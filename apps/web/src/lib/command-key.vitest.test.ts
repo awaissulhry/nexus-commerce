@@ -210,7 +210,6 @@ describe('the API’s command receipts', () => {
       '/api/pim/attach-to-parent',
       '/api/pim/category-workspace/EBAY/site-assignments',
       '/api/pim/promote-to-parent',
-      '/api/products/bulk-replicate',
     ])
   })
 

@@ -33,7 +33,6 @@ export const RECEIPT_WINDOW_MS = 10 * 60_000
 
 /** POST routes whose Idempotency-Key is honoured, keyed by Fastify route URL. */
 const COMMAND_SCOPES: Record<string, string> = {
-  '/api/products/bulk-replicate': 'replicate',
   '/api/pim/attach-to-parent': 'pim-attach',
   '/api/pim/promote-to-parent': 'pim-promote',
   '/api/listing-wizard/:id/submit': 'wizard-submit',

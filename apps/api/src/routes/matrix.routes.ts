@@ -168,52 +168,11 @@ async function updateChannelListing(request: FastifyRequest, reply: FastifyReply
   }
 }
 
-/**
- * POST /api/products/:id/matrix/channel-listing
- * Create a new channel listing
- */
-async function createChannelListing(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    const { id } = request.params as { id: string }
-    const body = request.body as any
-
-    logger.info('Creating channel listing', { productId: id })
-
-    const listing = await (prisma as any).channelListing.create({
-      data: {
-        productId: id,
-        channel: body.channel,
-        region: body.region,
-        title: body.title,
-        description: body.description,
-        price: body.price,
-        quantity: body.quantity,
-        syncFromMaster: body.syncFromMaster || true,
-        syncLocked: body.syncLocked || false,
-        // ── PHASE 12b: Variation Matrix ────────────────────────────
-        variationTheme: body.variationTheme,
-        variationMapping: body.variationMapping,
-      },
-      include: {
-        offers: true,
-        images: true,
-      },
-    })
-
-    logger.info('Channel listing created', { listingId: listing.id })
-    return reply.status(201).send(listing)
-  } catch (error) {
-    logger.error('Error creating channel listing', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return reply.status(500).send({ error: 'Failed to create channel listing' })
-  }
-}
-
 // Presence D24: legacy Offer writers retired; use the studio Matrix write door.
+// Step 7, part 3: the listing creator (POST …/matrix/channel-listing) is gone too — it never set the
+// required channelMarket, so every call failed, and nothing called it.
 export async function matrixRoutes(fastify: FastifyInstance) {
   fastify.get('/api/products/:id/matrix', getProductMatrix)
-  fastify.post('/api/products/:id/matrix/channel-listing', createChannelListing)
   fastify.put('/api/products/:id/matrix/channel-listing/:listingId', {
     preHandler: async (request) => assertRequestPermission(request, 'products.edit'),
   }, updateChannelListing)

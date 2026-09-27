@@ -10,7 +10,6 @@ import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { assertInformationLocale } from '../services/pim/information-locale.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { amazonContentRefusal } from '../services/amazon/validate-before-send.js'
-import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
@@ -409,379 +408,6 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
-  // PUT /api/products/:id/listings/:channel/:marketplace — upsert
-  //
-  // Accepts the legacy direct-column shape ({ title, description,
-  // bulletPointsOverride, price, quantity, ... }) AND a Q.2 schema-
-  // driven `attributes` payload. When `attributes` is present:
-  //   - item_name           → title
-  //   - product_description → description
-  //   - bullet_point        → bulletPointsOverride[]  (JSON-encoded
-  //                                                    string[] from the
-  //                                                    schema editor)
-  //   - everything else     → platformAttributes.attributes[fieldId]
-  // Existing platformAttributes.attributes entries are merged shallowly
-  // so per-attribute saves don't blow away unrelated fields.
-  fastify.put<{
-    Params: { id: string; channel: string; marketplace: string }
-    Body: Record<string, any>
-  }>(
-    '/products/:id/listings/:channel/:marketplace',
-    async (request, reply) => {
-      try {
-        const { id, channel, marketplace } = request.params
-        const body = (request.body ?? {}) as Record<string, any>
-
-        // Verify the marketplace is configured
-        const mp = await prisma.marketplace.findUnique({
-          where: { channel_code: workspaceKey({ channel, code: marketplace }) },
-        })
-        if (!mp) {
-          return reply
-            .code(400)
-            .send({ error: `Marketplace ${channel}/${marketplace} not configured` })
-        }
-
-        // Verify the product exists
-        const product = await prisma.product.findUnique({ where: { id } })
-        if (!product) {
-          return reply.code(404).send({ error: `Product ${id} not found` })
-        }
-
-        const channelMarket = `${channel}_${marketplace}`
-        const existing = await prisma.channelListing.findFirst({
-          where: { productId: id, channel, marketplace },
-        })
-
-        // Q.2 — split out `attributes` into known columns + JSON merge.
-        // Q.4 — `variantAttributes` (Record<variationId, Record<fieldId,
-        //       value>>) merges into platformAttributes.variants so
-        //       per-variant channel overrides ride along on the parent
-        //       listing's row.
-        // Q.5 — `productType` body field stores into
-        //       platformAttributes.productType so the schema endpoint
-        //       can pick it up as the per-listing override.
-        const { attributes, variantAttributes, productType, ...rest } = body
-        const data: Record<string, any> = { ...rest }
-
-        // platformAttributes accumulates across the productType /
-        // attributes / variantAttributes branches below. Seeding from
-        // existing keeps unrelated keys (browseNodeId etc.) intact.
-        const existingPA =
-          (existing?.platformAttributes as Record<string, any> | null) ?? null
-        let nextPA: Record<string, any> | null = null
-        const ensurePA = () => {
-          if (nextPA === null) nextPA = { ...(existingPA ?? {}) }
-          return nextPA
-        }
-
-        if (typeof productType === 'string') {
-          const pa = ensurePA()
-          if (productType.trim() === '') {
-            delete pa.productType
-          } else {
-            pa.productType = productType
-          }
-        }
-
-        if (attributes && typeof attributes === 'object') {
-          const attrs = attributes as Record<string, unknown>
-          const passthrough: Record<string, unknown> = {}
-          for (const [fieldId, value] of Object.entries(attrs)) {
-            if (fieldId === 'item_name' && typeof value === 'string') {
-              data.title = value
-            } else if (
-              fieldId === 'product_description' &&
-              typeof value === 'string'
-            ) {
-              data.description = value
-            } else if (fieldId === 'bullet_point') {
-              if (typeof value === 'string') {
-                try {
-                  const parsed = JSON.parse(value)
-                  if (Array.isArray(parsed)) {
-                    data.bulletPointsOverride = parsed.filter(
-                      (s) => typeof s === 'string' && s.length > 0,
-                    )
-                  } else {
-                    data.bulletPointsOverride = [value]
-                  }
-                } catch {
-                  data.bulletPointsOverride = [value]
-                }
-              } else if (Array.isArray(value)) {
-                data.bulletPointsOverride = value.filter(
-                  (s) => typeof s === 'string' && s.length > 0,
-                )
-              }
-            } else {
-              passthrough[fieldId] = value
-            }
-          }
-          const existingAttrs =
-            existingPA && typeof existingPA.attributes === 'object'
-              ? (existingPA.attributes as Record<string, unknown>)
-              : {}
-          const merged: Record<string, unknown> = { ...existingAttrs }
-          for (const [k, v] of Object.entries(passthrough)) {
-            if (v === null || v === undefined || v === '') {
-              delete merged[k]
-            } else {
-              merged[k] = v
-            }
-          }
-          ensurePA().attributes = merged
-        }
-
-        // Q.4 — variant overrides. Same shallow-merge pattern: each
-        // variationId slice replaces (rather than deep-merges) so a
-        // PATCH-style edit to one (variation, field) keeps the other
-        // fields on that variation untouched.
-        if (variantAttributes && typeof variantAttributes === 'object') {
-          const existingVariants =
-            existingPA && typeof existingPA.variants === 'object'
-              ? (existingPA.variants as Record<string, Record<string, unknown>>)
-              : {}
-          const mergedVariants: Record<string, Record<string, unknown>> = {
-            ...existingVariants,
-          }
-          for (const [variationId, slice] of Object.entries(
-            variantAttributes as Record<string, Record<string, unknown>>,
-          )) {
-            const prev = mergedVariants[variationId] ?? {}
-            const next: Record<string, unknown> = { ...prev }
-            for (const [fieldId, v] of Object.entries(slice ?? {})) {
-              if (v === null || v === undefined || v === '') {
-                delete next[fieldId]
-              } else {
-                next[fieldId] = v
-              }
-            }
-            if (Object.keys(next).length === 0) {
-              delete mergedVariants[variationId]
-            } else {
-              mergedVariants[variationId] = next
-            }
-          }
-          ensurePA().variants = mergedVariants
-        }
-
-        if (nextPA !== null) {
-          data.platformAttributes = nextPA
-        }
-
-        let listing
-        if (existing) {
-          listing = await prisma.channelListing.update({
-            where: { id: existing.id },
-            data: {
-              ...data,
-              channel,
-              marketplace,
-              channelMarket,
-              region: marketplace,
-            },
-          })
-        } else {
-          listing = await prisma.channelListing.create({
-            data: {
-              ...data,
-              productId: id,
-              channel,
-              marketplace,
-              channelMarket,
-              region: marketplace,
-            },
-          })
-        }
-        return listing
-      } catch (error: any) {
-        fastify.log.error({ err: error }, '[products/listings PUT] failed')
-        return reply.code(500).send({ error: error?.message ?? String(error) })
-      }
-    }
-  )
-
-  // POST /api/products/:id/listings/:channel/:marketplace/replicate
-  //
-  // Copy content from a source (channel, marketplace) listing to one or
-  // more target marketplaces within the same channel. Useful for
-  // pan-EU sellers who maintain IT as the master and want to push the
-  // same bullets / attributes to DE, FR, ES, UK.
-  //
-  // Body:
-  //   targetMarketplaces: string[]    — e.g. ["DE","FR","ES","UK"]
-  //   fields?: string[]               — specific field ids; omit for all
-  //   includeSetup?: boolean          — also copy productType + variationTheme (default true)
-  //   includePrice?: boolean          — also copy priceOverride (default false)
-  fastify.post<{
-    Params: { id: string; channel: string; marketplace: string }
-    Body: {
-      targetMarketplaces: string[]
-      fields?: string[]
-      includeSetup?: boolean
-      includePrice?: boolean
-    }
-  }>(
-    '/products/:id/listings/:channel/:marketplace/replicate',
-    async (request, reply) => {
-      const { id, channel, marketplace } = request.params
-      const {
-        targetMarketplaces,
-        fields,
-        includeSetup = true,
-        includePrice = false,
-      } = request.body ?? {}
-
-      if (!Array.isArray(targetMarketplaces) || targetMarketplaces.length === 0) {
-        return reply.code(400).send({ error: 'targetMarketplaces[] required' })
-      }
-
-      const source = await prisma.channelListing.findFirst({
-        where: { productId: id, channel, marketplace },
-      })
-      if (!source) {
-        return reply.code(404).send({ error: `No listing found for ${channel}/${marketplace}` })
-      }
-
-      const sourcePA = (source.platformAttributes as Record<string, any> | null) ?? {}
-      const sourceAttrs = (typeof sourcePA.attributes === 'object' && sourcePA.attributes)
-        ? sourcePA.attributes as Record<string, unknown>
-        : {}
-
-      const results: { marketplace: string; ok: boolean; error?: string }[] = []
-
-      for (const targetMarket of targetMarketplaces) {
-        if (targetMarket.toUpperCase() === marketplace.toUpperCase()) {
-          results.push({ marketplace: targetMarket, ok: false, error: 'same as source' })
-          continue
-        }
-        try {
-          const targetMp = await prisma.marketplace.findUnique({
-            where: { channel_code: workspaceKey({ channel, code: targetMarket }) },
-          })
-          if (!targetMp) {
-            results.push({ marketplace: targetMarket, ok: false, error: 'marketplace not configured' })
-            continue
-          }
-
-          const existing = await prisma.channelListing.findFirst({
-            where: { productId: id, channel, marketplace: targetMarket },
-          })
-          const existingPA = (existing?.platformAttributes as Record<string, any> | null) ?? {}
-          const existingAttrs = (typeof existingPA.attributes === 'object' && existingPA.attributes)
-            ? existingPA.attributes as Record<string, unknown>
-            : {}
-
-          // Merge source attributes into target, field-filter if requested
-          const mergedAttrs = { ...existingAttrs }
-          const attrsToCopy = fields
-            ? Object.fromEntries(Object.entries(sourceAttrs).filter(([k]) => fields.includes(k)))
-            : sourceAttrs
-          Object.assign(mergedAttrs, attrsToCopy)
-
-          const nextPA: Record<string, any> = { ...existingPA, attributes: mergedAttrs }
-          if (includeSetup) {
-            if (sourcePA.productType) nextPA.productType = sourcePA.productType
-            if (sourcePA.variants && !fields) nextPA.variants = sourcePA.variants
-          }
-
-          const data: Record<string, any> = { platformAttributes: nextPA }
-
-          // Copy title / description / bullets if not field-filtered or field is in the list
-          const copyField = (name: string) => !fields || fields.includes(name)
-          if (copyField('item_name') && source.title) data.title = source.title
-          if (copyField('product_description') && source.description) data.description = source.description
-          if (copyField('bullet_point') && source.bulletPointsOverride?.length) {
-            data.bulletPointsOverride = source.bulletPointsOverride
-          }
-          if (includeSetup && copyField('variationTheme') && source.variationTheme) {
-            data.variationTheme = source.variationTheme
-          }
-          if (includePrice && source.priceOverride != null) {
-            data.price = source.priceOverride
-            data.pricingRule = source.pricingRule
-            data.priceAdjustmentPercent = source.priceAdjustmentPercent
-          }
-
-          if (existing) {
-            await prisma.channelListing.update({ where: { id: existing.id }, data })
-          } else {
-            await prisma.channelListing.create({
-              data: {
-                ...data,
-                productId: id,
-                channel,
-                marketplace: targetMarket,
-                channelMarket: `${channel}_${targetMarket}`,
-                region: targetMarket,
-              },
-            })
-          }
-          results.push({ marketplace: targetMarket, ok: true })
-        } catch (err: any) {
-          results.push({ marketplace: targetMarket, ok: false, error: err?.message ?? String(err) })
-        }
-      }
-
-      const succeeded = results.filter((r) => r.ok).length
-      return reply.send({ ok: true, replicated: succeeded, total: targetMarketplaces.length, results })
-    }
-  )
-
-  // POST /api/products/:id/listings/:channel/:marketplace/pricing
-  //
-  // Set the pricing rule for this (channel, marketplace): priceOverride,
-  // pricingRule, priceAdjustmentPercent, followMasterPrice.
-  fastify.post<{
-    Params: { id: string; channel: string; marketplace: string }
-    Body: {
-      priceOverride?: number | null
-      pricingRule?: string
-      priceAdjustmentPercent?: number | null
-      followMasterPrice?: boolean
-    }
-  }>(
-    '/products/:id/listings/:channel/:marketplace/pricing',
-    async (request, reply) => {
-      const { id, channel, marketplace } = request.params
-      const { priceOverride, pricingRule, priceAdjustmentPercent, followMasterPrice } =
-        request.body ?? {}
-
-      const mp = await prisma.marketplace.findUnique({
-        where: { channel_code: workspaceKey({ channel, code: marketplace }) },
-      })
-      if (!mp) return reply.code(400).send({ error: `Marketplace ${channel}/${marketplace} not configured` })
-
-      const existing = await prisma.channelListing.findFirst({
-        where: { productId: id, channel, marketplace },
-      })
-
-      const data: Record<string, any> = {}
-      if (priceOverride !== undefined) data.price = priceOverride
-      if (pricingRule !== undefined) data.pricingRule = pricingRule
-      if (priceAdjustmentPercent !== undefined) data.priceAdjustmentPercent = priceAdjustmentPercent
-      if (followMasterPrice !== undefined) data.followMasterPrice = followMasterPrice
-
-      let listing
-      if (existing) {
-        listing = await prisma.channelListing.update({ where: { id: existing.id }, data })
-      } else {
-        listing = await prisma.channelListing.create({
-          data: {
-            ...data,
-            productId: id,
-            channel,
-            marketplace,
-            channelMarket: `${channel}_${marketplace}`,
-            region: marketplace,
-          },
-        })
-      }
-      return listing
-    }
-  )
-
   // GET /api/products/:id/listings/AMAZON/:marketplace/detect-type
   // GET /api/products/:id/listings/AMAZON/:marketplace/detect-type
   //
@@ -876,64 +502,13 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
-  // POST /api/products/:id/listings/:channel/:marketplace/save-browse-nodes
-  //
-  // Persists browse nodes (and optionally category path) for a channel listing.
-  // Merges into platformAttributes.attributes.recommended_browse_nodes.
-  fastify.post<{
-    Params: { id: string; channel: string; marketplace: string }
-    Body: { browseNodes?: number[]; categoryPath?: string }
-  }>(
-    '/products/:id/listings/:channel/:marketplace/save-browse-nodes',
-    async (request, reply) => {
-      const { id, channel, marketplace } = request.params
-      const { browseNodes, categoryPath } = request.body ?? {}
-
-      const existing = await prisma.channelListing.findFirst({
-        where: { productId: id, channel, marketplace },
-      })
-      const existingPA = (existing?.platformAttributes as Record<string, any> | null) ?? {}
-      const existingAttrs = typeof existingPA.attributes === 'object' && existingPA.attributes
-        ? (existingPA.attributes as Record<string, unknown>) : {}
-
-      const nextAttrs: Record<string, unknown> = { ...existingAttrs }
-      if (browseNodes !== undefined) {
-        nextAttrs.recommended_browse_nodes = browseNodes
-      }
-
-      const nextPA: Record<string, any> = { ...existingPA, attributes: nextAttrs }
-      if (categoryPath !== undefined) nextPA.detectedCategoryPath = categoryPath
-
-      const mp = await prisma.marketplace.findUnique({
-        where: { channel_code: workspaceKey({ channel, code: marketplace }) },
-      })
-      if (!mp) return reply.code(400).send({ error: `Marketplace ${channel}/${marketplace} not configured` })
-
-      let listing
-      if (existing) {
-        listing = await prisma.channelListing.update({
-          where: { id: existing.id },
-          data: { platformAttributes: nextPA },
-        })
-      } else {
-        listing = await prisma.channelListing.create({
-          data: {
-            productId: id, channel, marketplace,
-            channelMarket: `${channel}_${marketplace}`,
-            region: marketplace,
-            platformAttributes: nextPA,
-          },
-        })
-      }
-      return listing
-    }
-  )
-
   // POST /api/products/:id/listings/:channel/:marketplace/publish
   //
-  // Validates required fields, attempts a channel push (Amazon SP-API or
-  // optimistic mark-as-published for other channels), then sets
-  // isPublished=true and listingStatus='ACTIVE' on success.
+  // Validates required fields, pushes to Amazon (SP-API), then sets
+  // isPublished=true and listingStatus='ACTIVE' when Amazon took it.
+  // Amazon only: step 7, part 3 deleted the branch that marked an eBay or
+  // Shopify listing ACTIVE + published (creating the row if missing) without
+  // calling the channel. Any other channel, or Amazon not connected, is refused.
   //
   // Returns { ok, status, message, issues? }
   fastify.post<{
@@ -1059,55 +634,13 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             issues: spResult.warnings?.map((w) => ({ message: w.message, severity: w.severity })),
           }
         } else {
-          // Non-Amazon channels (eBay, Shopify, etc.) — optimistic mark-as-published
-          await prisma.channelListing.upsert({
-            where: listing
-              ? { id: listing.id }
-              : { id: 'none' }, // fallback: upsert by productId+channel+marketplace below
-            update: { isPublished: true, listingStatus: 'ACTIVE', lastSyncedAt: new Date() },
-            create: {
-              productId: id,
-              channel,
-              marketplace,
-              channelMarket: `${channel}_${marketplace}`,
-              region: marketplace,
-              isPublished: true,
-              listingStatus: 'ACTIVE',
-              lastSyncedAt: new Date(),
-            },
-          }).catch(async () => {
-            // upsert by unique id failed (no existing listing), create instead
-            await prisma.channelListing.create({
-              data: {
-                productId: id,
-                channel,
-                marketplace,
-                channelMarket: `${channel}_${marketplace}`,
-                region: marketplace,
-                isPublished: true,
-                listingStatus: 'ACTIVE',
-                lastSyncedAt: new Date(),
-              },
-            })
+          return reply.code(400).send({
+            ok: false,
+            status: 'UNSUPPORTED',
+            message: channel.toUpperCase() === 'AMAZON'
+              ? 'Amazon is not connected, so nothing was published.'
+              : `This route publishes to Amazon only; nothing was sent to ${channel}.`,
           })
-
-          // Sync inventory immediately after marking published
-          const activatedL = await prisma.channelListing.findFirst({
-            where: { productId: id, channel, marketplace },
-            select: { id: true },
-          })
-          if (activatedL) void syncActivatedListings([activatedL.id])
-
-          const channelLabel =
-            channel === 'EBAY' ? 'eBay'
-            : channel === 'SHOPIFY' ? 'Shopify'
-            : channel
-
-          responsePayload = {
-            ok: true,
-            status: 'SUBMITTED',
-            message: `Marked as published. Inventory synced and push queued for ${channelLabel}.`,
-          }
         }
 
         return reply.send(responsePayload)
@@ -1126,9 +659,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
   //   Body: { coordinates: Array<{ channel: string; marketplace: string }> }
   // Per coordinate returns: status ('ready'|'blocked'), issues[], the
   // resolved title/price/productType that would be sent, and the effective
-  // `action`: AMAZON goes through SP-API (live or dry-run per env);
-  // eBay/Shopify are marked active + queue an inventory sync (NOT a content
-  // push — that's the cockpit/flat-file job), surfaced honestly here.
+  // `action`: AMAZON goes through SP-API (live or dry-run per env); any other
+  // channel is 'unsupported' and blocked, because the publish route refuses it
+  // (step 7, part 3 — it used to mark eBay/Shopify active without calling them).
   fastify.post<{
     Params: { id: string }
     Body: { coordinates?: Array<{ channel: string; marketplace: string }> }
@@ -1185,11 +718,17 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           if (isAmazon && !product.sku) {
             issues.push({ message: 'Product has no SKU — cannot publish to Amazon', severity: 'ERROR' })
           }
+          if (isAmazon && !amazonConfigured) {
+            issues.push({ message: 'Amazon is not connected, so nothing would be published', severity: 'ERROR' })
+          }
+          if (!isAmazon) {
+            issues.push({ message: `This route publishes to Amazon only; nothing would be sent to ${channel}`, severity: 'ERROR' })
+          }
 
           const blocked = issues.some((i) => i.severity === 'ERROR')
           const action = isAmazon
             ? (amazonConfigured ? (amazonDryRun ? 'amazon-dry-run' : 'amazon-live') : 'amazon-unconfigured')
-            : 'mark-active'
+            : 'unsupported'
 
           return {
             channel,
