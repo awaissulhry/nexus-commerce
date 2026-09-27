@@ -46,11 +46,18 @@ describe('product channel branch links', () => {
     expect(order.searchParams.get('account')).toBe('store-b')
   })
 
-  it('clears the previous channel’s account, listing and record when following an Amazon branch', () => {
+  it('clears the previous channel’s account, listing, record and languages when following an Amazon branch', () => {
     const amazon = { id: 'AMAZON', label: 'Amazon', markets: ['IT'] }
     const url = new URL(studioChannelViewHref(pathname, search + '&tab=presentation', 'EBAY', 'IT', amazon, 'sheet'), 'https://nexus.test')
     expect(url.pathname).toBe(pathname)
-    expect(Object.fromEntries(url.searchParams)).toEqual({ scope: 'AMAZON', market: 'IT', locale: 'it' })
+    // Languages belong to the scope they were picked on, as the Editing menu's setScope has it (2026-09-27).
+    expect(Object.fromEntries(url.searchParams)).toEqual({ scope: 'AMAZON', market: 'IT' })
+  })
+
+  it('drops a multi-language selection that the target channel may not support', () => {
+    const url = new URL(studioChannelViewHref(pathname, 'market=IT&locales=it,de,fr', 'master', 'IT', ebay, 'sheet'), 'https://nexus.test')
+    expect(url.searchParams.get('locales')).toBeNull()
+    expect(url.searchParams.get('scope')).toBe('EBAY')
   })
 
   it('selects an available target market instead of carrying an unsupported market across channels', () => {

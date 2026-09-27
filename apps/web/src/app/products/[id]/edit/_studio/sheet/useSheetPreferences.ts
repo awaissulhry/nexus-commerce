@@ -47,17 +47,23 @@ export function useSheetPreferences<Row, Page>(options: {
     const ground = sheetColumns.presets[0]
     if (ground) sheetColumns.applyPreset(ground)
   }, [])
+  /* TOOLBAR REBUILD (2026-09-27) — Save keeps the view's NAME: on the operator's own saved view it updates that view;
+     anywhere else (a built-in view, a teammate's, My layout) it keeps the arrangement as My layout. */
   const confirm = useCallback(async (next: PreferencesValue) => {
     const { getGridApi, sheetColumns } = live.current
     const api = getGridApi()
     const visible = new Set((api?.getColumnState() ?? []).filter(column => !column.hide).map(column => column.colId))
-    const firstNew = next.visibleColumns.find(key => !visible.has(key))
-    await sheetColumns.savePreferences(next)
+    // Keys are FIELDS; with languages split a field is on screen when any of its language columns is.
+    const firstNew = next.visibleColumns.find(key => !sheetColumns.gridKeysOf(key).some(colId => visible.has(colId)))
+    const own = sheetColumns.ownActiveView
+    if (own) await sheetColumns.updatePreferences(own, next)
+    else await sheetColumns.savePreferences(next)
     setDraft(next)
     if (firstNew) {
       if (revealTimer.current) clearTimeout(revealTimer.current)
       revealTimer.current = setTimeout(() => {
-        if (live.current.getGridApi() === api) live.current.revealCell(firstNew, 'uncover')
+        const colId = live.current.sheetColumns.gridKeysOf(firstNew)[0]
+        if (colId && live.current.getGridApi() === api) live.current.revealCell(colId, 'uncover')
       }, 0)
     }
   }, [])
@@ -65,30 +71,34 @@ export function useSheetPreferences<Row, Page>(options: {
     await live.current.sheetColumns.savePreferencesAs(name, next)
     setDraft(next)
   }, [])
-  const update = useCallback(async (next: PreferencesValue) => {
-    const { sheetColumns } = live.current
-    if (sheetColumns.active.kind !== 'saved') return
-    const id = sheetColumns.active.id
-    const view = sheetColumns.gridState.views.find(view => view.id === id)
-    if (!view) throw new Error('That view no longer exists')
-    await sheetColumns.updatePreferences(view, next)
-    setDraft(next)
-  }, [])
   const { sheetColumns } = options
+  const own = sheetColumns.ownActiveView
+  const where = options.scope === 'master' ? 'the shared product' : 'this channel'
   const preferences: PreferencesModalProps = {
     open, onClose: () => setOpen(false),
     value: draft ?? { visibleColumns: [], lockedColumns: options.scope === 'master' ? ['product'] : [], stickyFirstColumn: true, stickyLastColumn: false, pageSize: 0, sortBy: '', sortDir: 'asc' },
     onConfirm: confirm,
     allColumns: sheetColumns.preferenceColumns, defaultVisible: sheetColumns.allColumnKeys,
     pageSizeChoices: [], sortFieldOptions: [], showSticky: false,
-    groupToggles: true, inViewCount: true, attributeGroups: true,
+    groupToggles: true, inViewCount: true, attributeGroups: true, bulkPick: true, rememberInteraction: true,
     onReloadSaved: sheetColumns.reloadSavedPreferences,
-    viewSave: { activeName: sheetColumns.activeViewName, onSaveAs: saveAs, onUpdate: sheetColumns.activeViewName ? update : undefined, startNaming: intent === 'new-view' },
-    title: intent === 'new-view' ? 'New view' : sheetColumns.activeViewName ? `Customise columns · ${sheetColumns.activeViewName}` : 'Customise columns',
-    listHint: options.scope === 'master'
-      ? 'Organise attributes into groups and choose their order. Save keeps your personal layout for this market, including after a reload.'
-      : 'Organise channel attributes into groups and choose their order. Save keeps your personal layout for this channel and market after a reload.',
+    // Save already updates the operator's own view, so the footer offers no second "Update" button.
+    viewSave: { activeName: sheetColumns.activeViewName, onSaveAs: saveAs, startNaming: intent === 'new-view' },
+    confirmLabel: own ? `Save “${own.name}”` : 'Save',
+    title: intent === 'new-view' ? 'New view' : `Customise columns · ${viewLabel(sheetColumns)}`,
+    listHint: own
+      ? `Tick the attributes to show. Save updates your view “${own.name}” for ${where}, on every product and market.`
+      : `Tick the attributes to show. Save keeps them as My layout for ${where}, on every product and market. Languages come from the Languages menu.`,
   }
   const columnDialog = useMemo(() => ({ customise: openCustomise, reset: resetColumns }), [openCustomise, resetColumns])
   return { preferences, columnDialog, openCustomise, openNewView }
+}
+
+/** What the Customise title names: the saved view, the built-in view, or My layout. */
+function viewLabel<Page>(columns: SheetColumnsApi<Page>): string {
+  const active = columns.active
+  if (active.kind === 'saved') return active.name
+  if (active.kind === 'preset') return active.label
+  if (active.kind === 'all') return columns.presets.find(preset => preset.id === 'all')?.label ?? 'All attributes'
+  return columns.emptyLabel
 }

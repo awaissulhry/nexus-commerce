@@ -93,10 +93,12 @@ describe('sheetViews — complete and focused Information views', () => {
     const columns = [col({ key: 'conditional', group: 'Details', requiredBy: [] })]
     expect(sheetViews(columns, { ...ctx, requiredKeys: ['conditional'], flaggedKeys: [] }).presets.find(view => view.id === REQUIRED_VIEW_ID)?.columns).toEqual(['conditional'])
   })
-  it('offers All attributes, Required, Essentials and Localized content from column rules', () => {
+  it('offers All attributes, Required, Essentials and Text fields from column rules — no Languages view (2026-09-27)', () => {
     const r = sheetViews(COLUMNS, ctx)
     expect(r.source).toBe('rules')
-    expect(r.presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, REQUIRED_VIEW_ID, 'languages', 'essentials', 'localized-content'])
+    expect(r.presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, REQUIRED_VIEW_ID, 'essentials', 'localized-content'])
+    // The id stays, so a remembered pick still opens it; the name says what it holds.
+    expect(r.presets.find((v) => v.id === 'localized-content')!.label).toBe('Text fields')
   })
 
   it('Required is every column some channel requires on this product type, filled or not, in the §9.2 order', () => {
@@ -120,13 +122,13 @@ describe('sheetViews — complete and focused Information views', () => {
     const gaps = flagged.presets.find((v) => v.id === GAPS_VIEW_ID)!
     expect(gaps.label).toBe('Has gaps')
     expect(gaps.columns).toEqual(['brand', 'fabric_type'])
-    expect(flagged.presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, REQUIRED_VIEW_ID, 'languages', GAPS_VIEW_ID, 'essentials', 'localized-content'])
+    expect(flagged.presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, REQUIRED_VIEW_ID, GAPS_VIEW_ID, 'essentials', 'localized-content'])
     expect(sheetViews(COLUMNS, { ...ctx, flaggedKeys: [] }).presets.map((v) => v.id)).not.toContain(GAPS_VIEW_ID)
   })
 
   it('omits an empty Required set while retaining useful content views', () => {
     const none = COLUMNS.map((c) => ({ ...c, requiredBy: [] }))
-    expect(sheetViews(none, ctx).presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, 'languages', 'essentials', 'localized-content'])
+    expect(sheetViews(none, ctx).presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, 'essentials', 'localized-content'])
   })
 
   it('avoids provider group duplication while retaining the Essentials rule', () => {
@@ -162,7 +164,7 @@ describe('sheetViews — the server wins when it speaks', () => {
   it('uses PES.5’s views verbatim, after All attributes, and says they came from the server', () => {
     const r = sheetViews(COLUMNS, ctx, [{ id: 'pricing', label: 'Pricing', columnKeys: ['basePrice'] }])
     expect(r.source).toBe('server')
-    expect(r.presets.slice(2)).toEqual([{ id: 'pricing', label: 'Pricing', columns: ['basePrice'] }])
+    expect(r.presets.slice(1)).toEqual([{ id: 'pricing', label: 'Pricing', columns: ['basePrice'] }])
   })
 
   it('an EMPTY server list is not an answer — the rules still run', () => {
@@ -272,9 +274,9 @@ describe('R-VT-1 — a saved view may not silently drop a structural column', ()
   })
 })
 
-describe('progress columns are structural (2026-09-26)', () => {
-  it('a progress column joins the always-columns, so a view saved before it existed cannot drop it', () => {
+describe('progress columns are NOT structural (2026-09-27)', () => {
+  it('only the variation theme is re-injected; a layout may hide a progress column on purpose (sheetLayoutMemory.progressShown)', () => {
     const cols = [{ key: 'progress:scope', managedBy: 'progress', kind: 'text' }, { key: 'brand', kind: 'text' }, { key: 'variation_theme', kind: 'variationTheme' }] as never
-    expect(structuralColumnKeys(cols)).toEqual(['progress:scope', 'variation_theme'])
+    expect(structuralColumnKeys(cols)).toEqual(['variation_theme'])
   })
 })

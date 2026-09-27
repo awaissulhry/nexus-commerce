@@ -18,7 +18,7 @@ export function widenLanguageSheets(sheets: StudioSheet[]): StudioSheet {
   const byLanguage = new Map(sheets.map(sheet => [sheet.scope.locale, new Map(sheet.rows.map(row => [`${row.id}:${row.aliasId ?? ''}`, row]))]))
   const columns = base.columns.flatMap(column => textKeys.has(column.key)
     ? sheets.map(sheet => ({ ...column, key: `${column.key}@${sheet.scope.locale}`, locale: sheet.scope.locale,
-      group: column.label, groupKey: `language:${column.key}` }))
+      group: column.label, groupKey: `language:${column.key}`, sourceGroup: column.group, sourceGroupKey: column.groupKey }))
     : [column])
   return { ...base, columns,
     rows: base.rows.map(row => {

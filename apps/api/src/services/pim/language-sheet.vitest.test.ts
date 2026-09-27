@@ -22,6 +22,9 @@ describe('Languages view wire', () => {
     expect(output.columns.map(c => [c.key, c.locale])).toEqual([['name@nl','nl'],['name@fr','fr'],['brand',undefined],['bulletPoints@nl','nl'],['bulletPoints@fr','fr']])
     expect(output.columns[0].groupKey).toBe(output.columns[1].groupKey)
     expect(output.columns[0].writeField).toBe('name')
+    // The field's own group rides along, so the sheet can list the field once, where it belongs (2026-09-27).
+    expect([output.columns[0].sourceGroup, output.columns[0].sourceGroupKey]).toEqual(['Content', 'content'])
+    expect(output.columns[2].sourceGroup).toBeUndefined()
     expect(output.rows[1].values['name@fr']).toEqual(sheet('fr').rows[1].values.name)
     expect(output.rows[0].values['name@fr'].contentVersion).toBe(5)
     expect(output.rows[0].values['bulletPoints@nl'].value).toEqual([])

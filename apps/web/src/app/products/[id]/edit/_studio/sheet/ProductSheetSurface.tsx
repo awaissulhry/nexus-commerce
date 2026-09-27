@@ -47,9 +47,15 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
         views={columns.gridState}
         presets={columns.presets}
         activePresetId={columns.activePresetId}
-        languagesView={scope.locales !== null}
+        languagesView={(scope.locales?.length ?? 0) > 1}
         onApplyPreset={columns.applyPreset}
         viewsEmptyLabel={columns.emptyLabel}
+        activeCount={columns.activeCount}
+        myLayout={columns.myLayout}
+        myLayoutActive={columns.active.kind === 'custom'}
+        onApplyMyLayout={columns.applyMyLayout}
+        narrowToMatches={columns.narrowToMatches}
+        onNarrowToMatches={columns.setNarrowToMatches}
         onSaveCurrentView={columns.saveCurrentAs}
         onUpdateCurrentView={columns.updateView}
         describeView={columns.describeView}
