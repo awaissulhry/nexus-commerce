@@ -3290,3 +3290,89 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 /* MediaStrip muted item — shown for context, not part of the cell's own list (images rebuild P3c, 2026-09-27). */
 .nds-media-strip-thumbnail.is-muted { border-style: dashed; }
 .nds-media-strip-thumbnail.is-muted > img { opacity: 0.55; }
+
+/* ── Media pickers (sheet pop-up rebuild P0, 2026-09-28; docs/sheet-popup-editor/PLAN-2026-09-27.md §4.1) ──────────────
+   MediaMark · MediaPickList · MediaChipField · MediaOrderedList · ResourcePickerDialog. A picture or swatch beside a
+   choice's words, like Shopify's bulk-editor pop-ups. The swatch colour is the store's own data, passed in as
+   `--nds-media-swatch`; nothing here writes a hex. A white swatch keeps a strong border so it does not vanish. */
+.nds-media-mark { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--nds-radius-sm); object-fit: cover; background: var(--nds-surface-sunken); vertical-align: middle; }
+.nds-media-mark.chip { width: 18px; height: 18px; border-radius: var(--nds-radius-pill); }
+.nds-media-mark.row { width: 28px; height: 28px; }
+.nds-media-mark.card { width: 40px; height: 40px; border-radius: var(--nds-radius-md); }
+.nds-media-mark.swatch { background: var(--nds-media-swatch); border: 1px solid var(--nds-border-strong); }
+.nds-media-mark.unavailable { color: var(--nds-text-muted); border: 1px dashed var(--nds-border-strong); }
+
+.nds-mpick { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.nds-mpick-search { width: 100%; }
+.nds-mpick-list { overflow-y: auto; outline: none; display: flex; flex-direction: column; gap: 1px; }
+.nds-mpick-list:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-md); }
+.nds-mpick-group { padding: var(--nds-space-8) var(--nds-space-8) var(--nds-space-4); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-3); }
+.nds-mpick-row { position: relative; display: flex; align-items: center; gap: var(--nds-space-9); min-height: 36px; padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-md); color: var(--nds-text-strong); font-size: var(--nds-font-size-base); cursor: pointer; user-select: none; }
+.nds-mpick-row:hover, .nds-mpick-row.active { background: var(--nds-surface-hover); }
+.nds-mpick-row.active::before { content: ''; position: absolute; left: 2px; width: 3px; height: 20px; border-radius: 2px; background: var(--nds-primary); }
+.nds-mpick-row.on { background: var(--nds-wash-primary); }
+.nds-mpick-row.disabled { color: var(--nds-text-disabled); cursor: not-allowed; }
+.nds-mpick-row.held { cursor: default; }
+.nds-mpick-box { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1.5px solid var(--nds-border-strong); border-radius: 4px; background: var(--nds-surface); color: var(--nds-text-inverse); }
+.nds-mpick-row.on .nds-mpick-box { background: var(--nds-primary); border-color: var(--nds-primary); }
+.nds-mpick-media { flex-shrink: 0; display: inline-flex; width: 28px; justify-content: center; }
+.nds-mpick-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nds-mpick-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-mpick-detail, .nds-mpick-held { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.nds-mpick-held { color: var(--nds-warning-strong); }
+.nds-mpick-check { flex-shrink: 0; color: var(--nds-primary); }
+.nds-mpick-state { display: flex; align-items: center; justify-content: center; gap: var(--nds-space-6); padding: var(--nds-space-12) var(--nds-space-9); font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-muted); }
+.nds-mpick-state.error { color: var(--nds-danger-strong); }
+.nds-mpick-more { display: flex; justify-content: center; padding: var(--nds-space-4); }
+.nds-mpick-foot { border-top: 1px solid var(--nds-border-subtle); padding-top: var(--nds-space-5); }
+
+.nds-mchips { display: flex; align-items: flex-start; gap: var(--nds-space-6); padding: var(--nds-space-4); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface); cursor: text; }
+.nds-mchips:focus-within { outline: 2px solid var(--nds-primary); outline-offset: -1px; }
+.nds-mchips.disabled { background: var(--nds-surface-sunken); cursor: not-allowed; }
+.nds-mchips-list { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); margin: 0; padding: 0; list-style: none; }
+.nds-mchip { max-width: 100%; border-radius: var(--nds-radius-sm); outline: none; }
+.nds-mchip[draggable='true'] { cursor: grab; }
+.nds-mchip:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-mchip .nds-token .t { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; }
+.nds-mchip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.nds-mchip.unknown .nds-mchip-label { color: var(--nds-warning-strong); font-style: italic; }
+.nds-mchips-input { flex: 1 1 120px; min-width: 120px; }
+.nds-mchips-field { width: 100%; border-color: transparent; background: transparent; box-shadow: none; }
+.nds-mchips-field:focus-within { outline: none; box-shadow: none; }
+.nds-mchips-clear { flex-shrink: 0; align-self: center; }
+
+.nds-molist { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.nds-molist-head { display: flex; align-items: center; gap: var(--nds-space-6); }
+.nds-molist-grow { flex: 1; }
+.nds-molist-empty { padding: var(--nds-space-9); text-align: center; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-muted); border: 1px dashed var(--nds-border); border-radius: var(--nds-radius-md); }
+.nds-molist-row { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; font-size: var(--nds-font-size-base); }
+.nds-molist-media { flex-shrink: 0; display: inline-flex; width: 28px; justify-content: center; }
+.nds-molist-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nds-molist-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nds-text-strong); }
+.nds-molist-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.nds-molist-row.unknown .nds-molist-label { color: var(--nds-warning-strong); font-style: italic; }
+
+.nds-rpick-count { font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-2); }
+
+/* ── Live drag (OrderedList `liveDrag`, MediaChipField; 2026-09-28) ─────────────────────────────────────────────────
+   Owner: "the ui and ux of drag and drop has to be improved". The whole row is the handle; while dragging the row
+   LIFTS (raised surface, primary edge, pop shadow) and follows the pointer, the other rows SLIDE to open the gap; a
+   chip line shows an insertion bar instead (sliding a wrapped line would reflow it under the hand). Transitions run
+   only while a drag is live, so the drop itself never animates rows from a stale offset. */
+.nds-ordered-list.live > .nds-ordered-list-item { touch-action: none; cursor: grab; transition: background-color 120ms ease, border-color 120ms ease; }
+.nds-ordered-list.live > .nds-ordered-list-item:hover { background: var(--nds-surface-hover); border-color: var(--nds-border-strong); }
+.nds-ordered-list.live .nds-ordered-list-grip, .nds-ordered-list-handle { cursor: grab; color: var(--nds-text-3); }
+.nds-ordered-list-handle { display: inline-flex; flex-shrink: 0; }
+.nds-ordered-list.dragging { user-select: none; }
+.nds-ordered-list.dragging > .nds-ordered-list-item { transition: transform 160ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+.nds-ordered-list.dragging > .nds-ordered-list-item[data-sort-state='lifted'] { transition: none; position: relative; z-index: 2; cursor: grabbing; background: var(--nds-surface-raised); border-color: var(--nds-primary); box-shadow: var(--nds-shadow-pop); }
+.nds-ordered-list.dragging > .nds-ordered-list-item[data-sort-state='lifted'] * { cursor: grabbing; }
+.nds-mchips-list > .nds-mchip { touch-action: none; }
+.nds-mchips-list.dragging, .nds-mchips-list.dragging * { cursor: grabbing; user-select: none; }
+.nds-mchip[data-sort-state='lifted'] { position: relative; z-index: 2; border-radius: var(--nds-radius-sm); box-shadow: var(--nds-shadow-pop); opacity: 0.9; }
+/* The target chip's bar draws ABOVE the lifted chip, which usually sits right over it. */
+.nds-mchip[data-sort-mark] { position: relative; z-index: 3; }
+.nds-mchip[data-sort-mark]::before { content: ''; position: absolute; top: 1px; bottom: 1px; width: 3px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
+.nds-mchip[data-sort-mark='before']::before { left: -4px; }
+.nds-mchip[data-sort-mark='after']::before { right: -4px; }
+@media (prefers-reduced-motion: reduce) { .nds-ordered-list.dragging > .nds-ordered-list-item { transition: none; } }

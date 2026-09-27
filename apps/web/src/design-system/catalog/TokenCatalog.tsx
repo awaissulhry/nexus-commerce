@@ -122,6 +122,7 @@ import { DownloadExample } from './DownloadExample'
 import { OrderedListExample } from './OrderedListExample'
 import { AsyncListboxExample } from './AsyncListboxExample'
 import { MediaGalleryExample } from './MediaGalleryExample'
+import { MediaPickersExample } from './MediaPickersExample'
 import { EmbeddedDrawerExample } from './EmbeddedDrawerExample'
 import { DrawerFooterExample } from './DrawerFooterExample'
 import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
@@ -1043,6 +1044,7 @@ export function TokenCatalog() {
         <OrderedListExample />
         <AsyncListboxExample />
         <MediaGalleryExample />
+        <MediaPickersExample />
         <EmbeddedDrawerExample />
         <DrawerFooterExample />
 

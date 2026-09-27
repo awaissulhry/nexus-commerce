@@ -135,7 +135,8 @@ describe('EDITOR_CAPS', () => {
        job: a new popup editor kind must either appear here or be a deliberate omission someone
        argued for. See the note on `EDITOR_CAPS.axes` for why 420 is not a raised `list` cap. */
     /* `slotlist` added by Step 4.3 #3 (A-52 §4, 2026-09-24) — the bullets editor, its own kind like `axes`. */
-    expect(Object.keys(EDITOR_CAPS).sort()).toEqual(['axes', 'formula', 'list', 'longtext', 'measure', 'select', 'slotlist'])
+    /* `media` added by the sheet pop-up rebuild P0 (2026-09-28) — the picture pickers, their own kind like `axes`. */
+    expect(Object.keys(EDITOR_CAPS).sort()).toEqual(['axes', 'formula', 'list', 'longtext', 'measure', 'media', 'select', 'slotlist'])
     expect(EDITOR_CAPS.select.width).toBe(320)
     expect(EDITOR_CAPS.axes.width).toBe(420)
     for (const c of Object.values(EDITOR_CAPS)) {
@@ -148,6 +149,15 @@ describe('EDITOR_CAPS', () => {
       expect(c.preferredHeight).toBeGreaterThan(0)
       expect(c.preferredHeight).toBeLessThanOrEqual(c.height)
     }
+  })
+
+  it('gives the media pickers room for a picture row without moving the axes or list editors', () => {
+    expect(EDITOR_CAPS.media.width).toBe(480)
+    expect(EDITOR_CAPS.media.width).toBeGreaterThan(EDITOR_CAPS.axes.width)
+    expect(EDITOR_CAPS.list.width).toBe(360)
+    /* The room still wins: a media editor at the right edge is as wide as the room, never wider. */
+    expect(editorBox({ cellWidth: 160, cellHeight: 35, roomToRight: 300, kind: 'media' }).width).toBe(300)
+    expect(editorBox({ cellWidth: 160, cellHeight: 35, roomToRight: 2000, kind: 'media' }).width).toBe(480)
   })
 
   it('gives the formula editor the taller cap — its completions and preview sit below it', () => {
