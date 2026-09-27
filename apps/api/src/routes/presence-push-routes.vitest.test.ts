@@ -197,6 +197,21 @@ describe('P0.1 — Amazon direct publish dry run', () => {
   })
 })
 
+// Step 7, part 3 — the direct publish used to mark an eBay or Shopify listing ACTIVE + published (creating the row
+// when missing) without calling the channel. That branch is gone: any channel but Amazon is refused, writing nothing.
+// The Amazon cases above are the positive control.
+describe('step 7, part 3 — the direct publish no longer marks other channels published', () => {
+  it.each(['EBAY', 'SHOPIFY'])('%s: 400 UNSUPPORTED, no listing write, no stock sync, nothing sent', async channel => {
+    const response = await app.inject({ method: 'POST', url: `/api/products/p/listings/${channel}/IT/publish`, payload: {} })
+    expect(response.statusCode, response.body).toBe(400)
+    expect(response.json()).toMatchObject({ ok: false, status: 'UNSUPPORTED' })
+    expect(s.update).not.toHaveBeenCalled()
+    expect(syncActivatedListings).not.toHaveBeenCalled()
+    expect(s.amazon).not.toHaveBeenCalled()
+    expect(s.send).not.toHaveBeenCalled()
+  })
+})
+
 describe('P0.7 — the primary-only eBay flat-file writers never act for another account', () => {
   it.each([
     ['POST', '/api/ebay/flat-file/publish'],

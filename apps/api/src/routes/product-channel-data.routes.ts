@@ -1,14 +1,17 @@
 import { variationBag } from '../services/pim/shared-variation-values.js'
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Channel pricing + inventory + Amazon sync-data endpoints for the
  * product edit page.
  *
  *   GET  /api/products/:id/channel-pricing      — variant × market pricing
- *   PATCH /api/products/:id/channel-pricing     — bulk update prices
  *   GET  /api/products/:id/channel-inventory    — variant × market listed qty + physical stock
  *   GET  /api/products/:id/amazon-sync-data     — pull title/desc/bullets from ChannelListing
  *   PATCH /api/products/:id/channel-follows     — hand a field back to the master, or pin it
+ *
+ * Step 7, part 3 deleted PATCH /channel-pricing and PATCH /fulfillment: each created a missing
+ * listing row as a side effect, and only the unmounted old product editor called them. Prices go
+ * through the Matrix door (`channel-price-write.service.ts`), fulfilment through
+ * `fulfillment-method.service.ts`.
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -16,10 +19,7 @@ import prisma from '../db.js'
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
-import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 import { applyChannelFollows, isFollowableField, FOLLOWABLE_FIELDS } from '../services/pim/channel-follows.service.js'
-import { setFulfillmentMethod } from '../services/pim/fulfillment-method.service.js'
-import { writeChannelPrices, type PriceWriteTarget } from '../services/pim/channel-price-write.service.js'
 import { categoryForListing, resolveCategoriesForProducts, type ResolvedCategory } from '../services/pim/mapping/category-mapping.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
@@ -130,75 +130,6 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       })
     },
   )
-
-  // ── PATCH /api/products/:id/channel-pricing ─────────────────────────────
-  //
-  // When variantId is provided it is a child Product ID (from the Matrix tab).
-  // We write to ChannelListing where productId = variantId — this is the same
-  // table getExistingRows reads, so the flat file reflects the change
-  // immediately on next load.
-  //
-  // We also attempt a secondary write to VariantChannelListing for the
-  // PE.1 ChannelPricingSection which still uses that table.
-  fastify.patch<{
-    Params: { id: string }
-    Body: {
-      updates: Array<{
-        variantId?: string | null
-        marketplace: string
-        channel?: string
-        price?: number | null
-        salePrice?: number | null
-        quantity?: number | null
-      }>
-    }
-  }>('/products/:id/channel-pricing', async (request, reply) => {
-    const { id } = request.params
-    const { updates } = request.body
-
-    if (!updates?.length) return reply.code(400).send({ error: 'updates must be non-empty' })
-
-    // MAP.2b — one resolve for the whole batch; the answer cannot change during it.
-    const pcdConn = await primaryConnectionIds(updates.map((u) => (u.channel ?? 'AMAZON').toUpperCase()))
-
-    // MX.1 / Add 4(b) — the PRICE write is the ONE channel price write (`channel-price-write.service.ts`): `price` AND
-    // `priceOverride` + `followMasterPrice = false` (null clears back to master), the sale + its window, a PriceChangeEvent,
-    // an override audit row, ONE PRICE_UPDATE enqueue — and REAL per-row outcomes (this route used to answer the request
-    // count after `Promise.allSettled`, report 19 §5.5). The row's existence stays this route's legacy contract: a child
-    // without a listing row still gets one created as a draft, then the service writes it. The legacy `quantity` write is
-    // kept verbatim below (not the Matrix's path; the Matrix pins through the Sync Control primitives).
-    const targets: PriceWriteTarget[] = []
-    const legacyQuantity: Array<{ listingId: string; quantity: number }> = []
-    for (const u of updates) {
-      const mp = u.marketplace.toUpperCase()
-      const ch = (u.channel ?? 'AMAZON').toUpperCase()
-      const productId = u.variantId ?? id
-      const where = { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn.get(ch) ?? null, aliasKey: '' }) }
-      const existing = await prisma.channelListing.findUnique({ where, select: { id: true } })
-      const listingId = existing?.id ?? (await prisma.channelListing.create({
-        data: { productId, channel: ch, marketplace: mp, channelMarket: `${ch}_${mp}`, region: mp, channelConnectionId: pcdConn.get(ch) ?? null, syncStatus: 'PENDING' },
-        select: { id: true },
-      })).id
-      /**
-       * 🔴 Step 2.2 — `PATCH /channel-pricing` takes no version from its client yet, so it cannot
-       * compare against one. It says so rather than re-reading the row it is about to write, which
-       * the step rejected by name: *"a compare-and-set that always succeeds."* When the client
-       * starts sending a version, this becomes `expectedVersion: u.expectedVersion` and the
-       * unguarded branch goes away.
-       */
-      const t: PriceWriteTarget = { listingId, unguardedReason: 'legacy-channel-pricing' }
-      if (u.price !== undefined) t.price = u.price
-      if (u.salePrice !== undefined) t.sale = { value: u.salePrice, start: (u as { salePriceStart?: string | null }).salePriceStart ?? null, end: (u as { salePriceEnd?: string | null }).salePriceEnd ?? null }
-      targets.push(t)
-      if (u.quantity !== undefined && u.quantity !== null) legacyQuantity.push({ listingId, quantity: u.quantity })
-    }
-    const actor = (request as { authUser?: { email?: string; id?: string } }).authUser?.email ?? 'channel-pricing'
-    const r = await writeChannelPrices({ targets, actor, source: 'MANUAL_OVERRIDE', reason: 'channel-pricing' })
-    for (const q of legacyQuantity) {
-      await prisma.channelListing.update({ where: { id: q.listingId }, data: { quantity: q.quantity, followMasterQuantity: false, syncStatus: 'PENDING' } }).catch(() => undefined)
-    }
-    return reply.send({ ok: r.refused === 0 && r.conflict === 0, updated: r.applied, noop: r.noop, refused: r.refused, conflict: r.conflict, results: r.results })
-  })
 
   // ── GET /api/products/:id/channel-inventory ─────────────────────────────
   //
@@ -353,64 +284,6 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       })
     },
   )
-
-  // ── PATCH /api/products/:id/fulfillment ─────────────────────────────────
-  //
-  // FCF.4b — set ChannelListing.fulfillmentMethod per channel×marketplace.
-  // Mirrors PATCH /channel-pricing: when variantId is provided it is a child
-  // Product ID (the Matrix tab operates on children); otherwise the update is
-  // product-level. Pass fulfillmentMethod: null to clear the override and fall
-  // back to the derived method. Writing FBA/FBM also mirrors the value into
-  // platformAttributes.fulfillmentChannel so the read-side (cockpit card,
-  // channel-inventory ingested signal) stays consistent until the next sync.
-  fastify.patch<{
-    Params: { id: string }
-    Body: {
-      updates: Array<{
-        variantId?: string | null
-        marketplace: string
-        channel?: string
-        fulfillmentMethod: 'FBA' | 'FBM' | null
-      }>
-    }
-  }>('/products/:id/fulfillment', async (request, reply) => {
-    const { id } = request.params
-    const { updates } = request.body
-    if (!updates?.length) return reply.code(400).send({ error: 'updates must be non-empty' })
-    for (const u of updates) {
-      if (u.fulfillmentMethod != null && u.fulfillmentMethod !== 'FBA' && u.fulfillmentMethod !== 'FBM') {
-        return reply.code(400).send({ error: `invalid fulfillmentMethod: ${u.fulfillmentMethod}` })
-      }
-    }
-
-    // MAP.2b — one resolve for the whole batch.
-    const pcdConn2 = await primaryConnectionIds(updates.map((u) => (u.channel ?? 'AMAZON').toUpperCase()))
-
-    // MX.1 / Add 4(a) — the write is the ONE fulfilment write (`fulfillment-method.service.ts`): the typed column AND the
-    // flat `platformAttributes.fulfillmentChannel` AND the nested `fulfillment_availability[0].fulfillment_channel_code`
-    // (what the FBA guard reads) land together, an FBA→FBM change while FBA stock is on hand is refused BY NAME, the
-    // SCT.6d product-flag follow-on is kept, and the response carries REAL per-row outcomes — never the request count
-    // (report 18 §5.2/§5.4). The row's existence stays this route's legacy contract (a missing row is created as a draft).
-    const targets: Array<{ listingId: string; method: 'FBA' | 'FBM' | null }> = []
-    for (const u of updates) {
-      const mp = u.marketplace.toUpperCase()
-      const ch = (u.channel ?? 'AMAZON').toUpperCase()
-      const productId = u.variantId ?? id
-      const where = { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null, aliasKey: '' }) }
-      const existing = await prisma.channelListing.findUnique({ where, select: { id: true } })
-      const listingId = existing?.id ?? (await prisma.channelListing.create({
-        data: { productId, channel: ch, marketplace: mp, channelMarket: `${ch}_${mp}`, region: mp, channelConnectionId: pcdConn2.get(ch) ?? null, syncStatus: 'PENDING' },
-        select: { id: true },
-      })).id
-      targets.push({ listingId, method: u.fulfillmentMethod })
-    }
-    const actor = (request as { authUser?: { email?: string; id?: string } }).authUser?.email ?? 'channel-fulfillment'
-    const r = await setFulfillmentMethod({ targets, actor })
-    return reply.send({
-      ok: r.refused === 0 && r.conflict === 0, updated: r.applied, noop: r.noop, refused: r.refused, conflict: r.conflict,
-      results: r.results, productConversions: r.productConversions.length, productConversionIds: r.productConversions,
-    })
-  })
 
   // ── GET /api/products/:id/listings ──────────────────────────────────────
   // T3.3 — all of a product's channel listings (every channel × market)

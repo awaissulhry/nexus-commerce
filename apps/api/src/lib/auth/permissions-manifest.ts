@@ -369,7 +369,6 @@ export const ENTRIES: Entry[] = [
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/fulfillment/stock')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/stock')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/inventory')),
-  RW(F.inventoryView, F.inventoryAdjust, pfx('/api/inbound')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/fba-inbound-v2')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/reconciliation')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/fulfillment')),

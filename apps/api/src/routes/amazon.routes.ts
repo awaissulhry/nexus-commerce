@@ -17,7 +17,6 @@ import {
   type ApprovedGroup,
 } from '../services/pim/auto-detect.service.js'
 import { computeAmazonAccountHealth } from '../services/amazon-account-health.service.js'
-import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 import {
   getBuyShippingRates,
   purchaseBuyShippingLabel,
@@ -1206,90 +1205,6 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
-  // POST /api/amazon/pim/link-amazon — verify ASIN on Amazon, link to product
-  fastify.post<{
-    Body: { productId: string; asin: string; marketplace?: string }
-  }>('/pim/link-amazon', async (request, reply) => {
-    try {
-      const { productId, asin, marketplace } = request.body
-      if (!productId || !asin) {
-        return reply.code(400).send({ error: 'productId and asin required' })
-      }
-      if (!(await amazonService.isConfigured())) {
-        return reply.code(503).send({ error: 'Amazon SP-API not configured' })
-      }
-
-      const marketplaceId = marketplace || process.env.AMAZON_MARKETPLACE_ID || 'APJ6JRA9NG5V4'
-      const region = (await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()).toUpperCase()
-      const sp = await (amazonService as any).getClient()
-
-      const item: any = await sp.callAPI({
-        operation: 'getCatalogItem',
-        endpoint: 'catalogItems',
-        version: '2022-04-01',
-        path: { asin },
-        query: {
-          marketplaceIds: [marketplaceId],
-          includedData: ['summaries', 'images'],
-        },
-      })
-      if (!item.asin) {
-        return reply.code(404).send({ error: 'ASIN not found on Amazon' })
-      }
-
-      const title = item.summaries?.[0]?.itemName ?? null
-      const channelMarket = `AMAZON_${region}`
-
-      await prisma.product.update({
-        where: { id: productId },
-        data: {
-          amazonAsin: asin,
-          linkedToChannels: { push: 'AMAZON' },
-          lastAmazonSync: new Date(),
-          amazonSyncStatus: 'LINKED',
-        },
-      })
-
-      // MAP.2b — the key carries the account now. AMAZON's primary reproduces
-      // exactly what the backfill wrote on all 725 existing Amazon rows, so this
-      // upsert still finds the same row it always did.
-      const amzConn = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
-      await prisma.channelListing.upsert({
-        where: { productId_channelMarket: workspaceKey({ productId, channelMarket, channelConnectionId: amzConn, aliasKey: '' }) },
-        create: {
-          productId,
-          channel: 'AMAZON',
-          channelMarket,
-          region,
-          externalListingId: asin,
-          platformProductId: asin,
-          isPublished: true,
-          title,
-          listingStatus: 'ACTIVE',
-        },
-        update: {
-          externalListingId: asin,
-          platformProductId: asin,
-          isPublished: true,
-          lastSyncedAt: new Date(),
-        },
-      })
-
-      return {
-        success: true,
-        asin,
-        title,
-        images: item.images?.[0]?.images ?? [],
-      }
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[pim/link-amazon] failed')
-      return reply.code(500).send({
-        error: error?.message ?? String(error),
-        details: error?.response?.data,
-      })
-    }
-  })
-
   // DELETE /api/amazon/pim/products/stale
   // Body: { skus: string[] }
   // For each SKU: call getListingsItem; if Amazon returns "not found" (or
@@ -1411,68 +1326,6 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   )
-
-  // POST /api/amazon/pim/bulk-link-amazon — link every product with an ASIN
-  fastify.post('/pim/bulk-link-amazon', async (_request, reply) => {
-    try {
-      const region = (await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()).toUpperCase()
-      const channelMarket = `AMAZON_${region}`
-
-      const unlinked = await prisma.product.findMany({
-        where: {
-          amazonAsin: { not: null },
-          OR: [{ amazonSyncStatus: null }, { amazonSyncStatus: { not: 'LINKED' } }],
-        },
-      })
-
-      let linked = 0
-      const errors: string[] = []
-
-      for (const product of unlinked) {
-        try {
-          await prisma.product.update({
-            where: { id: product.id },
-            data: {
-              linkedToChannels: { push: 'AMAZON' },
-              amazonSyncStatus: 'LINKED',
-              lastAmazonSync: new Date(),
-            },
-          })
-          // MAP.2b — see above.
-          const amzConn2 = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
-          await prisma.channelListing.upsert({
-            where: {
-              productId_channelMarket: workspaceKey({ productId: product.id, channelMarket, channelConnectionId: amzConn2, aliasKey: '' }),
-            },
-            create: {
-              productId: product.id,
-              channel: 'AMAZON',
-              channelMarket,
-              region,
-              externalListingId: product.amazonAsin!,
-              platformProductId: product.amazonAsin!,
-              isPublished: true,
-              title: product.name,
-              listingStatus: 'ACTIVE',
-            },
-            update: {
-              externalListingId: product.amazonAsin!,
-              platformProductId: product.amazonAsin!,
-              lastSyncedAt: new Date(),
-            },
-          })
-          linked++
-        } catch (err: any) {
-          errors.push(`${product.sku}: ${err?.message ?? String(err)}`)
-        }
-      }
-
-      return { linked, total: unlinked.length, errors }
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[pim/bulk-link-amazon] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
-  })
 
   // POST /api/amazon/orders/sync — pull orders from SP-API into the
   // Phase-26 unified Order schema. Two cursor modes:

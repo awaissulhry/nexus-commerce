@@ -15,11 +15,6 @@ import { marketCurrency } from '../services/pim/market-currency.js'
  *           matching category in each requested target marketplace.
  *           Used by CategoryPickerModal's per-marketplace tab to
  *           auto-suggest sister categories.
- *   PATCH /api/ebay/cockpit/category            — EC.4: persist a
- *           picked category to ChannelListing.platformAttributes.
- *           {categoryId, categoryName} for one (productId, EBAY,
- *           marketplace). Preserves existing itemSpecifics so
- *           re-categorising never silently clears aspect work.
  *   PATCH /api/ebay/cockpit/aspects             — EC.5: persist the
  *           itemSpecifics map (aspectName → value[]) for one
  *           (productId, EBAY, marketplace). Merges into existing
@@ -31,9 +26,6 @@ import { marketCurrency } from '../services/pim/market-currency.js'
  *           cell snapshots for the variation matrix (SKU, axis
  *           values, price, qty, listing status) for a given
  *           (parentProductId, marketplace).
- *   PATCH /api/ebay/cockpit/variation-matrix    — EC.6: atomic
- *           save of axes + sort order on the parent listing AND
- *           per-cell price/qty overrides on each child listing.
  *   PATCH /api/ebay/cockpit/offer-policies      — EC.8: persist
  *           Best Offer settings (enabled / auto-accept / auto-
  *           decline) and policy refs (fulfillment / payment /
@@ -76,11 +68,6 @@ import { marketCurrency } from '../services/pim/market-currency.js'
  *           same-productType products with current eBay listing
  *           snapshot for diff preview. Used by the Apply-to-Siblings
  *           modal.
- *   POST  /api/ebay/cockpit/template-apply      — EC.14: copies
- *           layout (aspects + policies + best offer + variation
- *           axes + compatibility) from a donor listing to N target
- *           listings. Per-target pre-apply snapshot for rollback.
- *           Scoped — operator picks which layers to copy.
  *   POST  /api/ebay/cockpit/promote-to-master   — EC.15: pushes
  *           cockpit-edited title / description / basePrice back
  *           into the Product master record. Closes the loop so
@@ -89,6 +76,10 @@ import { marketCurrency } from '../services/pim/market-currency.js'
  *
  * All endpoints reuse the EbayCategoryService singleton (in-memory
  * 24h caches for search + aspects). No changes to flat-file routes.
+ *
+ * Step 7, part 3 deleted three writers that created a missing eBay listing
+ * as a DRAFT and that only the unmounted old product editor called:
+ * PATCH /category, PATCH /variation-matrix and POST /template-apply.
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -97,7 +88,7 @@ import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
 import { findCategoryByNameOnSite } from '../services/ebay-category-cross-site.js'
-import { parseThemeAxes, selfHealAxisSortOrder, mergeAxisValueOrderWrite } from '../services/ebay-theme-axes.js'
+import { parseThemeAxes } from '../services/ebay-theme-axes.js'
 import { resolveFamilyAxes } from '../services/ebay-family-axes.service.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
 import { resolveComplianceById, complianceBlockers } from '../services/compliance-resolver.service.js'
@@ -225,98 +216,6 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     )
 
     return reply.send({ map, source, categoryName })
-  })
-
-  // ── PATCH /api/ebay/cockpit/category ────────────────────────────────
-  // Persist the picked category for one (productId, EBAY, marketplace).
-  // Find-or-create the ChannelListing row, then merge categoryId +
-  // categoryName into platformAttributes. itemSpecifics is LEFT ALONE
-  // — the new category schema reconciliation happens at render time
-  // (EC.5's Aspects card filters what's still valid). _categoryHistory
-  // gets an audit entry so operators can see prior categories.
-  fastify.patch<{
-    Body: {
-      productId: string
-      marketplace: string
-      categoryId: string
-      categoryName?: string
-      categoryPath?: string
-    }
-  }>('/ebay/cockpit/category', async (request, reply) => {
-    const { productId, marketplace, categoryId, categoryName, categoryPath } =
-      request.body ?? ({} as Record<string, string | undefined>)
-
-    if (!productId || !marketplace || !categoryId) {
-      return reply
-        .code(400)
-        .send({ error: 'productId, marketplace, categoryId are required' })
-    }
-
-    // Look up the product so we can hand a richer 404 to the operator
-    // (vs. a Prisma constraint violation when find-or-create fires).
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-      select: { id: true },
-    })
-    if (!product) {
-      return reply.code(404).send({ error: 'Product not found' })
-    }
-
-    // Find or create the eBay ChannelListing for this marketplace.
-    // channelMarket is the legacy composite key (CHANNEL_REGION).
-    const channelMarket = `EBAY_${marketplace.toUpperCase()}`
-    const existing = await prisma.channelListing.findFirst({
-      where: { productId, channel: 'EBAY', marketplace },
-    })
-
-    const prevPlatform = (existing?.platformAttributes ?? {}) as Record<string, unknown>
-    const prevHistory = Array.isArray((prevPlatform as { _categoryHistory?: unknown })._categoryHistory)
-      ? ((prevPlatform as { _categoryHistory?: Array<unknown> })._categoryHistory ?? [])
-      : []
-    const nextHistory = [
-      {
-        ts: new Date().toISOString(),
-        categoryId: (prevPlatform.categoryId as string | undefined) ?? null,
-        categoryName: (prevPlatform.categoryName as string | undefined) ?? null,
-      },
-      ...prevHistory,
-    ].slice(0, 10)
-
-    const nextPlatform: Record<string, unknown> = {
-      ...prevPlatform,
-      categoryId,
-      categoryName: categoryName ?? prevPlatform.categoryName ?? null,
-      categoryPath: categoryPath ?? prevPlatform.categoryPath ?? null,
-      _categoryHistory: nextHistory,
-    }
-
-    const saved = existing
-      ? await prisma.channelListing.update({
-          where: { id: existing.id },
-          data: {
-            platformAttributes: nextPlatform as Prisma.InputJsonValue,
-          },
-        })
-      : await prisma.channelListing.create({
-          data: {
-            productId,
-            channel: 'EBAY',
-            region: marketplace.toUpperCase(),
-            marketplace,
-            channelMarket,
-            listingStatus: 'DRAFT',
-            isPublished: false,
-            platformAttributes: nextPlatform as Prisma.InputJsonValue,
-          },
-        })
-
-    return reply.send({
-      listingId: saved.id,
-      categoryId,
-      categoryName: categoryName ?? null,
-      categoryPath: categoryPath ?? null,
-      historyDepth: nextHistory.length,
-    })
   })
 
   // ── PATCH /api/ebay/cockpit/aspects ─────────────────────────────────
@@ -546,160 +445,6 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       resolvedAxisWarnings,
       resolvedAxisSuppressed,
       axisCandidates,
-    })
-  })
-
-  // ── PATCH /api/ebay/cockpit/variation-matrix ────────────────────────
-  // Atomic save: parent's chosen axes + sort order + per-cell child
-  // overrides. Anything missing from the body is left alone — partial
-  // edits are safe. Returns the same shape as the GET so the UI can
-  // refresh from the response without a second round-trip.
-  //
-  // Body:
-  //   {
-  //     parentProductId, marketplace,
-  //     pickedAxes?:    string[]             // ≤ 2 axes
-  //     axisSortOrder?: { [axis]: string[] }
-  //     cells?:         [{ childProductId, priceOverride?, quantity? }]
-  //   }
-  fastify.patch<{
-    Body: {
-      parentProductId: string
-      marketplace: string
-      pickedAxes?: string[]
-      axisSortOrder?: Record<string, string[]>
-      axisNameLabels?: Record<string, string>
-      axisValueLabels?: Record<string, Record<string, string>>
-      axisValueOrder?: Record<string, string[]>
-      cells?: Array<{
-        childProductId: string
-        priceOverride?: number | null
-        quantity?: number | null
-      }>
-    }
-  }>('/ebay/cockpit/variation-matrix', async (request, reply) => {
-    const body = request.body
-    if (!body || typeof body !== 'object') {
-      return reply.code(400).send({ error: 'Body is required' })
-    }
-    const { parentProductId, marketplace, pickedAxes, axisSortOrder, axisNameLabels, axisValueLabels, axisValueOrder, cells } = body
-    if (pickedAxes !== undefined || axisSortOrder !== undefined || axisValueOrder !== undefined) return reply.code(409).send({ error: 'Use the destination-specific presentation order editor with the current listing version and input token', orderUrl: '/api/ebay/cockpit/presentation-order' })
-
-    if (!parentProductId || !marketplace) {
-      return reply.code(400).send({ error: 'parentProductId, marketplace are required' })
-    }
-
-    // ── Parent: axes + sort order + eBay renames on platformAttributes ──
-    if (
-      pickedAxes !== undefined ||
-      axisSortOrder !== undefined ||
-      axisNameLabels !== undefined ||
-      axisValueLabels !== undefined ||
-      axisValueOrder !== undefined
-    ) {
-      const parentListing = await prisma.channelListing.findFirst({
-        where: { productId: parentProductId, channel: 'EBAY', marketplace },
-      })
-      const prevPlatform = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
-      const nextPlatform: Record<string, unknown> = { ...prevPlatform }
-      if (pickedAxes !== undefined) {
-        // EV.3 — eBay supports up to 5 variation specifics.
-        nextPlatform._variationAxes = (pickedAxes ?? []).slice(0, 5)
-      }
-      if (axisSortOrder !== undefined) {
-        nextPlatform._axisSortOrder = axisSortOrder
-      }
-      // EV.4 — eBay-only display/publish renames.
-      if (axisNameLabels !== undefined) {
-        nextPlatform._axisNameLabels = axisNameLabels
-      }
-      if (axisValueLabels !== undefined) {
-        nextPlatform._axisValueLabels = axisValueLabels
-      }
-      if (axisValueOrder !== undefined) {
-        // EFX P3.1 — MERGE written keys over the existing map, never replace it.
-        // The two writers (flat-file modal, cockpit card) derive their axis sets
-        // from different sources (grid rows' aspect_* vs children's
-        // categoryAttributes.variations), so each may legitimately omit an axis
-        // the other ordered — a full replace silently dropped the other
-        // surface's entries (live-verified on AIREON: a card save lost the
-        // modal's 'tipo di prodotto' order).
-        nextPlatform._axisValueOrder = mergeAxisValueOrderWrite(
-          nextPlatform._axisValueOrder as Record<string, string[]> | undefined,
-          axisValueOrder,
-        )
-        // EFX P3 — self-heal: a synonym-keyed value order supersedes any legacy
-        // raw-name _axisSortOrder entry for the same dimension. Prune the
-        // matched legacy keys (leaving unmatched ones for the push merge).
-        const prevSort = (nextPlatform._axisSortOrder ?? {}) as Record<string, string[]>
-        const healed = selfHealAxisSortOrder(prevSort, axisValueOrder)
-        if (Object.keys(healed).length > 0) nextPlatform._axisSortOrder = healed
-        else delete nextPlatform._axisSortOrder
-      }
-
-      if (parentListing) {
-        await prisma.channelListing.update({
-          where: { id: parentListing.id },
-          data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
-        })
-      } else {
-        await prisma.channelListing.create({
-          data: {
-            productId: parentProductId,
-            channel: 'EBAY',
-            region: marketplace.toUpperCase(),
-            marketplace,
-            channelMarket: `EBAY_${marketplace.toUpperCase()}`,
-            listingStatus: 'DRAFT',
-            isPublished: false,
-            platformAttributes: nextPlatform as Prisma.InputJsonValue,
-          },
-        })
-      }
-    }
-
-    // ── Per-cell child overrides ───────────────────────────────────
-    const updates: Array<{ childProductId: string; listingId: string }> = []
-    if (Array.isArray(cells) && cells.length > 0) {
-      for (const cell of cells) {
-        if (!cell?.childProductId) continue
-        const existing = await prisma.channelListing.findFirst({
-          where: { productId: cell.childProductId, channel: 'EBAY', marketplace },
-        })
-        const data: Prisma.ChannelListingUpdateInput = {}
-        if (cell.priceOverride !== undefined) {
-          data.priceOverride = cell.priceOverride === null ? null : new Prisma.Decimal(cell.priceOverride)
-        }
-        if (cell.quantity !== undefined) {
-          data.quantity = cell.quantity
-        }
-        const saved = existing
-          ? await prisma.channelListing.update({
-              where: { id: existing.id },
-              data,
-            })
-          : await prisma.channelListing.create({
-              data: {
-                productId: cell.childProductId,
-                channel: 'EBAY',
-                region: marketplace.toUpperCase(),
-                marketplace,
-                channelMarket: `EBAY_${marketplace.toUpperCase()}`,
-                listingStatus: 'DRAFT',
-                isPublished: false,
-                priceOverride: cell.priceOverride != null ? new Prisma.Decimal(cell.priceOverride) : null,
-                quantity: cell.quantity ?? null,
-              },
-            })
-        updates.push({ childProductId: cell.childProductId, listingId: saved.id })
-      }
-    }
-
-    return reply.send({
-      parentProductId,
-      marketplace,
-      updatedCells: updates.length,
-      cells: updates,
     })
   })
 
@@ -1666,175 +1411,6 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
         }
       }),
       total: candidates.length,
-    })
-  })
-
-  // ── POST /api/ebay/cockpit/template-apply ───────────────────────────
-  // EC.14 — copies donor's layout (scope-filtered) onto each target.
-  // Each target gets its own pre-apply snapshot in _versionHistory
-  // under reason="pre-template-apply" so undo is one click per
-  // target via the existing snapshot/restore endpoint.
-  //
-  // Scope flags pick which layers to copy. All default to true:
-  //   aspects      — itemSpecifics (the heaviest layer, usually wanted)
-  //   policies     — fulfillment/payment/return policy refs + location
-  //   bestOffer    — bestOfferEnabled + auto-accept/decline thresholds
-  //   variations   — _variationAxes + _axisSortOrder
-  //   compatibility — Motors compatibility object
-  //   category     — categoryId/Name/Path (OFF by default — risky if
-  //                  siblings are in a slightly different sub-category)
-  fastify.post<{
-    Body: {
-      donorProductId: string
-      marketplace: string
-      targetProductIds: string[]
-      scope?: {
-        aspects?: boolean
-        policies?: boolean
-        bestOffer?: boolean
-        variations?: boolean
-        compatibility?: boolean
-        category?: boolean
-      }
-    }
-  }>('/ebay/cockpit/template-apply', async (request, reply) => {
-    const body = request.body
-    if (!body) return reply.code(400).send({ error: 'Body is required' })
-    const { donorProductId, marketplace, targetProductIds, scope = {} } = body
-    if (!donorProductId || !marketplace) {
-      return reply.code(400).send({ error: 'donorProductId, marketplace are required' })
-    }
-    if (!Array.isArray(targetProductIds) || targetProductIds.length === 0) {
-      return reply.code(400).send({ error: 'targetProductIds must be a non-empty array' })
-    }
-    if (targetProductIds.length > 200) {
-      return reply.code(400).send({ error: 'Max 200 targets per call' })
-    }
-    const flags = {
-      aspects:        scope.aspects        !== false,
-      policies:       scope.policies       !== false,
-      bestOffer:      scope.bestOffer      !== false,
-      variations:     scope.variations     !== false,
-      compatibility:  scope.compatibility  !== false,
-      category:       scope.category       === true, // opt-IN
-    }
-
-    const donor = await prisma.channelListing.findFirst({
-      where: { productId: donorProductId, channel: 'EBAY', marketplace },
-    })
-    if (!donor) {
-      return reply.code(404).send({ error: 'Donor has no eBay listing for this marketplace' })
-    }
-    const donorPlatform = (donor.platformAttributes ?? {}) as Record<string, unknown>
-
-    // Build the layout slice to copy.
-    const layout: Record<string, unknown> = {}
-    if (flags.aspects && donorPlatform.itemSpecifics) {
-      layout.itemSpecifics = donorPlatform.itemSpecifics
-    }
-    if (flags.policies) {
-      for (const k of ['fulfillmentPolicyId', 'paymentPolicyId', 'returnPolicyId', 'merchantLocationKey']) {
-        if (donorPlatform[k] !== undefined) layout[k] = donorPlatform[k]
-      }
-    }
-    if (flags.bestOffer) {
-      for (const k of ['bestOfferEnabled', 'bestOfferAutoAcceptPrice', 'bestOfferMinAcceptPrice']) {
-        if (donorPlatform[k] !== undefined) layout[k] = donorPlatform[k]
-      }
-    }
-    if (flags.variations) {
-      if (donorPlatform._variationAxes !== undefined) layout._variationAxes = donorPlatform._variationAxes
-      // EFX P3 — carry the canonical synonym-keyed value order too (keep the
-      // legacy _axisSortOrder copy for back-compat), plus the eBay-only renames
-      // so a templated target reproduces the donor's variation layout exactly.
-      if (donorPlatform._axisValueOrder !== undefined) layout._axisValueOrder = donorPlatform._axisValueOrder
-      if (donorPlatform._axisSortOrder !== undefined) layout._axisSortOrder = donorPlatform._axisSortOrder
-      if (donorPlatform._axisNameLabels !== undefined) layout._axisNameLabels = donorPlatform._axisNameLabels
-      if (donorPlatform._axisValueLabels !== undefined) layout._axisValueLabels = donorPlatform._axisValueLabels
-    }
-    if (flags.compatibility && donorPlatform.compatibility !== undefined) {
-      layout.compatibility = donorPlatform.compatibility
-    }
-    if (flags.category) {
-      for (const k of ['categoryId', 'categoryName', 'categoryPath']) {
-        if (donorPlatform[k] !== undefined) layout[k] = donorPlatform[k]
-      }
-    }
-
-    if (Object.keys(layout).length === 0) {
-      return reply.code(400).send({ error: 'Nothing to copy — every scope flag is off or donor has no data.' })
-    }
-
-    const results: Array<{ productId: string; ok: boolean; snapshotId?: string; error?: string }> = []
-
-    for (const targetId of targetProductIds) {
-      try {
-        if (targetId === donorProductId) {
-          results.push({ productId: targetId, ok: false, error: 'Cannot apply to donor itself' })
-          continue
-        }
-        const target = await prisma.channelListing.findFirst({
-          where: { productId: targetId, channel: 'EBAY', marketplace },
-        })
-
-        // Find-or-create the target listing.
-        const isCreate = !target
-        const prevPlatform = ((target?.platformAttributes ?? {}) as Record<string, unknown>)
-        const { _versionHistory: prevHistRaw, ...snapshotPlatform } = prevPlatform
-        const prevHistory = Array.isArray(prevHistRaw) ? (prevHistRaw as unknown[]) : []
-        const snapshotEntry = {
-          id: `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-          ts: new Date().toISOString(),
-          reason: 'pre-template-apply',
-          snapshot: {
-            platformAttributes: snapshotPlatform,
-            priceOverride: target?.priceOverride != null ? Number(target.priceOverride) : null,
-            quantity: target?.quantity ?? null,
-          },
-        }
-        const nextHistory = [snapshotEntry, ...prevHistory].slice(0, 10)
-        const nextPlatform: Record<string, unknown> = {
-          ...prevPlatform,
-          ...layout,
-          _versionHistory: nextHistory,
-        }
-        if (isCreate) {
-          await prisma.channelListing.create({
-            data: {
-              productId: targetId,
-              channel: 'EBAY',
-              region: marketplace.toUpperCase(),
-              marketplace,
-              channelMarket: `EBAY_${marketplace.toUpperCase()}`,
-              listingStatus: 'DRAFT',
-              isPublished: false,
-              platformAttributes: nextPlatform as Prisma.InputJsonValue,
-            },
-          })
-        } else {
-          await prisma.channelListing.update({
-            where: { id: target!.id },
-            data: { platformAttributes: nextPlatform as Prisma.InputJsonValue },
-          })
-        }
-        results.push({ productId: targetId, ok: true, snapshotId: snapshotEntry.id })
-      } catch (err) {
-        results.push({
-          productId: targetId,
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-
-    return reply.send({
-      donorProductId,
-      marketplace,
-      scope: flags,
-      layerKeys: Object.keys(layout),
-      results,
-      okCount: results.filter((r) => r.ok).length,
-      failCount: results.filter((r) => !r.ok).length,
     })
   })
 
