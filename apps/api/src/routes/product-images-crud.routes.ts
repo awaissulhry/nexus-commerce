@@ -47,7 +47,8 @@ import {
 } from '../services/cloudinary.service.js'
 import { analyzeProductImage } from '../services/ai/image-vision.service.js'
 import { generateLifestyleImage, type ImagenAspectRatio } from '../services/ai/image-generation.service.js'
-import { applyImagesToProducts } from '../services/images/bulk-apply.service.js'
+import { applyImagesToProducts, MediaPlanRefusal } from '../services/images/bulk-apply.service.js'
+import { uploadDedupScope } from '../services/images/media-plan-switch.js'
 import {
   DHASH256_NEAR_DUP_THRESHOLD,
   NEAR_DUP_HAMMING_THRESHOLD,
@@ -210,8 +211,10 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       // FE can show "duplicate — using existing" without re-uploading
       // to Cloudinary or appending another card to the gallery.
       const contentHash = sha256Buffer(buf)
+      // A family on the photo plan has ONE library: a picture any of its products holds is not new (2026-09-28).
+      const dedupScope = await uploadDedupScope(id)
       const exact = await prisma.productImage.findFirst({
-        where: { productId: id, contentHash },
+        where: { productId: { in: dedupScope }, contentHash },
       })
       if (exact) {
         return reply.status(200).send({ ...exact, reused: 'exact' })
@@ -249,7 +252,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       // decision doesn't waste an upload.
       if (perceptualHash && dhash256 && !force) {
         const candidates = await prisma.productImage.findMany({
-          where: { productId: id, perceptualHash: { not: null } },
+          where: { productId: { in: dedupScope }, perceptualHash: { not: null } },
           select: {
             id: true,
             url: true,
@@ -730,12 +733,17 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      const result = await applyImagesToProducts({
-        sourceProductId: id,
-        targetProductIds: children.map((c) => c.id),
-        mode,
-      })
-      return reply.send(result)
+      try {
+        const result = await applyImagesToProducts({
+          sourceProductId: id,
+          targetProductIds: children.map((c) => c.id),
+          mode,
+        })
+        return reply.send(result)
+      } catch (err) {
+        if (err instanceof MediaPlanRefusal) return reply.status(409).send({ error: 'MEDIA_PLAN', message: err.message })
+        throw err
+      }
     },
   )
 
@@ -773,6 +781,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         })
         return reply.send(result)
       } catch (err) {
+        if (err instanceof MediaPlanRefusal) return reply.status(409).send({ error: 'MEDIA_PLAN', message: err.message })
         const message = err instanceof Error ? err.message : 'Bulk apply failed'
         return reply.status(message.startsWith('SOURCE_NOT_FOUND') ? 404 : 500).send({
           error: 'BULK_APPLY_FAILED',

@@ -75,6 +75,15 @@ describe('Media page model', () => {
     expect(followAllOps(r, { layer: 'LISTING', destination: WINTER })).toEqual([{ op: 'follow', set: 'common' }, { op: 'follow', set: 'value:color:black' }])
     expect(followAllOps(r, { layer: 'SHARED' })).toEqual([])
   })
+  it('one picture stored on several SKUs is one photo: its copies show its picture, count as its usage, and are never placed twice', () => {
+    const r = read([{ key: 'SHARED', plan: plan({ common: ids('cover-kid'), values: { 'color:black': ids('n1') } }, 'color') }])
+    r.library = r.library.map(a => a.id === 'cover' ? { ...a, copies: ['cover-kid', 'cover-kid2'] } : a)
+    expect(assetMap(r).get('cover-kid')?.url).toBe('https://cdn.test/cover.jpg')
+    // The plan points at a copy; the library card says where it is used.
+    expect(libraryUsage(r).get('cover')).toEqual(['Common · main'])
+    expect(() => applyLocal(r, { layer: 'SHARED' }, [{ op: 'insert', set: 'common', assetIds: ['cover'] }])).toThrow(/already in that set/)
+    expect(() => applyLocal(r, { layer: 'SHARED' }, [{ op: 'insert', set: 'common', assetIds: ['cover-kid2'] }])).toThrow(/already in that set/)
+  })
   it('"Show as" shows each market its language version, and says when it falls back', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])
     const assets = assetMap(r)

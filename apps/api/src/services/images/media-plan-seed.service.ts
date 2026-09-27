@@ -10,6 +10,8 @@ import { fetchCatalogSource } from '../pim/catalog-source-fetch.js'
 import { publishListingEvent } from '../listing-events.service.js'
 import { aHashBuffer, dHash256Buffer, sha256Buffer } from './image-hash.service.js'
 import { familyRoot, loadDestinations, loadFamily, loadLibrary, planValueKey } from './media-plan.service.js'
+import { libraryEntries } from './media-library-identity.js'
+import { normalizeAmazonImageUrl } from './normalize-amazon-image-url.js'
 
 /**
  * Images rebuild P3a (docs/images-studio-rebuild/P3-PLAN.md) — move ONE family onto the media plan, explicitly.
@@ -79,9 +81,12 @@ export async function buildMediaSeed(productId: string) {
       select: { marketplace: true, channelConnectionId: true, aliasKey: true, platformAttributes: true } }),
   ])
   const report: string[] = []
-  const byUrl = new Map(library.map(a => [a.url, a.id]))
+  // One picture stored on several SKUs is one photo: the plan points at its library card (the root's own row first).
+  const pictures = libraryEntries(library, rootId, new Set())
+  const card = new Map(pictures.flatMap(p => [[p.id, p.id] as const, ...p.copies.map(c => [c, p.id] as const)]))
+  const byUrl = new Map(library.map(a => [normalizeAmazonImageUrl(a.url), card.get(a.id)!]))
   const imports = new Map<string, string>()
-  const assetFor = (url: string) => byUrl.get(url) ?? imports.get(url) ?? (imports.set(url, `import:${sha(url).slice(0, 20)}`), imports.get(url)!)
+  const assetFor = (url: string) => byUrl.get(normalizeAmazonImageUrl(url)) ?? imports.get(url) ?? (imports.set(url, `import:${sha(url).slice(0, 20)}`), imports.get(url)!)
 
   const toPlan = (curation: Curation, label: string): MediaPlan => {
     const axis = curation.axisLabel ? fam.axes.find(a => a.code === curation.axisLabel || canonicalVariantAxis(a.label) === canonicalVariantAxis(curation.axisLabel!)) : undefined

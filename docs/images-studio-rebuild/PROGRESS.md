@@ -43,6 +43,9 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   from: …" had no DS size and showed at the browser's 16 px, so it read as a foreign font. The page, the preview and the
   loading state now set `--nds-font-size-base` (13 px); after the fix 0 of 62 (preview) and 0 of 208 (plan page) text
   runs are at 16 px or in a non-DS font. Guarded in the same test file.
+- **Library duplicates (Owner, 2026-09-28: "multiple duplicates of the same image … I do not want that to happen ever"):**
+  researched and Fix 1 built — one card per picture, copies count as the same photo, family-wide upload check, and the
+  four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
 - **Next:** P4 (upload dialog with file-name rules, Compare, Review & publish).
 
 ## P3d — polish and proof
