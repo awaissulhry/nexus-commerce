@@ -29,6 +29,7 @@ import { checkLengthLimits, findMissingRequired, type LengthColumn, type Require
 import { conditionalRequirementIssues } from '../listing-wizard/conditional-requirements.js'
 import { mirrorListingIssues } from '../listing-issues.service.js'
 import { validatePayloadValues, type SchemaPayloadHints } from './payload-schema-validator.js'
+import { resolveListingCategory } from '../pim/mapping/category-mapping.service.js'
 
 const amazonService = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazonService)
@@ -151,7 +152,10 @@ export async function buildPreflightReport(
   const reports: PreflightListingReport[] = []
   for (const listing of listings) {
     const mp = String(listing.marketplace)
-    const row = buildRow({ listing, product, marketplace: mp, parentSku })
+    // The publish's product type (#82 rule), on this listing's own account as the cockpit publish's resolver reads it.
+    const category = await resolveListingCategory({ productId, channel: 'AMAZON', marketplace: mp, platformAttributes: listing.platformAttributes,
+      channelConnectionId: listing.channelConnectionId })
+    const row = buildRow({ listing, product, marketplace: mp, parentSku, productType: category.channelCategoryId })
     const productType = String(row.product_type ?? '')
     const issues: PreflightIssueItem[] = []
     let diff: PreflightDiffItem[] = []

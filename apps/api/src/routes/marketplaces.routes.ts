@@ -20,7 +20,7 @@ import { syncActivatedListings } from '../services/listing-activation-sync.servi
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { writeCoordinateOffer } from '../services/market-offer-availability.service.js'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
-import { categoryForListing, resolveCategoryForProduct } from '../services/pim/mapping/category-mapping.service.js'
+import { resolveListingCategory } from '../services/pim/mapping/category-mapping.service.js'
 
 const amazonService = new AmazonService()
 
@@ -73,7 +73,7 @@ export async function buildMarketplaceAmazonAttributes(input: {
  */
 async function publishProductType(productId: string, channel: string, marketplace: string, pa: Record<string, any>, ownType: unknown): Promise<string> {
   if (channel.toUpperCase() !== 'AMAZON') return pa.productType ?? ownType ?? ''
-  return categoryForListing(await resolveCategoryForProduct({ productId, channel: 'AMAZON', marketplace }), 'AMAZON', pa).channelCategoryId ?? ''
+  return (await resolveListingCategory({ productId, channel: 'AMAZON', marketplace, platformAttributes: pa })).channelCategoryId ?? ''
 }
 
 const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {

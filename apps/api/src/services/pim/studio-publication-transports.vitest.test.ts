@@ -318,6 +318,21 @@ it('2026-09-27: an existing listing Amazon runs as FBA is published as FBA even 
   expect(m.row.mock.calls.at(-1)![0].fulfillment_availability__fulfillment_channel_code).toBe('DEFAULT')
 })
 
+it('F2: the Amazon product type is the resolver’s answer for this listing (no second read), never the product’s own', async () => {
+  // The product says OUTERWEAR; the resolver found COAT on its Amazon listings in the region's other markets.
+  const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', productType: 'OUTERWEAR', images: [{ id: 'image', url: 'https://example.test/image' }] }
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: {},
+    listings: [{ productId: 'p', externalListingId: 'ASIN', platformAttributes: {}, offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
+    resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT', source: 'listingOtherMarket' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
+  await prepareAmazonPublication(facts)
+  expect(m.row.mock.calls.at(-1)![0].product_type).toBe('COAT')
+  expect(m.spec).toHaveBeenLastCalledWith('IT', 'COAT', 'account-b')
+  // Conflicting shared categories resolve to no type (and block the review); the product's own type never settles it.
+  facts.resolved[0].products[0].category = { channelCategoryId: null, source: 'none', conflicts: ['a → COAT', 'b → PANTS'] }
+  await prepareAmazonPublication(facts).catch(() => undefined)
+  expect(m.row.mock.calls.at(-1)![0].product_type).toBe('')
+})
+
 const mappingRow = (channelKey: string, targetKind: string, targetKey: string, extra: Record<string, unknown> = {}) => ({ id: channelKey, setId: 'set-1', channelKey, columnKey: channelKey, label: null, aliases: [], productTypes: [],
   requirement: 'optional', templateRequirement: null, targetKind, targetKey, transform: [], direction: 'both', state: 'mapped', reason: null, decidedBy: 'rule', sortOrder: 0, ...extra })
 

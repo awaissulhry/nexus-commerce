@@ -93,13 +93,13 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const tracked = !!ledger && (ledger.ledger.length > 0 || ledger.uncountedIsZero)
     const current = { ...listing, priceOverride: listing?.followMasterPrice !== false ? product.basePrice : listing.priceOverride ?? listing.price,
       quantityOverride: listing?.followMasterQuantity !== false ? (tracked ? ledger!.quantity : product.totalStock) : listing.quantityOverride ?? listing.quantity }
-    const row = buildRow({ listing: current, product, marketplace: scope.marketplace, parentSku: sellerSkus.get(parent.id) })
+    // `data.category` is resolveBatch's answer for this listing (the #82 rule); the row builder takes it, no second read.
+    const row = buildRow({ listing: current, product, marketplace: scope.marketplace, parentSku: sellerSkus.get(parent.id), productType: data.category.channelCategoryId })
     // Condition belongs to its own attribute, not the purchasable_offer object.
     // The legacy row builder can otherwise stringify an attribute envelope here.
     delete row.purchasable_offer__condition_type
     row.purchasable_offer__currency = facts.destination.currency
     row.item_sku = sellerSkus.get(product.id)
-    row.product_type = data.category.channelCategoryId ?? row.product_type
     row._isNew = !listing?.externalListingId
     row.record_action = row._isNew ? 'full_update' : 'partial_update'
     if (projection?.theme) row.variation_theme = projection.theme.code

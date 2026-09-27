@@ -45,7 +45,7 @@ vi.mock('../services/pim/publish-review-gate.js', () => ({ resolvePublishContent
 // F2 — the Amazon publish takes its product type from the shared resolver (real-database cases in
 // amazon-product-type-callers.vitest.test.ts); here it answers the fixture product's own type.
 vi.mock('../services/pim/mapping/category-mapping.service.js', async importOriginal => ({ ...await importOriginal<object>(),
-  resolveCategoryForProduct: async () => ({ channelCategoryId: 'COAT', channelCategoryPath: null, browseNodeId: null, source: 'productType', categoryId: null, categoryName: null, reviewed: false }) }))
+  resolveListingCategory: async () => ({ channelCategoryId: 'COAT', channelCategoryPath: null, browseNodeId: null, source: 'productType', categoryId: null, categoryName: null, reviewed: false }) }))
 vi.mock('../services/ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'fixture' } }))
 vi.mock('../services/connection-resolver.service.js', () => ({ tryResolveConnection: async () => ({ id: 'account', connectionMetadata: {} }) }))
 vi.mock('../services/ebay-category.service.js', () => ({ EbayCategoryService: class {} }))

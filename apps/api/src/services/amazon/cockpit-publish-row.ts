@@ -16,6 +16,12 @@ export function buildRow(args: {
   product: any
   marketplace: string
   parentSku?: string | null
+  /**
+   * The Amazon product type from the ONE rule (#82: `resolveListingCategory`, or a `resolveBatch` category the caller
+   * already holds). Required and never re-derived here: `listing type ?? Product.productType` sent OUTERWEAR for a
+   * product that is COAT in every other market. Pure, so the caller does the read.
+   */
+  productType: string | null
 }): Record<string, unknown> {
   const { listing, product, marketplace, parentSku } = args
   const platform = (listing.platformAttributes ?? {}) as Record<string, any>
@@ -33,9 +39,7 @@ export function buildRow(args: {
     return null
   }
 
-  const productType = String(
-    platform.productType ?? product.productType ?? '',
-  ).toUpperCase()
+  const productType = String(args.productType ?? '').toUpperCase()
 
   // Bullets — explicit override array wins; otherwise fall back to
   // the attribute envelope.

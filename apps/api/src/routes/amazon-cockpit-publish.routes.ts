@@ -182,7 +182,8 @@ export default async function amazonCockpitPublishRoutes(
         const isNewListing = !listing.isPublished
         const resolved = await resolveBatch({ channel: 'AMAZON', marketplace: mp, channelConnectionId: listing.channelConnectionId,
           aliasKey: listing.aliasKey, productIds: [id] })
-        const row = buildRow({ listing, product, marketplace: mp, parentSku })
+        // The resolver above already applied the #82 rule to this listing (account + alias); no second read.
+        const row = buildRow({ listing, product, marketplace: mp, parentSku, productType: resolved.products[0]?.category.channelCategoryId ?? null })
         // Mark new listings so the feed uses full UPDATE (not partial-update).
         if (isNewListing) (row as any)._isNew = true
         // HIGH-3 — schema-aware build (enum codes, localized fields, number/bool

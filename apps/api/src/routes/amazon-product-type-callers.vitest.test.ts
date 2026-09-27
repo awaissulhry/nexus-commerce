@@ -1,12 +1,14 @@
 /**
- * F2 — the three route callers that picked an Amazon product type as `listing type || Product.productType` now use the
- * ONE rule (#82, `resolveCategoriesForProducts` + `categoryForListing`): this market's listing, else the product's own
- * listings in the region's other markets, else the category mapping, else `Product.productType`.
+ * F2 — the callers that picked an Amazon product type as `listing type ?? Product.productType` now use the ONE rule
+ * (#82, `resolveCategoriesForProducts` + `categoryForListing`): this market's listing, else the product's own listings in
+ * the region's other markets, else the category mapping, else `Product.productType`.
  *
  * Measured before: a jacket COAT in DE and IT but OUTERWEAR on the product got OUTERWEAR for a first listing in BE made
- * through the product-page schema, the direct publish or its preflight, and a type-less product listed COAT elsewhere
- * showed "blocked" in the grid's listing health. On an in-process PostgreSQL (PGlite) with the REAL resolver and sibling
- * query; only outbound calls and unrelated services are stood in. Every id below is invented.
+ * through the product-page schema, the direct publish or its preflight; its GTIN status looked for an OUTERWEAR
+ * exemption; a type-less product listed COAT elsewhere showed "blocked" in the grid's listing health; and the cockpit
+ * publish and the Amazon pre-flight report built their row (schema hints, byte limits, report type) as OUTERWEAR. On an
+ * in-process PostgreSQL (PGlite) with the REAL resolver, sibling query and `resolveBatch`; only outbound calls and
+ * unrelated services are stood in. Every id below is invented.
  *
  * Run: DATABASE_URL=postgresql://nexus@127.0.0.1:1/nexus_unit_test npx vitest run src/routes/amazon-product-type-callers.vitest.test.ts
  */
@@ -26,7 +28,8 @@ vi.mock('@nexus/database', async () => {
 })
 // Outbound calls and services these routes merely construct.
 vi.mock('../services/marketplaces/amazon.service.js', () => ({ AmazonService: class { isConfigured = async () => true } }))
-vi.mock('../services/categories/schema-sync.service.js', () => ({ CategorySchemaService: class {} }))
+// No cached Amazon schema in this fixture: every schema read fails, as it does for a market never fetched.
+vi.mock('../services/categories/schema-sync.service.js', () => ({ CategorySchemaService: class { getSchema = async () => { throw new Error('No cached schema (fixture)') } } }))
 vi.mock('../services/listing-wizard/product-types.service.js', () => ({ ProductTypesService: class {} }))
 vi.mock('../services/listing-wizard/schema-parser.service.js', () => ({ SchemaParserService: class { getMultiChannelRequiredFields = s.requiredFields } }))
 vi.mock('../services/listing-wizard/telemetry.service.js', () => ({ WIZARD_EVENT_TYPES: [], writeStepTransition: vi.fn(), writeWizardEvent: vi.fn() }))
@@ -43,15 +46,23 @@ vi.mock('../lib/queue.js', () => ({ outboundSyncQueue: null, addJobSafely: vi.fn
 vi.mock('../services/pim/publish-review-gate.js', () => ({ resolvePublishContent: async () => [], publishContentIssues: () => [], requireReviewedContent: () => false }))
 vi.mock('../services/pim/amazon-content-payload.js', () => ({ buildAmazonContentAttributes: async () => ({}) }))
 vi.mock('../services/categories/marketplace-ids.js', async importOriginal => ({ ...await importOriginal<object>(), configuredAmazonMarketplaceId: async () => 'FAKE_MARKETPLACE_ID' }))
-vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'FAKE-SELLER' }))
+vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'FAKE-SELLER', amazonSpClient: vi.fn() }))
 vi.mock('../services/amazon/validate-before-send.js', () => ({ amazonContentRefusal: async () => null }))
 vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { putListingsItem: s.put } }))
+// Cockpit publish: no cached Amazon schema here, so its spec and mapped-attribute pass are stood in; the row it builds and
+// the real feed builder decide the product type the dry run shows.
+vi.mock('../services/pim/channel-specs/index.js', async importOriginal => ({ ...await importOriginal<object>(), loadAmazonSpec: async () => ({ fields: [] }) }))
+vi.mock('../services/amazon/mapping-payload.js', async importOriginal => ({ ...await importOriginal<object>(), applyResolvedMappingToAmazonFeed: (feed: string) => feed }))
 
 import prisma from '../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
 import listingWizardRoutes from './listing-wizard.routes.js'
 import marketplacesRoutes from './marketplaces.routes.js'
 import productChannelDataRoutes from './product-channel-data.routes.js'
+import amazonCockpitPublishRoutes from './amazon-cockpit-publish.routes.js'
+import { buildPreflightReport } from '../services/amazon/preflight-report.service.js'
+import { buildRow } from '../services/amazon/cockpit-publish-row.js'
+import { AmazonFlatFileService } from '../services/amazon/flat-file.service.js'
 
 // Production runs with business profiles on: seeding and every request run inside a business.
 const legacy = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -59,8 +70,8 @@ const scoped = <T>(work: () => Promise<T>) => withWorkspace(legacy, work)
 const ids: Record<string, string> = {}
 let app: FastifyInstance
 
-async function product(key: string, productType: string | null) {
-  ids[key] = (await prisma.product.create({ data: { sku: `F2-${key}`, name: key, basePrice: 10, productType } })).id
+async function product(key: string, productType: string | null, brand?: string) {
+  ids[key] = (await prisma.product.create({ data: { sku: `F2-${key}`, name: key, basePrice: 10, productType, brand } })).id
 }
 async function listing(key: string, marketplace: string, platformAttributes: Record<string, unknown>, channel = 'AMAZON') {
   await prisma.channelListing.create({ data: { productId: ids[key], channel, marketplace, channelMarket: `${channel}_${marketplace}`,
@@ -73,6 +84,7 @@ beforeAll(async () => {
   await app.register(listingWizardRoutes, { prefix: '/api' })
   await app.register(marketplacesRoutes, { prefix: '/api' })
   await app.register(productChannelDataRoutes, { prefix: '/api' })
+  await app.register(amazonCockpitPublishRoutes, { prefix: '/api' })
   await app.ready()
   await scoped(async () => {
     // GALE-like: COAT in DE and IT, OUTERWEAR on the product, not listed in BE.
@@ -93,6 +105,28 @@ beforeAll(async () => {
     // Nothing anywhere: no type resolves.
     await product('bare', null)
     await listing('bare', 'BE', {})
+    // GTIN status: a brand with no GTIN, and an exemption approved for COAT in BE only.
+    await product('branded', 'OUTERWEAR', 'Fake Brand')
+    await listing('branded', 'IT', { productType: 'COAT' })
+    await listing('branded', 'DE', { productType: 'COAT' })
+    await product('brandedPinned', 'OUTERWEAR', 'Fake Brand')
+    await listing('brandedPinned', 'BE', { productType: 'PANTS' })
+    await listing('brandedPinned', 'DE', { productType: 'COAT' })
+    await product('brandedBare', null, 'Fake Brand')
+    await prisma.gtinExemptionApplication.create({ data: { brandName: 'Fake Brand', productIds: [], marketplace: 'BE', productType: 'COAT',
+      brandRegistrationType: 'WEBSITE_ONLY', brandLetter: 'Fixture letter', imagesProvided: [], status: 'APPROVED' } })
+    // Cockpit publish and pre-flight report (FR: a market the cockpit publisher has an id for): the FR listing exists
+    // but names no type; DE and IT say COAT.
+    await prisma.marketplace.create({ data: { channel: 'AMAZON', code: 'FR', name: 'Amazon FR (fixture)', marketplaceId: 'FAKE_FR_ID', region: 'EU',
+      currency: 'EUR', language: 'fr', languages: ['fr'] } as never })
+    await product('cockpit', 'OUTERWEAR')
+    await listing('cockpit', 'IT', { productType: 'COAT' })
+    await listing('cockpit', 'DE', { productType: 'COAT' })
+    await listing('cockpit', 'FR', {})
+    await listing('cockpit', 'FR', { productType: '90002' }, 'EBAY')
+    await product('cockpitPinned', 'OUTERWEAR')
+    await listing('cockpitPinned', 'FR', { productType: 'PANTS' })
+    await listing('cockpitPinned', 'DE', { productType: 'COAT' })
   })
 }, 120_000)
 afterAll(async () => { await app?.close(); await s.db?.close() }, 30_000)
@@ -195,5 +229,72 @@ describe('grid listing health (POST /products/listing-health/bulk)', () => {
     const results = await health()
     expect(results[ids.typeless].byChannel.EBAY).toEqual({ ready: 1, total: 1 })
     expect(results[ids.jacket].byChannel.EBAY).toEqual({ ready: 1, total: 1 })
+  })
+})
+
+describe('GTIN status (GET /products/:id/listings/:channel/:marketplace/gtin-status)', () => {
+  const gtin = async (key: string, channel = 'AMAZON', marketplace = 'BE') => {
+    const response = await app.inject({ method: 'GET', url: `/api/products/${ids[key]}/listings/${channel}/${marketplace}/gtin-status` })
+    expect(response.statusCode, response.body).toBe(200)
+    return response.json()
+  }
+  it('Amazon BE, unlisted there, COAT in DE and IT → the COAT exemption covers it (was "needed": it looked for OUTERWEAR)', async () => {
+    expect(await gtin('branded')).toMatchObject({ needed: false, reason: 'existing_exemption' })
+    // …the type the schema route shows for the same coordinate.
+    await schema('branded', 'AMAZON', 'BE')
+    expect(schemaType()).toBe('COAT')
+  })
+  it('a listing in this market names its own type → it still wins (PANTS has no exemption)', async () => {
+    expect(await gtin('brandedPinned')).toEqual({ needed: true, reason: 'needed' })
+    await schema('brandedPinned', 'AMAZON', 'BE')
+    expect(schemaType()).toBe('PANTS')
+  })
+  it('no type resolvable → the same reason as before', async () => {
+    expect(await gtin('brandedBare')).toEqual({ needed: true, reason: 'no_product_type' })
+  })
+  it('non-Amazon unchanged', async () => {
+    expect(await gtin('branded', 'EBAY', 'IT')).toEqual({ needed: false, reason: 'non_amazon_channel' })
+  })
+})
+
+describe('cockpit publish (POST /products/:id/publish-amazon, dry run)', () => {
+  const cockpit = async (key: string) => {
+    const hints = vi.spyOn(AmazonFlatFileService.prototype, 'getFeedSchemaHints')
+    const response = await app.inject({ method: 'POST', url: `/api/products/${ids[key]}/publish-amazon`, payload: { marketplaces: ['FR'], dryRun: true } })
+    expect(response.statusCode, response.body).toBe(200)
+    const [submission] = response.json().submissions
+    expect(submission, JSON.stringify(submission)).toMatchObject({ marketplace: 'FR', ok: true })
+    return { messageType: submission.payload.messages[0].productType, hintsType: hints.mock.calls[0]?.[1] }
+  }
+  it('FR listing with no type, COAT in DE and IT → the row, its schema hints and the feed are COAT (was OUTERWEAR)', async () => {
+    expect(await cockpit('cockpit')).toEqual({ messageType: 'COAT', hintsType: 'COAT' })
+  })
+  it('the FR listing names its own type → it still wins', async () => {
+    expect(await cockpit('cockpitPinned')).toEqual({ messageType: 'PANTS', hintsType: 'PANTS' })
+  })
+})
+
+describe('Amazon pre-flight report (buildPreflightReport)', () => {
+  const report = (key: string, marketplace: string | null) => scoped(() => buildPreflightReport(ids[key], marketplace))
+  it('FR listing with no type, COAT in DE and IT → the report checks COAT (was OUTERWEAR)', async () => {
+    expect((await report('cockpit', 'FR')).listings.map(l => [l.marketplace, l.productType])).toEqual([['FR', 'COAT']])
+  })
+  it('the FR listing names its own type → it still wins', async () => {
+    expect((await report('cockpitPinned', 'FR')).listings.map(l => l.productType)).toEqual(['PANTS'])
+  })
+  it('non-Amazon listings stay out of the report', async () => {
+    const rows = (await report('cockpit', null)).listings.map(l => [l.marketplace, l.productType]).sort()
+    expect(rows).toEqual([['DE', 'COAT'], ['FR', 'COAT'], ['IT', 'COAT']])
+  })
+})
+
+describe('the row builder is pure: it takes the resolved type and never re-derives one', () => {
+  const listingRow = { platformAttributes: { productType: 'OUTERWEAR' } }
+  const productRow = { sku: 'F2-ROW', productType: 'OUTERWEAR' }
+  it('uses the type it is given, in Amazon’s spelling', () => {
+    expect(buildRow({ listing: listingRow, product: productRow, marketplace: 'FR', productType: ' coat '.trim() }).product_type).toBe('COAT')
+  })
+  it('no resolved type → empty, never the listing’s or the product’s own', () => {
+    expect(buildRow({ listing: listingRow, product: productRow, marketplace: 'FR', productType: null }).product_type).toBe('')
   })
 })
