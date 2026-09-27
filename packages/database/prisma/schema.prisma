@@ -342,6 +342,7 @@ model Product {
   // Relations
   variations                ProductVariation[]
   images                    ProductImage[]
+  mediaPlans                ProductMediaPlan[] // Images rebuild P1 — the family's photo sets per layer
   listingImages             ListingImage[] // Phase A: per-listing image set (multi-scope)
   listingWizards            ListingWizard[] // Phase A: multi-channel wizards for this product
   channelListings           ChannelListing[]
@@ -2589,7 +2590,11 @@ model ProductImage {
   /// MM.1 — Video length in seconds (Cloudinary durationSeconds).
   durationSec   Float?
   /// MM.1 — Bidirectional link to the DAM DigitalAsset this media came from.
-  sourceAssetId String?
+  sourceAssetId  String?
+  /// Images rebuild §4.8 — the language of the text IN the photo: `zxx` no text, `mul` several, or a language code.
+  languageTag    String  @default("zxx")
+  /// Images rebuild §4.8 — language versions of one photo (a size chart in IT, DE, FR…) share this id.
+  versionGroupId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2610,6 +2615,34 @@ model ProductImage {
   @@index([productId, isPrimary])
   @@index([productId, mediaType, sortOrder])
   @@index([workspaceId])
+  @@index([versionGroupId])
+}
+
+/// Images rebuild P1 (docs/images-studio-rebuild/PLAN.md §6.1) — a family's photo sets on ONE layer: SHARED (every
+/// channel), CHANNEL (e.g. every eBay listing) or LISTING (one account × market × alias). `plan` is validated by
+/// `@nexus/shared/media-plan`: a missing set key follows the layer above, a present one (even empty) is this layer's
+/// own. The key columns use '' instead of NULL so the compound unique is always targetable (the aliasKey lesson).
+model ProductMediaPlan {
+  workspaceId         String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String   @id @default(cuid())
+  /// The family root (the parent), or the product itself when it has no variants.
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  layer               String
+  channel             String   @default("")
+  marketplace         String   @default("")
+  channelConnectionId String   @default("")
+  aliasKey            String   @default("")
+  plan                Json
+  /// Compare-and-swap counter for this layer alone — a photo edit never conflicts with a sheet cell edit.
+  revision            Int      @default(1)
+  updatedById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([workspaceId, productId, layer, channel, marketplace, channelConnectionId, aliasKey], name: "media_plan_layer")
+  @@index([workspaceId])
+  @@index([productId])
 }
 
 // (Phase 31 Image model removed 2026-05-02 — see RESTORATION_NOTES.

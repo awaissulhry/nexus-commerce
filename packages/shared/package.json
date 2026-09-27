@@ -165,6 +165,18 @@
     "./attribute-placement-proposal": {
       "types": "./dist/attribute-placement-proposal.d.ts",
       "default": "./dist/attribute-placement-proposal.js"
+    },
+    "./media-plan": {
+      "types": "./dist/media-plan.d.ts",
+      "default": "./dist/media-plan.js"
+    },
+    "./media-plan-channels": {
+      "types": "./dist/media-plan-channels.d.ts",
+      "default": "./dist/media-plan-channels.js"
+    },
+    "./media-plan-files": {
+      "types": "./dist/media-plan-files.d.ts",
+      "default": "./dist/media-plan-files.js"
     }
   },
   "scripts": {

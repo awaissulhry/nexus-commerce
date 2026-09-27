@@ -46,6 +46,7 @@ import { amazonMediaWorkspaceRoutes } from './amazon-media-workspace.routes.js'
 import { shopifyContentRoutes } from './shopify-content.routes.js'
 import { shopifyLinkedProductsRoutes } from './shopify-linked-products.routes.js'
 import { productMediaRoutes } from './product-media.routes.js'
+import { mediaPlanRoutes } from './media-plan.routes.js'
 import { resolveSlotTaxonomy } from '../../services/images/amazon-slot-taxonomy.service.js'
 import { deriveWorkspaceAxes } from '../../services/images/ebay-image-axis.pure.js'
 import { resolveFamilyAxes } from '../../services/ebay-family-axes.service.js'
@@ -56,6 +57,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(shopifyContentRoutes)
   await fastify.register(shopifyLinkedProductsRoutes)
   await fastify.register(productMediaRoutes)
+  await fastify.register(mediaPlanRoutes)
   // ── GET /api/products/:productId/images-workspace ─────────────────
   fastify.get<{
     Params: { productId: string }

@@ -51,6 +51,8 @@ export type InvalidationType =
   | 'product.updated'
   | 'product.created'
   | 'product.deleted'
+  // Images rebuild P1 — a family's photo plan changed (`id` = the family root).
+  | 'product-media.changed'
   | 'listing.updated'
   | 'listing.created'
   | 'listing.deleted'

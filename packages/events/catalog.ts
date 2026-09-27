@@ -107,6 +107,13 @@ export const EVENTS = {
     schema: z.strictObject({ productId: z.string().min(1), reason: z.string().optional() }),
     subject: (p) => p.productId,
   }),
+  'product.media.changed': defineEvent({
+    type: 'product.media.changed',
+    context: 'catalog',
+    description: "A family's photo plan changed on one layer (Shared, a channel or a listing); photo surfaces refetch.",
+    schema: z.strictObject({ productId: z.string().min(1), layer: z.string().min(1) }),
+    subject: (p) => p.productId,
+  }),
   'product.deleted': defineEvent({
     type: 'product.deleted',
     context: 'catalog',

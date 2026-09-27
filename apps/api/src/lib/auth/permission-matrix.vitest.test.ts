@@ -34,6 +34,10 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   ['GET', '/api/products/123', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
   ['POST', '/api/products', ['ADMIN', 'OPS_MANAGER']],
   ['DELETE', '/api/products/123', ['ADMIN', 'OPS_MANAGER']],
+  // Images rebuild P1 — the Media page read and its photo edits (same rule as the Product media column).
+  ['GET', '/api/products/123/media', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
+  ['POST', '/api/products/123/media/ops', ['ADMIN', 'OPS_MANAGER']],
+  ['PUT', '/api/products/123/product-media', ['ADMIN', 'OPS_MANAGER']],
   // Orders
   ['GET', '/api/orders', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
   ['POST', '/api/orders/123/refund', ['ADMIN', 'OPS_MANAGER']],

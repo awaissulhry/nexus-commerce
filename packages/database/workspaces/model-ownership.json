@@ -457,6 +457,7 @@
     "CommandReceipt",
     "ChannelMappingSet",
     "ChannelMappingField",
-    "ChannelMappingUse"
+    "ChannelMappingUse",
+    "ProductMediaPlan"
   ]
 }

@@ -118,6 +118,12 @@
           "relationFromFields": []
         },
         {
+          "name": "mediaPlans",
+          "kind": "object",
+          "type": "ProductMediaPlan",
+          "relationFromFields": []
+        },
+        {
           "name": "listingImages",
           "kind": "object",
           "type": "ListingImage",
@@ -1281,6 +1287,20 @@
           "kind": "object",
           "type": "ProductImage",
           "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ProductMediaPlan",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
         }
       ]
     },
