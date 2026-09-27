@@ -197,9 +197,19 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   }))], [keyMap, identityColumn])
   const specs = useMemo<PreferencesColumnSpec[]>(() => {
     // The modal receives this schema order too. Required-first grid ranking must not reorder groups on Save.
-    return [{ key: identityColumn, label: 'Identity (SKU, readiness)', locked: true }, ...fieldColumns.map((c) => ({ key: c.key, label: c.label, group: c.group, groupKey: c.groupKey }))]
-  }, [fieldColumns, identityColumn])
-  const views = useMemo(() => sheetViews(attributeColumns, fieldCtx, serverViews), [attributeColumns, fieldCtx, serverViews])
+    // Progress columns are listed (hide, show, pin) but not counted: the dialog counts attributes, like the toolbar.
+    // A structural column (the variation theme) is always on screen, so the dialog shows it as FIXED, not tickable.
+    return [{ key: identityColumn, label: 'Identity (SKU, readiness)', locked: true }, ...fieldColumns.map((c) => ({
+      key: c.key, label: c.label, group: c.group, groupKey: c.groupKey,
+      ...(c.managedBy === 'progress' ? { uncounted: true } : {}), ...(structural.includes(c.key) ? { locked: true } : {}),
+    }))]
+  }, [fieldColumns, identityColumn, structural])
+  /* A view's count is the attributes it names; the always-on columns (identity, variation theme) are nobody's to name,
+     so they are left out of every preset here — resolving a preset puts them back (`resolvePreset`'s `always`). */
+  const views = useMemo(() => {
+    const built = sheetViews(attributeColumns, fieldCtx, serverViews)
+    return { ...built, presets: built.presets.map((p) => (p.columns.some((k) => structural.includes(k)) ? { ...p, columns: p.columns.filter((k) => !structural.includes(k)) } : p)) }
+  }, [attributeColumns, fieldCtx, serverViews, structural])
   /* SHEET-VIEWS step 5 — the row facts a rule view follows. Read through a ref when a view is applied, so a
      gap fixed while editing does not pull its column off screen: a rule resolves at APPLY time, not live. */
   const ruleFacts = useMemo<ViewRuleFacts>(() => ({
@@ -213,7 +223,6 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const [active, setActive] = useState<ActiveColumns>({ kind: 'all' })
   const activeRef = useRef(active)
   activeRef.current = active
-  const [shownCount, setShownCount] = useState<number | null>(null)
   const [landedScope, setLandedScope] = useState<string | null>(null)
   const [landedGrid, setLandedGrid] = useState<GridApi<TRow> | null>(null)
   const [recovery, setRecovery] = useState<{ surface: string; state: GridState } | null>(null)
@@ -337,23 +346,25 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const paint = useCallback((order: boolean, locks?: readonly string[]) => applyToGrid(narrowedKeys() ?? activeColumnsRef.current, order, locks), [applyToGrid, narrowedKeys])
 
   const countOf = useCallback((payload: ColumnsViewPayload) => visibleLayoutKeys(payload, specs).filter((k) => attributeKeys.has(k)).length, [specs, attributeKeys])
-  /** The FIELD keys a payload shows: identity, the progress columns it does not hide, then its own columns. */
+  /**
+   * The FIELD keys a payload shows: identity, the progress columns it does not hide (always right after Product, as
+   * they opened on 2026-09-26), the structural columns (variation theme), then its own columns.
+   */
   const shownKeys = useCallback((payload: ColumnsViewPayload) => {
     const applied = withViewRules(payload, specs, preferencesFromLayout(payload, specs), ruleFactsRef.current)
-    const own = visibleLayoutKeys(applied, specs)
-    const progress = progressShown(payload, progressKeys).filter((k) => !own.includes(k))
-    return [...new Set([...alwaysColumns, ...progress, ...own])]
-  }, [specs, progressKeys, alwaysColumns])
+    const own = visibleLayoutKeys(applied, specs).filter((k) => !progressSet.has(k))
+    const progress = progressShown(payload, progressKeys)
+    return [...new Set([...alwaysColumns.filter((k) => !structural.includes(k)), ...progress, ...alwaysColumns, ...own])]
+  }, [specs, progressKeys, progressSet, alwaysColumns, structural])
   const activate = useCallback((next: ActiveColumns, payload: ColumnsViewPayload, restoreLocks = true) => {
     // The STORED payload is kept (its rules too); what shows is its keys plus what its rules match here today.
     layoutRef.current = payload
     const keys = shownKeys(payload)
     activeColumnsRef.current = keys
     setActive(next)
-    setShownCount(keys.filter((k) => attributeKeys.has(k)).length)
     paint(true, restoreLocks && payload.v === 3 ? payload.lockedColumns : undefined)
     gridState.markDirty()
-  }, [shownKeys, attributeKeys, paint, gridState])
+  }, [shownKeys, paint, gridState])
   /** An explicit column choice stops a filter's narrowing: the columns follow what was asked for last. */
   const stopNarrowing = useCallback(() => { narrowRef.current = false; setNarrowState(false) }, [])
   const presetPayload = useCallback((preset: GridViewPreset) => columnsViewPayload(resolvePreset(preset, addressable, alwaysColumns).columns.filter((k) => attributeKeys.has(k))), [addressable, alwaysColumns, attributeKeys])
@@ -505,9 +516,13 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const acknowledged = gridState.activeId && gridState.activeId !== active.id ? gridState.views.find((v) => v.id === gridState.activeId) : null
     if (acknowledged) { setActive({ ...active, id: acknowledged.id, name: acknowledged.name }); return }
     const still = gridState.views.find((v) => v.id === active.id)
-    if (!still) setActive({ kind: 'custom', count: activeColumnsRef.current.filter((k) => attributeKeys.has(k)).length })
-    else if (still.name !== active.name) setActive({ ...active, name: still.name })
-  }, [landed, gridState.loaded, gridState.views, gridState.activeId, active, attributeKeys])
+    // The view on screen was deleted: go back to All attributes, rather than call its columns "My layout".
+    if (!still) {
+      const all = views.presets.find((p) => p.id === ALL_VIEW_ID)
+      if (all) applyPreset(all)
+      else setActive({ kind: 'custom', count: activeColumnsRef.current.filter((k) => attributeKeys.has(k)).length })
+    } else if (still.name !== active.name) setActive({ ...active, name: still.name })
+  }, [landed, gridState.loaded, gridState.views, gridState.activeId, active, attributeKeys, views.presets, applyPreset])
 
   /* A NEW filter narrows by default (D1 = A); its counts changing repaints without touching the switch. */
   const chipId = activeChip?.id ?? null
@@ -619,6 +634,16 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     // `workingVersion` is the signal that `workingRef` changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workingVersion, layoutSurface, countOf])
+  /* The Columns trigger's number is the SAME number the menu prints beside the item that is on. */
+  const activeCount = useMemo(() => {
+    if (active.kind === 'all') return views.presets.find((p) => p.id === ALL_VIEW_ID)?.columns.length ?? null
+    if (active.kind === 'preset') return views.presets.find((p) => p.id === active.id)?.columns.length ?? null
+    if (active.kind === 'saved') {
+      const view = gridState.views.find((v) => v.id === active.id)
+      return view ? viewColumnCount(view) : null
+    }
+    return active.count
+  }, [active, views.presets, gridState.views, viewColumnCount])
   const ownActiveView = active.kind === 'saved' ? gridState.views.find((v) => v.id === active.id && isOwnView(v as SavedGridView<unknown>)) ?? null : null
   return {
     gridState, initialState: recoveryState ?? gridState.initialState, captureGridState,
@@ -626,7 +651,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     activePresetId: active.kind === 'all' ? ALL_VIEW_ID : active.kind === 'preset' ? active.id : null,
     emptyLabel: MY_LAYOUT_LABEL,
     activeViewName: active.kind === 'saved' ? active.name : null,
-    activeCount: shownCount, ownActiveView, myLayout, applyMyLayout, narrowToMatches, setNarrowToMatches,
+    activeCount, ownActiveView, myLayout, applyMyLayout, narrowToMatches, setNarrowToMatches,
     landed, loadError: loadError ?? (memoryError?.surface === layoutSurface ? memoryError.message : null) ?? gridState.loadError,
     orderedKeys: gridOrderedKeys, preferenceColumns: specs, alwaysColumns, allColumnKeys, gridKeysOf: keyMap.gridKeysOf,
     applyPreset, currentPreferences, currentPayload, savePreferences, savePreferencesAs,

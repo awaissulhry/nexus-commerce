@@ -277,7 +277,8 @@ export function GridViewsMenu<TPage>({
   /* With headings, the active view's own verbs sit under its name, so "Rename…" says WHICH view it renames. */
   if (headings && active) {
     const first = items.findIndex((item) => item.id === 'update' || item.id === 'duplicate')
-    if (first >= 0) items.splice(first, 0, { id: 'sep-active', separator: true }, heading('h-active', `“${active.name}”`))
+    // The name is data: it keeps its own letters under the uppercase section style.
+    if (first >= 0) items.splice(first, 0, { id: 'sep-active', separator: true }, heading('h-active', <>View <span className="nds-menu-heading-name">“{active.name}”</span></>))
   }
 
   const trimmed = name.trim()

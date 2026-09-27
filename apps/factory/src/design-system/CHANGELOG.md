@@ -1,6 +1,6 @@
 ## Menu headings and on/off items, Customise select-all — 2026-09-27
 
-Mirrored from web (the product sheet's toolbar rebuild). **`Menu`**: `MenuItemDef.heading` (a section heading, skipped by the arrow keys, `.nds-menu-heading`) and `checked` (`role="menuitemcheckbox"`, a ✓ in a fixed slot). **`PreferencesModal`**: `bulkPick` ("Select all · Clear all", on the matches when filtering), `rememberInteraction` (the filter text and open groups survive a reopen), `confirmLabel`. Styles in `components.css`, `patterns.css` and `grid/theme/grid.css` (the toolbar's “Columns:” / “Rows:” lead words). All opt-in.
+Mirrored from web (the product sheet's toolbar rebuild). **`Menu`**: `MenuItemDef.heading` (a section heading, skipped by the arrow keys, `.nds-menu-heading`) and `checked` (`role="menuitemcheckbox"`, a ✓ in a fixed slot). **`PreferencesModal`**: `bulkPick` ("Select all · Clear all", on the matches when filtering), `rememberInteraction` (the filter text and open groups survive a reopen), `confirmLabel`, and `PreferencesColumnSpec.uncounted` (listed, never counted). Styles in `components.css`, `patterns.css` and `grid/theme/grid.css` (the toolbar's “Columns:” / “Rows:” lead words). All opt-in.
 
 ## Focus outlines that paint, and a guard — 2026-09-27
 

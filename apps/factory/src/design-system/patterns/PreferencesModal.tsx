@@ -83,6 +83,12 @@ export interface PreferencesColumnSpec {
   group?: string
   /** Stable schema-owned group identity; labels are for display only. */
   groupKey?: string
+  /**
+   * Listed and tickable, but left out of every count the dialog prints ("240 columns", "In view · n of N") —
+   * a column that is not one of the things the host counts (2026-09-27: the sheet's progress columns, so the dialog
+   * and the toolbar agree on "236 attributes").
+   */
+  uncounted?: boolean
 }
 
 export interface PreferencesValue {
@@ -367,9 +373,9 @@ export function usePreferencesPanes({
       .filter((section) => section.columns.length > 0)
   }, [pickSections, needle, attributeGroups])
 
-  const totalCount = attributeGroups ? allColumns.filter((c) => !c.locked).length : allColumns.length
+  const totalCount = (attributeGroups ? allColumns.filter((c) => !c.locked) : allColumns).filter((c) => !c.uncounted).length
   const matchCount = useMemo(
-    () => filteredSections.reduce((n, s) => n + s.columns.filter((c) => !attributeGroups || !c.locked).length, 0),
+    () => filteredSections.reduce((n, s) => n + s.columns.filter((c) => (!attributeGroups || !c.locked) && !c.uncounted).length, 0),
     [filteredSections, attributeGroups],
   )
   // Only worth its row on a list long enough to get lost in. One rule in the DS rather than a prop
@@ -644,7 +650,7 @@ export function usePreferencesPanes({
                 if (!keys.length) return null
                 const shown = keys.filter((k) => draft.visibleColumns.includes(k)).length
                 return (
-                  <div className="nds-prefs-bulk" role="group" aria-label={needle ? 'Select the matching columns' : 'Select every column'}>
+                  <div className="nds-prefs-pickall" role="group" aria-label={needle ? 'Select the matching columns' : 'Select every column'}>
                     <button type="button" className="nds-prefs-findall" disabled={shown === keys.length} onClick={() => addColumns(keys)}>
                       {needle ? `Select ${keys.length === 1 ? 'the match' : `all ${keys.length} matches`}` : 'Select all'}
                     </button>

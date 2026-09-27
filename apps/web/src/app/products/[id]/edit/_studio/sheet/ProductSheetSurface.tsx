@@ -28,6 +28,10 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
     rows="media-line"
     emptyCells="blank"
     treeData
+    /* The VIEW owns the column order (`useSheetColumns` applies it). Without this, AG reverts to the columnDefs order
+       whenever they are rebuilt — a progress refresh, a readiness read — and the variation theme slid behind the
+       identity fields (measured 2026-09-27 after a scope round trip). */
+    maintainColumnOrder
     groupHeaderHeight={gridGeometry.stripH}
   />
   const drawer = model.drawer && <StudioDock {...model.drawer} />

@@ -2312,6 +2312,8 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   user-select: none;
 }
 .nds-menu-sep + .nds-menu-heading { padding-top: 4px; }
+/* A name inside a heading (a saved view's) is data and keeps its own letters. */
+.nds-menu-heading-name { text-transform: none; letter-spacing: normal; }
 /* An on/off item draws its own tick in a fixed slot, so ticked and unticked labels line up. */
 .nds-menu [role='menuitemcheckbox']::before {
   content: '';

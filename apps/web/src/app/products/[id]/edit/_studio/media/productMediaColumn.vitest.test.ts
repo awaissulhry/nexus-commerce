@@ -21,4 +21,8 @@ describe('one Product media workspace in every sheet', () => {
       expect(withProductMediaColumn(input).map(c => c.key)).toEqual(['sku', 'description', 'productMedia'])
     expect(withProductMediaColumn([column('unrelated_ids')]).map(c => c.key)).toEqual(['productMedia', 'unrelated_ids'])
   })
+  it('stays after Description when the Languages menu splits it per language (2026-09-27)', () => {
+    const input = [column('name@it'), column('name@de'), column('description@it'), column('description@de'), column('brand')]
+    expect(withProductMediaColumn(input).map(c => c.key)).toEqual(['name@it', 'name@de', 'description@it', 'description@de', 'productMedia', 'brand'])
+  })
 })

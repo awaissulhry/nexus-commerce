@@ -339,7 +339,7 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
                 }}
               />
               {activeFilter && (
-                <Button size="sm" variant="ghost" className="nds-toolbar-rows-clear" disabled={blocked} aria-label={`Clear the filter ${activeFilter.label}`} title="Show all rows" onClick={() => p.onChipToggle?.(null)}>
+                <Button size="sm" className="nds-toolbar-rows-clear" disabled={blocked} aria-label={`Clear the filter ${activeFilter.label}`} title="Show all rows" onClick={() => p.onChipToggle?.(null)}>
                   <X size={12} aria-hidden />
                 </Button>
               )}
