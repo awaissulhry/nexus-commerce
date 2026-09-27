@@ -83,3 +83,32 @@ describe('prepareEbayInventoryChanges', () => {
     expect(byField(plan).pictures.selectable).toBe(false)
   })
 })
+
+describe('variation pictures (images rebuild P2d)', () => {
+  const liveItem = (sku: string) => ({ sku, locale: 'it_IT', groupIds: ['FAM'], condition: 'NEW', product: { title: sku, aspects: { Colore: ['Rosso'] }, imageUrls: ['https://img.example/old.jpg'] },
+    availability: { shipToLocationAvailability: { quantity: 3 } } })
+  const withItems = (items: Record<string, unknown>) => { const read = live(); read.raw.items = items as never; return read }
+  const pictures = { axis: 'Colore', bySku: { 'FAM-RED-M': ['https://img.example/r1.jpg', 'https://img.example/r2.jpg'], 'FAM-RED-L': ['https://img.example/r1.jpg', 'https://img.example/r2.jpg'] } }
+  const items = { 'FAM-RED-M': liveItem('FAM-RED-M'), 'FAM-RED-L': liveItem('FAM-RED-L') }
+
+  it('shows one "Variation pictures" row comparing each SKU\'s photos with eBay\'s', () => {
+    const plan = prepareEbayInventoryChanges({ owner, destination, ours: ours({ variationPictures: pictures }), live: withItems(items), baselineValues: accepted({}) })
+    const row = byField(plan).variationPictures
+    expect(row).toMatchObject({ label: 'Variation pictures', selectable: true, current: { state: 'value', value: pictures } })
+    expect(row.channel).toEqual({ state: 'value', value: { axis: 'Colore', bySku: { 'FAM-RED-M': ['https://img.example/old.jpg'], 'FAM-RED-L': ['https://img.example/old.jpg'] } } })
+  })
+  it('compiles whole item bodies without stock or read-only fields, and names the photo aspect on the group', () => {
+    const plan = prepareEbayInventoryChanges({ owner, destination, ours: ours({ variationPictures: pictures }), live: withItems(items), baselineValues: accepted({}) })
+    const compiled = compileEbayInventoryChanges(plan, [byField(plan).variationPictures.id])
+    expect(compiled.items['FAM-RED-M']).toEqual({ condition: 'NEW', product: { title: 'FAM-RED-M', aspects: { Colore: ['Rosso'] }, imageUrls: pictures.bySku['FAM-RED-M'] } })
+    expect((compiled.group!.variesBy as any).aspectsImageVariesBy).toEqual(['Colore'])
+  })
+  it('refuses a SKU not on the listing, more than 12 photos, an aspect the listing does not vary by, and an unknown item field', () => {
+    const refusal = (over: any, liveItems: Record<string, unknown> = items) =>
+      byField(prepareEbayInventoryChanges({ owner, destination, ours: ours({ variationPictures: { ...pictures, ...over } }), live: withItems(liveItems), baselineValues: accepted({}) })).variationPictures.reason
+    expect(refusal({ bySku: { 'FAM-NEW-M': ['https://img.example/x.jpg'] } })).toContain('not on this eBay listing yet')
+    expect(refusal({ bySku: { 'FAM-RED-M': Array.from({ length: 13 }, (_, i) => `https://img.example/${i}.jpg`) } })).toContain('1 to 12 HTTPS photos')
+    expect(refusal({ axis: 'Materiale' })).toContain('does not vary by Materiale')
+    expect(refusal({}, { ...items, 'FAM-RED-M': { ...liveItem('FAM-RED-M'), listingPolicies: {} } })).toContain('unknown field (listingPolicies)')
+  })
+})
