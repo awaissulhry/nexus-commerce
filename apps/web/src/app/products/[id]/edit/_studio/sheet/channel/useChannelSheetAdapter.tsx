@@ -98,7 +98,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const languageScope = useStudioScope();
     const { accounts, destination, setListing, registerScopeChangeGuard } = languageScope;
     const alternateAccount = !studioAccountAccess(accounts, accountId).supportsPrimaryTools;
-    const { data: loadedData, loading, error, backendMissing, reload, refresh } = useChannelSheet({
+    const { data: loadedData, loading, switching, error, backendMissing, reload, refresh } = useChannelSheet({
         productId,
         locales: languageScope.locales,
         schemaRevision: shopifySchema?.revision,
@@ -843,7 +843,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const noAccount = !accountId && !data?.scope.connectionId && accounts.length === 0;
     return {
         scope: 'channel',
-        loading, unavailable: unavailable,
+        loading, switching, unavailable: unavailable,
         errorLabel: `${channelLabel(channel)} · ${marketplace} information`,
         errorMessage: error,
         backendMissing: backendMissing, retry: reload,
@@ -876,10 +876,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             unavailable: unavailable,
             overflow: [liveRead.menuItem, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: data ? `${rulesStatus(channel, marketplace, data.meta.schemaMissing).label}…` : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             // 2026-09-27 — one wording for the chip, the dialog and the empty grid (`rulesStatus`).
-            status: data ? [
+            status: [
+                ...(switching ? [{ tone: 'info' as const, label: 'Loading languages…', detail: 'The sheet keeps the languages it shows until the new ones arrive; editing resumes then.' }] : []),
+                ...(data ? [
                 ...(listingState === 'draft' ? [{ tone: 'info' as const, label: DRAFT_CHIP_LABEL, detail: draftChipDetail(channel, marketplace) }] : []),
                 (({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing)),
-            ] : [],
+            ] : []),
+            ],
         },
         toolbarExtra: <>    {liveRead.element}{pendingMasterWrite && (() => {
                 const pm = pendingMasterWrite;

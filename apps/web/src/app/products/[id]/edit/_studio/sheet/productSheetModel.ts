@@ -17,6 +17,8 @@ type CommonToolbarProps = 'views' | 'presets' | 'activePresetId' | 'languagesVie
 export interface ProductSheetModel<Row, Page, DrawerRow extends SheetRow = SheetRow> {
   scope: 'master' | 'channel'
   loading: boolean
+  /** Only the languages changed and the new read is on its way: the last sheet stays on screen, dimmed and held. */
+  switching?: boolean
   unavailable: boolean
   backendMissing: boolean
   errorLabel: string

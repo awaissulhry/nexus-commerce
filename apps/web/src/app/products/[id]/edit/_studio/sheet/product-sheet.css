@@ -1,0 +1,15 @@
+/* 2026-09-27 — the sheet held while only its languages change (`ProductSheetSurface`, `switching`). The wrapper is
+   `display: contents`, so it adds no box and the grid keeps its layout; the grid under it is dimmed and `inert`. */
+.nds-sheet-hold {
+  display: contents;
+}
+.nds-sheet-hold.is-held > * {
+  opacity: 0.55;
+  transition: opacity 120ms ease-out;
+  cursor: progress;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nds-sheet-hold.is-held > * {
+    transition: none;
+  }
+}
