@@ -207,7 +207,8 @@ describe('the handover claim this package corrected', () => {
   })
 
   it('and it has a live call site outside the client', () => {
-    const route = readFileSync(join(SRC, 'routes', 'marketplaces.routes.ts'), 'utf8')
-    expect(route).toContain('amazonSpApiClient.putListingsItem({')
+    // It was `routes/marketplaces.routes.ts`'s direct publish until the old product editor, its only caller, was deleted.
+    const adapter = readFileSync(join(SRC, 'services', 'listing-wizard', 'amazon-publish.adapter.ts'), 'utf8')
+    expect(adapter).toContain('amazonSpApiClient.putListingsItem({')
   })
 })

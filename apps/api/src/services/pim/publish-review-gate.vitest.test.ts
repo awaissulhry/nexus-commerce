@@ -154,7 +154,9 @@ describe('the fourth eBay direct push (pushVariationGroup)', () => {
 describe('every named publish path consults the one function', () => {
   // R-LX-7's list, verbatim. This is a set claim about the gate's coverage, so
   // each member is read from source and the two text-free paths are measured
-  // rather than exempted by assertion.
+  // rather than exempted by assertion. (Its ninth member, the direct publish
+  // route + preflight in marketplaces.routes.ts, was deleted with the old
+  // product editor, its only caller.)
   const gated = [
     ['Amazon payload builder', 'apps/api/src/services/pim/amazon-content-payload.ts', 'assertContentReviewed'],
     ['the queue drain (every channel)', 'apps/api/src/services/outbound-sync.service.ts', 'assertListingContentReviewed'],
@@ -164,7 +166,6 @@ describe('every named publish path consults the one function', () => {
     ['eBay variation group push', 'apps/api/src/services/ebay-variation-push.service.ts', 'assertListingContentReviewed'],
     ['Shopify content sync', 'apps/api/src/services/shopify/content-sync.service.ts', 'assertListingContentReviewed'],
     ['content auto-publish', 'apps/api/src/services/content-auto-publish.service.ts', 'assertListingContentReviewed'],
-    ['the publish route + preflight', 'apps/api/src/routes/marketplaces.routes.ts', 'publishContentIssues'],
   ] as const
   it.each(gated)('%s calls %s', (_name, file, symbol) => {
     const source = readFileSync(new URL(`../../../../../${file}`, import.meta.url), 'utf8')

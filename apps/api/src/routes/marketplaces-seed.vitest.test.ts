@@ -98,21 +98,4 @@ describe('A-53 market routes, inside the request’s business', () => {
       expect(await count('nexus_legacy_workspace')).toBe(20)
     } finally { vi.unstubAllEnvs() }
   })
-
-  it('the publish preflight asks the business’s own market table, as the publish route does', async () => {
-    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
-    try {
-      const product = await withWorkspace(scope('EMPTY'), () => state.db.client.product.create({ data: { sku: 'A53-PREFLIGHT', name: 'Preflight jacket', basePrice: 100 } }))
-      const issues = async (marketplace: string) => {
-        const response = await call('POST', `/products/${product.id}/publish-preflight`, 'EMPTY', { coordinates: [{ channel: 'AMAZON', marketplace }] })
-        expect(response.statusCode, response.body).toBe(200)
-        return response.json().coordinates[0].issues.map((i: { message: string }) => i.message) as string[]
-      }
-      // Amazon BE is in this business's table: mapped (the old 17-row list said "not mapped").
-      expect(await issues('BE')).not.toContain('No marketplace mapping for AMAZON/BE')
-      // A row with no marketplace id is not mapped, whatever a static list says (the old list said IT was).
-      await withWorkspace(scope('EMPTY'), () => state.db.client.marketplace.updateMany({ where: { channel: 'AMAZON', code: 'IT' }, data: { marketplaceId: null } }))
-      expect(await issues('IT')).toContain('No marketplace mapping for AMAZON/IT')
-    } finally { vi.unstubAllEnvs() }
-  })
 })

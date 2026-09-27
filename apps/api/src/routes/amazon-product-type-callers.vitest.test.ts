@@ -4,7 +4,8 @@
  * the region's other markets, else the category mapping, else `Product.productType`.
  *
  * Measured before: a jacket COAT in DE and IT but OUTERWEAR on the product got OUTERWEAR for a first listing in BE made
- * through the product-page schema, the direct publish or its preflight; its GTIN status looked for an OUTERWEAR
+ * through the product-page schema, the direct publish or its preflight (both deleted with the old product editor since);
+ * its GTIN status looked for an OUTERWEAR
  * exemption; a type-less product listed COAT elsewhere showed "blocked" in the grid's listing health; and the cockpit
  * publish and the Amazon pre-flight report built their row (schema hints, byte limits, report type) as OUTERWEAR. On an
  * in-process PostgreSQL (PGlite) with the REAL resolver, sibling query and `resolveBatch`; only outbound calls and
@@ -57,7 +58,6 @@ vi.mock('../services/amazon/mapping-payload.js', async importOriginal => ({ ...a
 import prisma from '../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
 import listingWizardRoutes from './listing-wizard.routes.js'
-import marketplacesRoutes from './marketplaces.routes.js'
 import productChannelDataRoutes from './product-channel-data.routes.js'
 import amazonCockpitPublishRoutes from './amazon-cockpit-publish.routes.js'
 import { buildPreflightReport } from '../services/amazon/preflight-report.service.js'
@@ -82,7 +82,6 @@ beforeAll(async () => {
   app = Fastify()
   app.addHook('preHandler', (_request, _reply, done) => { withWorkspace(legacy, done) })
   await app.register(listingWizardRoutes, { prefix: '/api' })
-  await app.register(marketplacesRoutes, { prefix: '/api' })
   await app.register(productChannelDataRoutes, { prefix: '/api' })
   await app.register(amazonCockpitPublishRoutes, { prefix: '/api' })
   await app.ready()
@@ -163,49 +162,6 @@ describe('product-page schema (GET /products/:id/listings/:channel/:marketplace/
     expect(s.aspects).toHaveBeenCalledWith('90001', 'IT', expect.anything())
     // eBay never borrows an Amazon type, from the product or another market.
     expect((await schema('typeless', 'EBAY', 'IT')).json()).toMatchObject({ code: 'no_ebay_category' })
-  })
-})
-
-const preflight = async (key: string, coordinates: Array<{ channel: string; marketplace: string }>) => {
-  const response = await app.inject({ method: 'POST', url: `/api/products/${ids[key]}/publish-preflight`, payload: { coordinates } })
-  expect(response.statusCode, response.body).toBe(200)
-  return response.json().coordinates as Array<{ channel: string; status: string; resolved: { productType: string | null }; issues: Array<{ message: string }> }>
-}
-const publish = (key: string, channel: string, marketplace: string) => app.inject({ method: 'POST', url: `/api/products/${ids[key]}/listings/${channel}/${marketplace}/publish`, payload: {} })
-
-describe('direct publish and its preflight', () => {
-  it('Amazon BE, unlisted there, COAT in DE and IT → the preflight predicts COAT and the publish sends COAT', async () => {
-    expect((await preflight('jacket', [{ channel: 'AMAZON', marketplace: 'BE' }]))[0].resolved.productType).toBe('COAT')
-    const response = await publish('jacket', 'AMAZON', 'BE')
-    expect(response.json()).toMatchObject({ ok: true, status: 'DRY_RUN' })
-    expect(s.put).toHaveBeenCalledWith(expect.objectContaining({ productType: 'COAT', marketplaceId: 'FAKE_MARKETPLACE_ID' }))
-  })
-  it('a product with no type of its own publishes with its sibling markets’ type instead of failing', async () => {
-    const [row] = await preflight('typeless', [{ channel: 'AMAZON', marketplace: 'BE' }])
-    expect(row).toMatchObject({ status: 'ready', resolved: { productType: 'COAT' } })
-    expect((await publish('typeless', 'AMAZON', 'BE')).json()).toMatchObject({ ok: true })
-    expect(s.put).toHaveBeenCalledWith(expect.objectContaining({ productType: 'COAT' }))
-  })
-  it('a listing in this market names its own type → it still wins', async () => {
-    expect((await preflight('pinned', [{ channel: 'AMAZON', marketplace: 'BE' }]))[0].resolved.productType).toBe('PANTS')
-    await publish('pinned', 'AMAZON', 'BE')
-    expect(s.put).toHaveBeenCalledWith(expect.objectContaining({ productType: 'PANTS' }))
-  })
-  it('no type resolvable → the same 422 and message as before, nothing sent', async () => {
-    expect((await preflight('bare', [{ channel: 'AMAZON', marketplace: 'BE' }]))[0].issues.map(i => i.message)).toContain('Product type is required')
-    const response = await publish('bare', 'AMAZON', 'BE')
-    expect(response.statusCode).toBe(422)
-    expect(response.json()).toMatchObject({ ok: false, status: 'INVALID', message: 'Product type is required' })
-    expect(s.put).not.toHaveBeenCalled()
-  })
-  it('non-Amazon unchanged: listing type, else the product’s own — never another market’s Amazon listing', async () => {
-    const rows = await preflight('jacket', [{ channel: 'EBAY', marketplace: 'IT' }, { channel: 'SHOPIFY', marketplace: 'BE' }])
-    expect(rows.map(r => r.resolved.productType)).toEqual(['90001', 'OUTERWEAR'])
-    expect((await preflight('typeless', [{ channel: 'SHOPIFY', marketplace: 'BE' }]))[0].resolved.productType).toBeNull()
-    // The direct publish still asks every channel for a type, and eBay still gets none from Amazon's listings.
-    const response = await publish('typeless', 'EBAY', 'IT')
-    expect(response.statusCode).toBe(422)
-    expect(response.json()).toMatchObject({ message: 'Product type is required' })
   })
 })
 

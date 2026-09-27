@@ -135,7 +135,6 @@ import channelMappingRoutes from "./routes/channel-mapping.routes.js"; // PES.6
 import cellFormulaRoutes from "./routes/cell-formula.routes.js"; // PES.6 wave-4
 import valueMapRoutes from "./routes/value-map.routes.js";
 import mappingPropagationRoutes from "./routes/mapping-propagation.routes.js";
-import amazonCockpitRoutes from "./routes/amazon-cockpit.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
 import syncLogsRoutes from "./routes/sync-logs.routes.js";
 import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.js";
@@ -678,7 +677,6 @@ app.register(channelMappingRoutes, { prefix: '/api' }); // PES.6 — global mapp
 app.register(cellFormulaRoutes, { prefix: '/api' }); // PES.6 wave-4 — cell formulas + master rules
 app.register(valueMapRoutes, { prefix: '/api' });
 app.register(mappingPropagationRoutes, { prefix: '/api' });
-app.register(amazonCockpitRoutes, { prefix: '/api' });
 app.register(auditLogRoutes, { prefix: '/api' });
 app.register(syncLogsRoutes, { prefix: '/api' });
 app.register(listingsSyndicationRoutes, { prefix: '/api' });
