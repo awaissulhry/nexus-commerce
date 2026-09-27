@@ -37,6 +37,8 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/pim/attach-to-parent': 'pim-attach',
   '/api/pim/promote-to-parent': 'pim-promote',
   '/api/listing-wizard/:id/submit': 'wizard-submit',
+  // Attribute parity P3 — one "Download rules" click, one sequential run of provider fetches.
+  '/api/categories/schema/download': 'schema-download',
 }
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
