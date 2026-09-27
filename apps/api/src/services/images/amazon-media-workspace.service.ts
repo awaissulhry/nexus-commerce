@@ -8,7 +8,7 @@ import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { amazonMediaClient, amazonVariationAttributes, marketValue, mediaObject } from './amazon-media-client.js'
-import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL, mediaPlanRevision } from './media-plan-switch.js'
 
 export const AMAZON_MEDIA_KEY = '_amazonMediaWorkspace'
 export const mediaHash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -110,12 +110,15 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
       label: `${items.find(i => i.id === id)?.sku || 'Amazon'} · ${code}`, width: null, height: null, origin: 'saved-gallery' })
   }
   const label = aliasKey ? aliases.find(a => a.id === aliasKey)!.label : 'Primary listing'
+  // Images rebuild P2e — a family on the media plan also binds its reviews to the plan's Amazon layers.
+  const planRevision = await mediaPlanRevision(destination.familyId, 'AMAZON', destination.accountId)
   // Every relevant listing and source participates in CAS. Remote checks do not
   // change the draft fingerprint, but refreshing context invalidates old reviews.
   const revision = mediaHash([rows.map(r => {
     const { _amazonMediaObservations: _observations, ...attributes } = mediaObject(r.platformAttributes)
     return [r.id, r.version, r.externalListingId, r.platformProductId, attributes, r.variationTheme, r.flatFileSnapshot, r.product.sku, r.product.variantAttributes]
-  }), assets, market.language, aliasKey, Object.entries(observations).map(([id, o]) => [id, o.error, o.theme, o.attributes, o.productType, o.supported])])
+  }), assets, market.language, aliasKey, Object.entries(observations).map(([id, o]) => [id, o.error, o.theme, o.attributes, o.productType, o.supported]),
+  ...(planRevision ? [planRevision] : [])])
   return { productId, revision, draft, assets, items, warnings, observations, markets: markets.map(m => ({ code: m.code, label: m.name })), activeRunId: typeof pa._amazonMediaActiveRun === 'string' ? pa._amazonMediaActiveRun : null,
     languages: [...new Set([market.language.toLowerCase().split(/[-_]/)[0], ...(destination.marketplace === 'CA' ? ['en', 'fr'] : destination.marketplace === 'BE' ? ['fr', 'nl', 'de'] : [])])],
     destination: { accountId: destination.accountId, marketplace: destination.marketplace, listingId: root?.id ?? null, aliasKey, label,

@@ -1,6 +1,6 @@
 import prisma from '../../db.js'
-import { applyMediaOps, emptyMediaPlan, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
-import { projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { applyMediaOps, emptyMediaPlan, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
+import { channelNames, projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from '@nexus/shared/media-plan-channels'
 import { storedVariationValues } from '../pim/stored-variation-projection.js'
 import { optionForValue, type DictionaryAttribute } from '../pim/family-variations-core.js'
 import { canonicalVariantAxis } from '../pim/variant-attribute-keys.js'
@@ -142,6 +142,9 @@ async function loadDestinations(productIds: string[]) {
 type Destination = Awaited<ReturnType<typeof loadDestinations>>['destinations'][number]
 /** What a publisher knows better than the page: the channel's own names and the variants its review includes. */
 export interface MediaLayoutOverrides { valueNames?: Record<string, string>; axisName?: string | null; includedIds?: readonly string[] }
+/** A publisher's channel values, as its variation projection resolved them: per variant, per axis label (`Colore`),
+ *  the value the channel receives; and per axis label, the channel's axis name. */
+export interface MediaChannelValues { byProduct: Record<string, Record<string, string>>; axisNames: Record<string, string | null> }
 
 /** Everything a layout needs, loaded once for the family — the page and the publishers use this one loader. */
 async function loadMediaContext(rootId: string) {
@@ -196,7 +199,7 @@ export async function isMediaSwitched(productId: string): Promise<boolean> {
  * keeps today's behaviour). Computed by the same loader and projection as the page, so both agree on language versions,
  * listed variants and order; the publisher supplies the channel's own names and the variants its review includes.
  */
-export async function mediaLayoutFor(input: { productId: string; channel: MediaChannel; marketplace: string; accountId: string; aliasKey?: string } & MediaLayoutOverrides) {
+export async function mediaLayoutFor(input: { productId: string; channel: MediaChannel; marketplace: string; accountId: string; aliasKey?: string; channelValues?: MediaChannelValues } & MediaLayoutOverrides) {
   const rootId = await familyRoot(input.productId)
   if (!(await isOnMediaPlan(rootId))) return null
   const ctx = await loadMediaContext(rootId)
@@ -205,7 +208,16 @@ export async function mediaLayoutFor(input: { productId: string; channel: MediaC
   const d = ctx.destinations.find(x => x.key === key)
   if (!d) throw new WorkspaceScopeError('This listing is not one of the product\'s photo destinations yet. Reload the Media page.', 409)
   if (!d.targetable) throw new WorkspaceScopeError(d.refusal ?? 'This destination cannot receive photos.', 409)
-  const layout = projectDestination(ctx, d, input)
+  // The channel's own names for the picture axis and its values, from the publisher's projection (pins, value maps).
+  const names: MediaLayoutOverrides = {}
+  if (input.channelValues) {
+    const { axis } = resolveAxis({ shared: ctx.byKey.get('SHARED')?.plan ?? null, channel: ctx.byKey.get(`CHANNEL:${d.channel}`)?.plan ?? null, listing: ctx.byKey.get(key)?.plan ?? null }, ctx.family.defaultAxis)
+    const named = channelNames({ axes: ctx.axes, variants: ctx.family.variants, axis, channelValues: input.channelValues, valueLabels: ctx.family.valueLabels })
+    if (named.conflicts.length) throw new WorkspaceScopeError(named.conflicts.join(' '), 409)
+    names.valueNames = named.valueNames
+    names.axisName = named.axisName
+  }
+  const layout = projectDestination(ctx, d, { ...input, ...names })
   const url = (id: string) => {
     const asset = ctx.assets.get(id)
     if (!asset) throw new WorkspaceScopeError('A photo in the plan was deleted from the library. Review the Media page.', 409)

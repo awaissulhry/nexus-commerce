@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MediaPlan, MediaPlanStack } from './media-plan'
-import { pickVersion, projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
+import { amazonSlotsFor, channelNames, pickVersion, projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
 
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
 const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
@@ -82,6 +82,12 @@ describe('Amazon layout', () => {
     expect(out.items.map(i => i.sku)).toEqual(['GALE-YELLOW-M', 'GALE-BLACK-M', 'GALE-BLACK-L'])
     expect(out.parent?.slots.MAIN).toBe('cover')
   })
+  it('gives each product its own slots, the parent its Common slots, and nothing to a product not in the layout', () => {
+    const out = projectAmazon(stack, family, assets, amazon)
+    expect(amazonSlotsFor(out, 'b-m')?.MAIN).toBe('cover')
+    expect(amazonSlotsFor(out, 'root')?.MAIN).toBe('cover')
+    expect(amazonSlotsFor(out, 'b-xl')).toBeNull()
+  })
   it('names what does not fit, adds the swatch, and lets a per-SKU set win', () => {
     const many = library(...assets.values(), ...Array.from({ length: 10 }, (_, i) => asset(`m${i}`)), asset('sw'), asset('own'))
     const p = plan({ common: ids('cover'), values: { 'color:black': ids(...Array.from({ length: 10 }, (_, i) => `m${i}`)) }, skus: { 'b-l': ids('own') }, swatches: { 'color:black': { assetId: 'sw' } } }, 'color')
@@ -127,5 +133,21 @@ describe('language versions (D6)', () => {
     expect(pickVersion('a-it', lib, ['mul', 'it'], 'it')).toMatchObject({ assetId: 'a-mul', exact: true })
     expect(pickVersion('a-en', lib, ['it'], 'it')).toMatchObject({ assetId: 'a-it', exact: true })
     expect(pickVersion('gone', lib, ['it'], 'it')).toBeNull()
+  })
+})
+
+describe('channel names', () => {
+  const axes = [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }]
+  it('names each value with what the listing receives (a pin wins over Shared) and the axis with the listing name', () => {
+    const out = channelNames({ axes, variants: family.variants, axis: 'color', valueLabels: family.valueLabels, channelValues: {
+      byProduct: { 'y-m': { Colore: 'Giallo', Taglia: 'M' }, 'b-m': { Colore: 'Nero opaco', Taglia: 'M' }, 'b-l': { Colore: 'Nero opaco', Taglia: 'L' } },
+      axisNames: { Colore: 'Colore', Taglia: 'Taglia' } } })
+    expect(out).toEqual({ axisName: 'Colore', conflicts: [], valueNames: { 'color:yellow': 'Giallo', 'color:black': 'Nero opaco', 'size:m': 'M', 'size:l': 'L' } })
+  })
+  it('reports one value named two ways, and leaves an unnamed value for the checks', () => {
+    const out = channelNames({ axes, variants: family.variants, axis: 'color', valueLabels: family.valueLabels, channelValues: {
+      byProduct: { 'b-m': { Colore: 'Nero' }, 'b-l': { Colore: 'Schwarz' } }, axisNames: { Colore: 'Farbe' } } })
+    expect(out.conflicts).toEqual(['Nero is named both "Nero" and "Schwarz" on this listing.'])
+    expect(out.valueNames['color:yellow']).toBeUndefined()
   })
 })
