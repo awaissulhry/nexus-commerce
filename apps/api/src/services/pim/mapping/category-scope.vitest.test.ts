@@ -5,6 +5,7 @@ const db = vi.hoisted(() => ({
   productCategory: { findMany: vi.fn() },
   categoryChannelMapping: { findMany: vi.fn() },
   category: { findMany: vi.fn() }, categoryClosure: { findMany: vi.fn(async () => []) },
+  $queryRaw: vi.fn(async () => [] as unknown[]), // the Amazon sibling-market read (category-sibling-market.vitest.test.ts)
 }))
 vi.mock('../../../db.js', () => ({ default: db }))
 import { categoryForListing, resolveCategoriesForProducts, type ResolvedCategory } from './category-mapping.service.js'
@@ -26,6 +27,14 @@ describe('channel category isolation', () => {
   it('keeps the legacy Amazon type as an Amazon fallback', async () => {
     const result = await resolveCategoriesForProducts({ productIds: ['jacket'], channel: 'AMAZON', marketplace: 'IT' })
     expect(result.jacket).toEqual(legacy)
+  })
+
+  it('reads the sibling Amazon markets in ONE query for the whole set, and never for another channel', async () => {
+    db.product.findMany.mockResolvedValue([{ id: 'jacket', productType: 'OUTERWEAR' }, { id: 'jacket-m', parentId: 'jacket', productType: 'OUTERWEAR' }])
+    await resolveCategoriesForProducts({ productIds: ['jacket', 'jacket-m'], channel: 'AMAZON', marketplace: 'BE' })
+    expect(db.$queryRaw).toHaveBeenCalledTimes(1)
+    for (const channel of ['EBAY', 'SHOPIFY', 'ETSY']) await resolveCategoriesForProducts({ productIds: ['jacket'], channel, marketplace: 'IT' })
+    expect(db.$queryRaw).toHaveBeenCalledTimes(1)
   })
 
   it.each(['EBAY', 'SHOPIFY'])('does not invent a %s category from an Amazon product type', async (channel) => {
