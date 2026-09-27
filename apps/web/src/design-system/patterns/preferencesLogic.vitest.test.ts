@@ -237,6 +237,10 @@ describe('inViewCount — locking a column shrinks neither side', () => {
   it('structural columns are in neither number', () => {
     expect(inViewCount(COLS, V({ visibleColumns: [] }), []).total).toBe(4)
   })
+  it('an uncounted column (the sheet\'s progress bars, 2026-09-27) is listed but in neither number', () => {
+    const withProgress: PreferencesColumnSpec[] = [...COLS, { key: 'progress:scope', label: 'Shared product', uncounted: true }]
+    expect(inViewCount(withProgress, V({ visibleColumns: [...V().visibleColumns, 'progress:scope'] }), [])).toEqual({ shown: 3, total: 4 })
+  })
 })
 
 describe('lockSide — a right-side lock (an actions bookend) reads in SCREEN order', () => {

@@ -36,5 +36,13 @@ export function GridViewsMenuExample() {
     <h3>Views menu — team views and rule views</h3>
     <p>My views first, then views a teammate shared. A teammate&apos;s view can be applied and duplicated, never changed. A view that follows a rule says so; a new column there joins it by itself.</p>
     <GridViewsMenu<null> views={api} showCounts productType={OUTERWEAR} describeView={(v) => ({ note: NOTES[v.id] })} />
+    <h3>As a sheet&apos;s “Columns” menu (2026-09-27)</h3>
+    <p>Headings name each section, the trigger names the question and the answer, the sheet adds My layout after the built-in views and Customise at the end.</p>
+    <GridViewsMenu<null> views={api} showCounts headings productType={OUTERWEAR} describeView={(v) => ({ note: NOTES[v.id] })}
+      presets={[{ id: 'all', label: 'All attributes', columns: ['name', 'brand', 'color'] }, { id: 'required', label: 'Required', columns: ['name'] }]}
+      activePresetId={activeId ? null : 'all'}
+      triggerLabel={<><span className="nds-toolbar-menu-lead">Columns</span><span className="nds-toolbar-fold-active">{views.find((v) => v.id === activeId)?.name ?? 'All attributes'}</span></>}
+      afterPresets={[{ id: 'my-layout', label: 'My layout (2)' }]}
+      endItems={[{ id: 'customise', label: 'Customise columns…' }]} />
   </section>
 }

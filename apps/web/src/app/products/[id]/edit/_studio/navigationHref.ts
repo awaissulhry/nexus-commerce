@@ -4,8 +4,11 @@ import type { ChannelOption, StudioScopeId, StudioTabId } from './types'
 export function studioChannelViewPatch(scope: StudioScopeId, market: string | null, channel: ChannelOption, tab: StudioTabId): Record<string, string | undefined> {
   const view = { tab: tab === 'sheet' ? undefined : tab }
   if (scope === channel.id) return view
+  // Languages belong to the scope they were picked on, exactly as the Editing menu's `setScope` drops them: a channel
+  // market that lacks one of them would otherwise open on "Choose supported content languages" (2026-09-27).
   return { ...view, scope: channel.id,
     market: market && channel.markets.includes(market) ? market : channel.markets[0],
+    locale: undefined, locales: undefined,
     account: undefined, listing: undefined, rec: undefined, cell: undefined, chip: undefined }
 }
 

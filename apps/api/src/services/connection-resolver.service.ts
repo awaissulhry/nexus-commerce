@@ -155,9 +155,16 @@ export function chooseConnection(
   throw new AmbiguousConnectionError(opts.channel, active.map((c) => c.id), opts.hint);
 }
 
-/** Every active connection, optionally restricted to a channel, in the operator's own order. */
-export async function listActiveConnections(channel?: string): Promise<ConnectionRow[]> {
-  return prisma.channelConnection.findMany({
+/**
+ * Every active connection, optionally restricted to a channel, in the operator's own order.
+ * `db` lets a writer read inside its own transaction (`ensureDraftListings`): a second connection
+ * opened mid-transaction does not see the transaction's rows and can wait on a full pool.
+ */
+export async function listActiveConnections(
+  channel?: string,
+  db: Pick<Prisma.TransactionClient, "channelConnection"> = prisma,
+): Promise<ConnectionRow[]> {
+  return db.channelConnection.findMany({
     where: { ...(channel ? { channelType: channel } : {}), isActive: true },
     orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
     select: CONNECTION_PUBLIC_SELECT,

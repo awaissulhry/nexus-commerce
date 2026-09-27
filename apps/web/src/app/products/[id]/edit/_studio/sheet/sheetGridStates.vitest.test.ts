@@ -36,7 +36,9 @@ describe('information grid states', () => {
       onCustomise: vi.fn(), onImport: vi.fn(), onExport: vi.fn(), onReload: vi.fn(), ...state,
     }))
     expect(html).toContain(state.loading ? 'Loading information…' : 'Information unavailable')
-    for (const label of ['All attributes', 'Customise', 'Export', 'Import']) expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${label}</button>`))
+    // The Columns menu is held as a disabled "Columns" button while the sheet cannot be read (2026-09-27).
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*><span class="nds-toolbar-menu-lead">Columns<\/span><\/button>/)
+    for (const label of ['Customise', 'Export', 'Import']) expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${label}</button>`))
     expect(html).toContain('aria-label="More"')
     expect(html).not.toContain('0 rows')
     expect(html).not.toContain('views: not supplied')

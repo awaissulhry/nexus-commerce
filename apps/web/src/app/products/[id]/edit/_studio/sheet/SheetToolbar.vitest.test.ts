@@ -173,3 +173,62 @@ describe('SheetToolbar selection state (SHEET-VIEWS, Owner 2026-09-26: the produ
     expect(markup).not.toContain('nds-grid-selbar')
   })
 })
+
+describe('TOOLBAR REBUILD (Owner, 2026-09-27): one control per question', () => {
+  const chips = [
+    { id: 'missing-required', label: 'Missing required', count: { n: 168, unit: 'cells' as const }, cells: { byRow: {} } },
+    { id: 'warnings', label: 'Warnings', count: { n: 12, unit: 'cells' as const }, cells: { byRow: {} } },
+  ]
+  const views = { views: [{ id: 'v1', name: 'Launch', isDefault: false, payload: { v: 2, kind: 'columns', columns: ['brand'] }, updatedAt: '2026-09-27T00:00:00Z', owned: true }],
+    activeId: null, save: vi.fn(), apply: vi.fn(), remove: vi.fn(), rename: vi.fn(), duplicate: vi.fn(), setDefault: vi.fn(), clearDefault: vi.fn() } as never
+  const presets = [{ id: 'all', label: 'All attributes', columns: ['a', 'b', 'c'] }, { id: 'required', label: 'Required', columns: ['a'] }]
+  const base = { visible: 21, total: 21, selected: 0, search: '', onSearch: vi.fn(), chips, onChipToggle: vi.fn(), views, presets, onApplyPreset: vi.fn(), onCustomise: vi.fn() }
+  const text = (node: unknown) => renderToStaticMarkup(createElement(Fragment, null, node as never))
+
+  it('Rows names what is on — never how many filters exist — and offers a one-click clear', () => {
+    const idle = renderToStaticMarkup(createElement(SheetToolbar, base))
+    expect(idle).toContain('<span class="nds-toolbar-menu-lead">Rows</span><span class="nds-toolbar-fold-active">All rows</span>')
+    expect(idle).not.toContain('Filters')
+    expect(idle).not.toContain('Clear the filter')
+    const on = renderToStaticMarkup(createElement(SheetToolbar, { ...base, activeChipId: 'missing-required' }))
+    expect(on).toContain('<span class="nds-toolbar-fold-active">Missing required</span><span class="nds-toolbar-fold-count">168 cells</span>')
+    expect(on).toContain('aria-label="Clear the filter Missing required"')
+  })
+
+  it('says, as a switch in the Rows menu, that a filter also narrows the columns (D1 = A)', () => {
+    menuInputs.length = 0
+    const onNarrow = vi.fn()
+    renderToStaticMarkup(createElement(SheetToolbar, { ...base, activeChipId: 'warnings', narrowToMatches: true, onNarrowToMatches: onNarrow }))
+    const rows = menuInputs.find(list => list.some(item => item.id === 'filter:all'))!
+    const narrow = rows.find(item => item.id === 'filter:narrow')!
+    expect(narrow.checked).toBe(true)
+    expect(text(narrow.label)).toBe('Only columns with matches')
+    narrow.onSelect!()
+    expect(onNarrow).toHaveBeenCalledWith(false)
+    // No filter on, no switch.
+    menuInputs.length = 0
+    renderToStaticMarkup(createElement(SheetToolbar, { ...base, narrowToMatches: true, onNarrowToMatches: onNarrow }))
+    expect(menuInputs.find(list => list.some(item => item.id === 'filter:all'))!.some(item => item.id === 'filter:narrow')).toBe(false)
+  })
+
+  it('Columns names the view and its attribute count; no Required or Languages chip sits beside it', () => {
+    const markup = renderToStaticMarkup(createElement(SheetToolbar, { ...base, activePresetId: 'required', activeCount: 9 }))
+    expect(markup).toContain('<span class="nds-toolbar-menu-lead">Columns</span><span class="nds-toolbar-fold-active">Required</span><span class="nds-toolbar-fold-count">9</span>')
+    expect(markup).not.toContain('nds-fchip')
+    expect(markup).not.toMatch(/>Languages</)
+  })
+
+  it('the Columns menu reads Built-in views (with My layout), My views, then Customise columns…', () => {
+    menuInputs.length = 0
+    const onMine = vi.fn()
+    renderToStaticMarkup(createElement(SheetToolbar, { ...base, activePresetId: null, myLayout: { count: 48 }, myLayoutActive: true, onApplyMyLayout: onMine }))
+    const columns = menuInputs.find(list => list.some(item => item.id === 'preset:all'))!
+    const shape = columns.filter(item => !item.separator).map(item => item.heading ? `# ${text(item.label)}` : item.id)
+    expect(shape.slice(0, 5)).toEqual(['# Built-in views', 'preset:all', 'preset:required', 'my-layout', '# My views'])
+    expect(shape[shape.length - 1]).toBe('customise')
+    const mine = columns.find(item => item.id === 'my-layout')!
+    expect(text(mine.label)).toBe('My layout (48) ✓')
+    mine.onSelect!()
+    expect(onMine).toHaveBeenCalled()
+  })
+})

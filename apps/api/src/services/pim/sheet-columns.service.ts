@@ -110,6 +110,12 @@ export interface SheetColumn {
   localizable?: boolean
   /** Set on a <key>@<locale> column in the saved Languages view. */
   locale?: string
+  /**
+   * On a <key>@<locale> column: the field's own group before the Languages split re-grouped it under the field's
+   * label (2026-09-27). The sheet's Customise dialog lists the FIELD once, in this group.
+   */
+  sourceGroup?: string
+  sourceGroupKey?: string
   managedBy?: 'productMedia'
   shopifyField?: import('@nexus/shared/shopify-information').InformationField
   familyRules?: FieldDefinition['familyRules']
