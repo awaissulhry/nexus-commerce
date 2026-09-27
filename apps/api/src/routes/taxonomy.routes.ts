@@ -3,6 +3,8 @@ import { taxonomyHistory, listTaxonomySources, readTaxonomyRequirements, request
 import { TaxonomyError } from '../services/taxonomy/model.js'
 import { categoryDirectory, categoryAssignments, categoryChangeImpact, applyCategoryCommand, CategoryTreeError, type CategoryCommand } from '../services/taxonomy/category-workspace.js'
 import { workspaceContext } from '@nexus/database/workspace-context'
+import { ebaySiteCoverage, ebaySiteSuggestions } from '../services/pim/mapping/ebay-site-suggestions.service.js'
+import { applyEbaySiteAssignments, undoEbaySiteAssignments } from '../services/pim/mapping/ebay-site-assignments.service.js'
 
 const routes: FastifyPluginAsync = async app => {
   const error = (reply: any, caught: unknown) => {
@@ -22,6 +24,20 @@ const routes: FastifyPluginAsync = async app => {
   })
   app.get<{ Params: { channel: string; market: string } }>('/pim/category-workspace/:channel/:market/assignments', async (request, reply) => {
     try { return await categoryAssignments(request.params.channel.toUpperCase(), request.params.market.toUpperCase()) } catch (caught) { return error(reply, caught) }
+  })
+  // "Fill other eBay sites" (D1 = A, 2026-09-27): which rows can be filled, the suggestions for one row, and the save
+  // (POST) with its undo (DELETE, the `assigned` rows of one save). Nothing is sent to eBay.
+  app.get('/pim/category-workspace/EBAY/site-coverage', async (_request, reply) => {
+    try { return await ebaySiteCoverage() } catch (caught) { return error(reply, caught) }
+  })
+  app.get<{ Querystring: { categoryId?: string } }>('/pim/category-workspace/EBAY/site-suggestions', async (request, reply) => {
+    try { return await ebaySiteSuggestions(request.query.categoryId as string) } catch (caught) { return error(reply, caught) }
+  })
+  app.post<{ Body: { categoryId?: unknown; assignments?: unknown } }>('/pim/category-workspace/EBAY/site-assignments', async (request, reply) => {
+    try { return await applyEbaySiteAssignments(request.body ?? {}, workspaceContext()?.actorUserId ?? null) } catch (caught) { return error(reply, caught) }
+  })
+  app.delete<{ Body: { categoryId?: unknown; assignments?: unknown } }>('/pim/category-workspace/EBAY/site-assignments', async (request, reply) => {
+    try { return await undoEbaySiteAssignments(request.body ?? {}, workspaceContext()?.actorUserId ?? null) } catch (caught) { return error(reply, caught) }
   })
   app.get('/pim/taxonomies', async (_request, reply) => {
     try { return { sources: await listTaxonomySources() } } catch (caught) { return error(reply, caught) }

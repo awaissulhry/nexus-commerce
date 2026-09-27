@@ -208,6 +208,7 @@ describe('the API’s command receipts', () => {
       '/api/categories/schema/download',
       '/api/listing-wizard/:id/submit',
       '/api/pim/attach-to-parent',
+      '/api/pim/category-workspace/EBAY/site-assignments',
       '/api/pim/promote-to-parent',
       '/api/products/bulk-replicate',
     ])

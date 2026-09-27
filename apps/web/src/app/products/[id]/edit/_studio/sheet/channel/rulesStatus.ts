@@ -7,6 +7,7 @@
  * Keys, as the API writes them (`sheet-columns.service.ts`): an Amazon product type (`OUTERWEAR`),
  * `AMAZON:category not selected`, `EBAY:<leaf>` / `EBAY:*`, `ETSY:<taxonomy>` / `ETSY:*`, `SHOPIFY:*`.
  */
+import { categoryHref } from '@/app/catalog/categories/api'
 import { channelLabel } from '../../scopes'
 
 const SHOPIFY_FIELDS_UNREAD = 'SHOPIFY:*'
@@ -35,10 +36,19 @@ export function missingRuleSentence(channel: string, market: string, key: string
   if (key === SHOPIFY_FIELDS_UNREAD) return 'The Shopify store fields are still loading.'
   if (key === AMAZON_TYPE_UNSET) return 'No Amazon product type is set. Choose one to load its fields.'
   if (key === 'ETSY:*') return 'No Etsy category is selected. Choose one to load its fields.'
-  if (key === 'EBAY:*') return `No eBay category is known for this product on ${where}. Choose one to load its fields.`
+  if (key === 'EBAY:*') return `No eBay category is chosen for ${where}. Choose one in Categories.`
   const scoped = /^(EBAY|ETSY):(.+)$/.exec(key)
   if (scoped) return `${scoped[1] === 'EBAY' ? 'eBay' : 'Etsy'}'s rules for category ${scoped[2]} are not downloaded yet.`
   return `Amazon's rules for ${key} on ${where} are not downloaded yet, so only the fixed columns show.`
+}
+
+/**
+ * Where the missing category is chosen, when the sheet can point there. eBay (`EBAY:*`): a site's category comes from
+ * the Categories workspace's assignment for that site, so the pointer opens its eBay assignments for this market.
+ */
+export function chooseCategoryLink(channel: string, market: string, missing: readonly string[]): { href: string; label: string } | null {
+  if (channel !== 'EBAY' || !missing.includes('EBAY:*')) return null
+  return { href: categoryHref('assignments', { channel: 'EBAY', market }), label: 'Choose one in Categories' }
 }
 
 export function rulesStatus(channel: string, market: string, missing: readonly string[]): RulesStatus {

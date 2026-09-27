@@ -296,7 +296,12 @@ export async function runMappingImpact(jobId: string) {
             if (errors.length) counts.invalid++
             if (!isPresent(b?.value)) counts.missing++
             if (errors.some(error => /conflict/i.test(error))) counts.conflicts++
-            if (errors.length && JSON.stringify(errors) !== JSON.stringify(a?.errors ?? [])) counts.introducedInvalid++
+            // A category change reaches a channel only through a listing. For a product with no listing on this
+            // coordinate it sends nothing, and the new category's required fields (eBay item specifics) only exist once
+            // the category does — so their empty values are work to do, still shown and counted as invalid, but they
+            // do not block the assignment. Listed products still do.
+            const canBlock = !payload.categoryChange || destination.listingIds.has(product.productId)
+            if (canBlock && errors.length && JSON.stringify(errors) !== JSON.stringify(a?.errors ?? [])) counts.introducedInvalid++
             rows.push({ productId: product.productId, sku: product.sku, listingId: destination.listingIds.get(product.productId) ?? null,
               accountId: destination.account ?? null, aliasKey: destination.alias, category: product.category.channelCategoryId,
               market: payload.market, language: before.locale ?? await languageForMarketplace(payload.market, payload.channel), field: change.fieldKey, before: a?.value ?? null, after: b?.value ?? null, source: b?.provenance ?? 'missing',
