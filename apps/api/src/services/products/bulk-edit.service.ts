@@ -2239,7 +2239,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // listing settings). Written as a JSON path set on the EXISTING listing — never created here.
     const platformPatchByCoord = new Map<
       string,
-      { productId: string; channel: string; marketplace: string; aliasKey: string; remove: string[]; sets: ChannelValueMutation['platform'] }
+      // `fields`: the changes' own fields (`attr_brand`), so a refusal names the cell that asked, not the JSON path.
+      { productId: string; channel: string; marketplace: string; aliasKey: string; fields: string[]; remove: string[]; sets: ChannelValueMutation['platform'] }
     >()
 
     for (const v of validated) {
@@ -2259,9 +2260,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             const key = `${v.id}|${ctx.channel}|${ctx.marketplace}|${aliasKey}`
             let entry = platformPatchByCoord.get(key)
             if (!entry) {
-              entry = { productId: v.id, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey, sets: [], remove: [] }
+              entry = { productId: v.id, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey, fields: [], sets: [], remove: [] }
               platformPatchByCoord.set(key, entry)
             }
+            if (!entry.fields.includes(v.field)) entry.fields.push(v.field)
             const mutation = channelValueMutation(store, [stripped, v.field], v.reset ? 'INHERIT' : 'SET', v.value)
             entry.remove.push(...mutation.overrideRemove)
             entry.sets.push(...mutation.platform)
@@ -2571,7 +2573,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       for (const e of entries) {
         const row = rows.find((l) => l.productId === e.productId && l.channel === e.channel && l.marketplace === e.marketplace && l.aliasKey === e.aliasKey)
         if (!row) {
-          errors.push({ id: e.productId, field: e.sets.map((x) => x.path.join('.')).join(','), error: `No ${e.channel} listing on ${e.marketplace} yet — a listing field needs the listing to exist` })
+          // One refusal per change, under the change's own field: the sheet matches errors by it,
+          // and a refusal it cannot match is painted as saved.
+          for (const field of e.fields) errors.push({ id: e.productId, field, error: `No ${e.channel} listing on ${e.marketplace} yet — a listing field needs the listing to exist` })
           continue
         }
         // Replacing a JSON bag must guard the snapshot even for callers without a token.

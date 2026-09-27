@@ -41,7 +41,9 @@
  *   bullmq-sync.worker.ts consumer picks the row up after the grace window and
  *   dispatches to pricing-outbound.service.ts → marketplace API. Listings whose
  *   price didn't change (followMasterPrice=false, or MATCH_AMAZON) get only the
- *   masterPrice snapshot update — no marketplace push needed.
+ *   masterPrice snapshot update — no marketplace push needed. A paused listing
+ *   (syncPaused) keeps the cascaded price but gets no queue row, as in the stock
+ *   cascade: the push lock refused that row at dispatch anyway.
  *
  * Audit:
  *   AuditLog row written with slim before/after diff (changed fields only — not
@@ -126,6 +128,7 @@ interface ChannelListingForCascade {
   pricingRule: 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER'
   priceAdjustmentPercent: Prisma.Decimal | null
   followMasterPrice: boolean
+  syncPaused: boolean
 }
 
 /**
@@ -224,6 +227,7 @@ export class MasterPriceService {
           pricingRule: true,
           priceAdjustmentPercent: true,
           followMasterPrice: true,
+          syncPaused: true,
         },
       })) as unknown as ChannelListingForCascade[]
 
@@ -280,6 +284,10 @@ export class MasterPriceService {
             },
           })
           cascadedListingIds.push(listing.id)
+          // A paused listing (an operator's pause, or an inert draft) keeps the stored price but is
+          // not queued, the way the stock cascade treats it. Dispatch refused its row anyway
+          // (PUSH_SYNC_PAUSED, terminal), so nothing sent changes; resume never replayed those rows.
+          if (listing.syncPaused) continue
           queueRowsToCreate.push({
             productId,
             channelListingId: listing.id,
@@ -327,14 +335,16 @@ export class MasterPriceService {
       let queuedSyncIds: string[] = []
       if (queueRowsToCreate.length > 0) {
         await createOutboundRows(tx, { data: queueRowsToCreate })
+        // The queued listings only: a paused listing is cascaded but not queued.
+        const queuedListingIds = queueRowsToCreate.map((row) => row.channelListingId as string)
         const justEnqueued = await tx.outboundSyncQueue.findMany({
           where: {
-            channelListingId: { in: cascadedListingIds },
+            channelListingId: { in: queuedListingIds },
             syncType: 'PRICE_UPDATE',
             syncStatus: 'PENDING',
           },
           orderBy: { createdAt: 'desc' },
-          take: cascadedListingIds.length,
+          take: queuedListingIds.length,
           select: { id: true },
         })
         queuedSyncIds = justEnqueued.map((r) => r.id)
