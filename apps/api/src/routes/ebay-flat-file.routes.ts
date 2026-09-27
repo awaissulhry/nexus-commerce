@@ -1,4 +1,4 @@
-import { assertPushAllowed, isStillDraftListing } from '@nexus/shared/push-lock'
+import { assertPublishAllowed, assertPushAllowed, isStillDraftListing } from '@nexus/shared/push-lock'
 import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
@@ -48,6 +48,7 @@ import {
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { familyPushRefusal } from '../services/ebay-push-lock.js';
 import { ebayListingLanguage } from '../services/gateway/channels.js';
 import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-axes.js';
 import { stampPendingSync } from '../services/flat-file/pending-sync-stamp.js';
@@ -1584,7 +1585,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const controls = await readPushControls({ channel: 'EBAY', skus: [String(row.sku ?? '')],
           productIds: row._productId ? [String(row._productId)] : [], allowAbsent: true });
         for (const listing of controls) {
-          const refusal = assertPushAllowed(listing);
+          // A still-draft's pause only keeps it inert; Push is a publish. Which site's draft may really be sent is
+          // decided per site inside the push (`familyPushRefusal`).
+          const refusal = isStillDraftListing(listing) ? assertPublishAllowed(listing) : assertPushAllowed(listing);
           if (refusal) return reply.code(409).send({ error: refusal.code, message: refusal.sentence, refusal });
         }
       }
@@ -1941,7 +1944,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const controls = await readPushControls({ channel: 'EBAY', skus: [String(row.sku ?? '')],
         productIds: row._productId ? [String(row._productId)] : [], allowAbsent: true });
       for (const listing of controls) {
-        const refusal = assertPushAllowed(listing);
+        // As the pre-check above: the per-site decision is `familyPushRefusal`, inside the push.
+        const refusal = isStillDraftListing(listing) ? assertPublishAllowed(listing) : assertPushAllowed(listing);
         if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal });
       }
     }
@@ -2409,7 +2413,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             curatedOverrides?.pictureAxis,
             curatedOverrides?.imageOverrideBySku,
             curatedOverrides?.groupImageOverride,
-            { warningsSink: axisWarnings, parentContent: themedParentContent, ...(curatedOverrides?.omitImageVariesBy ? { omitImageVariesBy: true } : {}) }, // EFX D7 warnings + P9e per-market parent content (ED.2: theme-rendered)
+            // `publishesDrafts`: Push is the flat file's publish, so a still-draft on this site may be sent.
+            { warningsSink: axisWarnings, parentContent: themedParentContent, publishesDrafts: true, ...(curatedOverrides?.omitImageVariesBy ? { omitImageVariesBy: true } : {}) }, // EFX D7 warnings + P9e per-market parent content (ED.2: theme-rendered)
           );
           perRowResults.push(...groupResults);
 
@@ -3505,7 +3510,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
 
           const controls = await readPushControls({ channel: 'EBAY', productIds: [productId] });
-          const refusal = controls.map(assertPushAllowed).find(Boolean);
+          // A still-draft on another site has no offer to touch. On this site it is still refused: this publish does
+          // not record the listing as published, so a draft sent here would stay paused.
+          const refusal = familyPushRefusal(controls, mpUpper);
           if (refusal) {
             results.push({ productId, market: mpUpper, status: 'REFUSED', message: `${refusal.code}: ${refusal.sentence}` });
             continue;
