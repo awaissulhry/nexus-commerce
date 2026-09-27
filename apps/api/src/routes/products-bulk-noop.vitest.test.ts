@@ -32,6 +32,7 @@ const channelListingFindMany = vi.fn()
 const channelListingFindUnique = vi.fn()
 const channelListingUpdate = vi.fn()
 const channelListingUpsert = vi.fn()
+const channelListingUpdateMany = vi.fn()
 const bulkOperationCreate = vi.fn()
 const executeRaw = vi.fn()
 const $transaction = vi.fn()
@@ -53,6 +54,13 @@ vi.mock('../services/pim/fulfillment-method.service.js', async (importOriginal) 
   setFulfillmentMethod: (...args: unknown[]) => fulfilmentWrite(...args),
 }))
 vi.mock('../services/pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: (...args: unknown[]) => resolveBatch(...args) }))
+// Product-sheet create path — the draft creator's own rules run on PostgreSQL (draft-listing.service and
+// bulk-edit-new-market tests); here only that the bulk route calls it, and with what.
+const ensureDrafts = vi.fn()
+vi.mock('../services/pim/draft-listing.service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/pim/draft-listing.service.js')>()),
+  ensureDraftListings: (...args: unknown[]) => ensureDrafts(...args),
+}))
 // Persistence contracts run without Redis or background cache workers.
 // LX.F R-LX-13 — and that now includes the QUEUE: this file's 68 failures in this
 // environment were all `getaddrinfo ENOTFOUND …upstash.io`, i.e. a DNS lookup for Redis
@@ -79,6 +87,7 @@ vi.mock('../db.js', () => {
       findUnique: (...a: unknown[]) => channelListingFindUnique(...a),
       update: (...a: unknown[]) => channelListingUpdate(...a),
       upsert: (...a: unknown[]) => channelListingUpsert(...a),
+      updateMany: (...a: unknown[]) => channelListingUpdateMany(...a),
     },
     bulkOperation: { create: (...a: unknown[]) => bulkOperationCreate(...a) },
     // Execute the outer interactive transaction; the spy measures its statement batches.
@@ -168,7 +177,7 @@ describe('Shopify and Etsy store information saves', () => {
         expect(result.json()).toMatchObject({ success: false, updated: 0, errors: [expect.objectContaining({ error: expect.stringContaining('ContentAddress') })] })
       }
       expect(productUpdate).not.toHaveBeenCalled()
-      expect(channelListingUpsert).not.toHaveBeenCalled()
+      expect(channelListingUpdateMany).not.toHaveBeenCalled()
       expect(executeRaw).not.toHaveBeenCalled()
     } finally { columns.mockRestore(); category.mockRestore() }
   })
@@ -200,7 +209,7 @@ describe('the Amazon fulfilment method writes through its one door (2026-09-27)'
       expect(fulfilmentWrite).toHaveBeenCalledTimes(1)
       expect(fulfilmentWrite.mock.calls[0][0].targets).toEqual([{ listingId: 'listing_1', method: 'FBM', expectedVersion: 19 }])
       expect(executeRaw.mock.calls.some(args => String(args[0]?.join?.('') ?? '').includes('"platformAttributes" ='))).toBe(false)
-      expect(channelListingUpsert).not.toHaveBeenCalled()
+      expect(channelListingUpdateMany).not.toHaveBeenCalled()
     } finally { spies.forEach(s => s.mockRestore()) }
   })
 
@@ -225,13 +234,32 @@ describe('the Amazon fulfilment method writes through its one door (2026-09-27)'
     } finally { spies.forEach(s => s.mockRestore()) }
   })
 
-  it('no listing in this market: refused, and the door is never called', async () => {
+  it('no listing in this market (token 0): the draft is started first, and the door writes on it at its fresh version', async () => {
     const spies = setUp()
-    channelListingFindMany.mockResolvedValue([])
+    // No listing until the draft step starts one; every read after it sees the draft.
+    channelListingFindMany.mockImplementation(async () => ensureDrafts.mock.calls.length ? [listingRow({ id: 'draft_1', channelConnectionId: 'account-a', platformAttributes: {}, version: 1 })] : [])
+    ensureDrafts.mockResolvedValueOnce([{ id: 'draft_parent', productId: 'parent', version: 1, created: true }, { id: 'draft_1', productId: PRODUCT_ID, version: 1, created: true }])
+    channelListingFindUnique.mockResolvedValue({ version: 2 })
     try {
-      const result = await send('DEFAULT')
-      expect(result.statusCode).toBe(400)
-      expect(result.body).toContain('no Amazon listing on IT')
+      const result = await patch({ changes: [{ id: PRODUCT_ID, field, value: 'DEFAULT', target: 'channel', intent: 'set' }],
+        marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT' }], expectedVersion: 0 })
+      expect(result.statusCode, result.body).toBe(200)
+      expect(ensureDrafts).toHaveBeenCalledWith(expect.anything(), { channel: 'AMAZON', market: 'IT', accountId: 'account-a', aliasKey: '', productIds: [PRODUCT_ID], family: true })
+      expect(fulfilmentWrite.mock.calls[0][0].targets).toEqual([{ listingId: 'draft_1', method: 'FBM', expectedVersion: 1 }])
+      expect(result.json()).toMatchObject({ currentVersion: 2, versionOf: 'channelListing',
+        createdListings: [{ productId: 'parent', listingId: 'draft_parent' }, { productId: PRODUCT_ID, listingId: 'draft_1' }] })
+    } finally { spies.forEach(s => s.mockRestore()) }
+  })
+
+  it('token 0 against a listing that exists: 409 with that listing\'s version, and nothing is started or written', async () => {
+    const spies = setUp()
+    channelListingFindMany.mockResolvedValue([listingRow({ channelConnectionId: 'account-a', platformAttributes: {} })])
+    try {
+      const result = await patch({ changes: [{ id: PRODUCT_ID, field, value: 'DEFAULT', target: 'channel', intent: 'set' }],
+        marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT' }], expectedVersion: 0 })
+      expect(result.statusCode).toBe(409)
+      expect(result.json()).toMatchObject({ code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 19, versionOf: 'channelListing' })
+      expect(ensureDrafts).not.toHaveBeenCalled()
       expect(fulfilmentWrite).not.toHaveBeenCalled()
     } finally { spies.forEach(s => s.mockRestore()) }
   })
@@ -277,6 +305,8 @@ beforeEach(() => {
   channelListingFindUnique.mockReset()
   channelListingUpdate.mockReset()
   channelListingUpsert.mockReset()
+  channelListingUpdateMany.mockReset()
+  ensureDrafts.mockReset().mockImplementation(async () => { throw new Error('No listing was expected to be missing in this case') })
   bulkOperationCreate.mockReset()
   executeRaw.mockReset()
   $transaction.mockReset()
@@ -286,6 +316,7 @@ beforeEach(() => {
   channelListingFindUnique.mockResolvedValue({ version: 19 })
   productUpdate.mockReturnValue({ __stmt: 'product.update' })
   channelListingUpsert.mockReturnValue({ __stmt: 'listing.upsert' })
+  channelListingUpdateMany.mockReturnValue({ __stmt: 'listing.updateMany' })
   // The fixture as measured: manufacturer is null, version 26.
   productFindMany.mockResolvedValue([
     { id: PRODUCT_ID, manufacturer: null, version: 26, categoryAttributes: {} },
@@ -480,7 +511,7 @@ describe('requested account resolution before bulk writes', () => {
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', accountId: 'account-b' }], expectedVersion: 19 })
     expect(result.statusCode, result.body).toBe(200)
     expect(primaryConnections).toHaveBeenCalledWith([])
-    expect(channelListingUpsert).toHaveBeenCalledWith(expect.objectContaining({ where: { productId_channel_marketplace: expect.objectContaining({ channelConnectionId: 'account-b' }) } }))
+    expect(channelListingUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ channelConnectionId: 'account-b' }) }))
   })
 
   it.each([
@@ -506,7 +537,7 @@ describe('requested account resolution before bulk writes', () => {
     expect(result.statusCode).toBe(409)
     expect(result.json().code).toBe('LISTING_SCOPE_MISMATCH')
     expect($transaction).not.toHaveBeenCalled()
-    expect(channelListingUpsert).not.toHaveBeenCalled()
+    expect(channelListingUpdateMany).not.toHaveBeenCalled()
   })
 })
 
@@ -838,18 +869,14 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       expectedVersion: 55,
     })
     expect(res.statusCode).toBe(200)
-    const upsertWhere = channelListingUpsert.mock.calls.map(
-      (c) => (c[0] as { where?: { productId_channel_marketplace?: { aliasKey?: string } } })
-        ?.where?.productId_channel_marketplace?.aliasKey,
+    const updateWhere = channelListingUpdateMany.mock.calls.map(
+      (c) => (c[0] as { where?: { aliasKey?: string } })?.where?.aliasKey,
     )
-    expect(upsertWhere).toContain('alias-2')
-    expect(upsertWhere).not.toContain('')
-    // The CREATE branch must carry it too — it defaults to '' otherwise, so a
-    // FIRST write under an alias would silently create the primary row.
-    const createAlias = channelListingUpsert.mock.calls.map(
-      (c) => (c[0] as { create?: { aliasKey?: string } })?.create?.aliasKey,
-    )
-    expect(createAlias).toContain('alias-2')
+    expect(updateWhere).toContain('alias-2')
+    expect(updateWhere).not.toContain('')
+    // There is no create branch left to default the alias to '': the column writer only UPDATEs, and a missing
+    // listing is started by `ensureDraftListings`, which never creates an alias listing.
+    expect(channelListingUpsert).not.toHaveBeenCalled()
     // And the CAS guards the alias row, keyed on its own version.
     expect(
       channelListingUpdate.mock.calls.some(
@@ -875,12 +902,11 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       expectedVersion: 19,
     })
     expect(res.statusCode).toBe(200)
-    const upsertWhere = channelListingUpsert.mock.calls.map(
-      (c) => (c[0] as { where?: { productId_channel_marketplace?: { aliasKey?: string } } })
-        ?.where?.productId_channel_marketplace?.aliasKey,
+    const updateWhere = channelListingUpdateMany.mock.calls.map(
+      (c) => (c[0] as { where?: { aliasKey?: string } })?.where?.aliasKey,
     )
-    expect(upsertWhere).toContain('')
-    expect(upsertWhere).not.toContain('alias-2')
+    expect(updateWhere).toContain('')
+    expect(updateWhere).not.toContain('alias-2')
     expect(
       channelListingUpdate.mock.calls.some(
         (c) => (c[0] as { where?: { id?: string } })?.where?.id === 'listing_primary',
@@ -969,7 +995,7 @@ describe('channel inheritance reset and account isolation', () => {
         marketplaceContexts: contexts, expectedVersion: 19 })
       expect(res.statusCode, res.body).toBe(200)
       expect(res.json()).toMatchObject({ success: true, updated: 1, versionOf: 'channelListing' })
-      const sql = executeRaw.mock.calls.find(call => call[0].join('').includes('ON CONFLICT'))!
+      const sql = executeRaw.mock.calls.find(call => call[0].join('').includes('"overrideData" = (COALESCE'))!
       expect(sql[0].join('')).toContain(' - ::text[]')
       expect(sql).toContainEqual([key])
       expect(sql).toContain('{}')
@@ -990,7 +1016,7 @@ describe('channel inheritance reset and account isolation', () => {
         marketplaceContexts: contexts, expectedVersion: 19 })
       expect(res.statusCode, res.body).toBe(200)
       expect(res.json()).toMatchObject({ updated: 1 })
-      const sql = executeRaw.mock.calls.find(call => call[0].join('').includes('ON CONFLICT'))!
+      const sql = executeRaw.mock.calls.find(call => call[0].join('').includes('"overrideData" = (COALESCE'))!
       expect(sql).toContain(JSON.stringify({ [key]: null }))
       expect(sql).toContainEqual([])
     } finally { restore() }
@@ -1006,13 +1032,13 @@ describe('channel inheritance reset and account isolation', () => {
     expect(res.statusCode, res.body).toBe(200)
     if (field !== 'ebay_price') {
       expect(res.json()).toMatchObject({ updated: 0, errors: [expect.objectContaining({ error: expect.stringContaining('ContentAddress') })] })
-      expect(channelListingUpsert).not.toHaveBeenCalled()
+      expect(channelListingUpdateMany).not.toHaveBeenCalled()
       return
     }
     expect(priceWrite).toHaveBeenCalledWith(expect.objectContaining({
       targets: [{ listingId: 'listing_1', price: null, expectedVersion: 19 }],
     }))
-    expect(channelListingUpsert).not.toHaveBeenCalled()
+    expect(channelListingUpdateMany).not.toHaveBeenCalled()
   })
 
   it.each(['reset', 'set'])('%s on a platform path preserves unrelated settings and distinguishes absence from null', async intent => {
@@ -1046,7 +1072,7 @@ describe('channel inheritance reset and account isolation', () => {
     category.mockRestore()
     expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toMatchObject({ updated: 0, errors: [expect.objectContaining({ error: expect.stringContaining('ContentAddress') })] })
-    expect(channelListingUpsert).not.toHaveBeenCalled()
+    expect(channelListingUpdateMany).not.toHaveBeenCalled()
   })
 
   it('refuses both halves of a whole-list reset mixed with a slot edit', async () => {
@@ -1094,7 +1120,7 @@ describe('channel inheritance reset and account isolation', () => {
       const statements = $transaction.mock.calls[0][0]
       expect(statements[0]).toBe(guard)
       expect(statements.filter((statement: unknown) => statement === guard)).toHaveLength(1)
-      expect(statements).toContainEqual({ __stmt: 'listing.upsert' })
+      expect(statements).toContainEqual({ __stmt: 'listing.updateMany' })
     } finally { restore() }
   })
 
@@ -1116,7 +1142,7 @@ describe('provenance is part of the no-op decision', () => {
     expect(priceWrite).toHaveBeenCalledWith(expect.objectContaining({
       targets: [{ listingId: 'listing_1', price: 100, expectedVersion: 19 }],
     }))
-    expect(channelListingUpsert).not.toHaveBeenCalled()
+    expect(channelListingUpdateMany).not.toHaveBeenCalled()
   })
 
   it('does not infer that every target is unchanged from the first listing', async () => {
@@ -1124,7 +1150,7 @@ describe('provenance is part of the no-op decision', () => {
     const res = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 100, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }, { channel: 'EBAY', marketplace: 'DE' }], expectedVersion: 19 })
     expect(res.statusCode, res.body).toBe(200)
-    expect(channelListingUpsert.mock.calls.map(call => call[0].where.productId_channel_marketplace.marketplace)).toEqual(['IT', 'DE'])
+    expect(channelListingUpdateMany.mock.calls.map(call => call[0].where.marketplace)).toEqual(['IT', 'DE'])
   })
 })
 

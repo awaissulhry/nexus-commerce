@@ -2,7 +2,7 @@ import { currentFormulaWrite } from './mapping/formula-write-context.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import prisma from '../../db.js'
-import { afterDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { activeDatabaseTransaction, afterDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { contentField, coordinateMatches, resolveContent } from './content-resolver.js'
 import { contentListing } from './content-read.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
@@ -11,6 +11,7 @@ import { marketLanguages } from './market-languages.js'
 import { resolveWriteRouting } from './studio-sheet.service.js'
 import { coerceForShape, parseSlotField, withSlotValue } from './sheet-values.js'
 import { writeContent } from './content-write.js'
+import { DraftListingError, ensureDraftListings } from './draft-listing.service.js'
 import type { SheetColumn } from './sheet-columns.service.js'
 import type { ProductBulkInput, ProductBulkContext } from '../products/bulk-edit.service.js'
 
@@ -24,8 +25,10 @@ export interface ContentEdit { change: Change; column: SheetColumn }
 export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: () => Promise<any>,
   priorErrors: Array<{ id: string; field: string; error: string }> = []) {
   const errors: Array<{ id: string; field: string; error: string }> = [...priorErrors]
-  const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number }> = []
+  // `draft`: a PIN on a coordinate where the product has no listing yet — its draft is started when the write runs.
+  const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number; draft?: true }> = []
   const contexts = input.marketplaceContexts ?? (input.marketplaceContext ? [input.marketplaceContext] : [])
+  const { ProductBulkError } = await import('../products/bulk-edit.service.js')
   for (const edit of edits) {
     const { change, column } = edit
     try {
@@ -45,13 +48,22 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       if (!column.editable) throw new Error(column.helpText || `${column.label} is read-only.`)
       const product = await prisma.product.findUniqueOrThrow({ where: { id: change.id }, include: { translations: true, parent: { include: { translations: true } } } })
       const coordinate = scope?.channel ? { channel: scope.channel, market: scope.marketplace, ...(scope.accountId ? { accountId: scope.accountId } : {}), ...('aliasKey' in scope && typeof scope.aliasKey === 'string' && scope.aliasKey ? { aliasId: scope.aliasKey } : {}) } : undefined
-      let listing: any = null, listingVersion: number | undefined
-      if (coordinate) {
+      // Product-sheet create path, step 3 — only a PIN is the listing's own content. A shared or language-tier write from
+      // a channel scope never touches the listing, so it needs none (it resolves from the shared tiers). A pin on the
+      // primary listing of a coordinate with no row starts that draft when the write runs (`ensureDraftListings`);
+      // version 0 means "I saw no listing", so it is a conflict against a listing that exists.
+      let listing: any = null, listingVersion: number | undefined, draft = false
+      if (coordinate && address.tier === 'pin') {
         const listings = await prisma.channelListing.findMany({ where: { productId: product.id, channel: coordinate.channel, marketplace: coordinate.market,
           ...(coordinate.accountId ? { channelConnectionId: coordinate.accountId } : {}), aliasKey: coordinate.aliasId ?? '' }, include: { translations: true } })
-        if (listings.length !== 1) throw new Error(`${column.label} needs one existing listing and account.`)
-        listingVersion = listings[0].version
-        listing = contentListing(product, listings[0], coordinate, await marketLanguages(coordinate.channel, coordinate.market))
+        if (listings.length === 1 && input.expectedVersion === 0) throw new ProductBulkError(409, { code: 'VERSION_CONFLICT',
+          error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.', expectedVersion: 0, currentVersion: listings[0].version, versionOf: 'channelListing' })
+        draft = listings.length === 0 && !coordinate.aliasId
+        if (listings.length !== 1 && !draft) throw new Error(`${column.label} needs one existing listing and account.`)
+        if (!draft) {
+          listingVersion = listings[0].version
+          listing = contentListing(product, listings[0], coordinate, await marketLanguages(coordinate.channel, coordinate.market))
+        }
       }
       const resolved = resolveContent({ product: product as any, parent: product.parent as any, listing, field, localizableKeys: [field], address: { requested, ...(coordinate ? { coordinate } : {}) } })
       const routing = resolveWriteRouting(column, coordinate ?? null, coordinate?.aliasId ?? null, { requested, primary: PRIMARY_CONTENT_LOCALE,
@@ -69,8 +81,11 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       const checked = coerceForShape({ ...column, shape: slot ? 'scalar' : column.shape }, change.value)
       if (checked.ok === false) throw new Error(checked.error)
       const value = checked.value
-      plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version })
-    } catch (error) { errors.push({ id: change.id, field: change.field, error: error instanceof Error ? error.message : String(error) }) }
+      plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version, ...(draft ? { draft: true as const } : {}) })
+    } catch (error) {
+      if (error instanceof ProductBulkError) throw error
+      errors.push({ id: change.id, field: change.field, error: error instanceof Error ? error.message : String(error) })
+    }
   }
   // R-60 — per row only on the sheet's opt-in (never inside a formula write, which is one value by construction).
   const perRow = context.contentPerRow === true && !currentFormulaWrite(context.formulaWriteToken)
@@ -86,9 +101,28 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     const groups = new Map<string, typeof plans>()
     for (const plan of plans) { const key = `${plan.edit.change.id}:${JSON.stringify(plan.address)}`; groups.set(key, [...(groups.get(key) ?? []), plan]) }
     const ownerVersions = new Map<string, number>()
+    const createdListings: Array<{ productId: string; listingId: string }> = []
+    const refused = new Set<typeof plans>()
     let currentVersion: number | undefined, versionOf: 'product' | 'channelListing' = 'product'
     for (const group of groups.values()) {
       const first = group[0], change = first.edit.change
+      if (first.draft && !first.listingId) {
+        // The pin's listing does not exist yet: start its draft (the family's parent and variants) in this transaction.
+        const c = (first.address as Extract<ContentAddress, { tier: 'pin' }>).coordinate
+        try {
+          const ensured = await ensureDraftListings(activeDatabaseTransaction()!, { channel: c.channel, market: c.market, accountId: c.accountId ?? null, productIds: [change.id], family: true })
+          for (const row of ensured) if (row.created) createdListings.push({ productId: row.productId, listingId: row.id })
+          const own = ensured.find(row => row.productId === change.id)!
+          ownerVersions.set(`listing:${own.id}`, own.version)
+          for (const plan of group) plan.listingId = own.id
+        } catch (error) {
+          // No account, an inactive market: that row's own refusal, never a 500 (all-or-nothing callers fail whole).
+          if (!(error instanceof DraftListingError) || error.code === 'COORDINATE_TAKEN' || !perRow) throw error
+          for (const plan of group) errors.push({ id: plan.edit.change.id, field: plan.edit.change.field, error: error.message })
+          refused.add(group)
+          continue
+        }
+      }
       const values: Record<string, unknown> = {}
       for (const plan of group.filter(p => p.edit.change.intent !== 'reset')) values[plan.field] = plan.slot ? withSlotValue(values[plan.field] ?? plan.baseValue, plan.slot, plan.value) : plan.value
       const reset = group.filter(p => p.edit.change.intent === 'reset').map(p => p.field)
@@ -110,13 +144,19 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     if (!context.formulaCascade) {
       const { reevaluateDependents } = await import('./mapping/cell-formula.service.js')
       for (const group of groups.values()) {
+        if (refused.has(group)) continue
         const first = group[0], address = first.address
         await reevaluateDependents({ productId: first.edit.change.id, changedFields: group.map(plan => plan.edit.change.field), updatedBy: context.userId,
           ...(address.tier === 'pin' ? { coordinate: { channel: address.coordinate.channel, marketplace: address.coordinate.market, channelConnectionId: address.coordinate.accountId, aliasKey: address.coordinate.aliasId, locale: address.language } } : {}) })
       }
     }
-    const ids = [...new Set(edits.map(edit => edit.change.id))]
+    const ids = [...new Set([...edits.map(edit => edit.change.id), ...createdListings.map(row => row.productId)])]
     await afterDatabaseCommit(`product-cache:${ids.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(ids))
-    return { ...rest, success: true, updated: plans.length + (rest.updated ?? 0), currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [] }
+    // The drafts this save started, with the version each holds now, so the sheet adopts them at once.
+    const created = createdListings.length ? await prisma.channelListing.findMany({ where: { id: { in: createdListings.map(row => row.listingId) } }, select: { id: true, version: true } }) : []
+    const createdOut = [...createdListings.map(row => ({ ...row, version: created.find(r => r.id === row.listingId)?.version ?? null })), ...(rest.createdListings ?? [])]
+    const skipped = [...refused].reduce((n, group) => n + group.length, 0)
+    return { ...rest, success: true, updated: plans.length - skipped + (rest.updated ?? 0), ...(createdOut.length ? { createdListings: createdOut } : {}),
+      currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [] }
   })
 }
