@@ -289,6 +289,32 @@ describe('a stated no-op is a SUCCESS; an unexplained one is not', () => {
   })
 })
 
+describe('a listing-field refusal on a market with no listing (draft listing safety, step 1)', () => {
+  const noListing = 'No AMAZON listing on SE yet — a listing field needs the listing to exist'
+  const brandRow = () => row({ listing: null, values: {
+    brand: cell({ writeField: 'attr_brand', writeTarget: 'channelListing', writeVerb: 'channel' }),
+    material: cell({}),
+  } } as never)
+  const save = (r: ChannelSheetRow) => commitChannelRow({ rowId: r.rowId, row: r, cells: [
+    { colId: 'brand', value: ['Nexus Moto'], intent: 'set' }, { colId: 'material', value: 'Nylon', intent: 'set' },
+  ] } as never, { channel: 'AMAZON', marketplace: 'SE', accountId: 'account-a' })
+
+  it('paints the refused cell refused when the server names the change field, and its sibling saved', async () => {
+    captureBody({ updated: 2, errors: [{ id: 'p1', field: 'attr_brand', error: noListing }] })
+    const result = await save(brandRow())
+    expect(result.ok).toBe(false)
+    expect(result.cells?.brand).toEqual({ ok: false, reason: noListing })
+    expect(result.cells?.material).toEqual({ ok: true })
+  })
+
+  it('the control: the old answer under the JSON path matches no cell, so the refused cell painted saved', async () => {
+    // Why the server must answer under `change.field`: the sheet matches errors EXACTLY and never guesses a path.
+    captureBody({ updated: 2, errors: [{ id: 'p1', field: 'brand,attributes.brand.0.value', error: noListing }] })
+    const result = await save(brandRow())
+    expect(result.cells?.brand).toEqual({ ok: true })
+  })
+})
+
 describe('unanswered writes', () => {
   it('reports a dropped connection as unknown instead of a server refusal', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))

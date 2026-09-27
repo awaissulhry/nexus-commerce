@@ -46,7 +46,9 @@ vi.mock('../../db.js', () => {
     create: async ({ data }: any) => { m.rows.set(data.id, structuredClone(data)); return structuredClone(data) },
     updateMany: async ({ where, data }: any) => { m.persistenceFailure(data); const rows = [...m.rows.values()].filter(row => matches(row, where)); for (const row of rows) m.rows.set(row.id, structuredClone({ ...row, ...data })); return { count: rows.length } },
     update: async ({ where, data }: any) => { m.persistenceFailure(data); const row = { ...m.rows.get(where.id), ...data }; m.rows.set(where.id, structuredClone(row)); await m.persisted(row); return structuredClone(row) },
-  }, channelListing: { createMany: m.createListings, updateMany: m.updateListings, count: async () => 2 }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => fn(db) }
+  }, channelListing: { createMany: m.createListings, updateMany: m.updateListings, count: async () => 2 },
+  // Draft promotion reads the settled records; they are real only in the database suite.
+  channelListingSnapshot: { findMany: async () => [] }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => fn(db) }
   return { default: db }
 })
 import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult } from './studio-publication.service.js'

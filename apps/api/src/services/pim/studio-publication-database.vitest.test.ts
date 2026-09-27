@@ -222,6 +222,85 @@ it('attributes Amazon messages by seller SKU and advances only the accepted SKU 
   expect(fixture.providerWrite).toHaveBeenCalledOnce()
 }, 30_000)
 
+/**
+ * Draft listing safety, step 1 — an accepted SKU turns its still-draft row live (published, ACTIVE, unpaused), per SKU.
+ * A rejected SKU's draft stays a draft, and a live listing an operator paused stays paused.
+ */
+const draftRow = (id: string, channel: string, marketplace: string, paused: boolean) => prisma.channelListing.create({ data: { productId: id, channel,
+  marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, channelConnectionId: accountId, aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: paused } })
+const pausedLiveRow = (id: string, channel: string, marketplace: string) => prisma.channelListing.create({ data: { productId: id, channel,
+  marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, channelConnectionId: accountId, aliasKey: '', listingStatus: 'ACTIVE', isPublished: true,
+  externalListingId: `FIXTURE-LIVE-${id}`, syncPaused: true } })
+
+it('Amazon ACCEPTED promotes and unpauses the accepted still-draft row, and leaves an operator-paused live row paused', async () => {
+  const amazon = { ...scope, channel: 'AMAZON' }
+  const draft = await draftRow(productId, 'AMAZON', 'IT', true)
+  const live = await pausedLiveRow(childId, 'AMAZON', 'IT')
+  fixture.facts.mockResolvedValue({ ...facts(), scope: amazon, products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }], listings: [draft, live] })
+  const review = await previewStudioPublication(productId, amazon, null)
+  expect(await submitStudioPublication(productId, review.id!, {}, null)).toMatchObject({ status: 'SUBMITTED' })
+  // The paused draft was SENT (Publish's lock lets a still-draft through), and journaled against its own row.
+  expect(fixture.providerWrite).toHaveBeenCalledOnce()
+  expect(await prisma.channelListingSnapshot.findFirst({ where: { publishEventId: review.id, channelListingId: draft.id } })).toMatchObject({ outcome: 'SUBMITTED' })
+  // Submitted is not accepted: nothing is promoted yet.
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: draft.id } })).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, syncPaused: true })
+  fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: false, message: 'Accepted' }] })
+  expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'ACCEPTED' })
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: draft.id } }))
+    .toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false, externalListingId: null, version: draft.version + 1 })
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: live.id } }))
+    .toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: true, version: live.version })
+  // A repeated status read changes nothing.
+  await studioPublicationResult(productId, review.id!, null)
+  expect((await prisma.channelListing.findUniqueOrThrow({ where: { id: draft.id } })).version).toBe(draft.version + 1)
+}, 30_000)
+
+it('Amazon PARTIAL promotes only the accepted SKU; the rejected SKU stays an unpublished draft', async () => {
+  const amazon = { ...scope, channel: 'AMAZON' }
+  fixture.facts.mockResolvedValue({ ...facts(), scope: amazon, products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }] })
+  const review = await previewStudioPublication(productId, amazon, null)
+  await submitStudioPublication(productId, review.id!, {}, null)
+  fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: true, message: 'Invalid content' }] })
+  expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'PARTIAL' })
+  const where = (id: string) => ({ productId: id, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: accountId, aliasKey: '' })
+  expect(await prisma.channelListing.findFirstOrThrow({ where: where(productId) })).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false })
+  expect(await prisma.channelListing.findFirstOrThrow({ where: where(childId) })).toMatchObject({ listingStatus: 'DRAFT', isPublished: false })
+}, 30_000)
+
+it('eBay read-back promotes a paused still-draft row and lifts its pause; a paused row that is not a draft keeps its pause', async () => {
+  const draft = await draftRow(productId, 'EBAY', 'IT', true)
+  // Not a still-draft (it carries a channel id), so the promotion writes it live but never touches its pause.
+  const other = await prisma.channelListing.create({ data: { productId: childId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT',
+    channelConnectionId: accountId, aliasKey: '', listingStatus: 'INACTIVE', isPublished: false, externalListingId: '123456789012', syncPaused: true } })
+  fixture.facts.mockResolvedValue({ ...facts(), products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }], listings: [draft, other] })
+  const review = await previewStudioPublication(productId, scope, null)
+  expect(await submitStudioPublication(productId, review.id!, {}, null)).toMatchObject({ status: 'UNVERIFIED' })
+  expect(fixture.providerWrite).toHaveBeenCalledOnce()
+  fixture.readEbay.mockResolvedValue({ reference: '123456789012', warnings: [], verified: true })
+  expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'ACCEPTED' })
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: draft.id } }))
+    .toMatchObject({ externalListingId: '123456789012', isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: draft.version + 1 })
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: other.id } }))
+    .toMatchObject({ externalListingId: '123456789012', isPublished: true, listingStatus: 'ACTIVE', syncPaused: true, version: other.version + 1 })
+}, 30_000)
+
+it('Shopify VERIFIED keeps the rows exactly as the Shopify synchronisation wrote them — a Shopify draft stays INACTIVE', async () => {
+  // The real synchronisation (shopify/content-sync.service.ts) maps every delivered row with the Shopify ids and the
+  // status Shopify verified. Here the Shopify product is a draft, so the rows are INACTIVE and unpublished: honest.
+  fixture.facts.mockResolvedValue(shopifyFacts())
+  fixture.shopSend.mockImplementationOnce(async (_product, _scope, _body, beforeMutation) => {
+    await beforeMutation?.({ query: 'mutation First { productSet(input:$input) { product { id } } }', variables: { input: { variants: [{ sku: 'EFFECTIVE-SHOP-SKU' }] } } })
+    await prisma.channelListing.updateMany({ where: { productId: { in: [productId, childId] }, channel: 'SHOPIFY' },
+      data: { externalListingId: 'FIXTURE-SHOPIFY-PRODUCT', listingStatus: 'INACTIVE', isPublished: false, version: { increment: 1 } } })
+    return { productId: 'gid://shopify/Product/42' }
+  })
+  const review = await previewStudioPublication(productId, shopifyFacts().scope, null)
+  expect(await submitStudioPublication(productId, review.id!, { locationId: 'shop-location' }, null)).toMatchObject({ status: 'VERIFIED' })
+  const rows = await prisma.channelListing.findMany({ where: { productId: { in: [productId, childId] }, channel: 'SHOPIFY' } })
+  expect(rows).toHaveLength(2)
+  for (const row of rows) expect(row).toMatchObject({ externalListingId: 'FIXTURE-SHOPIFY-PRODUCT', listingStatus: 'INACTIVE', isPublished: false })
+}, 30_000)
+
 it('binds a real stored content read to the selected listing and persists its explicit field selection', async () => {
   const own = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, externalListingId: '123456789012' } })
   const other = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, aliasKey: 'different-alias', externalListingId: 'another-item' } })

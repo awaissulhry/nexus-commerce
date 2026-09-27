@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const s = vi.hoisted(() => ({ row: {} as any, remote: null as any, status: 'DRAFT', category: false, applied: [] as string[], childWrites: [] as any[], childLookups: [] as any[], tx: {} as any }))
+const s = vi.hoisted(() => ({ row: {} as any, child: null as any, remote: null as any, status: 'DRAFT', category: false, applied: [] as string[], childWrites: [] as any[], childLookups: [] as any[], tx: {} as any }))
 vi.mock('../pim/publish-review-gate.js', () => ({ assertListingContentReviewed: async () => {} }))
 vi.mock('../../db.js', () => ({ default: { $transaction: (fn: any) => fn(s.tx), channelListing: { findFirst: async () => s.row } } }))
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: async () => ({ locales: [{ locale: 'en', primary: true, published: true }] }) }))
@@ -12,7 +12,7 @@ vi.mock('./admin-client.js', () => ({ shopifyAdmin: async () => ({ domain: 'fixt
 vi.mock('./content-workspace.service.js', () => ({
   CONTENT_KEY: '_nexusContent', PUBLISH_KEY: '_nexusContentPublish', object: (v: any) => v && typeof v === 'object' ? v : {}, digest: (v: any) => JSON.stringify(v) ?? 'none',
   contentDestination: async () => ({ familyId: 'family', accountId: 'store-b', marketplace: 'GLOBAL', aliasKey: 'alias-b' }),
-  readContent: async () => ({ family: { id: 'family', name: 'Product', categoryAttributes: {} }, variants: [{ id: 'child', sku: 'SKU', options: {}, price: '1', stock: 0 }], listing: structuredClone(s.row), listings: [structuredClone(s.row)], revision: 'revision', storedDocumentRevision: 'none', publish: {}, draft: { defaultLocale: 'en', locales: ['en'], fields: [], metaobjects: [] }, errors: [] }),
+  readContent: async () => ({ family: { id: 'family', name: 'Product', categoryAttributes: {} }, variants: [{ id: 'child', sku: 'SKU', options: {}, price: '1', stock: 0 }], listing: structuredClone(s.row), listings: [structuredClone(s.row), ...(s.child ? [structuredClone(s.child)] : [])], revision: 'revision', storedDocumentRevision: 'none', publish: {}, draft: { defaultLocale: 'en', locales: ['en'], fields: [], metaobjects: [] }, errors: [] }),
   publicContent: (v: any) => ({ revision: v.revision, errors: v.errors, variants: v.variants }),
 }))
 vi.mock('@nexus/shared/shopify-content', () => ({ inspectShopifyContent: () => [], resolveShopifyContent: () => ({}) }))
@@ -22,13 +22,13 @@ vi.mock('./content-publisher.js', () => ({
 }))
 import { previewContentSync, synchronizeContent } from './content-sync.service.js'
 beforeEach(() => {
-  s.remote = null; s.category = false; s.applied = []; s.childWrites = []; s.childLookups = []
+  s.remote = null; s.category = false; s.applied = []; s.childWrites = []; s.childLookups = []; s.child = null
   s.row = { id: 'listing', productId: 'family', version: 1, platformAttributes: {}, followMasterTitle: true, followMasterDescription: true }
   s.tx = { channelListing: {
     findUnique: async () => structuredClone(s.row), findUniqueOrThrow: async () => structuredClone(s.row),
-    findFirst: async (query: any) => { s.childLookups.push(query); return null },
+    findFirst: async (query: any) => { s.childLookups.push(query); return s.child && query.where.productId === s.child.productId ? structuredClone(s.child) : null },
     updateMany: async ({ where, data }: any) => { if (where.version !== s.row.version) return { count: 0 }; Object.assign(s.row, data, { version: s.row.version + 1 }); return { count: 1 } },
-    update: async ({ data }: any) => { Object.assign(s.row, data, { version: s.row.version + 1 }); return s.row },
+    update: async ({ where, data }: any) => { const row = s.child && where.id === s.child.id ? s.child : s.row; Object.assign(row, data, { version: row.version + 1 }); return row },
     create: async ({ data }: any) => { s.childWrites.push(data); return data },
   } }
 })
@@ -68,4 +68,38 @@ it.each([{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD', 'WITHD
 it('names the deliberate end and its recorded date and actor even when confirmActive is true', async () => {
   Object.assign(s.row, { presenceIntent: 'ENDED', presenceIntentAt: '2026-09-13T12:00:00Z', presenceIntentBy: 'operator-123' })
   await expect(synchronizeContent('family', { accountId: 'store-b' }, { confirmActive: true })).rejects.toThrow('deliberately ended on 2026-09-13T12:00:00.000Z by operator-123')
+})
+
+describe('Draft listing safety — Publish may send a paused still-draft, and delivery lifts its pause', () => {
+  const PAUSED = 'Listing sync is paused. Resume sync before sending changes.'
+  const stillDraft = { listingStatus: 'DRAFT', isPublished: false, externalListingId: null, syncPaused: true }
+  const publish = async () => {
+    const scope = { accountId: 'store-b', market: 'GLOBAL' }
+    const preview = await previewContentSync('family', scope, true)
+    return synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true })
+  }
+  it.each(['ACTIVE', 'DRAFT'])('sends paused still-drafts and unpauses them with the Shopify ids and the verified status (%s)', async status => {
+    s.status = status
+    Object.assign(s.row, stillDraft)
+    s.child = { id: 'child-listing', productId: 'child', version: 1, platformAttributes: {}, ...stillDraft }
+    expect((await publish()).success).toBe(true)
+    expect(s.remote).not.toBeNull()
+    // The family row got its Shopify id MID-delivery (checkpoint), so "was a draft" must come from before the send.
+    expect(s.row).toMatchObject({ externalListingId: '1', syncPaused: false, isPublished: status === 'ACTIVE', listingStatus: status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE' })
+    expect(s.child).toMatchObject({ externalListingId: '1', syncPaused: false, isPublished: status === 'ACTIVE', platformAttributes: expect.objectContaining({ variantId: '2' }) })
+    expect(s.childWrites).toEqual([])
+  })
+  it('refuses an operator-paused LIVE row with the same sentence, before any remote write', async () => {
+    Object.assign(s.row, { listingStatus: 'ACTIVE', isPublished: true, externalListingId: '1', syncPaused: true })
+    await expect(previewContentSync('family', { accountId: 'store-b', market: 'GLOBAL' }, true)).rejects.toMatchObject({ code: 'PUSH_SYNC_PAUSED', message: PAUSED })
+    await expect(synchronizeContent('family', { accountId: 'store-b', market: 'GLOBAL' }, { confirmActive: true })).rejects.toMatchObject({ code: 'PUSH_SYNC_PAUSED', message: PAUSED })
+    expect(s.remote).toBeNull()
+    expect(s.row.syncPaused).toBe(true)
+  })
+  it('refuses a family whose paused child is live, even when the family row is a still-draft', async () => {
+    Object.assign(s.row, stillDraft)
+    s.child = { id: 'child-listing', productId: 'child', version: 1, platformAttributes: {}, listingStatus: 'ACTIVE', isPublished: true, externalListingId: '1', syncPaused: true }
+    await expect(publish()).rejects.toMatchObject({ code: 'PUSH_SYNC_PAUSED' })
+    expect(s.remote).toBeNull()
+  })
 })
