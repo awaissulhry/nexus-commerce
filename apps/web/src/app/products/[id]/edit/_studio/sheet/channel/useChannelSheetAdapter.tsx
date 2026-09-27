@@ -51,7 +51,8 @@ import { studioAccountAccess } from '../../accountScope';
 import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
-import { addListingAlias, commitChannelRow, useChannelSheet } from './useChannelSheet';
+import { addListingAlias, commitChannelRow, useChannelSheet, type CreatedListing } from './useChannelSheet';
+import { connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, notListedSentence } from '../../draftListing';
 import { useReadinessRefresh, useSaveReporter, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
 import type { CompareTarget } from '../../drawer/types';
 import { useAuth } from '@/lib/auth/AuthProvider';
@@ -182,6 +183,20 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     dataRef.current = data;
     const rowsRef = useRef(rows);
     rowsRef.current = rows;
+    /* Create path, step 6 — a save that STARTED this coordinate's draft (parent + variants) has its listings adopted
+       into the rows in place (`commitChannelRow` → `adoptCreatedListings`), so the next save on any row of the family
+       carries the real version. The epoch makes the header and chip read those rows again at once, and the toast
+       says what happened: a draft, and nothing sent. */
+    const [listingEpoch, setListingEpoch] = useState(0);
+    const toastRef = useRef(toast);
+    toastRef.current = toast;
+    const onListingsCreatedRef = useRef<(created: CreatedListing[]) => void>(() => { });
+    onListingsCreatedRef.current = (created) => {
+        setListingEpoch((n) => n + 1);
+        const family = dataRef.current?.family;
+        if (family)
+            toastRef.current(draftStartedMessage({ rootSku: family.sku, familyId: family.id, channel, market: marketplace, created }), 'success');
+    };
     const formulaRowIds = useMemo(() => rows.map(r => r.rowId), [rows]);
     const formulaRowScopes = useMemo(() => Object.fromEntries(rows.map(r => [r.rowId, { productId: r.id, aliasKey: r.aliasId ?? '' }])), [rows]);
     const formulas = useCellFormulas({
@@ -267,7 +282,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                    column and silently disabled the split. Witnessed: a theme pick on Amazon·IT
                    reported `set` in the editor's own footer and issued no projection request at all.
                    The same ref discipline the formula candidates two hooks above already follow. */
-                const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind });
+                const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
+                    familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created) });
                 if (result.unreachable)
                     unsettledWrites.current.set(req.rowId, { writeId, subject });
                 else
@@ -818,6 +834,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         getGridApi()?.setFilterModel(null);
     }, reload);
     const unlisted = !!data?.aliases.length && data.aliases.every((a) => a.readiness?.state === 'unlisted');
+    /* Create path, step 6 — what the family holds here, from the rows' own listings (and the drafts a save just
+       started, `listingEpoch`). `none` on the primary listing: the first edit starts the draft, and the header says so —
+       or, with no account to start it under, says the API's own refusal. `draft`: every listing here is still a Nexus
+       draft by the shared rule (`isStillDraftListing`), and the chip says it is not published. */
+    const listingState = useMemo(() => (data ? coordinateListingState(rows) : null), [data, rows, listingEpoch]);
+    const startsDraftHere = listingState === 'none' && rows.some((row) => row.aliasId == null);
+    const noAccount = !accountId && !data?.scope.connectionId && accounts.length === 0;
     return {
         scope: 'channel',
         loading, unavailable: unavailable,
@@ -830,14 +853,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             visible: visibleRows.length,
             total: rows.length,
             selected: selected.length,
+            /* With no listing here, the alias count ("1 listing") counted the primary GROUP, not a listing — so it is left
+               out, and the notice above the grid says what the first edit does. */
             descriptor: data && <span className="nds-cell-muted">
               {' · '}
-              {unlisted ? `${readinessMeta('unlisted', 'row').label} · ` : ''}
-              {data.aliases.length} {data.aliases.length === 1 ? 'listing' : 'listings'} ·{' '}
+              {listingState === 'none' || unlisted ? `${readinessMeta('unlisted', 'row').label} · ` : ''}
+              {listingState === 'none' ? '' : `${data.aliases.length} ${data.aliases.length === 1 ? 'listing' : 'listings'} · `}
               {distinctVariantCount(rows)} variations
-              
-              
-              
             </span>,
             search: search,
             onSearch: setSearch,
@@ -854,7 +876,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             unavailable: unavailable,
             overflow: [liveRead.menuItem, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: data ? `${rulesStatus(channel, marketplace, data.meta.schemaMissing).label}…` : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             // 2026-09-27 — one wording for the chip, the dialog and the empty grid (`rulesStatus`).
-            status: data ? [(({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing))] : [],
+            status: data ? [
+                ...(listingState === 'draft' ? [{ tone: 'info' as const, label: DRAFT_CHIP_LABEL, detail: draftChipDetail(channel, marketplace) }] : []),
+                (({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing)),
+            ] : [],
         },
         toolbarExtra: <>    {liveRead.element}{pendingMasterWrite && (() => {
                 const pm = pendingMasterWrite;
@@ -932,7 +957,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the shared master record — every channel sees those edits
             </span>)}</>,
-        notice: null,
+        notice: startsDraftHere
+            ? <Banner tone={noAccount ? 'warning' : 'info'}>{noAccount ? connectAccountSentence(channel, marketplace) : notListedSentence(channel, marketplace)}</Banner>
+            : null,
         grid: {
             loading: loading,
             noRowsOverlayComponentParams: emptyState,

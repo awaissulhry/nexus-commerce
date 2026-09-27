@@ -1,3 +1,7 @@
+## Variation theme tooltip carries the delivery note — 2026-09-27
+
+Mirrored from web. **`variationThemeTooltip`** ends with the cell's `deliveryNote` when the cell is writable, and with `writeBlockedReason` when it is not.
+
 ## Customise: always-shown columns, emptied groups — 2026-09-27
 
 Mirrored from web. **`PreferencesColumnSpec.alwaysShown`** (always on screen, still movable and pinnable; held tick, no ✕, no hide) and **emptied groups** (left out of the tick-list; "Empty · drag a column here to put it back" in In view). Opt-in; every other caller is unchanged.
