@@ -24,6 +24,11 @@
  *     ERROR  — operator must resolve the underlying issue first; cascading
  *              over an ERROR can mask the failure
  *
+ *   A still-draft listing (listingStatus DRAFT with no externalListingId) is
+ *   skipped too: it has never reached the channel, and only Publish makes it
+ *   live. A product status change flipped it to ACTIVE before, so a draft read
+ *   as live without anything having been sent.
+ *
  * Outbound push:
  *   For every listing whose listingStatus actually changes, an OutboundSyncQueue
  *   row is enqueued with syncType='STATUS_UPDATE' and the standard 5-minute
@@ -67,6 +72,10 @@ const VALID_PRODUCT_STATUS: readonly ProductStatus[] = [
 // Mirrors the docstring above. ENDED + ERROR rows are skipped because the
 // marketplace owns those states, not the master.
 const TERMINAL_LISTING_STATUSES = new Set(['ENDED', 'ERROR'])
+
+/** A draft that has never reached the channel: DRAFT and no channel id. */
+const isStillDraft = (listing: Pick<ChannelListingForStatusCascade, 'listingStatus' | 'externalListingId'>) =>
+  listing.listingStatus === 'DRAFT' && !listing.externalListingId
 
 export interface MasterStatusUpdateContext {
   actor?: string | null
@@ -163,6 +172,11 @@ export class MasterStatusService {
 
       for (const listing of listings) {
         if (TERMINAL_LISTING_STATUSES.has(listing.listingStatus)) {
+          skippedListingIds.push(listing.id)
+          continue
+        }
+        if (isStillDraft(listing)) {
+          // Never sent to the channel: its status belongs to Publish, not to the master.
           skippedListingIds.push(listing.id)
           continue
         }

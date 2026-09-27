@@ -146,7 +146,9 @@ export class MasterContentService {
         cascadedListingIds.push(listing.id)
         // The existing content sync queue consumes a language-qualified payload.
         // Caller transactions leave scheduling to the drain after commit.
-        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false && ctx.queueOutbound !== false) {
+        // A paused listing (an operator's pause, or an inert draft) follows the text but is not
+        // queued, as in the stock cascade: the push lock refused its row at dispatch anyway.
+        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false && ctx.queueOutbound !== false && !listing.syncPaused) {
           const payload = Object.fromEntries(following.map(field => [field, resolveContent({ product: listing.product as any, parent: listing.productId === productId ? undefined : product as any, field, localizableKeys: fields, address: { requested: language } }).value]))
           const queue = await createOutboundRow(tx, { data: { productId: listing.productId, channelListingId: listing.id, channelConnectionId: listing.channelConnectionId, targetChannel: listing.channel as any,
             targetRegion: listing.region, externalListingId: listing.externalListingId, syncStatus: 'PENDING', syncType: 'CONTENT_UPDATE',
