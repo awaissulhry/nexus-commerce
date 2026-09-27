@@ -1,6 +1,8 @@
 /* Images rebuild P3b — the Media page's layout. Layout and domain content only; every control is a DS component. */
 
-.page { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; padding: var(--nds-space-12) var(--nds-space-16) var(--nds-space-24); color: var(--nds-text); }
+/* A studio tab surface owns its scroll: the frame's tab panel is a fixed-height flex box (2026-09-27: the wheel did
+   nothing on this page because it had no scroll area of its own). Guarded by planPage.scroll.vitest.test.ts. */
+.page { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; padding: var(--nds-space-12) var(--nds-space-16) var(--nds-space-24); color: var(--nds-text); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-12); }
 .pageTitle { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-semibold); }
 .control { display: inline-flex; align-items: center; gap: var(--nds-space-6); color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
@@ -62,7 +64,7 @@
 .switchActions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
 .managerPage { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
 .manager { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
-.state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-8); padding: var(--nds-space-24) var(--nds-space-16); color: var(--nds-text-2); }
+.state { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-8); padding: var(--nds-space-24) var(--nds-space-16); color: var(--nds-text-2); }
 
 @media (max-width: 640px) {
   .page { padding: var(--nds-space-10) var(--nds-space-10) var(--nds-space-20); }

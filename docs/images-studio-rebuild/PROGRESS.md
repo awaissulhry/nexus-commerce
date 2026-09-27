@@ -30,6 +30,14 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   (`document.fonts.check`). One real source found and removed: the design-system catalog's synthetic example photos drew
   a `sans-serif` label inside an SVG image (system font = Arial on Windows); they draw no text now and the font guard no
   longer excepts that file. The local test photos and the screenshots below were redrawn without text as well.
+- **Scroll fix (Owner, 2026-09-27: "the scroll on the images page is not working. It must not ever happen again"):**
+  the studio's tab panel is a fixed-height flex box that hid overflow, and the Media page had no scroll area of its own,
+  so the wheel did nothing (measured in production: the page 1245 px tall, 0 px scrollable). Now the Media page and its
+  loading state own their scroll; the switch preview renders INSIDE the older tab's scroll area (above it, it squeezed
+  the gallery to nothing); the tab panel scrolls a tab that forgets (safety net). Guard test
+  `plan-page/planPage.scroll.vitest.test.ts`; rule in `apps/web/CLAUDE.md`. Checked locally: wheel scroll on the page
+  and on the preview + gallery; all 11 studio tabs have 0 px extra panel height and no panel scroll bar; 390 px = the
+  page is its own scroll box, no sideways page scroll; Tab moves through the photos and the page follows the focus.
 - **Next:** P4 (upload dialog with file-name rules, Compare, Review & publish).
 
 ## P3d — polish and proof
