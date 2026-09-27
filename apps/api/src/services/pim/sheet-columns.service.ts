@@ -1201,8 +1201,9 @@ export interface GetSheetColumnsInput {
   productIds?: string[]
   /**
    * AM.1 — the eBay leaf categories the family's listings use (`platformAttributes.categoryId`),
-   * so the eBay coordinate's spec is THOSE categories' aspects. Without any, the marketplace-wide
-   * aspect rows stand in.
+   * so the eBay coordinate's spec is THOSE categories' aspects. Without any, the spec is the generic
+   * eBay listing fields only (`EBAY:*` in `schemaMissing`): marketplace-wide `aspect_` rows only annotate
+   * aspects that are already cached, they add none.
    */
   ebayCategoryIds?: string[]
   etsyCategoryIds?: string[]

@@ -116,7 +116,7 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
       optionLabels: conditions.length > 0 ? Object.fromEntries(conditions.map((c) => [c.value, c.label])) : undefined,
       channelStore: pa('conditionId'),
     }),
-    listing('categoryId', 'Categoria', 'Category', { kind: 'text', channelStore: pa('categoryId'), helpText: 'The eBay category this listing is filed under.' }),
+    listing('categoryId', 'Categoria', 'Category', { kind: 'text', requirement: 'required', channelStore: pa('categoryId'), helpText: 'The eBay category this listing is filed under. eBay needs one per site; Publish refuses without it.' }),
     listing('listingFormat', 'Formato', 'Listing format', { kind: 'select', mode: 'strict', options: LISTING_FORMATS, channelStore: pa('listingFormat') }),
     listing('listingDuration', 'Durata', 'Listing duration', { kind: 'select', mode: 'strict', options: LISTING_DURATIONS, channelStore: pa('listingDuration') }),
     listing('bestOffer', 'Proposta d\'acquisto', 'Best offer', { kind: 'boolean', channelStore: pa('bestOffer') }),

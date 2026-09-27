@@ -58,7 +58,8 @@ export async function presentationOrderInputs(destination: PresentationDestinati
     // LX.F2 R-LX-20 — this composed `EBAY_EBAY_IT` for a caller already holding `EBAY_IT` and then
     // matched no row at all; the coordinate authority strips first.
     db.categorySchema.findMany({ where: { channel: 'EBAY', marketplace: { in: categorySchemaMarkets('EBAY', marketplace) } }, orderBy: { id: 'asc' } }),
-    db.categoryChannelMapping.findMany({ where: { channel: 'EBAY', marketplace: { in: [marketplace, '*'] } }, orderBy: { id: 'asc' } }),
+    // eBay category mappings always name their site (`categoryMappingMarkets`).
+    db.categoryChannelMapping.findMany({ where: { channel: 'EBAY', marketplace }, orderBy: { id: 'asc' } }),
     db.categoryClosure.findMany({ orderBy: [{ ancestorId: 'asc' }, { descendantId: 'asc' }] }),
   ])
   if (!account?.isActive || account.channelType !== 'EBAY' || (aliasKey && !alias)) throw new MappingConflict('This account or listing is no longer available')
