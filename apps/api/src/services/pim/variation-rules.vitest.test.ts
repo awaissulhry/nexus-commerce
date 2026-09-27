@@ -278,11 +278,34 @@ describe('AMAZON - the three tiers, in order', () => {
     })
   })
 
-  it('NO listing on the coordinate: no write, and the reason says so', () => {
+  // Product-sheet create path, step 4 (D1 = A) — no listing here yet: the first save starts the coordinate's draft.
+  it('NO listing on the coordinate, with an account: writable at version 0 ("I saw no listing"), and it says where it saves', () => {
+    const cell = resolveVariationProjection(input({ channel: 'AMAZON', market: 'NL', schema: amazonIT, listing: null, coordinate: { accountId: 'amazon-account' } as never }))
+    expect(cell.writable).toBe(true)
+    expect(cell.writeBlockedReason).toBeNull()
+    expect(cell.write).toEqual({ endpoint: 'projection', expectedVersion: 0, aliasKey: '', coordinate: { channel: 'AMAZON', market: 'NL', accountId: 'amazon-account' } })
+    expect(cell.deliveryNote).toBe('Saved to the Amazon · NL draft. Publish sends it.')
+    // The rule or derived theme still shows until the operator overrides it.
+    expect(cell.theme?.code).toBeTruthy()
+    // With a listing the note is not shown (it is no longer a draft being started).
+    expect(resolveVariationProjection(input({ channel: 'AMAZON', market: 'NL', schema: amazonIT, listing: listing(), coordinate: { accountId: 'amazon-account' } as never })).deliveryNote).toBeUndefined()
+  })
+
+  it('NO listing and NO account: nothing to start a draft under — the draft creator\'s own sentence', () => {
     const cell = resolveVariationProjection(input({ channel: 'AMAZON', market: 'NL', schema: amazonIT, listing: null }))
     expect(cell.write).toBeNull()
     expect(cell.writable).toBe(false)
-    expect(cell.writeBlockedReason).toBe('This family has no Amazon listing on NL, so there is nothing to project yet.')
+    expect(cell.writeBlockedReason).toBe('Connect an Amazon account before listing on NL.')
+    expect(cell.deliveryNote).toBeUndefined()
+    expect(VT_COPY.connectAccount('eBay', 'DE')).toBe('Connect an eBay account before listing on DE.')
+    expect(VT_COPY.connectAccount('Shopify', 'GLOBAL')).toBe('Connect a Shopify account before listing on GLOBAL.')
+  })
+
+  it('NO row on a non-primary alias: blocked, because an edit never creates an alias listing', () => {
+    const cell = resolveVariationProjection(input({ channel: 'AMAZON', market: 'NL', schema: amazonIT, listing: null, coordinate: { accountId: 'amazon-account', aliasKey: 'alias-2' } as never }))
+    expect(cell.write).toBeNull()
+    expect(cell.writable).toBe(false)
+    expect(cell.writeBlockedReason).toBe('This listing alias has no Amazon · NL listing. An edit never creates an alias listing.')
   })
 })
 
