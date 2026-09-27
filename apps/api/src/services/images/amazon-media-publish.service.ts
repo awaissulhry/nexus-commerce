@@ -27,8 +27,9 @@ async function planImages(productId: string, accountId: string, marketplace: str
 
 const json = (value: unknown) => value as Prisma.InputJsonValue
 export async function readAmazonMediaRun(destination: WorkspaceDestination, id: string): Promise<AmazonMediaRun> {
-  const run = await prisma.amazonMediaRun.findFirst({ where: { id, productId: destination.productId, listingId: destination.listing!.id,
-    accountId: destination.accountId, marketplace: destination.marketplace } })
+  // A market with no listing yet has no image review.
+  const run = destination.listing ? await prisma.amazonMediaRun.findFirst({ where: { id, productId: destination.productId, listingId: destination.listing.id,
+    accountId: destination.accountId, marketplace: destination.marketplace } }) : null
   if (!run) throw new WorkspaceScopeError('This image review does not belong to the selected listing destination.', 404)
   return { id: run.id, status: run.status, createdAt: run.createdAt.toISOString(), revision: run.revision,
     items: run.plan as unknown as AmazonMediaPlanItem[], receipts: run.receipts as unknown as AmazonMediaReceipt[] }
@@ -44,7 +45,8 @@ export async function createAmazonMediaReview(destination: WorkspaceDestination,
     throw new WorkspaceScopeError('Choose between 1 and 200 distinct SKUs in this listing destination.', 422)
   // Resolve credential attribution before queuing. Nothing is submitted here.
   await amazonMediaClient(destination.accountId, destination.marketplace)
-  const run = await prisma.amazonMediaRun.create({ data: { productId: destination.productId, listingId: destination.listing!.id, accountId: destination.accountId,
+  if (!destination.listing) throw new WorkspaceScopeError('Choose between 1 and 200 distinct SKUs in this listing destination.', 422)
+  const run = await prisma.amazonMediaRun.create({ data: { productId: destination.productId, listingId: destination.listing.id, accountId: destination.accountId,
     marketplace: destination.marketplace, revision, actorId, status: 'REVIEW_QUEUED', plan: [],
     receipts: listingIds.map(listingId => ({ listingId, status: 'NOT_SENT' })) } })
   return readAmazonMediaRun(destination, run.id)
