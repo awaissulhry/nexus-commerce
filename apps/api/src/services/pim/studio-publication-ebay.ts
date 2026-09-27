@@ -1,3 +1,4 @@
+import { usesEbayInventory } from './ebay-listing-model.js'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import { object, publicationDigest } from './studio-publication-plan.js'
 import prisma from '../../db.js'
@@ -213,9 +214,8 @@ function assertLiveEbay() {
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
 }
 
-/** Nexus's marker for an eBay Inventory-model listing (P3.0 census 2026-09-26: it agrees with eBay's own offers on every live item). */
-export const usesEbayInventory = (facts: Pick<PublicationFacts, 'listings'>) =>
-  facts.listings.some(l => Object.keys(object(object(l.platformAttributes).__offerIds)).length > 0 || !!object(l.platformAttributes).offerId)
+// The marker lives in ./ebay-listing-model.ts so the Media page reads the same rule without loading this publisher.
+export { usesEbayInventory }
 
 export interface EbayInventoryPublication {
   kind: 'ebay-inventory'; marketplace: string; itemId: string; destination: EbayInventoryDestination
