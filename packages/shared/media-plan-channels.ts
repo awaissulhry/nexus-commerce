@@ -214,6 +214,12 @@ export function projectAmazon(stack: MediaPlanStack, family: MediaFamily, assets
   return { parent, items, safety, checks: ctx.checks }
 }
 
+/** The Amazon slots (MAIN, PT01–PT08, SWCH → asset id) one product receives from a layout; the parent uses `parent`. */
+export function amazonSlotsFor(layout: Pick<AmazonMediaLayout, 'items' | 'parent'>, productId: string): AmazonItemLayout['slots'] | null {
+  const item = layout.items.find(i => i.productId === productId) ?? (layout.parent?.productId === productId ? layout.parent : null)
+  return item ? item.slots : null
+}
+
 // ── Shopify ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface ShopifyMediaLayout { media: string[]; variantImages: Record<string, string | null>; checks: MediaCheck[] }

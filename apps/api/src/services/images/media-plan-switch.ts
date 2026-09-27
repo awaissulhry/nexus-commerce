@@ -21,3 +21,14 @@ export async function mediaPlanProducts(productIds: readonly string[]): Promise<
 export async function isOnMediaPlan(productId: string): Promise<boolean> {
   return (await mediaPlanProducts([productId])).has(productId)
 }
+
+/**
+ * The revisions of the plan layers one channel account reads (Shared, the channel, that account's listing layer),
+ * or `null` when the family is not on the plan. A review binds to it, so a plan edit after the review invalidates it.
+ */
+export async function mediaPlanRevision(rootId: string, channel: string, accountId: string, marketplace = 'GLOBAL', aliasKey = ''): Promise<string | null> {
+  const rows = await prisma.productMediaPlan.findMany({ where: { productId: rootId, OR: [{ layer: 'SHARED' }, { layer: 'CHANNEL', channel },
+    { layer: 'LISTING', channel, marketplace, channelConnectionId: accountId, aliasKey }] }, select: { layer: true, channel: true, revision: true } })
+  if (!rows.some(r => r.layer === 'SHARED')) return null
+  return rows.map(r => `${r.layer}:${r.channel}@${r.revision}`).sort().join('|')
+}

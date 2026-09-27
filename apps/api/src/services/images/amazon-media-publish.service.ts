@@ -4,6 +4,26 @@ import prisma from '../../db.js'
 import { WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
 import { amazonMediaClient, amazonMediaWriteRefusal } from './amazon-media-client.js'
 import { amazonMediaDestination, assertNoActiveMediaRun, desiredAmazonImages, mutateAmazonMedia, readAmazonMedia, refreshAmazonMedia } from './amazon-media-workspace.service.js'
+import { amazonSlotsFor, type AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
+import { isOnMediaPlan } from './media-plan-switch.js'
+import { mediaLayoutFor } from './media-plan.service.js'
+
+/**
+ * Images rebuild P2e — for a family on the media plan, the images a review asks Amazon for come from the plan's Amazon
+ * layout (one photo set per ASIN, for every market), not from the older per-market draft. `null` = not on the plan.
+ */
+async function planImages(productId: string, accountId: string, marketplace: string) {
+  if (!(await isOnMediaPlan(productId))) return null
+  const media = await mediaLayoutFor({ productId, channel: 'AMAZON', marketplace, accountId })
+  if (!media || media.layout.channel !== 'AMAZON') throw new WorkspaceScopeError('This product\'s photo plan changed. Review again.')
+  const layout = media.layout as AmazonMediaLayout & { channel: 'AMAZON' }
+  const errors = layout.checks.filter(c => c.severity === 'error').map(c => c.message)
+  return { errors, desired: (itemProductId: string) => {
+    const slots = amazonSlotsFor(layout, itemProductId)
+    if (!slots) return { desired: {}, problems: ['This SKU is not in the photo plan for this Amazon account. Review it on the Media page.'] }
+    return { desired: Object.fromEntries(Object.entries(slots).flatMap(([code, id]) => id ? [[code, media.url(id)]] : [])) as Record<string, string>, problems: [] as string[] }
+  } }
+}
 
 const json = (value: unknown) => value as Prisma.InputJsonValue
 export async function readAmazonMediaRun(destination: WorkspaceDestination, id: string): Promise<AmazonMediaRun> {
@@ -17,6 +37,9 @@ export async function createAmazonMediaReview(destination: WorkspaceDestination,
   const current = await readAmazonMedia(destination)
   if (current.revision !== revision) throw new WorkspaceScopeError('The saved gallery changed. Reload before reviewing publication.')
   await assertNoActiveMediaRun(current)
+  // A family on the media plan is reviewed only when its plan has no blocking problem — the reasons, not a partial send.
+  const planned = await planImages(destination.productId, destination.accountId, destination.marketplace)
+  if (planned?.errors.length) throw new WorkspaceScopeError(planned.errors.join('\n'), 422)
   if (!listingIds.length || listingIds.length > 200 || new Set(listingIds).size !== listingIds.length || listingIds.some(id => !current.items.some(i => i.id === id)))
     throw new WorkspaceScopeError('Choose between 1 and 200 distinct SKUs in this listing destination.', 422)
   // Resolve credential attribution before queuing. Nothing is submitted here.
@@ -61,13 +84,15 @@ export async function processAmazonMediaRun(id: string) {
   try {
     const destination = await amazonMediaDestination({ productId: initial.productId, accountId: initial.accountId, market: initial.marketplace, listingId: initial.listingId })
     const client = await amazonMediaClient(initial.accountId, initial.marketplace)
+    const planned = reviewing ? await planImages(initial.productId, initial.accountId, initial.marketplace) : null
     for (const receipt of receipts) {
       const current = await readAmazonMedia(destination)
       if (current.revision !== initial.revision) throw new WorkspaceScopeError('The saved gallery or listing context changed. Build a fresh review.')
       const item = current.items.find(i => i.id === receipt.listingId)
       if (!item) throw new Error('A selected SKU no longer belongs to this listing destination.')
       if (reviewing) {
-        const { desired, problems } = desiredAmazonImages(current, item.id)
+        const { desired, problems } = planned ? planned.desired(item.productId) : desiredAmazonImages(current, item.id)
+        if (planned?.errors.length) problems.push(...planned.errors)
         const entry: AmazonMediaPlanItem = { listingId: item.id, sku: item.sku, asin: item.asin ?? '', productType: item.productType ?? '', desired,
           before: {}, patches: [], changes: [], issues: [...problems] }
         try {
