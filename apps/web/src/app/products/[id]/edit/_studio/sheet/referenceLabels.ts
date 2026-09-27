@@ -50,7 +50,8 @@ const fulfillmentLabels = {
 const fixedLabels: ReferenceLabels = {
   fulfillmentChannel: fulfillmentLabels,
   fulfillment_channel_code: fulfillmentLabels,
-  fulfillment_availability__fulfillment_channel_code: fulfillmentLabels,
+  // `fulfillment_availability__fulfillment_channel_code` is the Amazon scope's Fulfillment method column: the server
+  // labels it FBA / FBM in Nexus's own words (channel-specs/amazon.ts), so no fixed table overrides it here.
   listingFormat: { FIXED_PRICE: 'Fixed price', AUCTION: 'Auction' },
   listingDuration: { GTC: 'Good until cancelled', ...Object.fromEntries([1, 3, 5, 7, 10, 30].map(days => [`DAYS_${days}`, `${days} ${days === 1 ? 'day' : 'days'}`])) },
   descriptionThemeId: { none: 'No theme' },
