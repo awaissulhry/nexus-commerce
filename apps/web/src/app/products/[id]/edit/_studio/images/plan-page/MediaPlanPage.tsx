@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Redo2, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+import { Redo2, Undo2, Upload } from 'lucide-react'
 import type { MediaOp, MediaSetRef } from '@nexus/shared/media-plan'
 
 import { Banner, Drawer, Listbox, MediaPreview, Modal, SourceIndicator, useToast } from '@/design-system/components'
@@ -16,6 +16,7 @@ import { PlanBoard } from './PlanBoard'
 import { DestinationsTable } from './DestinationsTable'
 import { ChannelView } from './ChannelView'
 import { CompareDialog } from './CompareDialog'
+import { UploadDialog } from './UploadDialog'
 import {
   CHANNEL_LABEL, assetMap, cardOf, libraryUsage, ownedSkuSets, setRows, showAsOptions, swatchRows, viewAxis, viewStack,
   type LayerView, type MediaChannel, type MediaRead,
@@ -60,6 +61,9 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   const [managing, setManaging] = useState(false)
   const [viewing, setViewing] = useState<string | null>(null)
   const [comparing, setComparing] = useState(false)
+  // P4b — the upload dialog, with the files dropped on the page (if any).
+  const [uploading, setUploading] = useState<File[] | null>(null)
+  const [dropping, setDropping] = useState(false)
 
   const assets = useMemo(() => assetMap(read), [read])
   const usage = useMemo(() => libraryUsage(read), [read])
@@ -121,6 +125,20 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
       event.preventDefault()
       if (event.shiftKey) plan.redo(); else plan.undo()
     }
+    // U opens "Upload photos" (PLAN.md §5.2) — never from inside a control that owns the key.
+    if (event.key.toLowerCase() === 'u' && !event.metaKey && !event.ctrlKey && !event.altKey && !target.closest('select, [role="listbox"], [role="menu"], [role="dialog"]')) {
+      event.preventDefault()
+      setUploading([])
+    }
+  }
+  // Files dropped anywhere on the page open the upload dialog with them (a library photo dragged onto a set is not a file).
+  const hasFiles = (event: DragEvent<HTMLDivElement>) => [...event.dataTransfer.types].includes('Files')
+  const onDragOver = (event: DragEvent<HTMLDivElement>) => { if (!hasFiles(event)) return; event.preventDefault(); if (!dropping) setDropping(true) }
+  const onDragLeave = (event: DragEvent<HTMLDivElement>) => { if (event.currentTarget === event.target) setDropping(false) }
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasFiles(event)) return
+    event.preventDefault(); setDropping(false)
+    setUploading([...event.dataTransfer.files])
   }
 
   const library = <LibraryPanel read={read} usage={usage} targets={targets} pendingTarget={pending?.target ?? null} onClearPending={() => setPending(null)}
@@ -131,7 +149,8 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
 
   if (managing) return <div ref={box} className={styles.page}><LibraryManager productId={read.productId} onClose={() => { setManaging(false); void plan.reload(true) }} /></div>
 
-  return <div ref={box} className={styles.page} onKeyDown={onKeyDown}>
+  // Focusable (not a Tab stop): a click on the page keeps its shortcuts (U, ⌘Z) and lets PageDown scroll it.
+  return <div ref={box} className={styles.page} tabIndex={-1} onKeyDown={onKeyDown} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} data-dropping={dropping || undefined}>
     <header className={styles.toolbar}>
       <h2 className={styles.pageTitle}>Media · {read.sku} · {read.family.variants.length} variant{read.family.variants.length === 1 ? '' : 's'}</h2>
       <label className={styles.control}><span>Photos vary by</span>
@@ -144,6 +163,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
           options={[{ value: '', label: 'Placed versions' }, ...showAsList.map(o => ({ value: o.value, label: o.label }))]} />
       </label>
       <span className={styles.spacer} />
+      <Button size="sm" variant="primary" onClick={() => setUploading([])} title="Upload photos (U)"><Upload size={14} aria-hidden />Upload photos</Button>
       <Button size="sm" variant="secondary" disabled={comparable.length < 2} onClick={() => setComparing(true)}
         title={comparable.length < 2 ? 'Compare needs two or more destinations' : undefined}>Compare</Button>
       <ToolbarButton icon={<Undo2 size={16} />} label={plan.undoLabel ? `Undo: ${plan.undoLabel}` : 'Undo'} shortcut="⌘Z" disabled={!plan.canUndo} onClick={() => plan.undo()} />
@@ -197,6 +217,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
     <Drawer open={!wide && libraryOpen} onClose={() => { setLibraryOpen(false); setPending(null) }} title="Photo library" width="min(520px, 100vw)">
       {library}
     </Drawer>
+    <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} />
     <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)} onOpenDestination={setOpen} />
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}

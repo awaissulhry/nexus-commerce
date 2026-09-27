@@ -17,7 +17,7 @@ vi.mock('../product-event.service.js', () => ({ productEventService: { emit: asy
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { applyMediaPlanOps, isMediaSwitched, mediaLayoutFor, readMediaWorkspace, sheetMediaPlan } from './media-plan.service.js'
+import { applyMediaPlanOps, isMediaSwitched, mediaLayoutFor, readMediaWorkspace, sheetMediaPlan, updateMediaLibrary } from './media-plan.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -218,5 +218,37 @@ describe('one picture, one library card (Owner, 2026-09-28: "multiple duplicates
     expect((await scoped(() => uploadDedupScope(ids.nm))).sort()).toEqual([ids.root, ids.nm, ids.nl, ids.gm, ids.rm].sort())
     await expect(scoped(() => applyImagesToProducts({ sourceProductId: ids.root, targetProductIds: [ids.nm] }))).rejects.toBeInstanceOf(MediaPlanRefusal)
     expect(await scoped(() => prisma.productImage.count({ where: { productId: ids.nm } }))).toBe(2)
+  })
+})
+
+describe('library languages and versions (P4b upload)', () => {
+  const photo = (name: string, languageTag = 'zxx') => scoped(async () => (await prisma.productImage.create({ data: { productId: ids.root, url: `https://cdn.example/${name}.jpg`, alt: name, type: 'ALT', languageTag } as never })).id)
+  const row = (id: string) => scoped(() => prisma.productImage.findUniqueOrThrow({ where: { id }, select: { languageTag: true, versionGroupId: true } }))
+  it('sets each file\'s language and makes files that differ only by language versions of one photo', async () => {
+    const [it, es] = [await photo('guide-it'), await photo('guide-es')]
+    const saved = await scoped(() => updateMediaLibrary(ids.nm, { languages: [{ id: it, languageTag: 'it' }, { id: es, languageTag: 'es' }], groups: [{ ids: [it, es] }] }))
+    expect(saved.rootId).toBe(ids.root)
+    const [a, b] = [await row(it), await row(es)]
+    expect([a.languageTag, b.languageTag]).toEqual(['it', 'es'])
+    expect(a.versionGroupId).toBeTruthy()
+    expect(b.versionGroupId).toBe(a.versionGroupId)
+    expect(state.events).toEqual([expect.objectContaining({ type: 'product.media.changed', productId: ids.root, layer: 'LIBRARY' })])
+  })
+  it('a new file can join a photo already in the library and keeps that photo\'s group', async () => {
+    const fr = await photo('chart-fr')
+    await scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: fr, languageTag: 'fr' }], groups: [{ ids: [fr], join: img['chart-it'] }] }))
+    expect((await row(fr)).versionGroupId).toBe('chart')
+    // The page reads it as a third version: placing it next to the Italian chart is refused as the same photo.
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'EBAY', marketplace: 'DE', accountId: ids.ebay }, ops: [{ op: 'insert', set: 'common', assetIds: [img['chart-it'], fr] }] }, null)))
+      .rejects.toMatchObject({ statusCode: 409 })
+  })
+  it('refuses two versions in one language, a version without text, and a photo of another family — and changes nothing', async () => {
+    const [a, b] = [await photo('twin-a'), await photo('twin-b')]
+    const other = await scoped(async () => (await prisma.productImage.create({ data: { productId: (await prisma.product.create({ data: { sku: 'ELSE', name: 'Else', basePrice: 1 } as never })).id, url: 'https://cdn.example/else.jpg', type: 'ALT' } as never })).id)
+    await expect(scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: a, languageTag: 'it' }, { id: b, languageTag: 'it' }], groups: [{ ids: [a, b] }] }))).rejects.toMatchObject({ statusCode: 422 })
+    await expect(scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: a, languageTag: 'it' }], groups: [{ ids: [a, b] }] }))).rejects.toMatchObject({ statusCode: 422 })
+    await expect(scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: other, languageTag: 'de' }], groups: [] }))).rejects.toMatchObject({ statusCode: 409 })
+    expect([await row(a), await row(b)]).toEqual([{ languageTag: 'zxx', versionGroupId: null }, { languageTag: 'zxx', versionGroupId: null }])
+    expect(state.events).toEqual([])
   })
 })

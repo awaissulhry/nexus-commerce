@@ -38,16 +38,19 @@ export function useMediaPlan(productId: string) {
   const readRef = useRef<MediaRead | null>(null)
   if (state.status === 'ready') readRef.current = state.read
 
-  const load = useCallback(async (quiet = false) => {
+  /** Reads the family again; answers the new read (null when it failed) so a caller can act on it at once. */
+  const load = useCallback(async (quiet = false): Promise<MediaRead | null> => {
     if (!quiet) setState({ status: 'loading' })
     const res = await apiGet<MediaRead>(`/api/products/${encodeURIComponent(productId)}/media`)
     if (!res.ok) {
-      if (quiet) { setNotice(`Photos could not be refreshed: ${res.message}`); return }
+      if (quiet) { setNotice(`Photos could not be refreshed: ${res.message}`); return null }
       setState({ status: 'error', message: res.message })
-      return
+      return null
     }
     stale.current = false
+    readRef.current = res.data
     setState({ status: 'ready', read: res.data })
+    return res.data
   }, [productId])
 
   useEffect(() => { void load() }, [load])

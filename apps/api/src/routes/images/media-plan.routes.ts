@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { MEDIA_LAYERS, mediaOpSchema } from '@nexus/shared/media-plan'
-import { applyMediaPlanOps, readMediaWorkspace } from '../../services/images/media-plan.service.js'
+import { applyMediaPlanOps, MEDIA_LANGUAGE, readMediaWorkspace, updateMediaLibrary } from '../../services/images/media-plan.service.js'
 import { previewMediaSwitch, switchToMediaPlan } from '../../services/images/media-plan-seed.service.js'
 import { WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
 
@@ -15,6 +15,12 @@ const opsBodySchema = z.object({
     aliasKey: z.string().max(256).optional(),
   }).strict(),
   ops: z.array(mediaOpSchema).min(1).max(50),
+}).strict()
+
+const id = z.string().min(1).max(64)
+const libraryBodySchema = z.object({
+  languages: z.array(z.object({ id, languageTag: z.string().regex(MEDIA_LANGUAGE) }).strict()).max(200),
+  groups: z.array(z.object({ ids: z.array(id).min(1).max(20), join: id.nullish() }).strict()).max(100),
 }).strict()
 
 export const mediaPlanRoutes: FastifyPluginAsync = async app => {
@@ -36,6 +42,18 @@ export const mediaPlanRoutes: FastifyPluginAsync = async app => {
       if (error instanceof z.ZodError) return reply.code(422).send({ error: 'This photo change is not valid. Reload the page and try again.' })
       request.log.error({ err: error }, 'Media edit failed')
       return reply.code(500).send({ error: 'The change could not be confirmed. Reload the page before trying again.' })
+    }
+  })
+  // P4b — the upload dialog's reading of the file names: each photo's language, and which photos are versions of one.
+  app.patch<{ Params: { productId: string }; Body: unknown }>('/products/:productId/media/library', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    try {
+      return await updateMediaLibrary(request.params.productId, libraryBodySchema.parse(request.body))
+    } catch (error) {
+      if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })
+      if (error instanceof z.ZodError) return reply.code(422).send({ error: 'These photo languages are not valid. Reload the page and try again.' })
+      request.log.error({ err: error }, 'Media library update failed')
+      return reply.code(500).send({ error: 'The photo languages could not be saved. Reload the page before trying again.' })
     }
   })
   // P3a — move one family onto the plan: a preview that writes nothing, then the switch bound to that preview.
