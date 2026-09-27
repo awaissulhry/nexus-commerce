@@ -14,7 +14,7 @@
  *   - Account: REQUIRED, and an ACTIVE connection of the channel. A publisher knows which account it sent through;
  *     nothing here guesses one.
  *   - Market: an active `Marketplace` row of the channel, spelled as its code (eBay UK is 'UK', `EBAY_UK`). `region`
- *     follows `resolveListingRegion`, because eBay's own readers key their listings by region and eBay UK's is GB.
+ *     follows `listingRegion`, because eBay's own readers key their listings by region and eBay UK's is GB.
  *   - Address: the coordinate (channel + market + account + alias, `whereCoordinate`). A row there is updated, a missing
  *     one created. Before creating, a LEGACY row of the same listing is adopted onto the coordinate: a row with no
  *     account (only when this account is the one the resolver gives an unattributed row), or a row under an older
@@ -40,7 +40,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { STILL_DRAFT_LISTING, isStillDraftListing } from '@nexus/shared/push-lock'
-import { whereCoordinate } from '../../lib/listing-coordinate.js'
+import { listingRegion, whereCoordinate } from '../../lib/listing-coordinate.js'
 import { chooseConnection, listActiveConnections } from '../connection-resolver.service.js'
 import { ChannelListingVersionConflict } from '../channel-listing-cas.js'
 import { validateAliasWriteTargets } from './listing-alias.service.js'
@@ -114,12 +114,6 @@ const withArticle = (label: string) => `${/^[aeiou]/i.test(label) ? 'an' : 'a'} 
 /** Fields only this rule writes: a caller naming one would overrule it. */
 const RULE_OWNED = ['id', 'workspaceId', 'productId', 'channel', 'marketplace', 'channelMarket', 'region', 'channelConnectionId',
   'aliasKey', 'aliasId', 'listingStatus', 'isPublished', 'syncPaused', 'externalListingId', 'externalParentId', 'version'] as const
-
-/**
- * eBay keys its listings by region, and eBay UK's region is GB: the rule of `resolveListingRegion`
- * (listing-content-write.service.ts), kept here without that module's eager queue imports.
- */
-const listingRegion = (channel: string, market: string) => (channel === 'EBAY' && market === 'UK' ? 'GB' : market)
 
 /** Older spellings a listing of this market may still be stored under (`${channel}_${code}` → spellings). */
 const LEGACY_MARKET_SPELLINGS: Record<string, string[]> = { EBAY_UK: ['GB'] }

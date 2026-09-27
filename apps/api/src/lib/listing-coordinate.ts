@@ -52,3 +52,12 @@ export function whereCoordinate(c: ListingCoordinate): ListingCoordinate {
     aliasKey: c.aliasKey,
   } satisfies Prisma.ChannelListingWhereInput
 }
+
+/**
+ * The legacy `region` column of a listing on this coordinate: the market code, except eBay UK, whose region is GB —
+ * eBay's own readers key their listings by region (`resolveListingRegion`, listing-content-write.service.ts). The one
+ * rule for both listing creators (`ensureDraftListings`, `recordLiveListings`).
+ */
+export function listingRegion(channel: string, market: string): string {
+  return channel === 'EBAY' && market === 'UK' ? 'GB' : market
+}

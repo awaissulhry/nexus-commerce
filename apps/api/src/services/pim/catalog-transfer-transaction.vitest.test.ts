@@ -63,11 +63,20 @@ describe('catalog transaction boundaries', () => {
     await applyTransferTarget(tx as never, { ...target(), before: null, create: true, patch: { name: 'New', familyId: 'f1' } }, 'job', null)
     expect(tx.product.create).toHaveBeenCalledWith({ data: { sku: 'SKU', name: 'New', familyId: 'f1', basePrice: 0, status: 'DRAFT' } })
   })
-  it('creates an exact account listing with publication disabled', async () => {
-    const tx = txOf(), t = target()
+  it('creates an exact account listing with publication disabled: an inert draft from the one draft rule, then the patch', async () => {
+    const base = txOf(), t = target()
+    // Step 7 — the draft rule reads the market, the account and the product, then inserts the draft.
+    const createManyAndReturn = vi.fn().mockResolvedValue([{ id: 'new-listing', productId: 'p1', version: 1 }])
+    const tx = { ...base, marketplace: { findFirst: vi.fn().mockResolvedValue({ id: 'market-it' }) },
+      channelConnection: { ...base.channelConnection, findMany: vi.fn().mockResolvedValue([{ id: 'account-a', channelType: 'AMAZON', isActive: true, isPrimary: true }]) },
+      product: { ...base.product, findMany: vi.fn().mockResolvedValue([{ id: 'p1', parentId: null, sku: 'SKU' }]) },
+      channelListing: { ...base.channelListing, createManyAndReturn } }
     t.identity = { ...t.identity, entity: 'Listings', channel: 'AMAZON', accountId: 'account-a', marketplace: 'IT' }; t.before = null; t.create = true; t.patch = { platformAttributes: { productType: 'COAT' } }
     await applyTransferTarget(tx as never, t, 'job', null)
-    expect(tx.channelListing.create).toHaveBeenCalledWith({ data: expect.objectContaining({ channelConnectionId: 'account-a', aliasKey: '', marketplace: 'IT', listingStatus: 'DRAFT', isPublished: false }) })
+    expect(createManyAndReturn).toHaveBeenCalledWith(expect.objectContaining({ data: [expect.objectContaining({ productId: 'p1', channelConnectionId: 'account-a', aliasKey: '', aliasId: null, marketplace: 'IT',
+      listingStatus: 'DRAFT', isPublished: false, syncPaused: true, externalListingId: null })] }))
+    expect(base.channelListing.create).not.toHaveBeenCalled()
+    expect(base.channelListing.updateMany).toHaveBeenCalledWith({ where: { id: 'new-listing', version: 1 }, data: { platformAttributes: { productType: 'COAT' }, version: { increment: 1 } } })
     expect(produceReadiness).toHaveBeenCalledWith('p1', { channel: 'AMAZON', market: 'IT', accountId: 'account-a' })
   })
   it('does not expose or apply another user’s job', async () => {

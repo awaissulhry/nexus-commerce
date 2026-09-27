@@ -13,6 +13,7 @@ import { clearSheetColumnCache } from './sheet-columns.service.js'
 import { clearFieldCatalogueCache } from './mapping/field-catalogue.service.js'
 import { productRoleOf } from '@nexus/shared/master-sheet'
 import { relationshipAliasConflicts } from './relationship-alias-guard.js'
+import { DraftListingError, draftListingFields, ensureDraftListings } from './draft-listing.service.js'
 
 type Payload = { kind: 'catalog-transfer-v1'; market: string; mode: TransferMode; rows?: TransferRow[]; plan: TransferPlan; previewExpiresAt: string }
 const json = <T>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -293,13 +294,29 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       // (a job's own cascade may move it), so the fresh `listing.version` would let a change since review through unseen.
       listingVersion = Number((target.before as { version?: number } | null)?.version ?? listing.version) + (Object.keys(target.patch).length ? 1 : 0)
     } else {
-      const listing = await tx.channelListing.create({ data: {
-        productId: product.id, channel: id.channel, marketplace: id.marketplace, region: id.marketplace,
-        channelMarket: `${id.channel}_${id.marketplace}`, channelConnectionId: id.accountId, aliasKey: id.aliasKey, aliasId: id.aliasKey || null,
-        listingStatus: 'DRAFT', isPublished: false, ...target.patch,
-      } as Prisma.ChannelListingUncheckedCreateInput })
-      entityId = listing.id
-      listingVersion = Number(listing.version ?? 0)
+      // Step 7 — a new listing is an inert Nexus draft from the one draft rule (DRAFT, unpublished, paused, on the
+      // reviewed account); the file's patch is written onto it AFTER it exists. Only this product: a family draft
+      // would plant rows under the job's later targets, which then read "changed since preview".
+      const draft = await (async () => {
+        try {
+          return id.aliasKey
+            ? (await tx.channelListing.createManyAndReturn({ data: [draftListingFields({ productId: product.id, channel: id.channel, market: id.marketplace, accountId: id.accountId, aliasKey: id.aliasKey })], skipDuplicates: true, select: { id: true, version: true } }))
+              .map(row => ({ ...row, created: true }))[0]
+            : (await ensureDraftListings(tx, { channel: id.channel, market: id.marketplace, accountId: id.accountId, productIds: [product.id] }))[0]
+        } catch (error) {
+          // A market or account the draft rule refuses is this target's conflict, like any other change since preview.
+          if (error instanceof DraftListingError) throw new TransferConflict(error.message)
+          throw error
+        }
+      })()
+      // The preview read no listing here: one that appeared since is somebody else's.
+      if (!draft?.created) throw new TransferConflict('Listing changed since preview; preview this listing again')
+      const patched = Object.keys(target.patch).length
+        ? await tx.channelListing.updateMany({ where: { id: draft.id, version: draft.version }, data: { ...target.patch, version: { increment: 1 } } as Prisma.ChannelListingUpdateManyMutationInput })
+        : { count: 1 }
+      if (!patched.count) throw new TransferConflict('Listing changed during apply; preview this listing again')
+      entityId = draft.id
+      listingVersion = Number(draft.version) + (Object.keys(target.patch).length ? 1 : 0)
     }
     // CFI-3 / CFI-6 — the channel file's own facts, written right after the listing write in THIS transaction, before any
     // content write can move the version. The version is the one this transaction verified (the snapshot fingerprint
