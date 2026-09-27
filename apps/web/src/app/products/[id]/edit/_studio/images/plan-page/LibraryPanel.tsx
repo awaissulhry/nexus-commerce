@@ -26,6 +26,8 @@ export interface LibraryPanelProps {
   onDragging(on: boolean): void
   /** Photos cannot be dragged out of a drawer onto the page; there the Add button is the way. */
   draggable: boolean
+  /** Keyboard: jump past the library (two Tab stops per photo) to the photo plan. */
+  onSkip?(): void
 }
 
 const FILTERS: Array<{ value: LibraryFilter; label: string }> = [
@@ -34,7 +36,7 @@ const FILTERS: Array<{ value: LibraryFilter; label: string }> = [
 ]
 
 /** The family's photos (parent and children), searchable, with where each one is used (PLAN.md §5.1). */
-export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPending, onAdd, onOpen, onManage, onDragging, draggable }: LibraryPanelProps) {
+export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPending, onAdd, onOpen, onManage, onDragging, draggable, onSkip }: LibraryPanelProps) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<LibraryFilter>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -59,6 +61,7 @@ export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPendi
       <h3 className={styles.sectionTitle}>Library · {read.library.length}</h3>
       <Button size="xs" variant="secondary" onClick={onManage}>Upload and edit…</Button>
     </header>
+    {onSkip && read.library.length > 0 && <span className={styles.skip}><Button size="xs" variant="link" onClick={onSkip}>Skip to the photo plan</Button></span>}
     <div className={styles.libraryTools}>
       <Input size="sm" leadingIcon={<Search size={14} aria-hidden />} placeholder="Search photos" aria-label="Search photos" value={search} onChange={event => setSearch(event.target.value)} />
       <Listbox size="sm" ariaLabel="Show" value={filter} onChange={value => setFilter(value as LibraryFilter)}

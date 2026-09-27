@@ -23,21 +23,23 @@ import type { MediaPlanState } from './useMediaPlan'
 import styles from './planPage.module.css'
 
 const WIDE = 1180
+const PHONE = 720
 
 /** The page's width decides where the library lives: beside the plan, or in a drawer (PLAN.md §5.2). */
 function useWide() {
   const ref = useRef<HTMLDivElement | null>(null)
-  const [wide, setWide] = useState(true)
+  const [width, setWidth] = useState(WIDE)
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const read = () => setWide(el.getBoundingClientRect().width >= WIDE)
+    const read = () => setWidth(el.getBoundingClientRect().width)
     read()
     const observer = new ResizeObserver(read)
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
-  return [ref, wide] as const
+  // A phone: the destinations become one card each (a table would scroll sideways).
+  return [ref, width >= WIDE, width < PHONE] as const
 }
 
 /**
@@ -48,7 +50,7 @@ function useWide() {
 export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlanState }) {
   const { scope, destination: studioDestination } = useStudioScope()
   const { toast } = useToast()
-  const [box, wide] = useWide()
+  const [box, wide, phone] = useWide()
   const [open, setOpen] = useState<string | null>(null)
   const [showSkus, setShowSkus] = useState(false)
   const [showAs, setShowAs] = useState<string>('')
@@ -115,7 +117,8 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   }
 
   const library = <LibraryPanel read={read} usage={usage} targets={targets} pendingTarget={pending?.target ?? null} onClearPending={() => setPending(null)}
-    onAdd={addTo} onOpen={asset => openAsset(asset.id)} onManage={() => { setLibraryOpen(false); setManaging(true) }} onDragging={plan.hold} draggable={wide} />
+    onAdd={addTo} onOpen={asset => openAsset(asset.id)} onManage={() => { setLibraryOpen(false); setManaging(true) }} onDragging={plan.hold} draggable={wide}
+    onSkip={() => { setLibraryOpen(false); const board = box.current; (board?.querySelector<HTMLElement>('.nds-media-board-thumb[tabindex="0"]') ?? board?.querySelector<HTMLElement>('.nds-media-board-row button'))?.focus() }} />
   const viewingAsset = viewing ? read.library.find(a => a.id === viewing) ?? null : null
 
   if (managing) return <div ref={box} className={styles.page}><LibraryManager productId={read.productId} onClose={() => { setManaging(false); void plan.reload(true) }} /></div>
@@ -155,10 +158,12 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
           </header>
           <PlanBoard read={read} view={shared} channel={null} assets={assets} languages={languages} showSkus={showSkus}
             edit={(ops, label) => edit(shared, ops, label)} onAddRequest={(ref, label) => requestAdd(shared, ref, label)} onOpen={openAsset} />
-          <Button size="sm" variant="ghost" aria-expanded={showSkus} onClick={() => setShowSkus(v => !v)}>
-            {showSkus ? '▾' : '▸'} Photos for one SKU only ({skuCount})
-          </Button>
-          {showSkus && <span className={styles.muted}>Amazon and Shopify use a SKU's own photos; eBay shows photos per {axis.info?.label ?? 'value'}.</span>}
+          {read.family.variants.length > 0 ? <>
+            <Button size="sm" variant="ghost" aria-expanded={showSkus} onClick={() => setShowSkus(v => !v)}>
+              {showSkus ? '▾' : '▸'} Photos for one SKU only ({skuCount})
+            </Button>
+            {showSkus && <span className={styles.muted}>Amazon and Shopify use a SKU's own photos; eBay shows photos per {axis.info?.label ?? 'value'}.</span>}
+          </> : <span className={styles.muted}>This product has no options — one gallery for every channel.</span>}
         </section>
 
         <section aria-labelledby="media-destinations-title" className={styles.section}>
@@ -171,7 +176,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
               <span className={styles.muted}>Open a destination to change its photos, see what buyers see, and read its checks.</span>
             </span>
           </header>
-          <DestinationsTable read={read} destinations={destinations} layouts={plan.layouts} selected={open} onOpen={setOpen} />
+          <DestinationsTable read={read} destinations={destinations} layouts={plan.layouts} selected={open} onOpen={setOpen} cards={phone} />
         </section>
 
         {openDestination && <ChannelView read={read} destination={openDestination} layout={plan.layouts[openDestination.key]} assets={assets}

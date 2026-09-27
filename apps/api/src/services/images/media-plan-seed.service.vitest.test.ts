@@ -51,6 +51,8 @@ beforeAll(async () => {
     await row(ids.root, 'cover', 0); await row(ids.root, 'same-as-cover', 1); await row(ids.root, 'detail', 2)
     await row(ids.root, 'n1', 0, 'Color', 'Nero'); await row(ids.root, 'n2', 1, 'Color', 'nero'); await row(ids.root, 'g1', 0, 'Color', 'Giallo')
     await row(ids.root, 'old-spelling', 0, 'Colore', 'Nero')
+    // A row under a DIFFERENT axis: the old publisher never sent it as a colour photo.
+    await row(ids.root, 'by-size', 0, 'Taglia', 'M')
     // An old shell, adopted as the alias "ALT1": its own builder rows become that alias's own photos.
     ids.shell = (await prisma.product.create({ data: { sku: 'GALE-ALT1', name: 'Gale alt', basePrice: 0, productType: 'EBAY_LISTING_SHELL' } as never })).id
     await row(ids.shell, 'shell-cover', 0); await row(ids.shell, 'shell-nero', 0, 'Color', 'Nero')
@@ -72,13 +74,17 @@ describe('moving a family onto the photo plan', () => {
     expect(shared.source).toBe('old eBay builder')
     expect(shared.plan.axis).toBe('color')
     expect(shared.plan.sets.common.map((i: any) => i.assetId)).toEqual([ids.cover, expect.stringMatching(/^import:/), expect.stringMatching(/^import:/)])
-    // "Nero" and its case twin "nero" are one dictionary value, in the builder's order.
-    expect(shared.plan.sets.values['color:black'].map((i: any) => i.assetId)).toEqual([ids.n1, expect.stringMatching(/^import:/)])
+    // "Nero" and its case twin "nero" are one dictionary value, in the builder's order; the row saved under "Colore" (the same
+    // axis) comes in at its position, as the old eBay publisher sent it.
+    expect(shared.plan.sets.values['color:black'].map((i: any) => i.assetId)).toEqual([ids.n1, expect.stringMatching(/^import:/), expect.stringMatching(/^import:/)])
     expect(Object.keys(shared.plan.sets.values)).toEqual(['color:black', 'color:yellow'])
     const alias = preview.layers.find((l: any) => l.label === 'ALT1')
     expect(alias).toMatchObject({ key: `LISTING:EBAY:IT:${ids.ebay}:${ids.alias}`, source: 'old eBay builder' })
-    expect(preview.report).toEqual(['Shared: 1 older photo saved under another axis spelling were left out.'])
-    expect(preview.imports).toBe(6)
+    expect(preview.report).toEqual([
+      'Shared: 1 photo saved under "Colore" (the same axis as "Color") was taken in, as the old eBay publisher sent it; repeats were dropped.',
+      'Shared: 1 older photo saved under another axis ("Taglia") was left out.',
+    ])
+    expect(preview.imports).toBe(7)
     expect(preview.destinations.map((d: any) => d.source)).toEqual(['old eBay builder (Shared)', 'old eBay builder (ALT1)'])
     expect(await scoped(() => prisma.productMediaPlan.count())).toBe(0)
     expect(await scoped(() => prisma.productImage.count())).toBe(before)
@@ -88,7 +94,7 @@ describe('moving a family onto the photo plan', () => {
     await expect(scoped(() => switchToMediaPlan(ids.root, { revision: 'f'.repeat(64) }, null))).rejects.toMatchObject({ statusCode: 409 })
     const { revision } = await scoped(() => previewMediaSwitch(ids.root)) as any
     const done = await scoped(() => switchToMediaPlan(ids.root, { revision }, null))
-    expect(done).toMatchObject({ layers: 2, imported: 6 })
+    expect(done).toMatchObject({ layers: 2, imported: 7 })
     const rows = await scoped(() => prisma.productMediaPlan.findMany({ orderBy: { layer: 'desc' } }))
     expect(rows.map(r => r.layer)).toEqual(['SHARED', 'LISTING'])
     expect(JSON.stringify(rows.map(r => r.plan))).not.toContain('import:')
