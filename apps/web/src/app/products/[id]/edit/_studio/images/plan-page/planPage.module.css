@@ -60,13 +60,15 @@
 .previewStrip { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); margin: 0; padding: 0; list-style: none; }
 .uploadFile { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; overflow-wrap: anywhere; }
 .uploadStatus { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); }
-.uploadWhere { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.uploadWhere { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-16); margin: 0; padding: 0; border: 0; min-width: 0; }
+.uploadWhere > legend { float: left; margin-right: var(--nds-space-8); padding: 0; }
 .uploadTable { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
 .uploadHead, .uploadLine { display: grid; grid-template-columns: 48px minmax(0, 2fr) minmax(130px, 1.2fr) 76px minmax(120px, 1fr) minmax(0, 1.6fr); align-items: center; gap: var(--nds-space-10); padding: var(--nds-space-8) var(--nds-space-12); }
 .uploadHead { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); border-bottom: 1px solid var(--nds-border-subtle); }
 .uploadLines { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; max-height: min(52vh, 560px); overflow-y: auto; }
 .uploadLine + .uploadLine { border-top: 1px solid var(--nds-border-subtle); }
 .uploadCell { min-width: 0; }
+.uploadFooterNote { display: flex; flex: 1 1 200px; flex-direction: column; gap: var(--nds-space-2); min-width: 0; font-size: var(--nds-font-size-sm); }
 /* The column name beside a control, on a phone only (the header row is hidden there). */
 .uploadLabel { display: none; }
 .compareBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }

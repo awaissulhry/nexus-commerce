@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { MediaSetRef } from '@nexus/shared/media-plan'
 
-import { Banner, FileDropzone, JobProgress, MetricStrip, Modal, Thumbnail } from '@/design-system/components'
-import { Button, Input, SegmentedControl, Select, Tag } from '@/design-system/primitives'
+import { Banner, FileDropzone, JobProgress, Modal, Thumbnail } from '@/design-system/components'
+import { Button, Input, Radio, SegmentedControl, Select, Tag } from '@/design-system/primitives'
 
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -151,6 +151,7 @@ export function UploadDialog({ read, plan, open, files, onClose, onReview }: Upl
       if (!outcome.ok) { setError(outcome.message); setPhase('idle'); return }
     }
     const placedNow = planned.sets.reduce((n, set) => n + set.count, 0) + planned.ops.filter(op => op.op === 'swatch').length
+      + versionRows(rows.filter(r => placedAsset(r))).reduce((n, keys) => n + keys.length - 1, 0)
     setDone({ placed: placedNow, fresh: counts.fresh, skipped: planned.skipped, refs: planned.sets.map(s => s.ref), steps: parts.length, undone: false })
     setPhase('done')
   }
@@ -218,7 +219,14 @@ export function UploadDialog({ read, plan, open, files, onClose, onReview }: Upl
     } },
   ]
 
-  const placeLabel = placing ? `Place ${placing} file${placing === 1 ? '' : 's'}${placement.sets.length ? ` · ${placement.sets.map(s => `${s.label} ${s.count}`).join(' · ')}` : ''}` : 'Nothing to place'
+  // Every file the window will use, then where they go: language versions of one photo are placed once, as versions.
+  const versionExtras = versionRows(rows.filter(r => placedAsset(r))).reduce((n, keys) => n + keys.length - 1, 0)
+  const swatches = placement.ops.filter(op => op.op === 'swatch').length
+  const usedFiles = placing + versionExtras
+  const placeLabel = usedFiles ? `Place ${usedFiles} file${usedFiles === 1 ? '' : 's'}` : 'Nothing to place'
+  /** Where they go, beside the button (it wraps on a phone; the button stays short). */
+  const placeDetail = [...placement.sets.map(s => `${s.label} ${s.count}`), ...(versionExtras ? [`${versionExtras} language version${versionExtras === 1 ? '' : 's'}`] : []),
+    ...(swatches ? [`${swatches} swatch${swatches === 1 ? '' : 'es'}`] : [])].join(' · ')
   const footer = phase === 'done' && done ? <>
     {done.steps === 1 && !done.undone && <Button size="sm" variant="secondary" onClick={() => { plan.undo(); setDone({ ...done, undone: true }) }}>Undo</Button>}
     {done.undone && done.fresh > 0 && <Button size="sm" variant="secondary" onClick={() => void removeAdded().then(onClose)}>Remove the {done.fresh} new photo{done.fresh === 1 ? '' : 's'} from the library</Button>}
@@ -226,8 +234,10 @@ export function UploadDialog({ read, plan, open, files, onClose, onReview }: Upl
     <span className={styles.spacer} />
     <Button size="sm" variant="primary" onClick={onClose}>Done</Button>
   </> : <>
-    {counts.fresh > 0 && <span className={styles.muted}>Cancel removes the {counts.fresh} photo{counts.fresh === 1 ? '' : 's'} this window added.</span>}
-    <span className={styles.spacer} />
+    <span className={styles.uploadFooterNote}>
+      {placeDetail && <span>{placeDetail}</span>}
+      {counts.fresh > 0 && <span className={styles.muted}>Cancel removes the {counts.fresh} photo{counts.fresh === 1 ? '' : 's'} this window added.</span>}
+    </span>
     <Button size="sm" variant="secondary" disabled={phase === 'placing'} onClick={() => void cancel()}>Cancel</Button>
     <Button size="sm" variant="primary" disabled={!placing || uploading || phase === 'placing'} onClick={() => void place()}>{phase === 'placing' ? 'Placing…' : placeLabel}</Button>
   </>
@@ -243,26 +253,30 @@ export function UploadDialog({ read, plan, open, files, onClose, onReview }: Upl
         <FileDropzone accept="image/*" multiple disabled={phase === 'placing'} onFiles={add}
           hint={rows.length ? 'Drop more files here.' : 'Or drop files anywhere on the Media page. Unknown names go to Common, where one click moves them.'} />
         {rows.length > 0 && <>
-          <MetricStrip metrics={[
-            { label: 'Files', value: counts.files },
-            { label: 'New', value: counts.fresh },
-            { label: 'Already in the library', value: counts.exact },
-            { label: 'Looks like a library photo', value: counts.similar },
-            ...(counts.failed ? [{ label: 'Not uploaded', value: counts.failed }] : []),
-          ]} />
+          <p className={styles.muted} role="status">{[
+            `${counts.files} file${counts.files === 1 ? '' : 's'}`, `${counts.fresh} new`,
+            ...(counts.exact ? [`${counts.exact} already in the library`] : []),
+            ...(counts.similar ? [`${counts.similar} look${counts.similar === 1 ? 's' : ''} like a photo you have`] : []),
+            ...(counts.failed ? [`${counts.failed} not uploaded`] : []),
+          ].join(' · ')}</p>
           {uploading && started && <JobProgress label="Uploading to the library" value={rows.filter(r => !['waiting', 'uploading'].includes(r.status.kind)).length} max={rows.length}
             detail={`${rows.filter(r => !['waiting', 'uploading'].includes(r.status.kind)).length} of ${rows.length} files`} startedAt={started} />}
-          <div className={styles.uploadWhere} role="group" aria-label="Put them in">
-            <span className={styles.control}>Put them in</span>
-            <SegmentedControl size="sm" ariaLabel="Put them in" value={where} onChange={v => setWhere(v as Where)} disabled={phase === 'placing'}
-              options={[{ value: 'SHARED', label: 'Shared — every channel' }, { value: 'CHANNEL', label: 'One channel' }, { value: 'LISTING', label: 'One listing' }]} />
-            {where === 'CHANNEL' && <Select size="sm" aria-label="Channel" value={channel} onChange={e => setChannel(e.target.value as MediaChannel)}>
-              {channels.map(c => <option key={c} value={c}>{CHANNEL_LABEL[c]}</option>)}
-            </Select>}
-            {where === 'LISTING' && <Select size="sm" aria-label="Listing" value={destination} onChange={e => setDestination(e.target.value)}>
-              {listings.map(d => <option key={d.key} value={d.key}>{destinationLabel(d)}</option>)}
-            </Select>}
-          </div>
+          <fieldset className={styles.uploadWhere} disabled={phase === 'placing'}>
+            <legend className={styles.control}>Put them in</legend>
+            <Radio name="upload-where" label="Shared — every channel" checked={where === 'SHARED'} onChange={() => setWhere('SHARED')} />
+            <span className={styles.cell}>
+              <Radio name="upload-where" label="One channel" checked={where === 'CHANNEL'} onChange={() => setWhere('CHANNEL')} />
+              {where === 'CHANNEL' && <Select size="sm" aria-label="Channel" value={channel} onChange={e => setChannel(e.target.value as MediaChannel)}>
+                {channels.map(c => <option key={c} value={c}>{CHANNEL_LABEL[c]}</option>)}
+              </Select>}
+            </span>
+            <span className={styles.cell}>
+              <Radio name="upload-where" label="One listing" checked={where === 'LISTING'} onChange={() => setWhere('LISTING')} />
+              {where === 'LISTING' && <Select size="sm" aria-label="Listing" value={destination} onChange={e => setDestination(e.target.value)}>
+                {listings.map(d => <option key={d.key} value={d.key}>{destinationLabel(d)}</option>)}
+              </Select>}
+            </span>
+          </fieldset>
           {versionNotes.map(note => <Banner key={note} tone="warning">{note}</Banner>)}
           <div className={styles.uploadTable}>
             <div className={styles.uploadHead} aria-hidden>{columns.map(c => <span key={c.key}>{c.label}</span>)}</div>

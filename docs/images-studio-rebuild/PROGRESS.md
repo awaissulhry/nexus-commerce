@@ -54,7 +54,33 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 - **Library duplicates (Owner, 2026-09-28: "multiple duplicates of the same image … I do not want that to happen ever"):**
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
-- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare built (below).
+- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare = PR #125; P4b Upload photos built (below).
+
+## P4b — Upload photos
+- **Open:** toolbar **Upload photos**, the **U** key, or files dropped anywhere on the page (a dashed outline shows the
+  drop). One window (`plan-page/UploadDialog.tsx`): one summary line, "Put them in" (Shared / one channel / one
+  listing, radios that wrap), then one line per file: preview, name and what decided its set, **Set** (sets and
+  swatches), **Position** (blank = end), **Language**, **Status**. A list, not a grid: every choice is a Tab stop in order,
+  and the lines stack on a phone with their labels.
+- **Reading the names** (`uploadModel.ts`, shared `parseMediaFileName`): a value's label or its dictionary code
+  ("black" finds Nero), a SKU, ps01–06, main/pt01/numbers (a camera number like 0042 is not a position), the
+  language. Files that differ only by language are **versions of one photo**, placed once (the main language).
+- **Uploading:** one file at a time through the existing upload route and its duplicate check. The file's name labels
+  the photo. Same bytes → "Already in the library" (that photo is used). Looks like a library photo → "Use that photo"
+  (default) or "Upload anyway"; a file in **another language** than the photo it looks like is uploaded as its version on
+  its own (the IT and DE size charts look alike — found testing). Another SKU's copy of a picture (#123) places the card.
+- **New write:** `PATCH /products/:id/media/library` — each new photo's language, and the version groups (a new
+  version can join a photo already in the library). Refuses versions in one language, a version with no text, and a
+  photo of another family; permission `products.images.edit`; event `product.media.changed` (layer `LIBRARY`).
+- **Place:** the library write, one fresh read, then one plan edit. The button says what happens: "Place 8 files", and
+  beside it "Nero 2 · Giallo 1 · Common 1 · 3 language versions · 1 swatch". Done: "N files placed (M new in the library).
+  K destinations follow them. Nothing was sent to a channel." with **Undo**, then "Remove the M new photos from the
+  library". **Cancel** removes the photos the window added; so does leaving the page or closing the tab.
+- **Checked on the local stack** (a local stand-in for Cloudinary's upload API in `.local-p3b/`, untracked): 8 files
+  → Nero at positions 1 and 5, Giallo at the end, the size chart in Common once with IT/DE/FR/ES versions, the Nero
+  swatch; Undo restored every set; Cancel, "Remove", and leaving the page each left 0 uploads behind. Keyboard (U opens,
+  Tab reaches every choice), 390 px (lines stack, footer wraps, no sideways scroll). Tests: upload model 4, library
+  endpoint 3 (real schema), permission matrix.
 
 ## P4a — Compare
 - Toolbar **Compare**: one chip per destination; each set one block, each chosen destination one line (source, count,
