@@ -326,17 +326,30 @@ Checked on production (read-only unless stated):
   queued** (sync queue empty for all 21). The 4 others are unchanged: MISANO-JACKET-XS-BLACK (DE, not on Amazon DE) and the
   VENTRA, IT-MOSS and REGAL parent rows in DE (Amazon shows no listing under our parent seller SKU).
 
-**Still open (each needs a decision or its own small PR):**
-1. **Prices differ** on the 20 IT rows just filled: Nexus 159 / 149 (AIREON) and 34.99 (overjacket), Amazon 129.00 and 29.00. Decide
-   which is right before any price push reaches them (the rows were already unpaused and published before today).
-2. VENTRA and IT-MOSS DE parents: their DE children are live with ASINs under another parent (or none). Read one child's
-   Amazon relationships, then decide. REGAL DE: Read live found the parent, the filler's seller SKU did not — check the SKU.
-3. MISANO-JACKET-XS-BLACK DE: not on Amazon DE — make it an inert draft (a production data write).
-4. eBay DE, FR, ES, UK categories: choose them with "Fill other eBay sites" (FR/ES start at 177104; DE/UK: search "Motorrad" /
-   "Motorcycle jacket" → 177117).
-5. The Amazon and eBay flat-file unpublished saves still make unpaused drafts: their own publish locks refuse a paused row
-   (would need `assertPublishAllowed` there first).
-6. Delete the unmounted old product editor (~191 files) and the remaining dead eBay-cockpit routes.
+**The open items, settled later the same evening:**
+1. Prices on the 20 filled IT rows — **the Owner handles it** by re-importing the native Amazon Excel files, so the data matches.
+2. VENTRA, IT-MOSS, REGAL DE parent rows — **the Owner handles it** with the same re-import.
+3. MISANO-JACKET-XS-BLACK DE — **the Owner handles it** with the same re-import.
+4. eBay categories — **done** (on the Owner's word), through `POST /api/pim/category-workspace/EBAY/site-assignments`, one site per
+   request, each through the existing review → activation path. Nothing was sent to eBay. Each leaf was checked in that site's
+   own downloaded tree, with the same meaning as the IT choice:
+
+   | Nexus category | IT | DE | UK | FR | ES |
+   |---|---|---|---|---|---|
+   | Jackets | 177104 (existing) | 177117 | 177117 | 177104 | 177104 |
+   | Rainwear | 177104 (existing) | 177117 | 177117 | 177104 | 177104 |
+   | Accessories | 177101 (existing) | 177101 | 177101 | 177101 | 177101 |
+   | Gloves | **177103** (new) | 177116 | 177116 | 177103 | 177103 |
+   | Suits | **177106** (new) | 177106 | 177106 | 177106 | 177106 |
+
+   Notes: DE and UK have no 177103 or 177104 — their moto jackets and gloves are 177117 and 177116; in IT, FR and ES those
+   numbers mean off-road items. Rainwear mirrors the IT choice (moto jackets); every site also has motorcycle rain wear, 177107.
+   One save (Gloves · UK) was refused once because a product changed during its check; the retry saved it.
+   Result: eBay rules cached for 20 of 20 category × site pairs, and **all 14 parent products show their eBay item specifics
+   on all five sites** (46–63 columns; the 29-field generic set is gone).
+5. Flat-file unpublished saves — **dropped** by the Owner (part of the native-file work).
+6. Old product editor, old bulk-operations grid and the routes only they used — **deleted**, PR #118, merged 637bfd9a6 (−88,028 lines, 293 files;
+   an import graph proves no mounted file lost an import).
 
 ## 11. How this was measured
 
