@@ -19,6 +19,8 @@ export interface PlanBoardProps {
   /** "Show as": the languages whose versions the tiles show; null = the placed versions. */
   languages: string[] | null
   showSkus: boolean
+  /** Only these sets, in this order (the Information sheet's set editor); swatches are left out. */
+  refs?: MediaSetRef[]
   edit(ops: MediaOp[], label: string): void
   onAddRequest(ref: MediaSetRef, label: string): void
   onOpen(assetId: string): void
@@ -28,8 +30,12 @@ export interface PlanBoardProps {
 const LIMIT: Partial<Record<string, { common: number; value: number }>> = { EBAY: { common: 24, value: 12 } }
 
 /** The photo plan of one layer: Common, one row per value, safety, per-SKU sets — and the swatches (PLAN.md §5.1, §5.4). */
-export function PlanBoard({ read, view, channel, assets, languages, showSkus, edit, onAddRequest, onOpen, disabled = false }: PlanBoardProps) {
-  const rows = useMemo(() => setRows(read, view, { skus: showSkus }).filter(r => r.kind !== 'safety' || channel === null || channel === 'AMAZON'), [read, view, showSkus, channel])
+export function PlanBoard({ read, view, channel, assets, languages, showSkus, refs, edit, onAddRequest, onOpen, disabled = false }: PlanBoardProps) {
+  const rows = useMemo(() => {
+    const all = setRows(read, view, { skus: showSkus || !!refs })
+    if (refs) return refs.flatMap(ref => all.filter(r => r.ref === ref))
+    return all.filter(r => r.kind !== 'safety' || channel === null || channel === 'AMAZON')
+  }, [read, view, showSkus, refs, channel])
   const common = rows.find(r => r.ref === 'common')
   const label = (id: string) => read.library.find(a => a.id === id)?.label ?? 'Photo'
 
@@ -102,7 +108,7 @@ export function PlanBoard({ read, view, channel, assets, languages, showSkus, ed
       onDropExternal={drop => edit([{ op: 'insert', set: drop.to as MediaSetRef, assetIds: drop.itemIds, index: drop.index }], `Add ${drop.itemIds.length} photo${drop.itemIds.length > 1 ? 's' : ''} to ${rowLabel(drop.to)}`)}
       onRemove={(ref, id) => edit([{ op: 'remove', set: ref as MediaSetRef, assetId: id }], `Remove ${label(id)} from ${rowLabel(ref)}`)}
       onOpen={(_, id) => onOpen(id)} />
-    {swatchBoard.length > 0 && (channel === null || channel === 'AMAZON') && <Disclosure summary={`Swatches (Amazon SWCH) · ${swatches.filter(s => s.assetId).length} of ${swatches.length}`}>
+    {!refs && swatchBoard.length > 0 && (channel === null || channel === 'AMAZON') && <Disclosure summary={`Swatches (Amazon SWCH) · ${swatches.filter(s => s.assetId).length} of ${swatches.length}`}>
       <MediaBoard label="Swatches" rows={swatchBoard} allowCopy={false} disabled={disabled} firstLabel="Swatch"
         onMove={move => move.from !== move.to && edit([{ op: 'swatch', value: valueOf(move.to), assetId: move.itemId }, { op: 'swatch', value: valueOf(move.from), assetId: view.layer === 'SHARED' ? undefined : null }], `Move swatch to ${valueOf(move.to)}`)}
         onDropExternal={drop => edit([{ op: 'swatch', value: valueOf(drop.to), assetId: drop.itemIds[0] }], `Set the swatch of ${swatches.find(s => `swatch:${s.value}` === drop.to)?.label ?? 'a value'}`)}

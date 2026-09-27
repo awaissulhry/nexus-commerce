@@ -14,9 +14,30 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   is switched onto the plan (P3a) — no family in production is switched yet.
 - **P3a — switch one family, with a preview (API).** PR #101 merged 2026-09-27 on the Owner's word (squash `902fbfae1`).
   In production the switch endpoints exist; no screen uses them until P3b is merged, and no family is switched.
-- **P3b — the new Media page. Built and checked on a local throwaway stack (2026-09-27); PR #102 open, base `main`;
-  merge needs the Owner's word.** Details below.
-- **Next:** P3c — the Information sheet's "Product media" column on the plan; P3d — polish and proof.
+- **P3b — the new Media page. MERGED 2026-09-27 (#102, squash `90119fb37`) on the Owner's word; deployed (API build
+  `90119fb3`, web on Vercel). No production family is switched yet — the first switch is the Owner's click.**
+- **P3c — the Information sheet's "Product media" column on the plan. Built and checked locally (2026-09-27); PR open.**
+  Details below.
+- **Next:** P3d — polish and proof (destination table as cards on a phone, screenshots, keyboard walk-through).
+
+## P3c — the "Product media" column on the plan
+| Piece | File | What it does |
+|---|---|---|
+| Row gallery (shared) | `packages/shared/media-plan-channels.ts` `rowGallery` | Parent row = Common; a variant = its own SKU set, else its value's set, then the Common photos it does not already show; each photo in the sheet language's version. Same resolver as the channel layouts. |
+| Sheet read (API) | `media-plan.service.ts` `sheetMediaPlan`, `studio-sheet.service.ts` | For a switched family the cell reads the plan (never the older gallery store): master sheet = Shared; channel sheet = that listing's layers. One extra read (the plan rows) for a family not on the plan. Each row carries `productMediaSet` (the set it edits, how many SKUs share it); a variant's Common photos come `muted`. |
+| Cell editor | `_studio/media/PlanSetDialog.tsx` | Enter / F2 / double-click opens the Media page's own set editor (`PlanBoard` + `LibraryPanel`) limited to the row's set and Common; a variant has "Nero · all 3 SKUs" / "This SKU only" (makes or drops the SKU's own set). Saves at once, Undo, "Open the Media page". |
+| Copy, paste, fill | `_studio/media/planCellTransfer.ts`, `useMediaCellActions.ts` | A plan cell copies its own set; paste and the fill handle give the target row's set exactly those photos on the sheet's layer (`replace`). Rows sharing a set write it once. The older gallery clipboard and the plan clipboard refuse each other with one sentence. In-cell drag reorder is off for plan rows (the editor reorders). |
+| Live | `productMediaColumn.tsx` | The sheet refreshes the family's cells on `product-media.changed` (the Media page, another tab or person). |
+| Shared rule | `packages/shared/media-plan.ts` | On Shared a per-SKU set can be dropped (`follow sku:…`) — the SKU shows its value's photos again; its undo is a follow too. |
+| DS | `MediaStripItem.muted` | Dashed frame + faded image + "· shared" in the tooltip; mirrored to Factory. |
+
+**Checked (local throwaway stack):** the sheet shows the parent's 3 Common photos and each variant's set + muted Common;
+Enter opens the editor on a Nero row; "This SKU only" made the SKU's own set (server read confirms); the fill handle from
+a Giallo row onto a Nero row replaced Nero's set while the Nero-M row kept its own SKU set; a change made outside the
+sheet showed in the cell within 3.5 s. Clipboard paste could not be driven in the automated browser (the grid's paste
+needs clipboard permission); the fill handle runs the same write path. Tests: shared 41, API media-plan 13 (sheet view
+on real rows: parent, variant, German version, alias layer), sheet-reading API suites 39 files / 417 tests (five fakes
+gained an empty plan table; the query-count guard holds), web studio 161 files / 2,129 tests, static gates 59/59.
 
 ## P3b — the Media page (what was built)
 | Piece | File | What it does |

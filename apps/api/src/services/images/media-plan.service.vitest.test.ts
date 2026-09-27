@@ -16,7 +16,7 @@ vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: un
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { applyMediaPlanOps, isMediaSwitched, mediaLayoutFor, readMediaWorkspace } from './media-plan.service.js'
+import { applyMediaPlanOps, isMediaSwitched, mediaLayoutFor, readMediaWorkspace, sheetMediaPlan } from './media-plan.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -142,6 +142,23 @@ describe('media plan edits', () => {
     await expect(scoped(() => applyMediaPlanOps(ids.root, { address, ops: edit.undo }, null))).rejects.toThrow(/cannot be undone/)
     await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'follow', set: 'value:color:black' }] }, null))
     expect(await scoped(() => prisma.productMediaPlan.count({ where: { layer: 'LISTING' } }))).toBe(0)
+  })
+  it('the Information sheet cell reads the plan: parent = Common, variant = its value set then Common (muted), per sheet language and listing', async () => {
+    const sheet = (await scoped(() => sheetMediaPlan(ids.root)))!
+    const show = (cell: ReturnType<typeof sheet.row>) => cell.items.map(i => `${i.id}${i.muted ? '*' : ''}`)
+    expect(sheet.row(ids.root, null, 'it')).toMatchObject({ set: { ref: 'common', label: 'Common' } })
+    expect(show(sheet.row(ids.root, null, 'it'))).toEqual([img.cover, img['chart-it']])
+    const nero = sheet.row(ids.nm, null, 'it')
+    expect(nero.set).toEqual({ ref: 'value:color:black', label: 'Nero', sharedBy: 2 })
+    expect(show(nero)).toEqual([img.cover, img.n1, `${img['chart-it']}*`])
+    // The German sheet shows the German version of the size chart (the cell keeps the placed id, so edits address it).
+    expect(sheet.row(ids.root, null, 'de').items[1]).toMatchObject({ id: img['chart-it'], alt: 'chart-de' })
+    // A channel sheet reads that listing's layers: the alias with its own Nero set.
+    await scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: ids.alias }, ops: [{ op: 'remove', set: 'value:color:black', assetId: img.n1 }] }, null))
+    const again = (await scoped(() => sheetMediaPlan(ids.root)))!
+    expect(show(again.row(ids.nm, { channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: ids.alias }, 'it'))).toEqual([img.cover, `${img['chart-it']}*`])
+    expect(show(again.row(ids.nm, { channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: '' }, 'it'))).toEqual([img.cover, img.n1, `${img['chart-it']}*`])
+    await scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: ids.alias }, ops: [{ op: 'follow', set: 'value:color:black' }] }, null))
   })
   it('Amazon photos belong to the account: its listing layer is GLOBAL whatever market is sent', async () => {
     const saved = await scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'AMAZON', marketplace: 'DE', accountId: ids.amazon, aliasKey: 'ignored' },

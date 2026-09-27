@@ -62,6 +62,7 @@ import { UnknownMarketError, VARIATION_THEME_KEY, type SheetColumn, type SheetCo
 import { projectCellValue, readPath, isBlankValue } from './sheet-values.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../product-read-cache.service.js'
 import { mediaLocaleSchema, mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
+import { sheetMediaPlan } from '../images/media-plan.service.js'
 import { getStudioColumns } from './studio-columns.js'
 import { withCachedSchemas } from './cached-schema-context.js'
 import { channelLabel } from '@nexus/shared/channel-label'
@@ -244,8 +245,11 @@ function categorySourceOf(category: ResolvedCategory): StudioCategorySource {
 export interface StudioRow {
   /** Multiple product owners can belong to one connected listing alias. */
   shopify?: import('@nexus/shared/shopify-information').ShopifySheetRow
-  productMedia?: Array<{ id: string; type: string; preview: string | null; alt: string }>
+  /** `muted`: a variant's Common photo shown after its own set (photo plan families, P3c). */
+  productMedia?: Array<{ id: string; type: string; preview: string | null; alt: string; muted?: boolean }>
   productMediaError?: string
+  /** Photo plan families only (P3c): the set this row's cell edits — Common, the value's set or the SKU's own set. */
+  productMediaSet?: { ref: string; label: string; sharedBy: number }
   productRole?: import('@nexus/shared/master-sheet').ProductRole
   parentSku?: string | null
   familyId?: string | null
@@ -1211,6 +1215,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
 
   const linkGroupLikes: FieldLinkGroupLike[] = linkGroups as unknown as FieldLinkGroupLike[]
   const rows: StudioRow[] = []
+  // A family on the photo plan: the "Product media" cell reads the plan (P3c), never the older gallery store.
+  const mediaPlan = await sheetMediaPlan(rootId)
 
   for (const projection of projections) {
     mark('preRows')
@@ -1544,8 +1550,12 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       const parentImages = root.images ?? []
       const ownFace = pickFaceImage(ownImages.filter(image => (image.mediaType ?? 'IMAGE') === 'IMAGE'))
       const face = ownFace ?? (isParent ? null : pickFaceImage(parentImages.filter(image => (image.mediaType ?? 'IMAGE') === 'IMAGE')))
-      let productMedia: StudioRow['productMedia'], productMediaError: string | undefined
-      try {
+      let productMedia: StudioRow['productMedia'], productMediaError: string | undefined, productMediaSet: StudioRow['productMediaSet']
+      if (mediaPlan) {
+        const cell = mediaPlan.row(product.id, coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? '', aliasKey: projection.id ?? '' } : null, locale)
+        productMedia = cell.items
+        productMediaSet = cell.set
+      } else try {
         const media = resolveMediaCollection({ locale: mediaLocaleSchema.parse(input.locale ?? marketLocale),
           own: coordinate ? mediaObject(listingRow?.platformAttributes)._productMediaLocales : product.localizedContent,
           shared: coordinate ? product.localizedContent : undefined, parent: isParent ? undefined : root.localizedContent,
@@ -1636,6 +1646,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         imageInherited: face !== null && ownFace === null,
         productMedia,
         ...(productMediaError ? { productMediaError } : {}),
+        ...(productMediaSet ? { productMediaSet } : {}),
         axisValues,
         aliasId: projection.id,
         values: { ...values, ...relationshipValues({ parentId: product.parentId, isParent }, product.parentId ? root.sku : null) },

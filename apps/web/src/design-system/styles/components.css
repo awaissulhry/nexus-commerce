@@ -3065,3 +3065,6 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-media-card.compact .nds-media-card-preview { padding: var(--nds-space-4); }
 .nds-media-card.compact .nds-media-card-detail { padding: var(--nds-space-4) var(--nds-space-6); font-size: var(--nds-font-size-xs); line-height: 1.4; }
 .nds-media-card.compact .nds-media-card-actions { padding: var(--nds-space-2) var(--nds-space-4); }
+/* MediaStrip muted item — shown for context, not part of the cell's own list (images rebuild P3c, 2026-09-27). */
+.nds-media-strip-thumbnail.is-muted { border-style: dashed; }
+.nds-media-strip-thumbnail.is-muted > img { opacity: 0.55; }

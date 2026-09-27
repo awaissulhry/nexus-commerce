@@ -5,7 +5,11 @@ import { Tooltip } from '../primitives/Tooltip'
 import { cdnFit } from '../lib/cdn-image'
 import { MediaTypeIcon, mediaTypeLabel, mediaImageUrl } from './MediaPreview'
 
-export interface MediaStripItem { id: string; type: string; preview?: string | null; alt?: string }
+export interface MediaStripItem {
+  id: string; type: string; preview?: string | null; alt?: string
+  /** Shown for context, not part of this cell's own list (e.g. a variant's shared photos after its own). */
+  muted?: boolean
+}
 export interface MediaStripProps {
   items: readonly MediaStripItem[]; label: string; limit?: number; emptyLabel?: string
   /** Optional in-cell reorder. The cell's Enter/F2 editor supplies the keyboard equivalent. */
@@ -20,7 +24,7 @@ export function MediaStrip({ items, label, limit = 5, emptyLabel = 'Add media', 
   const dragged = useRef<string | null>(null)
   const [target, setTarget] = useState<string | null>(null)
   return <span className="nds-media-strip" role={onReorder ? 'group' : 'img'} aria-label={`${label}, ${items.length} media items`}>
-    {items.slice(0, count).map((item, index) => <Tooltip portal className="nds-tooltip--light" key={`${item.id}:${item.preview}`} label={`${mediaTypeLabel(item.type)}${item.alt ? ` · ${item.alt}` : ''}${onReorder ? ' · Drag to reorder. Enter or F2 opens all media and position controls.' : ''}`}>
+    {items.slice(0, count).map((item, index) => <Tooltip portal className="nds-tooltip--light" key={`${item.id}:${item.preview}`} label={`${mediaTypeLabel(item.type)}${item.alt ? ` · ${item.alt}` : ''}${item.muted ? ' · shared' : ''}${onReorder ? ' · Drag to reorder. Enter or F2 opens all media and position controls.' : ''}`}>
       {onReorder ? <button type="button" className="nds-media-strip-move" tabIndex={-1} draggable data-nds-media-drag data-drop-target={target === item.id || undefined}
         aria-label={`${item.alt || mediaTypeLabel(item.type)}, position ${index + 1} of ${items.length}`}
         onMouseDownCapture={event => { if (event.button === 0) { event.stopPropagation(); onFocusCell?.() } }}
@@ -46,7 +50,7 @@ export function MediaStrip({ items, label, limit = 5, emptyLabel = 'Add media', 
 function StripThumbnail({ item }: { item: MediaStripItem }) {
   const [failed, setFailed] = useState(false)
   const src = mediaImageUrl(item.preview)
-  return <span className="nds-media-strip-thumbnail" aria-hidden>
+  return <span className={`nds-media-strip-thumbnail${item.muted ? ' is-muted' : ''}`} aria-hidden>
     {src && !failed ? <img src={cdnFit(src, 96)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} /> : <MediaTypeIcon type={item.type} size={16} />}
     {src && !failed && item.type !== 'IMAGE' && <span className="nds-media-strip-kind"><MediaTypeIcon type={item.type} size={12} /></span>}
   </span>

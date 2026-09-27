@@ -72,6 +72,10 @@ describe('media plan edits', () => {
     expect(owned.sets.common).toEqual(ids('cover', 'detail'))
     expect(applyMediaOps({ shared, channel: owned }, 'CHANNEL', [{ op: 'follow', set: 'common' }])).toEqual(emptyMediaPlan())
     expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'follow', set: 'common' }])).toThrow(MediaPlanEditError)
+    // A per-SKU set CAN be dropped on Shared: the SKU shows its value's photos again.
+    const withSku = applyMediaOps({ shared }, 'SHARED', [{ op: 'replace', set: 'sku:child9', assetIds: ['n1'] }])
+    expect(applyMediaOps({ shared: withSku }, 'SHARED', [{ op: 'follow', set: 'sku:child9' }]).sets.skus).toBeUndefined()
+    expect(inverseMediaOps('SHARED', shared, withSku)).toEqual([{ op: 'follow', set: 'sku:child9', expect: ['n1'] }])
     // Shared can drop its axis choice: the family's default axis applies again.
     expect(applyMediaOps({ shared }, 'SHARED', [{ op: 'axis', axis: undefined }]).axis).toBeUndefined()
   })

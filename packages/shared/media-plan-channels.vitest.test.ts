@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MediaPlan, MediaPlanStack } from './media-plan'
-import { amazonSlotsFor, channelNames, pickVersion, projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
+import { amazonSlotsFor, channelNames, pickVersion, projectAmazon, rowGallery, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
 
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
 const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
@@ -155,5 +155,25 @@ describe('channel names', () => {
       byProduct: { 'b-m': { Colore: 'Nero' }, 'b-l': { Colore: 'Schwarz' } }, axisNames: { Colore: 'Farbe' } } })
     expect(out.conflicts).toEqual(['Nero is named both "Nero" and "Schwarz" on this listing.'])
     expect(out.valueNames['color:yellow']).toBeUndefined()
+  })
+})
+
+describe('Information sheet row gallery', () => {
+  const row = (productId: string, st: MediaPlanStack = stack, languages = ['it']) => rowGallery({ stack: st, family, productId, assets, languages, mainLanguage: 'it' })
+  const show = (g: ReturnType<typeof rowGallery>) => g.items.map(i => `${i.assetId}${i.from === 'common' ? '*' : ''}`)
+  it('the parent shows Common; a variant its value set, then the Common photos it does not already show', () => {
+    expect(row('root')).toMatchObject({ set: 'common', label: 'Common', sharedBy: 4 })
+    expect(show(row('root'))).toEqual(['cover', 'detail', 'chart-it'])
+    const black = row('b-m')
+    expect(black).toMatchObject({ set: 'value:color:black', label: 'Nero', sharedBy: 3 })
+    // "cover" is in Nero AND in Common (D8): shown once, as Nero's main photo.
+    expect(show(black)).toEqual(['cover', 'n1', 'n2', 'detail*', 'chart-it*'])
+  })
+  it('a SKU with its own set shows that set; the sheet language picks the version', () => {
+    const own: MediaPlanStack = { shared: { ...shared, sets: { ...shared.sets, skus: { 'b-l': ids('n2') } } } }
+    expect(row('b-l', own)).toMatchObject({ set: 'sku:b-l', label: 'GALE-BLACK-L only', sharedBy: 1 })
+    expect(show(row('b-l', own))).toEqual(['n2', 'cover*', 'detail*', 'chart-it*'])
+    expect(show(row('root', stack, ['de']))).toEqual(['cover', 'detail', 'chart-de'])
+    expect(row('root', stack, ['de']).items[2]).toMatchObject({ placedId: 'chart-it', assetId: 'chart-de', exact: true })
   })
 })
