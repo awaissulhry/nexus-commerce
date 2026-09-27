@@ -73,14 +73,11 @@ vi.mock('../services/ebay-variation-add.service.js', () => ({ addVariationsToLis
 vi.mock('../services/ebay-variation-order-apply.service.js', () => ({ applyVariationOrderForFamily: vi.fn() }))
 vi.mock('../services/ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: async () => ({ html: 'Fixture' }), stampDescriptionPushSafe: vi.fn() }))
 
-import marketplaceRoutes from './marketplaces.routes.js'
-import { syncActivatedListings } from '../services/listing-activation-sync.service.js'
 import ebayRoutes from './ebay-flat-file.routes.js'
 
 let app: FastifyInstance
 beforeAll(async () => {
   app = Fastify()
-  await app.register(marketplaceRoutes, { prefix: '/api' })
   await app.register(ebayRoutes, { prefix: '/api' })
   await app.ready()
 })
@@ -103,7 +100,6 @@ beforeEach(() => {
 
 const row = { sku: 'SKU', title: 'Fixture', brand: 'Fixture', price: 20, quantity: 2 }
 const cases = [
-  ['Amazon publish', '/api/products/p/listings/AMAZON/IT/publish', {}],
   ['eBay publish', '/api/ebay/flat-file/publish', { rowIds: ['p'], markets: ['IT'] }],
   ['eBay API push', '/api/ebay/flat-file/push', { rows: [row], markets: ['IT'], mode: 'api' }],
   ['eBay feed push', '/api/ebay/flat-file/push', { rows: [row], markets: ['IT'], mode: 'feed' }],
@@ -138,8 +134,7 @@ describe.each(cases)('%s push lock', (name, url, payload) => {
     const result = await invoke(url, payload)
     expect(result.response.statusCode, result.text).toBe(200)
     expect(result.text).not.toContain('PUSH_')
-    if (name === 'Amazon publish') expect(s.amazon).toHaveBeenCalledOnce()
-    else if (name === 'eBay feed push') { expect(s.feed).toHaveBeenCalledOnce(); expect(s.upload).toHaveBeenCalledOnce() }
+    if (name === 'eBay feed push') { expect(s.feed).toHaveBeenCalledOnce(); expect(s.upload).toHaveBeenCalledOnce() }
     else expect(s.send).toHaveBeenCalledWith(expect.stringContaining('/sell/inventory/'), expect.objectContaining({ method: expect.stringMatching(/PUT|POST/) }))
   })
 })
@@ -177,38 +172,6 @@ describe('P0.1 — eBay flat-file writers outside live mode', () => {
     expect(response.statusCode).toBe(503)
     expect(response.json()).toMatchObject({ error: refusal, mode: 'dry-run' })
     expect(s.send).not.toHaveBeenCalled(); expect(s.feed).not.toHaveBeenCalled(); expect(s.upload).not.toHaveBeenCalled()
-  })
-})
-
-describe('P0.1 — Amazon direct publish dry run', () => {
-  it('reports DRY_RUN and leaves the listing unpublished, with no stock sync', async () => {
-    s.amazon.mockResolvedValue({ success: true, dryRun: true, status: 'ACCEPTED' })
-    const response = await app.inject({ method: 'POST', url: '/api/products/p/listings/AMAZON/IT/publish', payload: {} })
-    expect(response.statusCode).toBe(200)
-    expect(response.json()).toMatchObject({ ok: true, status: 'DRY_RUN' })
-    expect(s.update).not.toHaveBeenCalled()
-    expect(syncActivatedListings).not.toHaveBeenCalled()
-  })
-  it('positive control: a real submission marks the listing published and starts the stock sync', async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/products/p/listings/AMAZON/IT/publish', payload: {} })
-    expect(response.json()).toMatchObject({ ok: true, status: 'SUBMITTED' })
-    expect(s.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublished: true, listingStatus: 'ACTIVE' }) }))
-    expect(syncActivatedListings).toHaveBeenCalledWith(['listing'])
-  })
-})
-
-// Step 7, part 3 — the direct publish used to mark an eBay or Shopify listing ACTIVE + published (creating the row
-// when missing) without calling the channel. That branch is gone: any channel but Amazon is refused, writing nothing.
-// The Amazon cases above are the positive control.
-describe('step 7, part 3 — the direct publish no longer marks other channels published', () => {
-  it.each(['EBAY', 'SHOPIFY'])('%s: 400 UNSUPPORTED, no listing write, no stock sync, nothing sent', async channel => {
-    const response = await app.inject({ method: 'POST', url: `/api/products/p/listings/${channel}/IT/publish`, payload: {} })
-    expect(response.statusCode, response.body).toBe(400)
-    expect(response.json()).toMatchObject({ ok: false, status: 'UNSUPPORTED' })
-    expect(s.update).not.toHaveBeenCalled()
-    expect(syncActivatedListings).not.toHaveBeenCalled()
-    expect(s.amazon).not.toHaveBeenCalled()
-    expect(s.send).not.toHaveBeenCalled()
   })
 })
 

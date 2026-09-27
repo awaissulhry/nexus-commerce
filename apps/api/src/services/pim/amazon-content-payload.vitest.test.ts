@@ -4,7 +4,6 @@ vi.mock('../../db.js', () => ({ default: { marketplace: { findFirst: fixtures.ma
 vi.mock('../../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { putListingsItem: fixtures.provider, patchListingsItem: fixtures.provider } }))
 import { buildAmazonContentAttributes, buildAmazonContentEntries } from './amazon-content-payload.js'
 import { publishContentIssues, publishUntranslatedIssues, resolvePublishContent } from './publish-review-gate.js'
-import { buildMarketplaceAmazonAttributes } from '../../routes/marketplaces.routes.js'
 import { buildAmazonListingPatch } from '../outbound-sync.service.js'
 const product = { id: 'product', name: 'Source title', description: 'Source description', translations:
   ['de', 'nl', 'fr', 'en'].map(language => ({ language, name: `Title ${language}`, description: `Description ${language}`, bulletPoints: [`Bullet ${language}`], source: 'manual' as const })) }
@@ -15,7 +14,7 @@ beforeEach(() => {
 afterEach(() => { expect(fixtures.provider).not.toHaveBeenCalled(); vi.unstubAllGlobals() })
 it.each([['DE', 'de', 'de_DE'], ['BE', 'nl', 'nl_BE'], ['BE', 'fr', 'fr_BE'], ['UK', 'en', 'en_GB']])('builds resolved %s %s entries in both real builders', async (marketplace, language, tag) => {
   const content = { product }
-  const attributes = await buildMarketplaceAmazonAttributes({ marketplace, marketplaceId: 'fixture', attributes: {}, content })
+  const attributes = await buildAmazonContentAttributes({ ...content, marketplace, marketplaceId: 'fixture' })
   expect(attributes.item_name).toContainEqual({ value: `Title ${language}`, marketplace_id: 'fixture', language_tag: tag })
   const patch = await buildAmazonListingPatch({ title: 'stale queue snapshot' }, marketplace, 'OUTERWEAR', null, content)
   expect(patch.patches.find((p: any) => p.path === '/attributes/item_name').value).toEqual(attributes.item_name.map((v: any) => ({ ...v, marketplace_id: expect.any(String) })))

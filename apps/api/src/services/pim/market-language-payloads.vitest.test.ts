@@ -8,7 +8,6 @@ const fixture = vi.hoisted(() => ({
 vi.mock('../../db.js', () => ({ default: { marketplace: fixture.marketplace } }))
 vi.mock('../../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { putListingsItem: fixture.amazonPut, patchListingsItem: fixture.amazonPatch } }))
 import { buildAmazonListingPatch, resolveAmazonMarketplaceId } from '../outbound-sync.service.js'
-import { buildMarketplaceAmazonAttributes } from '../../routes/marketplaces.routes.js'
 import { extractLocaleTitle } from '../../routes/listings-syndication.routes.js'
 
 beforeEach(() => {
@@ -32,14 +31,13 @@ describe('LX.2 real builders, no publish rehearsal', () => {
     { market: 'BE', language: undefined, tag: 'nl_BE', resolved: 'nl' },
     { market: 'BE', language: 'fr', tag: 'fr_BE', resolved: 'fr' },
     { market: 'UK', language: undefined, tag: 'en_GB', resolved: 'en' },
-  ])('$market / $tag agrees across outbound-sync, marketplaces and syndication', async ({ market, language, tag, resolved }) => {
+  ])('$market / $tag agrees across outbound-sync and syndication', async ({ market, language, tag, resolved }) => {
     const content = { title: `Title ${resolved}`, description: `Description ${resolved}`, bulletPoints: ['One', 'Two'], language }
     const patch = await buildAmazonListingPatch(content, market, 'OUTERWEAR')
     // syncToAmazon passes the provider marketplace ID into this same builder.
     expect(await buildAmazonListingPatch(content, resolveAmazonMarketplaceId(market), 'OUTERWEAR')).toEqual(patch)
     const outbound = Object.fromEntries(patch.patches.map((p: any) => [p.path.replace('/attributes/', ''), p.value])) as Record<string, any[]>
-    const route = await buildMarketplaceAmazonAttributes({ ...content, marketplace: market, marketplaceId: resolveAmazonMarketplaceId(market), attributes: {} })
-    for (const built of [outbound, route]) {
+    for (const built of [outbound]) {
       for (const key of ['item_name', 'product_description', 'bullet_point']) {
         expect(built[key].length).toBeGreaterThan(0)
         expect(built[key].every((entry: any) => entry.language_tag === tag)).toBe(true)
@@ -51,6 +49,5 @@ describe('LX.2 real builders, no publish rehearsal', () => {
   })
   it('refuses a Belgian language outside the configured row before building outbound content', async () => {
     await expect(buildAmazonListingPatch({ title: 'Wrong', language: 'de' }, 'BE', 'OUTERWEAR')).rejects.toThrow('nl, fr')
-    await expect(buildMarketplaceAmazonAttributes({ marketplace: 'BE', marketplaceId: 'BE-fixture', language: 'de', title: 'Wrong', attributes: {} })).rejects.toThrow('nl, fr')
   })
 })

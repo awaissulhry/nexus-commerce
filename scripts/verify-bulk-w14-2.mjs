@@ -16,24 +16,12 @@ function check(label, cond) {
 console.log('\nW14.2 — dark mode parity\n')
 
 const files = [
-  'apps/web/src/app/bulk-operations/ActiveJobsStrip.tsx',
   'apps/web/src/app/bulk-operations/exports/ExportsClient.tsx',
   'apps/web/src/app/bulk-operations/history/HistoryClient.tsx',
 ]
 
-console.log('Case 1: ActiveJobsStrip header has dark variants')
-const strip = fs.readFileSync(path.join(repo, files[0]), 'utf8')
-check('"Active Jobs" label gets dark:text-blue-200',
-  /text-blue-900 dark:text-blue-200/.test(strip))
-check('"View all" link gets dark hover variant',
-  /hover:text-blue-900 dark:hover:text-blue-100/.test(strip))
-check('row hover has dark variant',
-  /hover:bg-blue-100\/30 dark:hover:bg-blue-900\/30/.test(strip))
-check('divide-y has dark variant',
-  /divide-blue-100 dark:divide-blue-900\/60/.test(strip))
-
 console.log('\nCase 2: every classname with a coloured token also carries a dark: variant')
-const exp = fs.readFileSync(path.join(repo, files[1]), 'utf8')
+const exp = fs.readFileSync(path.join(repo, files[0]), 'utf8')
 // Real-world dark-mode pairing maps light tokens to lighter/darker
 // shades (text-red-700 → dark:text-red-300), not verbatim. So check
 // that any className using a coloured base token includes SOME dark:
@@ -51,7 +39,7 @@ if (exportsViolations.length > 0) {
 }
 
 console.log('\nCase 3: HistoryClient retry-notice green-800 paired')
-const hist = fs.readFileSync(path.join(repo, files[2]), 'utf8')
+const hist = fs.readFileSync(path.join(repo, files[1]), 'utf8')
 check('retry notice text-green-800 has dark:text-green-200',
   /text-green-800 dark:text-green-200/.test(hist))
 

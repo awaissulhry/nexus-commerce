@@ -1,12 +1,10 @@
 /**
- * EFX P3 — variation value-order resolution + legacy self-heal.
+ * EFX P3 — variation value-order resolution.
  *
  * Covers the push service's ordering contract without touching the DB:
  *   (a) only legacy `_axisSortOrder` present → values order by it.
  *   (b) both `_axisValueOrder` and legacy `_axisSortOrder` for the same
  *       dimension → the synonym-keyed `_axisValueOrder` wins.
- *   (c) `selfHealAxisSortOrder` (the PATCH-route helper) drops the legacy keys a
- *       written value order supersedes, leaving unmatched legacy keys alone.
  *
  * mergeStoredValueOrder is the exact resolution the push body runs (extracted so
  * it's unit-testable); sortAxisValues is the same sort the specifications build
@@ -18,7 +16,6 @@ import {
   sortAxisValues,
   axisSynonymKey,
 } from './ebay-variation-push.service.js'
-import { selfHealAxisSortOrder, mergeAxisValueOrderWrite } from './ebay-theme-axes.js'
 
 /** Reproduce the push call-site lookup: synonym key first, then raw, then lower. */
 function orderForAxis(
@@ -80,61 +77,5 @@ describe('mergeStoredValueOrder — value order resolution', () => {
 
   it('empty platformAttributes → empty order (no crash)', () => {
     expect(mergeStoredValueOrder({})).toEqual({})
-  })
-})
-
-describe('selfHealAxisSortOrder — PATCH-route legacy prune', () => {
-  it('(c) drops legacy keys the written value order supersedes; keeps the rest', () => {
-    const prevSort = {
-      Taglia: ['S', 'M', 'L'], // synKey __dim1__ — superseded below
-      Pattern: ['Stripes', 'Solid'], // custom 'pattern' — untouched
-    }
-    const written = { __dim1__: ['L', 'M', 'S'] }
-
-    expect(selfHealAxisSortOrder(prevSort, written)).toEqual({
-      Pattern: ['Stripes', 'Solid'],
-    })
-  })
-
-  it('matches supersession across synonym aliases (Size ≡ Taglia)', () => {
-    // A written __dim1__ supersedes a legacy 'Size' entry too, not just 'Taglia'.
-    expect(
-      selfHealAxisSortOrder({ Size: ['S', 'M'] }, { __dim1__: ['M', 'S'] }),
-    ).toEqual({})
-  })
-
-  it('leaves everything alone when nothing matches', () => {
-    expect(
-      selfHealAxisSortOrder({ Colore: ['Rosso'] }, { __dim1__: ['M'] }),
-    ).toEqual({ Colore: ['Rosso'] })
-  })
-
-  it('undefined previous sort order → empty', () => {
-    expect(selfHealAxisSortOrder(undefined, { __dim1__: ['M'] })).toEqual({})
-  })
-})
-
-// ── EFX P3.1 — mergeAxisValueOrderWrite (PATCH merges, never replaces) ──────
-describe('mergeAxisValueOrderWrite', () => {
-  it('keeps stored entries the writer did not send (cross-surface axis sets)', () => {
-    // Live-verified on AIREON: the cockpit card (axes from child
-    // categoryAttributes) saved without 'tipo di prodotto' (an axis only the
-    // flat-file modal sees) and the old full-replace dropped it.
-    const prev = { __dim1__: ['3XL', 'L'], 'tipo di prodotto': ['Giacca', 'Pantaloni'] }
-    const written = { __dim1__: ['L', '3XL'], 'team name': ['Giacca', 'Pantaloni'] }
-    expect(mergeAxisValueOrderWrite(prev, written)).toEqual({
-      __dim1__: ['L', '3XL'],
-      'tipo di prodotto': ['Giacca', 'Pantaloni'],
-      'team name': ['Giacca', 'Pantaloni'],
-    })
-  })
-
-  it('written keys win over stored ones', () => {
-    expect(mergeAxisValueOrderWrite({ __dim0__: ['Rosso', 'Blu'] }, { __dim0__: ['Blu', 'Rosso'] }))
-      .toEqual({ __dim0__: ['Blu', 'Rosso'] })
-  })
-
-  it('undefined previous map → written map as-is', () => {
-    expect(mergeAxisValueOrderWrite(undefined, { __dim1__: ['M'] })).toEqual({ __dim1__: ['M'] })
   })
 })

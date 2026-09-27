@@ -19,10 +19,6 @@ const routes = fs.readFileSync(
   path.join(repo, 'apps/api/src/routes/bulk-operations.routes.ts'),
   'utf8',
 )
-const strip = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/ActiveJobsStrip.tsx'),
-  'utf8',
-)
 
 console.log('Case 1: SSE route registered')
 check("registers GET '/bulk-operations/:id/events'",
@@ -67,26 +63,6 @@ check("hooks request 'close' to close handler",
   /request\.raw\.on\('close', close\)/.test(routes))
 check('404s when job missing before stream opens',
   /code\(404\)[\s\S]{0,80}Job not found:/.test(routes))
-
-console.log('\nCase 5: ActiveJobsStrip subscribes')
-check('imports useRef',
-  /useRef/.test(strip))
-check('opens EventSource per job',
-  /new EventSource\(\s*`\$\{getBackendUrl\(\)\}\/api\/bulk-operations\/\$\{job\.id\}\/events`/.test(strip))
-check('listens for update events',
-  /addEventListener\('update'/.test(strip))
-check('listens for done events',
-  /addEventListener\('done'/.test(strip))
-check('updates per-job state on update',
-  /setJobs\(\(prev\) => prev\.map/.test(strip))
-check('refetches list on done',
-  /addEventListener\('done',[\s\S]{0,300}fetchActive\(\)/.test(strip))
-check('closes stale subs when job leaves the list',
-  /!wantedIds\.has\(id\)[\s\S]{0,200}es\.close\(\)/.test(strip))
-check('closes all subs on unmount',
-  /for \(const es of subs\.values\(\)\) es\.close\(\)/.test(strip))
-check('guards against SSR (typeof EventSource check)',
-  /typeof EventSource === 'undefined'/.test(strip))
 
 if (failures > 0) {
   console.log(`\n✗ ${failures} assertion(s) failed`)

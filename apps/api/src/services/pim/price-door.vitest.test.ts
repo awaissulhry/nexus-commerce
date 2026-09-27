@@ -81,10 +81,10 @@ describe('the price door', () => {
   it('🔴 an UNGUARDED write is reported as unguarded — it must not look checked', async () => {
     db.findMany.mockResolvedValue([listing('a', 7)])
     const r = await write({
-      targets: [{ listingId: 'a', price: 20, unguardedReason: 'legacy-channel-pricing' }],
+      targets: [{ listingId: 'a', price: 20, unguardedReason: 'bulk-override-snapshot' }],
       actor: 'test', source: 'MANUAL_OVERRIDE',
     })
-    // It runs — the legacy route still works — but nothing pretends it was compare-and-set checked.
+    // It runs — the snapshot bulk override still works — but nothing pretends it was compare-and-set checked.
     expect(r.results[0].guarded).toBe(false)
     expect(r.results[0].outcome).not.toBe('conflict')
   })

@@ -55,8 +55,6 @@ const PRICE_HOLD_MS = 30 * 1000
 export type PriceWriteUnguardedReason =
   /** `pricing.routes.ts` bulk override: a run over price SNAPSHOTS. No per-row version was shown to anyone. */
   | 'bulk-override-snapshot'
-  /** `PATCH /channel-pricing`: the client does not send a version yet. Narrowed when it does. */
-  | 'legacy-channel-pricing'
 
 /**
  * CFI-6 (R-CFI-1 Q2, BUILD.md D2) — the reasons a price may be RECORDED without being sent. A closed set, like

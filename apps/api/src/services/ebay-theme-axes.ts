@@ -261,49 +261,6 @@ export function axisSynonymKey(name: string): string {
 }
 
 /**
- * EFX P3 — self-heal the legacy raw-name-keyed `_axisSortOrder` when a save
- * writes the canonical synonym-keyed `_axisValueOrder`.
- *
- * Any legacy entry whose axis maps to a synonym key that was just written is
- * now superseded and is dropped. Entries whose synonym key was NOT written are
- * left untouched (the push service still merges them for back-compat), so this
- * only prunes what has genuinely been migrated. Pure + order-preserving so the
- * PATCH route stays trivially testable.
- *
- * @param prevSortOrder      current `_axisSortOrder` (raw-name keyed) or undefined
- * @param writtenValueOrder  the `_axisValueOrder` being persisted (synonym keyed)
- * @returns the pruned `_axisSortOrder` (may be empty)
- */
-/**
- * EFX P3.1 — merge a written synonym-keyed `_axisValueOrder` over the existing
- * stored map instead of replacing it. The flat-file modal and the cockpit card
- * derive their axis sets from DIFFERENT sources (grid rows' aspect_* columns vs
- * children's categoryAttributes.variations), so each writer may legitimately
- * omit an axis the other ordered; a full replace silently dropped the other
- * surface's entries. Written keys win; unwritten stored keys survive.
- */
-export function mergeAxisValueOrderWrite(
-  prev: Record<string, string[]> | undefined,
-  written: Record<string, string[]>,
-): Record<string, string[]> {
-  return { ...(prev ?? {}), ...written }
-}
-
-export function selfHealAxisSortOrder(
-  prevSortOrder: Record<string, string[]> | undefined,
-  writtenValueOrder: Record<string, string[]>,
-): Record<string, string[]> {
-  if (!prevSortOrder) return {}
-  const writtenKeys = new Set(Object.keys(writtenValueOrder))
-  const out: Record<string, string[]> = {}
-  for (const [rawName, vals] of Object.entries(prevSortOrder)) {
-    if (writtenKeys.has(axisSynonymKey(rawName))) continue // superseded — drop
-    out[rawName] = vals
-  }
-  return out
-}
-
-/**
  * Incident #42 — bilingual VALUE synonyms for axis matching.
  *
  * Adopted listings from the pre-Nexus era declare English axes with English

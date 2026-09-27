@@ -10,8 +10,9 @@
  *   `products/_lenses/TranslationsLens.tsx`      `/api/products/ai/bulk-generate`        — 400
  *   `products/_modals/AiBulkGenerateModal.tsx`   the same route, apply pass                — 400
  *   `products/drafts/DraftsClient.tsx`      2 calls on the same route                     — 400
- *   `products/[id]/edit/tabs/MasterDataTab.tsx`            `dryRun: true` — never affected
- *   `…/tabs/amazon-cockpit/autofill/AutoFillCard.tsx`      `dryRun: true` — never affected
+ *
+ * The two `dryRun: true` previews the scan also found (the old editor's `MasterDataTab.tsx` and
+ * `AutoFillCard.tsx`, never affected) were deleted with that editor; a dry run is still not a write.
  *
  * Two routes, two rules, because the two routes know different things:
  *  - `/translations/:language` is told only the language, so the SURFACE addresses it, through the one
@@ -69,13 +70,11 @@ const all = sourceFiles(ROOT).flatMap(calls)
 const writes = all.filter((call) => !/dryRun:\s*true/.test(call.text))
 
 describe('catalogue content-write surfaces have an addressed destination', () => {
-  it('🔴 POSITIVE CONTROL — the scanner sees both routes and both kinds of call', () => {
+  it('🔴 POSITIVE CONTROL — the scanner sees both routes', () => {
     // An empty set makes every assertion below vacuous, which is the failure this guards.
     expect(all.length).toBeGreaterThanOrEqual(8)
     expect(all.filter((c) => c.route === 'translations').length).toBeGreaterThanOrEqual(4)
     expect(all.filter((c) => c.route === 'bulk-generate').length).toBeGreaterThanOrEqual(4)
-    // The two dry-run previews are recognised as such, and are NOT counted as writes.
-    expect(all.length - writes.length).toBeGreaterThanOrEqual(2)
   })
 
   it('every /translations write carries a contentAddress', () => {

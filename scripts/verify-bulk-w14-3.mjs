@@ -15,10 +15,6 @@ function check(label, cond) {
 
 console.log('\nW14.3 — WCAG AA tab order + ARIA\n')
 
-const strip = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/ActiveJobsStrip.tsx'),
-  'utf8',
-)
 const exp = fs.readFileSync(
   path.join(repo, 'apps/web/src/app/bulk-operations/exports/ExportsClient.tsx'),
   'utf8',
@@ -27,19 +23,6 @@ const hist = fs.readFileSync(
   path.join(repo, 'apps/web/src/app/bulk-operations/history/HistoryClient.tsx'),
   'utf8',
 )
-
-console.log('Case 1: ActiveJobsStrip ARIA')
-check('cancel button has aria-label',
-  /aria-label=\{`Cancel \$\{job\.jobName\}`\}/.test(strip))
-check('cancel icon has aria-hidden',
-  /<Ban className="w-3 h-3" aria-hidden="true"/.test(strip))
-check('progress bar has role + aria-valuenow',
-  /role="progressbar"/.test(strip) &&
-  /aria-valuenow=\{pct\}/.test(strip) &&
-  /aria-valuemin=\{0\}/.test(strip) &&
-  /aria-valuemax=\{100\}/.test(strip))
-check('progress text marked aria-live=polite',
-  /aria-live="polite"[\s\S]{0,80}aria-atomic="true"/.test(strip))
 
 console.log('\nCase 2: ExportsClient ARIA')
 check('Download anchor has aria-label',
