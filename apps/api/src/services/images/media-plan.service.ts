@@ -28,14 +28,20 @@ const fold = (text: string) => text.trim().toLowerCase().replace(/[\s_-]+/g, '')
 const slug = (text: string) => text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/^(?=[^a-z])/, 'a_').slice(0, 64) || 'axis'
 const isColour = (label: string, code: string) => canonicalVariantAxis(label) === canonicalVariantAxis('Color') || code === 'color'
 
-async function familyRoot(productId: string) {
+export async function familyRoot(productId: string) {
   const product = await prisma.product.findFirst({ where: { id: productId, deletedAt: null }, select: { id: true, parentId: true } })
   if (!product) throw new WorkspaceScopeError('This product is unavailable.', 404)
   return product.parentId ?? product.id
 }
 
+/** A value's plan key: its dictionary option (`color:black`), or its folded text until it is mapped (`color:text:nero`). */
+export function planValueKey(code: string, text: string, attribute: DictionaryAttribute | undefined): { key: string; label: string; mapped: boolean } {
+  const option = attribute ? optionForValue(text, attribute) : null
+  return option ? { key: `${code}:${option.code}`, label: option.label, mapped: true } : { key: `${code}:text:${fold(text)}`, label: text.trim(), mapped: false }
+}
+
 /** The family, its variation axes as dictionary codes, and each variant's value key per axis (PLAN.md §4.9). */
-async function loadFamily(rootId: string) {
+export async function loadFamily(rootId: string) {
   const root = await prisma.product.findUniqueOrThrow({ where: { id: rootId }, select: { id: true, sku: true, name: true, variationAxes: true, variationAxisCodes: true, variationValueOrder: true,
     children: { where: { deletedAt: null }, orderBy: { sku: 'asc' }, select: { id: true, sku: true, categoryAttributes: true, variantAttributes: true } } } })
   const labels = root.variationAxes
@@ -52,12 +58,10 @@ async function loadFamily(rootId: string) {
     codes.forEach((code, i) => {
       const text = stored[labels[i]]?.trim()
       if (!text) return
-      const attribute = attributes.find(a => a.code === code)
-      const option = attribute ? optionForValue(text, attribute) : null
-      const key = option ? `${code}:${option.code}` : `${code}:text:${fold(text)}`
-      if (!option) unmapped.add(key)
-      values[code] = key
-      valueLabels[key] ??= option?.label ?? text
+      const value = planValueKey(code, text, attributes.find(a => a.code === code))
+      if (!value.mapped) unmapped.add(value.key)
+      values[code] = value.key
+      valueLabels[value.key] ??= value.label
     })
     return { productId: child.id, sku: child.sku, values, included: true }
   })
@@ -71,10 +75,10 @@ async function loadFamily(rootId: string) {
   }))
   const colour = codes.find((code, i) => isColour(labels[i], code))
   const family: MediaFamily = { productId: root.id, variants, defaultAxis: colour ?? codes[0] ?? null, valueOrder, valueLabels }
-  return { root, family, axes: codes.map((code, i) => ({ code, label: labels[i], dictionary: root.variationAxisCodes[i] === code, values: valueOrder[code].map(key => ({ key, label: valueLabels[key] })) })), unmapped: [...unmapped] }
+  return { root, family, attributes, axes: codes.map((code, i) => ({ code, label: labels[i], dictionary: root.variationAxisCodes[i] === code, values: valueOrder[code].map(key => ({ key, label: valueLabels[key] })) })), unmapped: [...unmapped] }
 }
 
-async function loadLibrary(productIds: string[]) {
+export async function loadLibrary(productIds: string[]) {
   const rows = await prisma.productImage.findMany({ where: { productId: { in: productIds } }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], select: {
     id: true, productId: true, url: true, alt: true, type: true, mediaType: true, width: true, height: true, mimeType: true, fileSize: true,
     languageTag: true, versionGroupId: true, isPrimary: true, posterUrl: true, durationSec: true } })
@@ -91,7 +95,7 @@ function readPlan(value: unknown): MediaPlan {
 }
 
 /** Every destination of the family, keyed the way LISTING layers are keyed. Amazon and Shopify photos belong to the account. */
-async function loadDestinations(productIds: string[]) {
+export async function loadDestinations(productIds: string[]) {
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: productIds }, channel: { in: [...MEDIA_CHANNELS] } },
     select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } })
   // Only eBay needs the listing's own attributes (the Trading/Inventory marker); Amazon's are large and are not read.

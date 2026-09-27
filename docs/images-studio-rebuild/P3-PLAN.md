@@ -14,14 +14,27 @@ orders the work and records one change to the approved plan.
 - UI checks run against a **local API on a throwaway database** seeded with an anonymised family — never the
   production API (hard rule 3). Merging P3 PRs needs the Owner's word per PR (the P2 standing OK does not cover P3).
 
+## Measured before P3a (production, read only, 2026-09-27)
+Of the 697 legacy eBay builder rows, **515 sit on the 22 old `EBAY_LISTING_SHELL` products** (the extra eBay listings,
+e.g. GALE-JACKET-ALT1..3) and only 182 on real family roots. Axis keys are "Color" (421) and "Colore" (126). No row
+links to a library photo (`sourceProductImageId` is empty); the shell rows' URLs are in no product library. 18 shells
+are still unadopted (4 were adopted as aliases).
+
+**Owner decision (2026-09-27): make the remaining shells aliases** — with the existing, reviewed adoption script
+(`apps/api/scripts/pes5-adopt-shells.mts`, ruling "adopt all 22, end nothing": zero eBay calls, reversible), dry run
+first, production write only with the Owner's word. Their photos move with the switch below: imported into the master
+family's library (deduplicated) and written as that alias's own Listing layer.
+
 ## P3a — switch a family onto the plan
 - `seedMediaPlan(productId)`: builds the Shared layer from the family's best current curation, in this order:
   1. the previous edit page's eBay builder rows (`ListingImage`, eBay, PLATFORM: Default rows → Common; per-value rows
      → value sets keyed by dictionary option; case twins merged in their order; unmatched values listed);
   2. otherwise the eBay media draft (`_mediaGalleryDraft`) of the primary listing;
   3. otherwise the library order (`ProductImage.sortOrder`) as Common.
-  A destination whose own current source differs (an alias with its own draft, an Amazon account with its own locators)
-  gets a Listing layer holding exactly that, so it keeps its photos.
+  A destination whose own current source differs gets a Listing layer holding exactly that, so it keeps its photos:
+  an alias with its own draft, and **every adopted shell alias — its old builder rows, their URLs imported into the
+  master library** (download through the safe fetcher, deduplicated by content hash, the original URL kept).
+  Amazon stays on the Shared layer; the preview names every Amazon slot that would change.
 - `GET /products/:id/media/switch-preview`: per destination — the layout the plan would send, the current source it
   replaces, and the differences by name. `POST /products/:id/media/switch`: writes the layers in one transaction
   (refused if the preview's revision changed).
