@@ -16,7 +16,7 @@ export async function mappingInputToken(channel: string, market: string, db: Pri
     ['ProductCategory', all, ['productId', 'categoryId']],
     ['Category', all, ['id']],
     ['CategoryClosure', all, ['ancestorId', 'descendantId']],
-    ['CategoryChannelMapping', Prisma.sql`channel = ${channel} AND marketplace IN (${market}, '*')`, ['id']],
+    ['CategoryChannelMapping', channel === 'EBAY' ? Prisma.sql`channel = ${channel} AND marketplace = ${market}` : Prisma.sql`channel = ${channel} AND marketplace IN (${market}, '*')`, ['id']],
     ['ChannelSchema', Prisma.sql`channel = ${channel} AND (marketplace = ${market} OR marketplace IS NULL)`, ['id']],
     ['CategorySchema', Prisma.sql`channel = ${channel}`, ['id']],
     ['FieldLinkGroup', all, ['id']],

@@ -1,6 +1,6 @@
 import prisma from '../../db.js'
-import { applyMediaOps, emptyMediaPlan, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
-import { channelNames, projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { applyMediaOps, emptyMediaPlan, inverseMediaOps, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
+import { channelNames, projectMediaDestination, type MediaAsset, type MediaFamily } from '@nexus/shared/media-plan-channels'
 import { storedVariationValues } from '../pim/stored-variation-projection.js'
 import { optionForValue, type DictionaryAttribute } from '../pim/family-variations-core.js'
 import { canonicalVariantAxis } from '../pim/variant-attribute-keys.js'
@@ -167,18 +167,12 @@ async function loadMediaContext(rootId: string) {
 type MediaContext = Awaited<ReturnType<typeof loadMediaContext>>
 
 function projectDestination(ctx: MediaContext, d: Destination, overrides: MediaLayoutOverrides = {}) {
-  const shared = ctx.byKey.get('SHARED')?.plan ?? null
-  const stack: MediaPlanStack = { shared, channel: ctx.byKey.get(`CHANNEL:${d.channel}`)?.plan ?? null, listing: ctx.byKey.get(d.key)?.plan ?? null }
-  const axis = ctx.axes.find(a => a.code === (stack.listing?.axis ?? stack.channel?.axis ?? shared?.axis ?? ctx.family.defaultAxis))
-  const destination: MediaDestination = { channel: d.channel, market: d.marketplace, languages: d.languages, mainLanguage: ctx.mainLanguage, api: d.api,
-    valueNames: overrides.valueNames ?? ctx.family.valueLabels, axisName: overrides.axisName !== undefined ? overrides.axisName : axis?.label ?? null }
-  const project = d.channel === 'EBAY' ? projectEbay : d.channel === 'AMAZON' ? projectAmazon : d.channel === 'SHOPIFY' ? projectShopify : projectEtsy
-  // A destination shows only the variants listed (and not excluded) on it; a publisher may narrow that to its review.
-  const listed = new Set(overrides.includedIds ?? d.productIds)
-  const family: MediaFamily = { ...ctx.family, variants: ctx.family.variants.map(v => ({ ...v, included: listed.has(v.productId) })) }
+  const stack: MediaPlanStack = { shared: ctx.byKey.get('SHARED')?.plan ?? null, channel: ctx.byKey.get(`CHANNEL:${d.channel}`)?.plan ?? null, listing: ctx.byKey.get(d.key)?.plan ?? null }
+  const layout = projectMediaDestination({ stack, family: ctx.family, axes: ctx.axes, assets: ctx.assets, target: d, mainLanguage: ctx.mainLanguage,
+    valueNames: overrides.valueNames, axisName: overrides.axisName, includedIds: overrides.includedIds })
   // Revisions of the layers this destination reads — a publisher binds its review to them.
   const revisions = [ctx.byKey.get('SHARED'), ctx.byKey.get(`CHANNEL:${d.channel}`), ctx.byKey.get(d.key)].map(l => l ? `${l.key}@${l.revision}` : null).filter(Boolean)
-  return { channel: d.channel, revisions, ...project(stack, family, ctx.assets, destination) }
+  return { channel: d.channel, revisions, ...layout }
 }
 
 export async function readMediaWorkspace(productId: string) {
@@ -265,7 +259,7 @@ export async function applyMediaPlanOps(productId: string, input: { address: Med
   const ids = [rootId, ...(await prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true } })).map(c => c.id)]
   const library = await prisma.productImage.findMany({ where: { productId: { in: ids } }, select: { id: true, versionGroupId: true } })
   const group = new Map(library.map(a => [a.id, a.versionGroupId]))
-  const introduced = input.ops.flatMap(op => op.op === 'insert' ? op.assetIds : op.op === 'swatch' && op.assetId ? [op.assetId] : [])
+  const introduced = input.ops.flatMap(op => op.op === 'insert' || op.op === 'replace' ? op.assetIds : op.op === 'swatch' && op.assetId ? [op.assetId] : [])
   const foreign = introduced.filter(id => !group.has(id))
   if (foreign.length) throw new WorkspaceScopeError('A photo is not in this product\'s library any more. Reload the page.', 409)
   const sameGroup = (a: string, b: string) => a === b || (!!group.get(a) && group.get(a) === group.get(b))
@@ -281,14 +275,17 @@ export async function applyMediaPlanOps(productId: string, input: { address: Med
         listing: address.layer === 'LISTING' && target ? readPlan(target.plan) : null }
       const next = applyMediaOps(stack, address.layer, input.ops, sameGroup)
       const empty = address.layer !== 'SHARED' && JSON.stringify(next) === JSON.stringify(emptyMediaPlan())
+      // Undo: the ops that put this layer back, each bound to what the layer holds after this edit.
+      const before = address.layer === 'SHARED' ? stack.shared : address.layer === 'CHANNEL' ? stack.channel : stack.listing
+      const undo = inverseMediaOps(address.layer, before ?? null, empty ? null : next)
       if (target) {
-        if (empty) { const gone = await tx.productMediaPlan.deleteMany({ where: { id: target.id, revision: target.revision } }); return gone.count ? { plan: null, revision: 0 } : null }
+        if (empty) { const gone = await tx.productMediaPlan.deleteMany({ where: { id: target.id, revision: target.revision } }); return gone.count ? { plan: null, revision: 0, undo } : null }
         const saved = await tx.productMediaPlan.updateMany({ where: { id: target.id, revision: target.revision }, data: { plan: next, revision: { increment: 1 }, updatedById: actorId } })
-        return saved.count ? { plan: next, revision: target.revision + 1 } : null
+        return saved.count ? { plan: next, revision: target.revision + 1, undo } : null
       }
-      if (empty) return { plan: null, revision: 0 }
+      if (empty) return { plan: null, revision: 0, undo }
       await tx.productMediaPlan.create({ data: { ...layerWhere(rootId, address.layer, address.channel, address.marketplace, address.accountId, address.aliasKey), plan: next, updatedById: actorId } })
-      return { plan: next, revision: 1 }
+      return { plan: next, revision: 1, undo }
     }).catch(error => {
       if (error instanceof MediaPlanEditError) throw new WorkspaceScopeError(error.message, 409)
       if ((error as { code?: string }).code === 'P2002') return null

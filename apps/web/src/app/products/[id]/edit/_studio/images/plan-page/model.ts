@@ -1,0 +1,304 @@
+import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
+import { pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
+
+/**
+ * Images rebuild P3b — the Media page's view of one family's photo plan (docs/images-studio-rebuild/PLAN.md §5).
+ *
+ * The page reads `GET /products/:id/media` once, edits one layer at a time through `POST /media/ops`, and computes every
+ * destination's layout and checks with the SAME shared functions the publishers use (`projectMediaDestination`), so an
+ * edit shows its effect at once and what the page shows is what a publish sends. Pure: tested without a browser.
+ */
+
+export type MediaChannel = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'ETSY'
+
+export interface LibraryAsset {
+  id: string; productId: string; url: string; alt: string | null; mediaType: string
+  width: number | null; height: number | null; mimeType: string | null; fileSize: number | null
+  languageTag: string; versionGroupId: string | null; label: string
+}
+export interface PlanLayer {
+  key: string; layer: MediaLayer; channel: string; marketplace: string; accountId: string; aliasKey: string
+  plan: MediaPlan; revision: number
+}
+export interface MediaDestinationRow {
+  key: string; channel: MediaChannel; marketplace: string; markets: string[]; accountId: string; accountLabel: string | null
+  accountActive: boolean; alias: { id: string; label: string; position: number } | null; languages: string[]; listed: number
+  productIds: string[]; targetable: boolean; refusal: string | null; api?: 'TRADING' | 'INVENTORY'
+}
+export interface MediaAxis { code: string; label: string; dictionary: boolean; values: Array<{ key: string; label: string }> }
+export interface MediaRead {
+  productId: string; rootId: string; sku: string; name: string | null; mainLanguage: string
+  family: MediaFamily & { axes: MediaAxis[]; unmapped: string[] }
+  library: LibraryAsset[]; layers: PlanLayer[]; destinations: MediaDestinationRow[]
+  meta?: { tookMs: number }
+}
+
+/** Which layer the page edits: Shared, one channel's layer, or one destination's own layer. */
+export type LayerView = { layer: 'SHARED' } | { layer: 'CHANNEL'; channel: MediaChannel } | { layer: 'LISTING'; destination: string }
+
+export const CHANNEL_LABEL: Record<MediaChannel, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy' }
+
+export function isSwitched(read: MediaRead) { return read.layers.some(l => l.layer === 'SHARED') }
+
+const layerByKey = (read: MediaRead, key: string) => read.layers.find(l => l.key === key)?.plan ?? null
+
+/** The layers one destination reads, top to bottom. */
+export function destinationStack(read: MediaRead, d: Pick<MediaDestinationRow, 'channel' | 'key'>): MediaPlanStack {
+  return { shared: layerByKey(read, 'SHARED'), channel: layerByKey(read, `CHANNEL:${d.channel}`), listing: layerByKey(read, d.key) }
+}
+
+/** The stack a layer view edits: its own layer and the layers above it. */
+export function viewStack(read: MediaRead, view: LayerView): MediaPlanStack {
+  if (view.layer === 'SHARED') return { shared: layerByKey(read, 'SHARED') }
+  if (view.layer === 'CHANNEL') return { shared: layerByKey(read, 'SHARED'), channel: layerByKey(read, `CHANNEL:${view.channel}`) }
+  const d = read.destinations.find(x => x.key === view.destination)
+  return d ? destinationStack(read, d) : { shared: layerByKey(read, 'SHARED') }
+}
+
+export function viewKey(view: LayerView): string {
+  if (view.layer === 'SHARED') return 'SHARED'
+  if (view.layer === 'CHANNEL') return `CHANNEL:${view.channel}`
+  return view.destination
+}
+
+/** The address `POST /media/ops` expects for a view. */
+export function viewAddress(read: MediaRead, view: LayerView) {
+  if (view.layer === 'SHARED') return { layer: 'SHARED' as const }
+  if (view.layer === 'CHANNEL') return { layer: 'CHANNEL' as const, channel: view.channel }
+  const d = read.destinations.find(x => x.key === view.destination)
+  if (!d) throw new Error('This destination is not on the page any more. Reload the page.')
+  return { layer: 'LISTING' as const, channel: d.channel, marketplace: d.marketplace, accountId: d.accountId, aliasKey: d.alias?.id ?? '' }
+}
+
+export function destinationLabel(d: MediaDestinationRow) {
+  const where = d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`
+  const alias = d.alias ? ` · ${d.alias.label}` : d.channel === 'EBAY' || d.channel === 'ETSY' ? ' · Main listing' : ''
+  return `${CHANNEL_LABEL[d.channel]}${where} · ${d.accountLabel ?? 'Unknown account'}${alias}`
+}
+
+// ── Sets ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export interface SetRow {
+  ref: MediaSetRef
+  label: string
+  kind: 'common' | 'value' | 'sku' | 'safety'
+  items: string[]
+  /** The layer whose copy the view shows; `null` = nobody set it yet. */
+  source: MediaLayer | null
+  /** Variants that use the set (value and SKU sets). */
+  skus: string[]
+}
+
+/** The resolved picture axis of a view and its values in family order (values only a layer knows come last). */
+export function viewAxis(read: MediaRead, stack: MediaPlanStack) {
+  const { axis, source } = resolveAxis(stack, read.family.defaultAxis)
+  const info = read.family.axes.find(a => a.code === axis) ?? null
+  const known = new Set(knownSetRefs(stack).filter(r => r.startsWith(`value:${axis}:`)).map(r => r.slice(6)))
+  const order = axis ? read.family.valueOrder[axis] ?? [] : []
+  const values = [...order, ...[...known].filter(k => !order.includes(k))]
+  return { axis, source, info, values }
+}
+
+export function valueLabel(read: MediaRead, key: string) { return read.family.valueLabels[key] ?? key.split(':').slice(1).join(':').replace(/^text:/, '') }
+
+/** The rows of the photo plan as one view sees them: Common, one per value of the axis, safety, then per-SKU sets. */
+export function setRows(read: MediaRead, view: LayerView, options: { skus?: boolean } = {}): SetRow[] {
+  const stack = viewStack(read, view)
+  const { axis, values } = viewAxis(read, stack)
+  const variants = read.family.variants
+  const row = (ref: MediaSetRef, label: string, kind: SetRow['kind'], skus: string[] = []): SetRow => ({ ref, label, kind, skus, ...resolveSet(stack, ref) })
+  const rows: SetRow[] = [row('common', 'Common', 'common', variants.map(v => v.sku))]
+  if (axis) for (const key of values) rows.push(row(`value:${key}`, valueLabel(read, key), 'value', variants.filter(v => v.values[axis] === key).map(v => v.sku)))
+  rows.push(row('safety', 'Safety (Amazon PS01–PS06)', 'safety'))
+  if (options.skus) for (const v of variants) rows.push(row(`sku:${v.productId}`, `SKU ${v.sku}`, 'sku', [v.sku]))
+  return rows
+}
+
+/** Per-SKU sets any layer of the view owns — the fold says how many there are. */
+export function ownedSkuSets(read: MediaRead, view: LayerView) {
+  const stack = viewStack(read, view)
+  return read.family.variants.filter(v => resolveSet(stack, `sku:${v.productId}`).source !== null).length
+}
+
+export function swatchRows(read: MediaRead, view: LayerView) {
+  const stack = viewStack(read, view)
+  const { axis, values } = viewAxis(read, stack)
+  if (!axis) return []
+  return values.map(key => ({ value: key, label: valueLabel(read, key), ...resolveSwatch(stack, key) }))
+}
+
+// ── The library ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Where each library photo is used on Shared: "Common · 2", "Nero · main". A version of a placed photo counts as used. */
+export function libraryUsage(read: MediaRead): Map<string, string[]> {
+  const usage = new Map<string, string[]>()
+  const groupOf = new Map(read.library.map(a => [a.id, a.versionGroupId]))
+  const members = (id: string) => {
+    const group = groupOf.get(id)
+    return group ? read.library.filter(a => a.versionGroupId === group).map(a => a.id) : [id]
+  }
+  for (const row of setRows(read, { layer: 'SHARED' }, { skus: true })) {
+    row.items.forEach((id, i) => {
+      for (const member of members(id)) usage.set(member, [...(usage.get(member) ?? []), i === 0 ? `${row.label} · main` : `${row.label} · ${i + 1}`])
+    })
+  }
+  const stack = viewStack(read, { layer: 'SHARED' })
+  for (const s of swatchRows(read, { layer: 'SHARED' })) if (s.assetId && stack.shared) usage.set(s.assetId, [...(usage.get(s.assetId) ?? []), `${s.label} · swatch`])
+  return usage
+}
+
+export type LibraryFilter = 'all' | 'unused' | 'used' | 'problems' | 'text'
+/** The library filtered by what a person looks for; order stays the library's own. */
+export function filterLibrary(read: MediaRead, usage: Map<string, string[]>, filter: LibraryFilter, search: string) {
+  const text = search.trim().toLowerCase()
+  return read.library.filter(a => {
+    if (text && !`${a.label} ${a.alt ?? ''} ${a.languageTag}`.toLowerCase().includes(text)) return false
+    if (filter === 'unused') return !usage.has(a.id)
+    if (filter === 'used') return usage.has(a.id)
+    if (filter === 'problems') return assetProblems(a).length > 0
+    if (filter === 'text') return a.languageTag !== 'zxx'
+    return true
+  })
+}
+
+/** What is wrong with one photo on its own (size, address) — the page's `Tag`s. Channel rules live in the checks. */
+export function assetProblems(a: LibraryAsset): string[] {
+  const problems: string[] = []
+  if (a.mediaType !== 'IMAGE') return problems
+  if (a.width == null || a.height == null) problems.push('Size unknown')
+  else if (Math.max(a.width, a.height) < 500) problems.push(`${Math.max(a.width, a.height)} px`)
+  if (!/^https:\/\//i.test(a.url)) problems.push('Not HTTPS')
+  return problems
+}
+
+export function languageName(tag: string) {
+  if (tag === 'zxx') return 'No text'
+  if (tag === 'mul') return 'Several languages'
+  return tag.toUpperCase()
+}
+
+/** The language versions of one photo, placed version first. */
+export function versionsOf(read: MediaRead, id: string) {
+  const a = read.library.find(x => x.id === id)
+  if (!a?.versionGroupId) return a ? [a] : []
+  return read.library.filter(x => x.versionGroupId === a.versionGroupId)
+}
+
+// ── Destinations ────────────────────────────────────────────────────────────────────────────────────────────────
+
+export function assetMap(read: MediaRead): Map<string, MediaAsset> {
+  return new Map(read.library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType,
+    fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
+}
+
+/** Every targetable destination's layout, computed by the shared projection (what a publish would send). */
+export function computeLayouts(read: MediaRead): Record<string, ChannelMediaLayout> {
+  const assets = assetMap(read)
+  return Object.fromEntries(read.destinations.filter(d => d.targetable).map(d => [d.key,
+    projectMediaDestination({ stack: destinationStack(read, d), family: read.family, axes: read.family.axes, assets, target: d, mainLanguage: read.mainLanguage })]))
+}
+
+export interface SetCell { ref: MediaSetRef; label: string; count: number; source: 'shared' | 'channel' | 'own' | 'none' }
+/** Per set of the destination's own axis: where its photos come from and how many there are. */
+export function destinationCells(read: MediaRead, d: MediaDestinationRow): SetCell[] {
+  const stack = destinationStack(read, d)
+  return setRows(read, { layer: 'LISTING', destination: d.key }).filter(r => r.kind !== 'safety' || d.channel === 'AMAZON').map(r => {
+    const resolved = resolveSet(stack, r.ref)
+    const source = resolved.source === 'LISTING' ? 'own' : resolved.source === 'CHANNEL' ? 'channel' : resolved.source === 'SHARED' ? 'shared' : 'none'
+    return { ref: r.ref, label: r.kind === 'safety' ? 'Safety' : r.label, count: resolved.items.length, source }
+  })
+}
+
+export function checkCounts(checks: readonly MediaCheck[]) {
+  const unique = [...new Map(checks.map(c => [`${c.severity}|${c.message}`, c])).values()]
+  return { errors: unique.filter(c => c.severity === 'error'), warnings: unique.filter(c => c.severity === 'warning') }
+}
+
+/** One line on what a destination would receive. */
+export function layoutSummary(channel: MediaChannel, layout: ChannelMediaLayout): string {
+  if (channel === 'EBAY' && 'gallery' in layout) return `Gallery ${layout.gallery.length}${layout.sets.length ? ` · ${layout.sets.length} ${layout.axisName ?? 'value'} set${layout.sets.length > 1 ? 's' : ''}` : ''}`
+  if (channel === 'AMAZON' && 'items' in layout) return `${layout.items.length} SKU${layout.items.length === 1 ? '' : 's'} · up to ${Math.max(0, ...layout.items.map(i => Object.keys(i.slots).length))} slots${layout.safety.length ? ` · ${layout.safety.length} safety` : ''}`
+  if (channel === 'SHOPIFY' && 'media' in layout) return `${layout.media.length} media · ${Object.values(layout.variantImages).filter(Boolean).length} variant images`
+  if ('images' in layout) return `${layout.images.length} photos · ${layout.variationImages.length} option photos`
+  return ''
+}
+
+// ── Local edits ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The same "one photo" rule the server applies: language versions of one photo count once. */
+export function sameGroupOf(read: MediaRead) {
+  const group = new Map(read.library.map(a => [a.id, a.versionGroupId]))
+  return (a: string, b: string) => a === b || (!!group.get(a) && group.get(a) === group.get(b))
+}
+
+/** Apply ops to one layer locally (the page moves at once; the server's answer then replaces it). Throws the same
+ *  refusal the server would. */
+export function applyLocal(read: MediaRead, view: LayerView, ops: readonly MediaOp[]): MediaRead {
+  const layer: MediaLayer = view.layer
+  const next = applyMediaOps(viewStack(read, view), layer, ops, sameGroupOf(read))
+  return withLayer(read, view, next, null)
+}
+
+/** Replace (or remove, `plan: null`) one layer's plan. `revision: null` keeps the known revision. */
+export function withLayer(read: MediaRead, view: LayerView, plan: MediaPlan | null, revision: number | null): MediaRead {
+  const key = viewKey(view)
+  const old = read.layers.find(l => l.key === key)
+  const rest = read.layers.filter(l => l.key !== key)
+  const empty = plan && view.layer !== 'SHARED' && !Object.keys(plan.sets).length && plan.axis === undefined
+  if (!plan || empty) return { ...read, layers: rest }
+  const address = viewAddress(read, view)
+  const row: PlanLayer = old ? { ...old, plan, revision: revision ?? old.revision }
+    : { key, layer: view.layer, channel: 'channel' in address ? address.channel ?? '' : '', marketplace: 'marketplace' in address ? address.marketplace ?? '' : '',
+      accountId: 'accountId' in address ? address.accountId ?? '' : '', aliasKey: 'aliasKey' in address ? address.aliasKey ?? '' : '', plan, revision: revision ?? 0 }
+  return { ...read, layers: [...rest, row] }
+}
+
+/** "Copy photos from" another destination: this destination's layer gets exactly the other one's resolved sets. */
+export function copyFromOps(read: MediaRead, from: MediaDestinationRow, to: MediaDestinationRow): MediaOp[] {
+  const source = destinationStack(read, from)
+  const target = destinationStack(read, to)
+  const refs = new Set<MediaSetRef>([...knownSetRefs(source), ...knownSetRefs(target)])
+  const ops: MediaOp[] = []
+  for (const ref of refs) {
+    const s = resolveSet(source, ref), t = resolveSet(target, ref)
+    if (JSON.stringify(s.items) === JSON.stringify(t.items)) continue
+    // Same channel and the source only follows: following again gives the target the very same photos, and keeps following.
+    if (from.channel === to.channel && s.source !== 'LISTING' && t.source === 'LISTING') ops.push({ op: 'follow', set: ref })
+    else ops.push({ op: 'replace', set: ref, assetIds: s.items })
+  }
+  const axis = resolveAxis(source, read.family.defaultAxis).axis
+  if (axis !== resolveAxis(target, read.family.defaultAxis).axis) ops.push({ op: 'axis', axis })
+  return ops
+}
+
+/** "Follow … for all sets": drop every set, the axis and the swatches this layer owns. */
+export function followAllOps(read: MediaRead, view: LayerView): MediaOp[] {
+  if (view.layer === 'SHARED') return []
+  const own = read.layers.find(l => l.key === viewKey(view))?.plan
+  if (!own) return []
+  const refs = knownSetRefs({ shared: own }).filter(ref => resolveSet({ shared: own }, ref).source !== null)
+  return [
+    ...refs.map(ref => ({ op: 'follow' as const, set: ref })),
+    ...(own.axis !== undefined ? [{ op: 'axis' as const, axis: undefined }] : []),
+    ...Object.keys(own.sets.swatches ?? {}).map(value => ({ op: 'swatch' as const, value, assetId: undefined })),
+  ]
+}
+
+/** "Show as": the version of each placed photo a market's languages see (D6), or the placed one. */
+export function shownVersion(read: MediaRead, assets: Map<string, MediaAsset>, id: string, languages: readonly string[] | null) {
+  if (!languages) return { id, exact: true, language: read.library.find(a => a.id === id)?.languageTag ?? 'zxx' }
+  const picked = pickVersion(id, assets, languages, read.mainLanguage)
+  return picked ? { id: picked.assetId, exact: picked.exact, language: picked.language } : { id, exact: true, language: 'zxx' }
+}
+
+/** The markets "Show as" offers: one per channel and market with its languages, best-listed first. */
+export function showAsOptions(read: MediaRead) {
+  const seen = new Map<string, { value: string; label: string; languages: string[] }>()
+  for (const d of read.destinations) {
+    const value = `${d.channel}:${d.marketplace}`
+    if (seen.has(value)) continue
+    const label = d.marketplace === 'GLOBAL' ? `${CHANNEL_LABEL[d.channel]} (all markets)` : `${CHANNEL_LABEL[d.channel]} ${d.marketplace}`
+    seen.set(value, { value, label: `${label} · ${d.languages.filter(l => l !== 'mul').map(l => l.toUpperCase()).join('/') || read.mainLanguage.toUpperCase()}`, languages: d.languages })
+  }
+  return [...seen.values()]
+}

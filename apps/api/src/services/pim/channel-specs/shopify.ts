@@ -141,6 +141,7 @@ export async function readShopifyDisplaySchema(accountId: string): Promise<Shopi
   return entry.value
 }
 
-export async function loadShopifyProductSpec(accountId?: string | null, locale?: string) {
-  return shopifyProductSpec(accountId ? await readShopifyMappingSchema(accountId) : null, accountId, locale)
+/** `categoryIds`: the family's Shopify categories, when the caller knows them (the sheet's Shopify scope). */
+export async function loadShopifyProductSpec(accountId?: string | null, locale?: string, categoryIds?: string[]) {
+  return shopifyProductSpec(accountId ? await readShopifyMappingSchema(accountId) : null, accountId, locale, categoryIds)
 }

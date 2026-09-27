@@ -92,6 +92,13 @@ describe('information grid reference names', () => {
     expect(columns[1].options).toEqual(['COLOR_NAME/SIZE_NAME'])
   })
 
+  it("keeps the server's FBA / FBM labels on the Amazon scope's Fulfillment method column", () => {
+    const [column] = nameReferenceColumns([
+      { key: 'fulfillment_availability__fulfillment_channel_code', kind: 'select', options: ['AMAZON_EU', 'DEFAULT'], optionLabels: { AMAZON_EU: 'FBA — Amazon stores and ships', DEFAULT: 'FBM — you ship' } },
+    ], {})
+    expect(column.optionLabels).toEqual({ AMAZON_EU: 'FBA — Amazon stores and ships', DEFAULT: 'FBM — you ship' })
+  })
+
   it('resolves database IDs, provider IDs, and country aliases within the selected channel', () => {
     const markets = [
       { id: 'amazon-it', channel: 'AMAZON', code: 'IT', marketplaceId: 'APJ6JRA9NG5V4', name: 'Amazon Italy' },

@@ -277,6 +277,33 @@ export function projectEtsy(stack: MediaPlanStack, family: MediaFamily, assets: 
   return { images, videos, variationImages, cut, checks: ctx.checks }
 }
 
+// ── One destination ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/** What a destination row must say for its layout: channel, market, languages, API, and the variants listed on it. */
+export interface MediaDestinationTarget {
+  channel: MediaDestination['channel']; marketplace: string; languages: string[]; api?: 'TRADING' | 'INVENTORY'; productIds: readonly string[]
+}
+export type ChannelMediaLayout = EbayMediaLayout | AmazonMediaLayout | ShopifyMediaLayout | EtsyMediaLayout
+
+/**
+ * One destination's layout from its layer stack — the Media page, the review and the publishers call this one function.
+ * Names default to the Shared ones; a publisher passes the channel's own names and may narrow the variants to its review.
+ */
+export function projectMediaDestination(input: {
+  stack: MediaPlanStack; family: MediaFamily; axes: ReadonlyArray<{ code: string; label: string }>; assets: ReadonlyMap<string, MediaAsset>
+  target: MediaDestinationTarget; mainLanguage: string; valueNames?: Record<string, string>; axisName?: string | null; includedIds?: readonly string[]
+}): ChannelMediaLayout {
+  const { axis } = resolveAxis(input.stack, input.family.defaultAxis)
+  const t = input.target
+  const destination: MediaDestination = { channel: t.channel, market: t.marketplace, languages: t.languages, mainLanguage: input.mainLanguage, api: t.api,
+    valueNames: input.valueNames ?? input.family.valueLabels, axisName: input.axisName !== undefined ? input.axisName : input.axes.find(a => a.code === axis)?.label ?? null }
+  // A destination shows only the variants listed (and not excluded) on it; a publisher may narrow that to its review.
+  const listed = new Set(input.includedIds ?? t.productIds)
+  const family: MediaFamily = { ...input.family, variants: input.family.variants.map(v => ({ ...v, included: listed.has(v.productId) })) }
+  const project = t.channel === 'EBAY' ? projectEbay : t.channel === 'AMAZON' ? projectAmazon : t.channel === 'SHOPIFY' ? projectShopify : projectEtsy
+  return project(input.stack, family, input.assets, destination)
+}
+
 // ── Channel names ───────────────────────────────────────────────────────────────────────────────────────────────
 
 /**

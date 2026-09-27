@@ -96,6 +96,7 @@ import { Prisma } from '@nexus/database'
 import prisma from '../db.js'
 import { csvDocument } from '../lib/csv.js'
 import { EbayCategoryService } from '../services/ebay-category.service.js'
+import { findCategoryByNameOnSite } from '../services/ebay-category-cross-site.js'
 import { parseThemeAxes, selfHealAxisSortOrder, mergeAxisValueOrderWrite } from '../services/ebay-theme-axes.js'
 import { resolveFamilyAxes } from '../services/ebay-family-axes.service.js'
 import { EbayPublishAdapter } from '../services/listing-wizard/ebay-publish.adapter.js'
@@ -216,20 +217,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     await Promise.all(
       targetCodes.map(async (code) => {
         try {
-          const items = await ebayCategoryService.searchCategories(
-            normaliseMarketplace(code),
-            categoryName,
-            { throwOnError: false, limit: 1 },
-          )
-          const first = items[0]
-          map[code] = first
-            ? {
-                id: first.productType,
-                name: first.displayName.split(' › ').pop() ?? first.displayName,
-                path: first.displayName,
-                matchScore: first.matchPercentage ?? 0,
-              }
-            : null
+          map[code] = await findCategoryByNameOnSite(ebayCategoryService, normaliseMarketplace(code), categoryName)
         } catch {
           map[code] = null
         }

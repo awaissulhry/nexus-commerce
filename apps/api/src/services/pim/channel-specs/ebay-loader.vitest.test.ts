@@ -8,7 +8,7 @@ it('never borrows marketplace-wide aspects for an uncached category', async () =
   const spec = await loadEbaySpec('IT', ['123'])
   expect(spec.absent).toBe(true)
   expect(spec.fields.some(f => f.attribute === 'aspect_Foreign')).toBe(false)
-  expect(spec.fields.some(f => f.key === 'categoryId')).toBe(true)
+  expect(spec.fields.find(f => f.key === 'categoryId')?.requirement).toBe('required')
 })
 it('selects the latest exact leaf instead of an older English-rich row', async () => {
   db.categorySchema.findFirst.mockResolvedValue({ fetchedAt: new Date(), schemaVersion: 'v2', schemaDefinition: { aspects: [] } })

@@ -44,7 +44,7 @@ export async function runTaxonomyRefresh() {
       }
       const markets = schemaMarkets(source.channel, source.marketplace)
       const inUse = full && provider.requirements === 'category' ? await prisma.categorySchema.findMany({ where: { channel: source.channel, marketplace: { in: markets }, isActive: true }, distinct: ['productType'], select: { productType: true } }) : []
-      const mappings = full && provider.requirements === 'category' ? await prisma.categoryChannelMapping.findMany({ where: { channel: source.channel, marketplace: { in: [...markets, '*'] } }, select: { channelCategoryId: true } }) : []
+      const mappings = full && provider.requirements === 'category' ? await prisma.categoryChannelMapping.findMany({ where: { channel: source.channel, marketplace: { in: source.channel === 'EBAY' ? markets : [...markets, '*'] } }, select: { channelCategoryId: true } }) : []
       const requested = [...new Set([...source.schemaRequests, ...inUse.map(s => s.productType), ...mappings.map(m => m.channelCategoryId)])]
       const batch = provider.requirements === 'category' ? requested.slice(0, 25) : []
       const failed: string[] = [], errors: string[] = []

@@ -41,6 +41,8 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/categories/schema/download': 'schema-download',
   // One "fill ASINs" click, one read of Amazon and one write per listing.
   '/api/amazon/listings/fill-asins': 'amazon-asin-fill',
+  // "Fill other eBay sites" — one Assign press, one run of rules downloads and category reviews.
+  '/api/pim/category-workspace/EBAY/site-assignments': 'ebay-site-assign',
 }
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
