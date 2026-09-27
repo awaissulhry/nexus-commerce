@@ -9,6 +9,7 @@ import { useRef, useState } from 'react'
 import { MediaCard, MediaGallery } from '../components/MediaGallery'
 import { MediaPreview } from '../components/MediaPreview'
 import { MediaStrip } from '../components/MediaStrip'
+import { MediaBoard, type MediaBoardMove } from '../components/MediaBoard'
 import { CellAction } from '../components/CellAction'
 import { PressableRow } from '../components/PressableRow'
 import { Thumbnail } from '../components/Thumbnail'
@@ -56,5 +57,30 @@ export function MediaGalleryExample() {
     <MediaStrip label="Example product" items={[{ id: 'photo', type: 'IMAGE', preview: image('Front') }, { id: 'video', type: 'VIDEO' }, { id: 'model', type: 'MODEL_3D' }]} />
     <MediaCard mediaType="VIDEO" label="Video without a poster" onPreview={() => setPreview('Video without a poster')} />
     <MediaPreview type="EXTERNAL_VIDEO" url="https://example.com/video" label="External video example" transcript="A translated transcript can accompany a hosted video. This is a synthetic catalog example." />
+    <MediaBoardExample />
+  </section>
+}
+
+/** Several ordered sets on one board: drag or Space + arrows move a photo between rows; Alt copies. */
+function MediaBoardExample() {
+  const [rows, setRows] = useState<Record<string, string[]>>({ common: ['Front', 'Detail'], black: ['Black 1', 'Black 2'], yellow: [] })
+  const [compactSelected, setCompactSelected] = useState(false)
+  const move = ({ itemId, from, to, index, copy }: MediaBoardMove) => setRows(current => {
+    const next = { ...current, [from]: copy ? current[from] : current[from].filter(id => id !== itemId) }
+    const target = (from === to ? next[from] : current[to]).filter(id => id !== itemId)
+    next[to] = [...target.slice(0, index), itemId, ...target.slice(index)]
+    return next
+  })
+  const labels: Record<string, string> = { common: 'Common', black: 'Black', yellow: 'Yellow' }
+  return <section aria-label="Media board example">
+    <h4>MediaBoard</h4>
+    <p>Each row is one ordered set; the first photo is its main photo. Space picks a photo up, arrows choose a row and a position, Space drops, Alt+Space or Alt-drag adds a copy.</p>
+    <MediaBoard label="Example photo sets" onMove={move}
+      onRemove={(row, id) => setRows(current => ({ ...current, [row]: current[row].filter(x => x !== id) }))}
+      rows={Object.entries(rows).map(([id, items]) => ({ id, label: labels[id], detail: `${items.length} photos`, items: items.map(item => ({ id: item, label: item, src: image(item) })) }))} />
+    <h4>MediaCard compact</h4>
+    <div style={{ width: 132 }}>
+      <MediaCard compact src={image('Library photo')} label="library-photo-with-a-long-name.jpg" marker="In use" selected={compactSelected} onSelectedChange={setCompactSelected} onPreview={() => undefined} detail="1200×1200" />
+    </div>
   </section>
 }

@@ -130,6 +130,19 @@ describe('media plan edits', () => {
     expect(back.plan).toBeNull()
     expect(await scoped(() => prisma.productMediaPlan.count({ where: { layer: 'LISTING' } }))).toBe(0)
   })
+  it('every edit returns its Undo: applied, the layer comes back (the alias row goes away); a stale undo is refused', async () => {
+    const address = { layer: 'LISTING' as const, channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: ids.alias }
+    const edit = await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'remove', set: 'value:color:black', assetId: img.n1 }] }, null))
+    expect(edit.undo).toEqual([{ op: 'follow', set: 'value:color:black', expect: [img.cover] }])
+    const undone = await scoped(() => applyMediaPlanOps(ids.root, { address, ops: edit.undo }, null))
+    expect(undone.plan).toBeNull()
+    // Redo is the undo's own undo; once someone else changes the set, the old undo is refused and nothing changes.
+    await scoped(() => applyMediaPlanOps(ids.root, { address, ops: undone.undo }, null))
+    await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'insert', set: 'value:color:black', assetIds: [img.g1] }] }, null))
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address, ops: edit.undo }, null))).rejects.toThrow(/cannot be undone/)
+    await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'follow', set: 'value:color:black' }] }, null))
+    expect(await scoped(() => prisma.productMediaPlan.count({ where: { layer: 'LISTING' } }))).toBe(0)
+  })
   it('Amazon photos belong to the account: its listing layer is GLOBAL whatever market is sent', async () => {
     const saved = await scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'AMAZON', marketplace: 'DE', accountId: ids.amazon, aliasKey: 'ignored' },
       ops: [{ op: 'own', set: 'common' }] }, null))

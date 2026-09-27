@@ -22,21 +22,24 @@ export interface MediaCardProps {
   onSelectedChange?(selected: boolean): void
   disabled?: boolean
   actions?: ReactNode
+  /** A dense tile for long lists (a photo library): one-line name, small paddings. */
+  compact?: boolean
 }
 
 /** Uncropped image, explicit failure, independent preview/selection/actions. */
-export function MediaCard({ src, placeholder, mediaType, label, detail, marker, onPreview, selected, onSelectedChange, disabled, actions }: MediaCardProps) {
+export function MediaCard({ src, placeholder, mediaType, label, detail, marker, onPreview, selected, onSelectedChange, disabled, actions, compact = false }: MediaCardProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const preview = mediaImageUrl(src)
-  return <article className={`nds-media-card${selected ? ' is-selected' : ''}`}>
+  return <article className={`nds-media-card${selected ? ' is-selected' : ''}${compact ? ' compact' : ''}`}>
     <div className="nds-media-card-head">
-      {onSelectedChange ? <Checkbox label={label} checked={selected ?? false} disabled={disabled} onChange={event => onSelectedChange(event.target.checked)} /> : <span>{label}</span>}
+      {onSelectedChange ? <Checkbox label={compact ? undefined : label} aria-label={compact ? `Select ${label}` : undefined} checked={selected ?? false} disabled={disabled} onChange={event => onSelectedChange(event.target.checked)} /> : compact ? null : <span>{label}</span>}
+      {compact && <span className="nds-media-card-name" title={label}>{label}</span>}
       {marker != null && <span className="nds-media-card-marker">{marker}</span>}
     </div>
     <button type="button" className="nds-media-card-preview" onClick={onPreview} aria-label={`Inspect ${label}`}>
       {!preview ? <span className="nds-media-card-failure">{placeholder ?? (mediaType ? <MediaTypeIcon type={mediaType} size={24} /> : <><ImageOff size={24} aria-hidden />No preview available</>)}</span>
         : failedSrc === src ? <span className="nds-media-card-failure"><ImageOff size={24} aria-hidden />Image unavailable</span>
-        : <img src={cdnFit(preview, 640)} alt={label} loading="lazy" decoding="async" onError={() => setFailedSrc(src ?? null)} />}
+        : <img src={cdnFit(preview, compact ? 240 : 640)} alt={label} loading="lazy" decoding="async" onError={() => setFailedSrc(src ?? null)} />}
       {mediaType && mediaType !== 'IMAGE' && <span className="nds-media-card-type"><MediaTypeIcon type={mediaType} size={12} />{mediaTypeLabel(mediaType)}</span>}
     </button>
     {detail != null && <div className="nds-media-card-detail">{detail}</div>}

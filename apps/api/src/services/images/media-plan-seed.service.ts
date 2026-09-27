@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import sharp from 'sharp'
 import prisma from '../../db.js'
 import { mediaLayerKey, mediaPlanSchema, type MediaLayer, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
-import { projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { projectMediaDestination, type MediaAsset } from '@nexus/shared/media-plan-channels'
 import { canonicalVariantAxis } from '../pim/variant-attribute-keys.js'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { fetchCatalogSource } from '../pim/catalog-source-fetch.js'
@@ -128,13 +128,7 @@ export async function previewMediaSwitch(productId: string) {
   const destinations = seed.destinations.filter(d => d.targetable).map(d => {
     const own = byKey.get(d.key)
     const stack: MediaPlanStack = { shared: shared.plan, channel: null, listing: own?.plan ?? null }
-    const axisCode = own?.plan.axis ?? shared.plan.axis ?? seed.fam.family.defaultAxis
-    const axisLabel = seed.fam.axes.find(a => a.code === axisCode)?.label ?? null
-    const destination: MediaDestination = { channel: d.channel, market: d.marketplace, languages: d.languages, mainLanguage: seed.mainLanguage, api: d.api, valueNames: seed.fam.family.valueLabels, axisName: axisLabel }
-    const listed = new Set(d.productIds)
-    const family: MediaFamily = { ...seed.fam.family, variants: seed.fam.family.variants.map(v => ({ ...v, included: listed.has(v.productId) })) }
-    const project = d.channel === 'EBAY' ? projectEbay : d.channel === 'AMAZON' ? projectAmazon : d.channel === 'SHOPIFY' ? projectShopify : projectEtsy
-    const layout = project(stack, family, assets, destination)
+    const layout = projectMediaDestination({ stack, family: seed.fam.family, axes: seed.fam.axes, assets, target: d, mainLanguage: seed.mainLanguage })
     const checks = [...new Map(layout.checks.map(c => [`${c.severity}|${c.message}`, c])).values()]
     return { key: d.key, channel: d.channel, marketplace: d.marketplace, markets: d.markets, accountLabel: d.accountLabel, alias: d.alias,
       source: own ? `${own.source} (${own.label})` : `${shared.source} (Shared)`, layout, checks }
