@@ -16,9 +16,28 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   In production the switch endpoints exist; no screen uses them until P3b is merged, and no family is switched.
 - **P3b — the new Media page. MERGED 2026-09-27 (#102, squash `90119fb37`) on the Owner's word; deployed (API build
   `90119fb3`, web on Vercel). No production family is switched yet — the first switch is the Owner's click.**
-- **P3c — the Information sheet's "Product media" column on the plan. Built and checked locally (2026-09-27); PR open.**
-  Details below.
-- **Next:** P3d — polish and proof (destination table as cards on a phone, screenshots, keyboard walk-through).
+- **P3c — the Information sheet's "Product media" column on the plan. MERGED 2026-09-27 (#112, `b5291447`); deployed.**
+- **P3d — polish and proof (2026-09-27): PR open.** Details below.
+- **Next:** the first real switch (the test family), then P4 (upload dialog, Compare, Review & publish).
+
+## P3d — polish and proof
+- **Phone:** under 720 px of page width the destinations table becomes one card per destination (title, markets or API,
+  checks, sets with their source, what it would send) — the same pieces as the table, so both say the same thing.
+  Measured at 390 px: no sideways page scroll; the library is a drawer; tick + "Add to" works there.
+- **Keyboard:** Tab order listed from the page (every stop named; the photo board is 2 stops — one tile and its menu —
+  as designed). Found: the library costs 2 stops per photo (about 350 on a 176-photo family before the plan). Fixed with
+  a visible "Skip to the photo plan" at the top of the library; it lands on the first photo of the plan.
+- **States:** a product with no options says "one gallery for every channel" instead of offering per-SKU photos; a
+  destination whose account is paused says so ("reconnect it before publishing"); the open destination's row uses the
+  grid's own selected-row paint.
+- **Switch, safer (found checking the test family's preview in production, read only):** the old eBay publisher sent the
+  builder rows of every spelling of the listing's axis ("Color" and "Colore"), merged per value in position order with
+  repeated photos dropped. The switch left the second spelling out (the test family's ALT1 alias: 14 photos). It now takes
+  them in exactly as the publisher sent them, and says so in the preview; rows under a different axis are still left out
+  and named. Tested (a deliberate break of the rule fails the test).
+- **Screenshots** (local stack, anonymised data; "Not HTTPS" tags are the local http photo server):
+  [desktop](screens/p3-media-page-desktop.jpg) · [phone](screens/p3-media-page-phone.jpg) ·
+  [Information sheet column](screens/p3-sheet-product-media.jpg).
 
 ## P3c — the "Product media" column on the plan
 | Piece | File | What it does |

@@ -4,6 +4,7 @@ import prisma from '../../db.js'
 import { mediaLayerKey, mediaPlanSchema, type MediaLayer, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
 import { projectMediaDestination, type MediaAsset } from '@nexus/shared/media-plan-channels'
 import { canonicalVariantAxis } from '../pim/variant-attribute-keys.js'
+import { axisSynonymKey } from '../ebay-theme-axes.js'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { fetchCatalogSource } from '../pim/catalog-source-fetch.js'
 import { publishListingEvent } from '../listing-events.service.js'
@@ -32,15 +33,21 @@ async function builderCuration(productId: string, preferredAxis: string | null, 
   const rows = await prisma.listingImage.findMany({ where: { productId, platform: 'EBAY', variationId: null, mediaType: 'IMAGE' },
     orderBy: [{ position: 'asc' }, { id: 'asc' }], select: { url: true, variantGroupKey: true, variantGroupValue: true } })
   if (!rows.length) return null
-  // The builder showed ONE axis spelling (the product's preference); rows it saved under another spelling were invisible
-  // there and mixed in at publish — they are left out and named, never merged silently.
+  // The builder showed ONE axis spelling (the product's preference), but the old eBay publisher sent every row whose axis
+  // is a synonym of the listing's ("Color", "Colore"), merged per value in position order with repeated photos dropped
+  // (ebay-shared-image-publish.service.ts). The plan takes exactly that, so the switch keeps what eBay was sent; rows
+  // under a different axis were never sent as that axis — they are left out and named.
   const keys = rows.map(r => r.variantGroupKey).filter((k): k is string => !!k)
   const counts = new Map<string, number>(); for (const k of keys) counts.set(k, (counts.get(k) ?? 0) + 1)
   const axisLabel = (preferredAxis && counts.has(preferredAxis) ? preferredAxis : [...counts].sort((a, b) => b[1] - a[1])[0]?.[0]) ?? null
-  const skipped = keys.filter(k => k !== axisLabel).length
-  if (skipped) report.push(`${label}: ${skipped} older photo${skipped > 1 ? 's' : ''} saved under another axis spelling were left out.`)
+  const sameAxis = (key: string | null) => !!key && !!axisLabel && axisSynonymKey(key) === axisSynonymKey(axisLabel)
+  const spellings = [...new Set(keys.filter(k => k !== axisLabel && sameAxis(k)))]
+  const taken = keys.filter(k => k !== axisLabel && sameAxis(k)).length
+  if (taken) report.push(`${label}: ${taken} photo${taken > 1 ? 's' : ''} saved under ${spellings.map(k => `"${k}"`).join(', ')} (the same axis as "${axisLabel}") ${taken > 1 ? 'were' : 'was'} taken in, as the old eBay publisher sent ${taken > 1 ? 'them' : 'it'}; repeats were dropped.`)
+  const skipped = keys.filter(k => !sameAxis(k)).length
+  if (skipped) report.push(`${label}: ${skipped} older photo${skipped > 1 ? 's' : ''} saved under another axis (${[...new Set(keys.filter(k => !sameAxis(k)))].map(k => `"${k}"`).join(', ')}) ${skipped > 1 ? 'were' : 'was'} left out.`)
   const values: Curation['values'] = []
-  for (const row of rows.filter(r => r.variantGroupKey === axisLabel && r.variantGroupValue)) {
+  for (const row of rows.filter(r => sameAxis(r.variantGroupKey) && r.variantGroupValue)) {
     const found = values.find(v => v.text === row.variantGroupValue)
     if (found) found.urls.push(row.url); else values.push({ text: row.variantGroupValue!, urls: [row.url] })
   }
