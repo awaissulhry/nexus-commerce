@@ -5,6 +5,7 @@ import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { TtlCache } from '../../utils/ttl-cache.js'
 import prisma from '../../db.js'
 import { cachedBrowseNodeLabels } from './browse-node-labels.service.js'
+import { categoryMappingMarkets } from '../pim/mapping/category-mapping.service.js'
 
 type Labels = Record<string, Record<string, string>>
 const shippingCache = new TtlCache<Promise<Record<string, string>>>({ ttlMs: 5 * 60_000, maxEntries: 100 })
@@ -12,7 +13,7 @@ const shippingCache = new TtlCache<Promise<Record<string, string>>>({ ttlMs: 5 *
 /** Saved taxonomy paths remain usable when the external taxonomy service is unavailable. */
 export async function cachedCategoryLabels(channel: string, marketplace: string, productType: string): Promise<Labels> {
   const mappings = await prisma.categoryChannelMapping.findMany({
-    where: { channel, marketplace: { in: channel === 'EBAY' ? [marketplace] : [marketplace, '*'] }, channelCategoryId: productType, channelCategoryPath: { not: null } },
+    where: { channel, marketplace: { in: categoryMappingMarkets(channel, marketplace) }, channelCategoryId: productType, channelCategoryPath: { not: null } },
     select: { marketplace: true, channelCategoryPath: true },
   })
   const exact = mappings.filter(mapping => mapping.marketplace === marketplace)

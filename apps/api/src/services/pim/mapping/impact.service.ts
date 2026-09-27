@@ -7,7 +7,7 @@ import { resolveBatch } from './resolve-batch.service.js'
 import { mappingInputToken } from './review-inputs.js'
 import { expressionDraft, changedFields, validateReviewMapping, type ExpressionChange, type CategoryChange } from './review-draft.js'
 import type { StoredVariationRule } from '../variation-rule-store.js'
-import { type MappingRow } from './category-mapping.service.js'
+import { categoryMappingMarkets, type MappingRow } from './category-mapping.service.js'
 import { languageForMarketplace } from '../../products/translation-resolver.service.js'
 import { mappingToken, MappingConflict } from './revision-token.js'
 import { isPresent } from '../resolve-channel-field.js'
@@ -157,7 +157,7 @@ export async function createMappingImpact(input: { channel: string; market: stri
       taxonomySchemaId = requirements.schema?.id
       change.channelCategoryPath = requirements.node.path
     }
-    categoryBefore = await prisma.categoryChannelMapping.findMany({ where: { channel: input.channel, marketplace: { in: [input.market, '*'] } } })
+    categoryBefore = await prisma.categoryChannelMapping.findMany({ where: { channel: input.channel, marketplace: { in: categoryMappingMarkets(input.channel, input.market) } } })
     categoryAfter = categoryBefore.filter(r => r.categoryId !== change.categoryId || r.marketplace !== input.market)
     if (change.channelCategoryId !== null) categoryAfter.push({ categoryId: change.categoryId, marketplace: input.market, channelCategoryId: change.channelCategoryId.trim(), channelCategoryPath: change.channelCategoryPath ?? null, browseNodeId: change.browseNodeId ?? null, reviewedAt: new Date().toISOString() })
   }
