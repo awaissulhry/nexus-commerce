@@ -7,6 +7,7 @@ import { mediaObject, readMediaCollection, productMediaSaveSchema, productMediaC
   type ProductMediaAsset, type ProductMediaCollection, type ProductMediaQuery, type ProductMediaWorkspace } from '@nexus/shared/product-media'
 import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from '../pim/workspace-destination.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type Input = ProductMediaQuery & { productId: string }
@@ -52,6 +53,7 @@ export async function readProductMedia(input: Input) {
 }
 
 export async function saveProductMedia(input: Input, body: unknown) {
+  if (await isOnMediaPlan(input.productId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const { expectedRevision, collection } = productMediaSaveSchema.parse(body)
   await validateProductMediaDestination(input)
   try {
@@ -90,6 +92,7 @@ function mediaConflict(error: unknown) {
 
 /** Copy a typed gallery, including localized accessibility metadata. Never delete target files. */
 export async function copyProductMedia(input: Input, body: unknown) {
+  if (await isOnMediaPlan(input.productId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const command = productMediaCopySchema.parse(body)
   const sourceInput = { productId: command.source.productId, ...command.source.context }
   await validateProductMediaDestination(input)

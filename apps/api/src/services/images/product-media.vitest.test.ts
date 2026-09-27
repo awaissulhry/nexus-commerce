@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PRODUCT_MEDIA_KEY, type ProductMediaQuery } from '@nexus/shared/product-media'
 const mocks = vi.hoisted(() => ({ products: [] as any[], listings: [] as any[], files: [] as any[], conflict: false, updates: [] as any[], destination: vi.fn() }))
+// Images rebuild P2b — these families are not on the media plan (its own guard is tested in media-plan-switch.vitest.test.ts).
+vi.mock('./media-plan-switch.js', async original => ({ ...await original<object>(), isOnMediaPlan: async () => false, mediaPlanProducts: async () => new Set() }))
 vi.mock('../../db.js', () => {
   const match = (row: any, where: any) => Object.entries(where).every(([key, value]) => value === undefined || row[key] === value)
   const db = {

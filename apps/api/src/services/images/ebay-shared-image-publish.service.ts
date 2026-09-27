@@ -37,6 +37,7 @@ import { axisSynonymKey } from '../ebay-variation-push.service.js'
 import { logger } from '../../utils/logger.js'
 import type { EbayInventoryPublishResult } from './ebay-inventory-image-publish.service.js'
 import { tryResolveConnection } from '../connection-resolver.service.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 
 const TRADING_PICTURE_CAP = 12
 const SHARED_SENTINEL = '__shared__'
@@ -239,6 +240,8 @@ export async function publishEbaySharedListingImages(
     select: { id: true, sku: true, ebayItemId: true, imageAxisPreference: true, productType: true },
   })
   if (!product) throw new Error(`Product ${productId} not found`)
+  // Images rebuild P2b — the media plan owns this family's photos; this revise would overwrite them.
+  if (await isOnMediaPlan(product.id)) return fail(MEDIA_PLAN_REFUSAL, 'MEDIA_PLAN_OWNS_PHOTOS')
 
   // Normalise to the membership convention ('UK', not 'GB').
   const wantMarket = marketplace

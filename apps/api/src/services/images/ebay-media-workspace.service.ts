@@ -8,6 +8,7 @@ import { ebayMediaDraftSchema, galleryKey, inspectMediaDraft, type EbayMediaAsse
 import prisma from '../../db.js'
 import { axisSynonymKey } from '../ebay-theme-axes.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 
 /** A draft only. Existing publishers must not interpret it as live image evidence. */
 export const EBAY_MEDIA_DRAFT_KEY = '_mediaGalleryDraft'
@@ -98,6 +99,7 @@ export async function readEbayMediaGallery(productId: string, context: MediaGall
 }
 
 export async function saveEbayMediaGallery(productId: string, input: unknown, context: MediaGalleryContext) {
+  if (await isOnMediaPlan(productId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const parsed = ebayMediaDraftSchema.safeParse((input as { draft?: unknown } | null)?.draft)
   const expectedRevision = (input as { expectedRevision?: unknown } | null)?.expectedRevision
   if (!parsed.success || typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(expectedRevision))

@@ -40,6 +40,7 @@ import {
 import { resolveSlotTaxonomy } from './amazon-slot-taxonomy.service.js'
 import { computeExactMirror } from './amazon-exact-mirror.js'
 import { marketplaceCodeToId } from '../../utils/marketplace-code.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 
 /**
  * M3 — publish mode. 'exact-mirror' (default) sends the full desired state
@@ -304,6 +305,8 @@ export async function submitAmazonImageFeed(
   })
   if (!product) throw new Error(`Product ${productId} not found`)
   const familyId = product.parentId ?? productId
+  // Images rebuild P2b — the media plan owns this family's photos; this feed would overwrite them.
+  if (await isOnMediaPlan(productId)) throw new Error(MEDIA_PLAN_REFUSAL)
   const managedListings = await prisma.channelListing.findMany({ where: { channel: 'AMAZON', marketplace: mkt,
     OR: [{ productId: familyId }, { product: { parentId: familyId } }] }, select: { platformAttributes: true } })
   if (managedListings.some(listing => (listing.platformAttributes as Record<string, unknown> | null)?._amazonMediaWorkspace !== undefined)) {

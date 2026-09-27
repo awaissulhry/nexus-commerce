@@ -7,6 +7,7 @@ import { amazonImageSlots, amazonSafetyImageSlots, amazonManagedImageSlots, amaz
 import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
 import { amazonMediaClient, amazonVariationAttributes, marketValue, mediaObject } from './amazon-media-client.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 
 export const AMAZON_MEDIA_KEY = '_amazonMediaWorkspace'
 export const mediaHash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -127,6 +128,7 @@ export async function mutateAmazonMedia(destination: WorkspaceDestination, revis
 }
 
 export async function saveAmazonMedia(destination: WorkspaceDestination, revision: string, input: unknown) {
+  if (await isOnMediaPlan(destination.familyId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const parsed = amazonMediaDraftSchema.safeParse(input)
   if (!parsed.success) throw new WorkspaceScopeError('A valid Amazon gallery draft is required.', 400)
   return mutateAmazonMedia(destination, revision, async (current, pa, tx) => {
@@ -173,6 +175,7 @@ export function desiredAmazonImages(workspace: AmazonMediaWorkspace, listingId: 
 export async function copyAmazonMarketGallery(destination: WorkspaceDestination, revision: string, input: {
   sourceMarket: string; sourceListingId: string; sourceGalleryId: string; sourceRevision: string; targetGalleryId: string; section?: 'gallery' | 'safety' | 'all'
 }) {
+  if (await isOnMediaPlan(destination.familyId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const sourceDestination = await amazonMediaDestination({ productId: destination.productId, accountId: destination.accountId, market: input.sourceMarket, listingId: input.sourceListingId })
   if (sourceDestination.marketplace === destination.marketplace) throw new WorkspaceScopeError('Choose a different source market.', 400)
   return mutateAmazonMedia(destination, revision, async (current, pa, tx) => {
