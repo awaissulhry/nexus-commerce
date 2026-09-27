@@ -6,7 +6,8 @@ import { Modal } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
 import { channelLabel } from '../../scopes'
-import { missingRuleSentence } from './rulesStatus'
+import Link from '@/lib/workspaces/Link'
+import { chooseCategoryLink, missingRuleSentence } from './rulesStatus'
 
 /** How one market's Amazon rules differ from most markets' (`SheetSpecCoverage.marketDifference`). */
 export interface MarketDifference {
@@ -69,6 +70,7 @@ export function SchemaStatus({ channel, market, accountId, categories, categoryS
     setBusy(false)
   }
   const canDownload = !store && downloadable.length > 0
+  const chooseLink = chooseCategoryLink(channel, market, missing)
   return <>
     <Modal open={open} onClose={() => { if (!busy) onClose() }} title={`${channelLabel(channel)} · ${market} requirements`} size="md" footer={<>
       <Button variant="secondary" disabled={busy} onClick={() => onClose()}>Close</Button>
@@ -84,6 +86,7 @@ export function SchemaStatus({ channel, market, accountId, categories, categoryS
         {!categories.length && <p>Select a listing category to load its requirements.</p>}
       </>}
       {missing.length > 0 && <p role="status">{missing.map(key => missingRuleSentence(channel, market, key)).join(' ')}</p>}
+      {chooseLink && <Button asChild size="sm" variant="link"><Link href={chooseLink.href} onClick={() => onClose()}>{chooseLink.label}</Link></Button>}
       {!store && <ul>{categories.map(category => <li key={category}>{category} · {ages.find(age => age.productType.replace(/^(EBAY|ETSY):/, '') === category)?.fetchedAt.slice(0, 10) ?? 'Not loaded'}{categorySources[category] ? ` — ${categorySources[category]}` : ''}</li>)}</ul>}
       {typeConflicts.length > 0 && <p role="status">{`This product's Amazon listings in other markets do not agree on the product type (${typeConflicts.join(', ')}), so the category mapping or the product's own type is used here.`}</p>}
       {differences.filter(d => d.onlyHere.length || d.missingHere.length).map(d => (
