@@ -18,11 +18,15 @@ export interface MarketDifference {
 
 interface DownloadResult { productType: string; outcome: 'added' | 'already' | 'failed'; error?: string }
 
-export function SchemaStatus({ channel, market, accountId, categories, missing, downloadable = [], differences = [], ages, open, onClose, onRefreshed }: {
+export function SchemaStatus({ channel, market, accountId, categories, categorySources = {}, typeConflicts = [], missing, downloadable = [], differences = [], ages, open, onClose, onRefreshed }: {
   channel: string; market: string; categories: string[]; missing: string[]
   /** Missing rule sets the download action can fetch (`rulesStatus().downloadable`). */
   downloadable?: string[]
   differences?: MarketDifference[]
+  /** Where each category came from, in words (`row.categorySource.label`): "From this product's Amazon listings in DE, IT". */
+  categorySources?: Record<string, string>
+  /** Sibling Amazon listings that disagree on the product type (`otherMarketConflicts`), e.g. "DE → OUTERWEAR". */
+  typeConflicts?: string[]
   accountId?: string | null
   open: boolean; onClose: () => void
   ages: Array<{ productType: string; fetchedAt: string }>; onRefreshed: () => void
@@ -80,7 +84,8 @@ export function SchemaStatus({ channel, market, accountId, categories, missing, 
         {!categories.length && <p>Select a listing category to load its requirements.</p>}
       </>}
       {missing.length > 0 && <p role="status">{missing.map(key => missingRuleSentence(channel, market, key)).join(' ')}</p>}
-      {!store && <ul>{categories.map(category => <li key={category}>{category} · {ages.find(age => age.productType.replace(/^(EBAY|ETSY):/, '') === category)?.fetchedAt.slice(0, 10) ?? 'Not loaded'}</li>)}</ul>}
+      {!store && <ul>{categories.map(category => <li key={category}>{category} · {ages.find(age => age.productType.replace(/^(EBAY|ETSY):/, '') === category)?.fetchedAt.slice(0, 10) ?? 'Not loaded'}{categorySources[category] ? ` — ${categorySources[category]}` : ''}</li>)}</ul>}
+      {typeConflicts.length > 0 && <p role="status">{`This product's Amazon listings in other markets do not agree on the product type (${typeConflicts.join(', ')}), so the category mapping or the product's own type is used here.`}</p>}
       {differences.filter(d => d.onlyHere.length || d.missingHere.length).map(d => (
         <p key={d.category}>
           {`${d.category}: Amazon asks for different fields in ${market}. Compared with ${d.comparedWith.join(', ')}`}
