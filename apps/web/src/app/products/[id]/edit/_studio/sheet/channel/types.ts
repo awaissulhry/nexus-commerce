@@ -533,6 +533,14 @@ export interface ChannelScopePage {
     schemaMissing: string[]
     schemaAge: Array<{ productType: string; fetchedAt: string }>
     droppedKeys: string[]
+    /**
+     * AM.1 — per channel spec, declared vs served (API `SheetSpecCoverage`). 2026-09-27: an Amazon entry may carry
+     * `marketDifference`, how this market's rules differ from most Amazon markets'.
+     */
+    coverage?: Array<{
+      coordinate: string; channel: string; category: string; declared: number; columns: number
+      marketDifference?: { comparedWith: string[]; onlyHere: Array<{ key: string; label: string }>; missingHere: Array<{ key: string; label: string }> }
+    }>
     tookMs: number
     /**
      * The mapping run's own report. `productLevelOnly` is the honesty flag that matters to this
