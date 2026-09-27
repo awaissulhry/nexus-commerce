@@ -13,6 +13,7 @@ vi.mock('@nexus/database', async () => {
   return { default: state.db.client }
 })
 vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: unknown) => { state.events.push(event) } }))
+vi.mock('../product-event.service.js', () => ({ productEventService: { emit: async () => undefined } }))
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
@@ -187,5 +188,35 @@ describe('media plan edits', () => {
     expect(after.revision).toBe(before.revision + 2)
     expect((after.plan as any).sets.common).toEqual([{ assetId: img['chart-it'] }, { assetId: img.cover }])
     expect((after.plan as any).sets.values['color:black']).toEqual([{ assetId: img.n1 }, { assetId: img.cover }])
+  })
+})
+
+describe('one picture, one library card (Owner, 2026-09-28: "multiple duplicates of the same image")', () => {
+  it('the page shows each picture once, even when every SKU stores its own copy; the copies stay resolvable', async () => {
+    await scoped(async () => {
+      for (const kid of [ids.nm, ids.gm]) {
+        await prisma.productImage.create({ data: { productId: kid, url: 'https://cdn.example/cover.jpg', type: 'MAIN' } as never })
+        await prisma.productImage.create({ data: { productId: kid, url: `https://m.media-amazon.com/images/I/71zz${kid === ids.nm ? '' : '._AC_SL1500_'}.jpg`, type: 'LIFESTYLE' } as never })
+      }
+    })
+    const read = await scoped(() => readMediaWorkspace(ids.root))
+    const cover = read.library.filter(a => a.url.endsWith('/cover.jpg'))
+    expect(cover.map(a => [a.id, a.copies.length])).toEqual([[img.cover, 2]])
+    expect(read.library.filter(a => a.url.includes('71zz'))).toHaveLength(1)
+    expect(read.library.some(a => 'contentHash' in a)).toBe(false)
+  })
+  it('a copy of a photo already in a set is the same photo: refused, never placed twice', async () => {
+    const copy = await scoped(async () => (await prisma.productImage.findFirstOrThrow({ where: { productId: ids.nm, url: 'https://cdn.example/cover.jpg' } })).id)
+    const plan = await scoped(() => prisma.productMediaPlan.findFirstOrThrow({ where: { layer: 'SHARED' } }))
+    const setWithCover = (plan.plan as any).sets.common.some((i: any) => i.assetId === img.cover) ? 'common' : 'value:color:black'
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'SHARED' }, ops: [{ op: 'insert', set: setWithCover as never, assetIds: [copy] }] }, null)))
+      .rejects.toMatchObject({ statusCode: 409, message: 'This photo is already in that set.' })
+  })
+  it('an upload is checked against the whole family on the plan; older tools may not copy photos onto its SKUs', async () => {
+    const { uploadDedupScope } = await import('./media-plan-switch.js')
+    const { applyImagesToProducts, MediaPlanRefusal } = await import('./bulk-apply.service.js')
+    expect((await scoped(() => uploadDedupScope(ids.nm))).sort()).toEqual([ids.root, ids.nm, ids.nl, ids.gm, ids.rm].sort())
+    await expect(scoped(() => applyImagesToProducts({ sourceProductId: ids.root, targetProductIds: [ids.nm] }))).rejects.toBeInstanceOf(MediaPlanRefusal)
+    expect(await scoped(() => prisma.productImage.count({ where: { productId: ids.nm } }))).toBe(2)
   })
 })

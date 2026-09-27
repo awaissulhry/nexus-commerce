@@ -24,6 +24,10 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { productEventService } from '../product-event.service.js'
+import { MEDIA_PLAN_REFUSAL, mediaPlanProducts } from './media-plan-switch.js'
+
+/** A photo-plan family refused by this older path; routes answer 409 with its message. */
+export class MediaPlanRefusal extends Error {}
 
 export interface BulkApplyInput {
   sourceProductId: string
@@ -63,6 +67,11 @@ export async function applyImagesToProducts(input: BulkApplyInput): Promise<Bulk
   if (!source) {
     throw new Error(`SOURCE_NOT_FOUND: ${sourceProductId}`)
   }
+
+  // A family on the photo plan has one library on the Media page: copying the source's rows onto each target would put
+  // the same picture in it once per SKU (2026-09-28), and replace mode would delete rows its plan points at.
+  const onPlan = await mediaPlanProducts([sourceProductId, ...targetProductIds])
+  if (onPlan.size) throw new MediaPlanRefusal(MEDIA_PLAN_REFUSAL)
 
   const sourceImages = await prisma.productImage.findMany({
     where: { productId: sourceProductId, mediaType: 'IMAGE' },

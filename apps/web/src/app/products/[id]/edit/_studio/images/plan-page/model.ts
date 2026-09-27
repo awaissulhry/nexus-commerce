@@ -15,6 +15,9 @@ export interface LibraryAsset {
   id: string; productId: string; url: string; alt: string | null; mediaType: string
   width: number | null; height: number | null; mimeType: string | null; fileSize: number | null
   languageTag: string; versionGroupId: string | null; label: string
+  /** The same picture stored again (another SKU's copy, or the same bytes at another address): one card, these ids
+   *  resolve to it (2026-09-28: the library showed one picture once per SKU). */
+  copies?: string[]
 }
 export interface PlanLayer {
   key: string; layer: MediaLayer; channel: string; marketplace: string; accountId: string; aliasKey: string
@@ -130,8 +133,15 @@ export function swatchRows(read: MediaRead, view: LayerView) {
 // ── The library ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Where each library photo is used on Shared: "Common · 2", "Nero · main". A version of a placed photo counts as used. */
+/** Library card id of any stored copy of a picture (a plan may point at a copy). */
+export function cardOf(read: MediaRead): (id: string) => string {
+  const card = new Map(read.library.flatMap(a => [[a.id, a.id] as const, ...(a.copies ?? []).map(c => [c, a.id] as const)]))
+  return id => card.get(id) ?? id
+}
+
 export function libraryUsage(read: MediaRead): Map<string, string[]> {
   const usage = new Map<string, string[]>()
+  const card = cardOf(read)
   const groupOf = new Map(read.library.map(a => [a.id, a.versionGroupId]))
   const members = (id: string) => {
     const group = groupOf.get(id)
@@ -139,11 +149,11 @@ export function libraryUsage(read: MediaRead): Map<string, string[]> {
   }
   for (const row of setRows(read, { layer: 'SHARED' }, { skus: true })) {
     row.items.forEach((id, i) => {
-      for (const member of members(id)) usage.set(member, [...(usage.get(member) ?? []), i === 0 ? `${row.label} · main` : `${row.label} · ${i + 1}`])
+      for (const member of members(card(id))) usage.set(member, [...(usage.get(member) ?? []), i === 0 ? `${row.label} · main` : `${row.label} · ${i + 1}`])
     })
   }
   const stack = viewStack(read, { layer: 'SHARED' })
-  for (const s of swatchRows(read, { layer: 'SHARED' })) if (s.assetId && stack.shared) usage.set(s.assetId, [...(usage.get(s.assetId) ?? []), `${s.label} · swatch`])
+  for (const s of swatchRows(read, { layer: 'SHARED' })) if (s.assetId && stack.shared) usage.set(card(s.assetId), [...(usage.get(card(s.assetId)) ?? []), `${s.label} · swatch`])
   return usage
 }
 
@@ -187,8 +197,9 @@ export function versionsOf(read: MediaRead, id: string) {
 // ── Destinations ────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function assetMap(read: MediaRead): Map<string, MediaAsset> {
-  return new Map(read.library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType,
-    fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
+  // A copy's id resolves to its card's picture, so a plan that points at a copy shows and sends the same photo.
+  return new Map(read.library.flatMap(a => [a.id, ...(a.copies ?? [])].map(id => [id, { id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType,
+    fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }] as const)))
 }
 
 /** Every targetable destination's layout, computed by the shared projection (what a publish would send). */
@@ -227,8 +238,9 @@ export function layoutSummary(channel: MediaChannel, layout: ChannelMediaLayout)
 
 /** The same "one photo" rule the server applies: language versions of one photo count once. */
 export function sameGroupOf(read: MediaRead) {
+  const card = cardOf(read)
   const group = new Map(read.library.map(a => [a.id, a.versionGroupId]))
-  return (a: string, b: string) => a === b || (!!group.get(a) && group.get(a) === group.get(b))
+  return (a: string, b: string) => card(a) === card(b) || (!!group.get(card(a)) && group.get(card(a)) === group.get(card(b)))
 }
 
 /** Apply ops to one layer locally (the page moves at once; the server's answer then replaces it). Throws the same

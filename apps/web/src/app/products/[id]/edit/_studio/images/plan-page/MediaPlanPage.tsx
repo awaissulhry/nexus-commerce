@@ -16,7 +16,7 @@ import { PlanBoard } from './PlanBoard'
 import { DestinationsTable } from './DestinationsTable'
 import { ChannelView } from './ChannelView'
 import {
-  CHANNEL_LABEL, assetMap, libraryUsage, ownedSkuSets, setRows, showAsOptions, swatchRows, viewAxis, viewStack,
+  CHANNEL_LABEL, assetMap, cardOf, libraryUsage, ownedSkuSets, setRows, showAsOptions, swatchRows, viewAxis, viewStack,
   type LayerView, type MediaChannel, type MediaRead,
 } from './model'
 import type { MediaPlanState } from './useMediaPlan'
@@ -119,7 +119,8 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   const library = <LibraryPanel read={read} usage={usage} targets={targets} pendingTarget={pending?.target ?? null} onClearPending={() => setPending(null)}
     onAdd={addTo} onOpen={asset => openAsset(asset.id)} onManage={() => { setLibraryOpen(false); setManaging(true) }} onDragging={plan.hold} draggable={wide}
     onSkip={() => { setLibraryOpen(false); const board = box.current; (board?.querySelector<HTMLElement>('.nds-media-board-thumb[tabindex="0"]') ?? board?.querySelector<HTMLElement>('.nds-media-board-row button'))?.focus() }} />
-  const viewingAsset = viewing ? read.library.find(a => a.id === viewing) ?? null : null
+  // A plan may point at another SKU's copy of a picture: the preview opens its library card.
+  const viewingAsset = viewing ? read.library.find(a => a.id === cardOf(read)(viewing)) ?? null : null
 
   if (managing) return <div ref={box} className={styles.page}><LibraryManager productId={read.productId} onClose={() => { setManaging(false); void plan.reload(true) }} /></div>
 
@@ -190,6 +191,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}
       {viewingAsset && <p className={styles.muted}>{viewingAsset.width && viewingAsset.height ? `${viewingAsset.width} × ${viewingAsset.height} px · ` : ''}{usage.get(viewingAsset.id)?.join(' · ') || 'Not in any set'}</p>}
+      {viewingAsset?.copies?.length ? <p className={styles.muted}>The same picture is stored {viewingAsset.copies.length} more time{viewingAsset.copies.length === 1 ? '' : 's'} (copies on other SKUs). The library shows it once.</p> : null}
     </Modal>
   </div>
 }

@@ -12,6 +12,7 @@ import { publishListingEvent } from '../listing-events.service.js'
 import { readExcludedListingIds } from '../pim/variation-excluded.js'
 import { usesEbayInventory } from '../pim/ebay-listing-model.js'
 import { isOnMediaPlan } from './media-plan-switch.js'
+import { libraryEntries, samePhoto } from './media-library-identity.js'
 
 /**
  * Images rebuild P1 — the media plan read and write (docs/images-studio-rebuild/PLAN.md §6). One read gives the page
@@ -82,7 +83,7 @@ export async function loadFamily(rootId: string) {
 export async function loadLibrary(productIds: string[]) {
   const rows = await prisma.productImage.findMany({ where: { productId: { in: productIds } }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], select: {
     id: true, productId: true, url: true, alt: true, type: true, mediaType: true, width: true, height: true, mimeType: true, fileSize: true,
-    languageTag: true, versionGroupId: true, isPrimary: true, posterUrl: true, durationSec: true } })
+    languageTag: true, versionGroupId: true, isPrimary: true, posterUrl: true, durationSec: true, contentHash: true } })
   return rows.map(r => ({ ...r, label: r.alt?.trim() || decodeURIComponent(r.url.split('/').pop()?.split('?')[0] ?? '') || 'Photo' }))
 }
 
@@ -166,7 +167,10 @@ async function loadMediaContext(rootId: string) {
   const layers = rows.map(r => ({ key: mediaLayerKey({ layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey }),
     layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey, plan: readPlan(r.plan), revision: r.revision, updatedAt: r.updatedAt }))
   const assets = new Map<string, MediaAsset>(library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType, fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
-  return { root, family, axes, unmapped, library, layers, byKey: new Map(layers.map(l => [l.key, l])), assets, destinations, mainLanguage }
+  // Every row stays resolvable (a plan may point at any copy); the page's library shows each picture once.
+  const referenced = new Set(layers.flatMap(l => [...JSON.stringify(l.plan).matchAll(/"assetId":"([^"]+)"/g)].map(m => m[1])))
+  const pictures = libraryEntries(library, root.id, referenced).map(({ contentHash: _hash, ...entry }) => entry)
+  return { root, family, axes, unmapped, library, pictures, layers, byKey: new Map(layers.map(l => [l.key, l])), assets, destinations, mainLanguage }
 }
 type MediaContext = Awaited<ReturnType<typeof loadMediaContext>>
 
@@ -185,7 +189,7 @@ export async function readMediaWorkspace(productId: string) {
   const ctx = await loadMediaContext(rootId)
   const layouts = Object.fromEntries(ctx.destinations.filter(d => d.targetable).map(d => [d.key, projectDestination(ctx, d)]))
   return { productId, rootId, sku: ctx.root.sku, name: ctx.root.name, mainLanguage: ctx.mainLanguage, family: { ...ctx.family, axes: ctx.axes, unmapped: ctx.unmapped },
-    library: ctx.library, layers: ctx.layers, destinations: ctx.destinations, layouts,
+    library: ctx.pictures, layers: ctx.layers, destinations: ctx.destinations, layouts,
     // Value and axis names here are the Shared ones; a publisher passes each market's own names (value maps, pins).
     meta: { tookMs: Date.now() - started, names: 'shared' as const } }
 }
@@ -299,12 +303,13 @@ export async function applyMediaPlanOps(productId: string, input: { address: Med
   const rootId = await familyRoot(productId)
   const address = await checkedAddress(rootId, input.address)
   const ids = [rootId, ...(await prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true } })).map(c => c.id)]
-  const library = await prisma.productImage.findMany({ where: { productId: { in: ids } }, select: { id: true, versionGroupId: true } })
-  const group = new Map(library.map(a => [a.id, a.versionGroupId]))
+  const library = await prisma.productImage.findMany({ where: { productId: { in: ids } }, select: { id: true, productId: true, url: true, contentHash: true, versionGroupId: true } })
+  const known = new Set(library.map(a => a.id))
   const introduced = input.ops.flatMap(op => op.op === 'insert' || op.op === 'replace' ? op.assetIds : op.op === 'swatch' && op.assetId ? [op.assetId] : [])
-  const foreign = introduced.filter(id => !group.has(id))
+  const foreign = introduced.filter(id => !known.has(id))
   if (foreign.length) throw new WorkspaceScopeError('A photo is not in this product\'s library any more. Reload the page.', 409)
-  const sameGroup = (a: string, b: string) => a === b || (!!group.get(a) && group.get(a) === group.get(b))
+  // One picture stored on several SKUs, or language versions of one photo, is one photo: never twice in a set.
+  const sameGroup = samePhoto(library)
   const key = mediaLayerKey({ layer: address.layer, channel: address.channel, marketplace: address.marketplace, accountId: address.accountId, aliasKey: address.aliasKey })
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await prisma.$transaction(async tx => {

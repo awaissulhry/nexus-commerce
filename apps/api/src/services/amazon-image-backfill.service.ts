@@ -25,6 +25,7 @@ import { normalizeAmazonImageUrl } from './images/normalize-amazon-image-url.js'
 import { logger } from '../utils/logger.js'
 import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from './marketplaces/amazon.service.js'
 import { productEventService } from './product-event.service.js'
+import { mediaPlanProducts } from './images/media-plan-switch.js'
 const amazonService = new AmazonService()
 
 export interface ImageBackfillResult {
@@ -38,6 +39,8 @@ export interface ImageBackfillResult {
   productsAccessDenied: number
   productsNoImages: number
   productsFailed: number
+  /** Products whose family is on the photo plan: their photos live on the Media page, so none are copied onto them. */
+  productsOnPhotoPlan: number
   errors: string[]
 }
 
@@ -134,9 +137,14 @@ export async function backfillProductImagesFromCatalog(opts: {
   // exist (the per-url upsert below catches it too, but skipping
   // saves the SP-API roundtrip).
   const fetchedProductIds = new Set<string>()
+  // A family on the photo plan has one library on the Media page; per-SKU copies of Amazon's pictures are what filled
+  // it with the same photo many times (2026-09-28). Its products get none.
+  const onPlan = await mediaPlanProducts(productsRaw.map(p => p.id))
+  let productsOnPhotoPlan = 0
 
   for (const product of productsRaw) {
     productsScanned++
+    if (onPlan.has(product.id)) { if (!fetchedProductIds.has(product.id)) productsOnPhotoPlan++; fetchedProductIds.add(product.id); continue }
     if (fetchedProductIds.has(product.id)) {
       // already covered by an earlier marketplace's fetch this run
       continue
@@ -260,7 +268,7 @@ export async function backfillProductImagesFromCatalog(opts: {
   const durationMs = Date.now() - t0
   logger.info('[amazon-image-backfill] complete', {
     productsScanned, productsWithImagesFetched, imagesCreated, imagesUpdated,
-    productsAccessDenied, productsNoImages, productsFailed,
+    productsAccessDenied, productsNoImages, productsFailed, productsOnPhotoPlan,
     errorCount: errors.length, durationMs,
   })
 
@@ -275,6 +283,7 @@ export async function backfillProductImagesFromCatalog(opts: {
     productsAccessDenied,
     productsNoImages,
     productsFailed,
+    productsOnPhotoPlan,
     errors,
   }
 }

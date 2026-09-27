@@ -30,6 +30,7 @@ import { logger } from '../utils/logger.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { recordLiveListings } from './pim/live-listing.service.js'
+import { isOnMediaPlan } from './images/media-plan-switch.js'
 import { mergeCategoryAttributes } from './pim/category-attributes-write.js'
 
 export type ReconChannel = 'AMAZON' | 'EBAY'
@@ -239,7 +240,9 @@ export async function enrichProductFromAmazon(
   // ── ProductImage upsert ────────────────────────────────────────────────
   // Replace existing Amazon-sourced images (identified by amazon.com in URL)
   // but preserve Cloudinary / manually-uploaded images (publicId set).
-  if (details.images.length > 0) {
+  // A family on the photo plan is left alone: its photos live on the Media page, and a replaced row the plan points at
+  // would break it (2026-09-28).
+  if (details.images.length > 0 && !(await isOnMediaPlan(match.productId))) {
     await prisma.productImage.deleteMany({
       where: {
         productId: match.productId,
