@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# Warns when a branch switch (post-checkout) or a pull (post-merge) changed package-lock.json while
+# node_modules is installed: the installed packages then no longer match the lockfile, and typecheck
+# fails with confusing errors (2026-09-27: React 18 types stayed installed after the React 19 upgrade).
+# Warning only — it never installs and never blocks: `npm ci` wipes node_modules, which other sessions
+# share in this checkout.
+old="$1" new="$2" branch_switch="$3"
+[ "$branch_switch" = 1 ] || exit 0
+cd "$(git rev-parse --show-toplevel)" || exit 0
+[ -d node_modules ] || exit 0 # fresh worktree: npm ci is its first step anyway
+
+git diff --quiet "$old" "$new" -- package-lock.json 2>/dev/null
+[ $? -eq 1 ] || exit 0 # 0 = unchanged; 128 = no old commit (new worktree)
+echo "package-lock.json changed — the installed packages are out of date. Run: npm ci" >&2
+exit 0
