@@ -53,6 +53,11 @@ export interface UseMasterSheetOptions {
 export interface MasterSheetState {
   sheet: StudioSheet | null
   loading: boolean
+  /**
+   * Only the LANGUAGES changed and the new read is on its way (2026-09-27). The last sheet stays on screen — the
+   * surface dims it and holds every edit — instead of blanking to a skeleton for the length of a multi-language read.
+   */
+  switching: boolean
   error: string | null
   /** Contract problems found in a response we still rendered — shown, never swallowed. */
   contractProblems: string[]
@@ -71,6 +76,8 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const localesQuery = opts.locales ? `&locales=${encodeURIComponent(opts.locales.join(','))}` : ''
   const [sheet, setSheet] = useState<StudioSheet | null>(null)
   const [loading, setLoading] = useState(true)
+  const [switching, setSwitching] = useState(false)
+  const lastRead = useRef<{ coordinate: string; locales: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [contractProblems, setProblems] = useState<string[]>([])
   const [conflicts, setConflicts] = useState<string[]>([])
@@ -175,7 +182,15 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     const abort = new AbortController()
     const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(30_000)])
     const quiet = quietRead.current
-    if (!quiet) setLoading(true)
+    /* A language switch on the same product, market and first language keeps the sheet it has until the new one
+       arrives. Any other change (product, market, first language) is a new sheet and shows the skeleton. */
+    const coordinate = JSON.stringify([productId, market, locale])
+    const languageSwitch = !quiet && !!sheetRef.current && lastRead.current?.coordinate === coordinate && lastRead.current.locales !== localesQuery
+    lastRead.current = { coordinate, locales: localesQuery }
+    if (languageSwitch) {
+      apiRef.current?.stopEditing(true)
+      setSwitching(true)
+    } else if (!quiet) setLoading(true)
     quietRead.current = false
     setError(null)
     setProblems([])
@@ -234,7 +249,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
         setError(studioReadMessage(err))
       })
       .finally(() => {
-        if (!cancelled && mine === requestRef.current) setLoading(false)
+        if (!cancelled && mine === requestRef.current) { setLoading(false); setSwitching(false) }
       })
 
     return () => { cancelled = true; abort.abort() }
@@ -244,5 +259,5 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const refresh = useCallback(() => { quietRead.current = true; setNonce(n => n + 1) }, [])
   const bindGrid = useCallback((api: GridApi<StudioRow> | null) => { apiRef.current = api }, [])
 
-  return { sheet, loading, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid }
+  return { sheet, loading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid }
 }

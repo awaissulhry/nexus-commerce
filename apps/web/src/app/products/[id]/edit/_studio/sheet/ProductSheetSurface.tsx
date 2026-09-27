@@ -11,6 +11,7 @@ import { SheetFooterNote } from './SheetFooterNote'
 import { SheetLoadError } from './SheetLoadError'
 import { SHEET_STATE_OVERLAYS } from './sheetGridStates'
 import type { ProductSheetModel } from './productSheetModel'
+import './product-sheet.css'
 
 /** The only Information sheet renderer, for Shared product and every channel. */
 export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model: ProductSheetModel<Row, Page, DrawerRow>) {
@@ -20,7 +21,10 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
   const channel = model.scope === 'channel'
   /* 2026-09-26 — an EDITING grid: an empty cell is a value nobody entered, so it draws nothing
      (`emptyCells="blank"`; a cell that does not apply carries the engine's hatch instead). */
-  const grid = <NexusGrid<Row>
+  /* 2026-09-27 — while only the languages change, the last sheet stays on screen: dimmed, and `inert`, so no edit can
+     land in a language that is about to be replaced. The wrapper is always there (it is `display: contents`), so the
+     grid is never remounted when it turns on or off. */
+  const grid = <div className={`nds-sheet-hold${model.switching ? ' is-held' : ''}`} inert={model.switching || undefined} aria-busy={model.switching || undefined}><NexusGrid<Row>
     {...SHEET_GRID_OPTIONS}
     {...SHEET_STATE_OVERLAYS}
     {...model.grid}
@@ -38,7 +42,7 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
     /* The sheet's locks freeze a column at the LEFT; a right pin could not be kept, so it is not offered. */
     pinSides="left"
     groupHeaderHeight={gridGeometry.stripH}
-  />
+  /></div>
   const drawer = model.drawer && <StudioDock {...model.drawer} />
   const preferences = <>
     {model.beforePreferences}

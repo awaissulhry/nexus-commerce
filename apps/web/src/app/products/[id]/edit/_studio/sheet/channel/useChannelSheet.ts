@@ -48,6 +48,11 @@ export interface UseChannelSheetOptions {
 export interface ChannelSheetState {
   data: ChannelScopePage | null
   loading: boolean
+  /**
+   * Only the LANGUAGES changed and the new read is on its way (2026-09-27): `data` is still the last page of this
+   * coordinate, which the surface dims and holds, instead of blanking to a skeleton.
+   */
+  switching: boolean
   error: string | null
   /**
    * True when the failure is specifically "PES.5's route is not deployed yet" (404 / 501). The sheet
@@ -98,7 +103,8 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
   const activeUrl = useRef(url)
   activeUrl.current = url
   const [response, setResponse] = useState<{ url: string; data: ChannelScopePage | null } | null>(null)
-  const data = response?.url === url ? response.data : null
+  const switching = !!response?.data && response.url !== url && sameCoordinate(response.url, url)
+  const data = response?.url === url || switching ? response?.data ?? null : null
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [backendMissing, setBackendMissing] = useState(false)
@@ -175,7 +181,18 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
   }, [url])
 
   const current = response?.url === url
-  return { data, loading: current ? loading : true, error: current ? error : null, backendMissing: current && backendMissing, reload, refresh, applyLocal }
+  return { data, loading: current ? loading : !switching, switching, error: current ? error : null, backendMissing: current && backendMissing, reload, refresh, applyLocal }
+}
+
+/** Two reads of the same coordinate that differ only in the languages asked for. */
+export function sameCoordinate(a: string, b: string): boolean {
+  const withoutLanguages = (href: string) => {
+    const parsed = new URL(href, 'http://sheet.invalid')
+    parsed.searchParams.delete('locales')
+    parsed.searchParams.sort()
+    return parsed.toString()
+  }
+  return withoutLanguages(a) === withoutLanguages(b)
 }
 
 /**

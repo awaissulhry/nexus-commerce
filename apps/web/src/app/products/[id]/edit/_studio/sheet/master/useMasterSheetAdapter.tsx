@@ -120,7 +120,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             refreshReadinessSoon();
         }
     }, [refreshReadinessSoon]);
-    const { sheet: loadedSheet, loading, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
+    const { sheet: loadedSheet, loading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
         productId, market, locale, locales: languageScope.locales, onWriteStart, onWriteEnd, onSettled,
         /* R-VT-15 — the server's refusal sentence, said the moment it arrives, through the ONE DS
            toast provider this route mounts (`_studio/StudioClient.tsx`; the root layout's is the old
@@ -544,7 +544,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }, onReload);
     return {
         scope: 'master',
-        loading, unavailable: !!error,
+        loading, switching, unavailable: !!error,
         errorLabel: 'shared product information',
         errorMessage: error,
         backendMissing: false, retry: reload,
@@ -573,6 +573,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             unavailable: !!error,
             overflow: [{ id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'refresh-progress', label: progressMenu()[0].name, description: 'Read the progress bars again — the shared product and every channel · market', onSelect: refreshProgress }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             status: [
+                ...(switching ? [{ tone: 'info' as const, label: 'Loading languages…', detail: 'The sheet keeps the languages it shows until the new ones arrive; editing resumes then.' }] : []),
                 ...(staleTypes.length > 0 || (sheet?.meta.schemaMissing.length ?? 0) > 0 ? [{
                     tone: 'warning' as const,
                     label: (sheet?.meta.schemaMissing.length ?? 0) > 0 ? 'Setup incomplete' : 'Cached requirements',
