@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'graphql'
 import { writeMediaCollection } from '@nexus/shared/product-media'
 import type { ShopifyStoreSchema, ShopifySheetGallery } from '@nexus/shared/shopify-linked-products'
+// Images rebuild P2f — not on the media plan: the older Shopify gallery paths run here.
+vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false, mediaPlanRevision: async () => null, mediaPlanProducts: async () => new Set() }))
 vi.mock('../../db.js', () => ({ default: {} }))
 import { readSheetGallerySources, reviewSheetGalleries, advanceSheetGallery, verifySheetGallery, SHEET_MEDIA_SYNC, type SheetGalleryProgress } from './channel-sheet-media.js'
 

@@ -9,6 +9,7 @@ import { assertShopifyResult, type ShopifyGraphql } from './admin-client.js'
 import { readInformationMedia, advanceMediaOrder } from './information-gateway.js'
 import { mediaRemovalVariants } from './information-media-membership.js'
 import { publishContentImages, publishTranslations } from './content-publisher.js'
+import { isOnMediaPlan } from '../images/media-plan-switch.js'
 
 export const SHEET_MEDIA_SYNC = '_nexusSheetMediaSync'
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -23,6 +24,9 @@ export async function readSheetGallerySources(tx: Prisma.TransactionClient, dest
   ])
   const locale = schema.locales.find(l => l.primary)?.locale
   if (!locale) throw new WorkspaceScopeError('The Shopify primary language could not be read. Refresh store capabilities.', 422)
+  // Images rebuild P2f — a media-plan family's linked-product photos are not synced from the older sheet galleries (that
+  // would overwrite the plan); syncing a linked product's photos from the plan is a later step.
+  const onPlan = await isOnMediaPlan(destination.familyId)
   const root = products.find(p => p.id === destination.familyId), rootListing = listings.find(l => l.productId === destination.familyId)
   const published = object(object(rootListing?.platformAttributes)._nexusContentPublish)
   const galleries: ShopifySheetGallery[] = [], signatures: unknown[] = [], warnings: string[] = []
@@ -30,6 +34,7 @@ export async function readSheetGallerySources(tx: Prisma.TransactionClient, dest
   for (const listing of listings.sort((a, b) => Number(b.productId === destination.familyId) - Number(a.productId === destination.familyId) || a.id.localeCompare(b.id))) {
     const pa = object(listing.platformAttributes), localized = object(pa._productMediaLocales), previous = object(pa[SHEET_MEDIA_SYNC])
     if (!Object.keys(localized).some(l => readMediaCollection(localized, l)) && !previous.signature) continue
+    if (onPlan) throw new WorkspaceScopeError('This product\'s photos are managed on the Media page. Syncing a linked Shopify product\'s photos from the plan comes in a later step; its older sheet gallery is not sent.', 409)
     const product = products.find(p => p.id === listing.productId)!
     const ownFiles = files.filter(f => f.productId === product.id), parentFiles = product.parentId ? files.filter(f => f.productId === product.parentId) : []
     const base = resolveMediaCollection({ locale, own: localized, shared: product.localizedContent, parent: product.parentId ? root?.localizedContent : undefined, ownIds: ownFiles.map(f => f.id), parentIds: parentFiles.map(f => f.id) }).collection

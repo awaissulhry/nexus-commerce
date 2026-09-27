@@ -17,6 +17,7 @@ import { publishContent, readRemoteProduct, shortId, type ShopifyRemoteProduct }
 import { nativeListingValue } from './native-listing-value.js'
 import { assertPublishAllowed, isStillDraftListing, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
 import { graphqlRootField } from '../gateway/graphql-root-field.js'
+import { isOnMediaPlan } from '../images/media-plan-switch.js'
 
 function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
   const intent = listing as PushLockListing & { presenceIntentAt?: Date | string | null; presenceIntentBy?: string | null }
@@ -142,7 +143,8 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
       vendor: String(nativeListingValue(listing, 'vendor', current.family.brand) ?? ''),
       productType: String(nativeListingValue(listing, 'productType', object(current.family.categoryAttributes).shopify_product_type) ?? ''),
       tags: nativeListingValue(listing, 'tags') as string[] | undefined, content: current.draft, variants: current.variants,
-      reconcileGallery: current.listings.some(l => Object.keys(object(object(l.platformAttributes)._productMediaLocales)).length > 0),
+      // Images rebuild P2f — a media-plan family's gallery is exactly the plan: managed media the plan dropped are removed.
+      reconcileGallery: await isOnMediaPlan(current.family.id) || current.listings.some(l => Object.keys(object(object(l.platformAttributes)._productMediaLocales)).length > 0),
       managedMediaIds: current.publish.status !== 'VERIFIED' && Array.isArray(current.publish.managedMediaIds) ? current.publish.managedMediaIds : Object.values(object(current.publish.mediaIds)).filter((id): id is string => typeof id === 'string'),
       galleryOperation: current.publish.galleryOperation,
       locationId: input.locationId, remote: preview.remote, confirmActive: input.confirmActive === true,
