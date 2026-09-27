@@ -60,6 +60,7 @@ import {
 } from '../services/listing-wizard/channels.js'
 import { publishListingEvent } from '../services/listing-events.service.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
+import { categoryForListing, resolveCategoryForProduct } from '../services/pim/mapping/category-mapping.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -3201,11 +3202,16 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // called with a non-numeric ID (which causes errorId 62005).
       const isValidEbayCategoryId = (v: string) => /^\d+$/.test(v.trim())
 
+      // Amazon: the ONE product-type rule (#82) — this market's listing, else the product's own listings in the
+      // region's other markets, else the category mapping, else Product.productType. So a new listing here gets
+      // COAT when the product is COAT everywhere else, not its own OUTERWEAR.
       const productType = isEbay
         ? (listingProductType && isValidEbayCategoryId(listingProductType)
             ? listingProductType
             : '')
-        : (listingProductType || product.productType || '')
+        : channel.toUpperCase() === 'AMAZON'
+          ? (categoryForListing(await resolveCategoryForProduct({ productId: id, channel: 'AMAZON', marketplace }), 'AMAZON', platformAttrs).channelCategoryId ?? '')
+          : (listingProductType || product.productType || '')
 
       if (!productType) {
         const [msg, code] = isEbay

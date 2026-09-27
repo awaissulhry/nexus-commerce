@@ -20,6 +20,7 @@ import { primaryConnectionIds } from '../services/connection-resolver.service.js
 import { applyChannelFollows, isFollowableField, FOLLOWABLE_FIELDS } from '../services/pim/channel-follows.service.js'
 import { setFulfillmentMethod } from '../services/pim/fulfillment-method.service.js'
 import { writeChannelPrices, type PriceWriteTarget } from '../services/pim/channel-price-write.service.js'
+import { categoryForListing, resolveCategoriesForProducts, type ResolvedCategory } from '../services/pim/mapping/category-mapping.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
 // ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
@@ -591,7 +592,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         const [products, listings] = await Promise.all([
           prisma.product.findMany({
             where: { id: { in: ids } },
-            select: { id: true, name: true, basePrice: true, productType: true },
+            select: { id: true, name: true, basePrice: true },
           }),
           prisma.channelListing.findMany({
             where: { productId: { in: ids } },
@@ -604,6 +605,17 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         ])
         const productById = new Map(products.map((p) => [p.id, p]))
 
+        // Amazon: "has a product type" is the publish's own rule (#82), so the grid and the review still agree — this
+        // market's listing, else the product's listings in the region's other markets, else the mapping, else
+        // Product.productType. Read once per market, and only for listings that name no type of their own.
+        const isAmazon = (l: (typeof listings)[number]) => l.channel.toUpperCase() === 'AMAZON'
+        const needsDefault = listings.filter((l) => isAmazon(l) && !categoryForListing(undefined, 'AMAZON', l.platformAttributes).channelCategoryId)
+        const amazonDefaults = new Map<string, Record<string, ResolvedCategory>>(await Promise.all(
+          [...new Set(needsDefault.map((l) => l.marketplace))].map(async (marketplace) => [marketplace, await resolveCategoriesForProducts({
+            productIds: needsDefault.filter((l) => l.marketplace === marketplace).map((l) => l.productId), channel: 'AMAZON', marketplace,
+          })] as const),
+        ))
+
         type Counts = { ready: number; total: number }
         const acc = new Map<
           string,
@@ -615,12 +627,13 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
           const a = acc.get(l.productId)
           if (!a) continue
           const p = productById.get(l.productId)
-          const pa = (l.platformAttributes as Record<string, any> | null) ?? {}
           const ch = l.channel.toUpperCase()
 
           const title = l.title ?? l.masterTitle ?? p?.name ?? null
           const price = num(l.priceOverride) ?? num(l.price) ?? num(l.masterPrice) ?? num(p?.basePrice)
-          const productType = pa.productType ?? p?.productType ?? null
+          const productType = ch === 'AMAZON'
+            ? categoryForListing(amazonDefaults.get(l.marketplace)?.[l.productId], 'AMAZON', l.platformAttributes).channelCategoryId
+            : null
 
           const missingRequired =
             !title || String(title).trim() === '' ||

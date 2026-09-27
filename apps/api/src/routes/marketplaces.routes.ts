@@ -20,6 +20,7 @@ import { syncActivatedListings } from '../services/listing-activation-sync.servi
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { writeCoordinateOffer } from '../services/market-offer-availability.service.js'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
+import { categoryForListing, resolveCategoryForProduct } from '../services/pim/mapping/category-mapping.service.js'
 
 const amazonService = new AmazonService()
 
@@ -65,6 +66,15 @@ export async function buildMarketplaceAmazonAttributes(input: {
   return spAttrs
 }
 
+/**
+ * The product type the publish sends and its preflight predicts. Amazon: the ONE rule (#82) — this market's listing,
+ * else the product's own listings in the region's other markets, else the category mapping, else Product.productType —
+ * so a first listing here is not sent as OUTERWEAR when the product is COAT in every other market. Other channels: as before.
+ */
+async function publishProductType(productId: string, channel: string, marketplace: string, pa: Record<string, any>, ownType: unknown): Promise<string> {
+  if (channel.toUpperCase() !== 'AMAZON') return pa.productType ?? ownType ?? ''
+  return categoryForListing(await resolveCategoryForProduct({ productId, channel: 'AMAZON', marketplace }), 'AMAZON', pa).channelCategoryId ?? ''
+}
 
 const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/sidebar/counts — aggregate counters for the sidebar.
@@ -951,7 +961,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         const resolvedTitle = listing?.title ?? product.name
         const resolvedPrice = listing?.price ?? (product as any).basePrice ?? null
         const pa = (listing?.platformAttributes as Record<string, any> | null) ?? {}
-        const resolvedProductType = pa.productType ?? (product as any).productType ?? ''
+        const resolvedProductType = await publishProductType(id, channel, marketplace, pa, (product as any).productType)
 
         const content = await resolvePublishContent({ product: product as any, parent: product.parent as any, listing, marketplace, channel })
         const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = publishContentIssues(content)
@@ -1150,7 +1160,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           const pa = (listing?.platformAttributes as Record<string, any> | null) ?? {}
           const resolvedTitle = listing?.title ?? product.name
           const resolvedPrice = listing?.price ?? (product as any).basePrice ?? null
-          const resolvedProductType = pa.productType ?? (product as any).productType ?? ''
+          const resolvedProductType = await publishProductType(id, channel, marketplace, pa, (product as any).productType)
 
           const content = await resolvePublishContent({ product: product as any, parent: product.parent as any, listing, marketplace, channel })
           const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = publishContentIssues(content)
