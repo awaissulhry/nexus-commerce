@@ -1018,6 +1018,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     variationAxes,
     ebayCategoryIds,
     etsyCategoryIds: wantChannel === 'ETSY' ? context!.categories : [],
+    ...(wantChannel === 'SHOPIFY' ? { shopifyCategoryIds: context!.categories } : {}),
     scopeKind: wantChannel ? 'channel' : 'master',
     // ⚠ BOTH options, and the pair is load-bearing. `onlyChannels` narrows to
     // this channel's caps; `includeEmptyChannels` keeps a coordinate the product
