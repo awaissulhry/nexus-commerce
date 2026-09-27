@@ -89,6 +89,12 @@ export interface PreferencesColumnSpec {
    * and the toolbar agree on "236 attributes").
    */
   uncounted?: boolean
+  /**
+   * Always on screen, yet the operator's to MOVE and pin (2026-09-27: the sheet's variation theme). The tick is held
+   * on ("Always shown"), the In-view row has no ✕, and every hide — a group's Clear, Clear all, bulk Hide — passes
+   * it by. Unlike `locked`, it keeps its place in its group and in the order.
+   */
+  alwaysShown?: boolean
 }
 
 export interface PreferencesValue {
@@ -326,7 +332,9 @@ export function usePreferencesPanes({
       const structural = allColumns.filter((c) => c.locked)
       return [
         ...(structural.length ? [{ key: '__grid_fixed', heading: 'Fixed columns', columns: structural }] : []),
-        ...attributeSections.map((g) => ({ key: g.key, heading: g.label, columns: g.columns })),
+        // A group whose every column was moved into another lists nothing to tick: it is left out here (2026-09-27).
+        // The In-view pane keeps it as a drop target, marked Empty.
+        ...attributeSections.filter((g) => g.columns.length > 0).map((g) => ({ key: g.key, heading: g.label, columns: g.columns })),
       ]
     }
     const byHeading = new Map<string, PreferencesColumnSpec[]>()
@@ -421,7 +429,10 @@ export function usePreferencesPanes({
     setDragKey(null)
   }
 
-  const toggleColumn = (key: string) => setDraft((d) => toggleColumnIn(d, key, defaultLocked))
+  // An `alwaysShown` column is never hidden, by any route (see `PreferencesColumnSpec.alwaysShown`).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const alwaysShown = useMemo(() => new Set(allColumns.filter((c) => c.alwaysShown).map((c) => c.key)), [allColumns])
+  const toggleColumn = (key: string) => { if (!alwaysShown.has(key) || !draft.visibleColumns.includes(key)) setDraft((d) => toggleColumnIn(d, key, defaultLocked)) }
 
   // ── SET-level edits: quick picks and group toggles (design V.4) ──
   // Only columns this grid HAS and the operator may toggle; a pick naming a column that is locked
@@ -431,7 +442,7 @@ export function usePreferencesPanes({
   const togglableKeys = useMemo(() => togglableKeysOf(allColumns).filter((k) => !operatorLocks.includes(k)), [allColumns, operatorLocks.join(' ')])
   const togglableSet = useMemo(() => new Set(togglableKeys), [togglableKeys])
   const addColumns = (keys: readonly string[]) => setDraft((d) => addColumnsTo(d, keys, togglableSet))
-  const removeColumns = (keys: readonly string[]) => setDraft((d) => removeColumnsFrom(d, keys, defaultLocked))
+  const removeColumns = (keys: readonly string[]) => setDraft((d) => removeColumnsFrom(d, keys.filter((key) => !alwaysShown.has(key)), defaultLocked))
   const setHas = (keys: readonly string[]) => setIsIn(draft, keys, togglableSet)
 
   const selectableKeys = new Set(allColumns.filter((c) => !c.locked).map((c) => c.key))
@@ -646,7 +657,7 @@ export function usePreferencesPanes({
               {bulkPick && (() => {
                 /* The columns the operator can tick that the filter shows — every one, or the matches. A locked
                    column is in the view whatever this does, so it is never counted. */
-                const keys = filteredSections.flatMap((section) => section.columns.filter((c) => !isLocked(c) && togglableSet.has(c.key)).map((c) => c.key))
+                const keys = filteredSections.flatMap((section) => section.columns.filter((c) => !isLocked(c) && !c.alwaysShown && togglableSet.has(c.key)).map((c) => c.key))
                 if (!keys.length) return null
                 const shown = keys.filter((k) => draft.visibleColumns.includes(k)).length
                 return (
@@ -686,7 +697,7 @@ export function usePreferencesPanes({
                   // The group's togglable keys; "All" when any is missing from the view, "Clear" when
                   // none is. A sibling of the heading button, never inside it — a button in a button
                   // is not HTML, and the heading keeps its own collapse job.
-                  const groupKeys = section.columns.filter((c) => !isLocked(c)).map((c) => c.key)
+                  const groupKeys = section.columns.filter((c) => !isLocked(c) && !c.alwaysShown).map((c) => c.key)
                   const groupAllIn = groupKeys.length > 0 && groupKeys.every((k) => draft.visibleColumns.includes(k))
                   return (
                   <div key={section.key} className="nds-prefs-group" {...groupProps(section.heading)}>
@@ -708,22 +719,25 @@ export function usePreferencesPanes({
                     )}
                     {!isCollapsed && section.columns.map((c) => {
                       const locked = isLocked(c)
+                      const held = locked || !!c.alwaysShown
                       return (
-                        <div key={c.key} className={`nds-prefs-pick${locked ? ' locked' : ''}`}>
+                        <div key={c.key} className={`nds-prefs-pick${held ? ' locked' : ''}`}>
                           {/* Disabled-and-ticked rather than absent: a locked column missing from
                               the list looks like a column the grid does not have, and a disabled
                               tick cannot be unticked, so the column cannot be lost. */}
                           <Checkbox
-                            checked={locked || draft.visibleColumns.includes(c.key)}
-                            disabled={locked}
-                            onChange={() => !locked && toggleColumn(c.key)}
+                            checked={held || draft.visibleColumns.includes(c.key)}
+                            disabled={held}
+                            onChange={() => !held && toggleColumn(c.key)}
                             label={
                               <span className="nds-prefs-picklbl">
                                 <span className="nds-prefs-lbl">{nameOf(c)}</span>
-                                {locked && (
+                                {locked ? (
                                   <span className="nds-prefs-locked" title={c.locked ? 'Locked by the grid' : `Locked — frozen at the ${c.lockSide === 'right' ? 'right' : 'left'} while you scroll`}>
                                     <Lock size={11} aria-hidden /> Locked
                                   </span>
+                                ) : c.alwaysShown && (
+                                  <span className="nds-prefs-locked" title="Always on screen — move or pin it in In view">Always shown</span>
                                 )}
                               </span>
                             }
@@ -778,7 +792,7 @@ export function usePreferencesPanes({
             {locked ? <Lock size={13} aria-hidden /> : <Unlock size={13} aria-hidden />}
           </button>
         ) : locked && <span className="nds-prefs-locked">Locked</span>}
-        <span className="nds-prefs-xslot">{!locked && <button type="button" className="nds-prefs-x" onClick={() => toggleColumn(c.key)} aria-label={`Remove ${nameOf(c)} from the view`}><X size={13} aria-hidden /></button>}</span>
+        <span className="nds-prefs-xslot">{!locked && !c.alwaysShown && <button type="button" className="nds-prefs-x" onClick={() => toggleColumn(c.key)} aria-label={`Remove ${nameOf(c)} from the view`}><X size={13} aria-hidden /></button>}</span>
       </div>
     )
   }
@@ -806,7 +820,7 @@ export function usePreferencesPanes({
         {attributeSections.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
       </select>
       <Button size="xs" variant="secondary" onClick={() => addColumns(selectedKeys)} disabled={selectedKeys.every((key) => draft.visibleColumns.includes(key) || operatorLocks.includes(key))}>Show</Button>
-      <Button size="xs" variant="secondary" onClick={() => removeColumns(selectedKeys)} disabled={!selectedKeys.some((key) => draft.visibleColumns.includes(key) && !operatorLocks.includes(key))}>Hide</Button>
+      <Button size="xs" variant="secondary" onClick={() => removeColumns(selectedKeys)} disabled={!selectedKeys.some((key) => draft.visibleColumns.includes(key) && !operatorLocks.includes(key) && !alwaysShown.has(key))}>Hide</Button>
       {locksPersist && <>
         <Button size="xs" variant="secondary" onClick={() => setSelectedLocks(true)} disabled={selectedKeys.every((key) => operatorLocks.includes(key))}>Pin</Button>
         <Button size="xs" variant="secondary" onClick={() => setSelectedLocks(false)} disabled={!selectedKeys.some((key) => operatorLocks.includes(key))}>Unpin</Button>
@@ -843,7 +857,10 @@ export function usePreferencesPanes({
           </div>
           {!isCollapsed && <>
             {visible.map((c) => renderViewRow(c, visible))}
-            {visible.length === 0 && <p className="nds-prefs-groupempty">{pinned ? `${pinned} pinned above` : 'No scrolling columns in view'}<Button size="xs" variant="ghost" onClick={() => addColumns(matching.map((c) => c.key))} disabled={matching.every((c) => isLocked(c) || draft.visibleColumns.includes(c.key))}>Show {needle ? 'matches' : 'group'}</Button></p>}
+            {visible.length === 0 && (group.columns.length === 0
+              // Every column of this group was moved into another one: say so, and leave it as a drop target.
+              ? <p className="nds-prefs-groupempty">Empty · drag a column here to put it back</p>
+              : <p className="nds-prefs-groupempty">{pinned ? `${pinned} pinned above` : 'No scrolling columns in view'}<Button size="xs" variant="ghost" onClick={() => addColumns(matching.map((c) => c.key))} disabled={matching.every((c) => isLocked(c) || draft.visibleColumns.includes(c.key))}>Show {needle ? 'matches' : 'group'}</Button></p>)}
           </>}
         </div>
       })}

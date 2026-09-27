@@ -129,6 +129,12 @@ export interface NexusGridProps<T> extends AgGridReactProps<T> {
    */
   columnDialog?: { customise?: () => void; reset?: () => void }
   /**
+   * `left` (2026-09-27): the header menu's Pin offers only "No pin" and "Pin left". For a grid whose column model knows
+   * left pins only (the product sheet's locks), where a right pin would be undone by the next repaint and never kept.
+   * Needs `columnDialog` (it rides the same menu). Default: AG's full Pin submenu.
+   */
+  pinSides?: 'left'
+  /**
    * What an empty cell draws (2026-09-26). `dash` — the default, and right for any grid of numbers,
    * where "nothing measured" and a measured 0 must look different. `blank` — an EDITING grid (the
    * product sheet), where an empty cell is just a value nobody entered yet: `EmptyValue` draws nothing
@@ -153,6 +159,7 @@ export function NexusGrid<T>({
   className,
   flatTree = false,
   columnDialog,
+  pinSides,
   emptyCells = 'dash',
   defaultColDef,
   selectionColumnDef,
@@ -347,6 +354,7 @@ export function NexusGrid<T>({
     if (!columnDialog) return undefined
     return (p) => {
       const kept: (DefaultMenuItem | MenuItemDef<T>)[] = p.defaultItems.filter((i) => i !== 'columnChooser' && i !== 'resetColumns')
+        .map((i) => (i === 'pinSubMenu' && pinSides === 'left' ? { name: 'Pin Column', icon: agIcon('pin'), subMenu: ['clearPinned', 'pinLeft'] as DefaultMenuItem[] } : i))
       while (kept[kept.length - 1] === 'separator') kept.pop()
       const own: MenuItemDef<T>[] = []
       if (columnDialog.customise) own.push({ name: 'Customise columns…', icon: agIcon('columns'), action: columnDialog.customise })
@@ -359,7 +367,7 @@ export function NexusGrid<T>({
       while (tail[tail.length - 1] === 'separator') tail.pop()
       return tail.length ? [...kept, 'separator', ...tail] : kept
     }
-  }, [columnDialog])
+  }, [columnDialog, pinSides])
 
   const mergedDefaultColDef = useMemo<ColDef<T>>(
     () => ({

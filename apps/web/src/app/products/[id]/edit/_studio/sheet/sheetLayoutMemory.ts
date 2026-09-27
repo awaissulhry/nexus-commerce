@@ -187,7 +187,16 @@ export function chooseLanding(input: LandingChoiceInput): LandingChoice {
   return { kind: 'all' }
 }
 
-/* ── 3. progress columns ────────────────────────────────────────────────────────────────────── */
+/* ── 3. progress columns and the variation theme ──────────────────────────────────────────── */
+
+/** Customise's own group for the variation theme — right after Progress, where the sheet shows it until it is moved. */
+export const FIXED_GROUP_KEY = 'variation-theme'
+export const FIXED_GROUP_LABEL = 'Variation theme'
+/**
+ * The groups the sheet shows FIRST by default. A layout saved before one of them existed never ordered it; Customise then
+ * lists it first too (not at the bottom), so the dialog and the sheet agree.
+ */
+export const FRONT_GROUP_KEYS = ['progress', FIXED_GROUP_KEY] as const
 
 /**
  * The progress columns a payload shows by default: every one it does not hide ON PURPOSE. A v3 layout hides a key it

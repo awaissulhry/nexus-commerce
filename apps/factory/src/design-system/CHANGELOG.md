@@ -1,3 +1,7 @@
+## Customise: always-shown columns, emptied groups — 2026-09-27
+
+Mirrored from web. **`PreferencesColumnSpec.alwaysShown`** (always on screen, still movable and pinnable; held tick, no ✕, no hide) and **emptied groups** (left out of the tick-list; "Empty · drag a column here to put it back" in In view). Opt-in; every other caller is unchanged.
+
 ## Menu headings and on/off items, Customise select-all — 2026-09-27
 
 Mirrored from web (the product sheet's toolbar rebuild). **`Menu`**: `MenuItemDef.heading` (a section heading, skipped by the arrow keys, `.nds-menu-heading`) and `checked` (`role="menuitemcheckbox"`, a ✓ in a fixed slot). **`PreferencesModal`**: `bulkPick` ("Select all · Clear all", on the matches when filtering), `rememberInteraction` (the filter text and open groups survive a reopen), `confirmLabel`, and `PreferencesColumnSpec.uncounted` (listed, never counted). Styles in `components.css`, `patterns.css` and `grid/theme/grid.css` (the toolbar's “Columns:” / “Rows:” lead words). All opt-in.

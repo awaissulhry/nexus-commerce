@@ -32,6 +32,11 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
        whenever they are rebuilt — a progress refresh, a readiness read — and the variation theme slid behind the
        identity fields (measured 2026-09-27 after a scope round trip). */
     maintainColumnOrder
+    /* A header drag is kept like a Customise Save (`useSheetColumns.onColumnMoved`). */
+    onColumnMoved={columns.onColumnMoved}
+    onColumnPinned={columns.onColumnPinned}
+    /* The sheet's locks freeze a column at the LEFT; a right pin could not be kept, so it is not offered. */
+    pinSides="left"
     groupHeaderHeight={gridGeometry.stripH}
   />
   const drawer = model.drawer && <StudioDock {...model.drawer} />
