@@ -17,7 +17,8 @@ export interface DestinationsTableProps {
   onOpen(key: string): void
 }
 
-const SOURCE = {
+/** How a set's source reads in the destinations table and in Compare. */
+export const SOURCE = {
   shared: { kind: 'master' as const, text: 'follows Shared' },
   channel: { kind: 'channel' as const, text: 'follows the channel' },
   own: { kind: 'override' as const, text: 'own photos' },

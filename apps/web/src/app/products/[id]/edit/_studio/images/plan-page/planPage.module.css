@@ -56,6 +56,16 @@
 .preview { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .previewMain { display: flex; align-items: center; gap: var(--nds-space-8); }
 .previewStrip { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); margin: 0; padding: 0; list-style: none; }
+.compareBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.compareChips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); }
+.compareSetBlock { display: flex; flex-direction: column; gap: var(--nds-space-6); padding-top: var(--nds-space-8); border-top: 1px solid var(--nds-border-subtle); }
+.compareSetHead { display: flex; align-items: center; gap: var(--nds-space-8); }
+.compareLines { display: flex; flex-direction: column; gap: var(--nds-space-8); margin: 0; padding: 0; list-style: none; }
+.compareLine { display: grid; grid-template-columns: minmax(160px, 240px) minmax(0, 1fr); align-items: start; gap: var(--nds-space-12); }
+.compareWho { justify-self: start; text-align: left; }
+.compareCell { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+/* A photo the first chosen destination does not have: outlined, and its tooltip says so. */
+.compareExtra { border-radius: var(--nds-radius-sm); outline: 2px solid var(--nds-warning); outline-offset: 1px; }
 .checkList { margin: var(--nds-space-4) 0 0; padding-inline-start: var(--nds-space-16); }
 .checkList > li + li { margin-top: var(--nds-space-2); }
 
@@ -70,6 +80,7 @@
 .state { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-8); padding: var(--nds-space-24) var(--nds-space-16); color: var(--nds-text-2); font-size: var(--nds-font-size-base); }
 
 @media (max-width: 640px) {
+  .compareLine { grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-4); }
   .page { padding: var(--nds-space-10) var(--nds-space-10) var(--nds-space-20); }
   .control { flex-wrap: wrap; }
 }

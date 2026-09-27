@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
-  applyLocal, computeLayouts, copyFromOps, destinationCells, filterLibrary, followAllOps, libraryUsage, setRows, showAsOptions,
+  applyLocal, compareDestinations, computeLayouts, copyFromOps, destinationCells, filterLibrary, followAllOps, libraryUsage, setRows, showAsOptions,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
 
@@ -83,6 +83,23 @@ describe('Media page model', () => {
     expect(libraryUsage(r).get('cover')).toEqual(['Common · main'])
     expect(() => applyLocal(r, { layer: 'SHARED' }, [{ op: 'insert', set: 'common', assetIds: ['cover'] }])).toThrow(/already in that set/)
     expect(() => applyLocal(r, { layer: 'SHARED' }, [{ op: 'insert', set: 'common', assetIds: ['cover-kid2'] }])).toThrow(/already in that set/)
+  })
+  it('Compare puts the chosen destinations\' sets side by side and names each difference against the first one', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ common: ids('chart-de', 'cover'), values: { 'color:black': ids('n1', 'spare') } }) },
+      { key: AMAZON, plan: plan({ skus: { n: ids('spare') }, safety: ids('spare') }) }])
+    const rows = compareDestinations(r, [EBAY, WINTER, AMAZON])
+    const row = (label: string) => rows.find(x => x.label === label)!
+    // Common: Winter has the German version of the same chart, in another order — the same photos, reordered.
+    expect(row('Common').cells.map(c => `${c.source}:${c.same}:${c.reordered}`)).toEqual(['shared:true:false', 'own:false:true', 'shared:true:false'])
+    // Nero: Winter drops "cover" and adds "spare".
+    expect(row('Nero').cells[1]).toMatchObject({ added: ['spare'], missing: ['cover'], same: false })
+    expect(row('Giallo').same).toBe(true)
+    // Safety and per-SKU photos are Amazon's: eBay cells do not apply, and the first cell that applies is the reference.
+    expect(row('Safety').cells.map(c => c.applies)).toEqual([false, false, true])
+    expect(row('Safety')).toMatchObject({ same: true })
+    expect(rows.filter(x => x.kind === 'sku').map(x => x.label)).toEqual(['SKU T-NERO'])
+    // An unknown or untargetable destination is left out; nothing chosen = nothing to compare.
+    expect(compareDestinations(r, ['nope'])).toEqual([])
   })
   it('"Show as" shows each market its language version, and says when it falls back', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])
