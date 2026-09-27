@@ -1,5 +1,5 @@
 /**
- * `POST /api/amazon/listings/fill-asins` — its permission, its double-click guard, what it accepts, and that a dry
+ * `POST /api/amazon/listings/fill-asins` — its permission, what it accepts, and that a dry
  * run reaches the filler as a dry run. The filler's own rules are in listing-asin-fill.service.vitest.test.ts.
  */
 import { readFileSync } from 'node:fs'
@@ -41,9 +41,10 @@ describe('fill-asins route', () => {
     expect(permissionForRoute('POST', '/api/amazon/something-else')).toBe('channels.sync')
   })
 
-  it('is a durable command, so a double-click does not run it twice', () => {
+  it('is not a keyed web command: no web screen calls it, and a repeat is harmless (an ASIN is never replaced)', () => {
+    // COMMAND_SCOPES holds exactly the routes the web sends an Idempotency-Key to (web `command-key.vitest.test.ts`).
     const source = readFileSync(join(import.meta.dirname, '..', 'lib', 'command-idempotency.ts'), 'utf8')
-    expect(source).toContain(`'${PATH}': 'amazon-asin-fill'`)
+    expect(source).not.toContain(PATH)
   })
 
   it('holds no Prisma call — the route parses and hands off', () => {

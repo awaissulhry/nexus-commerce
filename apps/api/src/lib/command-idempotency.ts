@@ -39,8 +39,6 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/listing-wizard/:id/submit': 'wizard-submit',
   // Attribute parity P3 — one "Download rules" click, one sequential run of provider fetches.
   '/api/categories/schema/download': 'schema-download',
-  // One "fill ASINs" click, one read of Amazon and one write per listing.
-  '/api/amazon/listings/fill-asins': 'amazon-asin-fill',
   // "Fill other eBay sites" — one Assign press, one run of rules downloads and category reviews.
   '/api/pim/category-workspace/EBAY/site-assignments': 'ebay-site-assign',
 }
