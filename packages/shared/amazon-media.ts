@@ -31,7 +31,8 @@ export interface AmazonMediaObservation {
 }
 export interface AmazonMediaWorkspace {
   productId: string; revision: string; draft: AmazonMediaDraft; assets: AmazonMediaAsset[]; items: AmazonMediaItem[]
-  destination: { accountId: string; marketplace: string; listingId: string; aliasKey: string; label: string; listings: Array<{ id: string; label: string }> }
+  /** `listingId: null` — no Amazon listing on this market yet: the gallery opens empty and its first save starts the draft. */
+  destination: { accountId: string; marketplace: string; listingId: string | null; aliasKey: string; label: string; listings: Array<{ id: string; label: string }> }
   languages: string[]; markets: Array<{ code: string; label: string }>; warnings: string[]; observations: Record<string, AmazonMediaObservation>; activeRunId: string | null
 }
 export interface AmazonMediaPatch { op: 'replace' | 'delete'; path: string; value: Array<Record<string, unknown>> }

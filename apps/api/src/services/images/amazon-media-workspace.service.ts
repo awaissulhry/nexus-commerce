@@ -6,6 +6,7 @@ import { amazonImageSlots, amazonSafetyImageSlots, amazonManagedImageSlots, amaz
   type AmazonMediaWorkspace, type AmazonMediaAsset, type AmazonMediaObservation, type AmazonMediaDraft } from '@nexus/shared/amazon-media'
 import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
+import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { amazonMediaClient, amazonVariationAttributes, marketValue, mediaObject } from './amazon-media-client.js'
 import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 
@@ -29,6 +30,9 @@ export async function amazonMediaDestination(input: AmazonMediaInput) {
   if (!destination.listing) {
     const rows = await prisma.channelListing.findMany({ where: { productId: input.productId, channel: 'AMAZON', marketplace: destination.marketplace,
       channelConnectionId: destination.accountId, aliasKey: '' }, select: { id: true }, take: 2 })
+    // Product-sheet create path, step 5 — no Amazon listing on this market yet: the gallery opens empty, and its first
+    // save starts the primary listing's draft (`mutateAmazonMedia`).
+    if (rows.length === 0) return destination
     if (rows.length !== 1) throw new WorkspaceScopeError('Choose an attributed Amazon listing to open its market gallery.', 422)
     destination = await resolveWorkspaceDestination({ productId: input.productId, channel: 'AMAZON', marketplace: destination.marketplace,
       accountId: destination.accountId, listingId: rows[0].id })
@@ -37,22 +41,31 @@ export async function amazonMediaDestination(input: AmazonMediaInput) {
   return destination
 }
 
+/** A save on a market with no Amazon listing starts the primary listing's draft (the family's parent and variants). */
+async function startAmazonDraft(destination: WorkspaceDestination, tx: Prisma.TransactionClient): Promise<WorkspaceDestination> {
+  const started = await ensureDraftListings(tx, { channel: 'AMAZON', market: destination.marketplace, accountId: destination.accountId, productIds: [destination.productId], family: true })
+    .catch(error => { throw error instanceof DraftListingError ? new WorkspaceScopeError(error.message, error.statusCode) : error })
+  const own = started.find(row => row.productId === destination.productId)!
+  return { ...destination, aliasKey: '', listing: { id: own.id, productId: destination.productId, aliasKey: '', version: own.version } }
+}
+
 export async function readAmazonMedia(destination: WorkspaceDestination, tx: Prisma.TransactionClient = prisma): Promise<AmazonMediaWorkspace> {
   const productId = destination.productId
   const coordinate = { channel: 'AMAZON', marketplace: destination.marketplace, channelConnectionId: destination.accountId }
   const aliasKey = destination.aliasKey ?? ''
   const [root, market, aliases, familyListings, masters, markets] = await Promise.all([
-    tx.channelListing.findFirst({ where: { ...coordinate, id: destination.listing!.id, productId, aliasKey }, include: { product: true } }),
+    destination.listing ? tx.channelListing.findFirst({ where: { ...coordinate, id: destination.listing.id, productId, aliasKey }, include: { product: true } }) : null,
     tx.marketplace.findFirst({ where: { channel: 'AMAZON', code: destination.marketplace, isActive: true } }),
     tx.productListingAlias.findMany({ where: { ...coordinate, productId: destination.familyId, status: 'ACTIVE' }, orderBy: { position: 'asc' }, select: { id: true, label: true } }),
     tx.channelListing.findMany({ where: { ...coordinate, OR: [{ productId }, { product: { parentId: productId, deletedAt: null } }] }, include: { product: true }, orderBy: { id: 'asc' } }),
     tx.productImage.findMany({ where: { mediaType: 'IMAGE', OR: [{ productId }, { product: { parentId: productId, deletedAt: null } }] }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] }),
     tx.marketplace.findMany({ where: { channel: 'AMAZON', isActive: true }, orderBy: { code: 'asc' }, select: { code: true, name: true } }),
   ])
-  if (!root || root.product.deletedAt || !market) throw new WorkspaceScopeError('This listing destination is no longer available.')
+  // No listing on this market yet (step 5): the gallery opens empty from the product's own images.
+  if ((destination.listing && (!root || root.product.deletedAt)) || !market) throw new WorkspaceScopeError('This listing destination is no longer available.')
   if (aliasKey && !aliases.some(a => a.id === aliasKey)) throw new WorkspaceScopeError('This listing alias is no longer active.')
   const rows = familyListings.filter(l => l.aliasKey === aliasKey && !l.product.deletedAt)
-  const pa = mediaObject(root.platformAttributes)
+  const pa = mediaObject(root?.platformAttributes)
   const parsed = pa[AMAZON_MEDIA_KEY] === undefined ? null : storedSchema.safeParse(pa[AMAZON_MEDIA_KEY])
   if (parsed && !parsed.success) throw new WorkspaceScopeError('This listing’s saved media could not be read. It has been preserved; editing is unavailable.', 422)
   const assets: AmazonMediaAsset[] = []
@@ -105,7 +118,7 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
   }), assets, market.language, aliasKey, Object.entries(observations).map(([id, o]) => [id, o.error, o.theme, o.attributes, o.productType, o.supported])])
   return { productId, revision, draft, assets, items, warnings, observations, markets: markets.map(m => ({ code: m.code, label: m.name })), activeRunId: typeof pa._amazonMediaActiveRun === 'string' ? pa._amazonMediaActiveRun : null,
     languages: [...new Set([market.language.toLowerCase().split(/[-_]/)[0], ...(destination.marketplace === 'CA' ? ['en', 'fr'] : destination.marketplace === 'BE' ? ['fr', 'nl', 'de'] : [])])],
-    destination: { accountId: destination.accountId, marketplace: destination.marketplace, listingId: root.id, aliasKey, label,
+    destination: { accountId: destination.accountId, marketplace: destination.marketplace, listingId: root?.id ?? null, aliasKey, label,
       listings: familyListings.filter(l => l.productId === productId && (!l.aliasKey || aliases.some(a => a.id === l.aliasKey))).map(l => ({ id: l.id, label: l.aliasKey ? aliases.find(a => a.id === l.aliasKey)!.label : 'Primary listing' })) } }
 }
 
@@ -114,7 +127,12 @@ export async function mutateAmazonMedia(destination: WorkspaceDestination, revis
     return await prisma.$transaction(async tx => {
       const current = await readAmazonMedia(destination, tx)
       if (current.revision !== revision) throw new WorkspaceScopeError('The saved gallery or listing context changed. Reload and review before continuing.')
-      const row = await tx.channelListing.findUniqueOrThrow({ where: { id: current.destination.listingId } })
+      if (!current.destination.listingId) {
+        // Nothing on Amazon to check yet; a save starts the listing's draft here, in this transaction.
+        if (observationOnly) throw new WorkspaceScopeError(`There is no Amazon listing on ${destination.marketplace} to check yet. Save the gallery to start its draft.`, 422)
+        destination = await startAmazonDraft(destination, tx)
+      }
+      const row = await tx.channelListing.findUniqueOrThrow({ where: { id: destination.listing!.id } })
       const next = await apply(current, mediaObject(row.platformAttributes), tx)
       const result = await tx.channelListing.updateMany({ where: { id: row.id, version: row.version, channelConnectionId: destination.accountId, marketplace: destination.marketplace },
         data: { platformAttributes: next as Prisma.InputJsonValue, version: { increment: observationOnly ? 0 : 1 } } })

@@ -77,6 +77,10 @@ async function submitStudioPublication(productId: string, id: string, body: Reco
 
 const productId = 'publication-database-product'
 const accountId = 'publication-database-ebay'
+// One account per channel: the draft creator (`ensureDraftListings`) starts a listing only under an active account of
+// that channel, on an active market.
+const amazonAccountId = 'publication-database-amazon'
+const shopifyAccountId = 'publication-database-shopify'
 const childId = 'publication-database-child'
 const scope = { channel: 'EBAY', marketplace: 'IT', accountId }
 const facts = () => ({
@@ -92,6 +96,11 @@ beforeAll(async () => {
   await prisma.product.create({ data: { id: productId, sku: 'PGLITE-PUBLISH', name: 'Disposable publication fixture', basePrice: 10, status: 'DRAFT' } })
   await prisma.product.create({ data: { id: childId, sku: 'PGLITE-CHILD', name: 'Disposable child', parentId: productId, basePrice: 10, status: 'DRAFT' } })
   await prisma.channelConnection.create({ data: { id: accountId, channelType: 'EBAY', isActive: true } })
+  await prisma.channelConnection.create({ data: { id: amazonAccountId, channelType: 'AMAZON', isActive: true } })
+  await prisma.channelConnection.create({ data: { id: shopifyAccountId, channelType: 'SHOPIFY', isActive: true } })
+  for (const [channel, code] of [['EBAY', 'IT'], ['AMAZON', 'IT'], ['SHOPIFY', 'GLOBAL']]) {
+    await prisma.marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } })
+  }
 }, 120_000)
 
 beforeEach(async () => {
@@ -127,7 +136,7 @@ beforeEach(async () => {
 
 afterAll(async () => { await fixture.database?.close() }, 30_000)
 
-const shopifyFacts = () => ({ ...facts(), scope: { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId },
+const shopifyFacts = () => ({ ...facts(), scope: { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: shopifyAccountId },
   products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }] })
 
 it('records Shopify mutations against the effective variant SKU and verifies all ordered request captures', async () => {
@@ -203,7 +212,7 @@ it('does not send if exact request and audit cannot both be durably recorded', a
 }, 30_000)
 
 it('attributes Amazon messages by seller SKU and advances only the accepted SKU after its processing report', async () => {
-  const amazon = { ...scope, channel: 'AMAZON' }
+  const amazon = { ...scope, channel: 'AMAZON', accountId: amazonAccountId }
   fixture.facts.mockResolvedValue({ ...facts(), scope: amazon, products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }] })
   const review = await previewStudioPublication(productId, amazon, null)
   expect(await submitStudioPublication(productId, review.id!, {}, null)).toMatchObject({ status: 'SUBMITTED' })

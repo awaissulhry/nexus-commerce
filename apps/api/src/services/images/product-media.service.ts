@@ -8,6 +8,7 @@ import { mediaObject, readMediaCollection, productMediaSaveSchema, productMediaC
 import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
+import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type Input = ProductMediaQuery & { productId: string }
@@ -71,9 +72,15 @@ export async function saveProductMedia(input: Input, body: unknown) {
 async function persistCollection(input: Input, { workspace, product, listing }: Awaited<ReturnType<typeof snapshot>>, collection: ProductMediaCollection | null, tx: Tx) {
   if (input.scope !== 'MASTER' && !listing) {
     if (!collection) return workspace
-    await tx.channelListing.create({ data: { productId: product.id, channel: input.scope, marketplace: input.market, region: input.market,
-      channelMarket: `${input.scope}_${input.market}`, channelConnectionId: input.accountId, aliasKey: input.aliasKey ?? '', aliasId: input.aliasKey || null,
-      listingStatus: 'DRAFT', isPublished: false, platformAttributes: { _productMediaLocales: writeMediaCollection({}, input.locale, collection) } as Prisma.InputJsonValue } })
+    // Product-sheet create path, step 5 — the first media save on a coordinate with no listing starts its draft (the
+    // family's parent and variants, `ensureDraftListings`, the one creator) in this transaction, then saves the gallery
+    // on the product's new row.
+    const started = await ensureDraftListings(tx, { channel: input.scope, market: input.market, accountId: input.accountId ?? null, aliasKey: input.aliasKey ?? '',
+      productIds: [product.id], family: true }).catch(error => { throw error instanceof DraftListingError ? new WorkspaceScopeError(error.message, error.statusCode) : error })
+    const own = started.find(row => row.productId === product.id)!
+    const written = await tx.channelListing.updateMany({ where: { id: own.id, version: own.version }, data: { version: { increment: 1 },
+      platformAttributes: { _productMediaLocales: writeMediaCollection({}, input.locale, collection) } as Prisma.InputJsonValue } })
+    if (written.count !== 1) throw new WorkspaceScopeError('Media changed while saving. Reload the gallery before retrying.')
     return (await snapshot(input, tx)).workspace
   }
   const result = listing ? await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version, productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId },

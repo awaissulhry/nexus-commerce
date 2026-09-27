@@ -48,7 +48,7 @@ const fixture = vi.hoisted(() => {
     const before = structuredClone(state)
     try { return await fn(db) } catch (e) { Object.assign(state, before); throw e }
   }
-  return { state, db, observe: vi.fn(), patch: vi.fn(), client: vi.fn(), download: vi.fn(), match }
+  return { state, db, observe: vi.fn(), patch: vi.fn(), client: vi.fn(), download: vi.fn(), ensure: vi.fn(), match }
 })
 
 it.skipIf(process.env.NEXUS_AMAZON_MEDIA_BROWSER !== '1')('serves an isolated Amazon Media browser fixture', async () => {
@@ -92,6 +92,8 @@ vi.mock('../../services/images/media-plan-switch.js', async original => ({ ...aw
 vi.mock('../../services/connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_channel: string, id: string) => { if (!['account-a', 'account-b'].includes(id)) throw new Error('Invalid account'); return id } }))
 vi.mock('../../services/images/amazon-media-client.js', async original => ({ ...await original<object>(), amazonMediaClient: fixture.client }))
 vi.mock('../../services/pim/catalog-source-fetch.js', () => ({ fetchCatalogSource: fixture.download }))
+// The draft creator's own rules run on PostgreSQL (draft-listing.service tests); here it starts the family's rows.
+vi.mock('../../services/pim/draft-listing.service.js', async original => ({ ...await original<object>(), ensureDraftListings: fixture.ensure }))
 vi.mock('../../lib/auth/session.js', () => ({ validateSession: vi.fn(), truncateIp: () => 'fixture' }))
 vi.mock('../../lib/auth/audit.js', () => ({ writeAuthAudit: vi.fn() }))
 vi.mock('../../lib/auth/rbac.js', () => ({ resolvePermissions: async (user: any) => ({ permissions: new Set(user.id === 'editor' ? ['products.view', 'products.images.edit'] : ['products.view']) }), hasPermission: (resolved: any, permission: string) => resolved.permissions.has(permission) }))
@@ -296,6 +298,45 @@ describe('Amazon Media destination and persistence', () => {
     expect(second.revision).toBe(first.revision)
   })
 })
+describe('a market with no Amazon listing yet (product-sheet create path, step 5)', () => {
+  const unlisted = `${base}?market=DE&accountId=account-a`
+  beforeEach(() => {
+    fixture.state.listings = fixture.state.listings.filter(l => l.marketplace !== 'DE')
+    fixture.ensure.mockImplementation(async (_tx: unknown, input: any) => ['p', 'blue', 'red'].map(productId => {
+      const row = { id: `draft-de-${productId}`, productId, channel: 'AMAZON', marketplace: input.market, channelConnectionId: input.accountId, aliasKey: '', version: 1,
+        externalListingId: null, platformProductId: null, platformAttributes: null, variationTheme: null, flatFileSnapshot: null, listingStatus: 'DRAFT', isPublished: false, syncPaused: true }
+      fixture.state.listings.push(row)
+      return { id: row.id, productId, version: 1, created: true }
+    }))
+  })
+  it('opens the gallery empty instead of refusing, and starts the draft on the first save', async () => {
+    const opened = await app.inject({ url: unlisted, headers })
+    expect(opened.statusCode, opened.body).toBe(200)
+    expect(opened.json()).toMatchObject({ items: [], draft: { common: {}, items: {} }, destination: { marketplace: 'DE', listingId: null, label: 'Primary listing' } })
+    expect(fixture.ensure).not.toHaveBeenCalled()
+    const draft = { common: { MAIN: { assetId: 'product:photo', language: 'zxx' } }, items: {} }
+    const saved = await app.inject({ method: 'PUT', url: unlisted, headers, payload: { expectedRevision: opened.json().revision, draft } })
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect(fixture.ensure).toHaveBeenCalledWith(expect.anything(), { channel: 'AMAZON', market: 'DE', accountId: 'account-a', productIds: ['p'], family: true })
+    expect(saved.json().destination).toMatchObject({ listingId: 'draft-de-p', aliasKey: '' })
+    expect(saved.json().items.map((item: any) => item.id).sort()).toEqual(['draft-de-blue', 'draft-de-p', 'draft-de-red'])
+    expect(fixture.state.listings.find(l => l.id === 'draft-de-p')).toMatchObject({ version: 2, platformAttributes: { _amazonMediaWorkspace: { draft } } })
+    // The Italian listing is untouched.
+    expect(fixture.state.listings.find(l => l.id === 'it-p').platformAttributes._amazonMediaWorkspace).toBeUndefined()
+  })
+  it('checking Amazon, reviewing or reading a run has nothing to act on and starts nothing', async () => {
+    const opened = (await app.inject({ url: unlisted, headers })).json()
+    const refresh = await app.inject({ method: 'POST', url: `${base}/refresh?market=DE&accountId=account-a`, headers, payload: { expectedRevision: opened.revision } })
+    expect(refresh.statusCode).toBe(422)
+    expect(refresh.json().error).toBe('There is no Amazon listing on DE to check yet. Save the gallery to start its draft.')
+    const review = await app.inject({ method: 'POST', url: `${base}/review?market=DE&accountId=account-a`, headers, payload: { expectedRevision: opened.revision, listingIds: ['de-p'] } })
+    expect(review.statusCode).toBe(422)
+    expect((await app.inject({ url: `${base}/runs/run-1?market=DE&accountId=account-a`, headers })).statusCode).toBe(404)
+    expect(fixture.ensure).not.toHaveBeenCalled()
+    expect(fixture.state.listings.some(l => l.marketplace === 'DE')).toBe(false)
+  })
+})
+
 describe('Amazon Media immutable review and publication', () => {
   it('blocks different desired galleries for offers sharing one ASIN in the same market', async () => {
     fixture.state.listings.find(l => l.id === 'it-red').externalListingId = 'ASIN-blue'
