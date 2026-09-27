@@ -16,12 +16,15 @@ import { ImagesTab } from './ImagesTab'
 import { EbayMediaRoute } from './ebay/EbayMediaRoute'
 import { AmazonMediaRoute } from './amazon/AmazonMediaRoute'
 import { ShopifyContentRoute } from './shopify/ShopifyContentRoute'
+import { MediaPlanRoute } from './plan-page/MediaPlanRoute'
 
 export function ImagesTabRoute() {
   const product = useStudioProduct()
   const { scope, destination } = useStudioScope()
-  if (scope === 'EBAY') return <EbayMediaRoute />
-  if (scope === 'AMAZON') return <AmazonMediaRoute />
-  if (scope === 'SHOPIFY') return <ShopifyContentRoute />
-  return <ImagesTab productId={destination.status === 'ready' ? destination.data.listing?.productId ?? product.id : product.id} />
+  // Images rebuild P3b: a family on the photo plan gets the new Media page; the others keep these tools until P6.
+  const fallback = scope === 'EBAY' ? <EbayMediaRoute />
+    : scope === 'AMAZON' ? <AmazonMediaRoute />
+    : scope === 'SHOPIFY' ? <ShopifyContentRoute />
+    : <ImagesTab productId={destination.status === 'ready' ? destination.data.listing?.productId ?? product.id : product.id} />
+  return <MediaPlanRoute productId={product.id} fallback={fallback} />
 }

@@ -134,10 +134,13 @@ export type MediaOp =
   | { op: 'move'; from: MediaSetRef; to: MediaSetRef; assetId: string; index: number }
   /** Replace a set's whole order (drag-reorder). Must be a permutation of the current set. */
   | { op: 'reorder'; set: MediaSetRef; assetIds: string[] }
+  /** Set a set to exactly these photos — Undo's op. `expect` = what the layer must hold now (`null` = it must
+   *  follow), so an undo never overwrites someone else's later change. */
+  | { op: 'replace'; set: MediaSetRef; assetIds: string[]; expect?: string[] | null }
   /** Copy the inherited set into this layer so it can be edited ("Use own photos"). */
   | { op: 'own'; set: MediaSetRef }
-  /** Drop this layer's copy so the set follows the layer above ("Follow again"). */
-  | { op: 'follow'; set: MediaSetRef }
+  /** Drop this layer's copy so the set follows the layer above ("Follow again"). `expect` as for `replace`. */
+  | { op: 'follow'; set: MediaSetRef; expect?: string[] | null }
   /** `axis: undefined` follows the layer above; `null` = one shared gallery. */
   | { op: 'axis'; axis: string | null | undefined }
   /** `assetId: undefined` follows; `null` = explicitly no swatch. */
@@ -148,8 +151,9 @@ export const mediaOpSchema: z.ZodType<MediaOp> = z.discriminatedUnion('op', [
   z.object({ op: z.literal('remove'), set: setRefSchema, assetId: idSchema }).strict(),
   z.object({ op: z.literal('move'), from: setRefSchema, to: setRefSchema, assetId: idSchema, index: z.number().int().min(0) }).strict(),
   z.object({ op: z.literal('reorder'), set: setRefSchema, assetIds: z.array(idSchema).max(MEDIA_SET_MAX) }).strict(),
+  z.object({ op: z.literal('replace'), set: setRefSchema, assetIds: z.array(idSchema).max(MEDIA_SET_MAX), expect: z.array(idSchema).max(MEDIA_SET_MAX).nullable().optional() }).strict(),
   z.object({ op: z.literal('own'), set: setRefSchema }).strict(),
-  z.object({ op: z.literal('follow'), set: setRefSchema }).strict(),
+  z.object({ op: z.literal('follow'), set: setRefSchema, expect: z.array(idSchema).max(MEDIA_SET_MAX).nullable().optional() }).strict(),
   z.object({ op: z.literal('axis'), axis: attributeCodeSchema.nullable().optional() }).strict(),
   z.object({ op: z.literal('swatch'), value: valueKeySchema, assetId: idSchema.nullable().optional() }).strict(),
 ]) as z.ZodType<MediaOp>
@@ -169,6 +173,11 @@ export function applyMediaOps(stack: MediaPlanStack, layer: MediaLayer, ops: rea
   const view = (): MediaPlanStack => ({ ...stack, [key]: plan })
   const current = (ref: MediaSetRef) => resolveSet(view(), ref).items
   const has = (items: string[], id: string) => items.some(existing => sameGroup(existing, id))
+  const expectHolds = (ref: MediaSetRef, expect: string[] | null | undefined) => {
+    if (expect === undefined) return
+    const own = layerSet(plan, ref)?.map(i => i.assetId) ?? null
+    if (JSON.stringify(own) !== JSON.stringify(expect)) throw new MediaPlanEditError('These photos changed since your edit, so it cannot be undone. Nothing was changed.')
+  }
   const write = (ref: MediaSetRef, ids: string[]) => {
     if (ids.length > MEDIA_SET_MAX) throw new MediaPlanEditError(`A set holds at most ${MEDIA_SET_MAX} photos.`)
     plan = withSet(plan, ref, ids.map(assetId => ({ assetId })))
@@ -212,14 +221,21 @@ export function applyMediaOps(stack: MediaPlanStack, layer: MediaLayer, ops: rea
         write(op.set, op.assetIds)
         break
       }
+      case 'replace': {
+        expectHolds(op.set, op.expect)
+        if (op.assetIds.some((id, i) => op.assetIds.findIndex(other => sameGroup(other, id)) !== i)) throw new MediaPlanEditError('The same photo was added twice.')
+        write(op.set, op.assetIds)
+        break
+      }
       case 'own': write(op.set, current(op.set)); break
       case 'follow':
         if (layer === 'SHARED') throw new MediaPlanEditError('Shared photos have nothing to follow.')
+        expectHolds(op.set, op.expect)
         plan = withSet(plan, op.set, undefined)
         break
       case 'axis':
+        // On Shared, dropping the choice means the family's own default axis (what a new plan starts with).
         if (op.axis === undefined) {
-          if (layer === 'SHARED') throw new MediaPlanEditError('Shared photos have nothing to follow.')
           const { axis: _drop, ...rest } = plan
           plan = rest
         } else plan = { ...plan, axis: op.axis }
@@ -234,6 +250,37 @@ export function applyMediaOps(stack: MediaPlanStack, layer: MediaLayer, ops: rea
     }
   }
   return mediaPlanSchema.parse(plan)
+}
+
+/**
+ * The ops that put one layer back the way it was (Undo), from the layer before and after an edit, set by set: a set
+ * the layer did not own follows again, an owned set gets its old photos back. Each set op carries what the layer holds
+ * now (`expect`), so an undo is refused when someone changed that set in between. On Shared "not owned" and an empty
+ * set look the same, so a set new on Shared is undone to empty.
+ */
+export function inverseMediaOps(layer: MediaLayer, before: MediaPlan | null, after: MediaPlan | null): MediaOp[] {
+  const was = before ?? emptyMediaPlan(), now = after ?? emptyMediaPlan()
+  const ops: MediaOp[] = []
+  const refs = new Set<MediaSetRef>(['common', 'safety'])
+  for (const plan of [was, now]) {
+    for (const key of Object.keys(plan.sets.values ?? {})) refs.add(`value:${key}`)
+    for (const key of Object.keys(plan.sets.skus ?? {})) refs.add(`sku:${key}`)
+  }
+  const ids = (plan: MediaPlan, ref: MediaSetRef) => layerSet(plan, ref)?.map(i => i.assetId)
+  for (const ref of refs) {
+    const old = ids(was, ref), current = ids(now, ref)
+    if (JSON.stringify(old) === JSON.stringify(current)) continue
+    const expect = current ?? null
+    if (old === undefined && layer !== 'SHARED') ops.push({ op: 'follow', set: ref, expect })
+    else ops.push({ op: 'replace', set: ref, assetIds: old ?? [], expect })
+  }
+  if (was.axis !== now.axis) ops.push({ op: 'axis', axis: was.axis })
+  const swatchOf = (plan: MediaPlan, key: string) => plan.sets.swatches && key in plan.sets.swatches ? plan.sets.swatches[key]?.assetId ?? null : undefined
+  for (const key of new Set([...Object.keys(was.sets.swatches ?? {}), ...Object.keys(now.sets.swatches ?? {})])) {
+    const old = swatchOf(was, key)
+    if (old !== swatchOf(now, key)) ops.push({ op: 'swatch', value: key, assetId: old })
+  }
+  return ops
 }
 
 /** Asset ids the plan points at — to refuse ops that name a photo the family does not own. */

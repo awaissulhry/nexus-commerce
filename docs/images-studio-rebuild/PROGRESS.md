@@ -9,11 +9,52 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   finished, table `ProductMediaPlan` exists with RLS forced and its policy, `ProductImage.languageTag` and
   `versionGroupId` exist; `/api/health/ready` 200; `GET /media` and `POST /media/ops` answer 401 without a login.
   Nothing on screen changed; no family has a plan yet, so every publisher behaves as before.
-- **P2 — publishers read the plan (2026-09-27).** Merged: P2a #90 (helper), P2b #92 (older paths refuse plan
-  families), P2c #93 (eBay Trading). Open: P2e #95 (Amazon), P2d #98 (eBay Inventory, stock-safe), P2f (Shopify).
-  Merged under the Owner's standing OK for the P2 series once CI is green. Nothing changes for a live listing until a
-  family is edited on the new Media page (P3): no family has a Shared layer yet.
-- **Next:** P3 — the Media page and the Information column on the plan.
+- **P2 — publishers read the plan (2026-09-27).** All merged: P2a #90, P2b #92, P2c #93 (eBay Trading), P2d #98
+  (eBay Inventory, stock-safe), P2e #95 (Amazon), P2f #99 (Shopify). Nothing changes for a live listing until a family
+  is switched onto the plan (P3a) — no family in production is switched yet.
+- **P3a — switch one family, with a preview (API).** PR #101 (base main); merge needs the Owner's word.
+- **P3b — the new Media page. Built and checked on a local throwaway stack (2026-09-27); PR open, base
+  `feat/images-p3a`.** Details below.
+- **Next:** P3c — the Information sheet's "Product media" column on the plan; P3d — polish and proof.
+
+## P3b — the Media page (what was built)
+| Piece | File | What it does |
+|---|---|---|
+| Route | `_studio/images/ImagesTabRoute.tsx`, `plan-page/MediaPlanRoute.tsx` | A family on the plan gets the new page on every scope (its older tools refuse it since P2b). A family not on the plan keeps today's tools; on the product scope the switch preview sits above them; on a channel scope one line says where to start it. |
+| Switch preview | `plan-page/SwitchPanel.tsx` | `GET /media/switch-preview`: per destination, where its photos come from today, what the plan would send (first photos), and its checks; the seed's report lines. "Start using the photo plan" posts the preview's revision; a stale preview reloads. Nothing is sent to any channel. |
+| Page | `plan-page/MediaPlanPage.tsx` | Toolbar (Photos vary by, Show as, Undo/Redo ⌘Z ⌘⇧Z), library beside the Shared plan (a drawer under 1180 px of page width), the destinations table, and one destination's channel view. The studio's channel chips filter the table; a chosen listing opens its view. |
+| Library | `plan-page/LibraryPanel.tsx` | Search, filter (unused, in use, size/address problem, has text), where each photo is used ("Nero · main", "Common · 2"), language versions, drag onto a set, or tick + "Add to ▾" (sets and swatches). A set's ＋ Add turns the library into "Adding to Nero". "Upload and edit…" opens today's library tools in place (upload with the duplicate check, edit, delete, videos) until P4's upload dialog. |
+| Plan board | `plan-page/PlanBoard.tsx` + DS `MediaBoard` | Common, one row per value in the family order, safety, per-SKU rows (folded), swatches (Amazon). Drag = move, Alt-drag / "Also use in" = copy (the tile says "also in Common"), M = main, Delete = remove from the set, Space + arrows = move by keyboard. Below Shared each row shows Follows Shared / Follows the channel / Own photos with "Use own photos" / "Follow again". |
+| Destinations | `plan-page/DestinationsTable.tsx` | One row per destination: where each set comes from and its count, what it would send, checks (to fix / warnings / ready), variants listed. |
+| Channel view | `plan-page/ChannelView.tsx` | Edit "this listing only" or "all listings of the channel"; Copy photos from ▾ another destination; Follow the channel (or Shared) for all sets; buyer preview (eBay gallery + value picker, Amazon slots per SKU group, Shopify media + variant images, Etsy photos + option photos); the checks in full. |
+| State | `plan-page/useMediaPlan.ts`, `plan-page/model.ts` | One read; each edit moves the page at once (the shared edit rules applied locally, so a refusal is the server's own sentence), then `POST /media/ops`; edits are sent in order. Layouts and checks are computed in the browser by the SAME shared function the publishers use (`projectMediaDestination`). Live refresh on `product-media.changed` (never during a drag or a save); our own saves' echoes are skipped. Save state goes to the studio header. |
+| Undo (API + shared) | `packages/shared/media-plan.ts`, `media-plan.service.ts` | New op `replace` (with `expect`) and `inverseMediaOps(before, after)`; every `POST /media/ops` answer carries its `undo` ops, bound to what the layer holds now — an undo after someone else's change to that set is refused and changes nothing. Redo is the undo's own undo. Shared may drop its axis choice (the family default applies). |
+| One projection | `packages/shared/media-plan-channels.ts` | `projectMediaDestination` — the API read, the switch preview and the page all call it (moved out of the API service; behaviour unchanged, API tests pass). |
+| DS | `MediaBoard`, `MediaCard compact` | Catalog, changelog, DS-GAPS entry; mirrored to Factory. |
+
+## P3b — how it was checked
+- Local throwaway stack only: PostgreSQL 17 container on 127.0.0.1 (schema from `bootstrap-fresh-database.mjs`),
+  owner login from `bootstrap-owner.ts`, local API HTTP only (no worker, no scheduler), `next dev` with
+  `NEXT_PUBLIC_API_URL` = the local API, no `.env` in the worktree. Anonymised families TEST-JACKET (Colour × Size, 9
+  variants, old eBay builder rows, alias "Winter" with its own draft) and TEST-GLOVE (library only), labelled
+  placeholder photos served from 127.0.0.1 (http, so every eBay check also says "not on HTTPS" — honest).
+- On screen: the switch preview, the switch, the page (desktop dark and light), M = main, Space/arrows/Space move from
+  Nero into Common, ⌘Z restores it (screen = server read, revision advanced), a library photo dropped on Safety, an
+  Alt-drag copy from Common into Nero ("also in Common"), a change made outside the page appearing within 2 s (streams
+  on; they are off by default against a local API), 390 px (no page sideways scroll; the library becomes a drawer;
+  tick + Add to works there) and 1024 px.
+- Tests: shared 15 (plan) — undo round trips on every layer, refusal after a later change; API media-plan 20 (new: the
+  answer's undo restores the alias layer and a stale undo is refused); page model 6. Deliberate breaks were each
+  caught (no axis undo, no `expect`, copy-from always replacing, wrong "main" label, no language-version rule).
+- Typecheck: api, web clean; factory's 338 existing errors are its ungenerated database client, none in the DS.
+- Guards: raw primitives, DS conformance, token guard, DS fork drift, api-guard, shadow tokens, i18n, CSS ratchets,
+  DS-GAPS append-only, route-Prisma, event contract — all pass.
+
+## P3b — known limits (by design, later steps)
+- Uploading stays in today's library tools ("Upload and edit…"); the file-name upload dialog is P4. Compare,
+  Review & publish are P4; channel status (read-back) is P5, so the table shows no live status yet.
+- The destinations table scrolls sideways inside its own box on a phone; it does not turn into cards yet (P3d).
+- Value and axis names on the page are the Shared ones; publishers already send each market's own names.
 
 ## P2 — what each channel does for a family on the plan
 | Channel | Sends | Safety |

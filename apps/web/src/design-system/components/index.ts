@@ -71,6 +71,7 @@ export { usePointerReorder } from './usePointerReorder'
 export { MediaCard, MediaGallery, type MediaCardProps, type MediaGalleryProps, type MediaGalleryItem } from './MediaGallery'
 export { MediaPreview, MediaTypeIcon, mediaTypeLabel, mediaUrl, type MediaPreviewProps, type MediaSource, type MediaCaption } from './MediaPreview'
 export { MediaStrip, type MediaStripProps, type MediaStripItem } from './MediaStrip'
+export { MediaBoard, MEDIA_BOARD_EXTERNAL_TYPE, type MediaBoardProps, type MediaBoardRow, type MediaBoardItem, type MediaBoardMove } from './MediaBoard'
 export { CellAction, type CellActionProps } from './CellAction'
 
 export { RecordListInput, type RecordListInputProps, type RecordListField } from './RecordListInput'

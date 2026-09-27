@@ -1,3 +1,7 @@
+## MediaBoard — several ordered photo sets on one board; MediaCard compact — 2026-09-27
+
+Mirrored from web. **`MediaBoard`** (new): ordered photo sets in rows; move a tile within or between rows by drag, keyboard (Space, arrows, Space; M main; Delete remove) or its menu; Alt copies; outside drops via `MEDIA_BOARD_EXTERNAL_TYPE`. **`MediaCard compact`**: a dense tile for long lists. Styles `.nds-media-board*`, `.nds-media-card.compact`, `.nds-media-card-name`; catalog `MediaGalleryExample`.
+
 ## Variation theme tooltip carries the delivery note — 2026-09-27
 
 Mirrored from web. **`variationThemeTooltip`** ends with the cell's `deliveryNote` when the cell is writable, and with `writeBlockedReason` when it is not.
