@@ -41,7 +41,9 @@ const defaultEbay = () => (sharedEbay ??= new EbayCategoryService())
 /**
  * PURE. Merge what the sources found (one entry per find, in the order found) into at most `limit` candidates:
  * one per category id with every reason that named it, only nodes that are assignable in the target tree, ranked by
- * number of reasons, then `same_name`, then `ebay_suggestion`, then first found.
+ * number of reasons, then `same_id`, then `ebay_suggestion`, then `same_name`, then first found. `same_name` is eBay's
+ * best match for the source leaf's name in ANOTHER language, the weakest signal: measured on production 2026-09-27 it
+ * named "Gitarren › E-Gitarren" on eBay DE for "Giacche e giubbotti".
  */
 export function rankCandidates(found: ReadonlyArray<{ categoryId: string; reason: SuggestionReason }>, tree: ReadonlyMap<string, TreeNode>, limit = MAX_CANDIDATES): SiteCandidate[] {
   const merged = new Map<string, { reasons: Set<SuggestionReason>; order: number }>()
@@ -52,7 +54,7 @@ export function rankCandidates(found: ReadonlyArray<{ categoryId: string; reason
     entry.reasons.add(reason)
     merged.set(id, entry)
   }
-  const rank = (reasons: Set<SuggestionReason>) => [reasons.size, Number(reasons.has('same_name')), Number(reasons.has('ebay_suggestion'))]
+  const rank = (reasons: Set<SuggestionReason>) => [reasons.size, Number(reasons.has('same_id')), Number(reasons.has('ebay_suggestion'))]
   return [...merged]
     .filter(([id]) => tree.get(id)?.assignable === true)
     .sort(([, a], [, b]) => {
@@ -62,6 +64,16 @@ export function rankCandidates(found: ReadonlyArray<{ categoryId: string; reason
     })
     .slice(0, limit)
     .map(([id, entry]) => ({ categoryId: id, path: tree.get(id)!.path, reasons: REASON_ORDER.filter(r => entry.reasons.has(r)) }))
+}
+
+/**
+ * PURE. The category the dialog starts with for a site: the best candidate only when two sources agree on it, else none
+ * ("Leave empty"). One source alone is not enough — a same number can name another category on another tree (FR's
+ * 177117 is motocross), and eBay's suggestions for a name in another language can be unrelated. The operator still
+ * sees every candidate and can search the site's tree.
+ */
+export function confidentDefault(candidates: readonly SiteCandidate[]): string | null {
+  return candidates.find(candidate => candidate.reasons.length >= 2)?.categoryId ?? null
 }
 
 /**
@@ -216,7 +228,7 @@ export async function ebaySiteSuggestions(categoryId: string, deps: { ebay?: Pic
     ]
     const tree = await treeNodes(snapshot, [...new Set(found.map(f => f.categoryId))])
     const candidates = rankCandidates(found, tree)
-    return { market, treeReady: true, candidates, defaultCategoryId: candidates[0]?.categoryId ?? null }
+    return { market, treeReady: true, candidates, defaultCategoryId: confidentDefault(candidates) }
   }))
 
   return {
