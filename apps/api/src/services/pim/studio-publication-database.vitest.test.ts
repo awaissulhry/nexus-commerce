@@ -235,14 +235,16 @@ it('attributes Amazon messages by seller SKU and advances only the accepted SKU 
  * Draft listing safety, step 1 — an accepted SKU turns its still-draft row live (published, ACTIVE, unpaused), per SKU.
  * A rejected SKU's draft stays a draft, and a live listing an operator paused stays paused.
  */
+/** Each channel's own account: Publish starts a missing row only under an active account of that channel (`ensureDraftListings`). */
+const accountFor = (channel: string) => channel === 'AMAZON' ? amazonAccountId : channel === 'SHOPIFY' ? shopifyAccountId : accountId
 const draftRow = (id: string, channel: string, marketplace: string, paused: boolean) => prisma.channelListing.create({ data: { productId: id, channel,
-  marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, channelConnectionId: accountId, aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: paused } })
+  marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, channelConnectionId: accountFor(channel), aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: paused } })
 const pausedLiveRow = (id: string, channel: string, marketplace: string) => prisma.channelListing.create({ data: { productId: id, channel,
-  marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, channelConnectionId: accountId, aliasKey: '', listingStatus: 'ACTIVE', isPublished: true,
+  marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, channelConnectionId: accountFor(channel), aliasKey: '', listingStatus: 'ACTIVE', isPublished: true,
   externalListingId: `FIXTURE-LIVE-${id}`, syncPaused: true } })
 
 it('Amazon ACCEPTED promotes and unpauses the accepted still-draft row, and leaves an operator-paused live row paused', async () => {
-  const amazon = { ...scope, channel: 'AMAZON' }
+  const amazon = { ...scope, channel: 'AMAZON', accountId: amazonAccountId }
   const draft = await draftRow(productId, 'AMAZON', 'IT', true)
   const live = await pausedLiveRow(childId, 'AMAZON', 'IT')
   fixture.facts.mockResolvedValue({ ...facts(), scope: amazon, products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }], listings: [draft, live] })
@@ -265,13 +267,13 @@ it('Amazon ACCEPTED promotes and unpauses the accepted still-draft row, and leav
 }, 30_000)
 
 it('Amazon PARTIAL promotes only the accepted SKU; the rejected SKU stays an unpublished draft', async () => {
-  const amazon = { ...scope, channel: 'AMAZON' }
+  const amazon = { ...scope, channel: 'AMAZON', accountId: amazonAccountId }
   fixture.facts.mockResolvedValue({ ...facts(), scope: amazon, products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }] })
   const review = await previewStudioPublication(productId, amazon, null)
   await submitStudioPublication(productId, review.id!, {}, null)
   fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: true, message: 'Invalid content' }] })
   expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'PARTIAL' })
-  const where = (id: string) => ({ productId: id, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: accountId, aliasKey: '' })
+  const where = (id: string) => ({ productId: id, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: amazonAccountId, aliasKey: '' })
   expect(await prisma.channelListing.findFirstOrThrow({ where: where(productId) })).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false })
   expect(await prisma.channelListing.findFirstOrThrow({ where: where(childId) })).toMatchObject({ listingStatus: 'DRAFT', isPublished: false })
 }, 30_000)
