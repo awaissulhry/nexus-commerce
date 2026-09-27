@@ -14,7 +14,10 @@ function rule(css: string, selector: string) {
   if (!match) throw new Error(`${selector} not found`)
   return match[1].replace(/\s+/g, ' ')
 }
-const ownsScroll = (declarations: string) => /flex: 1;/.test(declarations) && /min-height: 0;/.test(declarations) && /overflow-y: auto;/.test(declarations)
+/* Up and down only: an overflow-y scroll area also scrolls sideways unless told not to, and a hidden tooltip at the
+   right edge was enough to slide the Media page 15 px (2026-09-28). */
+const ownsScroll = (declarations: string) => /flex: 1;/.test(declarations) && /min-height: 0;/.test(declarations)
+  && /overflow-y: auto;/.test(declarations) && /overflow-x: hidden;/.test(declarations)
 
 describe('the Media tab always scrolls', () => {
   it('the Media page, its loading state and the older tab each own a scroll area', () => {
@@ -27,6 +30,9 @@ describe('the Media tab always scrolls', () => {
     const route = read('./MediaPlanRoute.tsx')
     expect(route).toMatch(/fallback\(<SwitchPanel /)
     expect(read('../ImagesTab.tsx').match(/\{header\}/g)?.length).toBe(3)
+  })
+  it('the tab\'s tooltips draw in a portal, so a hidden one cannot make the scroll area wider than the page', () => {
+    expect(read('../ImagesTabRoute.tsx')).toMatch(/<TooltipPortalProvider><MediaPlanRoute /)
   })
   it('the studio frame scrolls a tab that forgets its own scroll area, instead of cutting it off', () => {
     const panel = rule(read('../../studio.module.css'), '.tabPanel')
