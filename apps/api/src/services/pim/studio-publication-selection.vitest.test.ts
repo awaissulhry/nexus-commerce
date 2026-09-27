@@ -45,6 +45,8 @@ vi.mock('../../db.js', () => {
     },
     update: async ({ where, data }: any) => { const next = { ...m.rows.get(where.id), ...data }; m.rows.set(where.id, structuredClone(next)); return structuredClone(next) },
   }, channelListing: { createMany: vi.fn(async () => ({ count: 0 })), updateMany: vi.fn(async () => ({ count: 0 })), count: vi.fn(async () => 0) },
+  // Draft promotion reads the settled records; they are real only in the database suite.
+  channelListingSnapshot: { findMany: async () => [] },
   $queryRawUnsafe: vi.fn(), $transaction: async (fn: any) => fn(db) }
   return { default: db }
 })

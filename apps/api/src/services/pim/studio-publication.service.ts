@@ -31,12 +31,41 @@ const recordContext = (id: string, data: Record<string, any>, userId: string | n
   accountId: data.scope.accountId, aliasKey: data.delivery?.aliasKey ?? '',
 })
 
+/**
+ * Channels whose accepted SKU turns its still-draft row into a live listing here: Amazon only. eBay
+ * Trading does it in `reconcileEbayReceipt` with the ItemID. Shopify's synchronisation writes every
+ * delivered row itself, with the Shopify ids and the status Shopify verified (ACTIVE, or INACTIVE for a
+ * Shopify draft), so promoting here could only overrule an honest INACTIVE.
+ */
+const PROMOTE_ON_ACCEPTANCE = new Set(['AMAZON'])
+
+/**
+ * The rows whose SKU the channel accepted in this publication — per SKU, as the settled records say —
+ * become published, ACTIVE and unpaused, but only while they are still drafts (DRAFT, unpublished,
+ * no channel id). A live listing is never one, so an operator's own pause on it is never undone.
+ */
+async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: PublicationRecordContext) {
+  if (!PROMOTE_ON_ACCEPTANCE.has(context.channel)) return
+  const accepted = await tx.channelListingSnapshot.findMany({ where: { publishEventId: context.reviewId, reason: 'publish', outcome: 'ACCEPTED',
+    channel: context.channel, marketplace: context.marketplace, aliasKey: context.aliasKey, payload: { path: ['channelConnectionId'], equals: context.accountId } },
+  select: { channelListingId: true } })
+  if (!accepted.length) return
+  await tx.channelListing.updateMany({ where: { id: { in: accepted.map(row => row.channelListingId) }, channel: context.channel,
+    marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey,
+    listingStatus: 'DRAFT', isPublished: false, externalListingId: null },
+  data: { isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: { increment: 1 } } })
+}
+
 /** Receipt and accepted baseline move together; legacy operations never acquire an invented send record. */
 async function storeResult(id: string, data: Record<string, any>, userId: string | null, result: StudioPublishResult, statuses: string[]) {
   return prisma.$transaction(async tx => {
     const stored = await tx.bulkOperation.updateMany({ where: { id, status: { in: statuses } },
       data: { status: result.status, completedAt: IN_FLIGHT.includes(result.status) ? null : new Date(), changes: json({ ...data, result }) } })
-    if (stored.count && data.captureVersion === 1) await settlePublicationRecords(tx, recordContext(id, data, userId), result)
+    if (stored.count && data.captureVersion === 1) {
+      const context = recordContext(id, data, userId)
+      await settlePublicationRecords(tx, context, result)
+      await promoteAcceptedDrafts(tx, context)
+    }
     return stored
   })
 }
