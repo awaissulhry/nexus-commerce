@@ -86,3 +86,55 @@ describe('sendEbayInventoryGroup', () => {
     expect(r.group).not.toHaveBeenCalled()
   })
 })
+
+describe('sendEbayInventoryGroup — variation pictures (images rebuild P2d)', () => {
+  const colourGroup = { title: 'Jacket', description: '<p>Warm</p>', imageUrls: ['https://img.example/cover.jpg'], aspects: {}, variantSKUs: ['FAM-NERO', 'FAM-GIALLO'],
+    variesBy: { specifications: [{ name: 'Colore', values: ['Nero', 'Giallo'] }] } }
+  /** A stateful eBay: items keep their stock and photos; `stockMovesAfterRead` simulates a stock update landing in the window. */
+  function store(opts: { itemStatus?: Record<string, number>; stockMovesAfterRead?: string } = {}) {
+    const events: string[] = []
+    let current: Record<string, unknown> = structuredClone(colourGroup)
+    const records: Record<string, any> = Object.fromEntries(['FAM-NERO', 'FAM-GIALLO'].map((sku, i) => [sku,
+      { product: { title: sku, aspects: { Colore: [i ? 'Giallo' : 'Nero'] }, imageUrls: ['https://img.example/old.jpg'] }, condition: 'NEW', availability: { shipToLocationAvailability: { quantity: 5 + i } }, groupIds: ['FAM'] }]))
+    return { events, records,
+      group: vi.fn(async () => ({ status: 200, body: structuredClone(current) })),
+      items: vi.fn(async (skus: string[]) => { events.push(`read:${skus.join(',')}`); return skus.map(sku => ({ sku, statusCode: 200, inventoryItem: structuredClone(records[sku]) })) }),
+      getItem: vi.fn(async () => ({ xml: `<GetItemResponse><Item><ItemID>9000000001</ItemID><Title>Jacket</Title></Item></GetItemResponse>` })),
+      put: vi.fn(async (_key: string, body: Record<string, unknown>) => { events.push('put:group'); current = structuredClone(body); return { status: 204, text: '' } }),
+      putItem: vi.fn(async (sku: string, body: any) => {
+        events.push(`put:${sku}`)
+        const status = opts.itemStatus?.[sku] ?? 204
+        if (status < 300) records[sku] = { ...structuredClone(body), groupIds: ['FAM'] }
+        if (opts.stockMovesAfterRead === sku) records[sku].availability = { shipToLocationAvailability: { quantity: 99 } }
+        return { status, text: status >= 400 ? 'refused' : '' }
+      }) }
+  }
+  const colourDestination = { ...destination, expectedSkus: ['FAM-NERO', 'FAM-GIALLO'] }
+  const bodies = (r: ReturnType<typeof store>) => ({
+    'FAM-NERO': { product: { ...r.records['FAM-NERO'].product, imageUrls: ['https://img.example/n1.jpg', 'https://img.example/n2.jpg'] }, condition: 'NEW' },
+    'FAM-GIALLO': { product: { ...r.records['FAM-GIALLO'].product, imageUrls: ['https://img.example/g1.jpg'] }, condition: 'NEW' },
+  })
+  const pictureGroup = { ...colourGroup, variesBy: { ...colourGroup.variesBy, aspectsImageVariesBy: ['Colore'] } }
+  const send = async (r: ReturnType<typeof store>, items = bodies(r)) => sendEbayInventoryGroup({ destination: colourDestination, groupKey: 'FAM', group: pictureGroup,
+    expectedRevision: (await readEbayInventoryListing(colourDestination, r)).revision!, fields: ['variationPictures'], items, reads: r })
+
+  it('writes each SKU with its fresh stock echoed back, then the group, and verifies the photo order', async () => {
+    const r = store(); r.records['FAM-GIALLO'].availability = { shipToLocationAvailability: { quantity: 3 } }
+    const receipt = await send(r)
+    expect(r.events.filter(e => e.startsWith('put') || (e.startsWith('read:FAM-') && !e.includes(',')))).toEqual(['read:FAM-NERO', 'put:FAM-NERO', 'read:FAM-GIALLO', 'put:FAM-GIALLO', 'put:group'])
+    expect(r.putItem.mock.calls.map(([sku, body]) => [sku, body.availability.shipToLocationAvailability.quantity, body.product.imageUrls])).toEqual([
+      ['FAM-NERO', 5, ['https://img.example/n1.jpg', 'https://img.example/n2.jpg']], ['FAM-GIALLO', 3, ['https://img.example/g1.jpg']]])
+    expect(receipt).toMatchObject({ verified: true, warnings: [] })
+  })
+  it('a stock change landing in the write window is reported, never hidden', async () => {
+    const receipt = await send(store({ stockMovesAfterRead: 'FAM-GIALLO' }))
+    expect(receipt.verified).toBe(false)
+    expect(receipt.warnings.join(' ')).toContain('quantity of FAM-GIALLO changed during the photo update')
+  })
+  it('a refusal on the first SKU sends nothing; on a later SKU it names what was already updated', async () => {
+    await expect(send(store({ itemStatus: { 'FAM-NERO': 400 } }))).rejects.toMatchObject({ notSent: true })
+    const r = store({ itemStatus: { 'FAM-GIALLO': 400 } })
+    await expect(send(r)).rejects.toThrow('1 SKU(s) were already updated: FAM-NERO')
+    expect(r.events).not.toContain('put:group')
+  })
+})

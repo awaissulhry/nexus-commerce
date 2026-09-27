@@ -337,7 +337,7 @@ export async function submitStudioPublication(productId: string, id: string, bod
       } else if (plan.prepared.kind === 'ebay-inventory-send') {
         // PE P3.4 — one whole-group PUT built from the fresh live group; journal first, read back after. No offer is touched.
         const inventory = plan.prepared
-        const receipt = await sendEbayInventoryGroup({ destination: inventory.destination, groupKey: inventory.groupKey, group: inventory.group,
+        const receipt = await sendEbayInventoryGroup({ destination: inventory.destination, groupKey: inventory.groupKey, group: inventory.group, items: inventory.items,
           expectedRevision: inventory.expectedRevision, fields: inventory.fields, reads: ebayInventoryReads(scope.accountId, scope.marketplace, inventory.destination.itemId),
           beforeSend: request => recordPublicationRequests(context, inventory.products.map(p => ({ ...p, request: { ...request, intentVersion: 1, writes: inventory.fieldWrites[p.productId] ?? [] } }))) })
         result = { id, status: receipt.verified ? 'VERIFIED' : 'UNVERIFIED', warnings: receipt.warnings,

@@ -17,10 +17,14 @@ type Json = Record<string, unknown>
 export interface EbayInventoryOurs {
   title: string | null; description: string | null; pictures: string[]; aspects: Record<string, string[]>
   axes: string[]; order: Record<string, string[]>; variants: Array<Identity & { values: Record<string, string> }>
+  /** Images rebuild P2d — the photos each SKU carries (its value's set) and the aspect they vary by. */
+  variationPictures?: { axis: string; bySku: Record<string, string[]> }
 }
 export interface EbayInventoryChangePlan {
   kind: 'ebay-inventory-changes'; changes: StudioPublishChange[]; remoteRevision: string; ownerProductId: string
   groupKey: string | null; liveGroup: Json | null; aspectNames: Record<string, string>
+  /** The live inventory items the review read, by SKU — a variation picture send rewrites them whole. */
+  liveItems: Record<string, Json>
   /** Where the send re-reads before it writes, and who owns the group-level fields. */
   destination: EbayInventoryDestination; owner: Identity
 }
@@ -34,6 +38,25 @@ const fromLive = (value: LiveValue | undefined): StudioPublishValue => !value ||
 const pictureRefusal = (urls: string[]) => !urls.length ? 'The gallery cannot be cleared; at least one picture is required.'
   : urls.length > 24 || urls.some(url => !/^https:\/\//i.test(url)) ? 'eBay requires at most 24 HTTPS picture URLs.' : undefined
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+/** An inventory_item PUT replaces the whole object: these fields are written back; the read-only ones are dropped; any
+ *  other field would be lost, so it refuses. Availability is left out here and echoed FRESH at send (stock moves). */
+const ITEM_WRITABLE = new Set(['availability', 'condition', 'conditionDescription', 'conditionDescriptors', 'packageWeightAndSize', 'product'])
+const ITEM_READ_ONLY = new Set(['sku', 'locale', 'groupIds', 'inventoryItemGroupKeys'])
+const texts = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+const obj = (v: unknown): Json => v && typeof v === 'object' && !Array.isArray(v) ? v as Json : {}
+/** eBay's name for the aspect our pictures vary by, as the live group spells it, or null when the group does not vary by it. */
+const liveAxisName = (group: Json | null, axis: string) => (obj(group?.variesBy).specifications as unknown[] | undefined ?? []).map(obj)
+  .map(s => String(s.name ?? '')).find(name => ebayAspectKey(name) === ebayAspectKey(axis)) ?? null
+function variationPicturesRefusal(ours: NonNullable<EbayInventoryOurs['variationPictures']>, group: Json | null, items: Record<string, Json>): string | undefined {
+  if (!liveAxisName(group, ours.axis)) return `This eBay listing does not vary by ${ours.axis}; its photos cannot vary by it.`
+  for (const [sku, urls] of Object.entries(ours.bySku)) {
+    if (!items[sku]) return `${sku} is not on this eBay listing yet. New variations come in a later step (P3.6).`
+    if (!urls.length || urls.length > 12 || urls.some(url => !/^https:\/\//i.test(url))) return `${sku}: eBay allows 1 to 12 HTTPS photos per variation.`
+    const foreign = Object.keys(items[sku]).filter(key => !ITEM_WRITABLE.has(key) && !ITEM_READ_ONLY.has(key))
+    if (foreign.length) return `The live eBay item ${sku} holds an unknown field (${foreign.join(', ')}); a whole-object PUT could drop it.`
+  }
+  return undefined
+}
 
 export function prepareEbayInventoryChanges(input: { owner: Identity; ours: EbayInventoryOurs; live: ServerLiveRead<EbayInventoryRaw>; baselineValues: Map<string, StudioPublishValue>; destination: EbayInventoryDestination }): EbayInventoryChangePlan {
   const { owner, ours, live, baselineValues, destination } = input
@@ -49,6 +72,11 @@ export function prepareEbayInventoryChanges(input: { owner: Identity; ours: Ebay
   add(owner, 'title', 'Title', known(ours.title), channel('title'), !ours.title?.trim() ? 'A title is required; it cannot be cleared.' : undefined)
   add(owner, 'description', 'Description', known(ours.description), channel('description'), !ours.description?.trim() ? 'Clearing the description is unsupported; eBay requires a description.' : undefined)
   add(owner, 'pictures', 'Listing pictures', known(ours.pictures), channel('pictures'), pictureRefusal(ours.pictures))
+  if (ours.variationPictures) {
+    const liveVariation = group ? known({ axis: texts(obj(group.variesBy).aspectsImageVariesBy)[0] ?? null,
+      bySku: Object.fromEntries(Object.keys(ours.variationPictures.bySku).map(sku => [sku, texts(obj(live.raw.items[sku]?.product).imageUrls)])) }) : unknown(unreadReason!)
+    add(owner, 'variationPictures', 'Variation pictures', known(ours.variationPictures), liveVariation, variationPicturesRefusal(ours.variationPictures, group, live.raw.items))
+  }
 
   const aspectNames: Record<string, string> = {}
   for (const name of Object.keys((group?.aspects as Json | undefined) ?? {})) aspectNames[ebayAspectKey(name)] = name
@@ -71,13 +99,14 @@ export function prepareEbayInventoryChanges(input: { owner: Identity; ours: Ebay
     add({ productId: owner.productId, sku: remote.sku }, `variation-removed:${remote.sku}`, 'Variation not in Nexus', { state: 'absent' }, known(remote.values), LATER)
 
   return { kind: 'ebay-inventory-changes', changes: planPublicationChanges(inputs), remoteRevision: live.revision ?? 'unavailable',
-    ownerProductId: owner.productId, groupKey: live.raw.groupKey, liveGroup: group, aspectNames, destination, owner }
+    ownerProductId: owner.productId, groupKey: live.raw.groupKey, liveGroup: group, aspectNames, destination, owner, liveItems: live.raw.items }
 }
 
 /** The exact inventory_item_group PUT: the fresh live group with only the ticked fields replaced. */
-export function compileEbayInventoryChanges(plan: EbayInventoryChangePlan, selectedIds: string[]): { groupKey: string | null; group: Json | null; fieldWrites: Record<string, StudioPublishFieldWrite[]> } {
+export function compileEbayInventoryChanges(plan: EbayInventoryChangePlan, selectedIds: string[]): { groupKey: string | null; group: Json | null; items: Record<string, Json>; fieldWrites: Record<string, StudioPublishFieldWrite[]> } {
   const selected = selectPublicationChanges(plan.changes, selectedIds)
-  if (!selected.length) return { groupKey: plan.groupKey, group: null, fieldWrites: {} }
+  const items: Record<string, Json> = {}
+  if (!selected.length) return { groupKey: plan.groupKey, group: null, items, fieldWrites: {} }
   if (!plan.liveGroup || !plan.groupKey || plan.remoteRevision === 'unavailable') throw new Error('A successful live eBay group read is required before sending changes.')
   const foreign = Object.keys(plan.liveGroup).filter(key => !GROUP_FIELDS.has(key))
   if (foreign.length) throw new Error(`The live eBay group holds an unknown field (${foreign.join(', ')}); a whole-object PUT could drop it. Nothing will be sent.`)
@@ -104,8 +133,18 @@ export function compileEbayInventoryChanges(plan: EbayInventoryChangePlan, selec
         aspects[plan.aspectNames[key] ?? key] = value
       }
       group.aspects = aspects
+    } else if (change.field === 'variationPictures') {
+      const pictures = value as EbayInventoryOurs['variationPictures']
+      const refusal = pictures ? variationPicturesRefusal(pictures, plan.liveGroup, plan.liveItems) : 'The variation pictures are invalid.'
+      if (refusal || !pictures) throw new Error(refusal)
+      group.variesBy = { ...obj(group.variesBy), aspectsImageVariesBy: [liveAxisName(plan.liveGroup, pictures.axis)] }
+      for (const [sku, urls] of Object.entries(pictures.bySku)) {
+        const { availability: _fresh, ...body } = Object.fromEntries(Object.entries(structuredClone(plan.liveItems[sku])).filter(([key]) => ITEM_WRITABLE.has(key)))
+        items[sku] = { ...body, product: { ...obj(body.product), imageUrls: urls } }
+      }
     } else throw new Error(`${change.label} has no supported eBay Inventory write.`)
   }
-  if (!same(group.variantSKUs, plan.liveGroup.variantSKUs) || !same(group.variesBy, plan.liveGroup.variesBy)) throw new Error('The compiled group would change its variants. Nothing will be sent.')
-  return { groupKey: plan.groupKey, group, fieldWrites }
+  const variants = (g: Json) => { const { aspectsImageVariesBy: _pictures, ...rest } = obj(g.variesBy); return rest }
+  if (!same(group.variantSKUs, plan.liveGroup.variantSKUs) || !same(variants(group), variants(plan.liveGroup))) throw new Error('The compiled group would change its variants. Nothing will be sent.')
+  return { groupKey: plan.groupKey, group, items, fieldWrites }
 }

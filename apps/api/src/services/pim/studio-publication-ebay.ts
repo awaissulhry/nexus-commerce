@@ -271,6 +271,15 @@ export async function prepareEbayInventoryPublication(facts: PublicationFacts): 
     aspects: Object.fromEntries(Object.entries(shared.itemSpecifics ?? {}).map(([name, values]) => [name, (Array.isArray(values) ? values : [values]).map(String)])),
     axes: shared.variationSpecificNames, order: shared.variationSpecificsSet ?? {},
     variants: shared.variations.filter(v => bySku.has(v.sku)).map(v => ({ productId: bySku.get(v.sku)!, sku: v.sku, values: v.specifics })) }
+  // Images rebuild P2d — each SKU carries its value's photos (the same sets a Trading listing sends as picture sets).
+  if (shared.variationPictures) {
+    const { axisName, byValue } = shared.variationPictures
+    const skus = Object.fromEntries(shared.variations.filter(v => bySku.has(v.sku)).flatMap(v => {
+      const urls = byValue[String(v.specifics?.[axisName] ?? '')]
+      return urls?.length ? [[v.sku, urls]] : []
+    }))
+    if (Object.keys(skus).length) ours.variationPictures = { axis: axisName, bySku: skus }
+  }
   return { kind: 'ebay-inventory', marketplace: scope.marketplace, itemId: built.itemId, destination, owner, products: [owner], ours, live }
 }
 
