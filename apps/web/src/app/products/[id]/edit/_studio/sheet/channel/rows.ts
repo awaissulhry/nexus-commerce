@@ -212,6 +212,16 @@ export function variantRowsOf(rows: ChannelSheetRow[], aliasId: string | null): 
   return rows.filter((r) => r.rowKind === 'variant' && aliasKeyOf(r.aliasId) === key)
 }
 
+/**
+ * The rows one listing's review covers. Shopify's field synchronization covers every row linked to a Shopify product or
+ * variant — a single product's one row too, which has no variation rows (it was left out, so a single product's Shopify
+ * fields could not be sent; found on a development store, Lane B slice B4). The other channels' checks cover the variation rows.
+ */
+export function reviewRowsOf(rows: ChannelSheetRow[], aliasId: string | null, synchronize: boolean): ChannelSheetRow[] {
+  const key = aliasKeyOf(aliasId)
+  return synchronize ? rows.filter((r) => !!r.shopify && aliasKeyOf(r.aliasId) === key) : variantRowsOf(rows, aliasId)
+}
+
 /** The band row of one alias group, when the family root is listed under it. */
 export function bandRowOf(rows: ChannelSheetRow[], aliasId: string | null): ChannelSheetRow | undefined {
   const key = aliasKeyOf(aliasId)
