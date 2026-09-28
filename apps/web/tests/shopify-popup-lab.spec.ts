@@ -193,6 +193,8 @@ test('a read-only field is shown with its reason and does not block the rest of 
   await expect(externalId.getByRole('textbox')).toBeDisabled()
   await editor.getByRole('textbox', { name: 'Title' }).fill('Returns within 30 days')
   await editor.getByRole('button', { name: 'Review entry changes' }).click()
+  /* One changed field is "1 field", not "1 fields" (B4, seen on a development store). */
+  await expect(page.getByRole('dialog', { name: 'Save reusable entry to Shopify?' })).toContainText('1 field will be saved.')
   await page.getByRole('dialog', { name: 'Save reusable entry to Shopify?' }).getByRole('button', { name: 'Save to Shopify' }).click()
   /* After the save the editor is titled by the entry's new name. */
   await expect(page.getByRole('dialog', { name: 'Returns within 30 days' }).getByText('Entry saved and verified in Shopify.')).toBeVisible()
