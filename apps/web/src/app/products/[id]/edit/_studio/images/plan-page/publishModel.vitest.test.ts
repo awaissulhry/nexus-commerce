@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StudioPublishChange, StudioPublishReview } from '@nexus/shared/studio-publication'
 
-import { amazonCheck, amazonOutcome, ebayCheck, ebayOutcome, unsupportedReason, type AmazonRunLike } from './publishModel'
+import { amazonCheck, amazonOutcome, destinationsToCheck, ebayCheck, ebayOutcome, unsupportedReason, type AmazonRunLike } from './publishModel'
 
 const change = (field: string, status: StudioPublishChange['status'], selectable = true, reason = ''): StudioPublishChange => ({
   id: JSON.stringify(['parent', field]), productId: 'parent', sku: 'GALE', field, label: field, current: { state: 'value', value: 'ours' },
@@ -20,6 +20,17 @@ describe('Review & publish photos', () => {
     expect(ebayCheck(review({ changes: [change('pictures', 'SAME'), change('Pictures', 'SAME')] }))).toMatchObject({ kind: 'same' })
     expect(ebayCheck(review({ changes: [change('Pictures', 'DIFFERS', false, 'eBay allows 12 pictures per value.')] }))).toEqual({ kind: 'blocked', reason: 'eBay allows 12 pictures per value.' })
     expect(ebayCheck(review({ id: null, issues: [{ severity: 'error', message: 'Reconnect this account before publishing.' }] }))).toEqual({ kind: 'blocked', reason: 'Reconnect this account before publishing.' })
+  })
+  it('eBay: an unsaved review shows the error that names no field first — only that kind blocks a photos-only send', () => {
+    const issues = [{ severity: 'error' as const, field: 'category', message: "Category: Field 'Category' is required." },
+      { severity: 'error' as const, message: 'This listing alias uses the eBay Inventory API. … Nothing was sent.' }]
+    expect(ebayCheck(review({ id: null, issues }))).toEqual({ kind: 'blocked', reason: 'This listing alias uses the eBay Inventory API. … Nothing was sent.' })
+    expect(ebayCheck(review({ id: null, issues: issues.slice(0, 1) }))).toEqual({ kind: 'blocked', reason: "Category: Field 'Category' is required." })
+  })
+  it('opened from a channel view it checks that destination only; from the toolbar, every destination', () => {
+    const all = [{ key: 'amazon' }, { key: 'ebay-main' }, { key: 'ebay-alias' }]
+    expect(destinationsToCheck(all, 'ebay-alias')).toEqual([{ key: 'ebay-alias' }])
+    expect(destinationsToCheck(all, null)).toEqual(all)
   })
   it('Amazon: counts the SKUs and slots that change, blocks on any item problem, and reads the receipts', () => {
     const run: AmazonRunLike = { id: 'run-1', status: 'REVIEW', revision: 'r1', receipts: [],

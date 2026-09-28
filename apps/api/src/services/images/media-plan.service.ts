@@ -134,6 +134,9 @@ export async function loadDestinations(productIds: string[]) {
   const counts = [...groups.values()].flatMap(g => [...g.markets].map(([code, n]) => ({ channel: g.channel, code, n }))).sort((a, b) => b.n - a.n)
   const mainLanguage = counts.map(c => languagesOf(c.channel, c.code)[0]).find(Boolean) ?? 'en'
   const order: Record<MediaChannel, number> = { AMAZON: 0, EBAY: 1, SHOPIFY: 2, ETSY: 3 }
+  // ★ ①②③ (the DS AliasMark) only where one account and market hold more than one listing of the family.
+  const listingsAt = new Map<string, number>()
+  for (const g of groups.values()) listingsAt.set(`${g.channel}|${g.marketplace}|${g.accountId}`, (listingsAt.get(`${g.channel}|${g.marketplace}|${g.accountId}`) ?? 0) + 1)
   return { mainLanguage, destinations: [...groups.entries()].map(([key, g]) => {
     const alias = g.aliasKey ? aliases.find(a => a.id === g.aliasKey) ?? null : null
     const account = accounts.find(a => a.id === g.accountId)
@@ -143,6 +146,7 @@ export async function loadDestinations(productIds: string[]) {
       : alias && alias.status !== 'ACTIVE' ? 'This listing alias is archived.' : null
     return { key, channel: g.channel, marketplace: g.marketplace, markets: marketList, accountId: g.accountId, accountLabel: account?.accountLabel ?? null,
       accountActive: account?.isActive ?? false, alias: alias ? { id: alias.id, label: alias.label, position: alias.position } : null,
+      listingMark: (listingsAt.get(`${g.channel}|${g.marketplace}|${g.accountId}`) ?? 0) > 1 ? (g.aliasKey ? alias?.position ?? null : 0) : null,
       languages: [...new Set(own.length ? own : [mainLanguage])], listed: g.listed, productIds: [...g.productIds], targetable: !refusal, refusal,
       api: g.channel === 'EBAY' ? (usesEbayInventory({ listings: g.listingIds.map(id => ({ platformAttributes: attributesOf.get(id) })) }) ? 'INVENTORY' as const : 'TRADING' as const) : undefined }
   }).sort((a, b) => order[a.channel] - order[b.channel] || a.marketplace.localeCompare(b.marketplace) || (a.accountLabel ?? '').localeCompare(b.accountLabel ?? '') || (a.alias?.position ?? 0) - (b.alias?.position ?? 0)) }

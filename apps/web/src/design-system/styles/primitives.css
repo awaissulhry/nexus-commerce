@@ -1640,3 +1640,12 @@ button.nds-token > .t,
 
 .nds-fchip-full { display: inline-flex; align-items: center; gap: 6px; }
 .nds-fchip-compact { display: none; }
+
+/* AliasMark — ★ the main listing, ①②③ its aliases. Tabular so marks line up as a list grows. */
+.nds-alias-mark {
+  flex: 0 0 auto;
+  font-size: var(--nds-font-size-base);
+  line-height: 1;
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}

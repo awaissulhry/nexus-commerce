@@ -10,7 +10,7 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { publicationRequest } from '../../publication/request'
 import { requestAmazonRun, requestAmazonWorkspace } from '../amazon/transport'
 import { destinationLabel, type MediaDestinationRow, type MediaRead } from './model'
-import { amazonCheck, amazonOutcome, ebayCheck, ebayOutcome, unsupportedReason, type AmazonSend, type EbaySend, type PhotoCheck, type PhotoOutcome } from './publishModel'
+import { amazonCheck, amazonOutcome, destinationsToCheck, ebayCheck, ebayOutcome, unsupportedReason, type AmazonSend, type EbaySend, type PhotoCheck, type PhotoOutcome } from './publishModel'
 import styles from './planPage.module.css'
 
 interface Line { d: MediaDestinationRow; check: PhotoCheck; ticked: boolean; sending?: boolean; outcome?: PhotoOutcome }
@@ -19,17 +19,25 @@ const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const TONE = { ready: 'success', same: 'neutral', blocked: 'warning', unsupported: 'neutral', checking: 'neutral' } as const
 const STATE = { ready: 'Ready', same: 'No change', blocked: 'Fix first', unsupported: 'Not here', checking: 'Checking…' } as const
 
-export interface PublishPhotosDialogProps { read: MediaRead; open: boolean; onClose(): void }
+export interface PublishPhotosDialogProps {
+  read: MediaRead
+  open: boolean
+  /** Opened from one destination's view: check and offer that destination only, with "Check all destinations". */
+  only?: string | null
+  onClose(): void
+}
 
 /**
  * Images rebuild P4c — "Review & publish photos" (PLAN.md §5.6). Every destination is checked against the channel first
  * (eBay: a fresh review of the listing; Amazon: an image run's review), each says what would change, and only the ticked
  * ones are sent — photos only. One destination at a time, each with its own answer; nothing else about a listing changes.
  */
-export function PublishPhotosDialog({ read, open, onClose }: PublishPhotosDialogProps) {
+export function PublishPhotosDialog({ read, open, only = null, onClose }: PublishPhotosDialogProps) {
   const canPublish = usePermission('products.publish')
   const [lines, setLines] = useState<Line[]>([])
   const [phase, setPhase] = useState<Phase>('checking')
+  // Which destinations this window checks: the one it was opened from, until "Check all destinations".
+  const [scope, setScope] = useState<string | null>(only)
   const round = useRef(0)
   const base = `/api/products/${encodeURIComponent(read.rootId)}/studio-publication`
   const update = (key: string, change: Partial<Line>) => setLines(list => list.map(l => l.d.key === key ? { ...l, ...change } : l))
@@ -50,9 +58,10 @@ export function PublishPhotosDialog({ read, open, onClose }: PublishPhotosDialog
     return check.kind === 'checking' ? { kind: 'blocked', reason: 'Amazon is taking long to check these photos. Check again in a minute.' } : check
   }
 
-  const check = async () => {
+  const check = async (onlyKey: string | null = scope) => {
     const token = ++round.current
-    const initial: Line[] = read.destinations.map(d => { const reason = unsupportedReason(d); return { d, check: reason ? { kind: 'unsupported', reason } : { kind: 'checking' }, ticked: false } })
+    const chosen = destinationsToCheck(read.destinations, onlyKey)
+    const initial: Line[] = chosen.map(d => { const reason = unsupportedReason(d); return { d, check: reason ? { kind: 'unsupported', reason } : { kind: 'checking' }, ticked: false } })
     setLines(initial); setPhase('checking')
     for (const line of initial) {
       if (line.check.kind !== 'checking') continue
@@ -63,8 +72,9 @@ export function PublishPhotosDialog({ read, open, onClose }: PublishPhotosDialog
     }
     setPhase('ready')
   }
-  // A new opening checks every destination again (a review is only good for a few minutes).
-  useEffect(() => { if (open && canPublish) void check(); return () => { round.current++ } }, [open, canPublish]) // eslint-disable-line react-hooks/exhaustive-deps
+  // A new opening checks again (a review is only good for a few minutes): the destination it was opened from, else all.
+  useEffect(() => { if (open) setScope(only); if (open && canPublish) void check(only); return () => { round.current++ } }, [open, canPublish, only]) // eslint-disable-line react-hooks/exhaustive-deps
+  const checkAll = () => { setScope(null); void check(null) }
 
   const sendOne = async (send: EbaySend | AmazonSend): Promise<PhotoOutcome> => {
     if (send.channel === 'EBAY') {
@@ -94,6 +104,8 @@ export function PublishPhotosDialog({ read, open, onClose }: PublishPhotosDialog
   const skipped = count('ready') - ticked.length
   const footer = <>
     {phase !== 'sending' && <Button size="sm" variant="secondary" disabled={phase === 'checking' || !canPublish} onClick={() => void check()}>Check again</Button>}
+    {phase !== 'sending' && scope && read.destinations.length > 1 && <Button size="sm" variant="secondary" disabled={phase === 'checking' || !canPublish} onClick={checkAll}>
+      Check all {read.destinations.length} destinations</Button>}
     <span className={styles.spacer} />
     <Button size="sm" variant={phase === 'done' ? 'primary' : 'secondary'} disabled={phase === 'sending'} onClick={onClose}>{phase === 'done' ? 'Done' : 'Cancel'}</Button>
     {phase !== 'done' && <Button size="sm" variant="primary" disabled={phase !== 'ready' || !ticked.length || !canPublish} onClick={() => void publish()}>
@@ -112,12 +124,14 @@ export function PublishPhotosDialog({ read, open, onClose }: PublishPhotosDialog
           <Checkbox label={destinationLabel(line.d)} checked={line.ticked} disabled={line.check.kind !== 'ready' || phase !== 'ready' || !canPublish}
             onChange={() => update(line.d.key, { ticked: !line.ticked })} />
           <span className={styles.publishDetail}>
-            <span className={styles.cell}>
+            <span className={styles.publishStatus}>
               {line.outcome ? <Tag tone={line.outcome.tone}>{line.outcome.tone === 'success' ? 'Sent' : line.outcome.tone === 'danger' ? 'Failed' : 'Sending'}</Tag>
                 : line.sending ? <Tag tone="info">Sending…</Tag> : <Tag tone={TONE[line.check.kind]}>{STATE[line.check.kind]}</Tag>}
               <span>{line.outcome?.text ?? ('summary' in line.check ? line.check.summary : 'reason' in line.check ? line.check.reason : '')}</span>
             </span>
             {!line.outcome && line.check.kind === 'ready' && line.check.note && <span className={styles.muted}>{line.check.note}</span>}
+            {!line.outcome && line.check.kind === 'ready' && line.d.channel === 'EBAY' && <span className={styles.muted}>
+              Sending is one revision of this listing. eBay allows 250 revisions of a listing per calendar day.</span>}
           </span>
         </li>)}
       </ul>

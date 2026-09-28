@@ -43,7 +43,10 @@ async function readNow(productId: string, scope: LiveReadScope): Promise<ServerL
     if (!itemId) return notReadable(destination, 'This listing is not on eBay yet.')
     const reads = ebayInventoryReads(d.accountId, scope.marketplace, itemId)
     const expectedSkus = children.map(p => p.sku)
-    return listings.some(l => Object.keys(object(object(l.platformAttributes).__offerIds)).length > 0)
+    const inventory = listings.some(l => Object.keys(object(object(l.platformAttributes).__offerIds)).length > 0)
+    // The Inventory read finds the group by the family's parent SKU — the main listing's group, never an alias's.
+    if (inventory && d.aliasKey) return notReadable(destination, 'This alias uses the eBay Inventory API. Nexus reads Inventory listings by the family\'s SKUs, which belong to the main listing, so it cannot read this alias.')
+    return inventory
       ? readEbayInventoryListing({ ...destination, expectedSkus, itemId, parentSku: parent.sku }, reads)
       : readEbayTradingListing({ ...destination, expectedSkus, itemId }, { getItem: reads.getItem })
   }

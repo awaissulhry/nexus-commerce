@@ -82,6 +82,11 @@ describe('media plan read', () => {
       ['EBAY', 'IT', ['IT'], 'Winter', ['it']],
     ])
     expect(read.layouts[ebayKey()].checks.map((c: { code: string }) => c.code)).toContain('no-common')
+    // ★ ①: eBay IT on this account holds two listings of the family; Amazon's one listing needs no mark.
+    expect(read.destinations.map(d => d.listingMark)).toEqual([null, 0, 1])
+    // The alias is on the Inventory API (offer ids on its rows): its SKUs are the main listing's, so it is blocked.
+    expect(read.layouts[ebayKey(ids.alias)].checks.filter((c: { code: string }) => c.code === 'inventory-alias').map((c: { severity: string }) => c.severity)).toEqual(['error'])
+    expect(read.layouts[ebayKey()].checks.map((c: { code: string }) => c.code)).not.toContain('inventory-alias')
   })
 })
 
