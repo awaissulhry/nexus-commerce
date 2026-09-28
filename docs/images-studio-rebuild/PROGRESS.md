@@ -189,7 +189,16 @@ PLAN §4.5 and §11, closed in one PR:
   **Size, measured** (Owner's word, one real download, read only): IT All photos (182 files, photos 2,000–2,250 px)
   stops at the limit in about 2 s — "This ZIP would be larger than 100 MB, the most Nexus makes in one ZIP. No ZIP was
   saved." Nothing reached the Downloads folder. The 100 MB limit protected nothing that costs (P4-PLAN § P4d), so the
-  Owner chose to raise it: **1 GB** (the fix PR after #131), one shared constant for the server and the window.
+  Owner chose to raise it: **1 GB** (#134, `be762276f`), one shared constant for the server and the window.
+- **1 GB LIVE and proven (2026-09-28).** #134 merged 08:38 UTC. The first release run failed only on time: the
+  real-PostgreSQL runner stops its tests at 600 s ("vitest exit null"; 11 min 44 s against 9 min 12 s before) — a rerun
+  of the failed jobs passed and shipped (API 09:13, worker and scheduler 09:22). One real download in production
+  (Owner's word, read only): IT All photos → a 504 MB ZIP, 182 files `ASIN.SLOT.jpg`, 21 ASINs, all real JPEGs
+  (0.8–4.7 MB each), the archive test clean. The server made it in 4.3 s (first byte); the file took 3 min 41 s to
+  arrive (about 2.3 MB/s). The API's memory peaked at 1.6 GB of 8 GB.
+- **Found in that proof, fixed:** the button said "Making the ZIP…" for the whole download, although the ZIP was made
+  in 4 s. Now it says "Making the ZIP…" until the server answers, then "Downloading the ZIP… 120 of 504 MB" (the answer's
+  size; "120 MB" when it has none), one update per MB.
 - **Open:** the Amazon channel view → **Export ZIP for Seller Central**. One window (`plan-page/AmazonZipDialog.tsx`):
   **Market** (the account's markets), **What to export** (All photos · Safety images · Country photos), what the ZIP
   holds and in which language, **Where to upload it** (Seller Central's own names), then the list: every file
