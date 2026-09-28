@@ -290,6 +290,8 @@ export interface GalleryMediaPopupProps {
   onDirtyChange?(dirty: boolean): void
   /** An upload changed the library (the sheet reads again). Defaults to `onSaved`. */
   onLibraryChanged?(): void
+  /** The family's root product: another screen's save of it is heard live. */
+  familyId: string | null
 }
 
 /**
@@ -298,8 +300,8 @@ export interface GalleryMediaPopupProps {
  * (`PUT /product-media` bound to the revision read when it opened).
  */
 export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
-  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved } = props
-  const data = useGalleryPopupData(productId, context)
+  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved, familyId } = props
+  const data = useGalleryPopupData(productId, context, familyId)
   // The list and its revision from the read the pop-up opened with; the library from the latest read.
   const working: ProductMediaWorkspace | null = useMemo(() => data.baseline ? { ...data.baseline, assets: data.latest?.assets ?? data.baseline.assets } : null, [data.baseline, data.latest])
   const [draft, setDraft] = useState<gallery.GalleryDraft | null>(null)
@@ -350,7 +352,7 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
   }
 
   async function send(read: ProductMediaWorkspace, current: gallery.GalleryDraft, request: NonNullable<typeof body>) {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); data.setSaving(true)
     // The inherited list after a reset is the server's to resolve: the cell shows it when the sheet reads again.
     const applied = request.collection ? onApply(gallery.galleryCell(read, current)) : { restore: () => undefined, done: () => undefined }
     const subject = `product-media:${JSON.stringify([productId, context])}`
@@ -358,12 +360,14 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
     reporter.pending(writeId, subject)
     try {
       await data.save(request)
+      data.setSaving(false)
       reporter.resolved(writeId, true, undefined, subject)
       applied.done()
       onSaved()
       if (mounted.current) { onClose(); afterSave.current?.() }
     } catch (e) {
       applied.restore()
+      data.setSaving(false)
       const network = e instanceof TypeError || (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError'))
       const server = e instanceof Error ? e.message : model.POPUP_TEXT.unconfirmed
       // "Media changed since this editor opened. Reload the gallery …": said the way every pop-up says it.

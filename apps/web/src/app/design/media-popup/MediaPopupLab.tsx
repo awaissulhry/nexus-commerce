@@ -97,7 +97,7 @@ export function MediaPopupLab() {
           </PressableRow>
         </div>
       </>}
-      {open === LAB_CAP && <GalleryMediaPopup key={`cap:${where}`} productId={LAB_CAP} title="LAB-CAP" context={capContext}
+      {open === LAB_CAP && <GalleryMediaPopup key={`cap:${where}`} productId={LAB_CAP} familyId={LAB_CAP} title="LAB-CAP" context={capContext}
         contextLabel={where === 'shared' ? null : 'eBay IT · Lab eBay · Main listing'} channelLabel={where === 'shared' ? null : 'eBay'} canEdit={canEdit}
         anchor={capRow.current} initial={capCell} reporter={reporter}
         onApply={items => { setCapOverlay(items); return { restore: () => setCapOverlay(null), done: () => undefined } }}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ProductMediaQuery, ProductMediaWorkspace } from '@nexus/shared/product-media'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 
 import { adoptAfterUpload, VIDEO_FILE } from './galleryPopupModel'
 import type { Upload } from './popupParts'
@@ -25,7 +26,7 @@ async function answer(res: Response) {
 
 export type GalleryReadState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready' }
 
-export function useGalleryPopupData(productId: string, context: ProductMediaQuery) {
+export function useGalleryPopupData(productId: string, context: ProductMediaQuery, familyId: string | null) {
   const url = productMediaUrl(productId, context)
   const [state, setState] = useState<GalleryReadState>({ status: 'loading' })
   const [baseline, setBaseline] = useState<ProductMediaWorkspace | null>(null)
@@ -50,6 +51,14 @@ export function useGalleryPopupData(productId: string, context: ProductMediaQuer
     return () => { alive.current = false }
   }, [read])
 
+  // Someone else saved this family's photos (the live event, Owner D2): read again quietly — the pop-up then says the list
+  // changed (its revision moved) and Enter would be refused; its own save's echo is not "someone else".
+  const saving = useRef(false)
+  useInvalidationChannel(['product-media.changed'], event => {
+    if (saving.current || !event.id || (event.id !== familyId && event.id !== productId)) return
+    void read()
+  })
+
   /** Today's save. Answers the saved list, or throws with the server's own sentence. */
   const save = useCallback(async (body: { expectedRevision: string; collection: ProductMediaWorkspace['collection'] | null }) =>
     answer(await fetch(url, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) })) as Promise<ProductMediaWorkspace>, [url])
@@ -61,7 +70,7 @@ export function useGalleryPopupData(productId: string, context: ProductMediaQuer
     return fresh
   }, [read])
 
-  return { state, baseline, latest, reload: read, save, afterUpload }
+  return { state, baseline, latest, reload: read, save, afterUpload, setSaving: useCallback((on: boolean) => { saving.current = on }, []) }
 }
 
 /** The upload routes' codes, as sentences (the routes' other answers are sentences already). */

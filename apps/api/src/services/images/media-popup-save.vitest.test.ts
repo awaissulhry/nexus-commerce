@@ -7,14 +7,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * saving the same set at the same moment give ONE winner — never a silent overwrite. On PGlite (one connection) the two
  * saves run one after the other; scripts/run-real-postgres-tests.mjs runs this file on PostgreSQL 17, where they race.
  */
-const state = vi.hoisted(() => ({ db: null as any }))
+const state = vi.hoisted(() => ({ db: null as any, events: [] as Array<{ type: string; productId: string; layer: string }> }))
 vi.mock('@nexus/database', async () => {
   const { concurrentDatabase, concurrentDatabaseUrl } = await import('../../test-support/concurrent-database.js')
   const { formulaDatabase } = await import('../../test-support/formula-database.js')
   state.db = concurrentDatabaseUrl() ? await concurrentDatabase() : await formulaDatabase()
   return { default: state.db.client }
 })
-vi.mock('../listing-events.service.js', () => ({ publishListingEvent: () => undefined }))
+vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: { type: string; productId: string; layer: string }) => { state.events.push(event) } }))
 vi.mock('../product-event.service.js', () => ({ productEventService: { emit: async () => undefined } }))
 
 import prisma from '../../db.js'
@@ -101,5 +101,19 @@ describe('the older gallery\'s one save (C2)', () => {
     expect(String(lost[0].reason?.message)).toMatch(/Media changed (since this editor opened|while saving)/)
     const now = await scoped(() => readProductMedia({ ...context, productId: ids.cap }))
     expect(now.collection.items.map(i => i.assetId)).toEqual(results[0].status === 'fulfilled' ? mine : theirs)
+  })
+})
+
+describe('real time for the older gallery (C3, Owner D2 = a)', () => {
+  const context = { scope: 'MASTER', market: 'GLOBAL', locale: 'it' } as const
+  it('a save tells every open screen (the family root, layer GALLERY); a refused save tells nobody', async () => {
+    const opened = await scoped(() => readProductMedia({ ...context, productId: ids.cap }))
+    state.events.length = 0
+    await scoped(() => saveProductMedia({ ...context, productId: ids.cap }, { expectedRevision: opened.revision, collection: { version: 1, items: [{ assetId: img['cap-front'] }] } }))
+    expect(state.events).toEqual([expect.objectContaining({ type: 'product.media.changed', productId: ids.cap, layer: 'GALLERY' })])
+    state.events.length = 0
+    await expect(scoped(() => saveProductMedia({ ...context, productId: ids.cap }, { expectedRevision: opened.revision, collection: { version: 1, items: [] } })))
+      .rejects.toThrow(/Media changed since this editor opened/)
+    expect(state.events).toEqual([])
   })
 })
