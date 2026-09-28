@@ -54,8 +54,8 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 - **Library duplicates (Owner, 2026-09-28: "multiple duplicates of the same image … I do not want that to happen ever"):**
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
-- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Amazon ZIPs = its own session (worktree `/private/tmp/nexus-images-zip`).
-- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases = PR (below); W3 the first eBay photo send; W4 library duplicates Fix 2.
+- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`).
+- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases = PR #130 (below); W3 the first eBay photo send; W4 library duplicates Fix 2.
 
 ## W2 — Aliases on the Media page (2026-09-28)
 The Owner: "it is very important that the image manager supports aliases, especially for eBay". Five gaps against
@@ -90,6 +90,29 @@ PLAN §4.5 and §11, closed in one PR:
   old errors, none in the DS; static gates 59/59.
 - **Seen, not changed (outside this task):** the app's left navigation is taller than the window, so the whole frame can
   slide up when a script scrolls an element into view (normal wheel and Tab do not move it).
+
+## P4d — Export ZIP for Seller Central (Amazon)
+- **Open:** the Amazon channel view → **Export ZIP for Seller Central**. One window (`plan-page/AmazonZipDialog.tsx`):
+  **Market** (the account's markets), **What to export** (All photos · Safety images · Country photos), what the ZIP
+  holds and in which language, **Where to upload it** (Seller Central's own names), then the list: every file
+  `ASIN.SLOT.jpg` by ASIN with its photo, what to fix first, warnings, and the SKUs left out with the exact reason.
+  "Nothing is sent to Amazon."
+- **Server:** shared pure `planAmazonArchive` (`packages/shared/media-plan-archive.ts`); service
+  `media-plan-archive.service.ts` (preview; the ZIP bound to the preview by a digest, checked before and after the
+  downloads); one JPEG engine `jpeg-archive.ts`, shared with the older safety export (safe fetcher, each photo once,
+  4 at a time, real JPEG on white, all or nothing). Decisions and limits: [P4-PLAN.md](P4-PLAN.md) § P4d "Built
+  differently".
+- **Checked on the local stack** (TEST-JACKET; fake ASINs B0FXJ…; IT and DE tie on 10 listings, so the API language is
+  German): the window equals a curl of the preview for IT and DE × 3 kinds (DE All photos: 23 files, 4 ASINs, 6 SKUs
+  left out, 1 error "Small 400 px … needs 500 px"; IT Country photos: 7 files, the Italian size chart; DE Country photos:
+  none, "the API already sends the German versions"). Download on the local stack always refuses, by design — the safe
+  fetcher does not download `http://127.0.0.1` photos — and the window says so: "Size chart IT (B0FXJKTPAR PT02): Use a
+  public HTTP(S) source URL without embedded credentials or a custom port. No ZIP was saved." The success path is proven
+  by the service test (a real ZIP of real JPEGs, download faked). Keyboard: Enter opens; Tab = ✕ → Market → What to
+  export (arrows move the choice) → Close → Download; focus stays inside; Escape closes and focus returns to the button.
+  Light and dark; 390 px (controls stack, no sideways scroll); fonts Inter and JetBrains Mono only, no text at 16 px.
+- **Tests:** shared plan 6, service 12, engine 4, older export +1 (a plan family is refused), web model 6 + transport 4.
+  27 deliberate breaks (each guard removed in turn): 27 caught. Static gates 59/59. Image suites: API 249, web 380.
 
 ## P4c — Review & publish photos
 - **The rule that blocked GALE-JACKET's photos, changed:** a change-only review whose errors all name a field (an

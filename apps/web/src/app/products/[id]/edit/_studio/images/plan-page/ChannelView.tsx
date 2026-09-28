@@ -10,6 +10,7 @@ import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, SegmentedControl } from '@/design-system/primitives'
 
 import { CHANNEL_LABEL, checkCounts, copyFromOps, destinationLabel, followAllOps, type LayerView, type MediaDestinationRow, type MediaRead } from './model'
+import { AmazonZipDialog } from './AmazonZipDialog'
 import { DestinationName } from './DestinationsTable'
 import { PlanBoard } from './PlanBoard'
 import styles from './planPage.module.css'
@@ -31,6 +32,7 @@ export interface ChannelViewProps {
 /** One destination: its sets on its own layer or its channel's, the buyer preview and the checks (PLAN.md §5.4). */
 export function ChannelView({ read, destination: d, layout, assets, languages, edit, onAddRequest, onOpen, onPublish, onClose }: ChannelViewProps) {
   const [scope, setScope] = useState<'LISTING' | 'CHANNEL'>('LISTING')
+  const [zip, setZip] = useState(false)
   const view: LayerView = scope === 'LISTING' ? { layer: 'LISTING', destination: d.key } : { layer: 'CHANNEL', channel: d.channel }
   const channel = CHANNEL_LABEL[d.channel]
   const others = read.destinations.filter(x => x.key !== d.key && x.targetable).sort((a, b) => Number(b.channel === d.channel) - Number(a.channel === d.channel))
@@ -45,6 +47,7 @@ export function ChannelView({ read, destination: d, layout, assets, languages, e
       <h3 className={styles.sectionTitle}><DestinationName d={d} /></h3>
       {d.channel === 'AMAZON' && <span className={styles.muted}>Applies to {d.markets.join(' ')} — Amazon keeps one photo set per ASIN.</span>}
       <span className={styles.spacer} />
+      {d.channel === 'AMAZON' && <Button size="sm" variant="secondary" disabled={!layout || !d.markets.length} onClick={() => setZip(true)}>Export ZIP for Seller Central</Button>}
       {others.length > 0 && scope === 'LISTING' && <Menu label="Copy photos from ▾" align="right" triggerProps={{ className: 'nds-btn sm' }}
         items={others.map(o => ({ id: o.key, label: destinationLabel(o), onSelect: () => {
           const ops = copyFromOps(read, o, d)
@@ -72,6 +75,7 @@ export function ChannelView({ read, destination: d, layout, assets, languages, e
       {errors.length > 0 && <Banner tone="danger" title={`${errors.length} to fix before this destination can be published`}><ul className={styles.checkList}>{errors.map(c => <li key={c.message}>{c.message}</li>)}</ul></Banner>}
       {warnings.length > 0 && <Banner tone="warning" title={`${warnings.length} warning${warnings.length > 1 ? 's' : ''}`}><ul className={styles.checkList}>{warnings.map(c => <li key={c.message}>{c.message}</li>)}</ul></Banner>}
     </>}
+    {d.channel === 'AMAZON' && <AmazonZipDialog key={d.key} read={read} destination={d} assets={assets} open={zip} onClose={() => setZip(false)} />}
   </section>
 }
 

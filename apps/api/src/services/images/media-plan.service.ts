@@ -271,7 +271,7 @@ export async function mediaLayoutFor(input: { productId: string; channel: MediaC
     if (!asset) throw new WorkspaceScopeError('A photo in the plan was deleted from the library. Review the Media page.', 409)
     return asset.url
   }
-  return { rootId, destination: d, layout, url, mainLanguage: ctx.mainLanguage }
+  return { rootId, destination: d, layout, url, assets: ctx.assets, mainLanguage: ctx.mainLanguage }
 }
 
 export interface MediaLayerAddress { layer: MediaLayer; channel?: string; marketplace?: string; accountId?: string; aliasKey?: string }

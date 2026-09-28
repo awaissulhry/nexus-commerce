@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { MEDIA_LAYERS, mediaOpSchema } from '@nexus/shared/media-plan'
 import { applyMediaPlanOps, MEDIA_LANGUAGE, readMediaWorkspace, updateMediaLibrary } from '../../services/images/media-plan.service.js'
 import { previewMediaSwitch, switchToMediaPlan } from '../../services/images/media-plan-seed.service.js'
+import { amazonArchiveDownload, amazonArchivePreview } from '../../services/images/media-plan-archive.service.js'
+import { AMAZON_ARCHIVE_KINDS } from '@nexus/shared/media-plan-archive'
 import { WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
 
 /** Images rebuild P1 — one read for the Media page, and small edits to one layer (docs/images-studio-rebuild/PLAN.md §6.3). */
@@ -22,6 +24,8 @@ const libraryBodySchema = z.object({
   languages: z.array(z.object({ id, languageTag: z.string().regex(MEDIA_LANGUAGE) }).strict()).max(200),
   groups: z.array(z.object({ ids: z.array(id).min(1).max(20), join: id.nullish() }).strict()).max(100),
 }).strict()
+
+const archiveQuerySchema = z.object({ accountId: z.string().min(1).max(256), market: z.string().regex(/^[A-Za-z]{2,3}$/), kind: z.enum(AMAZON_ARCHIVE_KINDS as [string, ...string[]]) })
 
 export const mediaPlanRoutes: FastifyPluginAsync = async app => {
   app.get<{ Params: { productId: string } }>('/products/:productId/media', async (request, reply) => {
@@ -54,6 +58,32 @@ export const mediaPlanRoutes: FastifyPluginAsync = async app => {
       if (error instanceof z.ZodError) return reply.code(422).send({ error: 'These photo languages are not valid. Reload the page and try again.' })
       request.log.error({ err: error }, 'Media library update failed')
       return reply.code(500).send({ error: 'The photo languages could not be saved. Reload the page before trying again.' })
+    }
+  })
+  // P4d — the Amazon ZIPs for Seller Central: a preview of every file, then the archive bound to that preview. Reads only.
+  app.get<{ Params: { productId: string }; Querystring: unknown }>('/products/:productId/media/amazon-archive', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    try {
+      const query = archiveQuerySchema.parse(request.query)
+      return await amazonArchivePreview(request.params.productId, query as never)
+    } catch (error) {
+      if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })
+      if (error instanceof z.ZodError) return reply.code(422).send({ error: 'Choose an Amazon account, a market and what to export.' })
+      request.log.error({ err: error }, 'Amazon archive preview failed')
+      return reply.code(500).send({ error: 'The archive could not be prepared. Retry.' })
+    }
+  })
+  app.get<{ Params: { productId: string }; Querystring: unknown }>('/products/:productId/media/amazon-archive/file', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    try {
+      const query = archiveQuerySchema.extend({ digest: z.string().regex(/^[a-f0-9]{64}$/) }).parse(request.query)
+      const archive = await amazonArchiveDownload(request.params.productId, query as never)
+      return reply.header('Content-Type', 'application/zip').header('Content-Disposition', `attachment; filename="${archive.filename}"`).send(archive.buffer)
+    } catch (error) {
+      if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })
+      if (error instanceof z.ZodError) return reply.code(422).send({ error: 'Check the archive list again, then download.' })
+      request.log.error({ err: error }, 'Amazon archive download failed')
+      return reply.code(500).send({ error: 'The archive could not be built. Retry.' })
     }
   })
   // P3a — move one family onto the plan: a preview that writes nothing, then the switch bound to that preview.
