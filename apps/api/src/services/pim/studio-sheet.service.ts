@@ -1684,16 +1684,6 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       try { excluded = await readExcludedListingIds(listingRows.map((l) => l.id)) }
       catch { exclusionKnown = false }
     }
-    const variants = !exclusionKnown ? undefined : children.map((child) => {
-      const own = coordinate ? listingByRow.get(`${child.id}:`) ?? null : null
-      return {
-        id: child.id,
-        sku: child.sku,
-        included: coordinate ? !!own && !excluded.has(own.id) : true,
-        axisValues: rows.find((r) => r.id === child.id && r.aliasId === null)?.axisValues ?? {},
-      }
-    })
-
     const parentListings = new Map<string, import('./variation-rules.service.js').VariationListingFacts | null>()
     for (const group of projections) {
       const aliasKey = group.id ?? ''
@@ -1708,6 +1698,31 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         listingStatus: row.listingStatus ?? null,
       } : null)
     }
+
+    // Sheet pop-up P3 — a channel-only axis's values ride beside the family's, under its raw `own:` key, read by the one
+    // reader (`variation-own-axes.ts`): the axes this alias's parent STORES, plus this coordinate's variation-enabled
+    // columns no family axis uses (the pop-up's "Only on <channel>" list counts their values). Master: none.
+    const { ownAxisKeysToRead, ownAxisValuesFor, storedOwnAxisKeys } = await import('./variation-own-axes.js')
+    const { ownAxisKey } = await import('@nexus/shared/variation-mapping')
+    const familyAxisKeys = new Set((Array.isArray(root.variationAxes) ? root.variationAxes : []).map((a) => canonicalVariantAxis(String(a))))
+    const channelCandidateKeys = coordinate
+      ? columns.filter((c) => c.variantEligible && !familyAxisKeys.has(canonicalVariantAxis(c.key))).map((c) => ownAxisKey({ from: 'channel', field: c.key }))
+      : []
+    const ownKeysFor = (aliasKey: string) => coordinate ? ownAxisKeysToRead(storedOwnAxisKeys(coordinate.channel, parentListings.get(aliasKey) ?? null), channelCandidateKeys) : []
+    const valuesFor = (child: (typeof children)[number], aliasKey: string) => {
+      const row = rows.find((r) => r.id === child.id && (r.aliasId ?? '') === aliasKey)
+      return { ...(row?.axisValues ?? {}), ...ownAxisValuesFor(ownKeysFor(aliasKey), row?.values, child.categoryAttributes) }
+    }
+
+    const variants = !exclusionKnown ? undefined : children.map((child) => {
+      const own = coordinate ? listingByRow.get(`${child.id}:`) ?? null : null
+      return {
+        id: child.id,
+        sku: child.sku,
+        included: coordinate ? !!own && !excluded.has(own.id) : true,
+        axisValues: valuesFor(child, ''),
+      }
+    })
 
     const cells = await buildVariationThemeCells({
       coordinate: coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, label: coordinate.label } : null,
@@ -1727,7 +1742,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       categoriesByAlias: coordinate ? new Map([...parentListings].map(([alias, listing]) => [alias, categoryForListing(context?.defaults[rootId], coordinate.channel, listing?.platformAttributes).channelCategoryId])) : undefined,
       variantsByAlias: !exclusionKnown ? undefined : new Map(projections.map(group => [group.id ?? '', children.map(child => {
         const own = coordinate ? listingByRow.get(`${child.id}:${group.id ?? ''}`) ?? null : null
-        return { id: child.id, sku: child.sku, included: coordinate ? !!own && !excluded.has(own.id) : true, axisValues: rows.find(r => r.id === child.id && (r.aliasId ?? '') === (group.id ?? ''))?.axisValues ?? {} }
+        return { id: child.id, sku: child.sku, included: coordinate ? !!own && !excluded.has(own.id) : true, axisValues: valuesFor(child, group.id ?? '') }
       })])),
     })
 

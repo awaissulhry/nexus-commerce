@@ -1,3 +1,27 @@
+## Variation theme pop-up on Shopify — 2026-09-28
+
+Mirrored from web. The channel layout on Shopify: free option names (`freeNameRefusal`), own options, the live-product lock; `.nds-axes-chead > .nds-field` (+ its input shrinks); a cell panel outside AG's popup layer does not take focus on load.
+
+## Variation theme pop-up on a channel: "New attribute" — 2026-09-28
+
+Mirrored from web. `NewOwnAttribute` (say first, then Create; Use it for an existing attribute; held with its reason), `createOwnAxisAttribute` editor param, `OwnAxisSourcesLoader` answers `{ sources, newAttribute }`, `.nds-axes-newattr`.
+
+## Variation theme pop-up on a channel — 2026-09-28
+
+Mirrored from web. `AxesPanel` channel layout (eBay, Etsy): rows with origin, value chips and empty-variant hints; "+ Add" with Shared, channel-list and own-name groups; `channelAxes.ts`; `suppressAxesPanelKeys`; `MediaChipField` static chips are not Tab stops.
+
+## Variation theme pop-up, shared product — 2026-09-28
+
+Mirrored from web. `AxesPanel` master rows with value chips (photos on the photo axis only) and a variant list, refused axis removal, `variationFamily.ts`, `MediaChipField` `searchable`/`removable`, nested `useSortableDrag`.
+
+## Shopify pop-up pieces — 2026-09-28
+
+Mirrored from web. `MetafieldValue` reference chips with pictures and swatches (`metafieldDisplay` `swatches`), `MediaPickList` `rowActions`, `EDITOR_KEY_HINT_PANEL`, `editorBox`/`EDITOR_CAPS` exported from the editors barrel.
+
+## Media pickers: MediaMark, MediaPickList, MediaChipField, MediaOrderedList, ResourcePickerDialog — 2026-09-28
+
+Mirrored from web. Pickers whose choices carry a picture or a colour swatch (`MediaChoice`, `lib/media-choice.ts`), and the grid editor size kind `media` (480 × 520). Also the opt-in `OrderedList liveDrag` prop and `useSortableDrag` (`lib/sortable.ts`).
+
 ## Catalog: no text inside synthetic images — 2026-09-27
 
 Mirrored from web. The synthetic example photos in `catalog/MediaGalleryExample.tsx` draw no text (an SVG image cannot use the page fonts; its label fell back to Arial on Windows).

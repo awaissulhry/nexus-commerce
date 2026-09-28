@@ -160,7 +160,7 @@ function readContract(markers = 'CONTRACT-TABLE') {
     for (let i = 0; i < gestures.length; i++) {
       /* Strip the provenance mark; it is for the reader, not the assertion. An unknown token FAILS. */
       const token = c[3 + i].replace(/[✓·]/g, '').trim()
-      if (!/^(inline|pop:value|pop:text|pop:list|pop:multi|pop:measure|pop:sale|pop:slots|pop:fx|none|none\+say)$/.test(token)) {
+      if (!/^(inline|pop:value|pop:text|pop:list|pop:multi|pop:measure|pop:sale|pop:slots|pop:axes|pop:fx|none|none\+say)$/.test(token)) {
         return { rows: null, error: `unknown expectation "${c[3 + i]}" for ${c[0]}/${c[1]}/${gestures[i]}` }
       }
       expect[gestures[i]] = token
@@ -465,6 +465,9 @@ const shapeOf = () => {
   if (p.querySelector('.nds-measure-editor')) return 'popup:measure'
   /* MX.G — the Matrix sale editor (`SaleCellEditor`): price + two DS date fields. */
   if (p.querySelector('.nds-matrix-sale-editor')) return 'popup:sale'
+  /* Sheet pop-up P3 A2 (2026-09-28) — the variation-theme pop-up (`AxesPanelEditor`), BEFORE the listbox test: an eBay
+     row carries a Listbox for its aspect name, so this popup read as `popup:listbox` — the wrong editor, green. */
+  if (p.querySelector('.nds-axes-editor')) return 'popup:axes'
   if (p.querySelector('[role="listbox"], [class*="listbox"], [class*="Listbox"]')) return 'popup:listbox'
   return 'popup:UNCLASSIFIED:' + (p.firstElementChild?.className || '?').toString().split(' ')[0].slice(0, 24)
 }
@@ -1299,9 +1302,11 @@ if (RUN.includes('contract')) {
           return m
         }, new Map()).entries()].map(([key, keys]) => ({ key, label: 'Bullet points', kind: 'slotlist',
           editable: keys.every((k) => rowFacts?.values?.[k]?.editable !== false && rowFacts?.values?.[k]?.writable !== false) }))
+        /* Sheet pop-up P3 A2 — `axes` is a SHAPE row like `list` / `measure`: the variation theme column is
+           `kind: variationTheme, shape: axes` on the wire (`sheet-columns.service.ts` `variationThemeColumn`). */
         const kindMatches = (c) => row.kind === 'slotlist' ? c.kind === 'slotlist'
           : row.kind === 'bullets' ? isBulletList(c)
-          : (row.kind === 'list' || row.kind === 'measure' ? c.shape === row.kind && !isBulletList(c) : editorKind(c) === row.kind && (!c.shape || c.shape === 'scalar'))
+          : (row.kind === 'list' || row.kind === 'measure' || row.kind === 'axes' ? c.shape === row.kind && !isBulletList(c) : editorKind(c) === row.kind && (!c.shape || c.shape === 'scalar'))
         const declared = [...(scopeCols ?? []), ...oneCells].filter((c) => kindMatches(c)
           && (row.state === 'locked' ? !editable(c)
             : row.state === 'fxblocked' ? c.formulaWritable === false
@@ -1475,7 +1480,7 @@ if (RUN.includes('contract')) {
             /read-only|cannot be edited|does not apply|per variation|not writable|calculated from.*relationship|is a fact|set with the tick|Amazon-managed|has no listing of its own|not buyable|Guard reads FBA|cannot be changed here|A formula owns this cell/i.test(
               [...document.querySelectorAll('.nds-toasts')].map((n) => n.textContent ?? '').join(' ')))
           const actual = opened
-            ? { inline: 'inline', 'popup:value': 'pop:value', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:sale': 'pop:sale', 'popup:slots': 'pop:slots', 'popup:formula': 'pop:fx' }[shape] ?? shape
+            ? { inline: 'inline', 'popup:value': 'pop:value', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:sale': 'pop:sale', 'popup:slots': 'pop:slots', 'popup:axes': 'pop:axes', 'popup:formula': 'pop:fx' }[shape] ?? shape
             : (said ? 'none+say' : 'none')
           got[g] = actual
           if (actual !== row.expect[g]) {

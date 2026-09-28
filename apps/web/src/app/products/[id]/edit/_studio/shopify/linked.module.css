@@ -53,3 +53,7 @@
   overflow-wrap: anywhere;
   z-index: var(--nds-z-actionbar);
 }
+
+/* The colour field's picker: a square swatch button beside the hex text (sheet pop-up rebuild P1). */
+.colourPick { width: 40px; flex: none; padding: 2px; }
+.colourPick > input { padding: 0; height: 24px; cursor: pointer; }

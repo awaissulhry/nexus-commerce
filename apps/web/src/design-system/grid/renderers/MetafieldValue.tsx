@@ -16,6 +16,7 @@ import { memo } from 'react'
 import { Check, FileText, Minus, Star } from 'lucide-react'
 
 import { TokenChip } from '../../primitives'
+import { MediaMark } from '../../components/MediaChoice'
 import { cdnFit } from '../../lib/cdn-image'
 import { EmptyValue } from './cells'
 import { ListChipValue } from './shapeCells'
@@ -46,8 +47,8 @@ function Picture({ item }: { item: MetafieldReference }) {
 
 function References({ items, text }: { items: MetafieldReference[]; text: string }) {
   const summary = `${items.length} ${items.length === 1 ? 'reference' : 'references'}: ${text}`
-  // Pictures lead when the references have them (files, products); otherwise their names as chips.
-  if (items.some(item => item.src) || items.every(item => item.kind === 'file')) {
+  // Files ARE pictures: a strip of them, then the first name.
+  if (items.every(item => item.kind === 'file')) {
     const first = items[0]
     return (
       <span className="nds-mf-refs" aria-label={summary}>
@@ -57,18 +58,22 @@ function References({ items, text }: { items: MetafieldReference[]; text: string
       </span>
     )
   }
+  // Everything else as Shopify's cells draw it (measured 2026-09-27): a chip per reference, its picture or swatch in
+  // front of its name — a product's photo, an icon entry's icon, a colour entry's swatch — and nothing when it has none.
   return (
     <span className="nds-cell-list" aria-label={summary}>
       {items.slice(0, SHOWN_CHIPS).map((item, i) => (
-        <TokenChip key={`${i}:${item.id}`} className={`nds-cell-listchip${item.named ? '' : ' nds-mf-pending'}`}>{item.label}</TokenChip>
+        <TokenChip key={`${i}:${item.id}`} className={`nds-cell-listchip nds-mf-refchip${item.named ? '' : ' nds-mf-pending'}`}>
+          <MediaMark choice={{ image: item.src, swatch: item.swatch, label: item.label }} size="chip" />{item.label}
+        </TokenChip>
       ))}
       <More count={items.length - SHOWN_CHIPS} />
     </span>
   )
 }
 
-export const MetafieldValue = memo(function MetafieldValue({ type, raw, labels, images }: MetafieldValueProps) {
-  const d = metafieldDisplay(type, raw, { labels, images })
+export const MetafieldValue = memo(function MetafieldValue({ type, raw, labels, images, swatches }: MetafieldValueProps) {
+  const d = metafieldDisplay(type, raw, { labels, images, swatches })
   switch (d.kind) {
     case 'empty':
       return <EmptyValue />

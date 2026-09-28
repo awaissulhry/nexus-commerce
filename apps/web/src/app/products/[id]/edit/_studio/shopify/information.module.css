@@ -24,3 +24,12 @@
 
 .cellContent { flex: 1; min-width: 0; }
 .cell > :has(> [data-nds-cell-action]) { margin-inline-start: auto; flex-shrink: 0; }
+
+/* The Shopify cell pop-up (sheet pop-up rebuild P1): a panel under the cell, sized by the grid's `media` editor kind.
+   Layout only — every control inside is a design-system control. */
+.cellPanel { z-index: var(--nds-z-popover); display: flex; flex-direction: column; overflow: hidden; color: var(--nds-text); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xl); box-shadow: var(--nds-shadow-pop); outline: none; }
+.cellPanelBody { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--nds-space-12); }
+.cellPanelHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nds-space-8); min-width: 0; }
+.cellPanelHead strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-base); }
+.cellPanelHead span { flex: none; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); font-family: var(--nds-font-mono, inherit); }
+.cellPanelFoot { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-4) var(--nds-space-12); padding: var(--nds-space-6) var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); }

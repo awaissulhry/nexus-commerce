@@ -126,7 +126,9 @@ export interface ShopifyFieldOwner {
   id: string; title: string; productId: string; ownerType: 'PRODUCT' | 'PRODUCTVARIANT'
   fields: ShopifyFieldSnapshot[]; variants: { id: string; title: string; sku: string | null }[]
 }
-export interface ShopifyReference { id: string; label: string; image: string | null; type?: string; handle?: string; available?: boolean; media?: InformationMedia }
+/** `swatch`: a `#RRGGBB` colour an entry declares as its picture (Shopify `Metaobject.thumbnailField` → `thumbnail.hex`),
+ *  drawn when there is no `image` — a colour entry such as the category `shopify--color-pattern`. */
+export interface ShopifyReference { id: string; label: string; image: string | null; swatch?: string | null; type?: string; handle?: string; available?: boolean; media?: InformationMedia }
 export interface ShopifyReferencePage { items: ShopifyReference[]; cursor: string | null }
 export interface ShopifyReusableEntry {
   id: string; type: string; handle: string; name: string; revision: string

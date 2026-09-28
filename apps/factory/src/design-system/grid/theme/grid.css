@@ -1415,6 +1415,8 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 /* italic overhang — see `.nds-cell-required` */
 .nds-mf-pending { color: var(--nds-text-muted); font-style: italic; padding-inline-end: 2px; }
 .nds-mf-refs, .nds-mf-colors, .nds-mf-rating, .nds-mf-bool { display: inline-flex; align-items: center; gap: var(--nds-space-2); min-width: 0; max-width: 100%; overflow: hidden; }
+/* A reference chip with its picture or swatch in front (sheet pop-up rebuild P1, 2026-09-28). */
+.nds-mf-refchip .t { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; }
 .nds-mf-picture {
   flex: none; width: 24px; height: 24px; border-radius: var(--nds-radius-sm); object-fit: cover; display: inline-flex;
   align-items: center; justify-content: center; background: var(--nds-surface-sunken); border: 1px solid var(--nds-border-subtle); color: var(--nds-text-muted);
@@ -1837,3 +1839,56 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-grid-confirm-unknown { color: var(--nds-warning-text); }
 
 .nds-axes-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+
+/* ── Variation theme, shared product (sheet pop-up rebuild P2, 2026-09-28) ─────────────────────────────────────────
+   Each axis row: name, count, remove; its values as chips with photos, dragged into order. Then the variants, each with its
+   photo. A refused removal says why under the rows. */
+.nds-axes-mrow { display: flex; flex-direction: column; gap: var(--nds-space-4); flex: 1; min-width: 0; padding: var(--nds-space-4) 0; }
+.nds-axes-mhead { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.nds-axes-mname { font-weight: var(--nds-font-weight-semibold); font-size: var(--nds-font-size-base); color: var(--nds-text); }
+.nds-axes-mrow .nds-axes-meta { margin-left: 0; color: var(--nds-text-muted); }
+.nds-axes-mhead > :last-child { margin-left: auto; }
+.nds-axes-refusal { margin: var(--nds-space-4) 0 0; padding: var(--nds-space-6) var(--nds-space-8); border-radius: var(--nds-radius-md); background: var(--nds-warning-soft); color: var(--nds-warning-strong); font-size: var(--nds-font-size-sm); }
+.nds-axes-familynote { display: flex; align-items: center; gap: var(--nds-space-6); padding: var(--nds-space-6) 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.nds-axes-variants { display: flex; flex-direction: column; gap: var(--nds-space-6); margin-top: var(--nds-space-8); }
+.nds-axes-varlist { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.nds-axes-var { display: flex; align-items: center; gap: var(--nds-space-8); min-height: 34px; padding: var(--nds-space-2) var(--nds-space-4); border-radius: var(--nds-radius-sm); font-size: var(--nds-font-size-base); color: var(--nds-text); }
+.nds-axes-var:hover { background: var(--nds-surface-hover); }
+.nds-axes-varlabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-axes-varsku { flex: none; color: var(--nds-text-muted); max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-axes-varnone { color: var(--nds-text-muted); }
+.nds-axes-varphoto { flex: none; display: inline-flex; width: 28px; justify-content: center; }
+/* The `+ Add axis` note wraps inside the wider media box instead of running past its edge. */
+.nds-axes-editor .nds-axes-add { flex-wrap: wrap; }
+.nds-axes-editor .nds-axes-add .nds-axes-filterhint { flex: 1 1 12rem; white-space: normal; min-width: 0; }
+
+/* ── Sheet pop-up P3 A2 — the variation-theme pop-up on a CHANNEL scope (eBay, Etsy): rows with values, and "+ Add" with
+      three groups (from Shared, only on the channel, your own name). DS tokens only; the P2 master rows' rhythm. ── */
+.nds-axes-crow { display: flex; flex-direction: column; gap: var(--nds-space-4); flex: 1; min-width: 0; padding: var(--nds-space-4) 0; }
+.nds-axes-chead { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.nds-axes-chead > :last-child { margin-left: auto; flex: none; }
+.nds-axes-cname { flex: 1 1 auto; font-weight: var(--nds-font-weight-semibold); font-size: var(--nds-font-size-base); color: var(--nds-text); min-width: 0; overflow-wrap: anywhere; }
+.nds-axes-chead > .nds-listbox { flex: 1 1 auto; min-width: 0; }
+/* A4 — Shopify's free option name takes the same room as eBay's name list. */
+.nds-axes-chead > .nds-field { flex: 1 1 auto; min-width: 0; }
+/* …and its text field shrinks with it (its intrinsic 20-character width pushed the row's ↑ / ↓ out of a narrow pop-up). */
+.nds-axes-chead > .nds-field input { min-width: 0; width: 100%; }
+.nds-axes-origin { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); min-width: 0; overflow-wrap: anywhere; }
+.nds-axes-gap { font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); }
+.nds-axes-unbound { padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-md); background: var(--nds-danger-soft); color: var(--nds-danger-text); font-size: var(--nds-font-size-sm); }
+.nds-axes-addpanel { display: flex; flex-direction: column; gap: var(--nds-space-8); padding: var(--nds-space-4) var(--nds-space-12) var(--nds-space-8); }
+.nds-axes-addpanel .nds-axes-opt { margin: 0; width: 100%; }
+.nds-axes-addgroup { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.nds-axes-addlabel { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.nds-axes-ownform { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); min-width: 0; }
+.nds-axes-ownform > :first-child { flex: 1 1 140px; min-width: 0; }
+.nds-axes-ownform > :nth-child(2) { flex: 1 1 160px; min-width: 0; }
+.nds-axes-addnote { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+/* The channel's own rule under a section label (Amazon: its theme list only), in the rows' gutter. */
+.nds-axes-channelrule { margin: 0; padding: 0 var(--nds-space-12) var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+/* A refusal under the rows sits in the rows' own gutter. */
+.nds-axes-editor > .nds-axes-refusal { margin: var(--nds-space-4) var(--nds-space-12) 0; }
+/* P3 A3 — "New attribute": a line and its button, wrapping on a phone; the button keeps its own width, the line its margins. */
+.nds-axes-newattr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); min-width: 0; }
+.nds-axes-newattr > p { margin: 0; flex: 1 1 200px; min-width: 0; }
+.nds-axes-newattr > button { flex: none; }

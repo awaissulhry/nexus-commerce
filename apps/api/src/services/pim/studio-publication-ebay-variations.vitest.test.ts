@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *    put "Arancia" (Shared) in the listing.
  *  · live re-publish: a live item is validated like a new one (missing value, collision), never silently passed.
  */
-const m = vi.hoisted(() => ({ itemId: null as string | null, variants: [] as Array<{ id: string; sku: string; included: boolean; axisValues: Record<string, string> }> }))
+const m = vi.hoisted(() => ({ itemId: null as string | null, variants: [] as Array<{ id: string; sku: string; included: boolean; axisValues: Record<string, string> }>, platformAttributes: {} as Record<string, unknown> }))
 
 // Images rebuild P2c — not on the media plan: the builder keeps its per-product galleries (studio-publication-ebay-media tests the plan path).
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false }))
@@ -32,12 +32,13 @@ vi.mock('./stored-variation-projection.js', async original => {
       coordinate: { channel: 'EBAY', market: 'IT', accountId: 'acc', aliasKey: '', label: 'EBAY · IT' },
       family: { familyAxes: ['Colore', 'Taglia'], axisLabels: { color: 'Color', size: 'Size' }, productVersion: 1, productTheme: null, childIds: m.variants.map(v => v.id),
         variants: m.variants.map(v => ({ ...v, axisValues: { ...v.axisValues } })) },
-      listing: { version: 3, variationTheme: null, variationMapping: null, platformAttributes: {}, externalListingId: m.itemId, listingStatus: m.itemId ? 'ACTIVE' : 'DRAFT' },
+      listing: { version: 3, variationTheme: null, variationMapping: null, platformAttributes: m.platformAttributes, externalListingId: m.itemId, listingStatus: m.itemId ? 'ACTIVE' : 'DRAFT' },
       rule: null,
       schema: { ebay: { categoryId: '57988', aspects: [
-        { name: 'Colore', englishName: 'Color', variantEligible: true, required: false },
-        { name: 'Taglia', englishName: 'Size', variantEligible: true, required: false },
-      ] } },
+        { name: 'Colore', englishName: 'Color', variantEligible: true, required: false, columnKey: 'color' },
+        { name: 'Taglia', englishName: 'Size', variantEligible: true, required: false, columnKey: 'size' },
+        { name: 'Scollatura', englishName: 'Neckline', variantEligible: true, required: false, columnKey: 'scollatura' },
+      ], nonVariationAspects: ['Marca', 'Brand'] } },
       limits: limitsFor('EBAY'), vocabulary: vocabularyFor('EBAY'),
     }
     return { input, cell: resolveVariationProjection(input as any) }
@@ -57,6 +58,7 @@ const listing = (productId: string, extra: Record<string, unknown> = {}) => ({ i
 const AXIS_FIELDS = [
   { fieldKey: 'color', sheetKey: 'color', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Colore'] } },
   { fieldKey: 'size', sheetKey: 'size', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Taglia'] } },
+  { fieldKey: 'scollatura', sheetKey: 'scollatura', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Scollatura'] } },
 ]
 const mapped = (value: unknown) => ({ value, status: 'mapped', provenance: value == null ? 'missing' : 'override', errors: [] })
 
@@ -79,6 +81,7 @@ const aspects = (row: Record<string, unknown>) => Object.fromEntries(Object.entr
 beforeEach(() => {
   process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX
   m.itemId = null
+  m.platformAttributes = {}
   m.variants = [
     { id: 'c1', sku: 'FAM-NERO-M', included: true, axisValues: { Colore: 'Nero', Taglia: 'M' } },
     { id: 'c2', sku: 'FAM-ARANCIA-M', included: true, axisValues: { Colore: 'Arancia', Taglia: 'M' } },
@@ -123,5 +126,48 @@ describe('eBay studio publish — a LIVE re-publish is validated too', () => {
   it('a live item whose variants collide is refused, like a new one', async () => {
     m.variants[1].axisValues = { Colore: 'Nero', Taglia: 'M' }
     await expect(buildEbayListingInput(facts(), { currency: 'EUR' })).rejects.toThrow(/cannot be told apart/)
+  })
+})
+
+/**
+ * Sheet pop-up P3, slice A1 — a CHANNEL-ONLY axis reaches eBay exactly as the sheet shows it. Trading and Inventory both take
+ * their variation names and values from this one builder (`prepareEbayInventoryPublication` reads `shared.variationSpecificNames`
+ * and each variation's `specifics`), so this is the parity check for both.
+ */
+describe('eBay studio publish — channel-only axes (sheet pop-up P3)', () => {
+  const NECK = 'own:channel:scollatura', FIT = 'own:shared:fit'
+  const own = (key: string, name: string) => ({ _variationAxesMode: 'override', _variationAxes: ['Colore', 'Taglia', key], _axisNameLabels: { Colore: 'Colore', Taglia: 'Taglia', [key]: name } })
+  const specifics = (built: Awaited<ReturnType<typeof buildEbayListingInput>>) => built.shared.variations.map(v => v.specifics)
+
+  it('an aspect from eBay\'s list goes out under its eBay name with the eBay column\'s value, and never as a plain item specific', async () => {
+    m.platformAttributes = own(NECK, 'Scollatura')
+    const built = await buildEbayListingInput(facts({ c1: { scollatura: mapped('V') }, c2: { scollatura: mapped('Tondo') } }), { currency: 'EUR' })
+    expect(built.variants.map(aspects)).toEqual([
+      { aspect_Colore: 'Nero', aspect_Taglia: 'M', aspect_Scollatura: 'V' },
+      { aspect_Colore: 'Arancia', aspect_Taglia: 'M', aspect_Scollatura: 'Tondo' },
+    ])
+    expect(built.shared.variationSpecificNames).toEqual(['Colore', 'Taglia', 'Scollatura'])
+    expect(specifics(built)).toEqual([{ Colore: 'Nero', Taglia: 'M', Scollatura: 'V' }, { Colore: 'Arancia', Taglia: 'M', Scollatura: 'Tondo' }])
+    expect(built.shared.itemSpecifics ?? {}).not.toHaveProperty('Scollatura')
+  })
+
+  it('an axis under the operator\'s own name goes out under that name with the Shared attribute\'s value', async () => {
+    m.platformAttributes = own(FIT, 'Vestibilità')
+    m.variants[0].axisValues[FIT] = 'Slim'
+    m.variants[1].axisValues[FIT] = 'Regular'
+    const built = await buildEbayListingInput(facts(), { currency: 'EUR' })
+    expect(built.shared.variationSpecificNames).toEqual(['Colore', 'Taglia', 'Vestibilità'])
+    expect(specifics(built)).toEqual([{ Colore: 'Nero', Taglia: 'M', Vestibilità: 'Slim' }, { Colore: 'Arancia', Taglia: 'M', Vestibilità: 'Regular' }])
+  })
+
+  it('a variant with no value on a channel-only axis blocks the publish with its SKU (the save allowed it — Q-D3 a)', async () => {
+    m.platformAttributes = own(NECK, 'Scollatura')
+    await expect(buildEbayListingInput(facts({ c1: { scollatura: mapped('V') } }), { currency: 'EUR' })).rejects.toThrow('1 variant has no value for an axis on EBAY · IT: FAM-ARANCIA-M (Neckline).')
+  })
+
+  it('a stored name eBay forbids for variations never reaches eBay', async () => {
+    m.platformAttributes = own(FIT, 'Marca')
+    m.variants.forEach(v => { v.axisValues[FIT] = 'Xavia' })
+    await expect(buildEbayListingInput(facts(), { currency: 'EUR' })).rejects.toThrow(/error 219451/)
   })
 })

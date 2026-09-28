@@ -10,6 +10,7 @@ import { axisSynonymKey } from './ebay-theme-axes.js'
 import { mappingToken, MappingConflict } from './pim/mapping/revision-token.js'
 import { ORDER_RECEIPT } from './ebay-presentation-consumer.service.js'
 import { normalizeMarket } from './ebay-image-axis-preference.service.js'
+import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
 
 export interface PresentationDestinationInput { productId: string; marketplace: string; accountId?: string; aliasKey?: string }
 export interface PresentationDestination { productId: string; marketplace: string; channelConnectionId: string; aliasKey: string }
@@ -114,7 +115,13 @@ export function changePresentationOrder(attrs: unknown, change: PresentationOrde
     if (change.axes === null) restoreInheritedAxes(next)
     else {
       if (!Array.isArray(change.axes) || change.axes.some(a => typeof a !== 'string') || change.axes.length !== dimensions.size || new Set(change.axes.map(axisSynonymKey)).size !== dimensions.size || change.axes.some(a => !dimensions.has(axisSynonymKey(a)))) throw new MappingConflict('Reorder the existing axes without adding or removing dimensions')
-      next._variationAxes = change.axes
+      // Sheet pop-up P3 — this editor sees a channel-only axis under its eBay NAME (`ebay-family-axes.service.ts`), so its
+      // stored KEY (`own:…`, which says where the values live) is written back, never the name: a name would read as a
+      // family axis the family does not have.
+      const labels = bag(next._axisNameLabels)
+      const own = new Map((Array.isArray(next._variationAxes) ? next._variationAxes : []).filter(isOwnAxisKey)
+        .map(key => [axisSynonymKey(String(typeof labels[key] === 'string' ? labels[key] : key)), key]))
+      next._variationAxes = change.axes.map(axis => own.get(axisSynonymKey(axis)) ?? axis)
     }
   }
   if (change.values !== undefined) {

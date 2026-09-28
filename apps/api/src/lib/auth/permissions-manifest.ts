@@ -205,6 +205,9 @@ export const ENTRIES: Entry[] = [
 
   // ── S2 coverage: catalog / PIM sub-resources ───────────────────
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/studio-publication(?:\/|$)/.test(p)),
+  // Sheet pop-up P3 A3 — "New attribute" from the variation pop-up creates a dictionary attribute and places it in a family:
+  // what `/api/attributes` and `/api/families` require, never the `/api/products` rule's products.edit below.
+  P(F.pimManage, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/studio\/own-axis-attribute$/.test(p)),
   RW(F.pimManage, F.pimManage, pfx('/api/attribute-groups')),
   RW(F.pimManage, F.pimManage, pfx('/api/attribute-options')),
   RW(F.pimManage, F.pimManage, pfx('/api/family-attributes')),

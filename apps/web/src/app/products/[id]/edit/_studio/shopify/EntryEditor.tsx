@@ -7,8 +7,8 @@ import { LinkedFieldEditor } from './LinkedFieldEditor'
 import { linkedEndpoint, linkedRequest } from './api'
 import styles from './linked.module.css'
 
-export function EntryEditor({ id, copy = false, path, schema, canPublish, onClose, onSaved }: { id: string | null; copy?: boolean; path: string; schema: ShopifyStoreSchema; canPublish: boolean; onClose(): void; onSaved(entry: ShopifyReusableEntry): void }) {
-  const [entry, setEntry] = useState<ShopifyReusableEntry | null>(null), [type, setType] = useState(''), [handle, setHandle] = useState(() => `nexus-${crypto.randomUUID()}`)
+export function EntryEditor({ id, copy = false, initialType, path, schema, canPublish, onClose, onSaved }: { id: string | null; copy?: boolean; initialType?: string; path: string; schema: ShopifyStoreSchema; canPublish: boolean; onClose(): void; onSaved(entry: ShopifyReusableEntry): void }) {
+  const [entry, setEntry] = useState<ShopifyReusableEntry | null>(null), [type, setType] = useState(initialType ?? ''), [handle, setHandle] = useState(() => `nexus-${crypto.randomUUID()}`)
   const [fields, setFields] = useState<Record<string, string | null>>({}), [error, setError] = useState(''), [busy, setBusy] = useState(!!id), [confirm, setConfirm] = useState(false), [discard, setDiscard] = useState(false)
   const [status, setStatus] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE')
   const [nested, setNested] = useState<string | null>(null), [saved, setSaved] = useState(false)
@@ -31,7 +31,7 @@ export function EntryEditor({ id, copy = false, path, schema, canPublish, onClos
     } catch (e) { setError((e as Error).message); setConfirm(false) } finally { setBusy(false) }
   }
   return <>
-    <Modal open title={copying ? `Copy ${entry?.name}` : entry?.name ?? (id ? 'Reusable entry' : 'Create reusable entry')} size="md" readable onClose={close} footer={<><Button disabled={busy} onClick={close}>Close</Button><Button variant="primary" disabled={busy || !canPublish || !definition || !dirty || !!definition.fields.some(f => f.readOnlyReason)} onClick={() => setConfirm(true)}>Review entry changes</Button></>}>
+    <Modal open className="ag-custom-component-popup" title={copying ? `Copy ${entry?.name}` : entry?.name ?? (id ? 'Reusable entry' : 'Create reusable entry')} size="md" readable onClose={close} footer={<><Button disabled={busy} onClick={close}>Close</Button><Button variant="primary" disabled={busy || !canPublish || !definition || !dirty || !!definition.fields.some(f => f.readOnlyReason)} onClick={() => setConfirm(true)}>Review entry changes</Button></>}>
       <div className={styles.stack}>{error && <Banner tone="danger">{error}</Banner>}{saved && <Banner tone="success">Entry saved and verified in Shopify.</Banner>}{busy && <p role="status">Working with Shopify…</p>}
         {!entry && !id && <div className={styles.settings}><Field label="Entry type"><Select size="sm" disabled={busy} value={type} onChange={e => { setType(e.target.value); setFields({}) }}><option value="">Choose a type</option>{schema.metaobjectDefinitions.map(d => <option key={d.id} value={d.type}>{d.name}</option>)}</Select></Field><Field label="Entry handle"><Input size="sm" disabled={busy} value={handle} onChange={e => setHandle(e.target.value)} /></Field></div>}
         {definition?.publishable && <Field label="Entry visibility"><Select size="sm" disabled={busy || !canPublish} value={status} onChange={e => { setStatus(e.target.value as 'ACTIVE' | 'DRAFT'); setSaved(false) }}><option value="ACTIVE">Active — available to the storefront</option><option value="DRAFT">Draft — hidden from the storefront</option></Select></Field>}
@@ -39,10 +39,10 @@ export function EntryEditor({ id, copy = false, path, schema, canPublish, onClos
         {definition?.fields.map(def => <section key={def.key} className={styles.field} aria-label={def.name}>{(def.type.startsWith('list.') || def.type.endsWith('_reference') || ['money', 'rating', 'link', 'rich_text_field'].includes(def.type)) && <h3>{def.name}</h3>}<LinkedFieldEditor path={path} schema={schema} definition={def} value={Object.prototype.hasOwnProperty.call(fields, def.key) ? fields[def.key] : entry?.fields.find(f => f.key === def.key)?.value ?? null} disabled={busy || !canPublish} onOpenEntry={copying ? undefined : setNested} onChange={v => { setFields(old => ({ ...old, [def.key]: v })); setSaved(false) }} /></section>)}
       </div>
     </Modal>
-    <Modal open={confirm} onClose={() => { if (!busy) setConfirm(false) }} title="Save reusable entry to Shopify?" footer={<><Button disabled={busy} onClick={() => setConfirm(false)}>Keep editing</Button><Button variant="primary" disabled={busy} onClick={() => { void save() }}>{busy ? 'Saving…' : 'Save to Shopify'}</Button></>}>
+    <Modal open={confirm} className="ag-custom-component-popup" onClose={() => { if (!busy) setConfirm(false) }} title="Save reusable entry to Shopify?" footer={<><Button disabled={busy} onClick={() => setConfirm(false)}>Keep editing</Button><Button variant="primary" disabled={busy} onClick={() => { void save() }}>{busy ? 'Saving…' : 'Save to Shopify'}</Button></>}>
       <p>{copying ? 'This creates a separate copy with the displayed fields, then stages its reference in the draft. Save and synchronize the draft to use it on this product.' : entry ? 'The selected fields will update this shared entry wherever it is referenced.' : 'This creates a reusable entry. Choose it in a product’s metafield to display it.'}</p>{definition?.publishable && <p>Visibility: {status === 'ACTIVE' ? 'Active' : 'Draft'}.</p>}<p>{copying ? 'All displayed fields' : `${Object.keys(fields).length} fields`} will be saved.{!copying && ' Other entry fields are preserved.'}</p>
     </Modal>
-    <Modal open={discard} onClose={() => setDiscard(false)} title="Discard entry edits?" footer={<><Button onClick={() => setDiscard(false)}>Keep editing</Button><Button variant="danger-outline" onClick={onClose}>Discard edits</Button></>}><p>The changes in this entry editor have not been saved.</p></Modal>
+    <Modal open={discard} className="ag-custom-component-popup" onClose={() => setDiscard(false)} title="Discard entry edits?" footer={<><Button onClick={() => setDiscard(false)}>Keep editing</Button><Button variant="danger-outline" onClick={onClose}>Discard edits</Button></>}><p>The changes in this entry editor have not been saved.</p></Modal>
     {nested && <EntryEditor id={nested} path={path} schema={schema} canPublish={canPublish} onClose={() => setNested(null)} onSaved={onSaved} />}
   </>
 }

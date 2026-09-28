@@ -83,6 +83,15 @@ export const EDITOR_CAPS = {
    * and the positions scroll inside. A SEPARATE kind for the reason `axes` is: widening `list` would move the chip-list panel.
    */
   slotlist: { width: 560, height: 480, preferred: 560, preferredHeight: 400 },
+  /**
+   * Sheet pop-up rebuild P0 (2026-09-28, docs/sheet-popup-editor/PLAN-2026-09-27.md §4.1) — the MEDIA pickers: a chip line,
+   * a searchable list whose rows carry a 28px picture or swatch, a group heading and an "Add new entry" footer; for the
+   * variation theme, one row per axis with its value chips over the variant list. 480 is the narrowest box that holds
+   * `tick · 28px picture · a 40-character entry name · ✓` without truncating at the DS's 13px row text; 520 tall shows ~10 rows
+   * under a two-line chip field. A SEPARATE kind for the reason `axes` is one: widening `list` or `axes` would move editors
+   * that were sized on their own content.
+   */
+  media: { width: 480, height: 520, preferred: 480, preferredHeight: 480 },
 } as const
 
 export type EditorKind = keyof typeof EDITOR_CAPS

@@ -20,6 +20,7 @@ import {
   type VariationAxisSpec,
 } from './ebay-variation-push.service.js'
 import { buildSharedListingInput } from './ebay-shared-listing-push.service.js'
+import { ebayRowAxes } from './pim/variation-own-axes.js'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -362,3 +363,32 @@ describe('buildVariesBySpecifications', () => {
     expect(out).toEqual([{ name: 'Custom Bundle', values: ['SKU-A', 'SKU-B'] }])
   })
 })
+
+describe('sheet pop-up P3 — the older push declares channel-only axes by their eBay name', () => {
+  it('finds an aspect axis on the rows and gives a Shared-attribute axis its values, in the declared order, with no warning', () => {
+    const rows: Array<Record<string, unknown>> = [
+      { sku: 'A', aspect_Colore: 'Nero', aspect_Scollatura: 'V' },
+      { sku: 'B', aspect_Colore: 'Rosso', aspect_Scollatura: 'Tondo' },
+    ]
+    const included = [
+      { familyKey: 'Colore', channelName: 'Colore' },
+      { familyKey: 'own:channel:scollatura', channelName: 'Scollatura', own: { from: 'channel' } },
+      { familyKey: 'own:shared:fit', channelName: 'Vestibilità', own: { from: 'shared' } },
+    ]
+    const variants = [{ sku: 'A', axisValues: { 'own:shared:fit': 'Slim' } }, { sku: 'B', axisValues: { 'own:shared:fit': 'Regular' } }]
+    const { declared, nameLabels } = ebayRowAxes(included, variants, rows)
+    expect(declared).toEqual(['Colore', 'Scollatura', 'Vestibilità'])
+    expect(rows.map(r => r.aspect_Vestibilità)).toEqual(['Slim', 'Regular'])
+    const resolved = resolveVariationAxes(rows, declared, { nameLabels, storedAxisOrder: declared })
+    expect(resolved.validSpecs.map(s => [s.name, [...s.values].sort()])).toEqual([['Colore', ['Nero', 'Rosso']], ['Scollatura', ['Tondo', 'V']], ['Vestibilità', ['Regular', 'Slim']]])
+    expect(resolved.warnings).toEqual([])
+  })
+
+  it('positive control: declaring the raw key instead finds nothing and warns — the bug the name fixes', () => {
+    const rows: Array<Record<string, unknown>> = [{ sku: 'A', aspect_Colore: 'Nero', aspect_Scollatura: 'V' }, { sku: 'B', aspect_Colore: 'Rosso', aspect_Scollatura: 'Tondo' }]
+    const resolved = resolveVariationAxes(rows, ['Colore', 'own:channel:scollatura'], {})
+    expect(resolved.validSpecs.map(s => s.name)).toEqual(['Colore'])
+    expect(resolved.warnings.join(' ')).toMatch(/own:channel:scollatura/)
+  })
+})
+

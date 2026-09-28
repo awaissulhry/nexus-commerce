@@ -16,8 +16,10 @@ export interface MetafieldReference {
   id: string
   /** The resolved name, or the kind's word while names load (never a raw ID). */
   label: string
-  /** A small picture: a file's image, a video's poster, a product's featured image. */
+  /** A small picture: a file's image, a video's poster, a product's featured image, an entry's icon. */
   src: string | null
+  /** An entry's colour swatch (`#RRGGBB`), when its picture is a colour rather than a file. */
+  swatch: string | null
   kind: MetafieldReferenceKind
   /** False until a name was resolved for it. */
   named: boolean
@@ -39,6 +41,8 @@ export interface MetafieldDisplayOptions {
   labels?: Record<string, string>
   /** Reference id → picture URL. */
   images?: Record<string, string>
+  /** Reference id → colour swatch (`#RRGGBB`) — an entry whose picture is a colour (sheet pop-up rebuild P1). */
+  swatches?: Record<string, string>
 }
 
 export const METAFIELD_INVALID_TEXT = 'Stored value needs review'
@@ -107,7 +111,7 @@ export function metafieldDisplay(type: string, raw: string | null | undefined, o
       const items = (ids as string[]).map(id => {
         const kind = referenceKindOf(id)
         const name = options.labels?.[id]
-        return { id, kind, label: name ?? REFERENCE_WORD[kind], src: options.images?.[id] ?? null, named: !!name }
+        return { id, kind, label: name ?? REFERENCE_WORD[kind], src: options.images?.[id] ?? null, swatch: options.swatches?.[id] ?? null, named: !!name }
       })
       return { kind: 'references', items, text: items.map(item => item.label).join(', ') }
     }

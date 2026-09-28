@@ -49,11 +49,16 @@ import {
   axesEditorScopeLabel,
   axesFilterMatch,
   axesSectionTitle,
+  axesTabStaysInside,
   moveHighlight,
+  NewOwnAttribute,
   reorderAxes,
+  suppressAxesPanelKeys,
   themeGroupOf,
 } from './AxesPanelEditor'
 import type { VariationThemeCell } from '../renderers/variationTheme'
+import { CHANNEL_AXES_COPY } from './channelAxes'
+import { MediaChipField } from '../../components/MediaChipField'
 
 const panel = (cell: VariationThemeCell, host: 'cell' | 'dock' = 'cell') =>
   renderToStaticMarkup(createElement(AxesPanel, { cell, host, onChange: () => {} }))
@@ -208,7 +213,13 @@ describe('two hosts, one panel', () => {
     expect(dock).toContain('nds-axes-dockname')
     expect(dock).toContain('nds-axes-arrow')
     expect(dock).not.toContain('type="checkbox"')
-    expect(cell).toContain('type="checkbox"')
+    /* P3 A2: the SHEET's eBay cell is the channel layout — an axis leaves with ×, and a Shared one waits in "+ Add". A4 gave
+       Shopify's cell the same layout; the include checkbox stays where it does not apply: Amazon's cell. */
+    expect(cell).not.toContain('type="checkbox"')
+    expect(cell).toContain('nds-axes-crow')
+    expect(panel(GALE_SHOPIFY_DROPPED, 'cell')).toContain('nds-axes-crow')
+    expect(panel(GALE_SHOPIFY_DROPPED, 'cell')).not.toContain('type="checkbox"')
+    expect(panel(GALE_AMAZON_DE_DERIVED, 'cell')).toContain('type="checkbox"')
   })
 
   it('renders the dock own footer node when the dock gives it one (`Save mapping` stays)', () => {
@@ -230,8 +241,13 @@ describe('the source row shows the SERVER sentence and the right action', () => 
   it('offers `Override` on a derived coordinate and `Use inherited axes` on an overridden one', () => {
     expect(panel(GALE_AMAZON_DE_DERIVED)).toContain(AXES_EDITOR_COPY.override)
     expect(panel(GALE_AMAZON_DE_DERIVED)).toContain('Derived from the family axes')
-    expect(panel(GALE_EBAY_IT_OVERRIDDEN)).toContain(AXES_EDITOR_COPY.resetToRule)
+    /* P3 A2: the eBay cell's own setup goes back with "Reset to Shared"; there is no separate `Override` there, because any
+       edit makes an own setup when it is saved (an `Override` that saved nothing was a dead control). */
+    expect(panel(GALE_EBAY_IT_OVERRIDDEN)).toContain(CHANNEL_AXES_COPY.resetToShared)
     expect(panel(GALE_EBAY_IT_OVERRIDDEN)).not.toContain(AXES_EDITOR_COPY.override)
+    const derivedEbay: VariationThemeCell = { ...GALE_EBAY_IT_OVERRIDDEN, source: { ...GALE_EBAY_IT_OVERRIDDEN.source, kind: 'derived', label: 'Derived from the family axes' } }
+    expect(panel(derivedEbay)).not.toContain(AXES_EDITOR_COPY.override)
+    expect(panel(derivedEbay)).not.toContain(CHANNEL_AXES_COPY.resetToShared)
   })
 
   it('shows master its own strapline and no provenance mark', () => {
@@ -552,7 +568,9 @@ describe('VT.2c — the per-axis lock ON SCREEN, in both hosts', () => {
   })
 
   it('fixes the locked axis CHECKBOX in the cell host — a locked axis cannot be dropped either', () => {
-    const out = panel(locked, 'cell')
+    /* The checkbox rows are the Amazon cell's (P3 A2 gave eBay and Etsy their own layout, A4 Shopify; an Amazon coordinate
+       whose schema could not be read keeps the aspect rows, so this is a real cell). */
+    const out = panel({ ...locked, write: { ...locked.write!, coordinate: { ...locked.write!.coordinate, channel: 'AMAZON' } } }, 'cell')
     const boxes = out.match(/<input type="checkbox"[^>]*>/g) ?? []
     expect(boxes).toHaveLength(2)
     expect(boxes[0]).toContain('disabled')
@@ -831,6 +849,239 @@ it('held inclusion checkboxes keep their focus and the theme refusal; an editabl
     expect(input).toContain('aria-disabled="true"')
     expect(input).toContain('aria-description=')
   }
-  const editable = [...panel(GALE_SHOPIFY_DROPPED).matchAll(/<input\b[^>]*type="checkbox"[^>]*>/g)].map(m => m[0])
-  expect(editable.some(input => !input.includes('aria-disabled="true"'))).toBe(true)
+  /* A4: Shopify's cell has no checkbox any more; its editable control is each option's name box. */
+  const editable = [...panel(GALE_SHOPIFY_DROPPED).matchAll(/<input\b[^>]*aria-label="The Shopify option for [^"]*"[^>]*>/g)].map(m => m[0])
+  expect(editable.length).toBeGreaterThan(0)
+  expect(editable.some(input => !input.includes('disabled'))).toBe(true)
+})
+
+/* ── Sheet pop-up P3 A2 — the channel layout (the sheet's eBay / Etsy cell) ────────────────────────────────────────── */
+
+describe('P3 A2 — the channel layout', () => {
+  /** GALE eBay·IT, not live, with one channel-only aspect axis and one axis under a typed name, as the server serves them. */
+  const OPEN: VariationThemeCell = {
+    ...GALE_EBAY_IT_OVERRIDDEN,
+    locked: null,
+    axes: [
+      ...GALE_EBAY_IT_OVERRIDDEN.axes,
+      { axisKey: 'own:channel:scollatura', familyKey: 'own:channel:scollatura', label: 'Neckline', channelName: 'Scollatura', target: 'Scollatura', included: true, own: { from: 'channel', field: 'scollatura', custom: false } },
+      { axisKey: 'own:shared:fit', familyKey: 'own:shared:fit', label: 'Marca', channelName: 'Marca', target: 'Marca', included: true, own: { from: 'shared', field: 'fit', custom: true },
+        unbound: { reason: 'eBay lists Marca for this category, but not for variations. eBay refuses it as a variation specific (error 219451). Choose another name.' } },
+    ],
+    ownCandidates: [],
+    ownNames: { allowed: true, maxLength: 40, reason: null },
+    valueSummary: {
+      Colore: { values: ['Nero', 'Giallo'], filled: 20, of: 20 },
+      Taglia: { values: ['S', 'M'], filled: 20, of: 20 },
+      'own:channel:scollatura': { values: ['V'], filled: 18, of: 20 },
+      'own:shared:fit': { values: [], filled: 0, of: 20 },
+    },
+  }
+
+  it('each row says where it comes from, shows its values and its empty variants, and a refused axis keeps its reason', () => {
+    const out = panel(OPEN)
+    expect(out).toContain('from Shared: Color')
+    expect(out).toContain('only on eBay')
+    expect(out).toContain('your name · not in eBay’s search filters · values from fit')
+    for (const value of ['Nero', 'Giallo', 'V']) expect(out).toContain(value)
+    expect(out).toContain('2 variants empty · Fill the Scollatura column on the variant rows.')
+    expect(out).toContain('20 variants empty · Fill fit on the Shared product.')
+    expect(out).toContain('error 219451')
+    expect(out).toContain('4 of 5 · 20 variants')
+  })
+
+  it('"+ Add" counts what is left and offers a typed name; a live listing holds it and every × with the server\'s sentence', () => {
+    expect(panel(OPEN)).toContain('0 available · or your own name')
+    const live = panel({ ...OPEN, locked: GALE_EBAY_IT_OVERRIDDEN.locked })
+    expect(live).toContain(`${GALE_EBAY_IT_OVERRIDDEN.locked!.reason}</span>`)
+    /* every row's × carries the reason on the element that is hovered */
+    expect(live.split('Remove ').length - 1).toBeGreaterThanOrEqual(4)
+    expect(live.match(new RegExp(GALE_EBAY_IT_OVERRIDDEN.locked!.reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))!.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('a channel whose own names are off says why in "+ Add", never a dead field', () => {
+    const off = panel({ ...OPEN, ownNames: { allowed: false, maxLength: null, reason: 'This eBay DE listing has no category yet, so its variation specifics cannot be read.' } })
+    expect(off).not.toContain('or your own name')
+  })
+
+  it('Amazon keeps its theme list and states the Owner\'s rule in the server\'s words', () => {
+    const out = panel({ ...GALE_AMAZON_DE_DERIVED, ownNames: { allowed: false, maxLength: null, reason: 'Amazon decides the axes. Choose a theme from its list.' } })
+    expect(out).toContain('Amazon decides the axes. Choose a theme from its list.')
+    expect(out).not.toContain('nds-axes-crow')
+  })
+
+  it('the sheet cell editor opens the channel layout in the wider `media` box; the dock keeps its own rows', () => {
+    expect(editor(OPEN)).toContain('width:480px')
+    /* A4: Shopify opens the channel layout too; Amazon keeps its theme panel in the `axes` box. */
+    expect(editor(GALE_SHOPIFY_DROPPED)).toContain('width:480px')
+    expect(editor(GALE_AMAZON_DE_DERIVED)).toContain('width:420px')
+    expect(panel(OPEN, 'dock')).not.toContain('nds-axes-crow')
+  })
+
+  it('a live listing\'s "+ Add" hint is the short line; the full sentence stays on the lock banner and the button', () => {
+    const live = panel({ ...OPEN, locked: GALE_EBAY_IT_OVERRIDDEN.locked })
+    expect(live).toContain(`>${CHANNEL_AXES_COPY.setLockedShort}</span>`)
+    expect(panel(OPEN)).not.toContain(CHANNEL_AXES_COPY.setLockedShort)
+  })
+
+  it('"Reset to Shared" on an own setup; once pressed, a status line says ⏎ applies it (measured: it looked unchanged)', () => {
+    const own = panel(OPEN)
+    expect(own).toContain(CHANNEL_AXES_COPY.resetToShared)
+    expect(own).not.toContain(CHANNEL_AXES_COPY.resetPending)
+    const pressed = panel({ ...OPEN, resetRequested: true })
+    expect(pressed).toMatch(new RegExp(`role="status"[^>]*>(?:(?!</div>).)*${CHANNEL_AXES_COPY.resetPending.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+    /* a cell that follows Shared has nothing to reset */
+    expect(panel({ ...OPEN, source: { kind: 'derived', ruleLabel: null, category: null, label: 'Derived from the family axes' } })).not.toContain(CHANNEL_AXES_COPY.resetToShared)
+  })
+
+  it('🔴 a row\'s value chips are read as a list, not one Tab stop each (measured: 8 chips = 8 Tab stops); a movable chip keeps its stop', () => {
+    const chips = [...panel(OPEN).matchAll(/<li\b[^>]*class="nds-mchip[^"]*"[^>]*>/g)].map((m) => m[0])
+    expect(chips.length).toBeGreaterThanOrEqual(3)
+    for (const chip of chips) expect(chip).toContain('tabindex="-1"')
+    const movable = renderToStaticMarkup(createElement(MediaChipField, {
+      label: 'Colours', items: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], onChange: () => undefined, searchable: false, removable: false, reorderable: true,
+    }))
+    const movableChips = [...movable.matchAll(/<li\b[^>]*class="nds-mchip[^"]*"[^>]*>/g)].map((m) => m[0])
+    expect(movableChips).toHaveLength(2)
+    for (const chip of movableChips) expect(chip).toContain('tabindex="0"')
+  })
+})
+
+/* ── Sheet pop-up P3 A4 — the Shopify cell in the channel layout (QUALITY-PLAN §4.11) ───────────────────────────────── */
+
+describe('P3 A4 — Shopify options in the channel layout', () => {
+  /** GALE Shopify · GLOBAL with an own option ("Fit", values from a made-up Shared attribute), as the server serves it. */
+  const SHOP: VariationThemeCell = {
+    ...GALE_SHOPIFY_DROPPED,
+    ownNames: { allowed: true, maxLength: 255, reason: null },
+    axes: [
+      ...GALE_SHOPIFY_DROPPED.axes,
+      { axisKey: 'own:shared:fit', familyKey: 'own:shared:fit', label: 'Fit', channelName: 'Fit', target: 'Fit', included: true, own: { from: 'shared', field: 'fit', custom: true } },
+    ],
+    valueSummary: { 'own:shared:fit': { values: ['Slim'], filled: 1, of: 2 } },
+  }
+  const LIVE = 'Live on Shopify GLOBAL (made-up-id). Nexus cannot change the options of a product already on Shopify yet, so its options and their order are locked here.'
+
+  it('every option — Shared or own — has a free name box and says where it comes from; no search-filter line, no "Only on" group', () => {
+    const out = panel(SHOP)
+    for (const name of ['Color', 'Size', 'Fit']) expect(out).toMatch(new RegExp(`<input maxLength="255" aria-label="The Shopify option for ${name}" value="${name}"/>`))
+    expect(out).toContain('from Shared: Color')
+    expect(out).toContain('your name · values from fit')
+    expect(out).not.toContain('search filters')
+    expect(out).toContain('1 variant empty · Fill fit on the Shared product.')
+    /* three of three: "+ Add" is held with the channel's own cap sentence, never a dead button */
+    expect(out).toContain('3 of 3')
+    expect(out).toContain(AXES_EDITOR_COPY.atLimit('Shopify', 3, 'options'))
+  })
+
+  it('an empty name or another option\'s name is said under its row while typing', () => {
+    const dup = panel({ ...SHOP, axes: SHOP.axes.map((a) => (a.axisKey === 'own:shared:fit' ? { ...a, target: 'color' } : a)) })
+    expect(dup).toContain(`class="nds-axes-unbound" role="alert">${CHANNEL_AXES_COPY.duplicate}</span>`)
+    const empty = panel({ ...SHOP, axes: SHOP.axes.map((a) => (a.axisKey === 'own:shared:fit' ? { ...a, target: '' } : a)) })
+    expect(empty).toContain(`role="alert">Name this option.</span>`)
+    expect(panel(SHOP)).not.toContain('class="nds-axes-unbound" role="alert"')
+  })
+
+  it('🔴 D1 — a product already on Shopify: every name box, every × and the order are held with the server\'s sentence', () => {
+    const out = panel({ ...SHOP, locked: { reason: LIVE, externalId: 'made-up-id', setChangeIs: 'in-place', orderChangeAllowed: false } })
+    const boxes = [...out.matchAll(/<input\b[^>]*maxLength="255"[^>]*>/g)].map((m) => m[0])
+    expect(boxes).toHaveLength(3)
+    for (const box of boxes) { expect(box).toContain('disabled') ; expect(box).toContain(LIVE) }
+    expect(out).toContain(`${LIVE}</span>`)
+    expect(out).toContain(CHANNEL_AXES_COPY.setLockedShort)
+    /* the grips: every ↑ / ↓ is disabled, so nothing is saved that cannot reach Shopify */
+    const moves = [...out.matchAll(/<button type="button"[^>]*aria-label="Move [^"]*"[^>]*>/g)].map((m) => m[0])
+    expect(moves.length).toBeGreaterThan(0)
+    for (const move of moves) expect(move).toContain('disabled')
+    /* and no name refusal is shown on a held row */
+    expect(out).not.toContain('class="nds-axes-unbound" role="alert"')
+  })
+})
+
+/* ── Sheet pop-up P3 A3 — "New attribute" (QUALITY-PLAN §4.10), each step as the operator sees it ──────────────────────── */
+
+describe('P3 A3 — "New attribute" in "Your own name"', () => {
+  const OK = { allowed: true, reason: null, familyLabel: 'Sliders', familyProducts: 2 }
+  const noop = () => undefined
+  const block = (props: Partial<Parameters<typeof NewOwnAttribute>[0]>) => renderToStaticMarkup(createElement(NewOwnAttribute, {
+    name: 'Stile', state: OK, held: null, phase: { phase: 'idle' }, onStart: noop, onCreate: noop, onUseExisting: noop, ...props,
+  }))
+
+  it('offers the typed name; a held button keeps its reason ON SCREEN and names it as its description', () => {
+    const open = block({})
+    expect(open).toContain(CHANNEL_AXES_COPY.noFit)
+    expect(open).toContain('New attribute “Stile”')
+    expect(open).not.toContain('aria-disabled')
+    const reason = 'This product has no family, so a new attribute has nowhere to go. Choose a family on the Shared product first.'
+    const held = block({ held: reason })
+    expect(held).toContain('aria-disabled="true"')
+    const describedBy = held.match(/aria-describedby="([^"]+)"/)?.[1]
+    expect(describedBy).toBeTruthy()
+    expect(held).toContain(`id="${describedBy}" class="nds-axes-filterhint">${reason}</span>`)
+    expect(block({ name: '' })).toContain(`> ${CHANNEL_AXES_COPY.newAttributeUnnamed}</button>`)
+  })
+
+  it('🔴 the first press only SAYS what happens (family, products, Esc keeps it); "Create" is the write', () => {
+    const confirm = block({ phase: { phase: 'confirm' } })
+    expect(confirm).toContain(CHANNEL_AXES_COPY.createLine('Stile', 'Sliders', 2))
+    expect(confirm).toContain(`>${CHANNEL_AXES_COPY.create}</button>`)
+    /* a name that became refused while confirming falls back to the held button, never a Create that the server refuses */
+    expect(block({ phase: { phase: 'confirm' }, held: 'Name this specific.' })).not.toContain(`>${CHANNEL_AXES_COPY.create}</button>`)
+  })
+
+  it('while writing, after, and when the server offers an existing attribute or refuses — each says so in its own words', () => {
+    expect(block({ phase: { phase: 'creating' } })).toMatch(new RegExp(`role="status"[^>]*>.*${CHANNEL_AXES_COPY.creating}`))
+    expect(block({ phase: { phase: 'done', line: CHANNEL_AXES_COPY.created } })).toContain(`role="status">${CHANNEL_AXES_COPY.created}</p>`)
+    const offer = block({ phase: { phase: 'offer', message: '“Fit” already exists. Use it in this family?' } })
+    expect(offer).toContain('role="alert">“Fit” already exists. Use it in this family?</p>')
+    expect(offer).toContain(`>${CHANNEL_AXES_COPY.useExisting}</button>`)
+    const refused = block({ phase: { phase: 'refused', message: CHANNEL_AXES_COPY.noPermission } })
+    expect(refused).toContain(`role="alert">${CHANNEL_AXES_COPY.noPermission}</p>`)
+  })
+})
+
+/* ── Sheet pop-up P3 A2 — Tab inside the pop-up (AG sent Tab to the NEXT CELL, so no control was reachable by keyboard) ── */
+
+describe('P3 A2 — Tab stays inside the pop-up between its controls', () => {
+  /** A made-up panel with `count` controls; `hidden` ones have no layout box (a closed group), as `offsetParent` says. */
+  const fakePanel = (count: number, hidden: number[] = []) => {
+    const panelEl: { closest: () => unknown; querySelectorAll: () => unknown[] } = { closest: () => panelEl, querySelectorAll: () => controls }
+    const controls = Array.from({ length: count }, (_, i) => ({ offsetParent: hidden.includes(i) ? null : panelEl, closest: () => panelEl }))
+    return { panelEl, controls }
+  }
+  const tab = (target: unknown, shiftKey = false, key = 'Tab', editing = true) => suppressAxesPanelKeys({ event: { key, shiftKey, target }, editing })
+
+  it('the rule: between controls yes; past the last (Tab) or the first (Shift+Tab) no; from the panel itself, to its first', () => {
+    expect(axesTabStaysInside(0, 3, false)).toBe(true)
+    expect(axesTabStaysInside(1, 3, false)).toBe(true)
+    expect(axesTabStaysInside(2, 3, false)).toBe(false)
+    expect(axesTabStaysInside(0, 3, true)).toBe(false)
+    expect(axesTabStaysInside(2, 3, true)).toBe(true)
+    expect(axesTabStaysInside(-1, 3, false)).toBe(true)
+    expect(axesTabStaysInside(0, 0, false)).toBe(false)
+  })
+
+  it('the ColDef hook hands Tab to the browser inside the panel, and gives AG the edges', () => {
+    const { panelEl, controls } = fakePanel(3)
+    expect(tab(controls[0])).toBe(true)
+    expect(tab(controls[2])).toBe(false)
+    expect(tab(controls[0], true)).toBe(false)
+    expect(tab(controls[1], true)).toBe(true)
+    /* focus on the panel itself (a × removed the focused control): Tab goes to the first control */
+    expect(tab(panelEl)).toBe(true)
+  })
+
+  it('a control with no layout box is not counted, so the last VISIBLE control is the edge', () => {
+    const { controls } = fakePanel(3, [2])
+    expect(tab(controls[1])).toBe(false)
+  })
+
+  it('🔴 Enter (save) and Esc (discard) stay AG\'s everywhere; not editing, or outside the panel, nothing is suppressed', () => {
+    const { controls } = fakePanel(3)
+    expect(tab(controls[0], false, 'Enter')).toBe(false)
+    expect(tab(controls[0], false, 'Escape')).toBe(false)
+    expect(tab(controls[0], false, 'Tab', false)).toBe(false)
+    expect(tab({ closest: () => null })).toBe(false)
+    expect(tab(null)).toBe(false)
+  })
 })
