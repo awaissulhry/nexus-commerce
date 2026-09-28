@@ -47,6 +47,8 @@ export type RunState = 'preparing' | 'reviewing' | 'finishing' | 'done' | 'parti
 export interface RunCounts {
   linked: number; alreadyLinked: number; notSaved: number; linkRefused: number; managedApplied: number; managedFailed: number
   imagesCopied: number; imagesReused: number; imagesAddressed: number; imagesFailed: number; mediaNotCopied: number
+  /** Absent on a run finished before photos could wait for the Media page. */
+  imagesHeld?: number
 }
 export interface CopyRunSummary {
   id: string

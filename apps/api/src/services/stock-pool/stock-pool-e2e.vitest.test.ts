@@ -133,7 +133,12 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
       await q(`INSERT INTO "ChannelListing" (${keys.map((k) => `"${k}"`).join(',')}) VALUES (${keys.map((_, i) => `$${i + 1}`).join(',')})`, Object.values(cols))
       return lid
     }
-    id.bEbay = await listing(B, id.bJacket, 'EBAY', 'IT', { quantity: 0, stockBuffer: 1 })
+    // B's eBay IT: two accounts, and on the main one the main listing plus one alias (paused: it keeps its number).
+    id.bStore = randomUUID(); id.bStore2 = randomUUID(); id.bAlias = randomUUID()
+    await q(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "accountLabel", "externalAccountId", "isActive", "isPrimary", "updatedAt") VALUES ($1,$3,'EBAY','Main store','seller-main',true,true,now()), ($2,$3,'EBAY','Second store','seller-second',true,false,now())`, [id.bStore, id.bStore2, B])
+    id.bEbay = await listing(B, id.bJacket, 'EBAY', 'IT', { quantity: 0, stockBuffer: 1, channelConnectionId: id.bStore })
+    await q(`INSERT INTO "ProductListingAlias" (id, "workspaceId", "productId", channel, marketplace, "channelConnectionId", label, position, "updatedAt") VALUES ($1,$2,$3,'EBAY','IT',$4,'Winter listing',1,now())`, [id.bAlias, B, id.bJacket, id.bStore])
+    id.bEbayAlias = await listing(B, id.bJacket, 'EBAY', 'IT', { quantity: 3, syncPaused: true, channelConnectionId: id.bStore, aliasId: id.bAlias, aliasKey: id.bAlias })
     id.bAmazonFba = await listing(B, id.bJacket, 'AMAZON', 'IT', { quantity: 6, fulfillmentMethod: 'FBA' })
     id.bAmazonPinned = await listing(B, id.bJacket, 'AMAZON', 'DE', { quantity: 2, followMasterQuantity: false, fulfillmentMethod: 'FBM' })
     id.bShopifyPaused = await listing(B, id.bJacket, 'SHOPIFY', 'GLOBAL', { quantity: 7, syncPaused: true })
@@ -190,15 +195,20 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
     const { products } = await as(B, user.ownerB, () => links.previewSwitch({ productIds: [id.bJacket], to: 'pool', grantId }))
     expect(products).toHaveLength(1)
     expect(products[0]).toMatchObject({ from: 'own', to: 'pool', refusal: null })
-    const byChannel = Object.fromEntries(products[0].listings.map((l) => [`${l.channel}:${l.marketplace}${l.itemId ? `:${l.itemId}` : ''}`, [l.rule, l.willShow]]))
+    const byChannel = Object.fromEntries(products[0].listings.map((l) => [`${l.channel}:${l.marketplace}${l.itemId ? `:${l.itemId}` : ''}${l.listingMark != null ? `#${l.listingMark}` : ''}`, [l.rule, l.willShow]]))
     expect(byChannel).toEqual({
-      'EBAY:IT': ['follows', 9], // 10 lent − hold back 1
+      'EBAY:IT#0': ['follows', 9], // 10 lent − hold back 1
+      'EBAY:IT#1': ['paused', null], // the alias keeps its own number
       'AMAZON:IT': ['amazon-managed', null],
       'AMAZON:DE': ['fixed', null],
       'SHOPIFY:GLOBAL': ['paused', null],
       'EBAY:IT:ITEM-FOLLOW': ['follows', 10],
       'EBAY:IT:ITEM-EXCLUDED': ['excluded', null],
     })
+    // Each row names its account, and the two listings on one account and market are told apart.
+    expect(products[0].listings.filter((l) => l.channel === 'EBAY' && !l.itemId).map((l) => [l.listingId, l.accountLabel, l.listingMark, l.aliasLabel]).sort())
+      .toEqual([[id.bEbay, 'Main store', 0, null], [id.bEbayAlias, 'Main store', 1, 'Winter listing']].sort())
+    expect(products[0].listings.find((l) => l.channel === 'AMAZON' && l.marketplace === 'IT')).toMatchObject({ accountLabel: null, listingMark: null, aliasLabel: null })
   })
 
   it('3. switching to the pool moves only the listings that follow; every other listing keeps its number', async () => {
@@ -263,12 +273,19 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
   })
 
   it('6. the lender\'s preview counts what a pause does, without reading the borrower\'s rows', async () => {
+    // A pause of B's OTHER eBay account does not count B's main-store listing as paused.
+    const policy = randomUUID()
+    await q(`INSERT INTO "SyncChannelPolicy" (id, "workspaceId", channel, marketplace, "pushesPaused", "channelConnectionId", "updatedAt") VALUES ($1,$2,'EBAY','IT',true,$3,now())`, [policy, B, id.bStore2])
     const impact = await as(A, user.ownerA, () => grants.grantImpact(grantId))
     expect(impact).toEqual({
       grantId, linkedProducts: 1,
-      listings: { toZero: 1, toOwn: 0, pinned: 1, paused: 1, closed: 0, fba: 1 },
+      listings: { toZero: 1, toOwn: 0, pinned: 1, paused: 2, closed: 0, fba: 1 },
       sharedVariants: { toZero: 1, toOwn: 0, excluded: 1 },
     })
+    // The same pause for every account does.
+    await q(`UPDATE "SyncChannelPolicy" SET "channelConnectionId" = NULL WHERE id = $1`, [policy])
+    expect((await as(A, user.ownerA, () => grants.grantImpact(grantId))).listings).toMatchObject({ toZero: 0, paused: 3 })
+    await q(`DELETE FROM "SyncChannelPolicy" WHERE id = $1`, [policy])
   })
 
   it('7. a pause takes the listings off the pool (to 0 here); resume brings the pool number back', async () => {
@@ -289,7 +306,7 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
     await drain()
     expect((await snapshot()).bEbay).toBe(4) // still the pool: 5 lent − 1
     const preview = await as(B, user.ownerB, () => links.previewSwitch({ productIds: [id.bJacket], to: 'own' }))
-    expect(preview.products[0].listings.find((l) => l.channel === 'EBAY' && !l.itemId)).toMatchObject({ rule: 'follows', willShow: 2 })
+    expect(preview.products[0].listings.find((l) => l.listingId === id.bEbay)).toMatchObject({ rule: 'follows', willShow: 2 })
     expect(await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bJacket], to: 'own' }))).toEqual({ switched: 1, unchanged: 0 })
     await drain()
     expect((await snapshot()).bEbay).toBe(2) // own 3 − 1

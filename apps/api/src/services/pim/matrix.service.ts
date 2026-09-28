@@ -35,7 +35,7 @@ import {
 } from '@nexus/shared/matrix-contract'
 import { locationServes, resolveIntendedQuantity } from '../sync-control-core.js'
 import { ledgerInputs, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
-import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
+import { loadChannelPolicies, parsePolicyKey, policyFor } from '../sync-control-policy.service.js'
 import { isFbaListing } from '../outbound-sync.service.js'
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
@@ -294,7 +294,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       channel: ch, marketplace: mk, isFba, offerClosed: !!l.offerClosedAt,
       followMasterQuantity: l.followMasterQuantity !== false, syncPaused: l.syncPaused,
       pinnedQuantity: l.quantity, stockBuffer: l.stockBuffer ?? 0,
-      channelPolicy: policyFor(policies, ch, mk), ...inputs,
+      channelPolicy: policyFor(policies, ch, mk, l.channelConnectionId), ...inputs,
     })
     const routed = ledger.filter((r) => locationServes(r.syncRoutes, ch, mk)).map((r) => ({ locationCode: r.locationCode, available: r.available }))
     const warehouseAvailable = routed.reduce((s, r) => s + r.available, 0)
@@ -394,7 +394,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     generatedAt: new Date().toISOString(),
     coordinates: coordinates.map(({ rowsOf: _r, euMarkets: _e, ...c }) => c),
     rows,
-    policies: [...policies.entries()].map(([k, v]) => ({ channel: k.split(':')[0]!, market: k.split(':')[1] ?? '*', pushesPaused: v.pushesPaused })),
+    policies: [...policies.entries()].map(([k, v]) => ({ ...parsePolicyKey(k), pushesPaused: v.pushesPaused })),
     meta: { tookMs: Date.now() - t0, phases, queries },
   }
 }

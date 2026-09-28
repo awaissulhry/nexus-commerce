@@ -194,7 +194,7 @@ export async function readBackShopifyQuantities(options: { heal?: boolean } = {}
           syncPaused: listing.syncPaused ?? false,
           pinnedQuantity: listing.quantity,
           stockBuffer: listing.stockBuffer ?? 0,
-          channelPolicy: policyFor(policies, 'SHOPIFY', listing.marketplace ?? 'GLOBAL'),
+          channelPolicy: policyFor(policies, 'SHOPIFY', listing.marketplace ?? 'GLOBAL', listing.channelConnectionId),
           ledger: inputs.ledger,
           sourceLocationCodes: inputs.sourceLocationCodes,
           uncountedIsZero: inputs.uncountedIsZero,

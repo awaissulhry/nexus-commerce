@@ -149,9 +149,9 @@ export async function enqueueSharedTradingFanout(
     where,
     select: {
       sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true,
-      followPool: true, stockBuffer: true, pinnedQuantity: true,
+      followPool: true, stockBuffer: true, pinnedQuantity: true, channelConnectionId: true,
     },
-  })) as Array<SharedMembershipRow & { lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number; pinnedQuantity?: number | null }>
+  })) as Array<SharedMembershipRow & { lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number; pinnedQuantity?: number | null; channelConnectionId?: string | null }>
 
   if (memberships.length === 0) return []
 
@@ -166,7 +166,7 @@ export async function enqueueSharedTradingFanout(
       followPool: m.followPool ?? true,
       pinnedQuantity: m.pinnedQuantity ?? null,
       stockBuffer: m.stockBuffer ?? 0,
-      channelPolicy: args.scPolicies ? policyFor(args.scPolicies, 'EBAY', m.marketplace) : null,
+      channelPolicy: args.scPolicies ? policyFor(args.scPolicies, 'EBAY', m.marketplace, m.channelConnectionId) : null,
       ledger: args.scLedger,
       uncountedIsZero: args.uncountedIsZero,
     })

@@ -2,7 +2,7 @@
  * SC.5 — policy input validation + new-listing default enforcement sweep.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { validatePolicyInput, enforceNewListingDefaults } from './sync-control-policy.service.js'
+import { validatePolicyInput, enforceNewListingDefaults, loadChannelPolicies, policyFor, policyKey, parsePolicyKey } from './sync-control-policy.service.js'
 
 describe('SC.5 — validatePolicyInput', () => {
   it('accepts known channels, * or market codes, and at least one field', () => {
@@ -84,5 +84,50 @@ describe('SC.5 — enforceNewListingDefaults', () => {
       ],
     })
     expect(await enforceNewListingDefaults(db as never)).toEqual({ paused: 2 })
+  })
+})
+
+describe('MAP.2b — a policy row names an account, or every account', () => {
+  const load = (rows: unknown[]) => loadChannelPolicies({ syncChannelPolicy: { findMany: vi.fn().mockResolvedValue(rows) } })
+  const row = (over: Record<string, unknown>) => ({ channel: 'EBAY', marketplace: 'IT', channelConnectionId: null, pushesPaused: true, newListingDefaultMode: 'FOLLOW', ...over })
+
+  it('a row with no account pauses every account, and a caller that knows no account', async () => {
+    const policies = await load([row({})])
+    expect(policyFor(policies, 'EBAY', 'EBAY_IT', 'acct-1')?.pushesPaused).toBe(true)
+    expect(policyFor(policies, 'EBAY', 'EBAY_IT', 'acct-2')?.pushesPaused).toBe(true)
+    expect(policyFor(policies, 'EBAY', 'EBAY_IT')?.pushesPaused).toBe(true)
+  })
+
+  it('a row for one account pauses only that account', async () => {
+    const policies = await load([row({ channelConnectionId: 'acct-1' })])
+    expect(policyFor(policies, 'EBAY', 'IT', 'acct-1')?.pushesPaused).toBe(true)
+    expect(policyFor(policies, 'EBAY', 'IT', 'acct-2')).toBeNull()
+    expect(policyFor(policies, 'EBAY', 'IT')).toBeNull()
+  })
+
+  it('the market decides first: an exact market row beats a channel-wide row, for this account or every account', async () => {
+    const policies = await load([row({ marketplace: '*', channelConnectionId: 'acct-1', pushesPaused: true }), row({ newListingDefaultMode: 'PAUSED', pushesPaused: false })])
+    expect(policyFor(policies, 'EBAY', 'IT', 'acct-1')?.pushesPaused).toBe(false)
+    expect(policyFor(policies, 'EBAY', 'DE', 'acct-1')?.pushesPaused).toBe(true)
+    expect(policyFor(policies, 'EBAY', 'DE', 'acct-2')).toBeNull()
+  })
+
+  it('two rows for every account merge, and a pause wins in either order', async () => {
+    for (const rows of [[row({ pushesPaused: false, newListingDefaultMode: 'PAUSED' }), row({})], [row({}), row({ pushesPaused: false, newListingDefaultMode: 'PAUSED' })]]) {
+      const policies = await load(rows)
+      expect(policies.size).toBe(1)
+      expect(policies.get(policyKey('EBAY', 'IT'))).toEqual({ pushesPaused: true, newListingDefaultMode: 'PAUSED' })
+    }
+  })
+
+  it('a key reads back as its parts', () => {
+    expect(parsePolicyKey(policyKey('ebay', 'it', 'acct-1'))).toEqual({ channel: 'EBAY', market: 'IT', accountId: 'acct-1' })
+    expect(parsePolicyKey(policyKey('AMAZON', '*'))).toEqual({ channel: 'AMAZON', market: '*', accountId: null })
+  })
+
+  it('the new-listing sweep of a one-account row looks only at that account', async () => {
+    const db = mockDb({ policies: [{ channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'acct-1', newListingModeSetAt: cutoff }] })
+    await enforceNewListingDefaults(db as never)
+    expect(db.channelListing.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ channelConnectionId: 'acct-1' }) }))
   })
 })

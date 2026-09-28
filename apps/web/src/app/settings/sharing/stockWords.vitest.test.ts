@@ -51,5 +51,11 @@ describe('shared stock words', () => {
     expect(warehousesWords(grant({ locations: [{ id: 'l1', code: 'IT-MAIN', name: 'Main', usable: true }, { id: 'l2', code: 'IT-OLD', name: 'Old', usable: false }] }))).toBe('IT-MAIN · IT-OLD (closed: lends 0)')
     expect(lenderConsequence(grant(), 'end')).toMatch(/3 products in Borrower B go back to their own stock/)
     expect(listingName({ channel: 'EBAY', marketplace: 'IT', itemId: '1234' })).toBe('eBay IT · listing 1234')
+    // A lone listing needs no mark; the account is named when the listing has one.
+    expect(listingName({ channel: 'EBAY', marketplace: 'IT', accountLabel: 'Main store', listingMark: null, aliasLabel: null })).toBe('eBay IT · Main store')
+    // Two listings on one account and market: the main listing and its alias, told apart as the Media page does.
+    expect(listingName({ channel: 'EBAY', marketplace: 'IT', accountLabel: 'Main store', listingMark: 0, aliasLabel: null })).toBe('eBay IT · Main store · ★ Main listing')
+    expect(listingName({ channel: 'EBAY', marketplace: 'IT', accountLabel: 'Main store', listingMark: 1, aliasLabel: 'Winter listing' })).toBe('eBay IT · Main store · ① Winter listing')
+    expect(listingName({ channel: 'EBAY', marketplace: 'IT', accountLabel: null, listingMark: 2, aliasLabel: null })).toBe('eBay IT · ② Listing alias 2')
   })
 })

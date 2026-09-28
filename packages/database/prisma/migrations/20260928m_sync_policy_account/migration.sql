@@ -1,3 +1,54 @@
+-- Sync Control — a policy names one account, or (no account) every account of the channel.
+-- Review: docs/2026-09-28-sharing-review-and-plan.md §4 (D2).
+--
+-- Until now every policy row applied to every account: the lookups ignored the account. The save route,
+-- though, looked a row up by the channel's primary account and wrote it with none, so Resume never found
+-- the pause it had written — it answered "ok" and the channel stayed paused. The code now reads and writes
+-- the account; this migration makes every existing row what it always meant: a policy for every account.
+--
+-- (1) Rows that share a business, channel and market are merged into the newest one. A pause wins, and a
+--     "new listings start paused" default keeps its earliest start — both as they acted before (every row
+--     was read, so any paused row paused). (2) No row names an account. (3) A check that refuses the
+--     migration if either did not hold. No other table is touched.
+-- (4) The shared policy file packages/database/workspaces/stock-pool.sql, which this migration ENDS WITH
+--     byte for byte (policy-migrations.json): the pool impact preview counts a one-account pause only for
+--     that account's listings.
+
+-- One statement: the merge, the kept row's update and the others' removal see the same rows.
+WITH merged AS (
+  SELECT "workspaceId", channel, marketplace,
+         (array_agg(id ORDER BY "updatedAt" DESC, id))[1] AS keep_id,
+         bool_or("pushesPaused") AS paused,
+         bool_or("newListingDefaultMode" = 'PAUSED') AS mode_paused,
+         min("newListingModeSetAt") FILTER (WHERE "newListingDefaultMode" = 'PAUSED') AS paused_since
+    FROM "SyncChannelPolicy"
+   GROUP BY "workspaceId", channel, marketplace
+  HAVING count(*) > 1
+), kept AS (
+  UPDATE "SyncChannelPolicy" p
+     SET "pushesPaused" = m.paused,
+         "newListingDefaultMode" = CASE WHEN m.mode_paused THEN 'PAUSED' ELSE p."newListingDefaultMode" END,
+         "newListingModeSetAt" = CASE WHEN m.mode_paused THEN m.paused_since ELSE p."newListingModeSetAt" END
+    FROM merged m
+   WHERE p.id = m.keep_id
+  RETURNING p.id
+)
+DELETE FROM "SyncChannelPolicy" p
+ USING merged m
+ WHERE p."workspaceId" IS NOT DISTINCT FROM m."workspaceId" AND p.channel = m.channel AND p.marketplace = m.marketplace
+   AND p.id <> m.keep_id;
+
+UPDATE "SyncChannelPolicy" SET "channelConnectionId" = NULL WHERE "channelConnectionId" IS NOT NULL;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM "SyncChannelPolicy" WHERE "channelConnectionId" IS NOT NULL) THEN
+    RAISE EXCEPTION 'SyncChannelPolicy: a row still names an account; nothing was changed';
+  END IF;
+  IF EXISTS (SELECT 1 FROM "SyncChannelPolicy" GROUP BY "workspaceId", channel, marketplace HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'SyncChannelPolicy: two rows remain for one business, channel and market; nothing was changed';
+  END IF;
+END $$;
+
 -- Shared stock between business profiles — the lending permission, the product links, the work
 -- queue and the safe doors. Plan: docs/2026-09-19-shared-stock-plan.md; contract:
 -- docs/2026-09-19-shared-stock-build.md §1.

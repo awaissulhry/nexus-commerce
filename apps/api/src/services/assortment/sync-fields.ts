@@ -117,6 +117,9 @@ export interface ImageFacts {
   type: string
   isPrimary: boolean
   sortOrder: number
+  /** The language of the text in the photo (`zxx` = no text) and its language-version group. */
+  languageTag?: string
+  versionGroupId?: string | null
 }
 
 /**
@@ -125,10 +128,16 @@ export interface ImageFacts {
  */
 export const imageFilePrint = (image: Pick<ImageFacts, 'url'>) => fingerprint({ file: image.url })
 /**
- * Its text and placement. The order among images is NOT followed: the follower may keep images of its
- * own between the copies.
+ * Its text and placement, and the language of the text in it. The order among images is NOT followed: the
+ * follower may keep images of its own between the copies. A photo with no text and no language versions prints
+ * as before the language was followed, so a link made then sees no change; one with a language prints it, so a
+ * copy that arrived as "no text" is corrected by the next sync.
  */
-export const imageMetaPrint = (image: Pick<ImageFacts, 'alt' | 'type' | 'isPrimary'>) => fingerprint({ alt: image.alt ?? null, type: image.type, primary: image.isPrimary })
+export const imageMetaPrint = (image: Pick<ImageFacts, 'alt' | 'type' | 'isPrimary' | 'languageTag' | 'versionGroupId'>) => {
+  const language = image.languageTag && image.languageTag !== 'zxx' ? { language: image.languageTag } : {}
+  const versions = image.versionGroupId ? { versions: image.versionGroupId } : {}
+  return fingerprint({ alt: image.alt ?? null, type: image.type, primary: image.isPrimary, ...language, ...versions })
+}
 
 /** The follower's whole image set: any change to it (added, removed, edited, reordered) is an edit. */
 export const followerMediaPrint = (images: ImageFacts[]) =>

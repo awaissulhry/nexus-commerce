@@ -107,8 +107,8 @@ async function syncWithConflictRetry(linkId: string) {
   }
 }
 
-/** One link and the notes claimed for it: done, retried later, or failed after MAX_ATTEMPTS. */
-async function syncOne(linkId: string, changes: Claimed[], run: SyncRun): Promise<void> {
+/** One link and the notes claimed for it: done, retried later, or failed after MAX_ATTEMPTS. Exported for tests. */
+export async function syncOne(linkId: string, changes: Claimed[], run: SyncRun): Promise<void> {
   const ids = changes.map((change) => change.id)
   try {
     const outcome = await syncWithConflictRetry(linkId)
@@ -130,15 +130,22 @@ async function syncOne(linkId: string, changes: Claimed[], run: SyncRun): Promis
       return
     }
     run.retried++
-    // A newer note for this link already waits: it redoes this work, so these are closed.
-    const newer = await prisma.assortmentChange.count({ where: { linkId, state: 'pending' } })
+    // One note goes back to wait for its retry; the others are closed. A link has at most one pending note
+    // (a unique index): when a newer one already waits, or arrives while this one is put back, the index
+    // refuses the put-back, and that newer note redoes this work, so this one is closed too. (A count first,
+    // then the write, left a gap: a note arriving between them made the write throw, and the batch stayed
+    // claimed for ten minutes.)
     const [first, ...rest] = ids
-    if (rest.length || newer) await prisma.assortmentChange.updateMany({ where: { id: { in: newer ? ids : rest } }, data: { state: 'done', doneAt: new Date(), lastError: message.slice(0, 2000) } })
-    if (!newer) {
+    const closed = { state: 'done', doneAt: new Date(), lastError: message.slice(0, 2000) }
+    if (rest.length) await prisma.assortmentChange.updateMany({ where: { id: { in: rest } }, data: closed })
+    try {
       await prisma.assortmentChange.update({
         where: { id: first },
         data: { state: 'pending', availableAt: new Date(Date.now() + retryDelayMinutes(attempts) * 60_000), lastError: message.slice(0, 2000) },
       })
+    } catch (putBack) {
+      if (!(putBack instanceof Prisma.PrismaClientKnownRequestError && putBack.code === 'P2002')) throw putBack
+      await prisma.assortmentChange.updateMany({ where: { id: first }, data: closed })
     }
     logger.warn('assortment-sync: a link failed; it is tried again later', { linkId, attempts, error: message.slice(0, 300) })
   }

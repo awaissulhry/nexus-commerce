@@ -17,7 +17,7 @@ import { TransferReview } from '@/app/products/catalog-transfer/TransferReview'
 import type { TransferJob, TransferOptions } from '@/app/products/catalog-transfer/sourceMapping'
 import { transferApi } from '@/app/products/catalog-transfer/transferApi'
 import { sharingApi, SharingError, type CopyPreview, type CopyRun, type ProductOutcome, type Share } from './sharingApi'
-import { attributeTypeWords, bytesWords, count, excludedWords, otherMediaWords, outcomeWords, plannedCopy, runStateWords } from './words'
+import { attributeTypeWords, bytesWords, count, excludedWords, heldPhotosWords, otherMediaWords, outcomeWords, plannedCopy, runStateWords } from './words'
 
 type Step = 0 | 1 | 2
 const STEPS = [{ key: 'arrives', label: 'What arrives' }, { key: 'fields', label: 'Every field' }, { key: 'done', label: 'Done' }]
@@ -240,6 +240,7 @@ function Finish({ runId, onClose }: { runId: string; onClose: () => void }) {
       {(run.error ?? '').split('\n').filter(Boolean).map((line) => <p key={line}>{line}</p>)}
       <p>Finishing again only does what is missing.</p>
     </Banner>}
+    {c && (c.imagesHeld ?? 0) > 0 && <p className="shared-products-note">{heldPhotosWords(c.imagesHeld ?? 0)}</p>}
     {c && c.mediaNotCopied > 0 && <p className="shared-products-note">{c.mediaNotCopied === 1 ? '1 video, 3D model or document was' : `${c.mediaNotCopied} videos, 3D models or documents were`} not copied.</p>}
     <div className="business-profile-actions"><Button variant="primary" onClick={onClose}>Close</Button></div>
   </div>

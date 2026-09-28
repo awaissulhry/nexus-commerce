@@ -462,7 +462,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
       marketplace: marketplaceByProduct.get(pid) ?? 'EBAY_IT',
       followPool: true,
       stockBuffer: 0,
-      channelPolicy: policyFor(scPolicies, 'EBAY', marketplaceByProduct.get(pid) ?? 'EBAY_IT'),
+      channelPolicy: policyFor(scPolicies, 'EBAY', marketplaceByProduct.get(pid) ?? 'EBAY_IT', connection.id),
       ledger: product.ledger,
       uncountedIsZero: product.uncountedIsZero,
     })

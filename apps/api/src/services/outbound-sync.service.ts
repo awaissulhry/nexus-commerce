@@ -1141,7 +1141,7 @@ export class OutboundSyncService {
       } catch { /* a database without the window columns pushes the price alone — the sale cannot be scheduled there */ }
     }
     try {
-      const scp = policyFor(await loadChannelPolicies(), 'AMAZON', cl?.marketplace ?? marketplaceId);
+      const scp = policyFor(await loadChannelPolicies(), 'AMAZON', cl?.marketplace ?? marketplaceId, destination.connectionId);
       if (scp?.pushesPaused) {
         return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy" };
       }
@@ -1450,7 +1450,7 @@ export class OutboundSyncService {
       ? await prisma.channelListing
           .findUnique({
             where: { id: queueItem.channelListingId },
-            select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true, sourceLocationCodes: true },
+            select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true, sourceLocationCodes: true, channelConnectionId: true },
           })
           .catch(() => null)
       : null;
@@ -1478,7 +1478,7 @@ export class OutboundSyncService {
     // SC.1 — pause guard (listing + channel-market policy), re-checked at
     // dispatch time like the Amazon lane.
     try {
-      const scp = policyFor(await loadChannelPolicies(), 'EBAY', (cl as { marketplace?: string } | null)?.marketplace ?? marketplaceId);
+      const scp = policyFor(await loadChannelPolicies(), 'EBAY', (cl as { marketplace?: string } | null)?.marketplace ?? marketplaceId, queueItem.channelConnectionId ?? cl?.channelConnectionId ?? null);
       if (scp?.pushesPaused) {
         return { success: false, queueId, channel: "EBAY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy" };
       }
@@ -1997,10 +1997,10 @@ export class OutboundSyncService {
         const scPolicies = await loadChannelPolicies();
         const mems = await prisma.sharedListingMembership.findMany({
           where: { marketplace: market, itemId, sku: { in: updates.map((u) => u.sku) } },
-          select: { sku: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true },
+          select: { sku: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, channelConnectionId: true },
         });
         const memBySku = new Map(
-          mems.map((m: { sku: string; lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number; pinnedQuantity?: number | null }) => [m.sku, m]),
+          mems.map((m: { sku: string; lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number; pinnedQuantity?: number | null; channelConnectionId?: string | null }) => [m.sku, m]),
         );
         const effective: typeof updates = [];
         for (const u of updates) {
@@ -2010,7 +2010,7 @@ export class OutboundSyncService {
             followPool: m?.followPool ?? true,
             pinnedQuantity: m?.pinnedQuantity ?? null,
             stockBuffer: m?.stockBuffer ?? 0,
-            channelPolicy: policyFor(scPolicies, 'EBAY', market),
+            channelPolicy: policyFor(scPolicies, 'EBAY', market, m?.channelConnectionId ?? queueItem.channelConnectionId ?? null),
             ledger: scLedger,
             uncountedIsZero: productLedger?.uncountedIsZero ?? false,
           });

@@ -301,6 +301,27 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(await images(bJacket)).toHaveLength(2)
     expect(storage.cleaned).toContain(`product-images/${bJacket}/copy-${storage.uploads.length}`)
 
+    // B's family goes on the media plan: a shared photo is not written behind the Media page. The change stays due,
+    // the link says why, and B's owners are told; once the family leaves the plan, the photo arrives.
+    const plan = randomUUID()
+    await sql(`INSERT INTO "ProductMediaPlan" (id, "workspaceId", "productId", layer, plan, "updatedAt") VALUES ($1,$2,$3,'SHARED','{}'::jsonb,CURRENT_TIMESTAMP)`, [plan, B, bJacket])
+    const uploadsBefore = storage.uploads.length
+    await media(A, product.parent, FILE.back, { sortOrder: 3, publicId: 'product-images/a/back-2' })
+    await settle()
+    expect(storage.uploads.length).toBe(uploadsBefore)
+    expect(await images(bJacket)).toHaveLength(2)
+    expect(String((await linkRow(link.JKT)).lastSyncError)).toContain('managed on the Media page')
+    expect((await notices('assortment-sync-refused')).at(-1)?.body).toContain('managed on the Media page')
+    await sql(`DELETE FROM "ProductMediaPlan" WHERE id = $1`, [plan])
+    expect(await as(B, null, () => worker.queueLinks([link.JKT], 'resync'))).toBe(1)
+    await settle()
+    expect(storage.uploads.length).toBe(uploadsBefore + 1)
+    expect(await images(bJacket)).toHaveLength(3)
+    expect((await linkRow(link.JKT)).lastSyncError).toBeNull()
+    await sql(`DELETE FROM "ProductImage" WHERE "productId" = $1 AND "publicId" = 'product-images/a/back-2'`, [product.parent])
+    await settle()
+    expect(await images(bJacket)).toHaveLength(2)
+
     await media(B, bJacket, 'https://res.cloudinary.com/follower/image/upload/v1/b-own.png', { sortOrder: 9, publicId: 'b-own' })
     await sql(`UPDATE "ProductImage" SET alt = 'Side view 2' WHERE "productId" = $1 AND url = $2`, [product.parent, FILE.side])
     await settle()
@@ -330,6 +351,29 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(await as(B, null, () => worker.queueStaleLinks())).toBeGreaterThanOrEqual(1) // the held rename is behind
     await settle()
     expect((await one(`SELECT sku FROM "Product" WHERE id = $1`, [product['b:JKT-M']])).sku).toBe('JKT-M2')
+    expect(await linkRow(link['JKT-M'])).toMatchObject({ heldSku: null, heldReason: null })
+
+    // Still on the channel, though not active: an INACTIVE listing with a channel id keeps the old SKU too.
+    await sql(`UPDATE "ChannelListing" SET "listingStatus" = 'INACTIVE', "isPublished" = false, "externalListingId" = 'EXT-JKT-M' WHERE id = $1`, [listing])
+    await sql(`UPDATE "Product" SET sku = 'JKT-M3' WHERE id = $1`, [product.medium])
+    await settle()
+    expect((await one(`SELECT sku FROM "Product" WHERE id = $1`, [product['b:JKT-M']])).sku).toBe('JKT-M2')
+    const inactive = await linkRow(link['JKT-M'])
+    expect(inactive).toMatchObject({ heldSku: 'JKT-M3' })
+    expect(String(inactive.heldReason)).toContain('still listed on EBAY, though not active there')
+    // A shared eBay listing variant names the SKU as well: with the listing ended, it alone holds the rename.
+    await sql(`UPDATE "ChannelListing" SET "listingStatus" = 'ENDED' WHERE id = $1`, [listing])
+    const member = randomUUID()
+    await sql(`INSERT INTO "SharedListingMembership" (id, "workspaceId", marketplace, sku, "itemId", "parentSku", "productId", "variationSpecifics", "updatedAt")
+      VALUES ($1,$2,'IT','JKT-M2','ITEM-JKT','JKT',$3,'{}'::jsonb,CURRENT_TIMESTAMP)`, [member, B, product['b:JKT-M']])
+    expect(await as(B, null, () => worker.queueStaleLinks())).toBeGreaterThanOrEqual(1)
+    await settle()
+    expect((await one(`SELECT sku FROM "Product" WHERE id = $1`, [product['b:JKT-M']])).sku).toBe('JKT-M2')
+    expect(String((await linkRow(link['JKT-M'])).heldReason)).toContain('live on EBAY')
+    // A back to JKT-M2: nothing is waiting any more.
+    await sql(`DELETE FROM "SharedListingMembership" WHERE id = $1`, [member])
+    await sql(`UPDATE "Product" SET sku = 'JKT-M2' WHERE id = $1`, [product.medium])
+    await settle()
     expect(await linkRow(link['JKT-M'])).toMatchObject({ heldSku: null, heldReason: null })
 
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", "updatedAt") VALUES ($1,$2,'B-OWN','B own product',5,CURRENT_TIMESTAMP)`, [randomUUID(), B])
@@ -364,6 +408,11 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     // One notice per owner of B (two here), however many runs see it: an unread notice is not repeated.
     expect((await notices('assortment-variation-exists')).map((n) => [n.userId, n.title]).sort()).toEqual([
       [user.ownerA, 'New shared variation JKT-XL was not linked'], [user.ownerB, 'New shared variation JKT-XL was not linked']].sort())
+    // Read, it is not sent again: the next sync of the parent still sees the conflict, and says nothing new.
+    await sql(`UPDATE "Notification" SET "readAt" = CURRENT_TIMESTAMP WHERE type = 'assortment-variation-exists'`)
+    await sql(`UPDATE "Product" SET description = 'Parent, edited again' WHERE id = $1`, [product.parent])
+    await settle()
+    expect(await notices('assortment-variation-exists')).toHaveLength(2)
 
     await sql(`UPDATE "Product" SET "deletedAt" = CURRENT_TIMESTAMP WHERE id = $1`, [large])
     await settle()

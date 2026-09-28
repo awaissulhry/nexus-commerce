@@ -4,6 +4,7 @@
  * Written for a person who has never seen the schema: no status codes, no ids.
  */
 import type { Grant, GrantImpact, GrantSide, ListingPreview, LenderAction, BorrowerDecision } from './stockPoolApi'
+import { aliasMarkGlyph, aliasMarkName } from '@/design-system/primitives'
 import { count, dateWords, type Tone } from './words'
 
 function on(value: string | null | undefined): string {
@@ -114,9 +115,24 @@ export function previewRuleWords(row: Pick<ListingPreview, 'rule' | 'willShow'>)
 
 const CHANNEL_NAMES: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy' }
 
-export function listingName(row: Pick<ListingPreview, 'channel' | 'marketplace' | 'itemId'>): string {
+type ListingNameFacts = Pick<ListingPreview, 'channel' | 'marketplace' | 'itemId'> & Partial<Pick<ListingPreview, 'accountLabel' | 'listingMark' | 'aliasLabel'>>
+
+/**
+ * A listing's name in two parts, as the Media page names a destination: the channel, market and account, then —
+ * only where that account and market hold more than one listing of the product — which listing it is.
+ */
+export function listingNameParts(row: ListingNameFacts): { head: string; name: string | null } {
   const channel = CHANNEL_NAMES[row.channel] ?? row.channel.charAt(0) + row.channel.slice(1).toLowerCase()
-  return row.itemId ? `${channel} ${row.marketplace} · listing ${row.itemId}` : `${channel} ${row.marketplace}`
+  const head = `${channel} ${row.marketplace}${row.accountLabel ? ` · ${row.accountLabel}` : ''}`
+  if (row.itemId) return { head, name: `listing ${row.itemId}` }
+  if (row.listingMark == null) return { head, name: null }
+  return { head, name: row.listingMark === 0 ? 'Main listing' : row.aliasLabel ?? aliasMarkName(row.listingMark) }
+}
+
+export function listingName(row: ListingNameFacts): string {
+  const { head, name } = listingNameParts(row)
+  if (name === null) return head
+  return `${head} · ${row.listingMark != null && !row.itemId ? `${aliasMarkGlyph(row.listingMark)} ` : ''}${name}`
 }
 
 export const COST_PRICE_MISSING =

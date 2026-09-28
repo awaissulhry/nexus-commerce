@@ -781,6 +781,7 @@ async function cascadeQuantityToListings(
       syncPaused: true,
       offerClosedAt: true,
       sourceLocationCodes: true,
+      channelConnectionId: true,
     },
   })
 
@@ -849,7 +850,7 @@ async function cascadeQuantityToListings(
       syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
       pinnedQuantity: listing.quantity,
       stockBuffer: listing.stockBuffer ?? 0,
-      channelPolicy: policyFor(scPolicies, listing.channel, listing.marketplace),
+      channelPolicy: policyFor(scPolicies, listing.channel, listing.marketplace, listing.channelConnectionId),
       ...ledgerInputs(productLedger, (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? []),
     })
     const uncountedSkip = resolution.kind === 'UNCOUNTED' && (listing.quantity ?? 0) > 0

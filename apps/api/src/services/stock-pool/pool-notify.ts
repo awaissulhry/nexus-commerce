@@ -21,6 +21,11 @@ export interface PoolNotice {
   /** A bare path; the bell's router adds the business prefix. */
   href?: string | null
   meta?: Record<string, unknown>
+  /**
+   * One notice per person, type and entity, EVER: a notice already read is not sent again. For a fact that
+   * stays true until a person acts (a conflict), so every later run does not repeat it once it was read.
+   */
+  once?: boolean
 }
 
 export async function notifyOwners(notice: PoolNotice): Promise<{ created: number; deduped: number }> {
@@ -43,7 +48,7 @@ export async function notifyOwnersInTx(db: Pick<Prisma.TransactionClient, 'works
   let deduped = 0
   for (const { userId } of owners) {
     const unread = await db.notification.findFirst({
-      where: { userId, type: notice.type, entityType: notice.entityType, entityId: notice.entityId, readAt: null },
+      where: { userId, type: notice.type, entityType: notice.entityType, entityId: notice.entityId, ...(notice.once ? {} : { readAt: null }) },
       select: { id: true },
     })
     if (unread) { deduped++; continue }

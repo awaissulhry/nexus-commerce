@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { Share } from './sharingApi'
-import { DEFAULT_FIELD_GROUPS, FIELD_GROUP_ORDER, FIELD_GROUP_WORDS, groupsSentence, plannedCopy, runResultWords, statusWords } from './words'
+import { DEFAULT_FIELD_GROUPS, FIELD_GROUP_ORDER, FIELD_GROUP_WORDS, groupsSentence, heldPhotosWords, plannedCopy, runResultWords, statusWords } from './words'
 
 // The API owns the list. Two copies drift, so this reads the API's source and compares.
 const rules = readFileSync(new URL('../../../../../api/src/services/assortment/share-rules.ts', import.meta.url), 'utf8')
@@ -56,5 +56,12 @@ describe('shared products words', () => {
     expect(runResultWords({ state: 'reviewing', products: 3, skipped: 0, counts: null, error: null })).toBe('3 products in review')
     expect(runResultWords({ state: 'partial', products: 3, skipped: 1, error: null, counts: { linked: 2, alreadyLinked: 1, notSaved: 0, linkRefused: 0, managedApplied: 2, managedFailed: 0, imagesCopied: 1, imagesReused: 0, imagesAddressed: 1, imagesFailed: 1, mediaNotCopied: 1 } }))
       .toBe('3 products linked · 2 images added · 1 problem · 1 product skipped')
+  })
+})
+
+describe('photos held for the Media page', () => {
+  it('says how many photos were not added, and where to add them', () => {
+    expect(heldPhotosWords(1)).toBe('1 photo was not added: the product’s photos are managed on the Media page. Add them there.')
+    expect(heldPhotosWords(3)).toMatch(/^3 photos were not added/)
   })
 })

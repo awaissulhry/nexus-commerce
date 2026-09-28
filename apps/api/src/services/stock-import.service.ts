@@ -902,14 +902,14 @@ async function executeApplyImport(args: {
               id: true, productId: true, channel: true, region: true, marketplace: true,
               externalListingId: true, quantity: true, masterQuantity: true, stockBuffer: true,
               followMasterQuantity: true, fulfillmentMethod: true, quantityOverride: true,
-              listingStatus: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true,
+              listingStatus: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true, channelConnectionId: true,
             },
           })
         : [],
       wantsWarehouse && chunkProductIds.length > 0
         ? db.sharedListingMembership.findMany({
             where: { productId: { in: chunkProductIds }, status: 'ACTIVE' },
-            select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true },
+            select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, channelConnectionId: true },
           })
         : [],
     ])
@@ -1164,7 +1164,7 @@ async function executeApplyImport(args: {
           pinnedQuantity: listing.quantity,
           stockBuffer: listing.stockBuffer ?? 0,
           sourceLocationCodes: pooledSource ? [] : (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
-          channelPolicy: policyFor(scPoliciesImport, listing.channel, listing.marketplace),
+          channelPolicy: policyFor(scPoliciesImport, listing.channel, listing.marketplace, (listing as { channelConnectionId?: string | null }).channelConnectionId),
           ledger: listingLedger,
           uncountedIsZero,
         })
@@ -1222,7 +1222,7 @@ async function executeApplyImport(args: {
             followPool: (m as { followPool?: boolean }).followPool ?? true,
             pinnedQuantity: (m as { pinnedQuantity?: number | null }).pinnedQuantity ?? null,
             stockBuffer: (m as { stockBuffer?: number }).stockBuffer ?? 0,
-            channelPolicy: policyFor(scPoliciesImport, 'EBAY', (m as { marketplace: string }).marketplace),
+            channelPolicy: policyFor(scPoliciesImport, 'EBAY', (m as { marketplace: string }).marketplace, (m as { channelConnectionId?: string | null }).channelConnectionId),
             ledger: listingLedger,
             uncountedIsZero,
           })

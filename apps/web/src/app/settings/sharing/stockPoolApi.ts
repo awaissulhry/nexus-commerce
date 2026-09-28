@@ -65,6 +65,11 @@ export interface ListingPreview {
   itemId?: string
   channel: string
   marketplace: string
+  accountId: string | null
+  accountLabel: string | null
+  /** 0 = the main listing, 1… = an alias; null when the account and market hold only this listing. */
+  listingMark: number | null
+  aliasLabel: string | null
   showsNow: number | null
   willShow: number | null
   rule: ListingRule

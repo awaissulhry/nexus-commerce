@@ -92,6 +92,11 @@ export function runStateWords(state: RunState): { label: string; tone: Tone } {
   }
 }
 
+/** Photos a copy did not add because the product's photos are managed on the Media page (the API's PHOTOS_HELD). */
+export function heldPhotosWords(held: number): string {
+  return `${held === 1 ? '1 photo was' : `${held} photos were`} not added: the product’s photos are managed on the Media page. Add them there.`
+}
+
 /** One line for a finished run; nothing is said about counts a run never produced. */
 export function runResultWords(run: Pick<CopyRunSummary, 'state' | 'products' | 'skipped' | 'counts' | 'error'>): string {
   const c = run.counts
