@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { parse } from 'graphql'
 import { emptyShopifyContent, inspectShopifyContent, resolveShopifyContent, shopifyContentSchema, collectionCards, type ContentVariant, type ShopifyContent } from '@nexus/shared/shopify-content'
 vi.mock('./admin-client.js', () => ({ assertShopifyResult: (payload: any, operation: string) => { if (!payload || payload.userErrors?.length) throw new Error(`${operation}: ${payload?.userErrors?.[0]?.message ?? 'missing result'}`); return payload } }))
-import { mapRemoteVariants, publishContent, publishMetaobjects, SHOPIFY_OPTION_VALUE_MAX, shopifyOptionValueProblems, type PublishContentInput } from './content-publisher.js'
+import { ensureContentDefinitions, mapRemoteVariants, publishContent, publishMetaobjects, readRemoteProduct, SHOPIFY_IDENTITY_NOT_ID, SHOPIFY_OPTION_VALUE_MAX, shopifyOptionValueProblems, type PublishContentInput } from './content-publisher.js'
 // P3b A4 — the workspace's pure pieces (option order, variant options) are imported below; no database is used here.
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
@@ -97,7 +97,7 @@ function fakeShopify(c: ShopifyContent) {
     parse(query)
     const name = query.match(/(?:mutation|query)\s+(\w+)/)![1]; calls.push({ name, variables })
     if (name === 'NexusInventoryLocation') return { location: { id: variables.id, isActive: true } }
-    if (name === 'NexusDefinitions') return { metafieldDefinitions: collection([...c.fields, { namespace: 'nexus', key: 'resolved', type: 'json' }, { namespace: 'nexus', key: 'family_id', type: 'single_line_text_field' }].map((f, i) => ({ ...f, id: `def-${i}`, type: { name: f.type }, access: { storefront: 'PUBLIC_READ' }, validations: [], capabilities: { uniqueValues: { enabled: true } } }))) }
+    if (name === 'NexusDefinitions') return { metafieldDefinitions: collection([...c.fields, { namespace: 'nexus', key: 'resolved', type: 'json' }, { namespace: 'nexus', key: 'family_id', type: 'id' }].map((f, i) => ({ ...f, id: `def-${i}`, type: { name: f.type }, access: { storefront: 'PUBLIC_READ' }, validations: [], capabilities: { uniqueValues: { enabled: true } } }))) }
     if (name === 'NexusImage') return { files: { nodes: [{ id: `gid://shopify/MediaImage/${100 + calls.filter(c => c.name === name).length}`, fileStatus: 'READY' }] } }
     if (name === 'NexusProductSet') {
       product = { id: 'gid://shopify/Product/1', handle: 'family', status: 'DRAFT', updatedAt: '2026-09-08T10:00:00Z', media: collection(variables.input.files.map((f: any) => ({ id: f.id, status: 'READY' }))), metafields: collection([]), variants: collection(variables.input.variants.map((v: any, i: number) => ({ id: v.id ?? `gid://shopify/ProductVariant/${i + 1}`, sku: v.sku, price: v.price, selectedOptions: v.optionValues.map((o: any) => ({ name: o.optionName, value: o.name })), inventoryItem: { id: `gid://shopify/InventoryItem/${i + 1}` }, media: collection(v.file ? [v.file] : []), stock: v.inventoryQuantities?.[0]?.quantity ?? product?.variants.nodes[i]?.stock }))) }
@@ -120,6 +120,54 @@ function fakeShopify(c: ShopifyContent) {
   }
   return { gql, calls, owners, get product() { return product } }
 }
+/* A NEW product failed on a real Shopify development store (Lane B, 2026-09-28): "Metafield definition of type 'id' is required
+   when using custom ids." Nexus made `nexus.family_id` as plain text; the stand-in above had modelled that broken store. */
+describe('the family identity is a Shopify custom ID of type `id`', () => {
+  const collection = (nodes: any[]) => ({ nodes, pageInfo: { hasNextPage: false } })
+  const store = (familyIdType: string | null) => {
+    const calls: { name: string; variables: any }[] = []
+    const gql: any = async (query: string, variables: any = {}) => {
+      parse(query)
+      const name = query.match(/(?:mutation|query)\s+(\w+)/)![1]; calls.push({ name, variables })
+      if (name === 'NexusDefinitions') return { metafieldDefinitions: collection(variables.ownerType === 'PRODUCT' && familyIdType
+        ? [{ id: 'def-family', namespace: 'nexus', key: 'family_id', type: { name: familyIdType }, access: { storefront: 'PUBLIC_READ' }, validations: [], capabilities: { uniqueValues: { enabled: true } } }] : []) }
+      if (name === 'NexusCreateDefinition') return { metafieldDefinitionCreate: { createdDefinition: { id: `def-${calls.length}` }, userErrors: [] } }
+      if (name === 'NexusProductIdentity') return { product: null }
+      throw new Error(`Unmocked Shopify operation ${name}`)
+    }
+    return { gql, calls }
+  }
+  const bare = () => ({ ...emptyShopifyContent(['Colour']), fields: [], metaobjectDefinitions: [] }) as ShopifyContent
+  const identityCreates = (calls: { name: string; variables: any }[]) => calls.filter(c => c.name === 'NexusCreateDefinition' && c.variables.definition.key === 'family_id')
+
+  it('a store without it gets `nexus.family_id` as type `id` (unique values come with the type)', async () => {
+    const shop = store(null)
+    await ensureContentDefinitions(shop.gql, bare())
+    const [create] = identityCreates(shop.calls)
+    expect(create.variables.definition).toMatchObject({ namespace: 'nexus', key: 'family_id', type: 'id', ownerType: 'PRODUCT', capabilities: { uniqueValues: { enabled: true } } })
+    expect(identityCreates(shop.calls)).toHaveLength(1)
+  })
+
+  it('a store that kept the plain-text field from an earlier try is told what to do, and nothing is created or deleted', async () => {
+    const shop = store('single_line_text_field')
+    await expect(ensureContentDefinitions(shop.gql, bare())).rejects.toThrow(SHOPIFY_IDENTITY_NOT_ID)
+    expect(shop.calls.filter(c => /Create|Delete/.test(c.name))).toEqual([])
+    /* an `id` field already there is simply reused */
+    const ok = store('id')
+    await ensureContentDefinitions(ok.gql, bare())
+    expect(identityCreates(ok.calls)).toEqual([])
+  })
+
+  it('the lookup by custom ID runs only on an `id` field (Shopify refuses it on a plain-text one)', async () => {
+    const text = store('single_line_text_field')
+    expect(await readRemoteProduct(text.gql, null, 'workspace:family')).toBeNull()
+    expect(text.calls.map(c => c.name)).toEqual(['NexusDefinitions'])
+    const id = store('id')
+    expect(await readRemoteProduct(id.gql, null, 'workspace:family')).toBeNull()
+    expect(id.calls.find(c => c.name === 'NexusProductIdentity')?.variables.identifier).toEqual({ customId: { namespace: 'nexus', key: 'family_id', value: 'workspace:family' } })
+  })
+})
+
 describe('native Shopify publication', () => {
   it('publishes every combination with independent offers, ordered media and translated metafields', async () => {
     const c = content(), shopify = fakeShopify(c), checkpoints = vi.fn()
