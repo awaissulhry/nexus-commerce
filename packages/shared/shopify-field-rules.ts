@@ -9,9 +9,11 @@
  * - `shopifyValuesEqual`: whether two stored values are the same value for Shopify's type — for the read-back after a write,
  *   where Shopify may return the same JSON with other spacing or key order.
  *
- * Pure. Types only from `shopify-linked-products` (no runtime import, no cycle).
+ * Pure. Types only from `shopify-linked-products` (no runtime import, no cycle); the unit tables import nothing back.
  */
 import type { ShopifyFieldDefinition, ShopifyStoreSchema } from './shopify-linked-products.js'
+import { shopifyMeasurementUnits } from './shopify-field-codecs.js'
+import { shopifyMeasurementLimitReadable } from './shopify-measurement-limits.js'
 
 export interface ShopifyNoun { one: string; other: string }
 const NOUNS: Record<string, ShopifyNoun> = {
@@ -87,6 +89,11 @@ export function shopifyRuleSummary(def: Pick<ShopifyFieldDefinition, 'type' | 'v
   } else if (min || max) {
     const low = min && shopifyBoundWords(min), high = max && shopifyBoundWords(max)
     parts.push(low && high ? `${low} to ${high}${each}` : low ? `${low} or more${each}` : `${high} or less${each}`)
+    /* G14: a measurement limit in a unit Nexus cannot read is not checked in Nexus — say who checks it (PLAN §6.3). */
+    if (shopifyMeasurementUnits[base]) {
+      const limits = [min, max].filter((b): b is string => !!b), unread = limits.filter(b => !shopifyMeasurementLimitReadable(base, b))
+      if (unread.length) parts.push(unread.length < limits.length ? `Shopify checks the ${shopifyBoundWords(unread[0])} limit when you publish` : `Shopify checks ${unread.length > 1 ? 'these limits' : 'this limit'} when you publish`)
+    }
   }
   const precision = rule('max_precision')
   if (precision) parts.push(`Up to ${precision} decimal ${precision === '1' ? 'place' : 'places'}`)
