@@ -96,3 +96,93 @@ describe('B1 · the 11 store types in the cell', () => {
     expect(metafieldDisplay('list.metaobject_reference', '[1,').kind).toBe('invalid')
   })
 })
+
+/* ── Lane B slice B3a (PLAN §6.3, G13): every measurement kind in words, like weight — single values and lists. ── */
+import { shopifyMeasurementUnits } from '@nexus/shared/shopify-linked-products'
+
+describe('B3a · every measurement kind shows its value in words, never raw JSON', () => {
+  it.each([
+    ['antenna_gain', 'decibels_isotropic', '2.5 decibels isotropic'],
+    ['area', 'square_centimeters', '2.5 square centimeters'],
+    ['battery_charge_capacity', 'milliamp_hours', '2.5 milliamp hours'],
+    ['battery_energy_capacity', 'watt_hours', '2.5 watt hours'],
+    ['capacitance', 'picofarads', '2.5 picofarads'],
+    ['concentration', 'milligrams_per_gram', '2.5 milligrams per gram'],
+    ['data_storage_capacity', 'bytes', '2.5 bytes'],
+    ['data_transfer_rate', 'bits_per_second', '2.5 bits per second'],
+    ['dimension', 'inches', '2.5 inches'],
+    ['display_density', 'pixels_per_inch', '2.5 pixels per inch'],
+    ['distance', 'kilometers', '2.5 kilometers'],
+    ['duration', 'nanoseconds', '2.5 nanoseconds'],
+    ['electric_current', 'milliamperes', '2.5 milliamperes'],
+    ['electrical_resistance', 'ohms', '2.5 ohms'],
+    ['energy', 'joules', '2.5 joules'],
+    ['frequency', 'hertz', '2.5 hertz'],
+    ['illuminance', 'lux', '2.5 lux'],
+    ['inductance', 'microhenries', '2.5 microhenries'],
+    ['luminous_flux', 'lumens', '2.5 lumens'],
+    ['mass_flow_rate', 'grams_per_day', '2.5 grams per day'],
+    ['power', 'milliwatts', '2.5 milliwatts'],
+    ['pressure', 'pounds_per_square_inch', '2.5 pounds per square inch'],
+    ['resolution', 'pixels', '2.5 pixels'],
+    ['rotational_speed', 'revolutions_per_minute', '2.5 revolutions per minute'],
+    ['sound_level', 'decibels', '2.5 decibels'],
+    ['speed', 'kilometers_per_hour', '2.5 kilometers per hour'],
+    ['temperature', 'celsius', '2.5 celsius'],
+    ['thermal_power', 'british_thermal_units_per_hour', '2.5 british thermal units per hour'],
+    ['voltage', 'volts', '2.5 volts'],
+    ['volume', 'milliliters', '2.5 milliliters'],
+    ['volumetric_flow_rate', 'liters_per_hour', '2.5 liters per hour'],
+    ['weight', 'ounces', '2.5 ounces'],
+  ])('%s (%s) → "%s"', (kind, unit, text) => {
+    expect(metafieldDisplay(kind, JSON.stringify({ value: 2.5, unit }))).toEqual({ kind: 'text', text })
+  })
+  it('the list above is all 32 kinds, and every unit of every kind reads the same way', () => {
+    expect(Object.keys(shopifyMeasurementUnits)).toHaveLength(32)
+    for (const [kind, units] of Object.entries(shopifyMeasurementUnits)) for (const unit of units) {
+      expect(metafieldDisplay(kind, `{"value":21.5,"unit":"${unit}"}`), `${kind} · ${unit}`).toEqual({ kind: 'text', text: `21.5 ${unit.split('_').join(' ')}` })
+    }
+  })
+  it.each([
+    ['temperature', '{"value":21.5,"unit":"celsius"}', '21.5 celsius'],
+    ['temperature', '{"value":-3,"unit":"fahrenheit"}', '-3 fahrenheit'],
+    ['speed', '{"value":2.5,"unit":"kilometers_per_hour"}', '2.5 kilometers per hour'],
+    ['data_storage_capacity', '{"unit":"megabytes","value":"64.0"}', '64.0 megabytes'],
+    ['weight', '{"value":12.3,"unit":"kg"}', '12.3 kg'],
+  ])('%s %s → "%s" (the stored digits and unit, as written)', (kind, raw, text) => {
+    expect(metafieldDisplay(kind, raw)).toEqual({ kind: 'text', text })
+  })
+  it('list forms: one value per chip, for every kind', () => {
+    expect(metafieldDisplay('list.temperature', '[{"value":21.5,"unit":"celsius"},{"value":-3,"unit":"fahrenheit"}]'))
+      .toEqual({ kind: 'values', items: ['21.5 celsius', '-3 fahrenheit'], text: '21.5 celsius, -3 fahrenheit' })
+    expect(metafieldDisplay('list.duration', labGoodValue('list.duration'))).toEqual({ kind: 'values', items: ['45 minutes', '46 minutes'], text: '45 minutes, 46 minutes' })
+    for (const [kind, units] of Object.entries(shopifyMeasurementUnits)) {
+      expect(metafieldDisplay(`list.${kind}`, JSON.stringify([{ value: 1, unit: units[0] }, { value: 2, unit: units[units.length - 1] }])), kind)
+        .toEqual({ kind: 'values', items: [`1 ${units[0].split('_').join(' ')}`, `2 ${units[units.length - 1].split('_').join(' ')}`], text: expect.any(String) })
+    }
+    expect(metafieldDisplay('list.speed', '[]')).toEqual({ kind: 'empty', text: '' })
+  })
+  it.each([
+    ['temperature', '{"value":"warm","unit":"celsius"}'],
+    ['temperature', '{"unit":"celsius"}'],
+    ['temperature', '{"value":21.5}'],
+    ['temperature', '{"value":21.5,"unit":""}'],
+    ['temperature', '21.5'],
+    ['temperature', '[]'],
+    ['temperature', '{"value":'],
+    ['speed', '{"value":null,"unit":"meters_per_second"}'],
+    ['list.speed', '[{"value":1,"unit":"meters_per_second"},{}]'],
+    ['list.speed', '{"value":1,"unit":"meters_per_second"}'],
+  ])('%s %s → "Stored value needs review"', (kind, raw) => {
+    expect(metafieldDisplay(kind, raw)).toEqual({ kind: 'invalid', text: 'Stored value needs review' })
+  })
+  it('a text field that holds measurement-like text stays text', () => {
+    expect(metafieldDisplay('single_line_text_field', '{"value":1,"unit":"kg"}')).toEqual({ kind: 'text', text: '{"value":1,"unit":"kg"}' })
+  })
+  it('draws the words in the cell (markup), not the stored JSON', () => {
+    const cell = (type: string, raw: string) => renderToStaticMarkup(createElement(MetafieldValue, { type, raw }))
+    expect(cell('temperature', '{"value":21.5,"unit":"celsius"}')).toContain('21.5 celsius')
+    expect(cell('temperature', '{"value":21.5,"unit":"celsius"}')).not.toContain('&quot;unit&quot;')
+    expect(cell('list.speed', '[{"value":2.5,"unit":"kilometers_per_hour"},{"value":3,"unit":"miles_per_hour"}]')).toContain('2.5 kilometers per hour')
+  })
+})
