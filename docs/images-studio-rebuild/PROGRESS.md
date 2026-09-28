@@ -99,8 +99,10 @@ PLAN §4.5 and §11, closed in one PR:
   "Left out — 21 SKUs", each "its Amazon SE listing has no ASIN yet" (the SE drafts); Safety images: none (the plan's
   Safety set is empty); Country photos: none on any market (no photo has language versions); the API language is
   German (DE is the account's first market). Found: "has a Italian version" → now "has a version in Italian" (the fix PR after #129).
-  Not measured: the ZIP size. The photos are 2,000–2,250 px, so IT All photos (182 files) may pass the 100 MB limit;
-  a download is read only and would show it.
+  **Size, measured** (Owner's word, one real download, read only): IT All photos (182 files, photos 2,000–2,250 px)
+  stops at the limit in about 2 s — "This ZIP would be larger than 100 MB, the most Nexus makes in one ZIP. No ZIP was
+  saved." Nothing reached the Downloads folder. So the open risk in P4-PLAN § P4d is real for this family: All photos
+  needs a streamed ZIP (next step, the Owner decides).
 - **Open:** the Amazon channel view → **Export ZIP for Seller Central**. One window (`plan-page/AmazonZipDialog.tsx`):
   **Market** (the account's markets), **What to export** (All photos · Safety images · Country photos), what the ZIP
   holds and in which language, **Where to upload it** (Seller Central's own names), then the list: every file
