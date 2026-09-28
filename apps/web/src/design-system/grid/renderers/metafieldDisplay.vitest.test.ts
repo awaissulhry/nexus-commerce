@@ -44,3 +44,55 @@ describe('metafieldDisplay references', () => {
     expect(d.kind === 'references' && d.items[0]).toMatchObject({ label: 'Entry', named: false, swatch: null })
   })
 })
+
+/* Lane B slice B1 (PLAN §6.1, §7 L1): each of the 11 store types draws like Shopify's bulk editor — the model and the markup. */
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { LAB_STORE_FIELDS, LAB_STORE_START, labReferences } from '@nexus/shared/shopify-lab-store'
+import { MetafieldValue } from './MetafieldValue'
+
+const refs = labReferences()
+const maps = {
+  labels: Object.fromEntries(refs.map(r => [r.id, r.label])),
+  images: Object.fromEntries(refs.flatMap(r => (r.image ? [[r.id, r.image]] : []))),
+  swatches: Object.fromEntries(refs.flatMap(r => (r.swatch ? [[r.id, r.swatch]] : []))),
+}
+const storeField = (key: string) => LAB_STORE_FIELDS.find(f => f.key === key)!
+const start = (key: string) => LAB_STORE_START[storeField(key).id] ?? null
+const html = (key: string, raw = start(key)) => renderToStaticMarkup(createElement(MetafieldValue, { type: storeField(key).type, raw, ...maps }))
+
+describe('B1 · the 11 store types in the cell', () => {
+  it.each([
+    ['related_items_display', 'text', 'ahead'],
+    ['variation_label', 'text', 'Black'],
+    ['search_words', 'values', 'rain jacket, touring'],
+    ['icons_with_text', 'references', 'Water-repellent, Regular fit, Air vents'],
+    ['colour_category', 'references', 'Black'],
+    ['short_summary', 'references', 'Moss'],
+    ['related_items', 'references', 'Sample Pant, Sample Vest'],
+    ['average_rating', 'rating', '4.5 / 5'],
+    ['rating_count', 'number', '12'],
+    ['feed_custom_product', 'boolean', 'No'],
+    ['size_guide_page', 'references', 'Size guide (jackets)'],
+    ['swatch_picture', 'references', 'Size chart (IT)'],
+    ['swatch_colour', 'colors', '#2458d6'],
+  ])('%s → %s "%s"', (key, kind, text) => {
+    const d = metafieldDisplay(storeField(key).type, start(key), maps)
+    expect(d.kind).toBe(kind)
+    expect(d.text).toBe(text)
+  })
+  it('draws pictures, swatches, stars and marks — and a name, never a raw id', () => {
+    expect(html('icons_with_text')).toContain('3 references: Water-repellent, Regular fit, Air vents')
+    expect(html('colour_category')).toContain('--nds-media-swatch:#111111')
+    expect(html('related_items')).toContain('<img')
+    expect(html('swatch_picture')).toContain('<img')
+    expect(html('average_rating')).toContain('aria-label="Rating 4.5 / 5"')
+    expect(html('feed_custom_product')).toContain('data-value="no"')
+    expect(html('swatch_colour')).toContain('background-color:#2458d6')
+    for (const key of ['icons_with_text', 'related_items', 'size_guide_page', 'swatch_picture']) expect(html(key)).not.toMatch(/>gid:\/\//)
+  })
+  it('an empty cell draws the empty mark; an unreadable value says so', () => {
+    expect(html('media_and_text', null)).not.toContain('gid://')
+    expect(metafieldDisplay('list.metaobject_reference', '[1,').kind).toBe('invalid')
+  })
+})

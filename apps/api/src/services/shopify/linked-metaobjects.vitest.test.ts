@@ -69,7 +69,7 @@ describe('shared reusable entry changes', () => {
   })
   it('refuses missing references and read-only definitions before a write', async () => {
     const initial = await getLinkedEntry(gql, entryId)
-    await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'image', value: 'gid://shopify/MediaImage/999' }] })).rejects.toThrow('reference is unavailable')
+    await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'image', value: 'gid://shopify/MediaImage/999' }] })).rejects.toThrow('is no longer in the store')
     fixture.readOnly = true
     await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'heading', value: 'Mine' }] })).rejects.toThrow('read-only')
     expect(fixture.writes).toHaveLength(0)

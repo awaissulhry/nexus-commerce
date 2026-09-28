@@ -9,7 +9,7 @@ import type { CatalogueField } from './field-catalogue.service.js'
  * (`validateShopifyField`). Such a finding is a FLAG (readiness, preview, a held publish), never a refusal to save.
  * Pinned against each validator's real output in `off-list-error.vitest.test.ts`.
  */
-const OFF_LIST_ERROR = /contains an unaccepted value\. Allowed values:|must be equal to one of the allowed values|Choose one of the store’s allowed values\./
+const OFF_LIST_ERROR = /contains an unaccepted value\. Allowed values:|must be equal to one of the allowed values|Choose one of these values: /
 export function isOffListError(message: string): boolean {
   return OFF_LIST_ERROR.test(message)
 }

@@ -116,6 +116,8 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
       else if (!event.shiftKey && i === all.length - 1) { event.preventDefault(); all[0].focus() }
       return
     }
+    /* In a multi-line box Enter adds a line, so Ctrl/⌘+Enter saves there — and anywhere else in the panel (gap G5). */
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.altKey) { event.preventDefault(); onSave(); return }
     if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey) {
       if ((event.target as HTMLElement).closest('textarea, button, a[href], [contenteditable="true"]')) return
       event.preventDefault()
@@ -170,7 +172,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     if (!selected || !field || !schema) return true
     if (locked || value === selected.baseline) { close(); return true }
     const current = schema.definitions.find(d => d.ownerType === field.owner && d.namespace === field.definition?.namespace && d.key === field.definition?.key)
-    const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'This definition changed. Reopen the editor; your input is preserved here.'
+    const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'Shopify changed this field’s rules. Your value stays here; close and open the cell again to use the new rules.'
       : translated && value === null ? null : field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected.baseline)
     if (problem) { setError(`Not saved: ${problem}`); return false }
     const node = getApi()?.getRowNode(selected.row.rowId)

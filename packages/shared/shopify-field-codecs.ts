@@ -40,14 +40,15 @@ export function shopifyObjectError(type: string, value: unknown): string | null 
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Enter a structured value.'
   const v = value as Record<string, unknown>
   if (shopifyMeasurementUnits[type]) {
-    if (!shopifyDecimal(v.value)) return 'Enter a numeric measurement.'
-    if (!shopifyMeasurementUnits[type].includes(String(v.unit))) return 'Choose a unit supported by this measurement type.'
+    if (!shopifyDecimal(v.value)) return 'Enter a number, for example 2.5.'
+    if (!shopifyMeasurementUnits[type].includes(String(v.unit))) return 'Choose a unit from the list.'
   }
-  if (type === 'money' && (!shopifyDecimal(v.amount) || !/^[A-Z]{3}$/.test(String(v.currency_code)))) return 'Enter an amount and a three-letter currency code.'
-  if (type === 'rating' && (![v.value, v.scale_min, v.scale_max].every(shopifyDecimal) || Number(v.scale_min) >= Number(v.scale_max) || Number(v.value) < Number(v.scale_min) || Number(v.value) > Number(v.scale_max))) return 'Enter a rating within its declared scale.'
+  if (type === 'money' && !shopifyDecimal(v.amount)) return 'Enter an amount, for example 12.50.'
+  if (type === 'money' && !/^[A-Z]{3}$/.test(String(v.currency_code))) return 'Enter a three-letter currency code, for example EUR.'
+  if (type === 'rating' && (![v.value, v.scale_min, v.scale_max].every(shopifyDecimal) || Number(v.scale_min) >= Number(v.scale_max) || Number(v.value) < Number(v.scale_min) || Number(v.value) > Number(v.scale_max))) return 'Enter a rating inside its scale.'
   if (type === 'link') {
     if (typeof v.text !== 'string' || !v.text.trim()) return 'Enter the link text.'
-    try { if (typeof v.url !== 'string' || !['https:', 'http:'].includes(new URL(v.url).protocol)) return 'Enter an HTTP or HTTPS link.' } catch { return 'Enter a valid link URL.' }
+    try { if (typeof v.url !== 'string' || !['https:', 'http:'].includes(new URL(v.url).protocol)) return 'Enter a full web address, for example https://example.com.' } catch { return 'Enter a full web address, for example https://example.com.' }
   }
   return null
 }

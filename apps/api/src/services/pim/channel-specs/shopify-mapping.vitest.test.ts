@@ -78,8 +78,8 @@ describe('Shopify information mapping contract', () => {
       const f = shopifyProductSpec(schema([d]), 'a').fields.at(-1)!
       return { ...f, fieldKey: f.key, priority: 'optional', selectionOnly: false, shopifyField: f.shopifyField } as unknown as CatalogueField
     }
-    expect(validateChannelValue(field(def()), ['Waterproof']).errors.join(' ')).toContain('Shopify reference')
-    expect(validateChannelValue(field(def()), ['gid://shopify/Product/1']).errors.join(' ')).toContain('Metaobject')
+    expect(validateChannelValue(field(def()), ['Waterproof']).errors.join(' ')).toContain('Value 1: Choose an entry from the store.')
+    expect(validateChannelValue(field(def()), ['gid://shopify/Product/1']).errors.join(' ')).toContain('Value 1: This field takes entries only.')
     expect(validateChannelValue(field(def({ type: 'number_integer', validations: [{ name: 'min', value: '0' }] })), -1).errors).not.toEqual([])
     expect(validateChannelValue(field(def({ type: 'color' })), 'Giallo').errors).not.toEqual([])
     expect(validateChannelValue(field(def({ type: 'boolean' })), false).errors).toEqual([])

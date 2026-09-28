@@ -156,7 +156,22 @@ export async function readLinkedFields(gql: ShopifyGraphql, addresses: { ownerId
   return out
 }
 
-export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type: string; query?: string; cursor?: string; metaobjectType?: string }): Promise<ShopifyReferencePage> {
+/** A file's name for pickers and cells (gap G11): its alt text, else the video's file name or the last part of its address.
+ *  Never an empty name and never a raw id. */
+const FILE_TYPENAMES = ['MediaImage', 'GenericFile', 'Video', 'Model3d']
+export function linkedFileLabel(n: any): string {
+  if (typeof n?.alt === 'string' && n.alt.trim()) return n.alt
+  if (typeof n?.filename === 'string' && n.filename) return n.filename
+  const url = n?.image?.url ?? n?.url ?? null
+  if (typeof url === 'string') { try { const last = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? ''); if (last) return last } catch { /* fall through */ } }
+  return 'Untitled file'
+}
+/** `Image,Video` (a field's `file_type_options`) → Shopify's file search filter. Unknown kinds are ignored, never guessed. */
+export function linkedFileKindsQuery(fileTypes: string | undefined): string | null {
+  const kinds = (fileTypes ?? '').split(',').map(kind => ({ Image: 'media_type:IMAGE', Video: 'media_type:VIDEO' } as Record<string, string>)[kind.trim()]).filter(Boolean)
+  return kinds.length ? kinds.join(' OR ') : null
+}
+export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type: string; query?: string; cursor?: string; metaobjectType?: string; fileTypes?: string }): Promise<ShopifyReferencePage> {
   const type = input.type.replace(/^list\./, '')
   const query = input.query?.trim().slice(0, 200) || null, after = input.cursor || null
   let selection: string, root: string, args = 'first:40,after:$after,query:$query', variables: Record<string, unknown> = { after, query }, extra = ''
@@ -168,7 +183,12 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   else if (type === 'order_reference') { root = 'orders'; selection = 'id name' }
   else if (type === 'page_reference') { root = 'pages'; selection = 'id title' }
   else if (type === 'article_reference') { root = 'articles'; selection = 'id title' }
-  else if (type === 'file_reference') { root = 'files'; selection = 'id __typename alt ... on MediaImage { image { url } } ... on GenericFile { url } ... on Video { preview { image { url } } }' }
+  else if (type === 'file_reference') {
+    root = 'files'; selection = 'id __typename alt ... on MediaImage { image { url } } ... on GenericFile { url } ... on Video { filename preview { image { url } } }'
+    /* Only the kinds the field allows (gap G8), combined with the typed search like the product-media search below. */
+    const kinds = linkedFileKindsQuery(input.fileTypes)
+    if (kinds) variables.query = query ? `(${kinds}) AND (${query})` : kinds
+  }
   else if (type === 'product_media') { root = 'files'; selection = '__typename id alt fileStatus preview { image { url } } ... on MediaImage { image { url } } ... on Video { sources { url mimeType } } ... on Model3d { sources { url mimeType } }'; variables.query = `media_type:IMAGE OR media_type:VIDEO OR media_type:MODEL_3D`; if (query) variables.query = `(${variables.query}) AND (${query})` }
   else if (type === 'metaobject_reference' || type === 'mixed_reference' || type === 'disclosure_reference') {
     if (!input.metaobjectType) throw new WorkspaceScopeError('Choose the reusable entry type.', 400)
@@ -193,7 +213,7 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   const data = await gql(`query NexusLinkedReferenceSearch($after:String,$query:String${extra}) { ${root}(${args}) { nodes { ${selection} } ${pageInfo} } }`, variables)
   const page = data[root]
   if (!page || !Array.isArray(page.nodes) || (page.pageInfo.hasNextPage && !page.pageInfo.endCursor)) throw new WorkspaceScopeError('The search result is incomplete. Retry.', 502)
-  return { items: page.nodes.filter((n: any) => type !== 'product_media' || ['MediaImage', 'Video', 'Model3d'].includes(n.__typename)).map((n: any) => ({ id: n.id, label: n.displayName ?? (n.product ? `${n.product.title} / ${n.title}${n.sku ? ` · ${n.sku}` : ''}` : n.title ?? n.name ?? n.alt ?? n.id), image: referenceImage(n), ...(n.thumbnailField?.thumbnail?.hex ? { swatch: n.thumbnailField.thumbnail.hex } : {}), ...(n.type || n.__typename ? { type: n.type ?? n.__typename } : {}), ...(n.handle ? { handle: n.handle } : {}),
+  return { items: page.nodes.filter((n: any) => type !== 'product_media' || ['MediaImage', 'Video', 'Model3d'].includes(n.__typename)).map((n: any) => ({ id: n.id, label: n.displayName ?? (n.product ? `${n.product.title} / ${n.title}${n.sku ? ` · ${n.sku}` : ''}` : n.title ?? n.name ?? (FILE_TYPENAMES.includes(n.__typename) ? linkedFileLabel(n) : n.alt ?? n.id)), image: referenceImage(n), ...(n.thumbnailField?.thumbnail?.hex ? { swatch: n.thumbnailField.thumbnail.hex } : {}), ...(n.type || n.__typename ? { type: n.type ?? n.__typename } : {}), ...(n.handle ? { handle: n.handle } : {}),
     ...(type === 'product_media' ? { media: { id: n.id, alt: n.alt ?? '', type: ({ MediaImage: 'IMAGE', Video: 'VIDEO', Model3d: 'MODEL_3D' } as Record<string, string>)[n.__typename], status: n.fileStatus, preview: n.preview?.image?.url ?? n.image?.url ?? null, url: n.image?.url ?? n.sources?.[0]?.url ?? null, ...(n.sources ? { sources: n.sources } : {}) } } : {}) })), cursor: page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null }
 }
 
@@ -206,9 +226,9 @@ function referenceImage(n: any): string | null {
 
 export async function resolveLinkedReferences(gql: ShopifyGraphql, ids: string[]): Promise<ShopifyReference[]> {
   if (ids.length > 100 || ids.some(id => !shopifyGid.safeParse(id).success)) throw new WorkspaceScopeError('Select at most 100 references at a time.', 400)
-  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title featuredMedia { preview { image { url } } } } ... on ProductVariant { title product { title featuredMedia { preview { image { url } } } } media(first:1) { nodes { preview { image { url } } } } } ... on Collection { title image { url } } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type ${entryThumbnail} } ... on MediaImage { alt image { url } } ... on GenericFile { alt } ... on Model3d { alt } ... on Video { alt preview { image { url } } } } }`, { ids })
+  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title featuredMedia { preview { image { url } } } } ... on ProductVariant { title product { title featuredMedia { preview { image { url } } } } media(first:1) { nodes { preview { image { url } } } } } ... on Collection { title image { url } } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type ${entryThumbnail} } ... on MediaImage { alt image { url } } ... on GenericFile { alt url } ... on Model3d { alt } ... on Video { alt filename preview { image { url } } } } }`, { ids })
   if (!Array.isArray(nodes) || nodes.length !== ids.length || nodes.some((n: any, i: number) => n && n.id !== ids[i])) throw new WorkspaceScopeError('Shopify returned incomplete or mismatched references. Retry before synchronizing.', 502)
-  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? n?.alt ?? (n ? ids[i] : 'Unavailable reference')), image: referenceImage(n), ...(entryPicture(n).swatch ? { swatch: entryPicture(n).swatch } : {}), available: !!n, type: n?.type ?? n?.__typename }))
+  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? (FILE_TYPENAMES.includes(n?.__typename) ? linkedFileLabel(n) : n?.alt ?? (n ? ids[i] : 'Unavailable reference'))), image: referenceImage(n), ...(entryPicture(n).swatch ? { swatch: entryPicture(n).swatch } : {}), available: !!n, type: n?.type ?? n?.__typename }))
 }
 
 /**
