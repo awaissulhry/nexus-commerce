@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { addPrompt, baseReferenceType, chosenChoices, listMax, referenceChoice, referenceNoun, referenceUiFor, singleEntryType } from './referenceFieldModel'
+import { addPrompt, baseReferenceType, chosenChoices, referenceChoices, listMax, referenceChoice, referenceNoun, referenceUiFor, singleEntryType } from './referenceFieldModel'
 
 /* Made-up store: two entry definitions. */
 const schema = {
@@ -165,5 +165,19 @@ describe('B3c · the older picker says why it is used', () => {
        sentence (the B2 review; the made-up type field has an attribute but no category). */
     expect(olderPickerReason(labTypeField('product_taxonomy_value_reference'), LAB_SCHEMA)?.text).toMatch(/^Shopify lists these values only through a product category/)
     expect(olderPickerReason({ type: 'product_taxonomy_value_reference', validations: [] }, LAB_SCHEMA)?.text).toBe('This field does not name its list of values. Paste a value’s Shopify ID to choose it.')
+  })
+})
+
+/* B4 (seen on a development store): an entry and its copy share one name; the list tells them apart by their handle. */
+describe('same-named entries', () => {
+  const entry = (n: number, label: string, handle: string) => ({ id: `gid://shopify/Metaobject/${n}`, label, handle, image: null, available: true })
+  it('show their handle as the second line only when their names clash', () => {
+    const [a, b, c] = referenceChoices([entry(1, 'Lab teal', 'lab-teal-k2p9'), entry(2, 'Lab teal', 'lab-teal-x7m3'), entry(3, 'Label 1', 'label-1')])
+    expect([a.detail, b.detail, c.detail]).toEqual(['lab-teal-k2p9', 'lab-teal-x7m3', undefined])
+    const chips = chosenChoices([entry(1, 'Lab teal', 'lab-teal-k2p9').id, entry(2, 'Lab teal', 'lab-teal-x7m3').id], [entry(1, 'Lab teal', 'lab-teal-k2p9'), entry(2, 'Lab teal', 'lab-teal-x7m3')], { one: 'entry' }, false)
+    expect(chips.map(c => c.detail)).toEqual(['lab-teal-k2p9', 'lab-teal-x7m3'])
+  })
+  it('products keep their handle line as before', () => {
+    expect(referenceChoices([{ id: 'gid://shopify/Product/1', label: 'Jacket', handle: 'jacket', image: null }])[0].detail).toBe('/jacket')
   })
 })

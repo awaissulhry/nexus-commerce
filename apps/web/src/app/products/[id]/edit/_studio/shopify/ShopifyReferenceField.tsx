@@ -21,7 +21,7 @@ import {
 } from '@/design-system/components'
 import { Button, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { linkedEndpoint, linkedRequest } from './api'
-import { addPrompt, baseReferenceType, chosenChoices, kindSwitchFor, listMax, pickerEntryKinds, referenceChoice, referenceNoun, type ReferenceUi } from './referenceFieldModel'
+import { addPrompt, baseReferenceType, chosenChoices, kindSwitchFor, listMax, pickerEntryKinds, referenceChoices, referenceNoun, type ReferenceUi } from './referenceFieldModel'
 import styles from './linked.module.css'
 
 /** A page of search results for one field, re-read 200 ms after typing stops; older answers never overwrite newer. */
@@ -157,7 +157,7 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
       : null
   const pickList = (single: boolean) => <>
     {kindSwitch}
-    <MediaPickList ref={pick} label={`${entryName ?? def.name} ${noun.other}`} choices={search.items.map(referenceChoice)} selected={values}
+    <MediaPickList ref={pick} label={`${entryName ?? def.name} ${noun.other}`} choices={referenceChoices(search.items)} selected={values}
       mode={single ? 'single' : 'multi'} search="remote" searchField={single} query={search.query} onQueryChange={search.setQuery}
       searchPlaceholder={`Search ${entryName ?? noun.other}`} loading={search.loading} error={search.error} hasMore={search.hasMore} onLoadMore={search.loadMore}
       emptyText={search.query ? 'No matches' : `This store has no ${entryName ?? noun.other} yet`} onToggle={toggle} onActiveChange={setActive}
@@ -187,7 +187,7 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
   }
 
   /* Product-like references: the ordered list with photos, and the picker dialog. */
-  const choices = search.items.map(referenceChoice)
+  const choices = referenceChoices(search.items)
   return <div className={styles.stack}>
     {list
       ? <MediaOrderedList label={`${def.name}, in order`} items={chosen} disabled={locked} onChange={next => accept(next, [])}
