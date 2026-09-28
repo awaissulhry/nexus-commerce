@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { shopifyJsonSchemaError, shopifyObjectBoundError } from './shopify-definition-validation.js'
 export { shopifyJson } from './shopify-json.js'
 import { shopifyObjectError, shopifyObjectType, shopifyTypeReason } from './shopify-field-codecs.js'
-import { plainNumber, shopifyFileKind, shopifyFileKindsWords, shopifyNoun } from './shopify-field-rules.js'
-export { plainNumber, shopifyFileKind, shopifyFileKindsWords, shopifyNoun, shopifyRuleSummary, shopifyValuesEqual, type ShopifyNoun } from './shopify-field-rules.js'
+import { plainNumber, shopifyDateTimeMs, shopifyFileKind, shopifyFileKindsWords, shopifyJsonProblem, shopifyLimitMs, shopifyMomentWords, shopifyNoun } from './shopify-field-rules.js'
+export { plainNumber, shopifyDateMs, shopifyDateTimeMs, shopifyDateTimeValue, shopifyFileKind, shopifyFileKindsWords, shopifyJsonProblem, shopifyLimitMs, shopifyMomentWords, shopifyNoun, shopifyRuleSummary, shopifyValuesEqual, type ShopifyNoun } from './shopify-field-rules.js'
 export { shopifyMeasurementUnits, shopifyObjectType, shopifyTypeReason, shopifyTypeSupported } from './shopify-field-codecs.js'
 import { nativeEditSchema, mediaOrderEditSchema, nativeFieldError, nativeEditAddress, type InformationMedia, type NativeEdit, type MediaOrderEdit } from './shopify-information.js'
 
@@ -235,6 +235,8 @@ function itemError(def: Pick<ShopifyFieldDefinition, 'type' | 'validations'>, ty
     }
     const error = shopifyObjectError(type, object)
     if (error) return error
+    const domains = rule('allowed_domains')
+    if (type === 'link' && domains !== undefined) { const refusal = domainError(String((object as Record<string, unknown>).url), domains); if (refusal) return refusal }
     for (const bound of def.validations.filter(r => ['min', 'max'].includes(r.name))) {
       const boundError = shopifyObjectBoundError(type, object as Record<string, unknown>, bound)
       if (boundError) return boundError
@@ -266,20 +268,24 @@ function itemError(def: Pick<ShopifyFieldDefinition, 'type' | 'validations'>, ty
   if (type === 'language') { try { if (!/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(text) || !Intl.getCanonicalLocales(text).length) return 'Enter a language code, for example en or it-IT.' } catch { return 'Enter a language code, for example en or it-IT.' } }
   if (type === 'color' && !/^#[\da-f]{6}$/i.test(text)) return 'Enter a colour as # and six characters, for example #1A2B3C.'
   if (type === 'date' && (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(text)) || new Date(text).toISOString().slice(0, 10) !== text)) return 'Enter a date as YYYY-MM-DD, for example 2026-09-28.'
-  if (type === 'date_time' && Number.isNaN(Date.parse(text))) return 'Enter a valid date and time.'
+  if (type === 'date_time' && shopifyDateTimeMs(text) === null) return 'Choose a date and a time.'
   if (type === 'url') { try { if (!['https:', 'http:', 'mailto:', 'sms:', 'tel:'].includes(new URL(text).protocol)) return 'Enter a full web address, for example https://example.com.' } catch { return 'Enter a full web address, for example https://example.com.' } }
   if (['json', 'rich_text_field'].includes(type)) {
-    try { const data = JSON.parse(text); if (type === 'rich_text_field' && (data?.type !== 'root' || !Array.isArray(data.children))) return 'Use rich text with a root and children.' } catch { return 'Enter valid JSON.' }
+    /* The parser decides WHETHER; `shopifyJsonProblem` says where and why in the same words in every engine (G16). */
+    try { const data = JSON.parse(text); if (type === 'rich_text_field' && (data?.type !== 'root' || !Array.isArray(data.children))) return 'Use rich text with a root and children.' } catch { return `This is not valid JSON: ${shopifyJsonProblem(text) ?? 'check its quotes, commas and brackets'}.` }
   }
   for (const r of def.validations) {
     if (r.name === 'schema' && type === 'json') { const error = shopifyJsonSchemaError(r.value, text); if (error) return error }
     if (r.name === 'max_precision' && type === 'number_decimal' && (text.split('.')[1]?.length ?? 0) > Number(r.value)) return `Use at most ${r.value} decimal places.`
-    if (r.name === 'allowed_domains' && type === 'url') {
-      let domains: string[]
-      try { domains = JSON.parse(r.value) } catch { return 'This definition’s allowed domains cannot be read. Refresh the store schema.' }
-      if (!domains.some(domain => new URL(text).hostname.toLowerCase() === domain.toLowerCase())) return `Use a link on one of these sites: ${domains.join(', ')}.`
+    if (r.name === 'allowed_domains' && type === 'url') { const refusal = domainError(text, r.value); if (refusal) return refusal }
+    if (['min', 'max'].includes(r.name) && ['date', 'date_time'].includes(type)) {
+      /* Both sides as UTC moments — a limit with no zone is UTC, like the value (G15). A limit Nexus cannot read is left
+         to Shopify's own check when you publish; it never blocks the save. */
+      const actual = shopifyLimitMs(text), limit = shopifyLimitMs(r.value)
+      if (actual !== null && limit !== null && (r.name === 'min' ? actual < limit : actual > limit)) {
+        return `Choose ${type === 'date_time' ? `${shopifyMomentWords(limit)} (UTC)` : r.value} or ${r.name === 'min' ? 'later' : 'earlier'}.`
+      }
     }
-    if (['min', 'max'].includes(r.name) && ['date', 'date_time'].includes(type) && (r.name === 'min' ? Date.parse(text) < Date.parse(r.value) : Date.parse(text) > Date.parse(r.value))) return `Choose ${r.value.replace('T', ' ')} or ${r.name === 'min' ? 'later' : 'earlier'}.`
     if (r.name === 'regex') {
       try { if (!new RegExp(r.value, 'u').test(text)) return `This text does not have the format the store needs (${r.value}).` } catch { return 'The store’s validation pattern cannot be read. Refresh its schema.' }
     }
@@ -300,4 +306,15 @@ function itemError(def: Pick<ShopifyFieldDefinition, 'type' | 'validations'>, ty
     }
   }
   return null
+}
+
+/** `allowed_domains` on a web address: the one check for a `url` and for a `link`'s URL (B3b, gap G17). The format check
+ *  runs first, so the address is a real URL here. An empty list sets no limit. */
+function domainError(url: string, rule: string): string | null {
+  let domains: unknown
+  try { domains = JSON.parse(rule) } catch { return 'This definition’s allowed domains cannot be read. Refresh the store schema.' }
+  if (!Array.isArray(domains)) return 'This definition’s allowed domains cannot be read. Refresh the store schema.'
+  let host: string
+  try { host = new URL(url).hostname.toLowerCase() } catch { return null }
+  return !domains.length || domains.some(domain => String(domain).toLowerCase() === host) ? null : `Use a link on one of these sites: ${domains.join(', ')}.`
 }
