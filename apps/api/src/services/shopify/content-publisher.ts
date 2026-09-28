@@ -66,10 +66,13 @@ async function definitions(gql: ShopifyGraphql, ownerType: string): Promise<Defi
  */
 export const SHOPIFY_IDENTITY_NOT_ID = 'This Shopify store already has the field “Nexus family identity” (nexus.family_id) as plain text, from an earlier publish. Shopify needs it as type “id” and cannot change a field’s type. Delete that field in Shopify (Settings → Custom data → Products), then publish again.'
 
+/** The refusal carries `notSent`: it is raised before any Shopify write, so a caller must not report the run "unverified". */
+const identityNotId = () => Object.assign(new Error(SHOPIFY_IDENTITY_NOT_ID), { notSent: true })
+
 /** Reuse compatible merchant definitions; never overwrite their types, access or validation. */
 export async function ensureContentDefinitions(gql: ShopifyGraphql, content: ShopifyContent) {
   /* The identity FIRST: a store that kept the plain-text field is refused before any definition is created. */
-  if ((await definitions(gql, 'PRODUCT')).some(d => d.namespace === 'nexus' && d.key === 'family_id' && d.type.name !== 'id')) throw new Error(SHOPIFY_IDENTITY_NOT_ID)
+  if ((await definitions(gql, 'PRODUCT')).some(d => d.namespace === 'nexus' && d.key === 'family_id' && d.type.name !== 'id')) throw identityNotId()
   const metaIds: Record<string, string> = {}
   const pending = [...content.metaobjectDefinitions]
   while (pending.length) {
@@ -100,7 +103,7 @@ export async function ensureContentDefinitions(gql: ShopifyGraphql, content: Sho
       if (validations.some(v => !v.value)) throw new Error(`Missing metaobject definition for ${fieldKey(f)}.`)
       const current = existing.find(d => d.namespace === f.namespace && d.key === f.key)
       if (current) {
-        if (isIdentity && current.type.name !== 'id') throw new Error(SHOPIFY_IDENTITY_NOT_ID)
+        if (isIdentity && current.type.name !== 'id') throw identityNotId()
         if (current.type.name !== f.type || current.access.storefront !== 'PUBLIC_READ' || (isIdentity && !current.capabilities.uniqueValues.enabled) || validations.some(v => !current.validations.some(a => a.name === v.name && a.value === v.value))) throw new Error(`${ownerType} ${fieldKey(f)} has an incompatible type, reference validation or storefront access.`)
       } else {
         checked((await gql(`mutation NexusCreateDefinition($definition:MetafieldDefinitionInput!) { metafieldDefinitionCreate(definition:$definition) { createdDefinition { id } userErrors { field message } } }`, { definition: { namespace: f.namespace, key: f.key, name: f.label, type: f.type, ownerType, access: { storefront: 'PUBLIC_READ' }, validations, ...(isIdentity ? { capabilities: { uniqueValues: { enabled: true } } } : {}) } })).metafieldDefinitionCreate, 'Create metafield definition')

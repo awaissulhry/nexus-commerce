@@ -7,6 +7,7 @@ import { ensureContentDefinitions, mapRemoteVariants, publishContent, publishMet
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
 import { applyShopifyVariationProjection, withShopifyOwnOptions } from './content-workspace.service.js'
+import { syncFailure } from './content-sync.service.js'
 import { resolveVariationProjection } from '../pim/variation-rules.service.js'
 import { limitsFor, vocabularyFor } from '../pim/family-projection-limits.js'
 import { ownAxisValuesFor } from '../pim/variation-own-axes.js'
@@ -156,6 +157,21 @@ describe('the family identity is a Shopify custom ID of type `id`', () => {
     const ok = store('id')
     await ensureContentDefinitions(ok.gql, bare())
     expect(identityCreates(ok.calls)).toEqual([])
+  })
+
+  it('🔴 the plain-text refusal is raised before any write, so the sync reports it as NOT sent — never "unverified"', async () => {
+    const shop = store('single_line_text_field')
+    const refusal = await ensureContentDefinitions(shop.gql, bare()).catch((e: unknown) => e) as Error & { notSent?: boolean }
+    expect(refusal.notSent).toBe(true)
+    const reported = syncFailure(refusal, 'NOT_PUBLISHED')
+    expect(reported.checkpoint).toEqual({ status: 'NOT_PUBLISHED', error: SHOPIFY_IDENTITY_NOT_ID })
+    expect(reported.error.message).toBe(SHOPIFY_IDENTITY_NOT_ID)
+    expect((reported.error as Error & { notSent?: boolean }).notSent).toBe(true)
+    /* anything else may have reached Shopify: still unverified, as before */
+    const other = syncFailure(new Error('productSet timed out'), 'NOT_PUBLISHED')
+    expect(other.checkpoint).toEqual({ status: 'UNVERIFIED', error: 'productSet timed out' })
+    expect(other.error.message).toBe('Synchronisation is unverified. Some Shopify steps may have completed; refresh the remote review before retrying. productSet timed out')
+    expect((other.error as Error & { notSent?: boolean }).notSent).toBeUndefined()
   })
 
   it('the lookup by custom ID runs only on an `id` field (Shopify refuses it on a plain-text one)', async () => {

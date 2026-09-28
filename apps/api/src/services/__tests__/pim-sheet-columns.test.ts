@@ -484,6 +484,17 @@ describe('buildSheetColumns — shapes (AM.1)', () => {
     expect(columns[0].unitOptions).toEqual(['kilograms', 'grams'])
   })
 
+  it('two columns with one label: only the one whose key reads differently is qualified (never "Fit · Fit")', () => {
+    const { columns } = buildSheetColumns({
+      fields: [field({ id: 'attr_fit', label: 'Fit' }), field({ id: 'attr_fit_type', label: 'Fit' })],
+      specs: [],
+      coordinates: [],
+    })
+    const labels = Object.fromEntries(columns.map(c => [c.key, c.label]))
+    expect(labels.fit).toBe('Fit')
+    expect(labels.fit_type).toBe('Fit · Fit type')
+  })
+
   it('a compound leaf keeps its `parent__leaf` key and reads "Parent · Leaf" in English', () => {
     const { columns } = buildSheetColumns({
       fields: [],

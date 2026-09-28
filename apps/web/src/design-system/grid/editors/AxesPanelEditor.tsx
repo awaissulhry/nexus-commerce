@@ -347,6 +347,14 @@ export function axesAddEdit(draft: VariationThemeCell, code: string, master: boo
   }
 }
 
+/**
+ * The sentence a held control shows under the rows, or null when the lock banner already says it (a held × on a live
+ * listing showed the lock sentence twice — Lane B, 2026-09-28). Any other reason is said where the operator clicked.
+ */
+export function channelInlineRefusal(held: string, cell: Pick<VariationThemeCell, 'locked'>): string | null {
+  return held === cell.locked?.reason ? null : held
+}
+
 /* ── P3 A2: Tab inside the pop-up ─────────────────────────────────────────────────────────── */
 
 /**
@@ -771,6 +779,8 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
   const sharedLeft = channelLayout ? remainingSharedAxes(draft) : []
   const ownLeft = channelLayout ? remainingOwnCandidates(draft) : []
   /** Included variants here, from the server's value summary (every axis counts the same variants); null = not read. */
+  /* The variants INCLUDED on this coordinate. None yet (the channel's draft starts on the first save) is not "0 variants" —
+     the family has them (found by Lane B on Shopify: "2 of 3 · 0 variants" on a family of 2): the count is left out. */
   const variantCount = channelLayout ? Object.values(draft.valueSummary ?? {})[0]?.of ?? null : null
 
   /**
@@ -810,7 +820,7 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
     ) : <span className="nds-axes-cname">{a.channelName}</span>
     const nameRefusal = draft.candidates?.kind === 'free' && !held ? freeNameRefusal(draft, a, channelWord) : null
     const remove = () => {
-      if (held) { setRefusal(held); return }
+      if (held) { setRefusal(channelInlineRefusal(held, draft)); return }
       setRefusal(null)
       report(withoutAxis(draft, a.axisKey))
     }
@@ -1011,7 +1021,10 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
     /* P3 A2 — the channel layout: any edit makes an own setup on save, so there is no separate `Override`; an own setup can
        go back to Shared in one click (the existing reset, which may not travel with a mapping). */
     draft.source.kind === 'override' ? (
-      <Button variant="quiet" size="sm" onClick={() => report({ ...draft, resetRequested: true })}>{CHANNEL_AXES_COPY.resetToShared}</Button>
+      /* 🔴 Held while live: a reset is a SET change (on Lane B's development store it would have dropped "Fit" from a live
+         Shopify product's options). The lock banner above says why; the button carries it too. */
+      <Button variant="quiet" size="sm" aria-disabled={setHeld ? true : undefined} title={setHeld ?? undefined}
+        onClick={() => { if (!setHeld) report({ ...draft, resetRequested: true }) }}>{CHANNEL_AXES_COPY.resetToShared}</Button>
     ) : null
   ) : draft.source.kind === 'override' ? (
       <Button
@@ -1153,7 +1166,7 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
           <span className="nds-axes-sectionname">{axesSectionTitle(draft)}</span>
           <span className="nds-axes-sectionhint" title={orderState.reason ?? undefined}>
             {orderState.hint ?? (
-              <Tag tone="neutral">{limit != null ? `${included.length} of ${limit}` : `${included.length} ${included.length === 1 ? draft.vocabulary.axisNoun : draft.vocabulary.axisNounPlural}`}{channelLayout && variantCount != null ? ` · ${variantCount} ${variantCount === 1 ? 'variant' : 'variants'}` : ''}</Tag>
+              <Tag tone="neutral">{limit != null ? `${included.length} of ${limit}` : `${included.length} ${included.length === 1 ? draft.vocabulary.axisNoun : draft.vocabulary.axisNounPlural}`}{channelLayout && variantCount ? ` · ${variantCount} ${variantCount === 1 ? 'variant' : 'variants'}` : ''}</Tag>
             )}
           </span>
         </div>

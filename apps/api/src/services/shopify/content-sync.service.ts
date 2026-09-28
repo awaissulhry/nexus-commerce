@@ -195,8 +195,25 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     await checkpoint({ ...result, error: null })
     return { success: true, ...result, message: `Verified ${current.variants.length} native Shopify variants. Storefront theme verification is a separate review.` }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    await checkpoint({ status: 'UNVERIFIED', error: message }).catch(() => {})
-    throw new WorkspaceScopeError(`Synchronisation is unverified. Some Shopify steps may have completed; refresh the remote review before retrying. ${message}`, 502)
+    const failure = syncFailure(error, current.publish.status)
+    await checkpoint(failure.checkpoint).catch(() => {})
+    throw failure.error
+  }
+}
+
+/**
+ * How a failed synchronisation is reported. A refusal raised BEFORE any Shopify write (`notSent`, e.g. the family-identity
+ * field check) sent nothing: the listing keeps its earlier publication state and the refusal says only what to do — it
+ * used to read "Nothing was submitted. Synchronisation is unverified. Some Shopify steps may have completed; …", which
+ * contradicted itself (Lane B's development-store proof, 2026-09-28). Anything else may have reached Shopify: unverified.
+ */
+export function syncFailure(error: unknown, previousStatus: unknown): { checkpoint: Record<string, unknown>; error: Error } {
+  const message = error instanceof Error ? error.message : String(error)
+  if ((error as { notSent?: boolean } | null)?.notSent === true) {
+    return { checkpoint: { status: previousStatus ?? null, error: message }, error: Object.assign(new WorkspaceScopeError(message, 422), { notSent: true }) }
+  }
+  return {
+    checkpoint: { status: 'UNVERIFIED', error: message },
+    error: new WorkspaceScopeError(`Synchronisation is unverified. Some Shopify steps may have completed; refresh the remote review before retrying. ${message}`, 502),
   }
 }
