@@ -193,3 +193,64 @@ test('a read-only field is shown with its reason and does not block the rest of 
   /* After the save the editor is titled by the entry's new name. */
   await expect(page.getByRole('dialog', { name: 'Returns within 30 days' }).getByText('Entry saved and verified in Shopify.')).toBeVisible()
 })
+
+/* ── Slice B3a: the 32 measurement kinds (docs/shopify-metafields/PLAN-2026-09-28.md §6.3, G13 and G14). ── */
+
+test.describe('B3a · measurements', () => {
+  const typesTab = (page: Page) => page.getByRole('tab', { name: /Every Shopify type/ }).click()
+  const wholeRow = (page: Page, name: string) => page.locator('.nds-prow').filter({ has: row(page, name) })
+  /* The drawn value alone (MetafieldValue's text), not the row's type code and rule line beside it. */
+  const shown = (page: Page, name: string) => cellOf(page, name).locator('.nds-mf-text')
+  async function enter(page: Page, name: string, value: string) {
+    await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.type(value); await page.keyboard.press('Enter')
+    await expect(popup(page, name)).toBeVisible()
+  }
+
+  test('every newer kind shows its value in words in the cell, and the lab lists no G13 or G14 gap', async ({ page }) => {
+    await typesTab(page)
+    for (const [name, text] of [['Temperature', '2.5 celsius'], ['Speed', '2.5 kilometers per hour'], ['Data storage capacity', '64 megabytes'],
+      ['Duration', '45 minutes'], ['Thermal power', '2.5 british thermal units per hour'], ['Weight', '1.2 kilograms']] as const) {
+      await expect(shown(page, name)).toHaveText(text)
+    }
+    await expect(cellOf(page, 'List of duration')).toContainText('45 minutes')
+    await expect(cellOf(page, 'List of duration')).toContainText('46 minutes')
+    await expect(page.locator('.nds-prow-body', { hasText: '"unit"' })).toHaveCount(0)
+    for (const name of ['Temperature', 'List of temperature', 'Speed', 'Antenna gain']) await expect(wholeRow(page, name)).not.toContainText(/G1[34] ·/)
+  })
+
+  test('a limit in another unit refuses with the exact sentence; a value inside saves — keyboard only', async ({ page }) => {
+    await typesTab(page)
+    await openByKeyboard(page, 'Temperature')
+    const p = popup(page, 'Temperature')
+    await expect(p.getByText('14 fahrenheit to 323.15 kelvin', { exact: true })).toBeVisible()
+    await enter(page, 'Temperature', '-10.5')
+    await expect(p.getByText('Not saved: Enter 14 fahrenheit or more.', { exact: true })).toBeVisible()
+    await enter(page, 'Temperature', '50.5')
+    await expect(p.getByText('Not saved: Enter 323.15 kelvin or less.', { exact: true })).toBeVisible()
+    await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.type('-10'); await page.keyboard.press('Enter')
+    await expect(p).toHaveCount(0)
+    await expect(page.getByText('Temperature saved in the lab.')).toBeVisible()
+    await expect(shown(page, 'Temperature')).toHaveText('-10 celsius')
+    await expect(row(page, 'Temperature')).toBeFocused()
+
+    await openByKeyboard(page, 'Speed')
+    await enter(page, 'Speed', '50')
+    await expect(popup(page, 'Speed').getByText('Not saved: Enter 30 miles per hour or less.', { exact: true })).toBeVisible()
+    await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.type('48'); await page.keyboard.press('Enter')
+    await expect(popup(page, 'Speed')).toHaveCount(0)
+    await expect(shown(page, 'Speed')).toHaveText('48 kilometers per hour')
+  })
+
+  test('a value inside the limit under one reading of the unit is left to Shopify; one outside under every reading is refused', async ({ page }) => {
+    await typesTab(page)
+    await openByKeyboard(page, 'Data storage capacity')
+    const p = popup(page, 'Data storage capacity')
+    await expect(p.getByText('4 kilobytes to 2 gigabytes', { exact: true })).toBeVisible()
+    await enter(page, 'Data storage capacity', '2049')
+    await expect(p.getByText('Not saved: Enter 2 gigabytes or less.', { exact: true })).toBeVisible()
+    /* 2,040 MB is over 2 GB of 1,000 MB but under 2 GB of 1,024 MB: Shopify does not say which, so Nexus does not refuse. */
+    await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.type('2040'); await page.keyboard.press('Enter')
+    await expect(p).toHaveCount(0)
+    await expect(shown(page, 'Data storage capacity')).toHaveText('2040 megabytes')
+  })
+})
