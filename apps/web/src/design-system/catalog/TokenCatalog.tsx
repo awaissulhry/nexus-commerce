@@ -51,6 +51,7 @@ import {
   TooltipPortalProvider,
   Spinner,
   Skeleton,
+  AliasMark,
   Kbd,
   Divider,
   AxisChip,
@@ -636,6 +637,11 @@ export function TokenCatalog() {
           <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
             <Kbd>⌘</Kbd>
             <Kbd>K</Kbd>
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>AliasMark</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {['Main listing', 'Winter', 'Outlet'].map((label, position) => <span key={label} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><AliasMark position={position} />{label}</span>)}
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Divider</div>

@@ -6,6 +6,7 @@ import { EbayCategoryService } from "../services/ebay-category.service.js";
 import { EbayService } from "../services/marketplaces/ebay.service.js";
 import { EbayPublishService } from "../services/ebay-publish.service.js";
 import prisma from "@nexus/database";
+import { isOnMediaPlan } from "../services/images/media-plan-switch.js";
 
 export async function listingsRoutes(app: FastifyInstance) {
   // POST /listings/sync-amazon-catalog
@@ -101,7 +102,8 @@ export async function listingsRoutes(app: FastifyInstance) {
               where: { sku: item.sku },
             });
 
-            if (product) {
+            // A family on the photo plan keeps its photos on the Media page: no wipe, no per-SKU copies (2026-09-28).
+            if (product && !(await isOnMediaPlan(product.id))) {
               // Remove old images and insert fresh ones
               await (prisma as any).productImage.deleteMany({
                 where: { productId: product.id },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyMediaOps, emptyMediaPlan, inverseMediaOps, knownSetRefs, mediaLayerKey, MediaPlanEditError, mediaOpSchema, mediaPlanSchema, planAssetIds, resolveAxis, resolveSet, resolveSwatch, type MediaPlan, type MediaPlanStack } from './media-plan'
+import { applyMediaOps, emptyMediaPlan, inverseMediaOps, knownSetRefs, mediaLayerKey, MediaPlanEditError, mediaOpSchema, mediaPlanSchema, collapseVersionsInPlan, planAssetIds, replaceAssetInPlan, resolveAxis, resolveSet, resolveSwatch, type MediaPlan, type MediaPlanStack } from './media-plan'
 
 const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
@@ -122,5 +122,36 @@ describe('media plan edits', () => {
   })
   it('lists every photo a plan points at', () => {
     expect(planAssetIds(plan({ common: ids('a'), values: { 'color:black': ids('b') }, skus: { c1: ids('c') }, swatches: { 'color:black': { assetId: 'd' } }, safety: ids('e') })).sort()).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+})
+
+describe('same photo at two addresses (W4a)', () => {
+  const base: MediaPlan = { version: 1, axis: 'color', sets: { common: ids('amz', 'cover'), values: { 'color:black': ids('n1', 'amz'), 'color:yellow': ids('ours', 'amz') },
+    skus: { p1: ids('amz') }, swatches: { 'color:black': { assetId: 'amz' }, 'color:yellow': null }, safety: ids('ps1') } }
+  it('puts the kept photo where the copy was, and drops the copy where the set already shows the kept one', () => {
+    const next = replaceAssetInPlan(base, 'amz', 'ours')
+    expect(next.sets.common).toEqual(ids('ours', 'cover'))
+    expect(next.sets.values).toEqual({ 'color:black': ids('n1', 'ours'), 'color:yellow': ids('ours') })
+    expect(next.sets.skus).toEqual({ p1: ids('ours') })
+    expect(next.sets.swatches).toEqual({ 'color:black': { assetId: 'ours' }, 'color:yellow': null })
+    expect(next.sets.safety).toEqual(ids('ps1'))
+  })
+  it('counts a copy or a language version of the kept photo as the kept photo; leaves a plan without the copy as it is', () => {
+    const plan: MediaPlan = { version: 1, sets: { common: ids('ours-de', 'amz') } }
+    expect(replaceAssetInPlan(plan, 'amz', 'ours', (a, b) => a.startsWith(b)).sets.common).toEqual(ids('ours-de'))
+    const other: MediaPlan = { version: 1, sets: { common: ids('cover') } }
+    expect(replaceAssetInPlan(other, 'amz', 'ours')).toBe(other)
+  })
+})
+
+describe('language versions of one photo (W4b)', () => {
+  it('a set that holds two versions keeps the main-language one in its place; one version per set is left alone', () => {
+    const plan: MediaPlan = { version: 1, sets: { common: ids('cover', 'chart-es', 'chart-it', 'chart-fr'), values: { 'color:black': ids('chart-fr', 'n1') } } }
+    const next = collapseVersionsInPlan(plan, ['chart-it', 'chart-es', 'chart-fr'], 'chart-it')
+    expect(next.sets.common).toEqual(ids('cover', 'chart-it'))
+    expect(next.sets.values).toEqual({ 'color:black': ids('chart-fr', 'n1') })
+    // Without the main-language one in the set, the first member in set order stays.
+    expect(collapseVersionsInPlan({ version: 1, sets: { common: ids('chart-fr', 'chart-es') } }, ['chart-it', 'chart-es', 'chart-fr'], 'chart-it').sets.common).toEqual(ids('chart-fr'))
+    expect(collapseVersionsInPlan(plan, ['n1', 'cover'], 'n1')).toBe(plan)
   })
 })

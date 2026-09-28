@@ -1,6 +1,6 @@
 'use client'
 
-import type { StudioPublishChange, StudioPublishValue } from '@nexus/shared/studio-publication'
+import { isPhotoChangeId, type StudioPublishChange, type StudioPublishValue } from '@nexus/shared/studio-publication'
 import { ChangeReview, Disclosure } from '@/design-system/components'
 
 export function publicationValueText(value: StudioPublishValue): string {
@@ -10,12 +10,15 @@ export function publicationValueText(value: StudioPublishValue): string {
   return typeof value.value === 'string' ? value.value || '(empty text)' : JSON.stringify(value.value, null, 2)
 }
 
-export function PublicationChanges({ changes, selectedIds, disabled, onSelectionChange }: {
+export function PublicationChanges({ changes, selectedIds, disabled, onSelectionChange, photosOnly = false }: {
   changes: StudioPublishChange[]; selectedIds: string[]; disabled: boolean; onSelectionChange(ids: string[]): void
+  /** Other fields have problems (P4c): only photo rows can be ticked; the others say why. */
+  photosOnly?: boolean
 }) {
-  const row = (change: StudioPublishChange) => ({ id: change.id, label: `${change.label} · ${change.sku}`, selectable: change.selectable,
+  const blocked = (change: StudioPublishChange) => photosOnly && !isPhotoChangeId(change.id)
+  const row = (change: StudioPublishChange) => ({ id: change.id, label: `${change.label} · ${change.sku}`, selectable: change.selectable && !blocked(change),
     status: change.status === 'SAME' ? 'No send needed' : change.status === 'CANNOT_COMPARE' ? 'Cannot compare' : change.status === 'DIFFERS' ? 'Differs on channel' : 'Changed in Nexus',
-    note: change.reason, values: [{ label: 'Nexus now', value: publicationValueText(change.current) },
+    note: blocked(change) ? 'Fix the problems listed above to send this field. Photos can be sent now.' : change.reason, values: [{ label: 'Nexus now', value: publicationValueText(change.current) },
       { label: 'Last accepted', value: publicationValueText(change.lastAccepted) }, { label: 'Channel now', value: publicationValueText(change.channel) }] })
   const pending = changes.filter(c => c.status !== 'SAME'), same = changes.filter(c => c.status === 'SAME')
   const selected = changes.filter(c => c.selectable && selectedIds.includes(c.id))

@@ -6,7 +6,9 @@ const f = vi.hoisted(() => ({
   product: vi.fn(), exact: vi.fn(), update: vi.fn(), create: vi.fn(),
   account: vi.fn(), upload: vi.fn(), attach: vi.fn(), cloud: vi.fn(), configured: vi.fn(), emit: vi.fn(),
 }))
-vi.mock('../db.js', () => ({ default: { product: { findUnique: f.product }, productImage: {
+// A product that is not on the photo plan: the duplicate check looks at its own photos only.
+vi.mock('../db.js', () => ({ default: { product: { findUnique: f.product, findFirst: vi.fn(async () => ({ parentId: null })), findMany: vi.fn(async () => []) },
+  productMediaPlan: { count: vi.fn(async () => 0) }, productImage: {
   findFirst: f.exact, findMany: vi.fn(async () => []), aggregate: vi.fn(async () => ({ _max: { sortOrder: null } })), update: f.update, create: f.create,
 } } }))
 vi.mock('../services/shopify/media-library.service.js', () => ({
@@ -80,6 +82,7 @@ it('keeps content deduplication ahead of either upload provider', async () => {
   const response = await upload()
   expect(response.statusCode).toBe(200)
   expect(response.json()).toMatchObject({ id: image.id, reused: 'exact' })
+  expect(f.exact).toHaveBeenCalledWith({ where: { productId: { in: ['product-1'] }, contentHash: 'exact-hash' } })
   expect(f.upload).not.toHaveBeenCalled(); expect(f.cloud).not.toHaveBeenCalled()
 })
 

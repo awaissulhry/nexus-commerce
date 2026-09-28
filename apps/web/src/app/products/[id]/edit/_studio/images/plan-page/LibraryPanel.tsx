@@ -28,15 +28,18 @@ export interface LibraryPanelProps {
   draggable: boolean
   /** Keyboard: jump past the library (two Tab stops per photo) to the photo plan. */
   onSkip?(): void
+  /** "Looks like …" / "Similar to …" (W4a/W4b): compare this photo with a look-alike. */
+  onLookalike?(a: string, b: string, kind: 'same' | 'versions'): void
 }
 
 const FILTERS: Array<{ value: LibraryFilter; label: string }> = [
   { value: 'all', label: 'All photos' }, { value: 'unused', label: 'Not in any set' }, { value: 'used', label: 'In use' },
   { value: 'problems', label: 'Size or address problem' }, { value: 'text', label: 'Has text (language)' },
+  { value: 'lookalikes', label: 'Looks like another photo' },
 ]
 
 /** The family's photos (parent and children), searchable, with where each one is used (PLAN.md §5.1). */
-export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPending, onAdd, onOpen, onManage, onDragging, draggable, onSkip }: LibraryPanelProps) {
+export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPending, onAdd, onOpen, onManage, onDragging, draggable, onSkip, onLookalike }: LibraryPanelProps) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<LibraryFilter>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -102,6 +105,11 @@ export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPendi
               {problems.map(p => <Tag key={p} tone="warning">{p}</Tag>)}
               {uses.slice(0, 2).map(u => <span key={u} className={styles.use}>{u}</span>)}
               {uses.length > 2 && <span className={styles.use}>+{uses.length - 2} more</span>}
+              {onLookalike && asset.lookalikes?.slice(0, 1).map(other => {
+                const name = read.library.find(x => x.id === other.id)?.label ?? 'another photo'
+                return <Button key={other.id} size="xs" variant="link" onClick={() => onLookalike(asset.id, other.id, other.kind ?? 'same')}>
+                  {other.kind === 'versions' ? `Similar to ${name} — language versions?` : `Looks like ${name}`}</Button>
+              })}
             </span>} />
         </li>
       })}

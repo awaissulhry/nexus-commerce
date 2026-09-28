@@ -47,6 +47,8 @@ export interface MediaDestination {
   mainLanguage: string
   /** eBay only: which API owns the listing. */
   api?: 'TRADING' | 'INVENTORY'
+  /** eBay only: this destination is a listing alias (a second listing of the family on one account and market). */
+  alias?: boolean
   /** How this destination names each value (eBay DE: `color:black` → "Schwarz"). */
   valueNames: Record<string, string>
   /** How this destination names the picture axis ("Colore", "Farbe"). */
@@ -132,6 +134,10 @@ export interface EbayMediaLayout {
 export function projectEbay(stack: MediaPlanStack, family: MediaFamily, assets: ReadonlyMap<string, MediaAsset>, destination: MediaDestination): EbayMediaLayout {
   const ctx: Context = { stack, family, assets, destination, checks: [] }
   const limits = MEDIA_LIMITS.EBAY
+  // First, because no photo fix helps: an Inventory listing's photos belong to its SKUs, and Nexus addresses an eBay
+  // Inventory listing by the family's SKUs — the main listing's. An alias there would write the main listing's photos.
+  if (destination.api === 'INVENTORY' && destination.alias) ctx.checks.push({ severity: 'error', code: 'inventory-alias',
+    message: 'This alias uses the eBay Inventory API. There, photos belong to the SKUs, and this alias has the main listing\'s SKUs, so a send would change the main listing too. Nexus does not send photos to it.' })
   const gallery = pickAll(ctx, resolveSet(stack, 'common').items, 'common')
   if (!gallery.length) ctx.checks.push({ severity: 'error', code: 'no-common', set: 'common', message: 'eBay needs at least one Common photo — it is the search photo.' })
   if (gallery.length > limits.gallery) ctx.checks.push({ severity: 'error', code: 'over-limit', set: 'common', message: `Common has ${gallery.length} photos; eBay allows ${limits.gallery}.` })
@@ -282,6 +288,8 @@ export function projectEtsy(stack: MediaPlanStack, family: MediaFamily, assets: 
 /** What a destination row must say for its layout: channel, market, languages, API, and the variants listed on it. */
 export interface MediaDestinationTarget {
   channel: MediaDestination['channel']; marketplace: string; languages: string[]; api?: 'TRADING' | 'INVENTORY'; productIds: readonly string[]
+  /** A listing alias (null or absent = the main listing). */
+  alias?: { id: string } | null
 }
 export type ChannelMediaLayout = EbayMediaLayout | AmazonMediaLayout | ShopifyMediaLayout | EtsyMediaLayout
 
@@ -295,13 +303,40 @@ export function projectMediaDestination(input: {
 }): ChannelMediaLayout {
   const { axis } = resolveAxis(input.stack, input.family.defaultAxis)
   const t = input.target
-  const destination: MediaDestination = { channel: t.channel, market: t.marketplace, languages: t.languages, mainLanguage: input.mainLanguage, api: t.api,
+  const destination: MediaDestination = { channel: t.channel, market: t.marketplace, languages: t.languages, mainLanguage: input.mainLanguage, api: t.api, alias: !!t.alias,
     valueNames: input.valueNames ?? input.family.valueLabels, axisName: input.axisName !== undefined ? input.axisName : input.axes.find(a => a.code === axis)?.label ?? null }
   // A destination shows only the variants listed (and not excluded) on it; a publisher may narrow that to its review.
   const listed = new Set(input.includedIds ?? t.productIds)
   const family: MediaFamily = { ...input.family, variants: input.family.variants.map(v => ({ ...v, included: listed.has(v.productId) })) }
   const project = t.channel === 'EBAY' ? projectEbay : t.channel === 'AMAZON' ? projectAmazon : t.channel === 'SHOPIFY' ? projectShopify : projectEtsy
   return project(input.stack, family, input.assets, destination)
+}
+
+/**
+ * eBay's duplicate-listings rule (PLAN.md §4.5): two listings of one item on one account and market must not look the
+ * same. This page knows the photos, not the titles: a listing whose photos (gallery and value sets, in order) equal
+ * another's on the same account and market gets a warning that names it and asks to check the titles.
+ */
+export function duplicateListingChecks(
+  entries: ReadonlyArray<{ key: string; channel: string; marketplace: string; accountId: string; name: string }>,
+  layouts: Readonly<Record<string, ChannelMediaLayout>>,
+  urlOf: (assetId: string) => string = id => id,
+): Map<string, MediaCheck[]> {
+  const groups = new Map<string, Array<{ key: string; name: string }>>()
+  for (const entry of entries) {
+    const layout = layouts[entry.key] as EbayMediaLayout | undefined
+    if (entry.channel !== 'EBAY' || !layout?.gallery?.length) continue
+    const photos = JSON.stringify([layout.gallery.map(urlOf), (layout.sets ?? []).map(set => [set.valueKey, set.items.map(urlOf)])])
+    const at = `${entry.marketplace}|${entry.accountId}|${photos}`
+    groups.set(at, [...(groups.get(at) ?? []), { key: entry.key, name: entry.name }])
+  }
+  const out = new Map<string, MediaCheck[]>()
+  for (const same of groups.values()) {
+    if (same.length < 2) continue
+    for (const entry of same) out.set(entry.key, [{ severity: 'warning', code: 'duplicate-listing-photos',
+      message: `Same photos as ${same.filter(o => o.key !== entry.key).map(o => o.name).join(', ')} on this account and market. eBay does not allow two listings of one item that look the same. Check that the titles differ, or give this listing other photos.` }])
+  }
+  return out
 }
 
 // ── One sheet row ───────────────────────────────────────────────────────────────────────────────────────────────

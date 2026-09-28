@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[] }))
+const m = vi.hoisted(() => ({ facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false } }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -26,9 +26,13 @@ vi.mock('./studio-publication-amazon-changes.js', () => ({
 }))
 vi.mock('./studio-publication-ebay-changes.js', () => ({
   prepareEbayChanges: async (_facts: any, publication: any) => ({ kind: 'ebay-changes', publication, remoteRevision: 'remote-1',
-    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Saved title' },
+    // P4c: with photoFields on, the owner row offers a title and a gallery change, keyed the real way (["<id>","<field>"]).
+    changes: m.photoFields.on ? ['title', 'pictures'].map(field => ({ id: JSON.stringify(['parent', field]), productId: 'parent', sku: 'SKU', field, label: field,
+      current: { state: 'value', value: field }, lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'value', value: 'old' }, status: 'DIFFERS',
+      selectable: true, selectedByDefault: false, localChanged: null, channelChanged: null, reason: 'Differs', operation: 'replace' }))
+    : publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Saved title' },
       lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
-  compileEbayChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+  compileEbayChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.some(id => id === p.productId || id.startsWith(`["${p.productId}"`))),
     fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
 }))
 // Durable exact-payload writes are exercised against formulaDatabase in the database suite.
@@ -312,4 +316,30 @@ it('reads nothing when an Amazon acceptance promoted no row', async () => {
   await new Promise(resolve => setTimeout(resolve, 10))
   expect(m.updateListings).not.toHaveBeenCalled()
   expect(m.fill).not.toHaveBeenCalled()
+})
+
+// P4c — an off-list value on one field (eBay's Season list) blocks that field, not the listing's photos.
+it('saves a photos-only review when every error names a field, sends a photos-only selection, and refuses any other field', async () => {
+  const ebayScope = { ...scope, channel: 'EBAY' }
+  m.photoFields.on = true
+  const fieldError = { productId: 'parent', sku: 'SKU', field: 'season', severity: 'error', message: 'Season: Season contains an unaccepted value.' }
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), scope: ebayScope, issues: [fieldError] }))
+  const review = await previewRaw('parent', ebayScope, 'user')
+  expect(review).toMatchObject({ photosOnly: true, issues: [expect.objectContaining({ field: 'season' })] })
+  expect(review.id).toBeTruthy()
+  const title = JSON.stringify(['parent', 'title']), pictures = JSON.stringify(['parent', 'pictures'])
+  await expect(previewStudioPublicationSelection('parent', review.id!, { selectedIds: [title, pictures] }, 'user')).rejects.toMatchObject({ statusCode: 422 })
+  await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [pictures] }, 'user')
+  const result = await submitStudioPublication('parent', review.id!, {}, 'user')
+  expect(m.ebay).toHaveBeenCalledOnce()
+  expect(result.status).not.toBe('FAILED')
+  m.photoFields.on = false
+})
+it('an error that names no field still blocks the whole review, photos included', async () => {
+  const ebayScope = { ...scope, channel: 'EBAY' }
+  m.photoFields.on = true
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), scope: ebayScope, issues: [{ severity: 'error', message: 'Reconnect this account before publishing.' }] }))
+  expect(await previewRaw('parent', ebayScope, 'user')).toMatchObject({ id: null })
+  expect(m.rows.size).toBe(0)
+  m.photoFields.on = false
 })

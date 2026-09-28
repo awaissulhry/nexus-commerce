@@ -13,10 +13,11 @@ vi.mock('@nexus/database', async () => {
   return { default: state.db.client }
 })
 vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: unknown) => { state.events.push(event) } }))
+vi.mock('../product-event.service.js', () => ({ productEventService: { emit: async () => undefined } }))
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { applyMediaPlanOps, isMediaSwitched, mediaLayoutFor, readMediaWorkspace, sheetMediaPlan } from './media-plan.service.js'
+import { applyMediaPlanOps, isMediaSwitched, mediaLayoutFor, readMediaWorkspace, sheetMediaPlan, updateMediaLibrary } from './media-plan.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -81,6 +82,11 @@ describe('media plan read', () => {
       ['EBAY', 'IT', ['IT'], 'Winter', ['it']],
     ])
     expect(read.layouts[ebayKey()].checks.map((c: { code: string }) => c.code)).toContain('no-common')
+    // ★ ①: eBay IT on this account holds two listings of the family; Amazon's one listing needs no mark.
+    expect(read.destinations.map(d => d.listingMark)).toEqual([null, 0, 1])
+    // The alias is on the Inventory API (offer ids on its rows): its SKUs are the main listing's, so it is blocked.
+    expect(read.layouts[ebayKey(ids.alias)].checks.filter((c: { code: string }) => c.code === 'inventory-alias').map((c: { severity: string }) => c.severity)).toEqual(['error'])
+    expect(read.layouts[ebayKey()].checks.map((c: { code: string }) => c.code)).not.toContain('inventory-alias')
   })
 })
 
@@ -187,5 +193,67 @@ describe('media plan edits', () => {
     expect(after.revision).toBe(before.revision + 2)
     expect((after.plan as any).sets.common).toEqual([{ assetId: img['chart-it'] }, { assetId: img.cover }])
     expect((after.plan as any).sets.values['color:black']).toEqual([{ assetId: img.n1 }, { assetId: img.cover }])
+  })
+})
+
+describe('one picture, one library card (Owner, 2026-09-28: "multiple duplicates of the same image")', () => {
+  it('the page shows each picture once, even when every SKU stores its own copy; the copies stay resolvable', async () => {
+    await scoped(async () => {
+      for (const kid of [ids.nm, ids.gm]) {
+        await prisma.productImage.create({ data: { productId: kid, url: 'https://cdn.example/cover.jpg', type: 'MAIN' } as never })
+        await prisma.productImage.create({ data: { productId: kid, url: `https://m.media-amazon.com/images/I/71zz${kid === ids.nm ? '' : '._AC_SL1500_'}.jpg`, type: 'LIFESTYLE' } as never })
+      }
+    })
+    const read = await scoped(() => readMediaWorkspace(ids.root))
+    const cover = read.library.filter(a => a.url.endsWith('/cover.jpg'))
+    expect(cover.map(a => [a.id, a.copies.length])).toEqual([[img.cover, 2]])
+    expect(read.library.filter(a => a.url.includes('71zz'))).toHaveLength(1)
+    expect(read.library.some(a => 'contentHash' in a)).toBe(false)
+  })
+  it('a copy of a photo already in a set is the same photo: refused, never placed twice', async () => {
+    const copy = await scoped(async () => (await prisma.productImage.findFirstOrThrow({ where: { productId: ids.nm, url: 'https://cdn.example/cover.jpg' } })).id)
+    const plan = await scoped(() => prisma.productMediaPlan.findFirstOrThrow({ where: { layer: 'SHARED' } }))
+    const setWithCover = (plan.plan as any).sets.common.some((i: any) => i.assetId === img.cover) ? 'common' : 'value:color:black'
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'SHARED' }, ops: [{ op: 'insert', set: setWithCover as never, assetIds: [copy] }] }, null)))
+      .rejects.toMatchObject({ statusCode: 409, message: 'This photo is already in that set.' })
+  })
+  it('an upload is checked against the whole family on the plan; older tools may not copy photos onto its SKUs', async () => {
+    const { uploadDedupScope } = await import('./media-plan-switch.js')
+    const { applyImagesToProducts, MediaPlanRefusal } = await import('./bulk-apply.service.js')
+    expect((await scoped(() => uploadDedupScope(ids.nm))).sort()).toEqual([ids.root, ids.nm, ids.nl, ids.gm, ids.rm].sort())
+    await expect(scoped(() => applyImagesToProducts({ sourceProductId: ids.root, targetProductIds: [ids.nm] }))).rejects.toBeInstanceOf(MediaPlanRefusal)
+    expect(await scoped(() => prisma.productImage.count({ where: { productId: ids.nm } }))).toBe(2)
+  })
+})
+
+describe('library languages and versions (P4b upload)', () => {
+  const photo = (name: string, languageTag = 'zxx') => scoped(async () => (await prisma.productImage.create({ data: { productId: ids.root, url: `https://cdn.example/${name}.jpg`, alt: name, type: 'ALT', languageTag } as never })).id)
+  const row = (id: string) => scoped(() => prisma.productImage.findUniqueOrThrow({ where: { id }, select: { languageTag: true, versionGroupId: true } }))
+  it('sets each file\'s language and makes files that differ only by language versions of one photo', async () => {
+    const [it, es] = [await photo('guide-it'), await photo('guide-es')]
+    const saved = await scoped(() => updateMediaLibrary(ids.nm, { languages: [{ id: it, languageTag: 'it' }, { id: es, languageTag: 'es' }], groups: [{ ids: [it, es] }] }))
+    expect(saved.rootId).toBe(ids.root)
+    const [a, b] = [await row(it), await row(es)]
+    expect([a.languageTag, b.languageTag]).toEqual(['it', 'es'])
+    expect(a.versionGroupId).toBeTruthy()
+    expect(b.versionGroupId).toBe(a.versionGroupId)
+    expect(state.events).toEqual([expect.objectContaining({ type: 'product.media.changed', productId: ids.root, layer: 'LIBRARY' })])
+  })
+  it('a new file can join a photo already in the library and keeps that photo\'s group', async () => {
+    const fr = await photo('chart-fr')
+    await scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: fr, languageTag: 'fr' }], groups: [{ ids: [fr], join: img['chart-it'] }] }))
+    expect((await row(fr)).versionGroupId).toBe('chart')
+    // The page reads it as a third version: placing it next to the Italian chart is refused as the same photo.
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'EBAY', marketplace: 'DE', accountId: ids.ebay }, ops: [{ op: 'insert', set: 'common', assetIds: [img['chart-it'], fr] }] }, null)))
+      .rejects.toMatchObject({ statusCode: 409 })
+  })
+  it('refuses two versions in one language, a version without text, and a photo of another family — and changes nothing', async () => {
+    const [a, b] = [await photo('twin-a'), await photo('twin-b')]
+    const other = await scoped(async () => (await prisma.productImage.create({ data: { productId: (await prisma.product.create({ data: { sku: 'ELSE', name: 'Else', basePrice: 1 } as never })).id, url: 'https://cdn.example/else.jpg', type: 'ALT' } as never })).id)
+    await expect(scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: a, languageTag: 'it' }, { id: b, languageTag: 'it' }], groups: [{ ids: [a, b] }] }))).rejects.toMatchObject({ statusCode: 422 })
+    await expect(scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: a, languageTag: 'it' }], groups: [{ ids: [a, b] }] }))).rejects.toMatchObject({ statusCode: 422 })
+    await expect(scoped(() => updateMediaLibrary(ids.root, { languages: [{ id: other, languageTag: 'de' }], groups: [] }))).rejects.toMatchObject({ statusCode: 409 })
+    expect([await row(a), await row(b)]).toEqual([{ languageTag: 'zxx', versionGroupId: null }, { languageTag: 'zxx', versionGroupId: null }])
+    expect(state.events).toEqual([])
   })
 })

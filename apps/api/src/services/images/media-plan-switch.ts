@@ -8,6 +8,18 @@ import prisma from '../../db.js'
 /** What an older photo path says when it refuses such a family. */
 export const MEDIA_PLAN_REFUSAL = 'This product\'s photos are managed on the Media page. Publish them from there — this older photo path would overwrite them.'
 
+/**
+ * The products one upload is checked against for duplicates: the whole family when it is on the plan (the Media page
+ * has one library for the family, so a picture a variant already holds is not new), else the product alone (its
+ * gallery is its own).
+ */
+export async function uploadDedupScope(productId: string): Promise<string[]> {
+  const product = await prisma.product.findFirst({ where: { id: productId }, select: { parentId: true } })
+  const rootId = product?.parentId ?? productId
+  if (!(await prisma.productMediaPlan.count({ where: { productId: rootId, layer: 'SHARED' } }))) return [productId]
+  return [rootId, ...(await prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true } })).map(c => c.id)]
+}
+
 /** The ids among `productIds` whose family (the product or its parent) is on the media plan. */
 export async function mediaPlanProducts(productIds: readonly string[]): Promise<Set<string>> {
   const ids = [...new Set(productIds.filter(Boolean))]

@@ -34,6 +34,33 @@ export interface StudioPublishReview {
   skipped?: Array<{ productId: string; sku: string; reason: string }>
   /** Historical content observations, not a live read or a list of changes to be sent. */
   overwrite?: StudioPublishOverwrite
+  /**
+   * Images rebuild P4c — some fields have problems (every error names its field), so only photo fields may be sent from
+   * this review. The problems are in `issues`; a selection with any other field is refused.
+   */
+  photosOnly?: boolean
+}
+
+/** The change-review fields that carry only photos (eBay Trading gallery and colour sets; eBay Inventory's). */
+export const PUBLICATION_PHOTO_FIELDS: ReadonlySet<string> = new Set(['pictures', 'Pictures', 'variationPictures'])
+
+/** Whether a change id (`["<productId>","<field>"]`) is a photo field. */
+export function isPhotoChangeId(id: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(id)
+    return Array.isArray(parsed) && typeof parsed[1] === 'string' && PUBLICATION_PHOTO_FIELDS.has(parsed[1])
+  } catch { return false }
+}
+
+/**
+ * The problems that block a publication. When every error names a field, a selection of photo fields only is not
+ * blocked by them — it sends no other field (Owner, 2026-09-28: an off-list Season value blocked a photos-only send).
+ * An error that names no field (the account, a paused listing, the photo plan's own checks) always blocks.
+ */
+export function blockingIssues(issues: readonly StudioPublishIssue[], selectedIds?: readonly string[]): StudioPublishIssue[] {
+  const errors = issues.filter(i => i.severity === 'error')
+  if (!errors.length || errors.some(i => !i.field)) return errors
+  return selectedIds?.length && selectedIds.every(isPhotoChangeId) ? [] : errors
 }
 
 export interface StudioPublishOverwrite {

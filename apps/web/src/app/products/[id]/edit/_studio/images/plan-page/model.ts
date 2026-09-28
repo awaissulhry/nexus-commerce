@@ -1,5 +1,7 @@
 import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
-import { pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { parseMediaFileName } from '@nexus/shared/media-plan-files'
+import { aliasMarkGlyph } from '@/design-system/primitives'
+import { duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
 
 /**
  * Images rebuild P3b — the Media page's view of one family's photo plan (docs/images-studio-rebuild/PLAN.md §5).
@@ -15,6 +17,14 @@ export interface LibraryAsset {
   id: string; productId: string; url: string; alt: string | null; mediaType: string
   width: number | null; height: number | null; mimeType: string | null; fileSize: number | null
   languageTag: string; versionGroupId: string | null; label: string
+  /** The same picture stored again (another SKU's copy, or the same bytes at another address): one card, these ids
+   *  resolve to it (2026-09-28: the library showed one picture once per SKU). */
+  copies?: string[]
+  /** Other cards that look alike (closest first): the same picture at another address (W4a), or the same template with
+   *  other text — likely language versions of one photo (W4b). */
+  lookalikes?: Array<{ id: string; distance: number; kind?: 'same' | 'versions' }>
+  /** Photos the Owner marked the same as this one (W4a); each can be separated again. */
+  merged?: Array<{ id: string; label: string }>
 }
 export interface PlanLayer {
   key: string; layer: MediaLayer; channel: string; marketplace: string; accountId: string; aliasKey: string
@@ -24,6 +34,8 @@ export interface MediaDestinationRow {
   key: string; channel: MediaChannel; marketplace: string; markets: string[]; accountId: string; accountLabel: string | null
   accountActive: boolean; alias: { id: string; label: string; position: number } | null; languages: string[]; listed: number
   productIds: string[]; targetable: boolean; refusal: string | null; api?: 'TRADING' | 'INVENTORY'
+  /** ★ ①②③ position (DS AliasMark) when the account and market hold more than one listing of the family; else null. */
+  listingMark?: number | null
 }
 export interface MediaAxis { code: string; label: string; dictionary: boolean; values: Array<{ key: string; label: string }> }
 export interface MediaRead {
@@ -70,10 +82,24 @@ export function viewAddress(read: MediaRead, view: LayerView) {
   return { layer: 'LISTING' as const, channel: d.channel, marketplace: d.marketplace, accountId: d.accountId, aliasKey: d.alias?.id ?? '' }
 }
 
-export function destinationLabel(d: MediaDestinationRow) {
+/** "eBay IT · Test eBay" and the listing's name ("① Winter", "Main listing"; none for Amazon and Shopify). */
+export function destinationNameParts(d: MediaDestinationRow): { head: string; name: string | null } {
   const where = d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`
-  const alias = d.alias ? ` · ${d.alias.label}` : d.channel === 'EBAY' || d.channel === 'ETSY' ? ' · Main listing' : ''
-  return `${CHANNEL_LABEL[d.channel]}${where} · ${d.accountLabel ?? 'Unknown account'}${alias}`
+  return { head: `${CHANNEL_LABEL[d.channel]}${where} · ${d.accountLabel ?? 'Unknown account'}`,
+    name: d.alias ? d.alias.label : d.channel === 'EBAY' || d.channel === 'ETSY' ? 'Main listing' : null }
+}
+
+/** The listing alone ("★ Main listing", "① Winter"), for text about listings on one account and market. */
+export function listingName(d: MediaDestinationRow) {
+  const { head, name } = destinationNameParts(d)
+  return `${d.listingMark != null ? `${aliasMarkGlyph(d.listingMark)} ` : ''}${name ?? head}`
+}
+
+/** The destination as one line of text, with the listing's mark (★ ①②③) when its account and market hold several. */
+export function destinationLabel(d: MediaDestinationRow) {
+  const { head, name } = destinationNameParts(d)
+  const mark = d.listingMark != null ? `${aliasMarkGlyph(d.listingMark)} ` : ''
+  return name === null ? head : `${head} · ${mark}${name}`
 }
 
 // ── Sets ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -130,8 +156,15 @@ export function swatchRows(read: MediaRead, view: LayerView) {
 // ── The library ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Where each library photo is used on Shared: "Common · 2", "Nero · main". A version of a placed photo counts as used. */
+/** Library card id of any stored copy of a picture (a plan may point at a copy). */
+export function cardOf(read: MediaRead): (id: string) => string {
+  const card = new Map(read.library.flatMap(a => [[a.id, a.id] as const, ...(a.copies ?? []).map(c => [c, a.id] as const)]))
+  return id => card.get(id) ?? id
+}
+
 export function libraryUsage(read: MediaRead): Map<string, string[]> {
   const usage = new Map<string, string[]>()
+  const card = cardOf(read)
   const groupOf = new Map(read.library.map(a => [a.id, a.versionGroupId]))
   const members = (id: string) => {
     const group = groupOf.get(id)
@@ -139,15 +172,15 @@ export function libraryUsage(read: MediaRead): Map<string, string[]> {
   }
   for (const row of setRows(read, { layer: 'SHARED' }, { skus: true })) {
     row.items.forEach((id, i) => {
-      for (const member of members(id)) usage.set(member, [...(usage.get(member) ?? []), i === 0 ? `${row.label} · main` : `${row.label} · ${i + 1}`])
+      for (const member of members(card(id))) usage.set(member, [...(usage.get(member) ?? []), i === 0 ? `${row.label} · main` : `${row.label} · ${i + 1}`])
     })
   }
   const stack = viewStack(read, { layer: 'SHARED' })
-  for (const s of swatchRows(read, { layer: 'SHARED' })) if (s.assetId && stack.shared) usage.set(s.assetId, [...(usage.get(s.assetId) ?? []), `${s.label} · swatch`])
+  for (const s of swatchRows(read, { layer: 'SHARED' })) if (s.assetId && stack.shared) usage.set(card(s.assetId), [...(usage.get(card(s.assetId)) ?? []), `${s.label} · swatch`])
   return usage
 }
 
-export type LibraryFilter = 'all' | 'unused' | 'used' | 'problems' | 'text'
+export type LibraryFilter = 'all' | 'unused' | 'used' | 'problems' | 'text' | 'lookalikes'
 /** The library filtered by what a person looks for; order stays the library's own. */
 export function filterLibrary(read: MediaRead, usage: Map<string, string[]>, filter: LibraryFilter, search: string) {
   const text = search.trim().toLowerCase()
@@ -157,8 +190,67 @@ export function filterLibrary(read: MediaRead, usage: Map<string, string[]>, fil
     if (filter === 'used') return usage.has(a.id)
     if (filter === 'problems') return assetProblems(a).length > 0
     if (filter === 'text') return a.languageTag !== 'zxx'
+    if (filter === 'lookalikes') return !!a.lookalikes?.length
     return true
   })
+}
+
+/**
+ * Where a photo (any of its ids) sits in the family's layers — "Shared: Common", "eBay IT · Test eBay · ① Winter: Nero"
+ * — which is what marking it the same as another photo changes (W4a).
+ */
+export function photoPlacements(read: MediaRead, ids: readonly string[]): string[] {
+  const wanted = new Set(ids)
+  const hit = (items?: Array<{ assetId: string }>) => !!items?.some(i => wanted.has(i.assetId))
+  const value = (key: string) => read.family.valueLabels[key] ?? key
+  const out: string[] = []
+  for (const layer of read.layers) {
+    const destination = read.destinations.find(d => d.key === layer.key)
+    const where = layer.layer === 'SHARED' ? 'Shared' : layer.layer === 'CHANNEL' ? `All ${CHANNEL_LABEL[layer.channel as MediaChannel] ?? layer.channel} listings`
+      : destination ? destinationLabel(destination) : 'One listing'
+    const sets = layer.plan.sets
+    if (hit(sets.common)) out.push(`${where}: Common`)
+    for (const [key, items] of Object.entries(sets.values ?? {})) if (hit(items)) out.push(`${where}: ${value(key)}`)
+    for (const [productId, items] of Object.entries(sets.skus ?? {})) if (hit(items)) out.push(`${where}: ${read.family.variants.find(v => v.productId === productId)?.sku ?? 'one SKU'}`)
+    if (hit(sets.safety)) out.push(`${where}: Safety`)
+    for (const [key, item] of Object.entries(sets.swatches ?? {})) if (item && wanted.has(item.assetId)) out.push(`${where}: ${value(key)} swatch`)
+  }
+  return out
+}
+
+/** The address a photo comes from, in words: an Amazon image or a Nexus upload (W4a: the two sides of a look-alike). */
+export function photoSource(url: string): string {
+  const host = (() => { try { return new URL(url).hostname } catch { return '' } })()
+  return /(^|\.)media-amazon\.com$/.test(host) ? 'Amazon image' : /(^|\.)cloudinary\.com$/.test(host) ? 'Nexus upload' : host || 'Unknown address'
+}
+
+/** Which of two look-alikes to keep by default: a Nexus upload over an Amazon image, then the one in more sets, then the larger. */
+export function defaultKeep(read: MediaRead, a: LibraryAsset, b: LibraryAsset): LibraryAsset {
+  const amazon = (x: LibraryAsset) => photoSource(x.url) === 'Amazon image'
+  if (amazon(a) !== amazon(b)) return amazon(a) ? b : a
+  const uses = (x: LibraryAsset) => photoPlacements(read, [x.id, ...(x.copies ?? [])]).length
+  if (uses(a) !== uses(b)) return uses(a) > uses(b) ? a : b
+  const area = (x: LibraryAsset) => (x.width ?? 0) * (x.height ?? 0)
+  return area(b) > area(a) ? b : a
+}
+
+/** The languages a photo version can have here: the destinations' languages, the main one, and any a photo already has. */
+export function versionLanguages(read: MediaRead): string[] {
+  const text = (tag: string) => tag !== 'zxx' && tag !== 'mul'
+  return [...new Set([read.mainLanguage, ...read.destinations.flatMap(d => d.languages), ...read.library.map(a => a.languageTag)].filter(text))].sort()
+}
+
+/** A photo's language for the versions choice: its own, else one its name says ("size-chart-es"), else none yet. */
+export function guessLanguage(a: LibraryAsset): string {
+  if (a.languageTag !== 'zxx' && a.languageTag !== 'mul') return a.languageTag
+  const named = parseMediaFileName(a.label, { values: [], skus: [] }).language
+  return named === 'zxx' ? '' : named
+}
+
+/** The photo sets that show both photos — where joining them as versions keeps one (W4b). */
+export function sharedPlacements(read: MediaRead, a: LibraryAsset, b: LibraryAsset): string[] {
+  const inB = new Set(photoPlacements(read, [b.id, ...(b.copies ?? [])]))
+  return photoPlacements(read, [a.id, ...(a.copies ?? [])]).filter(place => inB.has(place))
 }
 
 /** What is wrong with one photo on its own (size, address) — the page's `Tag`s. Channel rules live in the checks. */
@@ -187,15 +279,23 @@ export function versionsOf(read: MediaRead, id: string) {
 // ── Destinations ────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function assetMap(read: MediaRead): Map<string, MediaAsset> {
-  return new Map(read.library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType,
-    fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
+  // A copy's id resolves to its card's picture, so a plan that points at a copy shows and sends the same photo.
+  return new Map(read.library.flatMap(a => [a.id, ...(a.copies ?? [])].map(id => [id, { id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType,
+    fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }] as const)))
 }
 
-/** Every targetable destination's layout, computed by the shared projection (what a publish would send). */
+/**
+ * Every targetable destination's layout, computed by the shared projection (what a publish would send), plus the
+ * warning for eBay listings on one account and market that would show the same photos (PLAN.md §4.5).
+ */
 export function computeLayouts(read: MediaRead): Record<string, ChannelMediaLayout> {
   const assets = assetMap(read)
-  return Object.fromEntries(read.destinations.filter(d => d.targetable).map(d => [d.key,
+  const targets = read.destinations.filter(d => d.targetable)
+  const layouts: Record<string, ChannelMediaLayout> = Object.fromEntries(targets.map(d => [d.key,
     projectMediaDestination({ stack: destinationStack(read, d), family: read.family, axes: read.family.axes, assets, target: d, mainLanguage: read.mainLanguage })]))
+  const duplicates = duplicateListingChecks(targets.map(d => ({ ...d, name: listingName(d) })), layouts, id => assets.get(id)?.url ?? id)
+  for (const [key, checks] of duplicates) layouts[key] = { ...layouts[key], checks: [...layouts[key].checks, ...checks] }
+  return layouts
 }
 
 export interface SetCell { ref: MediaSetRef; label: string; count: number; source: 'shared' | 'channel' | 'own' | 'none' }
@@ -207,6 +307,67 @@ export function destinationCells(read: MediaRead, d: MediaDestinationRow): SetCe
     const source = resolved.source === 'LISTING' ? 'own' : resolved.source === 'CHANNEL' ? 'channel' : resolved.source === 'SHARED' ? 'shared' : 'none'
     return { ref: r.ref, label: r.kind === 'safety' ? 'Safety' : r.label, count: resolved.items.length, source }
   })
+}
+
+// ── Compare (P4) ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** One destination's copy of one set, against the first chosen destination (the reference). */
+export interface CompareCell {
+  key: string
+  /** The channel uses this set (Safety is Amazon's; per-SKU photos are Amazon's and Shopify's). */
+  applies: boolean
+  source: SetCell['source']
+  items: string[]
+  /** Photos this destination has and the reference does not (its own ids), and the reference's photos it lacks (the
+   *  reference's ids) — by photo, not by language version (a photo's versions count as one photo, D6). */
+  added: string[]
+  missing: string[]
+  /** Same photos as the reference, in a different order. */
+  reordered: boolean
+  same: boolean
+}
+export interface CompareRow { ref: MediaSetRef; label: string; kind: SetRow['kind']; same: boolean; cells: CompareCell[] }
+
+const SKU_CHANNELS: ReadonlySet<MediaChannel> = new Set(['AMAZON', 'SHOPIFY'])
+
+/**
+ * Images rebuild P4 — Compare (PLAN.md §4.3): the chosen destinations' sets side by side. Each set is one row; each
+ * destination's cell says where its photos come from and how it differs from the first chosen destination. Per-SKU
+ * sets appear only when a chosen destination has one. Pure: the page and the tests call it the same way.
+ */
+export function compareDestinations(read: MediaRead, keys: readonly string[]): CompareRow[] {
+  const chosen = keys.map(k => read.destinations.find(d => d.key === k)).filter((d): d is MediaDestinationRow => !!d?.targetable)
+  if (!chosen.length) return []
+  // One photo: any stored copy of a picture (its library card), and its language versions.
+  const card = cardOf(read)
+  const group = new Map(read.library.map(a => [a.id, a.versionGroupId ?? a.id]))
+  const photo = (id: string) => group.get(card(id)) ?? card(id)
+  const perDestination = chosen.map(d => new Map(setRows(read, { layer: 'LISTING', destination: d.key }, { skus: true }).map(r => [r.ref, r])))
+  const order: SetRow[] = []
+  for (const rows of perDestination) for (const row of rows.values()) if (!order.some(r => r.ref === row.ref)) order.push(row)
+  const applies = (d: MediaDestinationRow, row: SetRow) => row.kind === 'safety' ? d.channel === 'AMAZON' : row.kind === 'sku' ? SKU_CHANNELS.has(d.channel) : true
+  const result: CompareRow[] = []
+  for (const head of order) {
+    const cells = chosen.map((d, i): CompareCell => {
+      const row = perDestination[i].get(head.ref)
+      const source: SetCell['source'] = !row?.source ? 'none' : row.source === 'LISTING' ? 'own' : row.source === 'CHANNEL' ? 'channel' : 'shared'
+      return { key: d.key, applies: !!row && applies(d, row), source, items: row?.items ?? [], added: [], missing: [], reordered: false, same: true }
+    })
+    const used = cells.filter(c => c.applies)
+    // A per-SKU row shows only when some chosen destination that uses SKU photos has that SKU's own set.
+    if (head.kind === 'sku' && !used.some(c => c.source !== 'none')) continue
+    if (!used.length) continue
+    const reference = used[0].items.map(photo)
+    for (const cell of used) {
+      const mine = cell.items.map(photo)
+      cell.added = cell.items.filter(id => !reference.includes(photo(id)))
+      cell.missing = used[0].items.filter(id => !mine.includes(photo(id)))
+      cell.reordered = !cell.added.length && !cell.missing.length && mine.join('|') !== reference.join('|')
+      cell.same = !cell.added.length && !cell.missing.length && !cell.reordered
+    }
+    result.push({ ref: head.ref, label: head.kind === 'safety' ? 'Safety' : head.label, kind: head.kind, same: used.every(c => c.same), cells })
+  }
+  return result
 }
 
 export function checkCounts(checks: readonly MediaCheck[]) {
@@ -227,8 +388,9 @@ export function layoutSummary(channel: MediaChannel, layout: ChannelMediaLayout)
 
 /** The same "one photo" rule the server applies: language versions of one photo count once. */
 export function sameGroupOf(read: MediaRead) {
+  const card = cardOf(read)
   const group = new Map(read.library.map(a => [a.id, a.versionGroupId]))
-  return (a: string, b: string) => a === b || (!!group.get(a) && group.get(a) === group.get(b))
+  return (a: string, b: string) => card(a) === card(b) || (!!group.get(card(a)) && group.get(card(a)) === group.get(card(b)))
 }
 
 /** Apply ops to one layer locally (the page moves at once; the server's answer then replaces it). Throws the same

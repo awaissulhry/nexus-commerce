@@ -284,6 +284,50 @@ export function inverseMediaOps(layer: MediaLayer, before: MediaPlan | null, aft
   return ops
 }
 
+/**
+ * Images W4a — the Owner marked `from` as the same picture as `to`: every set and swatch that uses `from` uses `to`
+ * instead, in the same place. Where the set already shows `to` (or a photo `same` counts as `to`: a copy, a language
+ * version), `from` is dropped, so a set never repeats a photo. The plan comes back unchanged (the same object) when it
+ * does not use `from`.
+ */
+export function replaceAssetInPlan(plan: MediaPlan, from: string, to: string, same: (a: string, b: string) => boolean = (a, b) => a === b): MediaPlan {
+  if (!planAssetIds(plan).includes(from)) return plan
+  const swap = (items: MediaItem[]) => !items.some(i => i.assetId === from) ? items
+    : items.some(i => i.assetId !== from && same(i.assetId, to)) ? items.filter(i => i.assetId !== from)
+    : items.map(i => i.assetId === from ? { ...i, assetId: to } : i)
+  const each = (record?: Record<string, MediaItem[]>) => record && Object.fromEntries(Object.entries(record).map(([key, items]) => [key, swap(items)]))
+  const sets: MediaPlan['sets'] = { ...plan.sets }
+  if (sets.common) sets.common = swap(sets.common)
+  if (sets.safety) sets.safety = swap(sets.safety)
+  if (sets.values) sets.values = each(sets.values)
+  if (sets.skus) sets.skus = each(sets.skus)
+  if (sets.swatches) sets.swatches = Object.fromEntries(Object.entries(sets.swatches).map(([key, item]) => [key, item?.assetId === from ? { ...item, assetId: to } : item]))
+  return mediaPlanSchema.parse({ ...plan, sets })
+}
+
+/**
+ * Images W4b — photos that became language versions of one photo: a set shows one of them, never two (each destination
+ * picks its market's version). Where a set holds several members, it keeps `keep` if present, else the first member in
+ * set order, at that position. The plan comes back unchanged (the same object) when no set holds two members.
+ */
+export function collapseVersionsInPlan(plan: MediaPlan, members: readonly string[], keep: string): MediaPlan {
+  const group = new Set(members)
+  const collapse = (items: MediaItem[]) => {
+    const inGroup = items.filter(i => group.has(i.assetId))
+    if (inGroup.length < 2) return items
+    const stay = inGroup.some(i => i.assetId === keep) ? keep : inGroup[0].assetId
+    return items.filter(i => !group.has(i.assetId) || i.assetId === stay)
+  }
+  const each = (record?: Record<string, MediaItem[]>) => record && Object.fromEntries(Object.entries(record).map(([key, items]) => [key, collapse(items)]))
+  const sets: MediaPlan['sets'] = { ...plan.sets }
+  if (sets.common) sets.common = collapse(sets.common)
+  if (sets.safety) sets.safety = collapse(sets.safety)
+  if (sets.values) sets.values = each(sets.values)
+  if (sets.skus) sets.skus = each(sets.skus)
+  const next = mediaPlanSchema.parse({ ...plan, sets })
+  return JSON.stringify(next) === JSON.stringify(plan) ? plan : next
+}
+
 /** Asset ids the plan points at — to refuse ops that name a photo the family does not own. */
 export function planAssetIds(plan: MediaPlan | null | undefined): string[] {
   if (!plan) return []

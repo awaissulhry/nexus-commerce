@@ -4,6 +4,8 @@
    nothing on this page because it had no scroll area of its own). It scrolls up and down only: hidden tooltips at the
    right edge made it slide 15 px sideways (2026-09-28). Guarded by planPage.scroll.vitest.test.ts. */
 .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; padding: var(--nds-space-12) var(--nds-space-16) var(--nds-space-24); color: var(--nds-text); font-size: var(--nds-font-size-base); }
+.page:focus { outline: none; }
+.page[data-dropping] { outline: 2px dashed var(--nds-info); outline-offset: -6px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-12); }
 .pageTitle { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-semibold); }
 .control { display: inline-flex; align-items: center; gap: var(--nds-space-6); color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
@@ -56,8 +58,63 @@
 .preview { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .previewMain { display: flex; align-items: center; gap: var(--nds-space-8); }
 .previewStrip { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); margin: 0; padding: 0; list-style: none; }
+.uploadFile { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; overflow-wrap: anywhere; }
+.uploadStatus { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); }
+.uploadWhere { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-16); margin: 0; padding: 0; border: 0; min-width: 0; }
+.uploadWhere > legend { float: left; margin-right: var(--nds-space-8); padding: 0; }
+.uploadTable { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
+.uploadHead, .uploadLine { display: grid; grid-template-columns: 48px minmax(0, 2fr) minmax(130px, 1.2fr) 76px minmax(120px, 1fr) minmax(0, 1.6fr); align-items: center; gap: var(--nds-space-10); padding: var(--nds-space-8) var(--nds-space-12); }
+.uploadHead { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); border-bottom: 1px solid var(--nds-border-subtle); }
+.uploadLines { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; max-height: min(52vh, 560px); overflow-y: auto; }
+.uploadLine + .uploadLine { border-top: 1px solid var(--nds-border-subtle); }
+.uploadCell { min-width: 0; }
+.uploadFooterNote { display: flex; flex: 1 1 200px; flex-direction: column; gap: var(--nds-space-2); min-width: 0; font-size: var(--nds-font-size-sm); }
+/* The column name beside a control, on a phone only (the header row is hidden there). */
+.uploadLabel { display: none; }
+.publishLine { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); align-items: start; gap: var(--nds-space-12); padding: var(--nds-space-8) 0; border-top: 1px solid var(--nds-border-subtle); }
+.publishDetail { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; }
+/* The status tag and the channel's sentence: the sentence wraps (a refusal can be long; 2026-09-28 it ran 591 px wide). */
+.publishStatus { display: flex; align-items: flex-start; gap: var(--nds-space-6); min-width: 0; overflow-wrap: anywhere; }
+.publishStatus > :first-child { flex: 0 0 auto; }
+.compareBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.compareChips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); }
+.compareSetBlock { display: flex; flex-direction: column; gap: var(--nds-space-6); padding-top: var(--nds-space-8); border-top: 1px solid var(--nds-border-subtle); }
+.compareSetHead { display: flex; align-items: center; gap: var(--nds-space-8); }
+.compareLines { display: flex; flex-direction: column; gap: var(--nds-space-8); margin: 0; padding: 0; list-style: none; }
+.compareLine { display: grid; grid-template-columns: minmax(160px, 240px) minmax(0, 1fr); align-items: start; gap: var(--nds-space-12); }
+.compareWho { justify-self: start; text-align: left; }
+.compareCell { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+/* A photo the first chosen destination does not have: outlined, and its tooltip says so. */
+.compareExtra { border-radius: var(--nds-radius-sm); outline: 2px solid var(--nds-warning); outline-offset: 1px; }
 .checkList { margin: var(--nds-space-4) 0 0; padding-inline-start: var(--nds-space-16); }
 .checkList > li + li { margin-top: var(--nds-space-2); }
+
+/* Same photo? (W4a): the two look-alikes side by side, on a phone too — comparing them is the point. */
+.sameBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); }
+.samePair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nds-space-16); min-width: 0; }
+.sameSide { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; overflow-wrap: anywhere; }
+.sameSide > p { margin: 0; }
+.sameText { margin: 0; }
+/* The photo window's language choice (W4b). */
+.photoLanguage { display: flex; flex-direction: column; gap: var(--nds-space-8); margin-top: var(--nds-space-8); min-width: 0; }
+.photoLanguage > p { margin: 0; }
+@media (max-width: 640px) { .samePair { gap: var(--nds-space-10); } }
+
+/* Amazon ZIP for Seller Central (P4d): the files by ASIN, each slot with its photo. All text at the DS body size. */
+.zipBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); }
+.zipControls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--nds-space-12) var(--nds-space-20); }
+.zipText { margin: 0; }
+.zipStatus { display: inline-flex; align-items: center; gap: var(--nds-space-6); margin: 0; color: var(--nds-text-2); }
+.zipSummary { margin: 0; font-weight: var(--nds-font-weight-semibold); font-variant-numeric: tabular-nums; }
+.zipLimits { margin: 0; color: var(--nds-text-2); }
+.zipGroups { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.zipGroup { display: flex; flex-direction: column; gap: var(--nds-space-6); padding: var(--nds-space-8) 0; border-top: 1px solid var(--nds-border-subtle); min-width: 0; }
+.zipGroupHead { margin: 0; overflow-wrap: anywhere; }
+.zipFiles { display: flex; flex-wrap: wrap; gap: var(--nds-space-10); margin: 0; padding: 0; list-style: none; }
+.zipFile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); width: 96px; min-width: 0; }
+.zipName { font-family: var(--nds-font-mono); }
+.zipSkus { color: var(--nds-text-2); }
+.zipPhoto { max-width: 100%; overflow: hidden; color: var(--nds-text-2); text-overflow: ellipsis; white-space: nowrap; }
 
 /* Switch preview and the library tools */
 /* Every surface sets the DS body size: unstyled text otherwise shows at the browser's 16 px and reads as a foreign font
@@ -70,6 +127,12 @@
 .state { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-8); padding: var(--nds-space-24) var(--nds-space-16); color: var(--nds-text-2); font-size: var(--nds-font-size-base); }
 
 @media (max-width: 640px) {
+  .uploadHead { display: none; }
+  .publishLine { grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-4); }
+  .uploadLabel { display: block; color: var(--nds-text-2); font-size: var(--nds-font-size-xs); }
+  .uploadLine { grid-template-columns: 48px minmax(0, 1fr); }
+  .uploadCell[data-col='set'], .uploadCell[data-col='position'], .uploadCell[data-col='language'], .uploadCell[data-col='status'] { grid-column: 2; }
+  .compareLine { grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-4); }
   .page { padding: var(--nds-space-10) var(--nds-space-10) var(--nds-space-20); }
   .control { flex-wrap: wrap; }
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
-  applyLocal, computeLayouts, copyFromOps, destinationCells, filterLibrary, followAllOps, libraryUsage, setRows, showAsOptions,
+  applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, guessLanguage, photoPlacements, photoSource, sharedPlacements, versionLanguages, followAllOps, libraryUsage, setRows, showAsOptions,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
 
@@ -75,6 +75,32 @@ describe('Media page model', () => {
     expect(followAllOps(r, { layer: 'LISTING', destination: WINTER })).toEqual([{ op: 'follow', set: 'common' }, { op: 'follow', set: 'value:color:black' }])
     expect(followAllOps(r, { layer: 'SHARED' })).toEqual([])
   })
+  it('one picture stored on several SKUs is one photo: its copies show its picture, count as its usage, and are never placed twice', () => {
+    const r = read([{ key: 'SHARED', plan: plan({ common: ids('cover-kid'), values: { 'color:black': ids('n1') } }, 'color') }])
+    r.library = r.library.map(a => a.id === 'cover' ? { ...a, copies: ['cover-kid', 'cover-kid2'] } : a)
+    expect(assetMap(r).get('cover-kid')?.url).toBe('https://cdn.test/cover.jpg')
+    // The plan points at a copy; the library card says where it is used.
+    expect(libraryUsage(r).get('cover')).toEqual(['Common · main'])
+    expect(() => applyLocal(r, { layer: 'SHARED' }, [{ op: 'insert', set: 'common', assetIds: ['cover'] }])).toThrow(/already in that set/)
+    expect(() => applyLocal(r, { layer: 'SHARED' }, [{ op: 'insert', set: 'common', assetIds: ['cover-kid2'] }])).toThrow(/already in that set/)
+  })
+  it('Compare puts the chosen destinations\' sets side by side and names each difference against the first one', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ common: ids('chart-de', 'cover'), values: { 'color:black': ids('n1', 'spare') } }) },
+      { key: AMAZON, plan: plan({ skus: { n: ids('spare') }, safety: ids('spare') }) }])
+    const rows = compareDestinations(r, [EBAY, WINTER, AMAZON])
+    const row = (label: string) => rows.find(x => x.label === label)!
+    // Common: Winter has the German version of the same chart, in another order — the same photos, reordered.
+    expect(row('Common').cells.map(c => `${c.source}:${c.same}:${c.reordered}`)).toEqual(['shared:true:false', 'own:false:true', 'shared:true:false'])
+    // Nero: Winter drops "cover" and adds "spare".
+    expect(row('Nero').cells[1]).toMatchObject({ added: ['spare'], missing: ['cover'], same: false })
+    expect(row('Giallo').same).toBe(true)
+    // Safety and per-SKU photos are Amazon's: eBay cells do not apply, and the first cell that applies is the reference.
+    expect(row('Safety').cells.map(c => c.applies)).toEqual([false, false, true])
+    expect(row('Safety')).toMatchObject({ same: true })
+    expect(rows.filter(x => x.kind === 'sku').map(x => x.label)).toEqual(['SKU T-NERO'])
+    // An unknown or untargetable destination is left out; nothing chosen = nothing to compare.
+    expect(compareDestinations(r, ['nope'])).toEqual([])
+  })
   it('"Show as" shows each market its language version, and says when it falls back', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])
     const assets = assetMap(r)
@@ -82,5 +108,49 @@ describe('Media page model', () => {
     expect(shownVersion(r, assets, 'chart-it', ['fr'])).toMatchObject({ exact: false })
     expect(shownVersion(r, assets, 'chart-it', null)).toEqual({ id: 'chart-it', exact: true, language: 'it' })
     expect(showAsOptions(r).map(o => o.label)).toEqual(['eBay IT · IT', 'Amazon (all markets) · IT'])
+  })
+
+  it('names a listing with its mark (★ ①②③) only when its account and market hold more than one listing', () => {
+    expect(destinationLabel(dest(EBAY, { listingMark: 0 }))).toBe('eBay IT · Test eBay · ★ Main listing')
+    expect(destinationLabel(dest(WINTER, { alias: { id: 'winter', label: 'Winter', position: 1 }, listingMark: 1 }))).toBe('eBay IT · Test eBay · ① Winter')
+    expect(destinationLabel(dest(EBAY, { listingMark: null }))).toBe('eBay IT · Test eBay · Main listing')
+    expect(destinationLabel(dest(AMAZON, { channel: 'AMAZON', marketplace: 'GLOBAL', accountLabel: 'Test Amazon', listingMark: null }))).toBe('Amazon · Test Amazon')
+  })
+  it('warns both eBay listings on one account and market that would show the same photos, and stops when they differ', () => {
+    const same = read([{ key: 'SHARED', plan: SHARED }])
+    const warned = (r: MediaRead) => Object.entries(computeLayouts(r)).filter(([, l]) => l.checks.some(c => c.code === 'duplicate-listing-photos')).map(([k]) => k)
+    expect(warned(same)).toEqual([EBAY, WINTER])
+    expect(computeLayouts(same)[WINTER].checks.find(c => c.code === 'duplicate-listing-photos')?.message).toMatch(/^Same photos as Main listing on this account and market/)
+    // Winter's own Nero set makes it different: no warning on either.
+    expect(warned(read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ values: { 'color:black': ids('n1') } }) }]))).toEqual([])
+  })
+
+  it('look-alikes (W4a): the filter, where a photo sits in every layer, and which one to keep by default', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ values: { 'color:black': ids('n1') }, swatches: { 'color:black': { assetId: 'n1' } } }) }])
+    r.destinations[1].listingMark = 1
+    r.library = r.library.map(a => a.id === 'spare' ? { ...a, lookalikes: [{ id: 'n1', distance: 4 }] } : a)
+    expect(filterLibrary(r, new Map(), 'lookalikes', '').map(a => a.id)).toEqual(['spare'])
+    expect(photoPlacements(r, ['n1'])).toEqual(['Shared: Nero', 'eBay IT · Test eBay · ① Winter: Nero', 'eBay IT · Test eBay · ① Winter: Nero swatch'])
+    expect(photoPlacements(r, ['spare'])).toEqual([])
+    expect(photoSource('https://m.media-amazon.com/images/I/81x.jpg')).toBe('Amazon image')
+    expect(photoSource('https://res.cloudinary.com/x/a.jpg')).toBe('Nexus upload')
+    const amazon = { ...r.library[0], id: 'amz', url: 'https://m.media-amazon.com/images/I/81x.jpg', width: 3000, height: 3000 }
+    const ours = { ...r.library[0], id: 'ours', url: 'https://res.cloudinary.com/x/a.jpg', width: 1000, height: 1000 }
+    // A Nexus upload wins over an Amazon image even when the Amazon one is larger.
+    expect(defaultKeep(r, amazon, ours).id).toBe('ours')
+    // Between two uploads: the one in more sets, then the larger.
+    expect(defaultKeep(r, { ...ours, id: 'n1' }, { ...ours, id: 'spare' }).id).toBe('n1')
+    expect(defaultKeep(r, { ...ours, id: 'x1' }, { ...ours, id: 'x2', width: 2000, height: 2000 }).id).toBe('x2')
+  })
+
+  it('language versions (W4b): the languages to offer, a guess from the name, and the sets that show both', () => {
+    const r = read([{ key: 'SHARED', plan: plan({ common: ids('cover', 'spare') }) }, { key: WINTER, plan: plan({ common: ids('spare', 'cover') }) }])
+    expect(versionLanguages(r)).toEqual(['de', 'it'])
+    expect(guessLanguage({ ...r.library[0], label: 'size-chart-es', languageTag: 'zxx' })).toBe('es')
+    expect(guessLanguage({ ...r.library[0], label: 'size chart', languageTag: 'zxx' })).toBe('')
+    expect(guessLanguage({ ...r.library[0], label: 'size-chart-es', languageTag: 'fr' })).toBe('fr')
+    const cover = r.library.find(a => a.id === 'cover')!, spare = r.library.find(a => a.id === 'spare')!, n1 = r.library.find(a => a.id === 'n1')!
+    expect(sharedPlacements(r, cover, spare)).toEqual(['Shared: Common', 'eBay IT · Test eBay · Winter: Common'])
+    expect(sharedPlacements(r, cover, n1)).toEqual([])
   })
 })
