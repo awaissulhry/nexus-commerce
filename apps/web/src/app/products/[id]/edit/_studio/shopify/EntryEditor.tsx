@@ -78,7 +78,7 @@ export function EntryEditor({ id, copy = false, initialType, path, schema, canPu
   return <>
     <Modal open className="ag-custom-component-popup" title={title} size="md" readable onClose={close} footer={<><Button disabled={busy} onClick={close}>Close</Button><Button variant="primary" disabled={busy || !canPublish || !definition || !dirty} onClick={review}>Review entry changes</Button></>}>
       <div className={styles.stack}>
-        <p className={styles.hint}>Saves to Shopify now — for every product that uses this entry. To delete an entry, use Shopify admin.</p>
+        <p className={styles.hint}>{copying ? 'Saves a new entry to Shopify now — only this product will use it.' : 'Saves to Shopify now — for every product that uses this entry.'} To delete an entry, use Shopify admin.</p>
         {error && <Banner tone="danger">{error}</Banner>}{saved && <Banner tone="success">Entry saved and verified in Shopify.</Banner>}{busy && <p role="status">Working with Shopify…</p>}
         {!canPublish && <Banner tone="neutral">Your Nexus role needs publish permission to save entries to Shopify.</Banner>}
         {!entry && !id && <div className={styles.settings}>
