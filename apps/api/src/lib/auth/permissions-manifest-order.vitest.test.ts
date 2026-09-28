@@ -45,6 +45,11 @@ describe('permission manifest ordering', () => {
     ['POST', '/api/products/:id/recover', 'products.delete'],
     ['POST', '/api/products/:id/recover/preview', 'products.view'],
     ['GET', '/api/products/:id/recover/events', 'products.view'],
+    // Sheet pop-up A3 — "New attribute" changes the business's attribute dictionary (what /api/attributes needs); the
+    // pop-up's read of "Values from" and the theme save beside it stay product edits.
+    ['POST', '/api/products/:id/studio/own-axis-attribute', 'pim.manage'],
+    ['GET', '/api/products/:id/studio/own-axis-sources', 'products.view'],
+    ['PATCH', '/api/products/:id/studio/projection', 'products.edit'],
     ['POST', '/etsy/sync/listings', 'products.edit'],
     ['POST', '/etsy/sync/inventory/from-etsy', 'inventory.adjust'],
     ['POST', '/etsy/sync/orders', 'orders.edit'],

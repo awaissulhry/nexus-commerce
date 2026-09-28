@@ -5,8 +5,9 @@
 import { describe, expect, it } from 'vitest'
 import type { VariationThemeCell } from '../renderers/variationTheme'
 import {
-  CHANNEL_AXES_COPY, channelAxisGapHint, channelAxisOrigin, channelAxisValues, channelSetChangeHeld, ownAxisKeyFor, ownNameRefusal,
-  remainingOwnCandidates, remainingSharedAxes, usesChannelAxesLayout, withOwnChannelAxis, withOwnSharedAxis, withSharedAxis, withoutAxis,
+  CHANNEL_AXES_COPY, channelAxisGapHint, channelAxisOrigin, channelAxisValues, channelSetChangeHeld, newAttributeDoneLine, newAttributeHeld,
+  ownAxisKeyFor, ownNameRefusal, remainingOwnCandidates, remainingSharedAxes, usesChannelAxesLayout, withOwnAxisSource, withOwnChannelAxis,
+  withOwnSharedAxis, withSharedAxis, withoutAxis,
 } from './channelAxes'
 import { variationThemeWrite } from './sheetWriter'
 
@@ -129,6 +130,37 @@ describe('what a row says', () => {
     expect(CHANNEL_AXES_COPY.addOption(c.name, CHANNEL_AXES_COPY.filled(c.filled, c.of))).toBe('Add Scollatura, 2 of 4 filled')
     expect(CHANNEL_AXES_COPY.addOption('Size', CHANNEL_AXES_COPY.notHere('specific'))).toBe('Add Size, not a specific here')
     expect(CHANNEL_AXES_COPY.notHere('option')).toBe('not an option here')
+  })
+})
+
+describe('P3 A3 — "New attribute"', () => {
+  const OK = { allowed: true, reason: null, familyLabel: 'Sliders', familyProducts: 2 }
+
+  it('is held with the server\'s reason first (no family, no permission), then the checks every typed name meets', () => {
+    const noFamily = 'This product has no family, so a new attribute has nowhere to go. Choose a family on the Shared product first.'
+    expect(newAttributeHeld(EBAY, { ...OK, allowed: false, reason: noFamily }, 'Stile', 'eBay')).toBe(noFamily)
+    expect(newAttributeHeld(EBAY, { ...OK, allowed: false, reason: null }, 'Stile', 'eBay')).toBe(CHANNEL_AXES_COPY.noPermission)
+    expect(newAttributeHeld(EBAY, OK, '  ', 'eBay')).toBe('Name this specific.')
+    expect(newAttributeHeld(EBAY, OK, 'x'.repeat(41), 'eBay')).toBe('eBay specific names are at most 40 characters.')
+    expect(newAttributeHeld(EBAY, OK, 'marca', 'eBay')).toBe('eBay lists Marca for this category, but not for variations.')
+    expect(newAttributeHeld(EBAY, OK, 'colore', 'eBay')).toBe(CHANNEL_AXES_COPY.duplicate)
+    /* the attribute IS the source, so "Choose where the values come from." never holds it */
+    expect(newAttributeHeld(EBAY, OK, 'Stile', 'eBay')).toBeNull()
+  })
+
+  it('says before the write where it goes, who else gets the column, and that Esc does not take it back', () => {
+    expect(CHANNEL_AXES_COPY.createLine('Stile', 'Sliders', 2)).toBe(
+      'Creates “Stile” (per variant, text) in the family “Sliders” — 2 products get this empty column. It is created now: Esc does not remove it.')
+    expect(CHANNEL_AXES_COPY.createLine('Stile', 'Sliders', 1)).toContain('1 product gets this empty column')
+  })
+
+  it('a created or placed attribute joins "Values from" once, and the pop-up says what happened', () => {
+    const made = { field: 'stile', label: 'Stile', filled: 0, of: 4, values: [] }
+    expect(withOwnAxisSource([FIT], made)).toEqual([FIT, made])
+    expect(withOwnAxisSource([FIT, made], { ...made, of: 5 })).toEqual([FIT, { ...made, of: 5 }])
+    expect(newAttributeDoneLine('created')).toBe(CHANNEL_AXES_COPY.created)
+    expect(newAttributeDoneLine('placed')).toBe(CHANNEL_AXES_COPY.placed)
+    expect(newAttributeDoneLine('present')).toBe(CHANNEL_AXES_COPY.present)
   })
 })
 

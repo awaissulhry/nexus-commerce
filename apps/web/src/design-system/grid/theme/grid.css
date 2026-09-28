@@ -1884,3 +1884,7 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-axes-channelrule { margin: 0; padding: 0 var(--nds-space-12) var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
 /* A refusal under the rows sits in the rows' own gutter. */
 .nds-axes-editor > .nds-axes-refusal { margin: var(--nds-space-4) var(--nds-space-12) 0; }
+/* P3 A3 — "New attribute": a line and its button, wrapping on a phone; the button keeps its own width, the line its margins. */
+.nds-axes-newattr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); min-width: 0; }
+.nds-axes-newattr > p { margin: 0; flex: 1 1 200px; min-width: 0; }
+.nds-axes-newattr > button { flex: none; }

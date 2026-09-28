@@ -51,6 +51,7 @@ import {
   axesSectionTitle,
   axesTabStaysInside,
   moveHighlight,
+  NewOwnAttribute,
   reorderAxes,
   suppressAxesPanelKeys,
   themeGroupOf,
@@ -936,6 +937,48 @@ describe('P3 A2 — the channel layout', () => {
     const movableChips = [...movable.matchAll(/<li\b[^>]*class="nds-mchip[^"]*"[^>]*>/g)].map((m) => m[0])
     expect(movableChips).toHaveLength(2)
     for (const chip of movableChips) expect(chip).toContain('tabindex="0"')
+  })
+})
+
+/* ── Sheet pop-up P3 A3 — "New attribute" (QUALITY-PLAN §4.10), each step as the operator sees it ──────────────────────── */
+
+describe('P3 A3 — "New attribute" in "Your own name"', () => {
+  const OK = { allowed: true, reason: null, familyLabel: 'Sliders', familyProducts: 2 }
+  const noop = () => undefined
+  const block = (props: Partial<Parameters<typeof NewOwnAttribute>[0]>) => renderToStaticMarkup(createElement(NewOwnAttribute, {
+    name: 'Stile', state: OK, held: null, phase: { phase: 'idle' }, onStart: noop, onCreate: noop, onUseExisting: noop, ...props,
+  }))
+
+  it('offers the typed name; a held button keeps its reason ON SCREEN and names it as its description', () => {
+    const open = block({})
+    expect(open).toContain(CHANNEL_AXES_COPY.noFit)
+    expect(open).toContain('New attribute “Stile”')
+    expect(open).not.toContain('aria-disabled')
+    const reason = 'This product has no family, so a new attribute has nowhere to go. Choose a family on the Shared product first.'
+    const held = block({ held: reason })
+    expect(held).toContain('aria-disabled="true"')
+    const describedBy = held.match(/aria-describedby="([^"]+)"/)?.[1]
+    expect(describedBy).toBeTruthy()
+    expect(held).toContain(`id="${describedBy}" class="nds-axes-filterhint">${reason}</span>`)
+    expect(block({ name: '' })).toContain(`> ${CHANNEL_AXES_COPY.newAttributeUnnamed}</button>`)
+  })
+
+  it('🔴 the first press only SAYS what happens (family, products, Esc keeps it); "Create" is the write', () => {
+    const confirm = block({ phase: { phase: 'confirm' } })
+    expect(confirm).toContain(CHANNEL_AXES_COPY.createLine('Stile', 'Sliders', 2))
+    expect(confirm).toContain(`>${CHANNEL_AXES_COPY.create}</button>`)
+    /* a name that became refused while confirming falls back to the held button, never a Create that the server refuses */
+    expect(block({ phase: { phase: 'confirm' }, held: 'Name this specific.' })).not.toContain(`>${CHANNEL_AXES_COPY.create}</button>`)
+  })
+
+  it('while writing, after, and when the server offers an existing attribute or refuses — each says so in its own words', () => {
+    expect(block({ phase: { phase: 'creating' } })).toMatch(new RegExp(`role="status"[^>]*>.*${CHANNEL_AXES_COPY.creating}`))
+    expect(block({ phase: { phase: 'done', line: CHANNEL_AXES_COPY.created } })).toContain(`role="status">${CHANNEL_AXES_COPY.created}</p>`)
+    const offer = block({ phase: { phase: 'offer', message: '“Fit” already exists. Use it in this family?' } })
+    expect(offer).toContain('role="alert">“Fit” already exists. Use it in this family?</p>')
+    expect(offer).toContain(`>${CHANNEL_AXES_COPY.useExisting}</button>`)
+    const refused = block({ phase: { phase: 'refused', message: CHANNEL_AXES_COPY.noPermission } })
+    expect(refused).toContain(`role="alert">${CHANNEL_AXES_COPY.noPermission}</p>`)
   })
 })
 

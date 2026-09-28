@@ -1,3 +1,7 @@
+## Variation theme pop-up on a channel: "New attribute" — 2026-09-28
+
+Mirrored from web. `NewOwnAttribute` (say first, then Create; Use it for an existing attribute; held with its reason), `createOwnAxisAttribute` editor param, `OwnAxisSourcesLoader` answers `{ sources, newAttribute }`, `.nds-axes-newattr`.
+
 ## Variation theme pop-up on a channel — 2026-09-28
 
 Mirrored from web. `AxesPanel` channel layout (eBay, Etsy): rows with origin, value chips and empty-variant hints; "+ Add" with Shared, channel-list and own-name groups; `channelAxes.ts`; `suppressAxesPanelKeys`; `MediaChipField` static chips are not Tab stops.

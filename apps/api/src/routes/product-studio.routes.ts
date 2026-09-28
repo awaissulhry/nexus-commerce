@@ -19,7 +19,9 @@ import { getInformationSheet } from '../services/pim/information-sheet.js'
  * `PATCH /api/products/bulk` (expectedVersion, 409 on conflict) — one write path
  * for the sheet, the studio and bulk-ops alike.
  */
-import type { FastifyPluginAsync, FastifyReply } from 'fastify'
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
+import { FEATURES as F } from '@nexus/shared/permissions'
+import { assertRequestPermission } from '../lib/auth/request-permission.js'
 import { resolveWorkspaceDestination, resolveWorkspaceListing, WorkspaceScopeError } from '../services/pim/workspace-destination.js'
 import { AmbiguousConnectionError, NoConnectionError } from '../services/connection-resolver.service.js'
 
@@ -88,6 +90,20 @@ function sendError(reply: any, err: unknown, log: any, context: Record<string, u
   }
   log.error({ err, ...context }, '[studio] request failed')
   return reply.code(500).send({ error: 'studio_request_failed', message: err instanceof Error ? err.message : String(err) })
+}
+
+/**
+ * Sheet pop-up P3 A3 — may this caller change the attribute dictionary (`pim.manage`)? The same resolution
+ * `assertRequestPermission` makes (session, the business profile's grants, the owner); only its 403 becomes `false`.
+ */
+async function mayManageAttributes(request: FastifyRequest): Promise<boolean> {
+  try {
+    await assertRequestPermission(request, F.pimManage)
+    return true
+  } catch (err) {
+    if ((err as { statusCode?: unknown })?.statusCode === 403) return false
+    throw err
+  }
 }
 
 /**
@@ -251,7 +267,35 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     if (!String(q.market ?? '').trim()) return missingMarket(reply, q)
     try {
       const { sharedOwnAxisSources } = await import('../services/pim/family-projection.service.js')
-      return { sources: await sharedOwnAxisSources(id, String(q.market).trim().toUpperCase()) }
+      const { ownAxisAttributeState } = await import('../services/pim/own-axis-attribute.service.js')
+      // A3 — with the "New attribute" button's state, so the pop-up holds it with its reason instead of failing on click.
+      const [sources, newAttribute] = await Promise.all([
+        sharedOwnAxisSources(id, String(q.market).trim().toUpperCase()),
+        mayManageAttributes(request).then(allowed => ownAxisAttributeState(id, allowed)),
+      ])
+      return { sources, newAttribute }
+    } catch (err) { return sendError(reply, err, request.log, { id }) }
+  })
+
+  /**
+   * Sheet pop-up P3 A3 — "New attribute": a Shared per-variant attribute under the operator's name, created and placed in
+   * the product's family in one transaction (or an existing one placed or reused), answered as its "Values from" entry.
+   * It changes the business's attribute dictionary, so it needs `pim.manage`, not `products.edit`: the manifest names it
+   * before the `/api/products` rule, and this handler checks again (explicit guards enforce in shadow mode too).
+   */
+  fastify.post('/products/:id/studio/own-axis-attribute', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as Record<string, unknown>
+    const body = (request.body ?? {}) as { name?: unknown; useExisting?: unknown }
+    try {
+      const { createOwnAxisAttribute, OWN_AXIS_ATTRIBUTE_COPY } = await import('../services/pim/own-axis-attribute.service.js')
+      if (!(await mayManageAttributes(request))) return reply.code(403).send({ error: 'forbidden', message: OWN_AXIS_ATTRIBUTE_COPY.noPermission })
+      if (!String(q.market ?? '').trim()) return missingMarket(reply, q)
+      if (body.useExisting !== undefined && body.useExisting !== true) {
+        return reply.code(400).send({ error: 'own_axis_attribute_refused', message: 'useExisting must be true. Omit it to create a new attribute.' })
+      }
+      const result = await createOwnAxisAttribute({ productId: id, market: String(q.market), name: typeof body.name === 'string' ? body.name : '', useExisting: body.useExisting === true })
+      return reply.code(result.outcome === 'created' ? 201 : 200).send(result)
     } catch (err) { return sendError(reply, err, request.log, { id }) }
   })
 

@@ -1,7 +1,7 @@
 # Sheet pop-up editor — quality plan (2026-09-28)
 
 Status: **APPROVED 2026-09-28** (Owner: "I'll go with your recommendations … For everything else, I'll go with your recommendations.") — the plan and Q-D1 … Q-D4 = (a). Lane B runs in a new session (prompt: `LANE-B-PROMPT.md`). **Each slice still starts only on the Owner's "build <slice>".**
-**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7). **A1c approved** (Owner: "I'll go with your recommendations.") and built (§4.8). **A2 approved** (Owner: "I'll go with your recommendation. Go ahead.") and built (§4.9).
+**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7). **A1c approved** (Owner: "I'll go with your recommendations.") and built (§4.8). **A2 approved** (Owner: "I'll go with your recommendation. Go ahead.") and built (§4.9). **A3 approved** (Owner: "Okay, go ahead.") and built (§4.10). **A4 spec drafted** (§4.11, read-only research; waiting for "build A4" and D1/D2).
 It replaces the loose next steps in `PLAN-2026-09-27.md` §10 for the work that is left.
 
 ## 0. What the Owner asked (2026-09-28)
@@ -237,6 +237,228 @@ cell in the `media` box, with no Save / Cancel buttons.
   (`scripts/check-editor-open.mjs`) has no arm for opening the theme pop-up (it measures the column's width and place only);
   an arm needs a contract-table row too — its own small slice. Note: with a list open inside the pop-up, one Esc closes the whole
   pop-up (discards; nothing written) — Esc is AG's everywhere by design.
+
+### 4.10 A3 — "New attribute" from the pop-up: SPEC and BUILT (2026-09-28, local commit, not pushed)
+
+**The check §4.5 asks for — DONE, passed** (private copy only, real routes, then removed): a per-variant text attribute made
+with `POST /api/attributes` and placed in the product's family with `POST /api/families/:id/attributes` shows AT ONCE (a) in
+"Values from" ("0 of 8 filled") and (b) on the Shared sheet as a column, locked on the parent row and editable on every
+variant row. Removed through the API after; the private copy is back to its counts (244 attributes, 486 family links).
+
+**Facts that shape the design** (read in the code and the private copy):
+- The Shared sheet shows only the attributes placed in the product's FAMILY (`family-sheet-schema.ts` `familySheetFields`);
+  "Values from" is the Shared sheet's per-variant, plain, `categoryAttributes` columns that are not family axes
+  (`family-projection.service.ts` `sharedOwnAxisSources`). So "New attribute" = create the attribute AND place it in the family.
+- **A family is shared.** REGAL-JACKET's family holds 8 products, the knee slider's 2 → a new attribute is a new, empty column
+  on EVERY product of that family. The pop-up must say so before it writes.
+- 28 of 42 main products on the private copy have NO family → the attribute has nowhere to go.
+- Creating attributes and changing families needs `pim.manage` (`lib/auth/permissions-manifest.ts:210, 484, 485`); the sheet
+  needs only `products.edit`. A3 must not let a sheet editor create dictionary attributes.
+- Today it is two writes (create, then place); the column caches are cleared after each (`attribute-schema-invalidation.ts`).
+
+**What the Owner will see** (in "+ Add" → "Your own name"):
+
+```
+│ YOUR OWN NAME                                                            │
+│ [ Vestibilità        ]  [ Values from… ▾ ]  [ Add ]                      │
+│ No attribute fits?  [ New attribute “Vestibilità” ]                      │
+│   → Creates “Vestibilità” (per variant, text) in the family “<family>”   │
+│     — 2 products get this empty column. It is created now: Esc does not  │
+│     remove it.                     [ Create ]                            │
+│   ✓ Created. It is chosen in “Values from”; press Add, then ⏎ saves.     │
+```
+
+**Server:** ONE new route `POST /api/products/:id/studio/own-axis-attribute` `{ name, market }` — ONE transaction: the code from
+the name (lower snake case, accents folded: "Vestibilità" → `vestibilita`), a `CustomAttribute` (type text, scope `per_variant`,
+placement `shared`, the group the family's other per-variant attributes use, else `attributes`), placed in the product's OWN
+family; then both column caches cleared; the answer is the new "Values from" entry. Permission `pim.manage` — an explicit
+manifest entry, so the `/api/products` rule (`products.edit`) never covers it. `GET …/own-axis-sources` also returns
+`newAttribute: { allowed, reason, familyLabel, familyProducts }`, so the button is never dead: held with its reason.
+
+**Refusals (exact sentences):**
+- no family: "This product has no family, so a new attribute has nowhere to go. Choose a family on the Shared product first."
+- no permission: "Only a user who may manage attributes can create one. Ask the business owner."
+- empty name / too long: the pop-up's own name checks (A2), before any write.
+- the name's code already exists: per-variant, plain, not archived, not in this family → offered instead: "“Fit” already
+  exists. Use it in this family?" (it is placed, nothing new is made) · already in this family → it is already in "Values from"
+  (chosen there) · for the whole product (global) or archived → "“Fit” already exists as an attribute for the whole product.
+  Choose another name."
+
+**Scenarios:** A-E13 (knee slider, 2-product family, a made-up name; then removed) · the four refusals · a user without
+`pim.manage` sees the held button with its reason and the route answers 403 with the same sentence · Esc after Create keeps
+the attribute (said on screen) · A-X1…A-X5 again for the new controls.
+
+**Tests:** API — create + place in one transaction, a failed placement leaves no attribute, code from name, every refusal,
+403 without `pim.manage`, profiles on and off; a real-PostgreSQL race: two creates of the same name → one attribute, the other
+gets "already exists. Use it…". Web — button states, the line before Create, the refusal display, the chosen source after.
+
+**Files (claimed before the first edit):** api `routes/product-studio.routes.ts` (one route), NEW
+`services/pim/own-axis-attribute.service.ts` (+ tests), `family-projection.service.ts` (`sharedOwnAxisSources` answer only),
+`lib/auth/permissions-manifest.ts` (one entry); web + factory `grid/editors/{AxesPanelEditor.tsx,channelAxes.ts}` (+ web tests);
+web `_studio/sheet/master/ownAxisSourcesLoader.ts`.
+
+**Size:** about 2–3 hours with the browser run and the docs.
+
+**BUILT 2026-09-28** (Owner: "Okay, go ahead." after "type build A3 to start"; "I'll go with your recommendations"). Server half by a
+helper agent (reviewed line by line), pop-up half in this session. Local commit, not pushed.
+- **Server:** NEW `own-axis-attribute.service.ts` (create + place in ONE transaction; an existing attribute is placed, reused or
+  refused by the rules above; a Shared product field of that name is answered too — "Brand" is refused as a whole-product field,
+  a field that already is a source is `present`); `GET …/own-axis-sources` answers `newAttribute`; NEW
+  `POST …/studio/own-axis-attribute` guarded twice (`pim.manage` in the manifest before the `/api/products` rule, and in the
+  handler, which enforces even while the manifest only logs). A race of two creates of one name leaves ONE attribute: proven on a
+  throwaway PostgreSQL 17 (`own-axis-attribute-postgres.vitest.test.ts`, a new line in `scripts/run-real-postgres-tests.mjs`).
+- **Pop-up:** `NewOwnAttribute` in "Your own name" — held with its reason on screen; first press shows the line (family, products,
+  Esc keeps it) with focus on Create; Create → "Created. It is chosen in “Values from”…" with focus on Add. With no attribute yet,
+  the name still leads to "New attribute".
+- **Browser (private copy, signed in as the local owner):** knee slider eBay · IT: "Vestibilità" → line "…in the family
+  “Accessories” — 2 products get this empty column…" → Create → chosen "Vestibilità · 0 of 8 filled" → Add → row "your name ·
+  values from Vestibilità · 8 variants empty"; "Size" → "already in “Values from”"; "Brand" / "Material" held first by eBay's
+  219451 list; "???" → the server's "Use letters or digits in the name."; Esc after Create kept the attribute and wrote nothing to
+  the listing; keyboard only (Tab → New attribute → Space → Create → Space → Add → Space); a 390 px frame (the line wraps beside
+  Create, nothing sticks out); dark mode; 0 console errors. Not signed in, the button is held with the permission sentence
+  (seen). No product without a family has eBay variants on the private copy, so that hold is proven by tests only. The test
+  attributes were deleted through the API; the copy is back to 244 / 486.
+- **Found on the way:** locally the browser had NO API session (`/api/auth/me` 401) — the permission layer only logs locally, so
+  pages work anonymously; the handler's own guard is the one that holds. Signing in through `/login` fixed it for the run.
+- **Tests:** web 106 in the pop-up files (9 new; 5 mutations, 5 red) · API new 11 + race 1 (the helper's 5 mutations: 4 red, the
+  cache-clear one cannot fail because the column caches key on the dictionary version) · area: web design system + sheet 2,459
+  pass; API 327 pass, 2 skipped (the real-PG files) — profiles off and on for the new files.
+
+### 4.11 A4 — Shopify's own options: SPEC DRAFT (2026-09-28, read-only research; waiting for the Owner's "build A4")
+
+Line numbers are at commit `391267ee2` (branch `feat/sheet-popup-channel-axes`). "Not checked" means not checked.
+
+**What the Owner will see** (Shopify · GLOBAL, parent row, Variation theme cell — the A2 channel layout, now on Shopify):
+
+```
+┌ Variation theme · Shopify · GLOBAL ──────────── Own setup · Reset to Shared ┐
+│ ⠿ [ Color        ]  from Shared: Color     [Nero] [Blu] [Verde] …            │
+│ ⠿ [ Size         ]  from Shared: Size      [S] [M] [L]                       │
+│ ⠿ [ Fit          ]  your name · values from Fit     [Slim] [Regular]         │
+│                     2 variants empty · Fill Fit on the Shared product.        │
+│ + Add an option     (at 3: "Shopify takes at most 3 options.")               │
+│    From Shared ─ …                                                           │
+│    Your own name ─ [ Fit ]  Values from [ Fit ▾ ]  [ Add ]  (+ A3's button)  │
+│ 3 of 3 options · 8 variants                                                  │
+│ Enter saves · Esc cancels                                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+Each row's name is a free text box (Shopify names are free, ≤ 255), for Shared options and own options alike. There is no
+"Only on Shopify" group: Shopify has no list of its own option names.
+
+**Facts (Q1 — where an own option lives, and what A1 already does):**
+- Stored on the Shopify parent listing: `ChannelListing.variationMapping = { axes: [{ axisKey: 'own:shared:<attribute>',
+  target: '<name>', order }] }` (`packages/shared/variation-mapping.ts:118-139` key format; written by
+  `family-projection.service.ts:1917`). No migration.
+- A1's SAVE already takes it on Shopify: only Amazon is refused (`family-projection.service.ts:1849`); `own:shared` must be a
+  real "Values from" attribute (`:1855-1859`); at most 3 (`:1889`, limit from `family-projection-limits.ts:109-110`); names
+  unique, case-insensitive (`:1890`); ≤ 255 (`:1891`); Shopify is free-form, so no name list (`:1892`).
+  `own:channel:*` is refused on Shopify (`:1850-1853`: no Shopify column is a variation option).
+- **But every Shopify own option is refused today** by the resolver: `ownNamesFor` answers Shopify with
+  "Axes that exist only on Shopify are not available yet." (`variation-rules.service.ts:570-575`, copy `:277`);
+  `namedOwnAxis` marks the axis unbound with it (`:615-623`); the save refuses an unbound axis
+  (`family-projection.service.ts:1809-1810`). So no Shopify own option can exist yet — checked on the private copy: 0 listings
+  on any channel hold an `own:` key.
+- Reading is generic already: the projection read, collisions and gaps read own values for every channel
+  (`family-projection.service.ts:1331-1342, 1524`; `variation-own-axes.ts:61-73` `storedOwnAxisKeys` reads `variationMapping`
+  off eBay), and so does the sheet cell's value summary (`studio-sheet.service.ts:1705-1714`).
+
+**Q2 — every place that must learn the own option, or it is lost:**
+| Place | Today | Change |
+|---|---|---|
+| `variation-rules.service.ts:570-575` `ownNamesFor` | Shopify: not allowed | allowed, `maxLength` 255 (the Shopify limit already there) |
+| `shopify/content-workspace.service.ts:102-108` variant `options` | family axes only (`variationBag` + `storedVariationValues(…, family.variationAxes)`) → an own option reads EMPTY | add `ownAxisValuesFor(storedOwnAxisKeys('SHOPIFY', listing), null, p.categoryAttributes)`; this one line feeds preview (`content-sync.service.ts:41, 70`), the publish checks and the publisher |
+| `content-workspace.service.ts:29-35` `shopifyAxisOrder` | drops every non-family key | keep own keys in stored order (it only seeds a never-saved document at `:77`; `:90` `applyShopifyVariationProjection` then sets `axes`/`optionNames` from the resolver, which already carries own axes) |
+| `packages/shared/shopify-content.ts:133` | "`<sku>`: missing `<axis>`." — prints the raw key `own:shared:fit` | print the option name (`optionNames[axis] ?? axis`) — **Lane B owns `packages/shared/shopify-*` (§6): ask first** |
+| `shopify/content-publisher.ts:213-221, 252-258, 337` (options, `optionValues`, read-back) | generic over `content.axes` + `optionNames` + `v.options[axis]` | **no change expected** — proven by the parity test below |
+| `pim/theme-change.service.ts:563-567` `shopifyPlan` | values from `sharedAxisValues[axisKey]` → an own option shows "would arrive with no values" | read `projectedAxisValues ?? sharedAxisValues` (as `:338` already does) |
+| web `_studio/images/shopify/ShopifyContentWorkspace.tsx:176` | "Any `{axis}`" prints the raw key | use the option name — **not a Lane A file (images / Shopify content): ask first** |
+| web DS `grid/editors/channelAxes.ts` `usesChannelAxesLayout` (`:81`; A3 is moving these web lines — find by name) | eBay and Etsy only | add Shopify |
+| web DS `AxesPanelEditor.tsx` `channelRow` (`:689`) | a name Listbox for eBay aspects, else a static name | a free `Input` (≤ 255) when `candidates.kind === 'free'`, for Shared AND own rows (the old layout's control, `:824-832`) |
+| `shopify/content-import.service.ts:12-16` | reads `selectedOptions` only for limits | no change (checked: it does not write axes) |
+
+**Q3 — limits, where each is really enforced:**
+- 3 options: save (`family-projection.service.ts:1889`) and the content schema (`packages/shared/shopify-content.ts:12`, `axes … max(3)`).
+- Names ≤ 255: save (`:1891`), schema (`shopify-content.ts:12-13`); unique: save (`:1890`) and duplicate axes (`shopify-content.ts:121`).
+- Variants: **100** is display only (`family-projection-limits.ts:110`, "spec §4.5 — no enforcing constant", `:75`; read by the
+  Variants page); **250** is enforced at publish (`shopify-content.ts:126`, `content-publisher.ts:38-45`); Shopify's own 2048 is
+  enforced nowhere. Not changed by A4.
+- Option VALUE length (Shopify: ≤ 255 per value — not checked against Shopify's docs) is enforced nowhere in the repo: a longer
+  Shared value would fail only at Shopify. A4 adds a publish check with one sentence.
+- Duplicate combinations are refused at save (collisions) and at publish (`shopify-content.ts:129`).
+
+**Q4 — a product already on Shopify (A-S4):**
+- Today a live Shopify listing locks a SET change with "Live on Shopify `<market>` (`<id>`) — changing the set is an operation.
+  Commit opens the plan." and allows reorder (`variation-rules.service.ts:433-434`, copy `:252-253`). The plan is a dry run
+  only; `productOptionsCreate/Update/Delete` exist nowhere (`content-publisher.ts:196-207`, warning in
+  `theme-change.service.ts:615-617`).
+- AND every change-only publish to an existing Shopify product is refused: "Change-only publishing for existing Shopify products
+  is not available yet. Shopify remains gated while its linked products are prepared." (`studio-publication.service.ts:133-134`).
+  So a reorder saved today on a live Shopify product can never reach it. → decision D1.
+
+**Server design:** `ownNamesFor` allows Shopify (one line); the variant `options` line; `shopifyAxisOrder` keeps own keys;
+the value-length check at publish; `shopifyPlan` reads projected values; Shopify's own lock sentence (D1). No route, no
+migration, no publisher rewrite.
+
+**Pop-up design:** the A2 channel layout on Shopify (above); "+ Add" has two groups ("From Shared", "Your own name" with
+"Values from" and A3's "New attribute"); the limit line "N of 3 options · M variants"; on a live product the lock sentence (D1).
+
+**Refusals (exact sentences):**
+- 4th option: "Shopify takes at most 3 options." (the pop-up's existing at-limit copy, before the save; the save's
+  "This channel takes at most 3 variation axes." stays behind it)
+- name empty / > 255 / used twice: A2's own-name sentences (`channelAxes.ts` `ownNameRefusal`) and the save's (`:1890-1891`)
+- value too long (publish): "`<sku>`: the `<option>` value is longer than Shopify's 255 characters. Shorten it on the Shared product."
+- live product (D1 a): "Live on Shopify `<market>` (`<id>`). Nexus cannot change the options of a product already on Shopify yet,
+  so its options and their order are locked here."
+
+**Scenarios:** A-S1 own option with a free name + "Values from", saved; its values show as chips; empty variants named ·
+A-S2 a 4th option refused before the save · A-S3 preview and publish send the option with the Shared attribute's values
+(parity test) · A-S4 a live product: locked with the sentence (D1) · rename a Shared option on Shopify still works · Reset
+to Shared · Esc / open+close write nothing · A-X1…A-X5.
+
+**Tests:** api — `variation-rules` (Shopify own option bound, 255 limit, a live listing's lock), `content-axis-order` (own key
+kept, in order), a DB test through `writeProjectionMapping` on a Shopify fixture (saved; 4th refused; unknown source refused),
+**parity** in `shopify/content.vitest.test.ts` with its stand-in `gql` (`:97`, `:173-175`): a draft with an own option →
+`publishContent` → the captured `productSet` `productOptions` and each variant's `optionValues` equal the sheet cell's
+`valueSummary` for that option, and the read-back (`content-publisher.ts:337`) passes; the value-length refusal. web —
+the Shopify channel layout, the free name Input, labels.
+
+**What can be tested where:** locally — every test above (stand-in `gql`, no Shopify keys), and the pop-up on a made-up
+Shopify cell in a design-system catalog example (the Shopify scope of the sheet on the private copy: 1 Shopify connection,
+2 Shopify listings, none published; the earlier session found the Shopify scope fails locally on "NEXUS_CREDENTIAL_ENC_KEY is
+missing" — whether the Variation theme cell still opens there is not checked). **Needs the Owner:** one real publish of a
+NEW product with an own option to a Shopify development store (Q-D4 a, already chosen; the store is an account step only the
+Owner can do), then a read-back of its options.
+
+**Files to claim:** api `services/pim/variation-rules.service.ts` (`ownNamesFor`, Shopify lock copy), `services/shopify/
+content-workspace.service.ts` (`shopifyAxisOrder`, variant options), `services/pim/theme-change.service.ts` (`shopifyPlan`
+values), `services/shopify/content-publisher.ts` (only if the value-length check lives there) + tests
+(`variation-rules`, `content-axis-order`, `content`, a DB test); web + factory `grid/editors/{channelAxes.ts,AxesPanelEditor.tsx}`
++ web tests, a catalog example. **Ask first:** `packages/shared/shopify-content.ts:133` (Lane B), `_studio/images/shopify/
+ShopifyContentWorkspace.tsx:176` (not Lane A).
+
+**Risks:** (1) values come raw from `Product.categoryAttributes` — no value map, no translation, one language for every Shopify
+market (research risk 3; not checked how a multi-language store shows them); (2) a select-type Shared attribute may store an
+option code, not its label — not checked (the private copy has only text per-variant attributes); (3) the Shopify scope may not
+open locally, so the browser proof of the pop-up may need the catalog example; (4) nothing is proven against a real Shopify
+store until the Owner's dev store exists.
+
+**Size:** about 1 day (server half a day with the parity test; pop-up + catalog example + browser + docs half a day).
+
+**Decisions for the Owner:**
+- **D1 — a product that is already on Shopify.** Nexus cannot change its options yet, and cannot publish any change to it.
+  (a) Lock its options AND their order in the pop-up, with one sentence — nothing is saved that cannot be sent. **Recommended.**
+  (b) Keep today's rule: the set is locked, but a reorder still saves (in Nexus only; it never reaches Shopify until change-only
+  publishing exists).
+- **D2 — the real-store proof.** (a) Wait for the Owner's development store (Q-D4 a) and prove one new-product publish there
+  before the PR is merged. **Recommended.** (b) Merge on the stand-in parity test, and prove on the first real new product.
+
+**Summary (5 lines):**
+1. A1 already saves a Shopify own option (`own:shared:<attribute>` in `variationMapping`), but the resolver refuses it with "not available yet" — A4 flips that one rule.
+2. The one real data gap: Shopify variant `options` read family axes only (`content-workspace.service.ts:108`), so an own option would publish EMPTY; one line fixes preview, checks and publish together.
+3. The publisher itself is generic (axes + optionNames) — a parity test with the existing stand-in `gql` proves options sent = sheet.
+4. A live Shopify product can get no option change and no change-only publish today → D1: lock options and order (recommended).
+5. About 1 day; two small display fixes sit in other lanes' files (ask first); the real proof needs the Owner's Shopify dev store.
 
 ## 5. Workstream B — Shopify metafields, every type (AAA)
 

@@ -202,7 +202,11 @@ describe('GET /products/:id/studio/own-axis-sources — the pop-up\'s "Values fr
     try {
       const ok = await app.inject({ method: 'GET', url: '/api/products/own-a/studio/own-axis-sources?market=it' })
       expect(ok.statusCode, ok.body).toBe(200)
-      expect(ok.json()).toEqual({ sources: [{ field: 'fit', label: 'fit', filled: 3, of: 3, values: ['Slim', 'Regular'] }] })
+      // A3 — beside the sources, the "New attribute" button's state: no signed-in user here, so it is held with its reason.
+      expect(ok.json()).toEqual({
+        sources: [{ field: 'fit', label: 'fit', filled: 3, of: 3, values: ['Slim', 'Regular'] }],
+        newAttribute: { allowed: false, reason: 'Only a user who may manage attributes can create one. Ask the business owner.', familyLabel: 'Jackets', familyProducts: 1 },
+      })
       const missing = await app.inject({ method: 'GET', url: '/api/products/own-demo/studio/own-axis-sources' })
       expect(missing.statusCode).toBe(400)
     } finally { await app.close() }

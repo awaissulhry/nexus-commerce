@@ -20,13 +20,43 @@ export interface OwnAxisSourceOption {
   values: string[]
 }
 
+/**
+ * P3 A3 — may this cell make a NEW per-variant attribute from the pop-up? The server answers it with the sources: the
+ * attribute goes into the product's family (shared by `familyProducts` products), and only a user who may manage attributes
+ * can make one. `reason` is the server's sentence when it may not.
+ */
+export interface NewAttributeState {
+  allowed: boolean
+  reason: string | null
+  familyLabel: string | null
+  familyProducts: number | null
+}
+
+export interface OwnAxisSourcesRead {
+  sources: OwnAxisSourceOption[]
+  /** null = a server that does not offer it; the pop-up then shows nothing (never a dead control). */
+  newAttribute: NewAttributeState | null
+}
+
 /** The host reads the sources; the design system never fetches. */
-export type OwnAxisSourcesLoader = (productId: string, market: string) => Promise<OwnAxisSourceOption[]>
+export type OwnAxisSourcesLoader = (productId: string, market: string) => Promise<OwnAxisSourcesRead>
+
+/**
+ * P3 A3 — what "Create" answered. `created` / `placed` (an existing attribute put into this family) / `present` (already
+ * in it) carry the new "Values from" entry; `offer` = an attribute of that name exists and may be used here; `refused` = the
+ * server's sentence. It WRITES at once (the attribute is not part of the pop-up's draft), which the pop-up says before.
+ */
+export type OwnAxisAttributeResult =
+  | { outcome: 'created' | 'placed' | 'present'; source: OwnAxisSourceOption }
+  | { outcome: 'offer'; message: string; label: string }
+  | { outcome: 'refused'; message: string }
+
+export type OwnAxisAttributeCreator = (productId: string, market: string, name: string, useExisting: boolean) => Promise<OwnAxisAttributeResult>
 
 export type OwnAxisSourcesState =
   | { state: 'idle' }
   | { state: 'loading' }
-  | { state: 'ready'; sources: OwnAxisSourceOption[] }
+  | { state: 'ready'; sources: OwnAxisSourceOption[]; newAttribute: NewAttributeState | null }
   | { state: 'error'; message: string }
 
 export const CHANNEL_AXES_COPY = {
@@ -64,6 +94,23 @@ export const CHANNEL_AXES_COPY = {
   resetPending: 'Press ⏎ to follow Shared again. This channel’s own axes and names are removed.',
   remove: (name: string) => `Remove ${name}`,
   nothingToAdd: (noun: string) => `Nothing left to add as a ${noun}.`,
+  /* P3 A3 — "New attribute" (QUALITY-PLAN §4.10). */
+  noFit: 'No attribute fits?',
+  noSourcesYet: 'This family has no per-variant attribute yet. Type a name and make one below.',
+  newAttribute: (name: string) => `New attribute “${name}”`,
+  newAttributeUnnamed: 'New attribute',
+  /** Said BEFORE the write: where it goes, who else gets the column, and that Esc does not take it back. */
+  createLine: (name: string, family: string, products: number) =>
+    `Creates “${name}” (per variant, text) in the family “${family}” — ${products} ${products === 1 ? 'product gets' : 'products get'} this empty column. It is created now: Esc does not remove it.`,
+  create: 'Create',
+  creating: 'Creating…',
+  created: 'Created. It is chosen in “Values from”; press Add, then ⏎ saves.',
+  placed: 'Added to this family. It is chosen in “Values from”; press Add, then ⏎ saves.',
+  present: 'It is already in “Values from” and is chosen there.',
+  useExisting: 'Use it',
+  /** The server's own sentence for a user without the permission (also what a 403 maps to). */
+  noPermission: 'Only a user who may manage attributes can create one. Ask the business owner.',
+  createFailed: (message: string) => `The attribute could not be created (${message}).`,
 } as const
 
 /**
@@ -188,6 +235,25 @@ export function withoutAxis(cell: VariationThemeCell, axisKey: string): Variatio
   if (!axis) return cell
   if (axis.own) return { ...cell, axes: cell.axes.filter((a) => a.axisKey !== axisKey) }
   return { ...cell, axes: cell.axes.map((a) => (a.axisKey === axisKey ? { ...a, included: false } : a)) }
+}
+
+/**
+ * P3 A3 — why "New attribute" may not run for this typed name, or null. The server's reason first (no family, no
+ * permission), then the checks every typed name meets (A2), with a source counted as present: the attribute IS the source.
+ */
+export function newAttributeHeld(cell: VariationThemeCell, state: NewAttributeState, name: string, channelWord: string): string | null {
+  if (!state.allowed) return state.reason ?? CHANNEL_AXES_COPY.noPermission
+  return ownNameRefusal(cell, name, true, channelWord)
+}
+
+/** The "Values from" list with a created or placed attribute in it, once. */
+export function withOwnAxisSource(sources: readonly OwnAxisSourceOption[], source: OwnAxisSourceOption): OwnAxisSourceOption[] {
+  return [...sources.filter((s) => s.field !== source.field), source]
+}
+
+/** What the pop-up says after "Create" answered with a source. */
+export function newAttributeDoneLine(outcome: 'created' | 'placed' | 'present'): string {
+  return outcome === 'created' ? CHANNEL_AXES_COPY.created : outcome === 'placed' ? CHANNEL_AXES_COPY.placed : CHANNEL_AXES_COPY.present
 }
 
 /**

@@ -17,11 +17,12 @@ import { productMediaColumn, PRODUCT_MEDIA_COLUMN, type useProductMediaEditor } 
 import { shopifyDraftColumn, type useShopifyDraftCell } from '../../shopify/ShopifyDraftCell'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelSheetRow, SheetColumn, ChannelScopePage } from '../channel/types'
-import { loadOwnAxisSources } from './ownAxisSourcesLoader'
+import { createOwnAxisAttribute, loadOwnAxisSources } from './ownAxisSourcesLoader'
 
 /* Sheet pop-up P3 A2 — the channel variation pop-up reads "Values from" through this host loader (a STABLE object: AG re-runs
-   its column model on a new params object, reference_ag_react_inline_options_rerun_column_model). */
-const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({ loadOwnAxisSources })
+   its column model on a new params object, reference_ag_react_inline_options_rerun_column_model). A3 — and makes a new
+   per-variant attribute through the same host. */
+const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({ loadOwnAxisSources, createOwnAxisAttribute })
 import {
   classifyProvenance, provenanceClassRules, roundTripClassRules, type CellSaveTracker,
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
