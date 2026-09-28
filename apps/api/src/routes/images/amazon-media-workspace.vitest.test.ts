@@ -106,6 +106,7 @@ import { rbacHook } from '../../lib/auth/rbac-hook.js'
 import { amazonMediaWorkspaceRoutes } from './amazon-media-workspace.routes'
 import { amazonMediaDestination, readAmazonMedia, saveAmazonMedia, refreshAmazonMedia, copyAmazonMarketGallery } from '../../services/images/amazon-media-workspace.service'
 import { approveAmazonMediaRun, createAmazonMediaReview, processAmazonMediaRun, readAmazonMediaRun, processPendingAmazonMediaRuns } from '../../services/images/amazon-media-publish.service'
+import { exportAmazonSafetyImages } from '../../services/images/amazon-media-safety-export.service'
 
 const headers = { authorization: 'editor' }
 const base = '/api/products/p/images-workspace/amazon'
@@ -454,6 +455,11 @@ describe('a family on the media plan (images rebuild P2e)', () => {
     const d = await destination(); const w = await readAmazonMedia(d)
     await expect(createAmazonMediaReview(d, w.revision, ['it-blue'], 'editor')).rejects.toMatchObject({ statusCode: 422, message: 'BOTTLE-RED has no MAIN photo.' })
     expect(fixture.client).not.toHaveBeenCalled()
+  })
+  it('the older "Export PS images" refuses it and names the Media page\'s ZIP (P4d): that store is not its photos', async () => {
+    const d = await destination(); const w = await readAmazonMedia(d)
+    await expect(exportAmazonSafetyImages(d, w.revision, ['it-blue'])).rejects.toMatchObject({ statusCode: 409, message: expect.stringMatching(/Export ZIP for Seller Central/) })
+    expect(fixture.download).not.toHaveBeenCalled()
   })
   it('a plan edit after the review invalidates it: approval is refused', async () => {
     const d = await destination(); const w = await readAmazonMedia(d)
