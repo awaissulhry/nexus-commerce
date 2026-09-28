@@ -190,9 +190,15 @@ function cachedTaxonomy<T>(key: string, read: () => Promise<T>): Promise<T> {
   return value
 }
 export function invalidateTaxonomyCache() { taxonomyCache.clear() }
+/** A category as Shopify's node id. A definition's category constraint holds the bare code (`aa-1-13`, measured on a live
+ *  store 2026-09-28); a product's category holds the full id. Anything else is not a category: null, never guessed. */
+export function taxonomyCategoryId(category: string): string | null {
+  if (/^gid:\/\/shopify\/TaxonomyCategory\/[a-z]{2}(-\d+)*$/.test(category)) return category
+  return /^[a-z]{2}(-\d+)*$/.test(category) ? `gid://shopify/TaxonomyCategory/${category}` : null
+}
 export async function readTaxonomyAttributeValues(gql: ShopifyGraphql, handle: string, categoryIds: string[]): Promise<{ attribute: { id: string; name: string } | null; values: ShopifyReference[] }> {
   let attribute: { id: string; name: string } | null = null
-  for (const category of categoryIds.filter(id => /^gid:\/\/shopify\/TaxonomyCategory\/[\w-]+$/.test(id)).slice(0, 5)) {
+  for (const category of [...new Set(categoryIds.map(taxonomyCategoryId).filter((id): id is string => !!id))].slice(0, 5)) {
     const attributes = await cachedTaxonomy(`category|${category}`, async () => {
       const data = await gql(`query NexusTaxonomyCategoryAttributes($id:ID!) { node(id:$id) { ... on TaxonomyCategory { attributes(first:250) { nodes { __typename ... on TaxonomyChoiceListAttribute { id name } } } } } }`, { id: category })
       return ((data?.node?.attributes?.nodes ?? []) as any[]).filter(n => n?.id && n?.name).map(n => ({ id: String(n.id), name: String(n.name) }))

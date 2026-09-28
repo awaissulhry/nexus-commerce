@@ -25,7 +25,9 @@ describe('B1 · the editor each store type opens', () => {
     const kinds = Object.fromEntries(SHOPIFY_TYPE_CATALOG.map(({ name }) => [name, linkedEditorKind(labTypeField(name), labGoodValue(name), LAB_SCHEMA)]))
     expect(kinds).toMatchObject({
       temperature: 'compound', 'list.temperature': 'list', multi_line_text_field: 'multi-line', json: 'box', jurisdiction: 'box',
-      rich_text_field: 'rich-text', date: 'date', date_time: 'line', mixed_reference: 'older-picker', product_taxonomy_value_reference: 'entries',
+      rich_text_field: 'rich-text', date: 'date', date_time: 'line', mixed_reference: 'older-picker',
+      /* No category on this made-up field, so Shopify cannot list its values: the older picker keeps it settable (B2 review). */
+      product_taxonomy_value_reference: 'older-picker',
       'list.variant_reference': 'resources', metaobject_reference: 'entries', rating: 'rating', money: 'compound', link: 'compound',
     })
     for (const { name } of SHOPIFY_TYPE_CATALOG) expect(() => render(labTypeField(name), labGoodValue(name)), name).not.toThrow()

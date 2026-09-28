@@ -28,6 +28,16 @@ describe('which pop-up a reference field gets', () => {
     expect(referenceUiFor({ type: 'mixed_reference', validations: [] }, schema)).toBe('legacy')
     expect(referenceUiFor({ type: 'product_taxonomy_value_reference', validations: [] }, schema)).toBe('legacy')
   })
+  it('gives a taxonomy value field Shopify’s list only when a category tells which list; else the older picker (B2 review)', () => {
+    const colourKind = { id: 'gid://shopify/MetaobjectDefinition/1', type: 'shopify--color-pattern' }
+    const baseColour = { type: 'list.product_taxonomy_value_reference', validations: [{ name: 'product_taxonomy_attribute_handle', value: 'color' }], ownerType: 'METAOBJECT', namespace: colourKind.type, constraints: null }
+    const productField = (constraints: { key: string; values: string[] } | null) => ({ ...colour, ownerType: 'PRODUCT', namespace: 'shopify', constraints })
+    const withProducts = (constraints: { key: string; values: string[] } | null) => ({ ...schema, definitions: [productField(constraints)] }) as unknown as ShopifyStoreSchema
+    expect(referenceUiFor(baseColour, withProducts({ key: 'category', values: ['zz-1'] }))).toBe('entries')
+    expect(referenceUiFor(baseColour, withProducts(null))).toBe('legacy')
+    expect(referenceUiFor({ ...baseColour, ownerType: 'PRODUCT', namespace: 'lab', constraints: { key: 'category', values: ['zz-1'] } }, withProducts(null))).toBe('entries')
+    expect(referenceUiFor({ ...baseColour, ownerType: 'PRODUCT', namespace: 'lab' }, withProducts(null))).toBe('legacy')
+  })
   it('names the thing being picked', () => {
     expect(baseReferenceType('list.variant_reference')).toBe('variant_reference')
     expect(referenceNoun('list.product_reference')).toEqual({ one: 'product', other: 'products' })

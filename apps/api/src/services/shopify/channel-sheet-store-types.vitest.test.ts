@@ -45,7 +45,7 @@ beforeEach(() => {
   s.workspace = { productId: 'family', familyId: 'family', revision: '1', destination: { accountId: 'store-a', listingId: 'listing-a', market: 'GLOBAL' }, suggestedProductIds: [product], operation: null,
     draft: { ...emptyShopifyLinkedDraft(), informationOnly: true, members: [{ id: product, title: 'Listed title', handle: 'listed', image: null }] } }
   s.snapshot = { currency: 'EUR', timezone: 'Europe/Rome', rows: [
-    { id: product, productId: product, kind: 'PRODUCT', title: 'Listed title', handle: 'listed', image: null, media: [], fields: [], values: { title: 'Listed title', category: 'gid://shopify/TaxonomyCategory/lab-1' } },
+    { id: product, productId: product, kind: 'PRODUCT', title: 'Listed title', handle: 'listed', image: null, media: [], fields: [], values: { title: 'Listed title', category: `gid://shopify/TaxonomyCategory/${LAB_CATEGORIES[0]}` } },
     { id: variant, productId: product, kind: 'PRODUCTVARIANT', title: 'Small', handle: 'listed', image: null, media: [], fields: [], values: { sku: 'S', category: null } },
   ] }
 })

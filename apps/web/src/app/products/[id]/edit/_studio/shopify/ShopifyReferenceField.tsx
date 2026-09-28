@@ -120,7 +120,10 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
     /* A pick clears the search, as Shopify's list does: the next Enter then saves instead of un-ticking the same row. */
     if (accept([...values, id], [ref]) && search.query) search.setQuery('')
   }
-  const entryActions = (choice: { value: string }, picked: boolean) => picked && (onOpenEntry || onCopyEntry) ? <>
+  /* Only a reusable entry can be opened or copied, as in the older picker. A taxonomy value shares the tick list but is
+     Shopify's own data. */
+  const isEntry = (id: string) => id.includes('/Metaobject/')
+  const entryActions = (choice: { value: string }, picked: boolean) => picked && isEntry(choice.value) && (onOpenEntry || onCopyEntry) ? <>
     {onOpenEntry && <ToolbarButton label="Edit entry" description="Changes this shared entry in Shopify, for every product that uses it." icon={<Pencil size={14} />} onClick={() => onOpenEntry(choice.value)} />}
     {onCopyEntry && !locked && <ToolbarButton label="Make a separate copy" description="A copy only this product uses." icon={<Copy size={14} />} onClick={() => onCopyEntry(choice.value)} />}
   </> : null
@@ -146,7 +149,7 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
       {current && <div className={styles.reference}>
         <MediaMark choice={current} size="card" />
         <span>{current.label}{entryName && <small>{entryName}</small>}</span>
-        {onOpenEntry && <Button size="xs" onClick={() => onOpenEntry(current.value)}>Edit entry</Button>}
+        {onOpenEntry && isEntry(current.value) && <Button size="xs" onClick={() => onOpenEntry(current.value)}>Edit entry</Button>}
         {!locked && <Button size="xs" onClick={() => setBrowsing(b => !b)} aria-expanded={browsing}>Change</Button>}
         {!locked && <Button size="xs" variant="link" onClick={() => { accept([], []); setBrowsing(true) }}>Clear</Button>}
       </div>}
