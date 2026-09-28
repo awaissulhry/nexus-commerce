@@ -32,6 +32,7 @@ import { memo } from 'react'
 import { ExpandButton, ExpandSlot, IdentityBand, ProvenanceMark, readinessMeta, useExpanded, type ICellRendererParams, type IRowNode } from '@/design-system/grid'
 import { ProductRoleChip } from '../ProductRoleChip'
 import type { MenuItemDef } from '@/design-system/components'
+import { AliasMark } from '@/design-system/primitives'
 
 /* 🔴 The pill takes the STATE, not a tone and not a percentage (#43 → #724 → #727).
  *
@@ -45,7 +46,6 @@ import type { MenuItemDef } from '@/design-system/components'
  * reads it from the state this passes. So this file no longer imports a tone function at all — one
  * table, one mapping, and neither scope can answer the colour question differently. */
 
-import { aliasMark } from './provenance'
 import type { AliasSummary } from './rows'
 import type { ChannelSheetRow, ReadinessState } from './types'
 
@@ -154,9 +154,7 @@ export const AliasBandCell = memo(function AliasBandCell(
         <>
           <ProductRoleChip product={row} />
           {multi && (
-            <span className="nds-alias-mark" aria-label={alias?.position === 0 ? 'Primary listing' : `Listing alias ${row.aliasPosition}`}>
-              {aliasMark(row.aliasPosition)}
-            </span>
+            <AliasMark position={row.aliasPosition} />
           )}
         </>
       }

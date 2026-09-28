@@ -35,7 +35,9 @@ const fieldOf = (change: StudioPublishChange) => FIELD_LABEL[change.field] ?? ch
 
 /** An eBay listing's photo rows from its change review: the gallery and the colour sets, each same / replaced / refused. */
 export function ebayCheck(review: StudioPublishReview): PhotoCheck {
-  if (!review.id) return { kind: 'blocked', reason: review.issues.find(i => i.severity === 'error')?.message ?? 'The eBay review could not be completed. Refresh it.' }
+  // Only an error that names no field blocks a photos-only send (P4c), so it is the reason to show first.
+  const errors = review.issues.filter(i => i.severity === 'error')
+  if (!review.id) return { kind: 'blocked', reason: (errors.find(i => !i.field) ?? errors[0])?.message ?? 'The eBay review could not be completed. Refresh it.' }
   const photos = (review.changes ?? []).filter(c => isPhotoChangeId(c.id))
   if (!photos.length) return { kind: 'blocked', reason: 'This eBay listing has no photos to compare. Refresh the review.' }
   const differ = photos.filter(c => c.status !== 'SAME')
@@ -84,4 +86,9 @@ export function amazonOutcome(run: AmazonRunLike): PhotoOutcome {
   }
   if (run.status === 'UNKNOWN') return { tone: 'danger', text: 'Amazon\'s answer is unknown. Check the Amazon photo page before sending again.', final: true }
   return { tone: 'info', text: `Sending to Amazon… ${count('ACCEPTED')} of ${run.receipts.length} accepted so far.`, final: false }
+}
+
+/** Which destinations the window checks: the one it was opened from (a channel view), else every destination. */
+export function destinationsToCheck<T extends { key: string }>(destinations: readonly T[], only: string | null): T[] {
+  return only ? destinations.filter(d => d.key === only) : [...destinations]
 }

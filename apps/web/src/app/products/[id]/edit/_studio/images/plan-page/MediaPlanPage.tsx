@@ -65,7 +65,8 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   // P4b — the upload dialog, with the files dropped on the page (if any).
   const [uploading, setUploading] = useState<File[] | null>(null)
   const [dropping, setDropping] = useState(false)
-  const [publishing, setPublishing] = useState(false)
+  // Review & publish: false = closed, 'all' = every destination (toolbar), else the destination key it was opened from.
+  const [publishing, setPublishing] = useState<false | 'all' | string>(false)
 
   const assets = useMemo(() => assetMap(read), [read])
   const usage = useMemo(() => libraryUsage(read), [read])
@@ -171,7 +172,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
       <ToolbarButton icon={<Undo2 size={16} />} label={plan.undoLabel ? `Undo: ${plan.undoLabel}` : 'Undo'} shortcut="⌘Z" disabled={!plan.canUndo} onClick={() => plan.undo()} />
       <ToolbarButton icon={<Redo2 size={16} />} label={plan.redoLabel ? `Redo: ${plan.redoLabel}` : 'Redo'} shortcut="⌘⇧Z" disabled={!plan.canRedo} onClick={() => plan.redo()} />
       {!wide && <Button size="sm" variant="secondary" onClick={() => setLibraryOpen(true)}>Library · {read.library.length}</Button>}
-      <Button size="sm" variant="primary" onClick={() => setPublishing(true)}><Send size={14} aria-hidden />Review &amp; publish</Button>
+      <Button size="sm" variant="primary" onClick={() => setPublishing('all')}><Send size={14} aria-hidden />Review &amp; publish</Button>
     </header>
 
     {plan.writeError && <Banner tone="danger" title="Not saved" onDismiss={plan.clearWriteError}
@@ -213,15 +214,15 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
         </section>
 
         {openDestination && <ChannelView read={read} destination={openDestination} layout={plan.layouts[openDestination.key]} assets={assets}
-          languages={languages} edit={edit} onAddRequest={requestAdd} onOpen={openAsset} onClose={() => setOpen(null)} />}
+          languages={languages} edit={edit} onAddRequest={requestAdd} onOpen={openAsset} onPublish={() => setPublishing(openDestination.key)} onClose={() => setOpen(null)} />}
       </div>
     </div>
 
     <Drawer open={!wide && libraryOpen} onClose={() => { setLibraryOpen(false); setPending(null) }} title="Photo library" width="min(520px, 100vw)">
       {library}
     </Drawer>
-    <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} onReview={() => setPublishing(true)} />
-    <PublishPhotosDialog read={read} open={publishing} onClose={() => setPublishing(false)} />
+    <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} onReview={() => setPublishing('all')} />
+    <PublishPhotosDialog read={read} open={publishing !== false} only={publishing === 'all' || publishing === false ? null : publishing} onClose={() => setPublishing(false)} />
     <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)} onOpenDestination={setOpen} />
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}

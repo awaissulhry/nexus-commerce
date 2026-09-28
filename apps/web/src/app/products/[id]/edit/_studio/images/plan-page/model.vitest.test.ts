@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
-  applyLocal, compareDestinations, computeLayouts, copyFromOps, destinationCells, filterLibrary, followAllOps, libraryUsage, setRows, showAsOptions,
+  applyLocal, compareDestinations, computeLayouts, copyFromOps, destinationCells, destinationLabel, filterLibrary, followAllOps, libraryUsage, setRows, showAsOptions,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
 
@@ -108,5 +108,20 @@ describe('Media page model', () => {
     expect(shownVersion(r, assets, 'chart-it', ['fr'])).toMatchObject({ exact: false })
     expect(shownVersion(r, assets, 'chart-it', null)).toEqual({ id: 'chart-it', exact: true, language: 'it' })
     expect(showAsOptions(r).map(o => o.label)).toEqual(['eBay IT · IT', 'Amazon (all markets) · IT'])
+  })
+
+  it('names a listing with its mark (★ ①②③) only when its account and market hold more than one listing', () => {
+    expect(destinationLabel(dest(EBAY, { listingMark: 0 }))).toBe('eBay IT · Test eBay · ★ Main listing')
+    expect(destinationLabel(dest(WINTER, { alias: { id: 'winter', label: 'Winter', position: 1 }, listingMark: 1 }))).toBe('eBay IT · Test eBay · ① Winter')
+    expect(destinationLabel(dest(EBAY, { listingMark: null }))).toBe('eBay IT · Test eBay · Main listing')
+    expect(destinationLabel(dest(AMAZON, { channel: 'AMAZON', marketplace: 'GLOBAL', accountLabel: 'Test Amazon', listingMark: null }))).toBe('Amazon · Test Amazon')
+  })
+  it('warns both eBay listings on one account and market that would show the same photos, and stops when they differ', () => {
+    const same = read([{ key: 'SHARED', plan: SHARED }])
+    const warned = (r: MediaRead) => Object.entries(computeLayouts(r)).filter(([, l]) => l.checks.some(c => c.code === 'duplicate-listing-photos')).map(([k]) => k)
+    expect(warned(same)).toEqual([EBAY, WINTER])
+    expect(computeLayouts(same)[WINTER].checks.find(c => c.code === 'duplicate-listing-photos')?.message).toMatch(/^Same photos as Main listing on this account and market/)
+    // Winter's own Nero set makes it different: no warning on either.
+    expect(warned(read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ values: { 'color:black': ids('n1') } }) }]))).toEqual([])
   })
 })

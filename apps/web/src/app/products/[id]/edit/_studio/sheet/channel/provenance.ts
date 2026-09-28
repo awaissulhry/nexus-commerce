@@ -37,6 +37,7 @@
  * variant", the opposite of what it is: a value every variant under that alias inherits.
  */
 
+import { aliasMarkGlyph } from '@/design-system/primitives'
 import type { CascadeLayer, ChannelValueSource, StudioCellValue, StudioLayer, StudioRowKind } from './types'
 
 /** Layers that mean "an alias-level ChannelListing supplied this". */
@@ -131,9 +132,7 @@ export interface CascadeMeta {
  * one more uniform group; it gets its own mark rather than a number that would read as "alias zero".
  */
 export function aliasMark(position: number): string {
-  if (position === 0) return '★'
-  const MARKS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳'
-  return position >= 1 && position <= MARKS.length ? MARKS[position - 1] : `(${position})`
+  return aliasMarkGlyph(position)
 }
 
 const META: Record<CascadeLayer, CascadeMeta> = {

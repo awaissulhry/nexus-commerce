@@ -54,7 +54,42 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 - **Library duplicates (Owner, 2026-09-28: "multiple duplicates of the same image … I do not want that to happen ever"):**
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
-- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`), live and checked in production (below).
+- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`), live and checked in production (below).
+- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases = PR #130 (below); W3 the first eBay photo send; W4 library duplicates Fix 2.
+
+## W2 — Aliases on the Media page (2026-09-28)
+The Owner: "it is very important that the image manager supports aliases, especially for eBay". Five gaps against
+PLAN §4.5 and §11, closed in one PR:
+- **A1 — one alias mark.** `AliasMark` (new DS primitive, mirrored in Factory) carries ★ (main listing) and ①②③ (aliases),
+  moved out of the Information sheet's channel band. The API read gives each destination `listingMark` — only when its
+  account and market hold more than one listing of the family. The Media page shows it in the destinations table, the
+  phone cards, the channel view title, Compare, Upload "One listing", Copy from and Review & publish.
+- **A2 — an eBay Inventory alias is refused.** Found in the code: Nexus addresses an Inventory listing by the family's
+  parent SKU (its group) and SKUs — the main listing's. On an alias, a send would write the main listing's photos. Now:
+  a blocking check `inventory-alias` (first in the list, shared projection), a refusal in
+  `prepareEbayInventoryPublication` before anything is read, and the live read returns "cannot read this alias". In
+  production today no alias is on the Inventory API (GALE-JACKET: the main listing is Inventory, its 4 aliases Trading).
+- **A3 — eBay duplicate listings.** Two eBay listings on one account and market with the same photos (gallery and value
+  sets, copies count as the same photo) each get a warning that names the other and asks to check the titles
+  (`duplicateListingChecks`, shared).
+- **A4 — revisions.** Each ready eBay line in Review & publish says "Sending is one revision of this listing. eBay allows
+  250 revisions of a listing per calendar day" (eBay Trading API ReviseItem / ReviseFixedPriceItem reference).
+- **A5 — one destination.** "Review & publish" in a channel view checks that destination only, with "Check all N
+  destinations"; the toolbar button checks all. An unsaved eBay review shows the error that names no field first (only
+  that kind blocks a photos-only send, P4c) — before this, an Inventory alias showed "Category is required".
+- **Found and fixed on the way:** a long reason in Review & publish did not wrap (it ran 591 px past the window).
+- **Checked on the local stack** (TEST-JACKET: ★ Main listing, ① Winter, ② Outlet (Inventory), ③ Outlet 2 — the last two
+  made through the app's own alias route): the marks in the table, cards and titles; the Inventory alias's reason first
+  in its checks and in Review & publish; the duplicate warning on ★, ② and ③ (same photos), not on ① (own photos);
+  one line from a channel view, five after "Check all"; Enter opens and Escape returns the focus to the button that
+  opened it; light and dark; 390 px (no sideways scroll, the header buttons wrap).
+- **Tests:** shared 22 (the Inventory-alias check and its order; duplicate listings by account, market and copies);
+  API media-plan (listingMark ★ ①, the alias check), live read 7, the publisher refusal 1; page model and publish model
+  25. Eight deliberate breaks, each caught. Profiles ON: the only failing file is the known
+  `studio-publication-database` (in `profiles-on-baseline.ci.json`). Typecheck shared, api, web clean; Factory's 338
+  old errors, none in the DS; static gates 59/59.
+- **Seen, not changed (outside this task):** the app's left navigation is taller than the window, so the whole frame can
+  slide up when a script scrolls an element into view (normal wheel and Tab do not move it).
 
 ## P4d — Export ZIP for Seller Central (Amazon)
 - **LIVE 2026-09-28** (#129, squash `c8fd585b5`, merged 00:46 UTC on the Owner's word; API, worker and scheduler
