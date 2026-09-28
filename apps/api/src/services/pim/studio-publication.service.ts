@@ -18,6 +18,7 @@ import { ebayInventoryReads, sendEbayInventoryGroup } from './studio-publication
 import { readPublicationOverwrite } from './studio-publication-overwrite.js'
 import { recordPublicationRequests, settlePublicationRecords, type PublicationRecordContext } from './studio-publication-records.js'
 import { readPublicationBaseline } from './studio-publication-baseline.js'
+import { sharedListingWarnings } from '../assortment/shared-listing-warning.js'
 import { prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
 import { compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
@@ -119,6 +120,8 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
   const facts = await readPublicationFacts(productId, scope)
   const mode = publishMode(scope.channel)
   const issues = [...facts.issues]
+  // Sharing studio step 5 — the same shared product already live on this channel in the other business (a warning).
+  issues.push(...await sharedListingWarnings(facts.parent.id, scope.channel, scope.marketplace))
   const existingProducts = new Set(facts.listings.filter(listing => listing.externalListingId).map(listing => listing.productId))
   let prepared: Prepared | null = null
   let changePlan: PublicationChangePlan | null = null

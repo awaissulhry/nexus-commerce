@@ -1,8 +1,8 @@
 # Sharing between businesses — review and plan
 
 Date: 2026-09-28
-Status: **APPROVED 2026-09-28** (D-1 A, D-2 A, reading confirmed, "yes, start"). **Steps 1, 2 and 3 BUILT and tested
-locally (§9–§11).** Nothing pushed. Branch `feat/sharing-studio`, worktree `/private/tmp/nexus-sharing-studio`.
+Status: **APPROVED 2026-09-28** (D-1 A, D-2 A, reading confirmed, "yes, start"). **Steps 1, 2, 3 and 5 BUILT and tested
+locally (§9–§12). Step 4 is next, as its own change (§12).** Nothing pushed. Branch `feat/sharing-studio`, worktree `/private/tmp/nexus-sharing-studio`.
 Builds on: `docs/2026-09-16-assortment-engine-plan.md` (AE), `docs/2026-09-19-shared-stock-plan.md`.
 The review facts were read from `origin/main` (c520befc5).
 
@@ -10,6 +10,7 @@ The review facts were read from `origin/main` (c520befc5).
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-28 | R-SH-4 | "Keep it all running, and when everything's done, push it to production … AAA … if there is anything next in the plan, go ahead." |
 | 2026-09-28 | R-SH-3 | Step 3: "Go ahead." |
 | 2026-09-28 | R-SH-2 | Step 2: "Go ahead." |
 | 2026-09-28 | R-SH-1 | D-1 **A** (Settings keeps the deal; a studio page per product), D-2 **A** (copy the layout once as drafts), the reading of "no multiple aliases" is right, and "yes, start". |
@@ -305,4 +306,31 @@ was then skipped until the next poll (2–60 s in production: a small delay, nev
 `CURRENT_TIMESTAMP(3)`, rounded the same way (rounding keeps order), in the worker's claim (`sync-worker.ts`) and in
 `nexus_assortment_pending_workspaces()` (`assortment-sync.sql`, migration `20260928n_assortment_due_rounding`,
 function body only). Proof: the combination that failed ran repeatedly after the fix (result in the PR).
+
+## 12. Step 5 — build record, and step 4's status (2026-09-28)
+
+**Step 5 — the duplicate-listing warning.** The publish review (`studio-publication.service.ts`, one line) adds a
+**warning** when the same shared product is already live on eBay, on the same market, in the other business — in
+either direction (this business follows it, or another business follows this one). It names the business and how
+many listings are live; it never blocks and shows no item id or account. The database answers through
+`nexus_shared_product_live_listings(product, channel)` (in `assortment-sync.sql`, carried by migration `20260928n`):
+only for a product of the business asking, only through an active link, only a name, a market and a count. A listing
+on the SAME account was already refused by the listing claim. Service: `shared-listing-warning.ts`.
+
+Proof: `shared-listing-warning.vitest.test.ts` (2) and `sync.vitest.test.ts` 4c (real PostgreSQL: no warning while A's
+listing is not on eBay; a warning naming Business A once it is; none for another market or channel; none for a
+product of another business; the other direction for Business B's live copy; no item id in the answer). On the local
+copy the real `…/studio-publication/preview` returned the warning. **Not seen on screen:** the local test accounts are
+not really connected, so the publish dialog lists no destination; the dialog already shows a review's warnings in its
+list (the same path as the variation-theme warning).
+
+**Step 4 — listing content per alias: NOT built in this change, on purpose.** Measured while starting it: a
+listing's own content is spread over the listing row (title, description and bullet overrides, the follow-master
+flags, item specifics in `platformAttributes`), per-language `ChannelListingTranslation` rows, legacy
+`ChannelListingImage` rows and the media plan's listing layers, and it can only be written through the catalog
+transfer engine's listing rows and each channel's field contract (a cached category schema per channel and market).
+Copying it across businesses needs the field group (a CHECK-constraint migration), a coordinate map from the
+sharing business's rank/alias to this business's account/alias, and a check on real listing content. Rushing that
+into this production push would put untested writes on live listing data. It is the next change: its own branch and
+PR, with the same local proof on a copy of real listing content first.
 

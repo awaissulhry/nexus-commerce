@@ -332,6 +332,35 @@ $$;
 REVOKE ALL ON FUNCTION nexus_assortment_pending_workspaces() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nexus_assortment_pending_workspaces() TO nexus_workspace_runtime;
 
+-- ── Sharing studio step 5: the same product, live on the same channel in another business ──────
+-- For the publish review's warning. Answers only for a product of the business in context, only through an active
+-- link in either direction (this business follows it, or another business follows this one), and only the other
+-- business's name, the market and how many listings are live there — no ids, no accounts, no values.
+CREATE OR REPLACE FUNCTION nexus_shared_product_live_listings(product_id text, channel_name text)
+RETURNS TABLE (business_name text, marketplace text, listings integer) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH me AS (
+    SELECT p.id AS product, p."workspaceId" AS business
+    FROM "Product" p
+    WHERE p.id = product_id AND p."workspaceId" = NULLIF(current_setting('nexus.workspace_id', true), '')
+  ), counterparts AS (
+    SELECT l."sourceWorkspaceId" AS business, l."sourceProductId" AS product
+    FROM "CatalogLink" l JOIN me ON l."targetWorkspaceId" = me.business AND l."targetProductId" = me.product
+    WHERE l.status = 'active'
+    UNION
+    SELECT l."targetWorkspaceId", l."targetProductId"
+    FROM "CatalogLink" l JOIN me ON l."sourceWorkspaceId" = me.business AND l."sourceProductId" = me.product
+    WHERE l.status = 'active'
+  )
+  SELECT w.name, cl.marketplace, count(*)::integer
+  FROM counterparts c
+  JOIN "Workspace" w ON w.id = c.business
+  JOIN "ChannelListing" cl ON cl."workspaceId" = c.business AND cl."productId" = c.product
+  WHERE cl.channel = channel_name AND cl."listingStatus" = 'ACTIVE' AND cl."isPublished" AND cl."externalListingId" IS NOT NULL
+  GROUP BY w.name, cl.marketplace
+$$;
+REVOKE ALL ON FUNCTION nexus_shared_product_live_listings(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION nexus_shared_product_live_listings(text, text) TO nexus_workspace_runtime;
+
 -- ── The repair job asks which of its links are behind ───────────────────────────────────────
 -- Active links of the business in context, of active shares, whose source was saved after the last
 -- sync (the product, a translation or an image), that never synced, or whose rename is held.

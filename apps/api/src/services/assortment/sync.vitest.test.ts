@@ -393,6 +393,26 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     ])
     expect(await as(B, user.ownerB, () => layout.applyShareLayout(shareId, { choices: [{ key: 'EBAY|1', accountId: b1 }] })))
       .toEqual({ products: 1, listings: 0, aliases: 0, refused: [] })
+
+    // Step 5 — the publish warning: the same product live on eBay in the other business, in either direction.
+    const warning = await import('./shared-listing-warning.js')
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'EBAY', 'IT'))).toEqual([]) // A's rows have no eBay item yet
+    await sql(`UPDATE "ChannelListing" SET "externalListingId" = 'A-ITEM-1' WHERE "workspaceId" = $1 AND "productId" = $2 AND marketplace = 'IT' AND "aliasKey" = ''`, [A, product.parent])
+    const fromB = await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'EBAY', 'IT'))
+    expect(fromB).toHaveLength(1)
+    expect(fromB[0].message).toContain('already live on eBay IT in Business A (1 listing)')
+    expect(JSON.stringify(fromB)).not.toContain('A-ITEM-1')
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'EBAY', 'DE'))).toEqual([])
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'AMAZON', 'IT'))).toEqual([])
+    // A product of another business answers nothing, whoever asks.
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product.parent, 'EBAY', 'IT'))).toEqual([])
+    // The other direction: B's copy goes live; A is warned when it publishes.
+    const bLive = randomUUID()
+    await sql(`INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "aliasKey", "listingStatus", "isPublished", "externalListingId", "updatedAt")
+      VALUES ($1,$2,$3,'EBAY','FR','FR','EBAY_FR',$4,'','ACTIVE',true,'B-ITEM-1',CURRENT_TIMESTAMP)`, [bLive, B, product['b:JKT'], b1])
+    expect((await as(A, user.ownerA, () => warning.sharedListingWarnings(product.parent, 'EBAY', 'FR')))[0]?.message).toContain('already live on eBay FR in Business B (1 listing)')
+    await sql(`DELETE FROM "ChannelListing" WHERE id = $1`, [bLive])
+    await sql(`UPDATE "ChannelListing" SET "externalListingId" = NULL WHERE "externalListingId" = 'A-ITEM-1'`)
   }, 60_000)
 
   it('5. images: a new source image is copied, a new alt text reaches the copy, a removed image removes the copy; B\'s own image change makes media an override', async () => {
