@@ -1,5 +1,5 @@
 'use client'
-import { shopifyMeasurementUnits, shopifyJson, type ShopifyFieldDefinition } from '@nexus/shared/shopify-linked-products'
+import { shopifyMeasurementUnits, shopifyJson, shopifyUnitName, type ShopifyFieldDefinition } from '@nexus/shared/shopify-linked-products'
 import { Field } from '@/design-system/components'
 import { Input, Select, Textarea } from '@/design-system/primitives'
 import styles from './linked.module.css'
@@ -20,6 +20,8 @@ export function ShopifyCompoundEditor({ definition, value, disabled, currency, o
   const initial = units ? { value: '', unit: units[0] } : type === 'money' ? { amount: '', currency_code: currency ?? '' }
     : type === 'rating' ? { value: '', scale_min: rules.scale_min ?? '', scale_max: rules.scale_max ?? '' } : { text: '', url: '' }
   const current: Record<string, unknown> = { ...initial, ...object }
+  /* Shopify returns the unit in capitals (`KILOGRAMS`): it is the listed unit, and is written back by its listed name (B4). */
+  if (units && shopifyUnitName(type, current.unit)) current.unit = shopifyUnitName(type, current.unit)
   const update = (key: string, raw: string) => onChange(shopifyJson.stringify({ ...current, [key]: units && key === 'value' && /^-?\d+(\.\d+)?$/.test(raw) ? shopifyJson.parse(raw) : raw }))
   const input = (key: string, label: string, numeric = false) => <Field key={key} label={label}><Input size="sm" disabled={disabled} value={String(current[key] ?? '')} inputMode={numeric ? 'decimal' : undefined} onChange={e => update(key, e.target.value)} /></Field>
   /* Money: the currency is the store's — a fact beside the amount, not an input. A stored amount in another currency

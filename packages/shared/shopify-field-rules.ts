@@ -14,7 +14,7 @@
  * Pure. Types only from `shopify-linked-products` (no runtime import, no cycle); the unit tables import nothing back.
  */
 import type { ShopifyFieldDefinition, ShopifyStoreSchema } from './shopify-linked-products.js'
-import { shopifyMeasurementUnits } from './shopify-field-codecs.js'
+import { shopifyMeasurementUnits, shopifyUnitName } from './shopify-field-codecs.js'
 import { shopifyMeasurementLimitReadable } from './shopify-measurement-limits.js'
 
 export interface ShopifyNoun { one: string; other: string }
@@ -55,11 +55,14 @@ export const plainNumber = (value: string) => {
 }
 const parse = (value: string): unknown => { try { return JSON.parse(value) } catch { return value } }
 /** A measurement or money bound (`{"unit":"g","value":10}`) as words: "10 g". */
+/** A unit in words: Shopify's stored capitals (`MILES_PER_HOUR`) as its long name (`miles per hour`); a symbol stays as written. */
+const LONG_UNITS = new Set(Object.values(shopifyMeasurementUnits).flat())
+const unitWords = (unit: string) => (LONG_UNITS.has(unit.toLowerCase()) ? unit.toLowerCase() : unit).replace(/_/g, ' ')
 export function shopifyBoundWords(value: string): string {
   const bound = parse(value)
   if (bound && typeof bound === 'object' && !Array.isArray(bound)) {
     const b = bound as Record<string, unknown>
-    if (b.value !== undefined) return `${plainNumber(String(b.value))} ${String(b.unit ?? '').replace(/_/g, ' ')}`.trim()
+    if (b.value !== undefined) return `${plainNumber(String(b.value))} ${unitWords(String(b.unit ?? ''))}`.trim()
     if (b.amount !== undefined) return `${plainNumber(String(b.amount))} ${String(b.currency_code ?? '')}`.trim()
   }
   return typeof bound === 'string' || typeof bound === 'number' ? plainNumber(String(bound)) : value
@@ -239,6 +242,8 @@ function sameJson(base: string, x: unknown, y: unknown, key?: string): boolean {
   if (numericKey && (typeof x === 'string' || typeof x === 'number') && (typeof y === 'string' || typeof y === 'number')) {
     return String(x).trim() !== '' && String(y).trim() !== '' && Number(x) === Number(y)
   }
+  /* A measurement's unit comes back in capitals (`KILOGRAMS` for `kilograms`; B4, measured): the same unit. */
+  if (key === 'unit' && typeof x === 'string' && typeof y === 'string' && shopifyMeasurementUnits[base]) return !!shopifyUnitName(base, x) && shopifyUnitName(base, x) === shopifyUnitName(base, y)
   if (Array.isArray(x) || Array.isArray(y)) return Array.isArray(x) && Array.isArray(y) && x.length === y.length && x.every((item, i) => sameItem(base, item, y[i]))
   if (x && y && typeof x === 'object' && typeof y === 'object') {
     const a = x as Record<string, unknown>, b = y as Record<string, unknown>

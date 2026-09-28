@@ -431,3 +431,38 @@ describe('B3 review · allowed sites in the rule line', () => {
     }
   })
 })
+
+/* ── Slice B4: values and limits in the form a real store stores them (measured on a development store, 2026-09-28). ── */
+describe('B4 · what Shopify stores, read as the same value', () => {
+  it('a measurement unit comes back in capitals: the same value, and a valid one', () => {
+    for (const [type, sent, stored] of [
+      ['weight', '{"value":1.2,"unit":"kilograms"}', '{"value":1.2,"unit":"KILOGRAMS"}'],
+      ['data_storage_capacity', '{"value":64,"unit":"megabytes"}', '{"value":64.0,"unit":"MEGABYTES"}'],
+      ['antenna_gain', '{"value":2.5,"unit":"decibels_isotropic"}', '{"value":2.5,"unit":"DECIBELS_ISOTROPIC"}'],
+      ['list.speed', '[{"value":2.5,"unit":"kilometers_per_hour"},{"value":3,"unit":"miles_per_hour"}]', '[{"value":2.5,"unit":"KILOMETERS_PER_HOUR"},{"value":3.0,"unit":"MILES_PER_HOUR"}]'],
+    ] as const) {
+      expect(shopifyValuesEqual(type, sent, stored), type).toBe(true)
+      expect(validateShopifyField(labTypeField(type), stored), type).toBeNull()
+    }
+    expect(shopifyValuesEqual('weight', '{"value":1.2,"unit":"kilograms"}', '{"value":1.2,"unit":"GRAMS"}')).toBe(false)
+    expect(shopifyValuesEqual('weight', '{"value":1.2,"unit":"kilograms"}', '{"value":1.3,"unit":"KILOGRAMS"}')).toBe(false)
+    expect(validateShopifyField(labTypeField('weight'), '{"value":1.2,"unit":"PARSECS"}')).toBe('Choose a unit from the list.')
+  })
+  it('the other spellings Shopify returns are the same value', () => {
+    expect(shopifyValuesEqual('date_time', '2026-09-28T12:30:00', '2026-09-28T12:30:00+00:00')).toBe(true)
+    expect(shopifyValuesEqual('list.date_time', '["2026-09-28T12:30:00"]', '["2026-09-28T12:30:00+00:00"]')).toBe(true)
+    expect(shopifyValuesEqual('list.number_decimal', '[12.5,3.25]', '["12.5","3.25"]')).toBe(true)
+    expect(shopifyValuesEqual('rating', '{"value":"4.5","scale_min":"1.0","scale_max":"5.0"}', '{"scale_min":"1.0","scale_max":"5.0","value":"4.5"}')).toBe(true)
+  })
+  it('a limit stored in capitals is read, checked and said in plain words', () => {
+    const withLimits = (type: string, validations: Array<[string, string]>) => ({ ...labTypeField(type), validations: validations.map(([name, value]) => ({ name, value })) })
+    const weight = withLimits('weight', [['min', '{"value":10.0,"unit":"GRAMS"}'], ['max', '{"value":25.0,"unit":"KILOGRAMS"}']])
+    expect(validateShopifyField(weight, '{"value":30,"unit":"kilograms"}')).toBe('Enter 25 kilograms or less.')
+    expect(validateShopifyField(weight, '{"value":5,"unit":"GRAMS"}')).toBe('Enter 10 grams or more.')
+    expect(validateShopifyField(weight, '{"value":1.2,"unit":"KILOGRAMS"}')).toBeNull()
+    expect(shopifyRuleSummary(weight, LAB_SCHEMA)).toBe('10 grams to 25 kilograms')
+    const temperature = withLimits('temperature', [['min', '{"value":14.0,"unit":"FAHRENHEIT"}'], ['max', '{"value":323.15,"unit":"KELVIN"}']])
+    expect(validateShopifyField(temperature, '{"value":-10.5,"unit":"celsius"}')).toBe('Enter 14 fahrenheit or more.')
+    expect(validateShopifyField(withLimits('speed', [['max', '{"value":30.0,"unit":"MILES_PER_HOUR"}']]), '{"value":50,"unit":"kilometers_per_hour"}')).toBe('Enter 30 miles per hour or less.')
+  })
+})

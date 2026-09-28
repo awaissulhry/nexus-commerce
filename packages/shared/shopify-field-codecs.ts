@@ -34,6 +34,18 @@ export function shopifyTypeReason(type: string): string | null {
   if (type.replace(/^list\./, '') === 'product_taxonomy_disclosure_reference') return 'Shopify lists this internal type, but the pinned 2026-07 API does not expose TaxonomyDisclosure resources for reading or selecting a value. Manage its taxonomy link through Shopify; the stored value is preserved.'
   return shopifyTypeSupported(type) ? null : `The ${type} type needs a Nexus value adapter. Its existing data is preserved; refresh the store schema after updating the connector.`
 }
+/**
+ * A unit as Shopify's long name (`kilograms`), or null when it is not a unit of that kind. Shopify STORES and returns the
+ * unit in capitals — `KILOGRAMS`, `MILES_PER_HOUR` — whatever spelling was sent, for values and for `min` / `max` limits
+ * alike (measured on a development store, 2026-09-28, Lane B slice B4). Both spellings are the same unit.
+ */
+export function shopifyUnitName(type: string, unit: unknown): string | null {
+  const units = shopifyMeasurementUnits[type]
+  if (!units || typeof unit !== 'string') return null
+  if (units.includes(unit)) return unit
+  const lower = unit.toLowerCase()
+  return units.includes(lower) ? lower : null
+}
 export const shopifyObjectType = (type: string) => !!shopifyMeasurementUnits[type] || ['money', 'rating', 'link'].includes(type)
 export const shopifyDecimal = (value: unknown): boolean => (typeof value === 'number' || typeof value === 'string') && /^-?\d+(\.\d+)?$/.test(String(value)) && Number.isFinite(Number(value))
 export function shopifyObjectError(type: string, value: unknown): string | null {
@@ -41,7 +53,7 @@ export function shopifyObjectError(type: string, value: unknown): string | null 
   const v = value as Record<string, unknown>
   if (shopifyMeasurementUnits[type]) {
     if (!shopifyDecimal(v.value)) return 'Enter a number, for example 2.5.'
-    if (!shopifyMeasurementUnits[type].includes(String(v.unit))) return 'Choose a unit from the list.'
+    if (!shopifyUnitName(type, v.unit)) return 'Choose a unit from the list.'
   }
   if (type === 'money' && !shopifyDecimal(v.amount)) return 'Enter an amount, for example 12.50.'
   if (type === 'money' && !/^[A-Z]{3}$/.test(String(v.currency_code))) return 'Enter a three-letter currency code, for example EUR.'

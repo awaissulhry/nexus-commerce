@@ -4,7 +4,7 @@ export { shopifyJson } from './shopify-json.js'
 import { shopifyObjectError, shopifyObjectType, shopifyTypeReason } from './shopify-field-codecs.js'
 import { plainNumber, shopifyDateTimeMs, shopifyFileKind, shopifyFileKindsWords, shopifyJsonProblem, shopifyLimitMs, shopifyMomentWords, shopifyNoun } from './shopify-field-rules.js'
 export { plainNumber, shopifyDateMs, shopifyDateTimeMs, shopifyDateTimeValue, shopifyFileKind, shopifyFileKindsWords, shopifyJsonProblem, shopifyLimitMs, shopifyMomentWords, shopifyNoun, shopifyRuleSummary, shopifyValuesEqual, type ShopifyNoun } from './shopify-field-rules.js'
-export { shopifyMeasurementUnits, shopifyObjectType, shopifyTypeReason, shopifyTypeSupported } from './shopify-field-codecs.js'
+export { shopifyMeasurementUnits, shopifyObjectType, shopifyTypeReason, shopifyTypeSupported, shopifyUnitName } from './shopify-field-codecs.js'
 import { nativeEditSchema, mediaOrderEditSchema, nativeFieldError, nativeEditAddress, type InformationMedia, type NativeEdit, type MediaOrderEdit } from './shopify-information.js'
 
 export const shopifyGid = z.string().regex(/^gid:\/\/shopify\/[A-Za-z]+\/\d+$/)

@@ -272,3 +272,14 @@ describe('B3 review · the date-time repair box', () => {
     expect(dateTimeRepairing('line', 'single_line_text_field', 'x', 'x')).toBe(false)
   })
 })
+
+/* B4: Shopify stores a measurement unit in capitals (`KILOGRAMS`, measured on a development store). The pop-up shows it as
+   the listed unit — never an unknown "(current)" one — and a stored unit it does not know still shows as "(current)". */
+describe('B4 · a measurement as Shopify stores it', () => {
+  it('the unit picker selects the listed unit for a stored capital one', () => {
+    const html = render(labTypeField('weight'), '{"value":1.2,"unit":"KILOGRAMS"}')
+    expect(html).toMatch(/<option value="kilograms" selected="">kilograms<\/option>/)
+    expect(html).not.toContain('(current)')
+    expect(render(labTypeField('weight'), '{"value":1.2,"unit":"parsecs"}')).toContain('parsecs (current)')
+  })
+})
