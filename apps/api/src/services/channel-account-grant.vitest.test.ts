@@ -185,4 +185,30 @@ describe('BP.S1c — share, list and revoke', () => {
     await expect(asOwnerOfA(() => service.listSharesFor(randomUUID())))
       .rejects.toMatchObject({ code: 'account_unavailable', statusCode: 404 })
   })
+
+  it('the guest\'s primary and "only account" are its own; a shared account is used only when named (2026-09-28)', async () => {
+    const resolver = await import('./connection-resolver.service.js')
+    const asB = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: B, actorUserId: ownerUser, membershipId: null, roleKeys: ['OWNER'] }, work)
+    // A's account is A's primary; B has a primary eBay account of its own; the share above is active.
+    await database.db.query(`UPDATE "ChannelConnection" SET "isPrimary" = true WHERE id = $1`, [connectionId])
+    const own = randomUUID()
+    await database.db.query(
+      `INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","managedBy","authStatus","isActive","isPrimary","externalAccountId","updatedAt")
+       VALUES ($1,$2,'EBAY','oauth','connected',true,true,$3,CURRENT_TIMESTAMP)`,
+      [own, B, 'seller-bps1c-b'],
+    )
+    // CONTROL — B does see both accounts, each its owner's primary: before 2026-09-28 every primary lookup of B threw.
+    const seen = await asB(() => resolver.listActiveConnections('EBAY'))
+    expect(seen.map((r) => [r.id, r.isPrimary])).toEqual([[own, true], [connectionId, true]])
+    expect((await asB(() => resolver.resolveConnection({ channel: 'EBAY', primary: true }))).id).toBe(own)
+    expect(Object.fromEntries(await asB(() => resolver.primaryConnectionIds(['EBAY'])))).toEqual({ EBAY: own })
+    // Named, the shared account still resolves.
+    expect((await asB(() => resolver.resolveConnection({ accountId: connectionId }))).id).toBe(connectionId)
+    // With no account of its own, B has no primary: the shared one never stands in for it.
+    await database.db.query(`UPDATE "ChannelConnection" SET "isActive" = false, "isPrimary" = false WHERE id = $1`, [own])
+    await expect(asB(() => resolver.resolveConnection({ channel: 'EBAY', primary: true }))).rejects.toBeInstanceOf(resolver.NoConnectionError)
+    expect(Object.fromEntries(await asB(() => resolver.primaryConnectionIds(['EBAY'])))).toEqual({ EBAY: null })
+    // A is unchanged: its account is its primary.
+    expect((await asOwnerOfA(() => resolver.resolveConnection({ channel: 'EBAY', primary: true }))).id).toBe(connectionId)
+  })
 })

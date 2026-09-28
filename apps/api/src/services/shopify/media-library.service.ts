@@ -4,7 +4,7 @@ import { workspaceIdForQuery, workspaceKey } from '@nexus/database/workspace-con
 import type { ShopifyFile, ShopifyMediaSource, MediaSourcesResponse, ShopifyFilesResponse, ShopifyFileReference } from '@nexus/shared/shopify-media'
 import { shopifyFileQuerySchema, SHOPIFY_UPLOAD_MAX_BYTES } from '@nexus/shared/shopify-media'
 import prisma from '../../db.js'
-import { listActiveConnections, resolveConnection, type ConnectionRow } from '../connection-resolver.service.js'
+import { isOwnConnection, listActiveConnections, resolveConnection, type ConnectionRow } from '../connection-resolver.service.js'
 import { shopifyShopDomain } from '../cx/connectors/shopify/auth.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { shopifyAdmin, assertShopifyResult, type ShopifyGraphql } from './admin-client.js'
@@ -21,13 +21,16 @@ function source(connection: ConnectionRow): ShopifyMediaSource {
     : !['read_files', 'write_files'].some(scope => scopes.includes(scope)) ? 'Reconnect this store and grant access to Shopify Files.' : null
   const uploadIssue = readIssue ?? (!scopes.includes('write_files') ? 'Grant permission to upload Shopify files in Connections.'
     : getShopifyPublishMode() !== 'live' ? 'Shopify uploads are disabled by the server’s publish settings.' : null)
-  return { accountId: connection.id, label: connection.accountLabel || connection.displayName || domain || 'Shopify store', domain, isPrimary: connection.isPrimary, readIssue, uploadIssue }
+  return { accountId: connection.id, label: connection.accountLabel || connection.displayName || domain || 'Shopify store', domain, isPrimary: connection.isPrimary && isOwnConnection(connection), readIssue, uploadIssue }
 }
 
 export async function mediaSources(): Promise<MediaSourcesResponse> {
-  const stores = (await listActiveConnections('SHOPIFY')).map(source)
-  const primary = stores.filter(store => store.isPrimary)
-  return { stores, defaultSource: stores.length === 0 ? 'nexus' : stores.length === 1 ? stores[0].accountId : primary.length === 1 ? primary[0].accountId : null }
+  const rows = await listActiveConnections('SHOPIFY')
+  const stores = rows.map(source)
+  // The default is one of this business's own stores, never one another business shares with it.
+  const own = stores.filter((_, i) => isOwnConnection(rows[i]))
+  const primary = own.filter(store => store.isPrimary)
+  return { stores, defaultSource: own.length === 0 ? 'nexus' : own.length === 1 ? own[0].accountId : primary.length === 1 ? primary[0].accountId : null }
 }
 
 export async function defaultShopifyMediaAccount(): Promise<string | null> {

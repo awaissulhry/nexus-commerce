@@ -37,6 +37,7 @@ import { locationServes, resolveIntendedQuantity } from '../sync-control-core.js
 import { ledgerInputs, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
 import { isFbaListing } from '../outbound-sync.service.js'
+import { isOwnConnection } from '../connection-resolver.service.js'
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
@@ -123,7 +124,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, policies, formulas, snapshots] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
-    prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
+    prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true, workspaceId: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
     prisma.productListingAlias.findMany({ where: { productId: root.id, status: 'ACTIVE' }, select: { id: true, channel: true, marketplace: true, channelConnectionId: true, label: true, position: true }, orderBy: { position: 'asc' } }),
     // Shared stock — the same ledgers the cascade uses (3 queries): a pooled member shows the pool.
     loadSyncLedgers(prisma, memberIds),
@@ -182,7 +183,8 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   const formulaByCell = new Map(formulas.map((f) => [`${f.productId}|${upper(f.channel)}|${upper(f.marketplace)}|${f.aliasKey ?? ''}`, f.expr]))
   const snapshotByCell = new Map(snapshots.map((s) => [`${s.sku}|${upper(s.channel)}|${upper(s.marketplace)}`, s]))
   const connectionsByChannel = new Map<string, Array<{ id: string; isPrimary: boolean }>>()
-  for (const c of connections) connectionsByChannel.set(upper(c.channelType), [...(connectionsByChannel.get(upper(c.channelType)) ?? []), { id: c.id, isPrimary: c.isPrimary }])
+  // An account another business shares with this one is never this business's primary, and comes after its own.
+  for (const c of [...connections.filter(isOwnConnection), ...connections.filter((c) => !isOwnConnection(c))]) connectionsByChannel.set(upper(c.channelType), [...(connectionsByChannel.get(upper(c.channelType)) ?? []), { id: c.id, isPrimary: c.isPrimary && isOwnConnection(c) }])
   const listingsByCoord = new Map<string, MatrixListing[]>()
   for (const l of listings) { const k = coordKey(l.channel, l.marketplace); listingsByCoord.set(k, [...(listingsByCoord.get(k) ?? []), l]) }
 

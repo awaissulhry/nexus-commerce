@@ -25,6 +25,15 @@
  * is behaviour-preserving and can be verified on prod before a second account
  * exists for anything to go wrong on.
  *
+ * ── Another business's account is never chosen for you (2026-09-28) ─────────────
+ * A business can SEE an account another business shares with it (BP.S3,
+ * `nexus_workspace_grant_read`). "The channel's account" and "the channel's
+ * primary" mean this business's OWN: a shared account is used only when the caller
+ * names it (or derives it from a row that names it). Before this, a business with
+ * its own primary and a shared one saw two primaries — every primary lookup threw
+ * AmbiguousConnectionError — and a business whose only primary was a shared one
+ * got the other business's account (docs/2026-09-28-sharing-review-and-plan.md §11).
+ *
  * ── Channel-agnostic by requirement ───────────────────────────────────────────
  * Per the operator's decision 1 (2026-08-19), nothing here hard-codes a channel.
  * `channel` is always a parameter. Adding Amazon multi-account later must cost one
@@ -33,6 +42,7 @@
 
 import type { ChannelConnection, Prisma } from "@prisma/client";
 import prisma from "../db.js";
+import { workspaceIdForQuery } from "../lib/workspace-context.js";
 
 /**
  * CX.1 — the resolver never returns credentials. Every column EXCEPT the token
@@ -51,7 +61,23 @@ export const CONNECTION_PUBLIC_SELECT = {
   accessTokenExpiresAt: true, refreshTokenExpiresAt: true,
   lastRefreshAt: true, lastHeartbeatAt: true, lastInboundAt: true, lastOutboundAt: true,
   lastErrorAt: true, lastError: true, consecutiveFailures: true, identity: true, apiVersion: true,
+  workspaceId: true,
 } satisfies Prisma.ChannelConnectionSelect;
+
+/**
+ * Whether an account belongs to the business the work runs in. A row read without its
+ * `workspaceId` (a caller's own select, a test fixture) counts as its own: only a row
+ * that says it is another business's is kept from an implicit choice.
+ */
+export function isOwnConnection(row: { workspaceId?: string | null }): boolean {
+  if (row.workspaceId === undefined || row.workspaceId === null) return true;
+  try {
+    return row.workspaceId === workspaceIdForQuery();
+  } catch {
+    // No business context: the rows could not have been read under one either.
+    return true;
+  }
+}
 
 /** A connection row without credentials — what every caller outside the token service sees. */
 export type ConnectionRow = Prisma.ChannelConnectionGetPayload<{ select: typeof CONNECTION_PUBLIC_SELECT }>;
@@ -124,15 +150,20 @@ function isPrimaryScope(s: ConnectionScope): s is { channel: string; primary: tr
  * Returns the one to use, or throws. Exported for tests and for callers that have
  * already loaded their candidates (a job iterating accounts, say).
  */
-export function chooseConnection(
-  candidates: Pick<ChannelConnection, "id" | "channelType" | "isActive" | "isPrimary">[],
+export function chooseConnection<T extends Pick<ChannelConnection, "id" | "channelType" | "isActive" | "isPrimary"> & { workspaceId?: string | null }>(
+  candidates: T[],
   opts: { channel: string; wantPrimary?: boolean; hint?: string },
-): Pick<ChannelConnection, "id" | "channelType" | "isActive" | "isPrimary"> {
-  const active = candidates.filter((c) => c.isActive && c.channelType === opts.channel);
+): T {
+  const live = candidates.filter((c) => c.isActive && c.channelType === opts.channel);
+  // Only this business's own accounts are chosen for a caller that did not name one.
+  const active = live.filter(isOwnConnection);
 
   if (active.length === 0) {
+    const shared = live.length;
     throw new NoConnectionError(
-      `No active ${opts.channel} connection.${opts.hint ? ` ${opts.hint}` : ""}`,
+      `No active ${opts.channel} connection.` +
+        (shared ? ` ${shared === 1 ? "The account" : `${shared} accounts`} another business shares with this one can be used only when chosen by name.` : "") +
+        (opts.hint ? ` ${opts.hint}` : ""),
     );
   }
   if (active.length === 1) return active[0]!;
@@ -164,11 +195,16 @@ export async function listActiveConnections(
   channel?: string,
   db: Pick<Prisma.TransactionClient, "channelConnection"> = prisma,
 ): Promise<ConnectionRow[]> {
-  return db.channelConnection.findMany({
+  const rows = await db.channelConnection.findMany({
     where: { ...(channel ? { channelType: channel } : {}), isActive: true },
     orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
     select: CONNECTION_PUBLIC_SELECT,
   });
+  // This business's own accounts first (primary first), then any another business shares with it: "account 1" is
+  // always this business's primary. A stable sort keeps the operator's order inside each part.
+  return rows.map((row, i) => ({ row, i, own: isOwnConnection(row) }))
+    .sort((a, b) => Number(b.own) - Number(a.own) || a.i - b.i)
+    .map(({ row }) => row);
 }
 
 async function byId(id: string, whatFor: string): Promise<ConnectionRow> {
@@ -310,7 +346,7 @@ export async function primaryConnectionIds(
   const rows = await prisma.channelConnection.findMany({
     where: { channelType: { in: wanted }, isActive: true },
     orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
-    select: { id: true, channelType: true, isActive: true, isPrimary: true },
+    select: { id: true, channelType: true, isActive: true, isPrimary: true, workspaceId: true },
   });
   const out = new Map<string, string | null>();
   for (const channel of wanted) {
