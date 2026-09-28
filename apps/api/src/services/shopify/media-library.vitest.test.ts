@@ -21,7 +21,7 @@ const fixture = vi.hoisted(() => {
   return { db, assets, images, usages, list: vi.fn(), resolve: vi.fn(), graphql: vi.fn(), admin: vi.fn(), mode: vi.fn() }
 })
 vi.mock('../../db.js', () => ({ default: fixture.db }))
-vi.mock('../connection-resolver.service.js', () => ({ listActiveConnections: fixture.list, resolveConnection: fixture.resolve }))
+vi.mock('../connection-resolver.service.js', async (original) => ({ ...await original<object>(), listActiveConnections: fixture.list, resolveConnection: fixture.resolve }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: fixture.mode }))
 vi.mock('./admin-client.js', async original => ({ ...await original<object>(), shopifyAdmin: fixture.admin }))
 
@@ -46,6 +46,15 @@ describe('Shopify media source ownership', () => {
     fixture.list.mockResolvedValue([])
     expect(await mediaSources()).toEqual({ stores: [], defaultSource: 'nexus' })
     expect(await defaultShopifyMediaAccount()).toBeNull()
+  })
+  it('never defaults to a store another business shares with this one (2026-09-28)', async () => {
+    // Business B sees A's store through a grant; it is A's primary, never B's default.
+    fixture.list.mockResolvedValue([store('a-store', { isPrimary: true, workspaceId: 'ws_a' })])
+    const sources = await workspace('ws_b', () => mediaSources())
+    expect(sources.defaultSource).toBe('nexus')
+    expect(sources.stores.map((s: { accountId: string; isPrimary: boolean }) => [s.accountId, s.isPrimary])).toEqual([['a-store', false]])
+    fixture.list.mockResolvedValue([store('a-store', { isPrimary: true, workspaceId: 'ws_a' }), store('b-store', { workspaceId: 'ws_b' })])
+    expect((await workspace('ws_b', () => mediaSources())).defaultSource).toBe('b-store')
   })
   it('uses a unique primary and refuses ambiguous or duplicate primaries', async () => {
     fixture.list.mockResolvedValue([store(), store('store-b')])
