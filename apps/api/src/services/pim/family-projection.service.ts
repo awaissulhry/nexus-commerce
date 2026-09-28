@@ -26,6 +26,7 @@ import { isAsinPending } from '@nexus/shared/listing-risk'
  */
 import prisma from '../../db.js'
 import { activeDatabaseTransaction, inDatabaseTransaction } from '../../lib/database-context.js'
+import { produceReadinessForProducts } from './readiness-index.service.js'
 import { ensureDraftListings } from './draft-listing.service.js'
 // VT.1 — MOVED to a leaf so the SHEET can read the exclusion set without importing this module (which imports
 // `studio-sheet.service.ts`, so the import would close a cycle and hand back a half-built module). Re-exported here
@@ -1903,7 +1904,12 @@ export async function writeProjectionMapping(input: MappingWriteInput): Promise<
   if (input.reset) { delete bag._variationAxes; delete bag._axisNameLabels; bag._variationAxesMode = 'inherit' }
   else { bag._variationAxes = requested!.map(e => e.axisKey); bag._axisNameLabels = names; bag._variationAxesMode = 'override' }
   try {
-    await prisma.$transaction(async tx => {
+    // QUALITY-PLAN A1b — the content transaction (`inDatabaseTransaction`, Serializable, retried on a lost race), so the
+    // readiness producer below runs before the commit, exactly as `setFamilyAxes` does. Before this the index kept the
+    // old state (the scope header said "Ready 100%" while the row showed a new gap or collision) until another write of
+    // the family. Only THIS coordinate is rebuilt: a projection changes nothing on Shared or on another channel.
+    await inDatabaseTransaction(prisma, async () => {
+      const tx = activeDatabaseTransaction()!
       if (orderInput && orderView) {
         await writePresentationOrderInTransaction(tx, orderInput, orderView, input.userId ?? null, names, requested!.map(e => e.axisKey))
       } else {
@@ -1913,7 +1919,8 @@ export async function writeProjectionMapping(input: MappingWriteInput): Promise<
         } })
         if (saved.count !== 1) throw new ProjectionConflictError('version_conflict', 'Another edit won this listing. Reload before saving.')
       }
-    }, { isolationLevel: 'Serializable', timeout: 30_000 })
+      await produceReadinessForProducts([root.id, ...current.children.map(child => child.id)], { channel, market, accountId: current.coordinate.accountId })
+    }, { isolationLevel: 'Serializable' })
   } catch (error) {
     if (['P2034', 'P2025'].includes(String((error as { code?: string })?.code))) throw new ProjectionConflictError('version_conflict', 'Another edit won this listing. Reload before saving.')
     throw error

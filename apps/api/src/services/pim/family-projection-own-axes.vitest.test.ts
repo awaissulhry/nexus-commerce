@@ -102,7 +102,19 @@ describe('eBay · IT draft — channel-only axes through writeProjectionMapping'
   })
 
   it('saves an axis from the eBay list: stored under its key and eBay name, bound, with its gap and no collision', async () => {
+    // A1b — the readiness index had no eBay row for this family before (nothing produced it yet): the measured start
+    const indexBefore = await scoped(() => prisma.readinessIndex.findMany({ where: { productId: 'own-demo', channel: 'EBAY', market: 'IT' } }))
+    expect(indexBefore).toEqual([])
     const read = await save([{ axisKey: 'Colore', target: 'Colore' }, { axisKey: NECK, target: 'Scollatura' }])
+    // …and the save produced it in the same transaction: the scope header and the catalogue filters see the gap at once
+    const index = await scoped(() => prisma.readinessIndex.findMany({ where: { productId: 'own-demo', channel: 'EBAY', market: 'IT' } }))
+    expect(index.length).toBeGreaterThan(0)
+    expect(index.map(row => row.state)).toEqual(['blocked'])
+    // the index keeps the fact (`missing[].kind`, what the catalogue filters narrow on) and the row's own sentence
+    expect(index.flatMap(row => row.missing as Array<{ kind?: string; field?: string; reason?: string }>).filter(item => item.kind === 'value-missing'))
+      .toEqual([expect.objectContaining({ field: 'variation_theme', reason: '1 variant has no value for an axis on eBay · IT: OWN-JACKET-C (Neckline).' })])
+    // Shared is not a projection: its rows are untouched by a channel save
+    expect(await scoped(() => prisma.readinessIndex.count({ where: { productId: 'own-demo', channel: null } }))).toBe(0)
     const listing = await scoped(() => prisma.channelListing.findUniqueOrThrow({ where: { id: 'ebay-own-own-demo' } }))
     const bag = listing.platformAttributes as Record<string, any>
     expect(bag._variationAxes).toEqual(['Colore', NECK])
@@ -146,6 +158,9 @@ describe('eBay · IT draft — channel-only axes through writeProjectionMapping'
       await prisma.channelListing.update({ where: { id: 'ebay-own-own-c' }, data: { platformAttributes: { categoryId: '100', conditionId: '1000', itemSpecifics: { Colore: 'Bianco' } } } as never })
     })
     await reset()
+    // A1b — the reset rebuilt the index too: no value gap and no error left on eBay · IT
+    const index = await scoped(() => prisma.readinessIndex.findMany({ where: { productId: 'own-demo', channel: 'EBAY', market: 'IT' } }))
+    expect(index.flatMap(row => row.missing as Array<{ kind?: string }>).some(item => item.kind === 'value-missing' || item.kind === 'collision')).toBe(false)
     const bag = (await scoped(() => prisma.channelListing.findUniqueOrThrow({ where: { id: 'ebay-own-own-demo' } }))).platformAttributes as Record<string, unknown>
     expect(bag._variationAxes).toBeUndefined()
     expect(bag._variationAxesMode).toBe('inherit')

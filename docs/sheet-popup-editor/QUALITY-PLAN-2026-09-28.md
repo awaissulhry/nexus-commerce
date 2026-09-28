@@ -1,7 +1,7 @@
 # Sheet pop-up editor — quality plan (2026-09-28)
 
 Status: **APPROVED 2026-09-28** (Owner: "I'll go with your recommendations … For everything else, I'll go with your recommendations.") — the plan and Q-D1 … Q-D4 = (a). Lane B runs in a new session (prompt: `LANE-B-PROMPT.md`). **Each slice still starts only on the Owner's "build <slice>".**
-**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6).
+**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7).
 It replaces the loose next steps in `PLAN-2026-09-27.md` §10 for the work that is left.
 
 ## 0. What the Owner asked (2026-09-28)
@@ -169,6 +169,18 @@ What A1 contains (server only; the pop-up is A2):
   `produceReadinessForProducts`, which `setFamilyAxes` does). The fix moves that save into the content transaction
   (`inDatabaseTransaction`) so the readiness producer can run — it touches every channel theme save, so it is its own small
   slice (**A1b**) with its own tests.
+
+### 4.7 A1b — a channel theme save refreshes the readiness index (2026-09-28)
+
+- `writeProjectionMapping` now writes inside the content transaction (`inDatabaseTransaction`, Serializable, retried on a
+  lost race) and runs `produceReadinessForProducts` for this coordinate only, before the commit — as `setFamilyAxes` does.
+  The theme save, the eBay order save and Reset all take this path.
+- Proven: database test — no eBay index row before; after the save one parent row, state `blocked`, `missing` holds
+  `value-missing` with the row's own sentence; after Reset no gap and no collision; Shared rows untouched (profiles off and
+  on). Browser on the private copy: header "eBay · Ready" → save → "eBay · Blocked" → Reset → "eBay · Ready"; the save took
+  0.9 s. Area tests: 0 new failures (same 3 / 19 as a clean copy). Real-PostgreSQL suites: the three that race this save (first theme save, draft listings, live listings) pass; one unrelated suite (live product sync, test 9, a retry claimed "now") failed once and passed 14/14 on a rerun — a timing flake, no changed file in its path.
+- **Same gap, not fixed (your word needed): the include / exclude save** (`writeProjectionInclusion`) also changes gaps and
+  collisions and does not refresh the index either. Same fix, same size (A1c).
 
 ## 5. Workstream B — Shopify metafields, every type (AAA)
 
