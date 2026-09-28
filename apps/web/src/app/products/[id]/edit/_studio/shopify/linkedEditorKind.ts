@@ -43,6 +43,14 @@ export type LinkedEditorKind =
 
 const LINE_TYPES = ['single_line_text_field', 'number_integer', 'number_decimal', 'url', 'date', 'date_time', 'id']
 
+/**
+ * Whether a date and time opens the repair box: its value cannot be read, or it is the text last typed in this repair box
+ * (so the first valid keystroke does not swap the box for the picker and drop the focus). Tied to the VALUE, not to the
+ * editor: when a list's values move, a readable value never inherits another one's repair box (B3 review). Empty = picker.
+ */
+export const dateTimeRepairing = (kind: LinkedEditorKind, type: string, value: string | null, typed: string | null) =>
+  type === 'date_time' && !!value && (kind === 'line' || typed === value)
+
 export function linkedEditorKind(def: ShopifyFieldDefinition, value: string | null, schema: ShopifyStoreSchema): LinkedEditorKind {
   const list = def.type.startsWith('list.'), type = list ? def.type.slice(5) : def.type, reference = type.endsWith('_reference')
   if (reference) {

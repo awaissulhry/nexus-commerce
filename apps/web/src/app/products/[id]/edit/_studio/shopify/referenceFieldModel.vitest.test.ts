@@ -42,6 +42,12 @@ describe('which pop-up a reference field gets', () => {
     expect(olderPickerReason({ ...baseColour, validations: [] }, withProducts(null))).toEqual({ text: 'This field does not name its list of values. Paste a value’s Shopify ID to choose it.', blocked: false })
     expect(olderPickerReason(baseColour, withProducts({ key: 'category', values: ['zz-1'] }))).toBeNull()
   })
+  it('an entry field whose one kind is gone from the store keeps the older picker and says why (B3 review)', () => {
+    const gone = { type: 'metaobject_reference', validations: [{ name: 'metaobject_definition_type', value: 'gone_kind' }] }
+    expect(referenceUiFor(gone, schema)).toBe('legacy')
+    expect(olderPickerReason(gone, schema)).toEqual({ text: 'This field’s entry kinds are no longer in the store. Refresh the store schema.', blocked: true })
+    expect(referenceUiFor({ ...gone, validations: [{ name: 'metaobject_definition_type', value: 'text_with_icon' }] }, schema)).toBe('entries')
+  })
   it('asks to add in plain case, keeping a name in capitals', () => {
     expect(['FAQ', 'Color', 'Press quote', 'entry', 'SKU list'].map(addPrompt)).toEqual(['Add FAQ', 'Add color', 'Add press quote', 'Add entry', 'Add SKU list'])
   })
