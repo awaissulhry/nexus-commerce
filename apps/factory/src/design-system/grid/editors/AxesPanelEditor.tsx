@@ -298,6 +298,55 @@ export function axesReorder(cell: VariationThemeCell, order: string[]): AxesEdit
   return { ok: true, next: { ...cell, axes: reorderAxes(cell.axes, order) } }
 }
 
+/* ── "+ Add": ONE order for the list and the add ─────────────────────────────────────────────────────────────────────── */
+
+/**
+ * 🔴 Which list "+ Add" reads — the ONE order the offered list and the add both follow. The Shared case comes before a
+ * channel's `addableAxes`: the server sends a Shared cell `addableAxes: []` ("empty, never absent") and an empty array is
+ * truthy, so testing it first offered nothing (fixed in the list) and then, in the add, found nothing to add (found by
+ * Lane B on a development store, 2026-09-28 — a click on "Color" added no axis). Two copies of one decision drifted; now
+ * there is one.
+ */
+export function axesAddSource(draft: VariationThemeCell, master: boolean, amazon: boolean): 'theme' | 'shared' | 'family' | 'aspects' {
+  if (amazon) return 'theme'
+  if (master) return 'shared'
+  if (draft.addableAxes) return 'family'
+  return 'aspects'
+}
+
+/** The draft after "+ Add" picks `code`, or null when the code is not on the list this cell offers. Pure. */
+export function axesAddEdit(draft: VariationThemeCell, code: string, master: boolean, amazon: boolean): VariationThemeCell | null {
+  switch (axesAddSource(draft, master, amazon)) {
+    case 'theme': {
+      /* Amazon: the THEME decides the rows. Picking one re-projects the axes from that theme's own drops — the rows are
+         informational, exactly as §3.5 says. */
+      const item = draft.candidates?.items.find((i) => i.code === code)
+      if (!item) return null
+      return {
+        ...draft,
+        theme: { code: item.code, label: item.label, deprecated: item.deprecated },
+        axes: draft.axes.map((a) => ({ ...a, included: !item.drops.includes(a.axisKey) })),
+        dropped: item.drops,
+      }
+    }
+    case 'shared': {
+      const c = (draft.masterCandidates ?? []).find((m) => m.axisKey === code)
+      if (!c) return null
+      return { ...draft, axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.key, label: c.label, channelName: c.label, target: c.key, included: true }] }
+    }
+    case 'family': {
+      const c = (draft.addableAxes ?? []).find((m) => m.axisKey === code)
+      if (!c) return null
+      return { ...draft, axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.familyKey, label: c.label, channelName: c.label, target: null, included: true }] }
+    }
+    case 'aspects': {
+      const aspect = draft.candidates?.items.find((i) => i.code === code)
+      if (!aspect) return null
+      return { ...draft, axes: [...draft.axes, { axisKey: aspect.code, familyKey: aspect.code, label: aspect.label, channelName: aspect.label, target: aspect.code, included: true }] }
+    }
+  }
+}
+
 /* ── P3 A2: Tab inside the pop-up ─────────────────────────────────────────────────────────── */
 
 /**
@@ -604,17 +653,15 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
      * every family axis in `mapping`. So a panel that offered the three eBay aspects here would offer
      * three bogus axes where the dock correctly offered none.
      */
-    /* 🔴 The Shared product FIRST: the server sends it `addableAxes: []` ("empty, never absent" — a channel's vocabulary),
-       and an empty array is truthy, so testing `addableAxes` first returned nothing and the Shared "+ Add axis" never
-       offered a candidate (found by Lane B building a family from a new product, 2026-09-28; the VT.1 fixture has no
-       `addableAxes`, which is why the suite did not see it). */
-    if (master) {
+    /* 🔴 The ONE order (`axesAddSource`): the Shared product before a channel's `addableAxes` (see there). */
+    const source = axesAddSource(draft, master, amazon)
+    if (source === 'shared') {
       return (draft.masterCandidates ?? [])
         .filter((c) => !chosen.has(c.axisKey))
         .map((c) => ({ code: c.axisKey, label: c.label, meta: `attribute · ${c.valueCount} values`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
     }
-    if (draft.addableAxes) {
-      return draft.addableAxes
+    if (source === 'family') {
+      return (draft.addableAxes ?? [])
         .filter((c) => !chosen.has(c.axisKey))
         .map((c) => ({ code: c.axisKey, label: c.label, meta: `not a ${draft.vocabulary.axisNoun} yet`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
     }
@@ -633,45 +680,10 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
 
   const add = useCallback(
     (code: string) => {
-      if (amazon) {
-        /* Amazon: the THEME decides the rows. Picking one re-projects the axes from that theme's own
-           drops — the rows are informational, exactly as §3.5 says. */
-        const item = draft.candidates?.items.find((i) => i.code === code)
-        if (!item) return
-        report({
-          ...draft,
-          theme: { code: item.code, label: item.label, deprecated: item.deprecated },
-          axes: draft.axes.map((a) => ({ ...a, included: !item.drops.includes(a.axisKey) })),
-          dropped: item.drops,
-        })
-        return
-      }
-      if (draft.addableAxes) {
-        const c = draft.addableAxes.find((m) => m.axisKey === code)
-        if (!c) return
-        report({
-          ...draft,
-          axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.familyKey, label: c.label, channelName: c.label, target: null, included: true }],
-        })
-        return
-      }
-      if (master) {
-        const c = (draft.masterCandidates ?? []).find((m) => m.axisKey === code)
-        if (!c) return
-        report({
-          ...draft,
-          axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.key, label: c.label, channelName: c.label, target: c.key, included: true }],
-        })
-        return
-      }
-      const aspect = draft.candidates?.items.find((i) => i.code === code)
-      if (!aspect) return
-      report({
-        ...draft,
-        axes: [...draft.axes, { axisKey: aspect.code, familyKey: aspect.code, label: aspect.label, channelName: aspect.label, target: aspect.code, included: true }],
-      })
+      const next = axesAddEdit(draft, code, master, amazon)
+      if (next) report(next)
     },
-    [amazon, master, host, draft, report],
+    [amazon, master, draft, report],
   )
 
   /**

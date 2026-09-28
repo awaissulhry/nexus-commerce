@@ -50,6 +50,8 @@ import {
   axesFilterMatch,
   axesSectionTitle,
   axesTabStaysInside,
+  axesAddEdit,
+  axesAddSource,
   moveHighlight,
   NewOwnAttribute,
   reorderAxes,
@@ -861,6 +863,31 @@ it('🔴 the Shared product offers its candidates with the server\'s real shape 
   const out = panel({ ...GALE_MASTER, addableAxes: [], masterCandidates: [...(GALE_MASTER.masterCandidates ?? []), { key: 'fit', label: 'Fit', axisKey: 'fit', valueCount: 2 }] })
   expect(out).not.toContain(AXES_EDITOR_COPY.noSharedCandidates)
   expect(out).not.toMatch(/<button[^>]*aria-disabled="true"[^>]*>[^<]*<svg[^>]*lucide-plus/)
+})
+
+describe('🔴 "+ Add": ONE order for the list and the add (a click on "Color" added nothing on the Shared product)', () => {
+  const SHARED = { ...GALE_MASTER, addableAxes: [], masterCandidates: [...(GALE_MASTER.masterCandidates ?? []), { key: 'fit', label: 'Fit', axisKey: 'fit', valueCount: 2 }] }
+
+  it('the source: Amazon\'s theme, then the Shared product, then a channel\'s family axes, then aspects', () => {
+    expect(axesAddSource(SHARED, true, false)).toBe('shared')
+    expect(axesAddSource({ ...GALE_EBAY_IT_OVERRIDDEN, addableAxes: [] }, false, false)).toBe('family')
+    expect(axesAddSource({ ...GALE_EBAY_IT_OVERRIDDEN, addableAxes: undefined }, false, false)).toBe('aspects')
+    expect(axesAddSource(GALE_AMAZON_DE_DERIVED, false, true)).toBe('theme')
+  })
+
+  it('the Shared product with the server\'s real shape (`addableAxes: []`) ADDS the picked attribute as an axis', () => {
+    const next = axesAddEdit(SHARED, 'fit', true, false)
+    expect(next?.axes.at(-1)).toMatchObject({ axisKey: 'fit', familyKey: 'fit', label: 'Fit', target: 'fit', included: true })
+    expect(next?.axes).toHaveLength(SHARED.axes.length + 1)
+    expect(axesAddEdit(SHARED, 'not-offered', true, false)).toBeNull()
+  })
+
+  it('a channel still adds a family axis (no target yet); Amazon still re-projects from the picked theme', () => {
+    const channel = { ...GALE_EBAY_IT_OVERRIDDEN, addableAxes: [{ axisKey: 'material', familyKey: 'Materiale', label: 'Material' }] }
+    expect(axesAddEdit(channel, 'material', false, false)?.axes.at(-1)).toMatchObject({ axisKey: 'material', familyKey: 'Materiale', target: null, included: true })
+    const theme = GALE_AMAZON_DE_DERIVED.candidates!.items[0]
+    expect(axesAddEdit(GALE_AMAZON_DE_DERIVED, theme.code, false, true)?.theme?.code).toBe(theme.code)
+  })
 })
 
 it('🔴 the Shared product with no per-variant attribute left points to Classification, never back at itself', () => {
