@@ -254,3 +254,160 @@ test.describe('B3a · measurements', () => {
     await expect(shown(page, 'Data storage capacity')).toHaveText('2040 megabytes')
   })
 })
+
+/* ── Slice B3c: mixed and disclosure references on the tick list (docs/shopify-metafields/PLAN-2026-09-28.md §6.3, G18). ── */
+
+test.describe('B3c · mixed and disclosure references', () => {
+  test.beforeEach(async ({ page }) => { await page.getByRole('tab', { name: /Every Shopify type/ }).click() })
+  const chip = (page: Page, name: string, label: string) => popup(page, name).locator('.nds-mchip', { has: page.locator('.nds-mchip-label', { hasText: label }) })
+  /* A row's own name (a picked row also carries its "Edit entry" actions). */
+  const rowNames = (list: ReturnType<Page['getByRole']>) => list.locator('.nds-mpick-label')
+
+  test('a list of mixed, by keyboard only: an FAQ entry, then the kind switch, then a Press quote entry; Enter saves both', async ({ page }) => {
+    test.setTimeout(60_000)
+    const name = 'List of mixed reference'
+    await expect(cellOf(page, name).getByText(/G18/)).toHaveCount(0)
+    await openByKeyboard(page, name)
+    const p = popup(page, name)
+    await expect(p.getByRole('radiogroup', { name: 'Entry kind' }).getByRole('radio')).toHaveText(['FAQ', 'Press quote'])
+    await expect(p.getByRole('radio', { name: 'FAQ' })).toHaveAttribute('aria-checked', 'true')
+    await expect(p.getByText('Reusable entry type')).toHaveCount(0)
+    /* The two starting entries go (Backspace in the empty search line), then "2" finds FAQ 2 and Enter ticks it. */
+    await expect(chip(page, name, 'Press quote 1')).toHaveCount(1)
+    await page.keyboard.press('Backspace'); await page.keyboard.press('Backspace')
+    await expect(p.locator('.nds-mchip')).toHaveCount(0)
+    await page.keyboard.type('2')
+    const faqList = p.getByRole('listbox', { name: 'FAQ entries' })
+    await expect(rowNames(faqList)).toHaveText(['FAQ 2'])
+    await page.keyboard.press('Enter')
+    await expect(chip(page, name, 'FAQ 2')).toHaveCount(1)
+    await expect(p).toBeVisible()
+    /* Tab: the chip line's Clear, then the kind switch; → picks Press quote and the list follows it. */
+    await page.keyboard.press('Tab'); await page.keyboard.press('Tab')
+    await expect(p.getByRole('radio', { name: 'FAQ' })).toBeFocused()
+    /* Every drawn frame is watched: the list named "Press quote entries" never shows an FAQ row, even while it loads. */
+    await p.evaluate(d => {
+      const w = window as unknown as { staleRows: boolean }; w.staleRows = false
+      new MutationObserver(() => { if (/FAQ/.test(d.querySelector('[role="listbox"][aria-label="Press quote entries"]')?.textContent ?? '')) w.staleRows = true })
+        .observe(d, { subtree: true, childList: true, characterData: true, attributes: true })
+    })
+    await page.keyboard.press('ArrowRight')
+    await expect(p.getByRole('radio', { name: 'Press quote' })).toBeFocused()
+    await expect(p.getByRole('radio', { name: 'Press quote' })).toHaveAttribute('aria-checked', 'true')
+    const pressList = p.getByRole('listbox', { name: 'Press quote entries' })
+    await expect(rowNames(pressList)).toHaveText(['Press quote 1', 'Press quote 2'])
+    expect(await page.evaluate(() => (window as unknown as { staleRows: boolean }).staleRows)).toBe(false)
+    await expect(p.getByRole('button', { name: 'Add new Press quote entry' })).toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(pressList).toBeFocused()
+    await page.keyboard.press('ArrowDown'); await page.keyboard.press('Space')
+    await expect(pressList.getByRole('option', { name: /Press quote 1/ })).toHaveAttribute('aria-selected', 'true')
+    /* Chips of both kinds, each with its own picture or none (FAQ entries have no picture: no empty slot). */
+    await expect(chip(page, name, 'Press quote 1').locator('img')).toHaveCount(1)
+    await expect(chip(page, name, 'FAQ 2').locator('img, .nds-media-mark')).toHaveCount(0)
+    await page.keyboard.press('Enter')
+    await expect(p).toHaveCount(0)
+    await expect(page.getByText(`${name} saved in the lab.`)).toBeVisible()
+    await expect(cellOf(page, name).locator('[aria-label="2 references: FAQ 2, Press quote 1"]')).toHaveCount(1)
+    await expect(row(page, name)).toBeFocused()
+  })
+
+  test('one mixed entry, by keyboard only: Change, switch the kind, pick a Press quote; the card names its kind', async ({ page }) => {
+    test.setTimeout(60_000)
+    const name = 'Mixed reference'
+    await openByKeyboard(page, name)
+    const p = popup(page, name)
+    await expect(p.locator('small', { hasText: 'FAQ' })).toBeVisible()
+    await p.getByRole('button', { name: 'Change' }).focus(); await page.keyboard.press('Enter')
+    await expect(p.getByRole('combobox', { name: 'Search FAQ' })).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(p.getByRole('radio', { name: 'FAQ' })).toBeFocused()
+    await page.keyboard.press('ArrowRight')
+    await expect(p.getByRole('radio', { name: 'Press quote' })).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(p.getByRole('combobox', { name: 'Search Press quote' })).toBeFocused()
+    await page.keyboard.type('2')
+    await expect(rowNames(p.getByRole('listbox', { name: 'Press quote entries' }))).toHaveText(['Press quote 2'])
+    await page.keyboard.press('Enter')
+    await expect(p.getByRole('radiogroup')).toHaveCount(0)
+    await expect(p.locator('small', { hasText: 'Press quote' })).toBeVisible()
+    await expect.poll(() => p.evaluate(d => d.contains(document.activeElement))).toBe(true)
+    await page.keyboard.press('Enter')
+    await expect(p).toHaveCount(0)
+    await expect(cellOf(page, name).locator('[aria-label="1 reference: Press quote 2"]')).toHaveCount(1)
+    await expect(cellOf(page, name).locator('img')).toHaveCount(1)
+  })
+
+  test('"Add new entry" makes an entry of the chosen kind and picks it', async ({ page }) => {
+    test.setTimeout(60_000)
+    const name = 'List of mixed reference'
+    await openByKeyboard(page, name)
+    const p = popup(page, name)
+    await p.getByRole('radio', { name: 'Press quote' }).click()
+    await p.getByRole('button', { name: 'Add new Press quote entry' }).click()
+    const editor = page.getByRole('dialog', { name: 'New Press quote' })
+    await editor.getByRole('textbox', { name: 'Quote' }).fill('Dry after a day of rain')
+    await editor.getByRole('button', { name: 'Review entry changes' }).click()
+    await page.getByRole('dialog', { name: 'Save reusable entry to Shopify?' }).getByRole('button', { name: 'Save to Shopify' }).click()
+    await expect(editor).toHaveCount(0)
+    await expect(chip(page, name, 'Dry after a day of rain')).toHaveCount(1)
+    await expect(p.getByRole('listbox', { name: 'Press quote entries' }).getByRole('option', { name: /Dry after a day of rain/ })).toHaveAttribute('aria-selected', 'true')
+    await page.keyboard.press('ControlOrMeta+Enter')
+    await expect(cellOf(page, name).locator('[aria-label="3 references: FAQ 1, Press quote 1, Dry after a day of rain"]')).toHaveCount(1)
+  })
+
+  test('a kind whose list cannot be read says so — never a spinner for ever, never the other kind’s rows', async ({ page }) => {
+    const name = 'List of mixed reference'
+    /* The store fails for Press quote entries only (a wrapper over the lab's own stand-in, in the page). */
+    await page.evaluate(() => {
+      const before = window.fetch
+      window.fetch = (input, init) => /metaobjectType=lab_press/.test(String(input instanceof Request ? input.url : input))
+        ? Promise.resolve(new Response(JSON.stringify({ error: 'Shopify could not be reached. Try again.' }), { status: 502, headers: { 'Content-Type': 'application/json' } }))
+        : before(input, init)
+    })
+    await openByKeyboard(page, name)
+    const p = popup(page, name)
+    await expect(rowNames(p.getByRole('listbox', { name: 'FAQ entries' }))).toHaveText(['FAQ 1', 'FAQ 2'])
+    await p.getByRole('radio', { name: 'Press quote' }).click()
+    const pressList = p.getByRole('listbox', { name: 'Press quote entries' })
+    await expect(pressList.getByRole('alert')).toHaveText('Shopify could not be reached. Try again.')
+    await expect(pressList.getByText('Loading…')).toHaveCount(0)
+    await expect(rowNames(pressList)).toHaveCount(0)
+    await p.getByRole('radio', { name: 'FAQ' }).click()
+    await expect(rowNames(p.getByRole('listbox', { name: 'FAQ entries' }))).toHaveText(['FAQ 1', 'FAQ 2'])
+  })
+
+  test('a disclosure field: one kind, so no switch; its own entries; Backspace removes one and Enter saves', async ({ page }) => {
+    const name = 'List of disclosure reference'
+    await openByKeyboard(page, name)
+    const p = popup(page, name)
+    await expect(p.getByRole('radiogroup')).toHaveCount(0)
+    await expect(rowNames(p.getByRole('listbox', { name: 'Disclosure (made up) entries' }))).toHaveText(['Disclosure (made up) 1', 'Disclosure (made up) 2'])
+    await expect(p.getByRole('button', { name: 'Add new entry' })).toBeVisible()
+    await expect(p.getByText('Disclosure (made up) entries · Up to 5 entries', { exact: true })).toBeVisible()
+    await page.keyboard.press('Backspace')
+    await expect(p.locator('.nds-mchip')).toHaveCount(1)
+    await page.keyboard.press('Enter')
+    await expect(p).toHaveCount(0)
+    await expect(cellOf(page, name).locator('[aria-label="1 reference: Disclosure (made up) 1"]')).toHaveCount(1)
+  })
+
+  test('on a phone in dark mode the kind switch fits the sheet and the page never scrolls sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ colorScheme: 'dark' })
+    const name = 'List of mixed reference'
+    await openByKeyboard(page, name)
+    const p = popup(page, name)
+    const sheet = (await p.boundingBox())!, kinds = (await p.getByRole('radiogroup', { name: 'Entry kind' }).boundingBox())!
+    expect(sheet.width).toBeGreaterThan(340)
+    expect(kinds.x).toBeGreaterThanOrEqual(sheet.x); expect(kinds.x + kinds.width).toBeLessThanOrEqual(sheet.x + sheet.width)
+    await expect(p.getByRole('listbox', { name: 'FAQ entries' }).getByRole('option')).toHaveCount(2)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+    /* Dark for real: the app's theme class is on, and the sheet is drawn dark (its background is a dark colour). */
+    expect(await page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true)
+    const [r, g, b] = (await p.evaluate(d => getComputedStyle(d).backgroundColor)).match(/\d+(\.\d+)?/g)!.map(Number)
+    expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeLessThan(80)
+    await page.keyboard.press('Escape')
+    await expect(row(page, name)).toBeFocused()
+  })
+})
