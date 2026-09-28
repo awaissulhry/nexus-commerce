@@ -63,7 +63,7 @@ describe('shared reusable entry changes', () => {
   })
   it('clears optional fields with readback while refusing required clears', async () => {
     const initial = await getLinkedEntry(gql, entryId)
-    await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'heading', value: '' }] })).rejects.toThrow('required')
+    await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'heading', value: '' }] })).rejects.toThrow('Heading: Enter a value. Shopify needs this field.')
     const saved = await saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'image', value: '' }] })
     expect(saved.fields.find(f => f.key === 'image')?.value).toBeNull()
   })
@@ -71,7 +71,7 @@ describe('shared reusable entry changes', () => {
     const initial = await getLinkedEntry(gql, entryId)
     await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'image', value: 'gid://shopify/MediaImage/999' }] })).rejects.toThrow('is no longer in the store')
     fixture.readOnly = true
-    await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'heading', value: 'Mine' }] })).rejects.toThrow('read-only')
+    await expect(saveLinkedEntry(gql, { ...identity, expectedRevision: initial.revision, fields: [{ key: 'heading', value: 'Mine' }] })).rejects.toThrow('Heading cannot be changed here: App owned')
     expect(fixture.writes).toHaveLength(0)
   })
   it('does not report success when Shopify readback differs', async () => {

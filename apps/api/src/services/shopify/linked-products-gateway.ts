@@ -171,7 +171,45 @@ export function linkedFileKindsQuery(fileTypes: string | undefined): string | nu
   const kinds = (fileTypes ?? '').split(',').map(kind => ({ Image: 'media_type:IMAGE', Video: 'media_type:VIDEO' } as Record<string, string>)[kind.trim()]).filter(Boolean)
   return kinds.length ? kinds.join(' OR ') : null
 }
-export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type: string; query?: string; cursor?: string; metaobjectType?: string; fileTypes?: string }): Promise<ShopifyReferencePage> {
+/**
+ * Shopify's values for one taxonomy attribute ("color", "pattern", …) — the values a category Color entry's "Base color"
+ * and "Base pattern" take (gap G12; docs/shopify-metafields/PLAN-2026-09-28.md §6.2). Shopify lists an attribute's values
+ * only through a category: the attribute is found by its handle among a category's attributes, then its values are read
+ * page by page. Taxonomy is Shopify's public data, the same for every store, so both reads are cached for a day.
+ * `attribute: null` means no given category carries the attribute — the caller says so; it never guesses.
+ */
+export const taxonomyHandle = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+const TAXONOMY_TTL_MS = 24 * 60 * 60 * 1000
+const taxonomyCache = new WorkspaceCache<string, { expires: number; value: Promise<unknown> }>(500)
+function cachedTaxonomy<T>(key: string, read: () => Promise<T>): Promise<T> {
+  const hit = taxonomyCache.get(key)
+  if (hit && hit.expires > Date.now()) return hit.value as Promise<T>
+  const value = read()
+  taxonomyCache.set(key, { expires: Date.now() + TAXONOMY_TTL_MS, value })
+  value.catch(() => { if (taxonomyCache.get(key)?.value === value) taxonomyCache.delete(key) })
+  return value
+}
+export function invalidateTaxonomyCache() { taxonomyCache.clear() }
+export async function readTaxonomyAttributeValues(gql: ShopifyGraphql, handle: string, categoryIds: string[]): Promise<{ attribute: { id: string; name: string } | null; values: ShopifyReference[] }> {
+  let attribute: { id: string; name: string } | null = null
+  for (const category of categoryIds.filter(id => /^gid:\/\/shopify\/TaxonomyCategory\/[\w-]+$/.test(id)).slice(0, 5)) {
+    const attributes = await cachedTaxonomy(`category|${category}`, async () => {
+      const data = await gql(`query NexusTaxonomyCategoryAttributes($id:ID!) { node(id:$id) { ... on TaxonomyCategory { attributes(first:250) { nodes { __typename ... on TaxonomyChoiceListAttribute { id name } } } } } }`, { id: category })
+      return ((data?.node?.attributes?.nodes ?? []) as any[]).filter(n => n?.id && n?.name).map(n => ({ id: String(n.id), name: String(n.name) }))
+    })
+    attribute = attributes.find(a => taxonomyHandle(a.name) === handle) ?? null
+    if (attribute) break
+  }
+  if (!attribute) return { attribute: null, values: [] }
+  const found = attribute
+  const values = await cachedTaxonomy(`values|${found.id}`, async () => (await collectShopifyPages<{ id: string; name: string }>(async after => {
+    const data = await gql(`query NexusTaxonomyAttributeValues($id:ID!,$after:String) { node(id:$id) { ... on TaxonomyChoiceListAttribute { values(first:250,after:$after) { nodes { id name } ${pageInfo} } } } }`, { id: found.id, after })
+    return data?.node?.values
+  }, 5000)).map(v => ({ id: v.id, label: v.name, image: null, type: 'TaxonomyValue', available: true } as ShopifyReference)))
+  return { attribute: found, values }
+}
+
+export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type: string; query?: string; cursor?: string; metaobjectType?: string; fileTypes?: string; attribute?: string; categories?: string }): Promise<ShopifyReferencePage> {
   const type = input.type.replace(/^list\./, '')
   const query = input.query?.trim().slice(0, 200) || null, after = input.cursor || null
   let selection: string, root: string, args = 'first:40,after:$after,query:$query', variables: Record<string, unknown> = { after, query }, extra = ''
@@ -193,6 +231,13 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   else if (type === 'metaobject_reference' || type === 'mixed_reference' || type === 'disclosure_reference') {
     if (!input.metaobjectType) throw new WorkspaceScopeError('Choose the reusable entry type.', 400)
     root = 'metaobjects'; selection = `id displayName handle type ${entryThumbnail}`; args += ',type:$type'; extra = ',$type:String!'; variables.type = input.metaobjectType
+  } else if (type === 'product_taxonomy_value_reference' && input.attribute) {
+    /* The attribute's own list, searched by name (gap G12): no raw id is typed any more. */
+    const { attribute, values } = await readTaxonomyAttributeValues(gql, input.attribute, (input.categories ?? '').split(',').map(c => c.trim()).filter(Boolean))
+    if (!attribute) throw new WorkspaceScopeError(`Shopify lists the “${input.attribute}” values only through a product category, and this field has none that carries it. The stored value is kept.`, 422)
+    const needle = query?.toLowerCase() ?? '', start = Number(after ?? 0) || 0
+    const matches = values.filter(v => !needle || v.label.toLowerCase().includes(needle))
+    return { items: matches.slice(start, start + 40), cursor: start + 40 < matches.length ? String(start + 40) : null }
   } else if (type === 'product_taxonomy_value_reference') {
     if (!query || !/^gid:\/\/shopify\/TaxonomyValue\/\d+$/.test(query)) return { items: [], cursor: null }
     const refs = await resolveLinkedReferences(gql, [query])

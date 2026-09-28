@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Copy, Pencil } from 'lucide-react'
 import type { ShopifyFieldDefinition, ShopifyReference, ShopifyReferencePage, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { shopifyReferenceError } from '@nexus/shared/shopify-linked-products'
+import { shopifyReferenceError, shopifyTaxonomyCategories } from '@nexus/shared/shopify-linked-products'
 import {
   MediaChipField, MediaMark, MediaOrderedList, MediaPickList, ResourcePickerDialog, type MediaPickListHandle,
 } from '@/design-system/components'
@@ -24,7 +24,8 @@ import { baseReferenceType, chosenChoices, listMax, referenceChoice, referenceNo
 import styles from './linked.module.css'
 
 /** A page of search results for one field, re-read 200 ms after typing stops; older answers never overwrite newer. */
-function useReferenceSearch(path: string, type: string, metaobjectType: string | undefined, enabled: boolean, fileTypes?: string) {
+function useReferenceSearch(path: string, type: string, metaobjectType: string | undefined, enabled: boolean, extra: { fileTypes?: string; attribute?: string; categories?: string; version?: number } = {}) {
+  const { fileTypes, attribute, categories, version } = extra
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<ShopifyReference[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
@@ -37,7 +38,7 @@ function useReferenceSearch(path: string, type: string, metaobjectType: string |
     const request = ++generation.current
     setLoading(true); setError(null)
     try {
-      const page = await linkedRequest<ShopifyReferencePage>(linkedEndpoint(path, '/references', { type, query, cursor: after, metaobjectType, fileTypes }), 'GET', undefined, controller.signal)
+      const page = await linkedRequest<ShopifyReferencePage>(linkedEndpoint(path, '/references', { type, query, cursor: after, metaobjectType, fileTypes, attribute, categories }), 'GET', undefined, controller.signal)
       if (generation.current === request) { setItems(old => after ? [...old, ...page.items.filter(i => !old.some(o => o.id === i.id))] : page.items); setCursor(page.cursor) }
     } catch (e) { if (!controller.signal.aborted && generation.current === request) setError((e as Error).message) }
     finally { if (generation.current === request) setLoading(false) }
@@ -48,7 +49,7 @@ function useReferenceSearch(path: string, type: string, metaobjectType: string |
     return () => { clearTimeout(timer); abort.current?.abort(); generation.current++ }
     // The query, type and path own a result generation; fetchPage reads their current render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, query, path, type, metaobjectType, fileTypes])
+  }, [enabled, query, path, type, metaobjectType, fileTypes, attribute, categories, version])
   return { query, setQuery, items, loading, error, hasMore: !!cursor, loadMore: () => { if (cursor) void fetchPage(cursor) } }
 }
 
@@ -77,10 +78,12 @@ export interface ShopifyReferenceFieldProps {
   onCopyEntry?(id: string): void
   /** "Add new entry" — creates the entry in Shopify (D2 a: saved to the store at once, after a confirm). */
   onCreateEntry?(entryType: string): void
+  /** Bumped after an entry is saved: the list is read again, so a new entry shows at once (B2). */
+  referenceVersion?: number
 }
 
 export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
-  const { ui, path, definition: def, schema, values, names, namesFailed, locked, onChange, onPicked, onError, onOpenEntry, onCopyEntry, onCreateEntry } = props
+  const { ui, path, definition: def, schema, values, names, namesFailed, locked, onChange, onPicked, onError, onOpenEntry, onCopyEntry, onCreateEntry, referenceVersion } = props
   const list = def.type.startsWith('list.')
   const type = baseReferenceType(def.type)
   const noun = referenceNoun(def.type)
@@ -92,7 +95,10 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
   const [dialog, setDialog] = useState(false)
   /* A file field limited to some kinds lists only those kinds (gap G8): the store is asked for them, nothing is hidden after. */
   const fileTypes = fileTypeOptions(def)
-  const search = useReferenceSearch(path, list ? def.type : type, entryType, !locked && (ui === 'entries' ? browsing : dialog), fileTypes)
+  /* A taxonomy value field reads its attribute's values through a category it applies to (B2, G12). */
+  const attribute = def.validations.find(v => v.name === 'product_taxonomy_attribute_handle')?.value
+  const categories = attribute ? shopifyTaxonomyCategories(def, schema).join(',') : undefined
+  const search = useReferenceSearch(path, list ? def.type : type, entryType, !locked && (ui === 'entries' ? browsing : dialog), { fileTypes, attribute, categories, version: referenceVersion })
   const pick = useRef<MediaPickListHandle>(null)
   const [active, setActive] = useState<string>()
 
@@ -119,7 +125,7 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
     {onCopyEntry && !locked && <ToolbarButton label="Make a separate copy" description="A copy only this product uses." icon={<Copy size={14} />} onClick={() => onCopyEntry(choice.value)} />}
   </> : null
   const pickList = (single: boolean) => (
-    <MediaPickList ref={pick} label={`${entryName ?? def.name} entries`} choices={search.items.map(referenceChoice)} selected={values}
+    <MediaPickList ref={pick} label={`${entryName ?? def.name} ${noun.other}`} choices={search.items.map(referenceChoice)} selected={values}
       mode={single ? 'single' : 'multi'} search="remote" searchField={single} query={search.query} onQueryChange={search.setQuery}
       searchPlaceholder={`Search ${entryName ?? noun.other}`} loading={search.loading} error={search.error} hasMore={search.hasMore} onLoadMore={search.loadMore}
       emptyText={search.query ? 'No matches' : `This store has no ${entryName ?? noun.other} yet`} onToggle={toggle} onActiveChange={setActive}

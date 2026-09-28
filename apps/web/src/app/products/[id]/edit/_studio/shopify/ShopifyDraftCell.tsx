@@ -139,6 +139,8 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   const canPublish = usePermission('products.publish')
   const canEdit = usePermission('products.edit'), canAdjustInventory = usePermission('inventory.adjust')
   const [entry, setEntry] = useState<{ id: string | null; copy?: boolean; type?: string } | null>(null)
+  /* Bumped after an entry is saved: the pop-up's pick list is read again, so a new entry shows at once (B2). */
+  const [referenceVersion, setReferenceVersion] = useState(0)
   const [selected, setSelected] = useState<Selected | null>(null), [value, setValue] = useState<string | null>(null), [error, setError] = useState('')
   const dirty = useRef(false); dirty.current = !!entry || !!selected && value !== selected.baseline
   useEffect(() => scope.registerScopeChangeGuard(() => !dirty.current), [scope.registerScopeChangeGuard])
@@ -188,7 +190,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     <div className={styles.stack}>
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
       {error && <Banner tone="danger">{error}</Banner>}{reason && <Banner tone="neutral">{reason}</Banner>}
-      {field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} onChange={next => { setValue(next); setError('') }}
+      {field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} referenceVersion={referenceVersion} onChange={next => { setValue(next); setError('') }}
         onOpenEntry={id => setEntry({ id })} onCopyEntry={!locked && canPublish ? id => setEntry({ id, copy: true }) : undefined}
         onCreateEntry={!locked && canPublish ? type => setEntry({ id: null, type }) : undefined} />
         : field.id === 'tags' ? <InformationTagsEditor original={selected.baseline} disabled={locked} onChange={setValue} />
@@ -197,6 +199,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     </div>
   </CellPanel>{entry && <EntryEditor key={`${entry.id}:${!!entry.copy}:${entry.type ?? ''}`} id={entry.id} copy={entry.copy} initialType={entry.type} path={path} schema={schema} canPublish={canPublish && !locked}
     onClose={() => setEntry(null)} onSaved={saved => {
+      setReferenceVersion(v => v + 1)
       /* A copy replaces the entry it was copied from; a NEW entry is picked straight away (Shopify's "Add new entry"). */
       const list = field.type.startsWith('list.')
       if (entry.copy) setValue(previous => list ? JSON.stringify(JSON.parse(previous ?? '[]').map((id: string) => id === entry.id ? saved.id : id)) : saved.id)

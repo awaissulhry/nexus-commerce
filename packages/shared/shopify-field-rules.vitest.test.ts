@@ -66,8 +66,11 @@ describe('every Shopify type: the rules never crash', () => {
     expect(validateShopifyField(labTypeField(READ_ONLY), labGoodValue(READ_ONLY))).toMatch(/stored value is preserved/)
   })
   const bad = types.flatMap(type => labBadValues(type).map(sample => ({ type, ...sample })))
-  it.each(bad.filter(sample => !sample.gap).map(s => [s.type, s.rule, s.value] as const))('%s refuses a value that breaks %s', (type, _rule, value) => {
+  it.each(bad.filter(sample => !sample.gap && !sample.storeCheck).map(s => [s.type, s.rule, s.value] as const))('%s refuses a value that breaks %s', (type, _rule, value) => {
     expect(validateShopifyField(labTypeField(type), value)).toEqual(expect.any(String))
+  })
+  it.each(bad.filter(sample => sample.storeCheck).map(s => [s.type, s.rule, s.value] as const))('%s: a value that breaks %s needs Shopify’s list — the offline rule lets it through to the store check', (type, _rule, value) => {
+    expect(validateShopifyField(labTypeField(type), value)).toBeNull()
   })
   for (const sample of bad.filter(s => s.gap)) it.todo(`${sample.gap}: ${sample.type} must refuse a value that breaks ${sample.rule}`)
   it('never throws, whatever is stored', () => {

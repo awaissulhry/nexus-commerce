@@ -4,7 +4,7 @@ import { z } from 'zod'
 import prisma from '../../db.js'
 import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, mediaOrderEditSchema, nativeSchemaError,
   type InformationField, type InformationRow, type InformationSnapshot, type ShopifySheetWrite } from '@nexus/shared/shopify-information'
-import { shopifyLinkedDraftSchema, shopifyReferenceError, validateShopifyField, type ShopifyLinkedDraft, type ShopifyLinkedWorkspace, type ShopifyReference, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import { shopifyLinkedDraftSchema, shopifyReferenceError, shopifyTaxonomyCategories, validateShopifyField, type ShopifyLinkedDraft, type ShopifyLinkedWorkspace, type ShopifyReference, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
 import { getStudioSheet } from '../pim/studio-sheet.service.js'
 import { readShopifyDisplaySchema, readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
@@ -13,7 +13,7 @@ import { contentDestination, object, PUBLISH_KEY, type ContentScope } from './co
 import { shopifyAdmin } from './admin-client.js'
 import { readInformation } from './information-gateway.js'
 import { AUTOMATION_KEY, LINKED_KEY, getLinkedWorkspace, linkedState, linkedTransaction, writeLinkedState } from './linked-products.service.js'
-import { resolveLinkedReferenceNames } from './linked-products-gateway.js'
+import { readTaxonomyAttributeValues, resolveLinkedReferenceNames } from './linked-products-gateway.js'
 
 export async function enrichShopifyChannelSheet(page: StudioSheet): Promise<StudioSheet> {
   if (page.scope.channel !== 'SHOPIFY' || !page.scope.connectionId) return page
@@ -89,7 +89,15 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
       for (let i = 0; i < ids.length; i += 100) for (const ref of await resolveLinkedReferenceNames(graphql, destination.accountId, ids.slice(i, i + 100))) refs.set(ref.id, ref)
       for (const { change, def, ids: cellIds } of referenceCells) {
         const problem = shopifyReferenceError(def, cellIds.map(id => refs.get(id) ?? { available: false }), schema)
-        if (problem) referenceRefusals.set(change.colId, problem)
+        if (problem) { referenceRefusals.set(change.colId, problem); continue }
+        /* A taxonomy value must be a value of the field's attribute (B2, G12) — checked against Shopify's list when a
+           category tells which list; otherwise Shopify's own check on publish decides. */
+        const handle = def.validations.find(v => v.name === 'product_taxonomy_attribute_handle')?.value
+        const categories = handle ? shopifyTaxonomyCategories(def, schema) : []
+        if (handle && categories.length) {
+          const { attribute, values } = await readTaxonomyAttributeValues(graphql, handle, categories)
+          if (attribute && cellIds.some(id => !values.some(v => v.id === id))) referenceRefusals.set(change.colId, `Choose a ${def.name} value from Shopify’s list.`)
+        }
       }
     } catch {
       /* The check could not run (a timeout, a rate limit, an incomplete answer): only the reference cells are refused —

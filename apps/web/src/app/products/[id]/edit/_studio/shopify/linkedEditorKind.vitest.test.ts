@@ -25,7 +25,7 @@ describe('B1 · the editor each store type opens', () => {
     const kinds = Object.fromEntries(SHOPIFY_TYPE_CATALOG.map(({ name }) => [name, linkedEditorKind(labTypeField(name), labGoodValue(name), LAB_SCHEMA)]))
     expect(kinds).toMatchObject({
       temperature: 'compound', 'list.temperature': 'list', multi_line_text_field: 'multi-line', json: 'box', jurisdiction: 'box',
-      rich_text_field: 'rich-text', date: 'date', date_time: 'line', mixed_reference: 'older-picker', product_taxonomy_value_reference: 'older-picker',
+      rich_text_field: 'rich-text', date: 'date', date_time: 'line', mixed_reference: 'older-picker', product_taxonomy_value_reference: 'entries',
       'list.variant_reference': 'resources', metaobject_reference: 'entries', rating: 'rating', money: 'compound', link: 'compound',
     })
     for (const { name } of SHOPIFY_TYPE_CATALOG) expect(() => render(labTypeField(name), labGoodValue(name)), name).not.toThrow()

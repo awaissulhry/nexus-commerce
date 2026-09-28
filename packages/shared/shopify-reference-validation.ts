@@ -35,3 +35,18 @@ export function shopifyReferenceError(def: Pick<ShopifyFieldDefinition, 'type' |
   } catch { return 'This field’s reference constraints cannot be read. Refresh the store schema.' }
   return null
 }
+
+/**
+ * The taxonomy categories through which a taxonomy-value field's attribute can be read (Lane B slice B2, gap G12): Shopify
+ * lists an attribute's values only through a category. A product field uses its own category constraint; an entry field
+ * (in a kind such as the category `shopify--color-pattern`) uses the constraints of the product fields that point to that
+ * kind. Empty when none is known — the caller then says so, it never guesses. At most five, in schema order.
+ */
+export function shopifyTaxonomyCategories(def: Pick<ShopifyFieldDefinition, 'ownerType' | 'namespace' | 'constraints'>, schema: Pick<ShopifyStoreSchema, 'definitions' | 'metaobjectDefinitions'>): string[] {
+  const own = def.constraints?.key === 'category' ? def.constraints.values : []
+  if (own.length || def.ownerType !== 'METAOBJECT') return [...new Set(own)].slice(0, 5)
+  const kind = schema.metaobjectDefinitions.find(d => d.type === def.namespace)
+  if (!kind) return []
+  const pointsHere = (d: ShopifyFieldDefinition) => d.validations.some(v => (v.name === 'metaobject_definition_id' && v.value === kind.id) || (v.name === 'metaobject_definition_type' && v.value === kind.type))
+  return [...new Set(schema.definitions.filter(pointsHere).flatMap(d => d.constraints?.key === 'category' ? d.constraints.values : []))].slice(0, 5)
+}

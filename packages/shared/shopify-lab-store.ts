@@ -91,7 +91,9 @@ export const LAB_ENTRY_KINDS: ShopifyMetaobjectDefinition[] = [
     ['color_taxonomy_reference', 'Base color', 'list.product_taxonomy_value_reference', [['product_taxonomy_attribute_handle', 'color'], ['list.min', '1'], ['list.max', '4']], true],
     ['pattern_taxonomy_reference', 'Base pattern', 'product_taxonomy_value_reference', [['product_taxonomy_attribute_handle', 'pattern']], true],
   ], false),
-  kindDefinition(2, 'lab_highlights', 'Highlights', [file('image', 'Image', IMAGE_VIDEO), text('title', 'Title'), long('description', 'Description')]),
+  /* + one made-up entry field (B2): an entry inside an entry, so the lab shows "Add new entry" from within an entry. */
+  kindDefinition(2, 'lab_highlights', 'Highlights', [file('image', 'Image', IMAGE_VIDEO), text('title', 'Title'), long('description', 'Description'),
+    ['related_icon', 'Related icon', 'metaobject_reference', [['metaobject_definition_type', 'lab_icon_text']]]]),
   kindDefinition(3, 'lab_short_text', 'Short text', [long('text', 'Text')]),
   kindDefinition(4, 'lab_summary', 'Short summary', [long('text', 'Text')]),
   kindDefinition(5, 'lab_icon_text', 'Icon with text', [file('image', 'Icon', IMAGE_VIDEO), text('heading', 'Heading'), long('content', 'Content')]),
@@ -123,6 +125,12 @@ export const LAB_ENTRY_KINDS: ShopifyMetaobjectDefinition[] = [
   /* Not a mirror: Shopify's disclosure fields pick only `shopify--disclosure-…` kinds, so the lab needs one (made up). */
   kindDefinition(24, 'shopify--disclosure-lab', 'Disclosure (made up)', [text('text', 'Text', true)], false),
 ]
+/* Made up for the lab (slice B2): one read-only field — an app owns it — to show it is shown with its reason and left out
+   of a save, while the rest of the kind stays editable. */
+{
+  const facts = LAB_ENTRY_KINDS.find(kind => kind.type === 'lab_facts')!
+  facts.fields = facts.fields.map(field => field.key === 'external_id' ? { ...field, readOnlyReason: 'An app owns this field. Change it in that app.' } : field)
+}
 export const labKind = (type: string) => LAB_ENTRY_KINDS.find(kind => kind.type === type)!
 
 /* ── 3b. Entries. ── */
@@ -330,13 +338,16 @@ export interface LabBadValue {
   value: string
   /** Set when TODAY's code accepts this value: the gap in docs/shopify-metafields/PLAN-2026-09-28.md §3 that refuses it. */
   gap?: string
+  /** Set when only Shopify's data can refuse it (a taxonomy value of another attribute): the offline rule accepts it, and
+   *  the pick list, the draft save and the entry save check it against Shopify's list (B2). */
+  storeCheck?: true
 }
 /** Values each lab type field must refuse (one per rule), as Shopify stores them. */
 export function labBadValues(type: string): LabBadValue[] {
   const base = shopifyBaseType(type), list = type.startsWith('list.')
   const one = (value: unknown): string => list ? JSON.stringify([value]) : stored(value)!
   const out: LabBadValue[] = []
-  const add = (rule: string, value: unknown, gap?: string) => out.push({ rule, value: one(value), ...(gap ? { gap } : {}) })
+  const add = (rule: string, value: unknown, gap?: string, storeCheck?: true) => out.push({ rule, value: one(value), ...(gap ? { gap } : {}), ...(storeCheck ? { storeCheck } : {}) })
   switch (base) {
     case 'single_line_text_field': add('min', 'A'); add('max', 'x'.repeat(41)); add('one line', 'two\nlines'); break
     case 'multi_line_text_field': add('max', 'x'.repeat(501)); break
@@ -356,7 +367,7 @@ export function labBadValues(type: string): LabBadValue[] {
     case 'language': add('format', 'english'); break
     case 'jurisdiction': add('format', 'Italy'); break
     case 'file_reference': add('file_type_options', list ? LAB_FILES[6].id : LAB_FILES[4].id); add('resource', LAB_PRODUCTS[0].id); break
-    case 'product_taxonomy_value_reference': add('product_taxonomy_attribute_handle', list ? taxonomy('Solid') : taxonomy('Black'), 'G12'); break
+    case 'product_taxonomy_value_reference': add('product_taxonomy_attribute_handle', list ? taxonomy('Solid') : taxonomy('Black'), undefined, true); break
     case 'metaobject_reference': case 'mixed_reference': case 'disclosure_reference': add('resource', LAB_PRODUCTS[0].id); break
     case 'product_taxonomy_disclosure_reference': break
     default:

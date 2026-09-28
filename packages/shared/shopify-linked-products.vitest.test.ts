@@ -53,7 +53,7 @@ describe('store-driven field types and validation', () => {
   })
   it('distinguishes explicit clears, empty lists, false and zero', () => {
     expect(validateShopifyField({ type: 'boolean', validations: [] }, null)).toBeNull()
-    expect(validateShopifyField({ type: 'boolean', validations: [], required: true }, null)).toContain('required')
+    expect(validateShopifyField({ type: 'boolean', validations: [], required: true }, null)).toBe('Enter a value. Shopify needs this field.')
     expect(validateShopifyField({ type: 'list.product_reference', validations: [{ name: 'list.min', value: '1' }] }, '[]')).toBe('Add at least 1 product.')
   })
   it('loads store-specific choices and text length limits', () => {

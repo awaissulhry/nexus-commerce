@@ -59,7 +59,7 @@ describe('entries in the stand-in store (same checks as saveLinkedEntry)', () =>
   })
   it('refuses a missing required field with the server’s words', () => {
     const answer = call('POST', '/entry', {}, { type: kind.type, handle: 'lab-no-heading', fields: [{ key: 'image', value: image }] })
-    expect(answer).toEqual({ status: 422, body: { error: 'Heading is required.' } })
+    expect(answer).toEqual({ status: 422, body: { error: 'Heading: Enter a value. Shopify needs this field.' } })
   })
   it('refuses a video in an image-only field at save', () => {
     const colour = labKind('shopify--color-pattern')
