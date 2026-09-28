@@ -85,10 +85,16 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
   })
   if (referenceCells.length) {
     const ids = [...new Set(referenceCells.flatMap(cell => cell.ids))], refs = new Map<string, ShopifyReference>()
-    for (let i = 0; i < ids.length; i += 100) for (const ref of await resolveLinkedReferenceNames(graphql, destination.accountId, ids.slice(i, i + 100))) refs.set(ref.id, ref)
-    for (const { change, def, ids: cellIds } of referenceCells) {
-      const problem = shopifyReferenceError(def, cellIds.map(id => refs.get(id) ?? { available: false }), schema)
-      if (problem) referenceRefusals.set(change.colId, problem)
+    try {
+      for (let i = 0; i < ids.length; i += 100) for (const ref of await resolveLinkedReferenceNames(graphql, destination.accountId, ids.slice(i, i + 100))) refs.set(ref.id, ref)
+      for (const { change, def, ids: cellIds } of referenceCells) {
+        const problem = shopifyReferenceError(def, cellIds.map(id => refs.get(id) ?? { available: false }), schema)
+        if (problem) referenceRefusals.set(change.colId, problem)
+      }
+    } catch {
+      /* The check could not run (a timeout, a rate limit, an incomplete answer): only the reference cells are refused —
+         an unchecked reference never reaches the draft — and every other cell of the batch still saves. */
+      for (const { change } of referenceCells) referenceRefusals.set(change.colId, 'Shopify could not be reached to check this value. Try again.')
     }
   }
   // Resolve reset from the authoritative common mapping, never from client-supplied text.

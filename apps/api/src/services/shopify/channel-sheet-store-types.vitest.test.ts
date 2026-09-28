@@ -10,7 +10,7 @@ import { shopifyCellToken } from './channel-sheet-projection.js'
  * with the rule's plain sentence; a pasted entry of another kind, or one the store no longer has, is refused HERE — not
  * first at publish. No Shopify write happens on this path.
  */
-const s = vi.hoisted(() => ({ workspace: null as any, snapshot: null as any, schema: null as any, writes: [] as any[], nameReads: [] as string[][], refs: [] as any[] }))
+const s = vi.hoisted(() => ({ workspace: null as any, snapshot: null as any, schema: null as any, writes: [] as any[], nameReads: [] as string[][], refs: [] as any[], namesDown: false }))
 vi.mock('../../db.js', () => ({ default: { channelListing: { findMany: async () => [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }] } } }))
 vi.mock('../pim/studio-sheet.service.js', () => ({ getStudioSheet: async () => { throw new Error('not used') } }))
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: async () => s.schema }))
@@ -21,6 +21,7 @@ vi.mock('./admin-client.js', () => ({ shopifyAdmin: async () => ({ graphql }) })
 vi.mock('./information-gateway.js', () => ({ readInformation: async () => s.snapshot }))
 vi.mock('./linked-products-gateway.js', () => ({ resolveLinkedReferenceNames: async (_gql: unknown, _account: string, ids: string[]) => {
   s.nameReads.push(ids)
+  if (s.namesDown) throw new Error('Shopify request failed (HTTP 429).')
   return ids.map(id => s.refs.find((r: any) => r.id === id) ?? { id, label: 'Unavailable reference', image: null, available: false })
 } }))
 vi.mock('./linked-products.service.js', () => ({ LINKED_KEY: '_nexusLinkedProducts', AUTOMATION_KEY: '_nexusLinkedAutomation',
@@ -35,7 +36,7 @@ const product = 'gid://shopify/Product/10', variant = 'gid://shopify/ProductVari
 const scope = { accountId: 'store-a', listingId: 'listing-a', market: 'GLOBAL' as const, locale: 'en' }
 const limitedFile = labTypeField('file_reference')
 beforeEach(() => {
-  s.writes = []; s.nameReads = []; s.refs = labReferences(); graphql.mockClear()
+  s.writes = []; s.nameReads = []; s.refs = labReferences(); s.namesDown = false; graphql.mockClear()
   s.schema = { ...LAB_SCHEMA, definitions: [...LAB_STORE_FIELDS, limitedFile] }
   s.workspace = { productId: 'family', familyId: 'family', revision: '1', destination: { accountId: 'store-a', listingId: 'listing-a', market: 'GLOBAL' }, suggestedProductIds: [product], operation: null,
     draft: { ...emptyShopifyLinkedDraft(), informationOnly: true, members: [{ id: product, title: 'Listed title', handle: 'listed', image: null }] } }
@@ -112,6 +113,14 @@ describe('B1 · LB-D2: a pasted entry is checked against the store at the draft 
   it('reads each id once through the names cache, and not at all for a value that already fails its rules', async () => {
     await saveShopifySheetCells('family', scope, { cells: [cell('icons_with_text', JSON.stringify([entry('lab_icon_text')])), cell('related_items', JSON.stringify([LAB_PAGES[0].id]))] }, 'user-1')
     expect(s.nameReads).toEqual([[entry('lab_icon_text')]])
+  })
+  it('when Shopify cannot be reached, refuses only the reference cell and still saves the others', async () => {
+    s.namesDown = true
+    const result = await saveShopifySheetCells('family', scope, { cells: [cell('short_summary', entry('lab_summary')), cell('variation_label', 'Navy')] }, 'user-1')
+    expect(result.cells[fieldFor('short_summary').id]).toEqual({ ok: false, reason: 'Listed title / Short summary: Shopify could not be reached to check this value. Try again.' })
+    expect(result.cells[fieldFor('variation_label').id]).toMatchObject({ ok: true })
+    expect(drafted('variation_label')).toBe('Navy')
+    expect(drafted('short_summary')).toBeUndefined()
   })
   it('lets a clear through without a read', async () => {
     s.workspace.draft.edits = []
