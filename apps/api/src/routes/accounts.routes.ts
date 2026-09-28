@@ -1,4 +1,4 @@
-import { listManagedConnections } from '../services/connection-resolver.service.js';
+import { isOwnConnection, listManagedConnections } from '../services/connection-resolver.service.js';
 /**
  * MAP.0 / MAP.1 — accounts.
  *
@@ -249,7 +249,8 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const accounts = rows
-        .map((r) => toAccountRow(r, r.isPrimary, scopesByConnection.get(r.id) ?? []))
+        // An account another business shares with this one is never this business's primary.
+        .map((r) => toAccountRow(r, r.isPrimary && isOwnConnection(r), scopesByConnection.get(r.id) ?? []))
         .sort(
           (a, b) =>
             (CHANNEL_ORDER[a.channel] ?? 99) - (CHANNEL_ORDER[b.channel] ?? 99) ||

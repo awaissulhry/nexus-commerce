@@ -8,7 +8,8 @@ import { describe, it, expect, vi } from 'vitest'
 const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }))
 vi.mock('../db.js', () => ({ default: { channelConnection: { findMany } } }))
 
-const { CONNECTION_PUBLIC_SELECT, listManagedConnections, resolveConnectionForProfile, AmbiguousConnectionError, NoConnectionError } = await import('./connection-resolver.service.js')
+const { CONNECTION_PUBLIC_SELECT, listActiveConnections, listManagedConnections, primaryConnectionIds, resolveConnectionForProfile, AmbiguousConnectionError, NoConnectionError } = await import('./connection-resolver.service.js')
+const { withWorkspace } = await import('../lib/workspace-context.js')
 
 const CREDENTIAL_KEYS = ['accessToken', 'refreshToken', 'ebayAccessToken', 'ebayRefreshToken', 'credentialsEnc'] as const
 
@@ -71,3 +72,25 @@ describe('profile and account directory resolution', () => {
     expect(findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { OR: [{ managedBy: 'oauth' }, { managedBy: 'env' }] }, select: CONNECTION_PUBLIC_SELECT }))
   })
 })
+
+describe('another business\'s shared account (2026-09-28)', () => {
+  const inB = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: 'ws_b', actorUserId: null, membershipId: null, roleKeys: [] }, work)
+  const row = (id: string, workspaceId: string, isPrimary = false) => ({ id, channelType: 'EBAY', isActive: true, isPrimary, workspaceId })
+
+  it('the public projection says whose account it is', () => {
+    expect((CONNECTION_PUBLIC_SELECT as Record<string, boolean>).workspaceId).toBe(true)
+  })
+
+  it('lists this business\'s own accounts first (its primary is "account 1"), then the shared ones, each in the operator\'s order', async () => {
+    // The database order: primary first — here A's primary, which B can see through a grant, comes before B's.
+    findMany.mockResolvedValueOnce([row('a-primary', 'ws_a', true), row('b-primary', 'ws_b', true), row('a-2', 'ws_a'), row('b-2', 'ws_b')])
+    expect((await inB(() => listActiveConnections('EBAY'))).map((r) => r.id)).toEqual(['b-primary', 'b-2', 'a-primary', 'a-2'])
+  })
+
+  it('the primary of each channel is this business\'s own; a channel with only a shared account has none', async () => {
+    findMany.mockResolvedValueOnce([row('a-primary', 'ws_a', true), row('b-primary', 'ws_b', true), { ...row('a-shop', 'ws_a', true), channelType: 'SHOPIFY' }])
+    const primaries = await inB(() => primaryConnectionIds(['EBAY', 'SHOPIFY']))
+    expect(Object.fromEntries(primaries)).toEqual({ EBAY: 'b-primary', SHOPIFY: null })
+  })
+})
+

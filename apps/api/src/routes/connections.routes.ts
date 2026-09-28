@@ -23,6 +23,7 @@ import { writeSettingsAudit } from "../utils/settings-audit.js";
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
 import { connectionLabel } from "../services/connection-label.js";
 import { channelFootprint } from "../services/channel-footprint.service.js";
+import { isOwnConnection } from "../services/connection-resolver.service.js";
 
 type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 type IsManagedBy = "oauth" | "env" | "pending";
@@ -165,11 +166,13 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if ((request.query as { all?: string }).all === 'true') {
-        return reply.send({ success: true, connections: rows.map(r => ({ ...toConnectionRow(r), isPrimary: r.isPrimary, accountLabel: r.accountLabel })) })
+        // An account another business shares with this one is never this business's primary.
+        return reply.send({ success: true, connections: rows.map(r => ({ ...toConnectionRow(r), isPrimary: r.isPrimary && isOwnConnection(r), accountLabel: r.accountLabel })) })
       }
-      // Keep one row per channel — first wins given the orderBy above.
+      // Keep one row per channel — first wins given the orderBy above, this business's own accounts before any another
+      // business shares with it.
       const byChannel = new Map<Channel, ConnectionRow>();
-      for (const r of rows) {
+      for (const r of [...rows.filter(isOwnConnection), ...rows.filter((r) => !isOwnConnection(r))]) {
         const channel = r.channelType as Channel;
         if (!byChannel.has(channel)) {
           byChannel.set(channel, toConnectionRow(r));

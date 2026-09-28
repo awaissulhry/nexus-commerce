@@ -14,9 +14,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   chooseConnection,
+  isOwnConnection,
   AmbiguousConnectionError,
   NoConnectionError,
 } from './connection-resolver.service.js'
+import { withWorkspace } from '../lib/workspace-context.js'
 
 type Row = { id: string; channelType: string; isActive: boolean; isPrimary: boolean }
 
@@ -143,3 +145,35 @@ describe('chooseConnection — nothing to resolve', () => {
     expect((many as AmbiguousConnectionError).code).toBe('AMBIGUOUS_CONNECTION')
   })
 })
+
+describe('chooseConnection — another business\'s account is never chosen for you (2026-09-28)', () => {
+  // Business B sees its own accounts and, through a grant, one of business A's (each business has its own primary).
+  const inB = <T>(work: () => T) => withWorkspace({ workspaceId: 'ws_b', actorUserId: null, membershipId: null, roleKeys: [] }, work)
+  const own = (id: string, over: Partial<Row> = {}) => ({ ...conn(id, over), workspaceId: 'ws_b' })
+  const shared = (id: string, over: Partial<Row> = {}) => ({ ...conn(id, over), workspaceId: 'ws_a' })
+
+  it('the primary is this business\'s own, even when a shared account is primary in its owner', () => {
+    // Before: two primaries → AmbiguousConnectionError on every primary lookup of B.
+    expect(inB(() => chooseConnection([shared('a-primary', { isPrimary: true }), own('b-primary', { isPrimary: true })], { channel: 'EBAY', wantPrimary: true })).id).toBe('b-primary')
+  })
+
+  it('a shared primary never stands in for a business with no primary of its own', () => {
+    // Before: B got A's account as "its" primary.
+    expect(() => inB(() => chooseConnection([shared('a-primary', { isPrimary: true }), own('b1'), own('b2')], { channel: 'EBAY', wantPrimary: true }))).toThrow(AmbiguousConnectionError)
+  })
+
+  it('"the only account" is this business\'s only own account; a shared one is never the only one', () => {
+    expect(inB(() => chooseConnection([shared('a1'), own('b1')], { channel: 'EBAY' })).id).toBe('b1')
+    let error: unknown
+    try { inB(() => chooseConnection([shared('a1')], { channel: 'EBAY' })) } catch (e) { error = e }
+    expect(error).toBeInstanceOf(NoConnectionError)
+    expect((error as Error).message).toContain('another business shares with this one can be used only when chosen by name')
+  })
+
+  it('a row read without its business (a caller\'s own select, a fixture) counts as its own', () => {
+    expect(inB(() => isOwnConnection({}))).toBe(true)
+    expect(inB(() => isOwnConnection({ workspaceId: 'ws_b' }))).toBe(true)
+    expect(inB(() => isOwnConnection({ workspaceId: 'ws_a' }))).toBe(false)
+  })
+})
+
