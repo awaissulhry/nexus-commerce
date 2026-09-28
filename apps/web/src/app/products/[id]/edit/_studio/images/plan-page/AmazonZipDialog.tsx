@@ -8,8 +8,8 @@ import { Banner, Field, Modal, Thumbnail } from '@/design-system/components'
 import { Button, SegmentedControl, Select, Spinner } from '@/design-system/primitives'
 
 import { MediaRequestError } from '../ebay/transport'
-import { downloadArchive, requestArchivePreview } from './archiveApi'
-import { ARCHIVE_KIND_LABEL, ARCHIVE_LIMITS, archiveKindHint, archiveSummary, filesByAsin, type ArchivePreview } from './archiveModel'
+import { downloadArchive, requestArchivePreview, type DownloadProgress } from './archiveApi'
+import { ARCHIVE_KIND_LABEL, ARCHIVE_LIMITS, archiveKindHint, archiveSummary, busyLabel, filesByAsin, type ArchivePreview } from './archiveModel'
 import { destinationLabel, type MediaDestinationRow, type MediaRead } from './model'
 import styles from './planPage.module.css'
 
@@ -34,6 +34,8 @@ export function AmazonZipDialog({ read, destination: d, assets, open, onClose }:
   const [check, setCheck] = useState<Check>({ state: 'checking' })
   const [again, setAgain] = useState(0)
   const [busy, setBusy] = useState(false)
+  // Set once the server has answered: the ZIP is made and the file is arriving.
+  const [progress, setProgress] = useState<DownloadProgress | null>(null)
   const [failure, setFailure] = useState('')
   const [saved, setSaved] = useState<string | null>(null)
   // The answer to Download shows above the list; bring it into view, as the button sits below a list that scrolls.
@@ -66,9 +68,11 @@ export function AmazonZipDialog({ read, destination: d, assets, open, onClose }:
 
   const download = async () => {
     if (!preview || !canDownload) return
-    setBusy(true); setFailure(''); setSaved(null)
+    setBusy(true); setProgress(null); setFailure(''); setSaved(null)
     try {
-      const blob = await downloadArchive(read.rootId, { accountId: d.accountId, market, kind, digest: preview.digest })
+      // One update per whole MB: a 500 MB file arrives in thousands of pieces.
+      const blob = await downloadArchive(read.rootId, { accountId: d.accountId, market, kind, digest: preview.digest },
+        next => setProgress(prev => prev && Math.floor(prev.received / 1_000_000) === Math.floor(next.received / 1_000_000) && prev.total === next.total ? prev : next))
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url; link.download = preview.filename
@@ -78,7 +82,7 @@ export function AmazonZipDialog({ read, destination: d, assets, open, onClose }:
       setFailure(error instanceof Error ? error.message : String(error))
       // The photos changed since this list: show the new list; the sentence above says why.
       if (error instanceof MediaRequestError && error.status === 409) setAgain(n => n + 1)
-    } finally { setBusy(false) }
+    } finally { setBusy(false); setProgress(null) }
   }
 
   return <Modal open={open} onClose={() => { if (!busy) onClose() }} size="xl" title="Export ZIP for Seller Central"
@@ -86,7 +90,7 @@ export function AmazonZipDialog({ read, destination: d, assets, open, onClose }:
     footer={<>
       <Button size="sm" disabled={busy} onClick={onClose}>Close</Button>
       <Button size="sm" variant="primary" disabled={!canDownload} onClick={() => void download()}>
-        {busy ? 'Making the ZIP…' : preview?.files.length ? `Download ZIP · ${preview.files.length} file${preview.files.length === 1 ? '' : 's'}` : 'Download ZIP'}
+        {busy ? busyLabel(progress) : preview?.files.length ? `Download ZIP · ${preview.files.length} file${preview.files.length === 1 ? '' : 's'}` : 'Download ZIP'}
       </Button>
     </>}>
     <div className={styles.zipBody}>

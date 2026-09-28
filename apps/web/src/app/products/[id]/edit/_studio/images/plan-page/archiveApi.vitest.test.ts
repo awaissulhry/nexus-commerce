@@ -31,6 +31,20 @@ describe('Amazon ZIP transport (P4d)', () => {
     vi.stubGlobal('fetch', answer(JSON.stringify({ error: 'The photos changed since the preview. Check the list again, then download.' }), 409))
     await expect(downloadArchive('p', { ...query, digest: 'a'.repeat(64) })).rejects.toMatchObject({ status: 409, message: 'The photos changed since the preview. Check the list again, then download.' })
   })
+  it('says how much of the ZIP has arrived, with its size when the answer gives it', async () => {
+    const stream = (parts: number[][], fail = false) => new ReadableStream<Uint8Array>({ start(c) { for (const p of parts) c.enqueue(new Uint8Array(p)); if (fail) c.error(new Error('reset')); else c.close() } })
+    const parts = [[0x50, 0x4b, 3], [4, 0], [0]]
+    const seen: unknown[] = []
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream(parts), { headers: { 'Content-Type': 'application/zip', 'Content-Length': '6' } })))
+    expect((await downloadArchive('p', { ...query, digest: 'a'.repeat(64) }, p => seen.push({ ...p }))).size).toBe(6)
+    expect(seen).toEqual([{ received: 0, total: 6 }, { received: 3, total: 6 }, { received: 5, total: 6 }, { received: 6, total: 6 }])
+    seen.length = 0
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream(parts), { headers: { 'Content-Type': 'application/zip' } })))
+    await downloadArchive('p', { ...query, digest: 'a'.repeat(64) }, p => seen.push({ ...p }))
+    expect(seen.at(-1)).toEqual({ received: 6, total: null })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream(parts.slice(0, 1), true), { headers: { 'Content-Type': 'application/zip' } })))
+    await expect(downloadArchive('p', { ...query, digest: 'a'.repeat(64) })).rejects.toThrow('The download was cut off. No ZIP was saved; try again.')
+  })
   it('a proxy that gives up (Vercel answers 504 after 120 s) is a sentence, not a status code', async () => {
     vi.stubGlobal('fetch', answer('<html>An error occurred</html>', 504, 'text/html'))
     await expect(downloadArchive('p', { ...query, digest: 'a'.repeat(64) })).rejects.toThrow('The server took too long to answer, so the connection was closed. No ZIP was saved; try again.')

@@ -38,12 +38,15 @@ export async function requestArchivePreview(productId: string, query: ArchiveQue
   return parsed.data
 }
 
+/** How much of the ZIP has arrived; `total` is null when the answer does not say its size. */
+export interface DownloadProgress { received: number; total: number | null }
+
 /**
  * The ZIP as a file, or the server's own sentence. A ZIP starts with "PK\x03\x04"; anything else is refused. The time
  * limit covers the wait for the server's answer (it stops making the ZIP at 90 s); the file itself then takes as long as
- * the connection needs.
+ * the connection needs, and `onProgress` says how much has arrived (a 504 MB ZIP took 3 min 40 s in production).
  */
-export async function downloadArchive(productId: string, query: ArchiveQuery & { digest: string }): Promise<Blob> {
+export async function downloadArchive(productId: string, query: ArchiveQuery & { digest: string }, onProgress?: (progress: DownloadProgress) => void): Promise<Blob> {
   const unsaved = 'No ZIP was saved; try again.'
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 130_000)
@@ -52,8 +55,26 @@ export async function downloadArchive(productId: string, query: ArchiveQuery & {
     response = await fetch(`${getBackendUrl()}${path(productId, '/file', { ...query })}`, { credentials: 'include', cache: 'no-store', signal: controller.signal })
   } catch { throw new MediaRequestError(`The server did not answer. ${unsaved}`) } finally { clearTimeout(timer) }
   if (!response.ok) throw await refusal(response, unsaved)
+  const length = Number(response.headers.get('content-length'))
+  const total = Number.isFinite(length) && length > 0 ? length : null
   let blob: Blob
-  try { blob = await response.blob() } catch { throw new MediaRequestError(`The download was cut off. ${unsaved}`) }
+  try {
+    if (!response.body) blob = await response.blob()
+    else {
+      const reader = response.body.getReader()
+      const chunks: Uint8Array[] = []
+      let received = 0
+      onProgress?.({ received, total })
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+        received += value.length
+        onProgress?.({ received, total })
+      }
+      blob = new Blob(chunks as BlobPart[], { type: 'application/zip' })
+    }
+  } catch { throw new MediaRequestError(`The download was cut off. ${unsaved}`) }
   const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer())
   if (!response.headers.get('content-type')?.includes('application/zip') || signature.length !== 4 || signature[0] !== 0x50 || signature[1] !== 0x4b || signature[2] !== 3 || signature[3] !== 4)
     throw new MediaRequestError(`The server did not send a readable ZIP. ${unsaved}`)

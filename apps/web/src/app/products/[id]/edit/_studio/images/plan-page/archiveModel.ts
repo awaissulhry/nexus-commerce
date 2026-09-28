@@ -66,6 +66,13 @@ export function archiveKindHint(kind: AmazonArchiveKind, market: string, languag
   }
 }
 
+/** The Download button while it works: making the ZIP on the server, then the file arriving ("120 of 504 MB"). */
+export function busyLabel(progress: { received: number; total: number | null } | null): string {
+  if (!progress) return 'Making the ZIP…'
+  const mb = (bytes: number) => Math.floor(bytes / 1_000_000).toLocaleString('en-US')
+  return progress.total ? `Downloading the ZIP… ${mb(progress.received)} of ${mb(progress.total)} MB` : `Downloading the ZIP… ${mb(progress.received)} MB`
+}
+
 /** "8 files · 3 ASINs · 2 SKUs left out" — or why there is nothing to download. */
 export function archiveSummary(preview: ArchivePreview): string {
   const asins = new Set(preview.files.map(f => f.asin)).size
