@@ -17,6 +17,9 @@ import styles from './media.module.css'
 /** Photos changed in the cells at once; `restore` puts them back when the save is refused, `done` ends "saving". */
 export interface AppliedCells { restore(): void; done(): void }
 
+/** Enter while an upload is still sending: the upload joins the list on Enter, so Enter waits. */
+export const UPLOAD_RUNNING = 'Not saved yet: an upload is still running. Press Enter again when it shows “added”.'
+
 export type Upload = { name: string; state: 'sending' | 'added' | 'exact' | 'similar' | 'failed'; message?: string; candidate?: { id: string; label: string }; file?: File }
 
 /**
@@ -57,15 +60,17 @@ export function useFirstPhotoFocus(root: RefObject<HTMLDivElement | null>) {
 }
 
 /**
- * Enter on a photo saves, like everywhere else in the pop-up (a click, or ⋯ → Open, shows the photo) — except while a
- * photo is picked up, when Enter drops it. Ctrl/⌘ + Enter saves from anywhere, a text box included.
+ * Enter on a photo saves, like everywhere else in the pop-up (a click, or ⋯ → Open, shows the photo). Ctrl/⌘ + Enter
+ * saves from anywhere, a text box included. While a photo is picked up, neither saves: Enter drops it.
  */
 export function photoKeys(root: RefObject<HTMLDivElement | null>, save: () => boolean) {
   return (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.altKey) return
     const target = event.target as HTMLElement
+    // While a photo is picked up (keyboard move), Enter drops it; nothing saves until it is down.
+    if (root.current?.querySelector('[data-picked]')) return
     if (event.metaKey || event.ctrlKey) { event.preventDefault(); event.stopPropagation(); save(); return }
-    if (!target.closest('.nds-media-board-thumb') || root.current?.querySelector('[data-picked]')) return
+    if (!target.closest('.nds-media-board-thumb')) return
     event.preventDefault(); event.stopPropagation()
     save()
   }

@@ -101,7 +101,7 @@ export function MediaPopupLab() {
         contextLabel={where === 'shared' ? null : 'eBay IT · Lab eBay · Main listing'} channelLabel={where === 'shared' ? null : 'eBay'} canEdit={canEdit}
         anchor={capRow.current} initial={capCell} reporter={reporter}
         onApply={items => { setCapOverlay(items); return { restore: () => setCapOverlay(null), done: () => undefined } }}
-        onSaved={() => { setCapOverlay(null); setNotice('LAB-CAP: saved in the lab.') }} onClose={() => setOpen(null)}
+        onSaved={() => { setCapOverlay(null); setNotice('LAB-CAP: saved in the lab.') }} onLibraryChanged={() => setCapOverlay(null)} onClose={() => setOpen(null)}
         onOpenMediaPage={() => setNotice('The Media page is not part of the lab.')} />}
       {openRow && <PlanMediaPopup key={`${openRow.productId}:${where}`} productId={openRow.productId} rowProductId={openRow.productId} title={openRow.sku}
         address={address} locale="it" canEdit={canEdit} anchor={cells.current.get(openRow.productId) ?? null}

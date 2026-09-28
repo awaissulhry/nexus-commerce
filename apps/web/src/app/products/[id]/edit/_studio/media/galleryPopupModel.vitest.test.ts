@@ -115,4 +115,11 @@ describe('what the pop-up says', () => {
     const libraryAfter = workspace({ hasOverride: false, source: 'library', revision: 'd'.repeat(64), collection: { version: 1, items: [{ assetId: 'front' }, { assetId: 'new' }] } })
     expect(adoptAfterUpload(library, libraryAfter, ['new']).revision).toBe('d'.repeat(64))
   })
+  it('a re-upload of a file already there (nothing new) never adopts a colleague\'s change to the list', () => {
+    const mine = workspace({ collection: { version: 1, items: [{ assetId: 'front' }, { assetId: 'back' }, { assetId: 'side' }] } })
+    const theirs = workspace({ revision: 'e'.repeat(64), collection: { version: 1, items: [{ assetId: 'front' }, { assetId: 'side' }] } })
+    expect(adoptAfterUpload(mine, theirs, []).revision).toBe('a'.repeat(64))
+    // Passing the re-uploaded id as "new" would hide the difference (the review's finding) — so only NEW files are passed.
+    expect(adoptAfterUpload(mine, theirs, ['back']).revision).toBe('e'.repeat(64))
+  })
 })

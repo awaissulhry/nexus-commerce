@@ -17,7 +17,7 @@ import * as model from './mediaPopupModel'
 import { useMediaPopupData } from './useMediaPopupData'
 import * as gallery from './galleryPopupModel'
 import { uploadGalleryFile, useGalleryPopupData } from './useGalleryPopupData'
-import { ChecksList, MediaPageLink, PhotoLibrary, PhotoViewer, PopupHead, photoKeys, useFirstPhotoFocus, usePopupGuards, type AppliedCells, type LibraryShow, type Upload } from './popupParts'
+import { ChecksList, MediaPageLink, PhotoLibrary, PhotoViewer, PopupHead, UPLOAD_RUNNING, photoKeys, useFirstPhotoFocus, usePopupGuards, type AppliedCells, type LibraryShow, type Upload } from './popupParts'
 import styles from './media.module.css'
 
 export type { AppliedCells } from './popupParts'
@@ -97,6 +97,7 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
   function save(): boolean {
     if (menuPress.current) return true
     if (busy) { holdClick(); return false }
+    if (uploads.some(u => u.state === 'sending')) { setError(UPLOAD_RUNNING); holdClick(); return false }
     if (!working || !data.baseline || !base || !draft || !ops.length || !base.view || !address || !canEdit) { close(); return true }
     const local = model.localRefusal(working, base, ops)
     if (local) { afterSave.current = null; setError(`Not saved: ${local}`); holdClick(); return false }
@@ -162,6 +163,7 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
       setDraft(current => current ? model.addItem(fresh, current, assetId) : current)
       setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: status.kind === 'exact' ? 'exact' : 'added' } : u))
     }
+    setError(current => current === UPLOAD_RUNNING ? '' : current)
   }
 
   const tiles = working && base && draft ? model.tiles(working, base, draft, language) : null
@@ -286,6 +288,8 @@ export interface GalleryMediaPopupProps {
   reporter: SaveReporter
   onOpenMediaPage(): void
   onDirtyChange?(dirty: boolean): void
+  /** An upload changed the library (the sheet reads again). Defaults to `onSaved`. */
+  onLibraryChanged?(): void
 }
 
 /**
@@ -294,12 +298,13 @@ export interface GalleryMediaPopupProps {
  * (`PUT /product-media` bound to the revision read when it opened).
  */
 export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
-  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange } = props
+  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved } = props
   const data = useGalleryPopupData(productId, context)
   // The list and its revision from the read the pop-up opened with; the library from the latest read.
   const working: ProductMediaWorkspace | null = useMemo(() => data.baseline ? { ...data.baseline, assets: data.latest?.assets ?? data.baseline.assets } : null, [data.baseline, data.latest])
   const [draft, setDraft] = useState<gallery.GalleryDraft | null>(null)
   useEffect(() => { if (!draft && data.baseline) setDraft(gallery.galleryDraft(data.baseline)) }, [draft, data.baseline])
+  const draftNow = useRef(draft); draftNow.current = draft
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
@@ -317,6 +322,8 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
 
   const editable = canEdit && !!draft && !busy
   const body = data.baseline && draft ? gallery.gallerySaveBody(data.baseline, draft) : null
+  // A re-read (after an upload) whose list differs from the one the pop-up opened with: someone changed it.
+  const changedElsewhere = !!(data.baseline && data.latest && data.latest.revision !== data.baseline.revision)
   useEffect(() => { onDirtyChange?.(!!body || busy); return () => onDirtyChange?.(false) }, [body, busy, onDirtyChange])
   const locale = context.locale
 
@@ -332,6 +339,8 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
   function save(): boolean {
     if (menuPress.current) return true
     if (busy) { holdClick(); return false }
+    // An upload joins the list on Enter: Enter waits for it (and a finished upload moves the revision the save binds to).
+    if (uploads.some(u => u.state === 'sending')) { setError(UPLOAD_RUNNING); holdClick(); return false }
     if (!working || !draft || !body || !canEdit) { close(); return true }
     const local = gallery.galleryRefusal(draft)
     if (local) { afterSave.current = null; setError(`Not saved: ${local}`); holdClick(); return false }
@@ -356,7 +365,9 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
     } catch (e) {
       applied.restore()
       const network = e instanceof TypeError || (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError'))
-      const message = network ? model.POPUP_TEXT.unconfirmed : e instanceof Error ? e.message : model.POPUP_TEXT.unconfirmed
+      const server = e instanceof Error ? e.message : model.POPUP_TEXT.unconfirmed
+      // "Media changed since this editor opened. Reload the gallery …": said the way every pop-up says it.
+      const message = network ? model.POPUP_TEXT.unconfirmed : /^Media changed/.test(server) ? model.POPUP_TEXT.conflict : server
       reporter.resolved(writeId, false, message, subject)
       if (!mounted.current) return
       reported.current = subject
@@ -376,13 +387,18 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
       if (status.kind === 'failed') { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'failed', message: status.message } : u)); continue }
       if (status.kind === 'similar') { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'similar', candidate: status.candidate, file } : u)); continue }
       const assetId = status.assetId
-      const fresh = await data.afterUpload([assetId])
+      // Only a NEW file changes the library: a re-upload of a file already there writes nothing, so it must not let the
+      // baseline move past someone else's change to the list.
+      const fresh = await data.afterUpload(status.kind === 'new' ? [assetId] : [])
       // An upload is in the library at once: the sheet reads again (a product with no list of its own shows it).
-      onSaved()
+      onLibraryChanged()
       if (!fresh) { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'failed', message: gallery.GALLERY_TEXT.uploadUnread } : u)); continue }
-      setDraft(current => current ? gallery.addAsset(current, assetId) ?? current : current)
+      const added = draftNow.current ? gallery.addAsset(draftNow.current, assetId) : null
+      if (!added) { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'failed', message: `in the library, but not added: ${gallery.GALLERY_TEXT.max}` } : u)); continue }
+      setDraft(added); draftNow.current = added
       setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: status.kind === 'exact' ? 'exact' : 'added' } : u))
     }
+    setError(current => current === UPLOAD_RUNNING ? '' : current)
   }
 
   const tiles = working && draft ? gallery.galleryTiles(working, draft) : null
@@ -393,7 +409,6 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
   const source = working && draft ? gallery.gallerySource(working, draft) : null
   const count = draft?.items.length ?? boardItems.length
   const found = working && draft ? gallery.galleryChecks(working, draft) : []
-  const draftNow = useRef(draft); draftNow.current = draft
   const listed = useMemo(() => adding && working && draftNow.current ? gallery.galleryCards(working, draftNow.current, show, search).map(a => a.id) : [], [adding, working, show, search])
   const cards = working ? working.assets.filter(a => listed.includes(a.id)) : []
   const viewedAsset = viewing && working ? working.assets.find(a => a.id === viewing) ?? null : null
@@ -409,6 +424,7 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
     <div ref={root} className={styles.popup} onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
       <PopupHead context={contextLabel} title={title} />
       {error && <Banner tone="danger">{error}</Banner>}
+      {!error && changedElsewhere && <Banner tone="warning">{model.POPUP_TEXT.changedElsewhere}</Banner>}
       {data.state.status === 'error' && <Banner tone="danger" action={<Button size="xs" onClick={() => void data.reload()}>Try again</Button>}>{data.state.message}</Banner>}
       {!canEdit && <Banner tone="neutral">{model.POPUP_TEXT.readOnly}</Banner>}
 
@@ -438,8 +454,8 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
       {viewedAsset && <PhotoViewer photo={{ type: viewedAsset.type, url: viewedAsset.url, poster: viewedAsset.preview, label: (viewedItem?.alt ?? viewedAsset.alt) || title,
         width: viewedAsset.width, height: viewedAsset.height, fileSize: viewedAsset.fileSize }} onClose={() => setViewing(null)}>
         {viewedItem && draft && <div className={styles.fields}>
-          <Field label={`Alt text · ${gallery.languageName(locale)}`} hint="Describe what matters in the picture, in this language.">
-            <Input size="sm" value={viewedItem.alt ?? viewedAsset.alt} maxLength={2000} readOnly={!editable} onChange={event => edit(gallery.setAlt(draft, viewedAsset.id, event.target.value))} />
+          <Field label={`Alt text · ${gallery.languageName(locale)}`} hint="Describe what matters in the picture, in this language. Empty uses the file's own text (shown greyed).">
+            <Input size="sm" value={viewedItem.alt ?? ''} placeholder={viewedAsset.alt} maxLength={2000} readOnly={!editable} onChange={event => edit(gallery.setAlt(draft, viewedAsset.id, event.target.value))} />
           </Field>
           {gallery.hasText(viewedAsset.type) && <>
             <Field label="Transcript" hint="Ctrl or ⌘ + Enter saves."><Textarea rows={4} maxLength={50000} value={viewedItem.transcript ?? ''} readOnly={!editable} onChange={event => edit(gallery.setTranscript(draft, viewedAsset.id, event.target.value))} /></Field>
@@ -459,7 +475,11 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
         accept=".jpg,.jpeg,.png,.webp,.gif,.avif,.mp4,.mov,.webm" maxBytes={200 * 1024 * 1024}
         uploadHint="Images up to 20 MB · MP4, MOV and WebM up to 200 MB · they join the list on Enter and stay in the library"
         onFiles={files => void upload(files)} uploads={uploads}
-        onUseCandidate={u => { setDraft(current => current && u.candidate ? gallery.addAsset(current, u.candidate.id) ?? current : current); setUploads(list => list.map(x => x.name === u.name ? { name: u.name, state: 'exact' } : x)) }}
+        onUseCandidate={u => {
+          const added = u.candidate ? gallery.addAsset(draft, u.candidate.id) : null
+          if (!added) { setUploads(list => list.map(x => x.name === u.name ? { name: u.name, state: 'failed', message: gallery.GALLERY_TEXT.max } : x)); return }
+          edit(added); setUploads(list => list.map(x => x.name === u.name ? { name: u.name, state: 'exact' } : x))
+        }}
         onUploadAnyway={u => { if (u.file) void upload([u.file], true) }} />}
 
       <MediaPageLink disabled={busy} onOpen={() => {

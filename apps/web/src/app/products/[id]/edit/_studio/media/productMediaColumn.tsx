@@ -83,14 +83,15 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
       done: () => { for (const t of touched) if (t.node.data) t.node.data.productMediaSaving = false; refresh() },
     }
   }
-  /** Enter in the gallery pop-up: the row's cell shows its new list at once. */
+  /** Enter in the gallery pop-up: the row's cell shows its new list at once. The row is found again by its product and
+   *  listing, not by object: an upload makes the sheet read again, and that swaps in new row objects. */
   const applyToRow = (items: MediaStripItem[]): AppliedCells => {
     const current = selected, api = current?.api
-    if (!current) return { restore: () => undefined, done: () => undefined }
-    const row = current.row, before = row.productMedia
-    let node: { data?: MediaRow } | null = null
-    api?.forEachNode(n => { if (n.data === row) node = n })
-    const refresh = () => { if (api && !api.isDestroyed() && node) api.refreshCells({ rowNodes: [node] as never, columns: [PRODUCT_MEDIA_COLUMN], force: true }) }
+    const node = current && api && !api.isDestroyed() ? findNode(api, current.row) : null
+    const row = node?.data
+    if (!api || !node || !row) return { restore: () => undefined, done: () => undefined }
+    const before = row.productMedia
+    const refresh = () => { if (!api.isDestroyed()) api.refreshCells({ rowNodes: [node] as never, columns: [PRODUCT_MEDIA_COLUMN], force: true }) }
     row.productMedia = items; row.productMediaSaving = true; refresh()
     return {
       restore: () => { row.productMedia = before; row.productMediaSaving = false; refresh() },
@@ -99,6 +100,9 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   }
   const closePlan = () => {
     const current = selected
+    // Closing ends the pop-up's pending change at once (its own cleanup runs only after it unmounts): a "Media page"
+    // move right after the save must not be held back by the scope guard.
+    dirty.current = false
     // Only this pop-up's own row: a late answer must never close a pop-up opened on another cell meanwhile.
     setSelected(now => now && current && now.row === current.row ? null : now)
     if (current) actions.clearError(current.row)
@@ -106,8 +110,7 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
     const api = current?.api
     if (api && current) requestAnimationFrame(() => {
       if (api.isDestroyed()) return
-      let index: number | null = null
-      api.forEachNode(node => { if (node.data === current.row && node.rowIndex != null) index = node.rowIndex })
+      const index = findNode(api, current.row)?.rowIndex
       if (index != null) api.setFocusedCell(index, PRODUCT_MEDIA_COLUMN)
     })
   }
@@ -123,6 +126,16 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
         onApply={applyToRow} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} />
     : null
   return { open, actions, element: planElement ?? galleryElement }
+}
+
+/** The grid's node for a row — by its product and listing alias, because a re-read swaps in new row objects. */
+function findNode(api: GridApi, row: MediaRow): { data?: MediaRow; rowIndex: number | null } | null {
+  let found: { data?: MediaRow; rowIndex: number | null } | null = null
+  api.forEachNode(node => {
+    const data = node.data as MediaRow | undefined
+    if (!found && data && (data.productId ?? data.id) === (row.productId ?? row.id) && (data.aliasId ?? '') === (row.aliasId ?? '')) found = node as never
+  })
+  return found
 }
 
 /** AG owns fill/paste; a gallery edit opens the same editor from every native open gesture. */

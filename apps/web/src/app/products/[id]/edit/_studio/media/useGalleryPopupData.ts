@@ -35,7 +35,8 @@ export function useGalleryPopupData(productId: string, context: ProductMediaQuer
   const read = useCallback(async (): Promise<ProductMediaWorkspace | null> => {
     try {
       const value = await answer(await fetch(url, { credentials: 'include', cache: 'no-store' })) as ProductMediaWorkspace
-      if (alive.current) { setLatest(value); setState({ status: 'ready' }) }
+      // The first read that works is the baseline — also when it is the "Try again" after a failed first read.
+      if (alive.current) { setLatest(value); setBaseline(current => current ?? value); setState({ status: 'ready' }) }
       return value
     } catch (error) {
       if (alive.current) setState(current => current.status === 'ready' ? current : { status: 'error', message: error instanceof Error ? error.message : 'Media could not be loaded.' })
@@ -45,7 +46,7 @@ export function useGalleryPopupData(productId: string, context: ProductMediaQuer
 
   useEffect(() => {
     alive.current = true
-    void read().then(value => { if (value && alive.current) setBaseline(current => current ?? value) })
+    void read()
     return () => { alive.current = false }
   }, [read])
 
