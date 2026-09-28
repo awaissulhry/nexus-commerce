@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, BarChart3, Image, LayoutGrid, LayoutTemplate, ListOrdered, Table2, Link2, FileText } from 'lucide-react'
+import { Activity, AlertTriangle, BarChart3, Building2, Image, LayoutGrid, LayoutTemplate, ListOrdered, Table2, Link2, FileText } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { StudioTabId } from './types'
 
@@ -15,6 +15,8 @@ export const STUDIO_TAB_LABELS: Record<StudioTabId, string> = {
   'variation-order': 'Variation order',
   presentation: 'Description themes', sheet: 'Information', images: 'Media', analytics: 'Performance', activity: 'Activity', errors: 'Needs attention',
   'shopify-family': 'Product family', 'shopify-metafields': 'Metafields & content',
+  // Sharing studio step 2 — not "Shared": the master scope is already "Shared product" (scopeItems.ts).
+  sharing: 'Other businesses',
 }
 /**
  * Glyphs read off the canvas's "Product navigation" artboard: `Link2` on Variants.
@@ -32,4 +34,5 @@ export const STUDIO_TAB_ICONS: Record<StudioTabId, ReactNode> = {
   presentation: <LayoutTemplate size={15} />, sheet: <Table2 size={15} />, images: <Image size={15} />, analytics: <BarChart3 size={15} />,
   activity: <Activity size={15} />, errors: <AlertTriangle size={15} />,
   'shopify-family': <Link2 size={15} />, 'shopify-metafields': <FileText size={15} />,
+  sharing: <Building2 size={15} />,
 }

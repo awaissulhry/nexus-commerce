@@ -77,6 +77,9 @@ export interface SourceImage {
   mimeType: string | null
   fileSize: number | null
   contentHash: string | null
+  /** The language of the text in the photo (`zxx` = no text), and the id its language versions share. */
+  languageTag: string
+  versionGroupId: string | null
 }
 
 /**
@@ -331,7 +334,7 @@ async function readInOwner(source: AuthorisedSource, ids: string[], market: stri
 
   const images = ids.length === 0 ? [] : await prisma.productImage.findMany({
     where: { productId: { in: ids } },
-    select: { id: true, productId: true, url: true, publicId: true, sourceAssetId: true, alt: true, type: true, mediaType: true, isPrimary: true, sortOrder: true, width: true, height: true, mimeType: true, fileSize: true, contentHash: true },
+    select: { id: true, productId: true, url: true, publicId: true, sourceAssetId: true, alt: true, type: true, mediaType: true, isPrimary: true, sortOrder: true, width: true, height: true, mimeType: true, fileSize: true, contentHash: true, languageTag: true, versionGroupId: true },
     orderBy: [{ productId: 'asc' }, { sortOrder: 'asc' }],
   })
 

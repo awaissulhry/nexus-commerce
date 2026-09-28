@@ -21,7 +21,7 @@ import {
   resolveIntendedQuantity,
   resolveMembershipIntended,
 } from '../services/sync-control-core.js'
-import { loadChannelPolicies, policyFor, validatePolicyInput, enforceNewListingDefaults } from '../services/sync-control-policy.service.js'
+import { loadChannelPolicies, policyFor, validatePolicyInput, enforceNewListingDefaults, writeChannelPolicy } from '../services/sync-control-policy.service.js'
 import { validateServesTokens } from '../services/sync-control-core.js'
 import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../services/stock-pool/sync-ledgers.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
@@ -33,7 +33,7 @@ import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordina
 import { closeMarketOffers, reopenMarketOffers, isFbaCoordinate } from '../services/amazon-market-offer.service.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
-import { primaryConnectionIds } from '../services/connection-resolver.service.js'
+import { NoConnectionError, resolveConnection } from '../services/connection-resolver.service.js'
 
 /** SCD.8 — ONE parser for every multi-select filter value. The UI sends
  *  comma-separated selections; each endpoint must apply OR-within-a-dimension.
@@ -112,7 +112,7 @@ async function computeRows(): Promise<SyncControlRow[]> {
     }),
     prisma.sharedListingMembership.findMany({
       where: { status: 'ACTIVE' },
-      select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, pinnedUntil: true, pausedUntil: true },
+      select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, pinnedUntil: true, pausedUntil: true, channelConnectionId: true },
     }),
     loadChannelPolicies(),
   ])
@@ -150,7 +150,7 @@ async function computeRows(): Promise<SyncControlRow[]> {
       syncPaused: cl.syncPaused,
       pinnedQuantity: cl.quantity,
       stockBuffer: cl.stockBuffer ?? 0,
-      channelPolicy: policyFor(policies, cl.channel, cl.marketplace),
+      channelPolicy: policyFor(policies, cl.channel, cl.marketplace, cl.channelConnectionId),
       ...ledgerInputs(ledgers.get(cl.productId), cl.sourceLocationCodes ?? []),
     })
     rows.push({
@@ -176,7 +176,7 @@ async function computeRows(): Promise<SyncControlRow[]> {
       followPool: m.followPool ?? true,
       pinnedQuantity: m.pinnedQuantity,
       stockBuffer: m.stockBuffer ?? 0,
-      channelPolicy: policyFor(policies, 'EBAY', m.marketplace),
+      channelPolicy: policyFor(policies, 'EBAY', m.marketplace, m.channelConnectionId),
       ledger: ledgerInputs(m.productId ? ledgers.get(m.productId) : undefined).ledger,
       uncountedIsZero: ledgerInputs(m.productId ? ledgers.get(m.productId) : undefined).uncountedIsZero,
     })
@@ -1182,14 +1182,17 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
   // ── SC.5 — channel/market policies (kill-switch + new-listing default) ──
   //
-  // Upsert on (channel, marketplace); '*' = channel-wide. A row that ends up
-  // all-default is deleted (an all-default row and no row derive identically).
+  // Upsert on (channel, marketplace, account); '*' = channel-wide, no account = every
+  // account of the channel. A row that ends up all-default is deleted (an all-default
+  // row and no row derive identically).
   // Resume (pushesPaused true→false) recascades every product with listings
   // in scope so marketplace truth reconverges without waiting for an order.
   app.post('/stock/sync-control/policies', async (request, reply) => {
     const body = request.body as {
       channel?: string
       marketplace?: string
+      /** One account of the channel; absent or null = every account. */
+      channelConnectionId?: string | null
       pushesPaused?: boolean
       newListingDefaultMode?: 'FOLLOW' | 'PAUSED'
     }
@@ -1199,23 +1202,28 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
     const channel = body.channel!.trim().toUpperCase()
     const marketplace = body.marketplace!.trim().toUpperCase()
-    // MAP.2b — a sync policy is now per account, so pausing one eBay store does
-    // not pause them all. The primary reproduces today's single-account rows.
-    const policyConn = (await primaryConnectionIds([channel])).get(channel) ?? null
-    const existing = await prisma.syncChannelPolicy.findUnique({
-      where: { channel_marketplace: workspaceKey({ channel, marketplace, channelConnectionId: policyConn }) },
+    // MAP.2b — a policy names one account, or none (every account). The row is found by the SAME
+    // account it is written with: a lookup by one account and a write with another left a pause
+    // that Resume could never find (it said "ok" and the channel stayed paused).
+    let policyConn: string | null = null
+    if (body.channelConnectionId) {
+      try {
+        const account = await resolveConnection({ accountId: body.channelConnectionId })
+        if (account.channelType !== channel) throw new NoConnectionError('The selected account does not belong to this channel.')
+        policyConn = account.id
+      } catch (error) {
+        if (error instanceof NoConnectionError) return reply.code(400).send({ error: error.message })
+        throw error
+      }
+    }
+    const { before: existing, saved, nextPaused, nextMode, pausedChanged, modeChanged } = await writeChannelPolicy({
+      channel, marketplace, channelConnectionId: policyConn, pushesPaused: body.pushesPaused, newListingDefaultMode: body.newListingDefaultMode,
     })
+    const scopeName = `${channel}:${marketplace}${policyConn ? `@${policyConn}` : ''}`
 
-    const nextPaused = body.pushesPaused ?? existing?.pushesPaused ?? false
-    const nextMode = body.newListingDefaultMode ?? existing?.newListingDefaultMode ?? 'FOLLOW'
-    const modeChanged = nextMode !== (existing?.newListingDefaultMode ?? 'FOLLOW')
-    const pausedChanged = nextPaused !== (existing?.pushesPaused ?? false)
-    const scopeName = `${channel}:${marketplace}`
-
-    // All-default result → drop the row entirely.
-    if (!nextPaused && nextMode === 'FOLLOW') {
+    if (!saved) {
+      // All-default result: the policy's rows were removed.
       if (existing) {
-        await prisma.syncChannelPolicy.delete({ where: { id: existing.id } })
         await audit([{
           scopeType: 'POLICY', scopeId: existing.id, scopeName, field: 'policy',
           before: { pushesPaused: existing.pushesPaused, newListingDefaultMode: existing.newListingDefaultMode },
@@ -1223,19 +1231,6 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         }], actor)
       }
     } else {
-      const saved = await prisma.syncChannelPolicy.upsert({
-        where: { channel_marketplace: workspaceKey({ channel, marketplace, channelConnectionId: policyConn }) },
-        create: {
-          channel, marketplace, pushesPaused: nextPaused, newListingDefaultMode: nextMode,
-          newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null,
-        },
-        update: {
-          pushesPaused: nextPaused,
-          newListingDefaultMode: nextMode,
-          // Cutoff moves ONLY when the default-mode itself changes.
-          ...(modeChanged ? { newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null } : {}),
-        },
-      })
       const entries: Array<{ scopeType: string; scopeId: string; scopeName?: string; field: string; before?: unknown; after?: unknown }> = []
       if (pausedChanged) entries.push({
         scopeType: 'POLICY', scopeId: saved.id, scopeName, field: 'pushesPaused',
@@ -1261,7 +1256,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     let recascadeQueued = 0
     if (pausedChanged && !nextPaused) {
       const listings = await prisma.channelListing.findMany({
-        where: { channel, listingStatus: { not: 'ENDED' } },
+        where: { channel, listingStatus: { not: 'ENDED' }, ...(policyConn ? { channelConnectionId: policyConn } : {}) },
         select: { productId: true, marketplace: true },
       })
       const inScope = marketplace === '*'

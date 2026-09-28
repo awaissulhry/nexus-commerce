@@ -41,6 +41,7 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
         syncPaused: true,
         offerClosedAt: true,
         sourceLocationCodes: true,
+        channelConnectionId: true,
         product: { select: { fulfillmentMethod: true } },
       },
     })
@@ -71,7 +72,7 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
         syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
         pinnedQuantity: null,
         stockBuffer: listing.stockBuffer ?? 0,
-        channelPolicy: policyFor(scPolicies, listing.channel, (listing as { marketplace?: string }).marketplace ?? 'DEFAULT'),
+        channelPolicy: policyFor(scPolicies, listing.channel, (listing as { marketplace?: string }).marketplace ?? 'DEFAULT', listing.channelConnectionId),
         ...ledgerInputs(ledgers.get(listing.productId), (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? []),
       })
       if (scRes.kind !== 'FOLLOW') {

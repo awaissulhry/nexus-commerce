@@ -10,10 +10,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Banner, EmptyState, Modal } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
-import { Button, Pill } from '@/design-system/primitives'
+import { AliasMark, Button, Pill } from '@/design-system/primitives'
 import { sharingApi } from './sharingApi'
 import type { Grant, ListingPreview, PoolProduct, SwitchPreview } from './stockPoolApi'
-import { COST_PRICE_MISSING, listingName, previewRuleWords } from './stockWords'
+import { COST_PRICE_MISSING, listingNameParts, previewRuleWords } from './stockWords'
 import { count } from './words'
 
 type Target = 'pool' | 'own'
@@ -104,7 +104,10 @@ function SwitchPreviewModal({ grant, to, productIds, onClose, onSwitched }: {
   const refused = (preview ?? []).filter((p) => p.refusal)
   const title = to === 'pool' ? `Use ${grant.ownerWorkspaceName}’s stock` : 'Use this business’s own stock'
   const columns: Array<Column<ListingPreview>> = [
-    { key: 'listing', label: 'Listing', render: (row) => listingName(row) },
+    { key: 'listing', label: 'Listing', render: (row) => {
+      const { head, name } = listingNameParts(row)
+      return <>{head}{name !== null && <> · {row.listingMark != null && !row.itemId && <><AliasMark position={row.listingMark} /> </>}{name}</>}</>
+    } },
     { key: 'now', label: 'Shows now', numeric: true, render: (row) => row.showsNow === null ? '—' : row.showsNow.toLocaleString() },
     { key: 'after', label: 'After the switch', render: (row) => previewRuleWords(row) },
   ]

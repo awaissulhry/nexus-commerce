@@ -14,7 +14,7 @@ import {
   syncLedgerOf,
   type SyncControlInputs,
 } from './sync-control-core.js'
-import { policyFor, type PolicyMap } from './sync-control-policy.service.js'
+import { policyFor, policyKey, type PolicyMap } from './sync-control-policy.service.js'
 
 const base = (over: Partial<SyncControlInputs>): SyncControlInputs => ({
   channel: 'AMAZON',
@@ -101,8 +101,8 @@ describe('SC.6 — standing invariants', () => {
   })
   it("policyFor: exact market row beats channel-wide '*' row", () => {
     const policies: PolicyMap = new Map([
-      ['AMAZON:*', { pushesPaused: true, newListingDefaultMode: 'FOLLOW' }],
-      ['AMAZON:IT', { pushesPaused: false, newListingDefaultMode: 'FOLLOW' }],
+      [policyKey('AMAZON', '*'), { pushesPaused: true, newListingDefaultMode: 'FOLLOW' }],
+      [policyKey('AMAZON', 'IT'), { pushesPaused: false, newListingDefaultMode: 'FOLLOW' }],
     ])
     expect(policyFor(policies, 'AMAZON', 'IT')).toMatchObject({ pushesPaused: false })
     expect(policyFor(policies, 'AMAZON', 'DE')).toMatchObject({ pushesPaused: true })

@@ -39,6 +39,7 @@ export type { ProductGroupRow }
 
 import styles from './styles.module.css'
 import { InventoryCell } from './InventoryCell'
+import { SourceCell, sourceExport } from './SourceCell'
 import { TRAIL_COLUMN } from './columnLocks'
 
 export const SALES_WINDOW_DAYS = 7
@@ -51,6 +52,13 @@ export const CHANNEL_OPTS = [
   { value: 'EBAY', label: 'eBay' },
   { value: 'SHOPIFY', label: 'Shopify' },
   { value: 'ETSY', label: 'Etsy' },
+]
+
+/** Sharing studio step 2 — the Source column's filter: the API's own / following / shared. */
+export const SOURCE_OPTS = [
+  { value: 'own', label: 'Own' },
+  { value: 'following', label: 'Follows another business' },
+  { value: 'shared', label: 'Shared with other businesses' },
 ]
 
 export const STATUS_OPTS = [
@@ -275,6 +283,8 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
     },
     { key: 'status', groupable: true, groupKey: 'products-next:identity', group: 'Identity', label: 'Status', width: 96, sortable: true, preset: statusColumn('status', { tones: STATUS_TONES }) },
     { key: 'tags', groupKey: 'products-next:identity', group: 'Identity', label: 'Tags', width: 150, value: (row) => row.tags ?? [], exportValue: (row) => (row.tags ?? []).map((t) => t.name).join(', '), preset: { cellClass: 'nds-ag-cell', cellRenderer: TagsCell } },
+    // Sharing studio step 2 — between business profiles: what this product follows, and who follows it.
+    { key: 'source', groupKey: 'products-next:identity', group: 'Identity', label: 'Source', width: 170, value: (row) => sourceExport(row.sharing), exportValue: (row) => sourceExport(row.sharing), preset: { cellClass: 'nds-ag-cell' }, render: (row) => <SourceCell row={row} /> },
     {
       key: 'available',
       aggregate: ['sum', 'avg', 'min', 'max'],

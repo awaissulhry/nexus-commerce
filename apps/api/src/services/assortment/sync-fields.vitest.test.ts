@@ -77,6 +77,20 @@ describe('AE.4 — the field-state rule', () => {
     expect(planMedia([{ ...kept, sortOrder: 9 }], [entry(kept, 't1')])).toEqual({ add: [], remove: [], update: [] })
   })
 
+  it('images: the language of the text in a photo is followed, and a photo with none prints as it always did', () => {
+    const plain: ImageFacts = { id: 's1', url: 'https://a/1.png', alt: 'Chart', type: 'ALT', isPrimary: false, sortOrder: 0 }
+    // A link made before languages were followed stored this print; "no text" and no versions must keep it.
+    const before = fingerprint({ alt: 'Chart', type: 'ALT', primary: false })
+    expect(imageMetaPrint(plain)).toBe(before)
+    expect(imageMetaPrint({ ...plain, languageTag: 'zxx', versionGroupId: null })).toBe(before)
+    // A size chart in Italian, one of its language versions: the copy that arrived as "no text" is corrected.
+    const italian = { ...plain, languageTag: 'it', versionGroupId: 'group-1' }
+    const stale = { source: 's1', target: 't1', file: imageFilePrint(plain), meta: before }
+    expect(planMedia([italian], [stale]).update.map((u) => [u.source.languageTag, u.source.versionGroupId])).toEqual([['it', 'group-1']])
+    expect(imageMetaPrint({ ...italian, languageTag: 'de' })).not.toBe(imageMetaPrint(italian))
+    expect(imageMetaPrint({ ...italian, versionGroupId: 'group-2' })).not.toBe(imageMetaPrint(italian))
+  })
+
   it('a stored state is read back, and anything else starts empty', () => {
     expect(readState(null)).toEqual({ v: 1, fields: {} })
     expect(readState({ v: 2, fields: {} })).toEqual({ v: 1, fields: {} })

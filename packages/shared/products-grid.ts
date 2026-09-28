@@ -119,6 +119,8 @@ export const GRID_FILTER_COLUMNS = {
   tags: 'set',
   price: 'number',
   available: 'number',
+  /** Sharing studio step 2 — own, following another business, shared with other businesses. */
+  source: 'set',
 } as const
 export type GridFilterColumnId = keyof typeof GRID_FILTER_COLUMNS
 

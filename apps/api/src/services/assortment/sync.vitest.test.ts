@@ -38,7 +38,7 @@ vi.mock('../pim/sheet-columns.service.js', () => ({
   coordinatesFor: () => [],
 }))
 vi.mock('../pim/mapping/field-catalogue.service.js', () => ({ getFieldCatalogue: async () => ({ fields: [], schema: { present: true } }), clearFieldCatalogueCache: () => {} }))
-vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: async () => {}, refresh: async () => {} } }))
+vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: async () => {}, refresh: async () => {}, refreshMany: async () => {} } }))
 vi.mock('../../lib/queue.js', () => {
   const queue = { add: async () => ({}), addBulk: async () => [], getJobCounts: async () => ({}), close: async () => {} }
   return {
@@ -281,6 +281,140 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(after.fields.find((f) => f.key === 'description')?.state).toBe('follow')
   }, 60_000)
 
+  it('4b. one product\'s sharing, read from each business (the studio page), and the products grid\'s Source column and filter', async () => {
+    const sharing = await import('./product-sharing.service.js')
+    // B follows: where it comes from, each field in words, its own stock.
+    const followed = await as(B, user.ownerB, () => sharing.productSharing(product['b:JKT']))
+    expect(followed.following?.link).toMatchObject({ id: link.JKT, sourceBusiness: 'Business A', status: 'active' })
+    const description = followed.following?.fields.find((f) => f.key === 'description')
+    expect(description).toMatchObject({ state: 'follow', locale: null })
+    expect(description?.label.length).toBeGreaterThan(0)
+    expect(followed.following?.fields.find((f) => f.key === 'sku')).toMatchObject({ label: 'SKU', group: 'Product' })
+    expect(followed.stock).toEqual({ source: { kind: 'own' }, lentTo: [] })
+
+    // A shares: the assortment that holds it, and what B does with it — for the parent and for a variation.
+    const shared = await as(A, user.ownerA, () => sharing.productSharing(product.parent))
+    expect(shared.following).toBeNull()
+    expect(shared.sharedOut.assortments).toEqual([expect.objectContaining({ holds: true, openShares: 1 })])
+    expect(shared.sharedOut.businesses).toEqual([expect.objectContaining({ businessName: 'Business B', shareStatus: 'active', copy: 'following', heldSku: null })])
+    const variation = await as(A, user.ownerA, () => sharing.productSharing(product.medium))
+    expect(variation.product).toMatchObject({ isVariation: true, rootId: product.parent })
+    expect(variation.sharedOut.businesses).toEqual([expect.objectContaining({ businessName: 'Business B', copy: 'following' })])
+
+    // Add and take out, whatever the assortment's rule — on assortments nobody is offered, so no link moves.
+    const list = await as(A, user.ownerA, () => assortments.createAssortment({ name: 'Studio list', selection: 'list' }))
+    const every = await as(A, user.ownerA, () => assortments.createAssortment({ name: 'Studio every', selection: 'all' }))
+    const holds = async (id: string) => (await as(A, user.ownerA, () => sharing.productSharing(product.medium))).sharedOut.assortments.find((a) => a.id === id)?.holds
+    expect([await holds(list.id), await holds(every.id)]).toEqual([false, true])
+    // A variation is written as its main product.
+    const added = await as(A, user.ownerA, () => sharing.setProductInAssortment(list.id, { productId: product.medium, holds: true, expectedVersion: list.version }))
+    const leftOut = await as(A, user.ownerA, () => sharing.setProductInAssortment(every.id, { productId: product.parent, holds: false, expectedVersion: every.version }))
+    expect([await holds(list.id), await holds(every.id)]).toEqual([true, false])
+    expect(await sql(`SELECT "productId", mode FROM "AssortmentMember" WHERE "assortmentId" = ANY($1) ORDER BY mode`, [[list.id, every.id]]))
+      .toEqual([{ productId: product.parent, mode: 'exclude' }, { productId: product.parent, mode: 'include' }])
+    await as(A, user.ownerA, () => sharing.setProductInAssortment(list.id, { productId: product.parent, holds: false, expectedVersion: added.version }))
+    await as(A, user.ownerA, () => sharing.setProductInAssortment(every.id, { productId: product.parent, holds: true, expectedVersion: leftOut.version }))
+    expect([await holds(list.id), await holds(every.id)]).toEqual([false, true])
+    await expect(as(A, user.ownerA, () => sharing.setProductInAssortment(list.id, { productId: product.parent, holds: true, expectedVersion: list.version })))
+      .rejects.toMatchObject({ code: 'assortment_changed' })
+    await expect(as(B, user.ownerB, () => sharing.setProductInAssortment(list.id, { productId: product['b:JKT'], holds: true, expectedVersion: 3 })))
+      .rejects.toMatchObject({ code: 'assortment_not_found' })
+    for (const id of [list.id, every.id]) await sql(`DELETE FROM "Assortment" WHERE id = $1`, [id])
+
+    // The grid: each side sees its own fact, and the Source filter narrows by it.
+    expect((await as(A, user.ownerA, () => sharing.sharingByProducts([product.parent]))).get(product.parent)).toEqual({ following: null, sharedWith: ['Business B'] })
+    expect((await as(B, user.ownerB, () => sharing.sharingByProducts([product['b:JKT']]))).get(product['b:JKT'])).toEqual({ following: { businessName: 'Business A' }, sharedWith: [] })
+    const following = await as(B, user.ownerB, () => sharing.sharingSourceCondition(['following'])) as { id: { in: string[] } }
+    expect(following.id.in).toContain(product['b:JKT'])
+    const own = await as(B, user.ownerB, () => sharing.sharingSourceCondition(['own'])) as { id: { notIn: string[] } }
+    expect(own.id.notIn).toContain(product['b:JKT'])
+    const out = await as(A, user.ownerA, () => sharing.sharingSourceCondition(['shared'])) as { id: { in: string[] } }
+    expect(out.id.in).toContain(product.parent)
+    expect(await as(A, user.ownerA, () => sharing.sharingSourceCondition(['own', 'following', 'shared']))).toBeNull()
+  }, 60_000)
+
+  it('4c. the shared product\'s listing layout: read from A without its accounts, made in B as drafts on B\'s own account, never doubled', async () => {
+    const layout = await import('./listing-layout.service.js')
+    // A lists JKT on two eBay accounts: account 1 (primary) on IT with the main listing and an alias "Winter", account 2 on DE.
+    const a1 = randomUUID(), a2 = randomUUID(), b1 = randomUUID(), winter = randomUUID()
+    await sql(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "accountLabel", "externalAccountId", "isActive", "isPrimary", "updatedAt") VALUES ($1,$3,'EBAY','A main','a-seller-1',true,true,CURRENT_TIMESTAMP), ($2,$3,'EBAY','A outlet','a-seller-2',true,false,CURRENT_TIMESTAMP)`, [a1, a2, A])
+    await sql(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "accountLabel", "externalAccountId", "isActive", "isPrimary", "updatedAt") VALUES ($1,$2,'EBAY','B store','b-seller-1',true,true,CURRENT_TIMESTAMP)`, [b1, B])
+    await sql(`INSERT INTO "Marketplace" (id, "workspaceId", channel, code, name, region, currency, language, "updatedAt") VALUES ($1,$2,'EBAY','IT','eBay Italy','EU','EUR','it',CURRENT_TIMESTAMP)`, [randomUUID(), B])
+    await sql(`INSERT INTO "ProductListingAlias" (id, "workspaceId", "productId", channel, marketplace, "channelConnectionId", label, position, "updatedAt") VALUES ($1,$2,$3,'EBAY','IT',$4,'Winter',1,CURRENT_TIMESTAMP)`, [winter, A, product.parent, a1])
+    const listing = (workspaceId: string, productId: string, market: string, connection: string, aliasKey = '') => sql(
+      `INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "aliasKey", "aliasId", "listingStatus", "isPublished", "syncPaused", "updatedAt")
+       VALUES ($1,$2,$3,'EBAY',$4,$4,$5,$6,$7,$8,'ACTIVE',true,false,CURRENT_TIMESTAMP)`, [randomUUID(), workspaceId, productId, market, `EBAY_${market}`, connection, aliasKey, aliasKey || null])
+    await listing(A, product.parent, 'IT', a1)
+    await listing(A, product.parent, 'IT', a1, winter)
+    await listing(A, product.parent, 'DE', a2)
+
+    const view = await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT-M']))
+    expect(view).toMatchObject({ rootId: product['b:JKT'], sourceBusiness: 'Business A', accounts: { EBAY: [{ id: b1, label: 'B store', primary: true }] } })
+    expect(view.groups.map((g) => [g.key, g.sourceAccount, g.sourceAccounts, g.slots, g.here.suggestedAccountId, g.here.blocked])).toEqual([
+      ['EBAY|DE|2', 2, 2, [{ position: 0, label: null }], null, 'eBay DE is not a market of this business. Add it in Settings › Channels.'],
+      ['EBAY|IT|1', 1, 2, [{ position: 0, label: null }, { position: 1, label: 'Winter' }], b1, null],
+    ])
+    // The wall: none of A's accounts crosses it, by id or by name.
+    for (const secret of [a1, a2, 'A main', 'A outlet', 'a-seller-1']) expect(JSON.stringify(view)).not.toContain(secret)
+
+    const made = await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }, { key: 'EBAY|DE|2', accountId: b1 }] }))
+    expect(made.results).toEqual([
+      { key: 'EBAY|IT|1', listings: 3, aliases: 1, refused: null },
+      { key: 'EBAY|DE|2', listings: 0, aliases: 0, refused: 'eBay DE is not a market of this business. Add it in Settings › Channels.' },
+    ])
+    // Inert drafts for the whole family, on B's account: the main listing and the alias "Winter".
+    const rows = await sql(`SELECT l."productId", l."aliasKey" = '' AS main, l."listingStatus", l."isPublished", l."syncPaused", l."channelConnectionId"
+      FROM "ChannelListing" l WHERE l."workspaceId" = $1 AND l.channel = 'EBAY' ORDER BY 1, 2`, [B])
+    expect(rows).toHaveLength(6)
+    for (const row of rows) expect(row).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, syncPaused: true, channelConnectionId: b1 })
+    expect(await sql(`SELECT label, position FROM "ProductListingAlias" WHERE "workspaceId" = $1`, [B])).toEqual([{ label: 'Winter', position: 1 }])
+    // Made again: nothing doubled, and the page says what is here.
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }] }))).results)
+      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: null }])
+    expect(Number((await one(`SELECT count(*) AS n FROM "ChannelListing" WHERE "workspaceId" = $1`, [B])).n)).toBe(6)
+    expect((await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT']))).groups.find((g) => g.key === 'EBAY|IT|1')?.here.present[b1]).toEqual({ main: true, aliases: ['Winter'] })
+    // A choice naming another business's account, or none, makes nothing.
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: a1 }, { key: 'EBAY|DE|2', accountId: null }] }))).results)
+      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: 'That account is not connected in this business. Reload the page.' }])
+
+    // A's accounts shared with B: one for reading only is never offered (the database refuses a listing on it); one for
+    // publishing is, named as A's, and never suggested.
+    await sql(`INSERT INTO "ChannelAccountGrant" ("connectionId", "workspaceId", "ownerWorkspaceId", mode, "grantedByUserId") VALUES ($1,$3,$4,'publish',$5), ($2,$3,$4,'read',$5)`, [a1, a2, B, A, user.ownerA])
+    const withShared = await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT']))
+    expect(withShared.accounts.EBAY.map((a) => [a.label, a.sharedBy])).toEqual([['B store', null], ['A main', 'Business A']])
+    expect(withShared.groups.find((g) => g.key === 'EBAY|IT|1')?.here.suggestedAccountId).toBe(b1)
+    await sql(`DELETE FROM "ChannelAccountGrant" WHERE "workspaceId" = $1`, [B])
+
+    // The whole share at once, as Settings offers it: one choice per channel and account of A.
+    const summary = await as(B, user.ownerB, () => layout.shareLayout(shareId))
+    expect(summary.groups).toEqual([
+      expect.objectContaining({ key: 'EBAY|1', sourceAccount: 1, sourceAccounts: 2, products: 1, markets: ['IT'], aliases: 1, suggestedAccountId: b1 }),
+      expect.objectContaining({ key: 'EBAY|2', sourceAccount: 2, products: 1, markets: ['DE'], aliases: 0, suggestedAccountId: null }),
+    ])
+    expect(await as(B, user.ownerB, () => layout.applyShareLayout(shareId, { choices: [{ key: 'EBAY|1', accountId: b1 }] })))
+      .toEqual({ products: 1, listings: 0, aliases: 0, refused: [] })
+
+    // Step 5 — the publish warning: the same product live on eBay in the other business, in either direction.
+    const warning = await import('./shared-listing-warning.js')
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'EBAY', 'IT'))).toEqual([]) // A's rows have no eBay item yet
+    await sql(`UPDATE "ChannelListing" SET "externalListingId" = 'A-ITEM-1' WHERE "workspaceId" = $1 AND "productId" = $2 AND marketplace = 'IT' AND "aliasKey" = ''`, [A, product.parent])
+    const fromB = await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'EBAY', 'IT'))
+    expect(fromB).toHaveLength(1)
+    expect(fromB[0].message).toContain('already live on eBay IT in Business A (1 listing)')
+    expect(JSON.stringify(fromB)).not.toContain('A-ITEM-1')
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'EBAY', 'DE'))).toEqual([])
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product['b:JKT'], 'AMAZON', 'IT'))).toEqual([])
+    // A product of another business answers nothing, whoever asks.
+    expect(await as(B, user.ownerB, () => warning.sharedListingWarnings(product.parent, 'EBAY', 'IT'))).toEqual([])
+    // The other direction: B's copy goes live; A is warned when it publishes.
+    const bLive = randomUUID()
+    await sql(`INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "aliasKey", "listingStatus", "isPublished", "externalListingId", "updatedAt")
+      VALUES ($1,$2,$3,'EBAY','FR','FR','EBAY_FR',$4,'','ACTIVE',true,'B-ITEM-1',CURRENT_TIMESTAMP)`, [bLive, B, product['b:JKT'], b1])
+    expect((await as(A, user.ownerA, () => warning.sharedListingWarnings(product.parent, 'EBAY', 'FR')))[0]?.message).toContain('already live on eBay FR in Business B (1 listing)')
+    await sql(`DELETE FROM "ChannelListing" WHERE id = $1`, [bLive])
+    await sql(`UPDATE "ChannelListing" SET "externalListingId" = NULL WHERE "externalListingId" = 'A-ITEM-1'`)
+  }, 60_000)
+
   it('5. images: a new source image is copied, a new alt text reaches the copy, a removed image removes the copy; B\'s own image change makes media an override', async () => {
     const bJacket = product['b:JKT']
     const uploads = storage.uploads.length
@@ -300,6 +434,27 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect((await images(bJacket)).map((image) => image.url)).not.toContain(copy)
     expect(await images(bJacket)).toHaveLength(2)
     expect(storage.cleaned).toContain(`product-images/${bJacket}/copy-${storage.uploads.length}`)
+
+    // B's family goes on the media plan: a shared photo is not written behind the Media page. The change stays due,
+    // the link says why, and B's owners are told; once the family leaves the plan, the photo arrives.
+    const plan = randomUUID()
+    await sql(`INSERT INTO "ProductMediaPlan" (id, "workspaceId", "productId", layer, plan, "updatedAt") VALUES ($1,$2,$3,'SHARED','{}'::jsonb,CURRENT_TIMESTAMP)`, [plan, B, bJacket])
+    const uploadsBefore = storage.uploads.length
+    await media(A, product.parent, FILE.back, { sortOrder: 3, publicId: 'product-images/a/back-2' })
+    await settle()
+    expect(storage.uploads.length).toBe(uploadsBefore)
+    expect(await images(bJacket)).toHaveLength(2)
+    expect(String((await linkRow(link.JKT)).lastSyncError)).toContain('managed on the Media page')
+    expect((await notices('assortment-sync-refused')).at(-1)?.body).toContain('managed on the Media page')
+    await sql(`DELETE FROM "ProductMediaPlan" WHERE id = $1`, [plan])
+    expect(await as(B, null, () => worker.queueLinks([link.JKT], 'resync'))).toBe(1)
+    await settle()
+    expect(storage.uploads.length).toBe(uploadsBefore + 1)
+    expect(await images(bJacket)).toHaveLength(3)
+    expect((await linkRow(link.JKT)).lastSyncError).toBeNull()
+    await sql(`DELETE FROM "ProductImage" WHERE "productId" = $1 AND "publicId" = 'product-images/a/back-2'`, [product.parent])
+    await settle()
+    expect(await images(bJacket)).toHaveLength(2)
 
     await media(B, bJacket, 'https://res.cloudinary.com/follower/image/upload/v1/b-own.png', { sortOrder: 9, publicId: 'b-own' })
     await sql(`UPDATE "ProductImage" SET alt = 'Side view 2' WHERE "productId" = $1 AND url = $2`, [product.parent, FILE.side])
@@ -332,6 +487,29 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect((await one(`SELECT sku FROM "Product" WHERE id = $1`, [product['b:JKT-M']])).sku).toBe('JKT-M2')
     expect(await linkRow(link['JKT-M'])).toMatchObject({ heldSku: null, heldReason: null })
 
+    // Still on the channel, though not active: an INACTIVE listing with a channel id keeps the old SKU too.
+    await sql(`UPDATE "ChannelListing" SET "listingStatus" = 'INACTIVE', "isPublished" = false, "externalListingId" = 'EXT-JKT-M' WHERE id = $1`, [listing])
+    await sql(`UPDATE "Product" SET sku = 'JKT-M3' WHERE id = $1`, [product.medium])
+    await settle()
+    expect((await one(`SELECT sku FROM "Product" WHERE id = $1`, [product['b:JKT-M']])).sku).toBe('JKT-M2')
+    const inactive = await linkRow(link['JKT-M'])
+    expect(inactive).toMatchObject({ heldSku: 'JKT-M3' })
+    expect(String(inactive.heldReason)).toContain('still listed on EBAY, though not active there')
+    // A shared eBay listing variant names the SKU as well: with the listing ended, it alone holds the rename.
+    await sql(`UPDATE "ChannelListing" SET "listingStatus" = 'ENDED' WHERE id = $1`, [listing])
+    const member = randomUUID()
+    await sql(`INSERT INTO "SharedListingMembership" (id, "workspaceId", marketplace, sku, "itemId", "parentSku", "productId", "variationSpecifics", "updatedAt")
+      VALUES ($1,$2,'IT','JKT-M2','ITEM-JKT','JKT',$3,'{}'::jsonb,CURRENT_TIMESTAMP)`, [member, B, product['b:JKT-M']])
+    expect(await as(B, null, () => worker.queueStaleLinks())).toBeGreaterThanOrEqual(1)
+    await settle()
+    expect((await one(`SELECT sku FROM "Product" WHERE id = $1`, [product['b:JKT-M']])).sku).toBe('JKT-M2')
+    expect(String((await linkRow(link['JKT-M'])).heldReason)).toContain('live on EBAY')
+    // A back to JKT-M2: nothing is waiting any more.
+    await sql(`DELETE FROM "SharedListingMembership" WHERE id = $1`, [member])
+    await sql(`UPDATE "Product" SET sku = 'JKT-M2' WHERE id = $1`, [product.medium])
+    await settle()
+    expect(await linkRow(link['JKT-M'])).toMatchObject({ heldSku: null, heldReason: null })
+
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", "updatedAt") VALUES ($1,$2,'B-OWN','B own product',5,CURRENT_TIMESTAMP)`, [randomUUID(), B])
     await sql(`UPDATE "Product" SET sku = 'B-OWN' WHERE id = $1`, [product.small])
     await settle()
@@ -344,6 +522,11 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
   }, 90_000)
 
   it('7. a variation added in A is created and linked in B; one whose SKU B already has is left for a person; one deleted in A is detached, and B keeps it', async () => {
+    // Sharing studio step 3: B's family has draft listings (test 4c) and one listing on a channel, on eBay UK.
+    const bStore = (await one(`SELECT id FROM "ChannelConnection" WHERE "workspaceId" = $1`, [B])).id as string
+    const onChannel = randomUUID()
+    await sql(`INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "listingStatus", "isPublished", "externalListingId", "updatedAt")
+      VALUES ($1,$2,$3,'EBAY','UK','UK','EBAY_UK',$4,'ACTIVE',true,'EXT-UK',CURRENT_TIMESTAMP)`, [onChannel, B, product['b:JKT'], bStore])
     const large = randomUUID()
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, description, "basePrice", status, "productType", "parentId", "familyId", "updatedAt")
       VALUES ($1,$2,'JKT-L','JKT-L name','Large',99,'ACTIVE','COAT',$3,$4,CURRENT_TIMESTAMP)`, [large, A, product.parent, familyA])
@@ -356,6 +539,15 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(largeLink).toMatchObject({ targetProductId: made.id, linkedBy: 'created', syncMarket: 'IT' })
     expect(Object.keys((largeLink.appliedState as { fields: object }).fields)).toEqual(expect.arrayContaining(['name', 'sku', 'managed:basePrice']))
     expect((await notices('assortment-sync-created')).at(-1)?.body).toContain('variation JKT-L')
+    // It joined the family's draft listings (the main one and the alias), as drafts; the listing on eBay UK is untouched,
+    // and the owners are told to add it there.
+    expect(await sql(`SELECT marketplace, "aliasKey" = '' AS main, "listingStatus", "syncPaused" FROM "ChannelListing" WHERE "productId" = $1 ORDER BY 2 DESC`, [made.id]))
+      .toEqual([{ marketplace: 'IT', main: true, listingStatus: 'DRAFT', syncPaused: true }, { marketplace: 'IT', main: false, listingStatus: 'DRAFT', syncPaused: true }])
+    expect((await notices('assortment-variation-live-listing')).map((n) => [n.title, n.body]).at(-1)).toEqual([
+      "New variation JKT-L: add it to JKT's live listings",
+      'It came from the shared product and joined the draft listings. The listings already on a channel were not changed: eBay UK. Add it there before their next publish.',
+    ])
+    await sql(`DELETE FROM "ChannelListing" WHERE id = $1`, [onChannel])
 
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", "updatedAt") VALUES ($1,$2,'JKT-XL','B own XL',5,CURRENT_TIMESTAMP)`, [randomUUID(), B])
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", status, "parentId", "familyId", "updatedAt") VALUES ($1,$2,'JKT-XL','JKT-XL name',99,'ACTIVE',$3,$4,CURRENT_TIMESTAMP)`, [randomUUID(), A, product.parent, familyA])
@@ -364,6 +556,11 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     // One notice per owner of B (two here), however many runs see it: an unread notice is not repeated.
     expect((await notices('assortment-variation-exists')).map((n) => [n.userId, n.title]).sort()).toEqual([
       [user.ownerA, 'New shared variation JKT-XL was not linked'], [user.ownerB, 'New shared variation JKT-XL was not linked']].sort())
+    // Read, it is not sent again: the next sync of the parent still sees the conflict, and says nothing new.
+    await sql(`UPDATE "Notification" SET "readAt" = CURRENT_TIMESTAMP WHERE type = 'assortment-variation-exists'`)
+    await sql(`UPDATE "Product" SET description = 'Parent, edited again' WHERE id = $1`, [product.parent])
+    await settle()
+    expect(await notices('assortment-variation-exists')).toHaveLength(2)
 
     await sql(`UPDATE "Product" SET "deletedAt" = CURRENT_TIMESTAMP WHERE id = $1`, [large])
     await settle()
@@ -413,7 +610,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
       expect(String(waiting.lastError)).toContain('permission denied')
       // A fresh change in A makes the waiting note ready now: the new state may apply.
       await sql(`UPDATE "Product" SET description = 'Fresh while waiting' WHERE id = $1`, [product.small])
-      expect(await sql(`SELECT "availableAt" <= CURRENT_TIMESTAMP AS ready, attempts FROM "AssortmentChange" WHERE "linkId" = $1 AND state = 'pending'`, [link['JKT-S']])).toEqual([{ ready: true, attempts: 1 }])
+      expect(await sql(`SELECT "availableAt" <= CURRENT_TIMESTAMP(3) AS ready, attempts FROM "AssortmentChange" WHERE "linkId" = $1 AND state = 'pending'`, [link['JKT-S']])).toEqual([{ ready: true, attempts: 1 }])
       // The seventh retry has happened; the eighth try is the last.
       await sql(`UPDATE "AssortmentChange" SET attempts = 7, "availableAt" = CURRENT_TIMESTAMP WHERE "linkId" = $1 AND state = 'pending'`, [link['JKT-S']])
       expect(await as(B, null, () => worker.processAssortmentChanges())).toMatchObject({ claimed: 1, failed: 1, retried: 0 })

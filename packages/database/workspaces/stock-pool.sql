@@ -3,8 +3,8 @@
 -- docs/2026-09-19-shared-stock-build.md §1.
 --
 -- Shared by the generator (scripts/workspace-policies.mjs, which the disposable test database
--- applies) and migration 20260919a_stock_pool, which ENDS WITH these exact bytes
--- (policy-migrations.json; check-policy-migration-parity.mjs). Change it only through a NEW
+-- applies) and the migration policy-migrations.json names for it, which ENDS WITH these exact bytes
+-- (check-policy-migration-parity.mjs; first 20260919a_stock_pool). Change it only through a NEW
 -- migration that ends with its new bytes.
 --
 -- Words: the LENDER (StockPoolGrant."ownerWorkspaceId") owns the warehouses and the stock rows.
@@ -492,7 +492,9 @@ BEGIN
         WHEN cl."fulfillmentMethod" = 'FBA' OR (cl.channel = 'AMAZON' AND (p."fulfillmentMethod" = 'FBA' OR COALESCE(o.fba, 0) > 0)) THEN 'fba'
         WHEN cl."offerClosedAt" IS NOT NULL THEN 'closed'
         WHEN EXISTS (SELECT 1 FROM "SyncChannelPolicy" sp WHERE sp."workspaceId" = cl."workspaceId" AND sp.channel = cl.channel
-                       AND sp.marketplace IN (cl.marketplace, '*') AND sp."pushesPaused") OR cl."syncPaused" THEN 'paused'
+                       AND sp.marketplace IN (cl.marketplace, '*') AND sp."pushesPaused"
+                       -- A policy with no account is for every account; one with an account, only for that account's listings.
+                       AND (sp."channelConnectionId" IS NULL OR sp."channelConnectionId" = cl."channelConnectionId")) OR cl."syncPaused" THEN 'paused'
         WHEN NOT cl."followMasterQuantity" THEN 'pinned'
         WHEN COALESCE(o.available, 0) > 0 THEN 'toOwn'
         ELSE 'toZero'

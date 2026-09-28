@@ -52,6 +52,8 @@ interface RunPlan { products: PlannedProduct[]; skipped: Array<{ sku: string; re
 interface RunCounts {
   linked: number; alreadyLinked: number; notSaved: number; linkRefused: number; managedApplied: number; managedFailed: number
   imagesCopied: number; imagesReused: number; imagesAddressed: number; imagesFailed: number; mediaNotCopied: number
+  /** Photos not written: the product's photos are managed on the Media page (copy-media.service.ts PHOTOS_HELD). */
+  imagesHeld: number
 }
 
 export interface CopyRunView {
@@ -154,6 +156,7 @@ function planProducts(preview: CopyPreview, catalog: OfferedCatalog, choices: Re
     const images = media.filter((image) => image.mediaType === 'IMAGE').map((image): PlannedImage => ({
       id: image.id, url: image.url, alt: image.alt, type: image.type, isPrimary: image.isPrimary, sortOrder: image.sortOrder,
       width: image.width, height: image.height, mimeType: image.mimeType, fileSize: image.fileSize,
+      languageTag: image.languageTag, versionGroupId: image.versionGroupId,
     }))
     return {
       sku, sourceProductId: source.id, sourceVersion: source.version, kind: outcome.get(sku)!.kind as 'new' | 'match', parentSku: source.parentSku,
@@ -319,7 +322,7 @@ export async function advanceCopyRun(runId: string): Promise<CopyRunView> {
   const plan = run.plan as unknown as RunPlan
   const counts: RunCounts = {
     linked: 0, alreadyLinked: 0, notSaved: 0, linkRefused: 0, managedApplied: 0, managedFailed: 0,
-    imagesCopied: 0, imagesReused: 0, imagesAddressed: 0, imagesFailed: 0, mediaNotCopied: 0,
+    imagesCopied: 0, imagesReused: 0, imagesAddressed: 0, imagesFailed: 0, mediaNotCopied: 0, imagesHeld: 0,
   }
   const problems: string[] = []
   await withWorkspace({ workspaceId, actorUserId: run.createdByUserId, membershipId: null, roleKeys: [] }, async () => {
@@ -366,6 +369,7 @@ export async function advanceCopyRun(runId: string): Promise<CopyRunView> {
       counts.imagesReused += media.reused
       counts.imagesAddressed += media.addressed
       counts.imagesFailed += media.failed.length
+      counts.imagesHeld += media.held
       counts.mediaNotCopied += planned.mediaNotCopied ?? 0
       problems.push(...media.failed.map((f) => `${planned.sku}: ${f}`))
 

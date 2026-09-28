@@ -26,15 +26,37 @@ import prisma from '../../db.js'
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../cloudinary.service.js'
 import { aHashBuffer, dHash256Buffer, sha256Buffer } from '../images/image-hash.service.js'
 import { saveMediaFingerprint } from '../images/media-fingerprint.service.js'
+import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { productEventService } from '../product-event.service.js'
 import { attachShopifyImage, defaultShopifyMediaAccount, uploadReadyShopifyAsset } from '../shopify/media-library.service.js'
+import { notifyOwners } from '../stock-pool/pool-notify.js'
 import type { SourceImage } from './copy-source.service.js'
 
-/** What the owner confirmed in Review 1, per image. Stored on the copy run's plan. */
+/**
+ * Images rebuild P2b — a family on the media plan takes its photos only through the Media page: its plan names
+ * which library photo each channel shows, so a photo written here would reach no channel, and one removed here
+ * would leave the plan pointing at nothing. Shared photos wait, and a person is told.
+ */
+export const PHOTOS_HELD = 'This product’s photos are managed on the Media page, so shared photos are not added or removed here. Change its photos on the Media page.'
+
+/**
+ * What the owner confirmed in Review 1, per image. Stored on the copy run's plan. The photo's language and its
+ * language-version group are optional: a plan stored before they were carried has neither (the photo is "no text").
+ */
 export type PlannedImage = Pick<SourceImage, 'id' | 'url' | 'alt' | 'type' | 'isPrimary' | 'sortOrder' | 'width' | 'height' | 'mimeType' | 'fileSize'>
+  & Partial<Pick<SourceImage, 'languageTag' | 'versionGroupId'>>
+
+/**
+ * The language of the text in a copied photo, and the id its language versions share. The group id is a random
+ * id that only groups (images rebuild §4.8), so the follower's copies keep the owner's: its versions stay one photo.
+ */
+export const imageLanguage = (image: Pick<PlannedImage, 'languageTag' | 'versionGroupId'>) =>
+  ({ languageTag: image.languageTag ?? 'zxx', versionGroupId: image.versionGroupId ?? null })
 
 export interface MediaCopyResult {
   copied: number; reused: number; addressed: number; failed: string[]
+  /** Photos not written because the product's family is on the media plan (PHOTOS_HELD). */
+  held: number
   /** Which follower image now shows each source image (copied or reused). The live sync (AE.4) follows them. */
   pairs: Array<{ source: string; target: string }>
 }
@@ -57,8 +79,17 @@ export function imageOrigin(url: string): 'file' | 'address' {
 }
 
 export async function copyImages(productId: string, images: PlannedImage[]): Promise<MediaCopyResult> {
-  const result: MediaCopyResult = { copied: 0, reused: 0, addressed: 0, failed: [], pairs: [] }
+  const result: MediaCopyResult = { copied: 0, reused: 0, addressed: 0, failed: [], held: 0, pairs: [] }
   if (images.length === 0) return result
+  if (await isOnMediaPlan(productId)) {
+    result.held = images.length
+    await notifyOwners({
+      type: 'assortment-photos-held', severity: 'warn',
+      title: images.length === 1 ? '1 shared photo was not added' : `${images.length} shared photos were not added`,
+      body: PHOTOS_HELD, entityType: 'Product', entityId: productId, href: `/products/${encodeURIComponent(productId)}/edit`,
+    })
+    return result
+  }
   const present = await prisma.productImage.findMany({ where: { productId }, select: { type: true, isPrimary: true } })
   let hasMain = present.some((image) => image.type === 'MAIN')
   let hasPrimary = present.some((image) => image.isPrimary)
@@ -103,7 +134,7 @@ async function copyFile(productId: string, image: PlannedImage, type: string, pr
     const { asset } = await uploadReadyShopifyAsset(shopifyAccount, buffer, fileName(image.url, mimeType))
     const attached = await attachShopifyImage(productId, asset, type, image.alt)
     await saveMediaFingerprint(attached.image.id, { contentHash, perceptualHash, dhash256 })
-    if (primary) await prisma.productImage.update({ where: { id: attached.image.id }, data: { isPrimary: true } })
+    await prisma.productImage.update({ where: { id: attached.image.id }, data: { ...imageLanguage(image), ...(primary ? { isPrimary: true } : {}) } })
     return { outcome: attached.reused ? 'reused' : 'copied', targetId: attached.image.id }
   }
   if (!isCloudinaryConfigured()) throw new Error('This business has no image storage. Connect a Shopify store or configure Cloudinary.')
@@ -113,7 +144,7 @@ async function copyFile(productId: string, image: PlannedImage, type: string, pr
       data: {
         productId, url: uploaded.url, publicId: uploaded.publicId, type, alt: image.alt, sortOrder: await nextSortOrder(productId),
         isPrimary: primary, width: uploaded.width, height: uploaded.height, fileSize: uploaded.bytes, mimeType,
-        contentHash, perceptualHash, dhash256,
+        contentHash, perceptualHash, dhash256, ...imageLanguage(image),
       },
       select: { id: true },
     })
@@ -134,7 +165,7 @@ async function carryAddress(productId: string, image: PlannedImage, type: string
   const created = await prisma.productImage.create({
     data: {
       productId, url: image.url, publicId: null, type, alt: image.alt, sortOrder: await nextSortOrder(productId), isPrimary: primary,
-      width: image.width, height: image.height, mimeType: image.mimeType, fileSize: image.fileSize,
+      width: image.width, height: image.height, mimeType: image.mimeType, fileSize: image.fileSize, ...imageLanguage(image),
     },
     select: { id: true },
   })

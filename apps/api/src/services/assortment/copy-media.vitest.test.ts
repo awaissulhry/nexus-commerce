@@ -134,7 +134,7 @@ describe('AE.3c — images arrive in the follower business', () => {
     const side = image({ url: SIDE_ADDRESS, type: 'ALT', sortOrder: 1 })
     const result = await inB(() => media.copyImages(productId, [main, side]))
     const { pairs, ...counts } = result
-    expect(counts).toEqual({ copied: 1, reused: 0, addressed: 1, failed: [] })
+    expect(counts).toEqual({ copied: 1, reused: 0, addressed: 1, failed: [], held: 0 })
     // AE.4 — each source image names the follower image that now shows it.
     const idByUrl = new Map((await sql(`SELECT id, url FROM "ProductImage" WHERE "productId" = $1`, [productId])).map((row) => [row.url, row.id]))
     expect(pairs).toEqual([
@@ -152,7 +152,7 @@ describe('AE.3c — images arrive in the follower business', () => {
 
     // Again: the same bytes and the same address are recognised; nothing is uploaded or added.
     const again = await inB(() => media.copyImages(productId, [main, side]))
-    expect(again).toEqual({ copied: 0, reused: 2, addressed: 0, failed: [], pairs }) // a reused image names the same row
+    expect(again).toEqual({ copied: 0, reused: 2, addressed: 0, failed: [], held: 0, pairs }) // a reused image names the same row
     expect(storage.uploads).toHaveLength(1)
     expect(await rows(productId)).toHaveLength(2)
   })
@@ -214,5 +214,18 @@ describe('AE.3c — images arrive in the follower business', () => {
     expect(result.failed).toEqual(['image 1: This business has no image storage. Connect a Shopify store or configure Cloudinary.'])
     expect(result.addressed).toBe(1)
     expect((await rows(productId)).map((row) => row.url)).toEqual([SIDE_ADDRESS])
+  })
+
+  it('a family on the media plan gets no photo written here: the photos wait for the Media page, and the result says how many', async () => {
+    const parent = await newProduct('MEDIA-7')
+    const child = randomUUID()
+    await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", "parentId", "updatedAt") VALUES ($1,$2,'MEDIA-7-S','MEDIA-7-S',1,$3,CURRENT_TIMESTAMP)`, [child, B, parent])
+    await sql(`INSERT INTO "ProductMediaPlan" (id, "workspaceId", "productId", layer, plan, "updatedAt") VALUES ($1,$2,$3,'SHARED','{}'::jsonb,CURRENT_TIMESTAMP)`, [randomUUID(), B, parent])
+    // The variation's family is on the plan through its parent.
+    const result = await inB(() => media.copyImages(child, [image({ url: MAIN_FILE, sortOrder: 0 }), image({ url: SIDE_ADDRESS, sortOrder: 1 })]))
+    expect(result).toEqual({ copied: 0, reused: 0, addressed: 0, failed: [], held: 2, pairs: [] })
+    expect(await rows(child)).toEqual([])
+    expect(fetched).toEqual([])
+    expect(storage.uploads).toEqual([])
   })
 })

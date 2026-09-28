@@ -66,6 +66,7 @@ import {
   withStructuralLocks,
   CHANNEL_OPTS,
   SALES_WINDOW_DAYS,
+  SOURCE_OPTS,
   STATUS_OPTS,
   STRUCTURAL_COLUMNS,
 } from './columns'
@@ -655,6 +656,7 @@ function ProductsNextInner() {
         : key === 'brand' ? facetOptions.brands.map((b) => ({ value: b, label: b }))
         : key === 'productType' ? facetOptions.types.map((t) => ({ value: t, label: t }))
         : key === 'tags' ? allTags.map((t) => ({ value: t.name, label: t.name }))
+        : key === 'source' ? SOURCE_OPTS
         : []
       return gridFilterDef('set', { options, searchable: key === 'brand' || key === 'productType' || key === 'tags' })
     },

@@ -3,8 +3,8 @@
 -- Plan: docs/2026-09-19-shared-stock-plan.md step 6; contract docs/2026-09-19-shared-stock-build.md §6.
 --
 -- Shared by the generator (scripts/workspace-policies.mjs, which the disposable test database
--- applies) and migration 20260919d, which ENDS WITH these exact bytes (policy-migrations.json;
--- check-policy-migration-parity.mjs). Change it only through a NEW migration ending with its new bytes.
+-- applies) and the migration policy-migrations.json names for it (first 20260919d), which ENDS WITH these exact bytes
+-- (check-policy-migration-parity.mjs). Change it only through a NEW migration ending with its new bytes.
 --
 -- The rules the database keeps, whatever the application does:
 --   1. Every save of a followed product is noted, whoever saves it (research F2: most code paths send
@@ -319,16 +319,47 @@ REVOKE ALL ON FUNCTION nexus_assortment_sync_source(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nexus_assortment_sync_source(text) TO nexus_workspace_runtime;
 
 -- ── Who has work: the poller asks with NO business context (a system caller) ────────────────
+-- "Due" at the column's precision: availableAt is TIMESTAMP(3), rounded — possibly up — when written, so it is compared
+-- with CURRENT_TIMESTAMP(3), rounded the same way (sync-worker.ts claims with the same rule).
 CREATE OR REPLACE FUNCTION nexus_assortment_pending_workspaces()
 RETURNS TABLE (workspace_id text) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT DISTINCT c."targetWorkspaceId"
   FROM "AssortmentChange" c
   WHERE NULLIF(current_setting('nexus.workspace_id', true), '') IS NULL
-    AND ((c.state = 'pending' AND c."availableAt" <= CURRENT_TIMESTAMP)
+    AND ((c.state = 'pending' AND c."availableAt" <= CURRENT_TIMESTAMP(3))
       OR (c.state = 'claimed' AND c."claimedAt" < CURRENT_TIMESTAMP - interval '10 minutes'))
 $$;
 REVOKE ALL ON FUNCTION nexus_assortment_pending_workspaces() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nexus_assortment_pending_workspaces() TO nexus_workspace_runtime;
+
+-- ── Sharing studio step 5: the same product, live on the same channel in another business ──────
+-- For the publish review's warning. Answers only for a product of the business in context, only through an active
+-- link in either direction (this business follows it, or another business follows this one), and only the other
+-- business's name, the market and how many listings are live there — no ids, no accounts, no values.
+CREATE OR REPLACE FUNCTION nexus_shared_product_live_listings(product_id text, channel_name text)
+RETURNS TABLE (business_name text, marketplace text, listings integer) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH me AS (
+    SELECT p.id AS product, p."workspaceId" AS business
+    FROM "Product" p
+    WHERE p.id = product_id AND p."workspaceId" = NULLIF(current_setting('nexus.workspace_id', true), '')
+  ), counterparts AS (
+    SELECT l."sourceWorkspaceId" AS business, l."sourceProductId" AS product
+    FROM "CatalogLink" l JOIN me ON l."targetWorkspaceId" = me.business AND l."targetProductId" = me.product
+    WHERE l.status = 'active'
+    UNION
+    SELECT l."targetWorkspaceId", l."targetProductId"
+    FROM "CatalogLink" l JOIN me ON l."sourceWorkspaceId" = me.business AND l."sourceProductId" = me.product
+    WHERE l.status = 'active'
+  )
+  SELECT w.name, cl.marketplace, count(*)::integer
+  FROM counterparts c
+  JOIN "Workspace" w ON w.id = c.business
+  JOIN "ChannelListing" cl ON cl."workspaceId" = c.business AND cl."productId" = c.product
+  WHERE cl.channel = channel_name AND cl."listingStatus" = 'ACTIVE' AND cl."isPublished" AND cl."externalListingId" IS NOT NULL
+  GROUP BY w.name, cl.marketplace
+$$;
+REVOKE ALL ON FUNCTION nexus_shared_product_live_listings(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION nexus_shared_product_live_listings(text, text) TO nexus_workspace_runtime;
 
 -- ── The repair job asks which of its links are behind ───────────────────────────────────────
 -- Active links of the business in context, of active shares, whose source was saved after the last

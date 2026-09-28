@@ -10,6 +10,7 @@ import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Pill } from '@/design-system/primitives'
 import type { Access } from './SharingClient'
 import { CopyDrawer } from './CopyDrawer'
+import { ShareLayoutModal } from './ShareLayoutModal'
 import { OfferShareModal } from './OfferShareModal'
 import { sharingApi, type Assortment, type CopyRunSummary, type Share } from './sharingApi'
 import { count, dateWords, groupsSentence, runResultWords, runStateWords, statusWords, type ShareSide } from './words'
@@ -46,6 +47,7 @@ export function IncomingPanel({ access, shares, onChanged }: { access: Access; s
   const [pending, setPending] = useState<Pending | null>(null)
   const [reviewing, setReviewing] = useState<Share | null>(null)
   const [copying, setCopying] = useState<{ share: Share; runId?: string } | null>(null)
+  const [laying, setLaying] = useState<Share | null>(null)
   const [runsVersion, setRunsVersion] = useState(0)
   const owner = access.state === 'owner'
   if (!shares) return <p role="status">Loading shares…</p>
@@ -55,6 +57,7 @@ export function IncomingPanel({ access, shares, onChanged }: { access: Access; s
       actions={owner ? [
         ...(share.status === 'pending' ? [<Button key="review" variant="primary" onClick={() => setReviewing(share)}>Review offer</Button>] : []),
         ...(share.status === 'active' ? [<Button key="copy" variant="primary" onClick={() => setCopying({ share })}>Copy products</Button>] : []),
+        ...(share.status === 'active' && share.linkedProducts > 0 ? [<Button key="layout" onClick={() => setLaying(share)}>Make draft listings</Button>] : []),
         ...(['active', 'paused'].includes(share.status) ? [<Button key="leave" variant="danger-outline" onClick={() => setPending({ share, action: 'leave' })}>Leave share</Button>] : []),
       ] : []}>
       {share.status !== 'pending' && share.status !== 'declined' && <CopyRuns key={`${share.id}:${runsVersion}`} share={share} canAct={owner && ['active', 'paused'].includes(share.status)} onOpen={(runId) => setCopying({ share, runId })} />}
@@ -62,6 +65,7 @@ export function IncomingPanel({ access, shares, onChanged }: { access: Access; s
     {reviewing && <ReviewOfferModal share={reviewing} onClose={() => setReviewing(null)}
       onAnswer={(action) => { setReviewing(null); setPending({ share: reviewing, action }) }} />}
     {pending && <ShareActionModal pending={pending} onClose={() => setPending(null)} onDone={async () => { setPending(null); await onChanged() }} />}
+    {laying && <ShareLayoutModal share={laying} onClose={() => setLaying(null)} />}
     {copying && <CopyDrawer share={copying.share} runId={copying.runId} onClose={() => { setCopying(null); setRunsVersion((n) => n + 1); void onChanged() }} />}
   </>
 }
@@ -147,7 +151,7 @@ function ShareActionModal({ pending, onClose, onDone }: { pending: Pending; onCl
 function ReviewOfferModal({ share, onClose, onAnswer }: { share: Share; onClose: () => void; onAnswer: (action: 'accept' | 'decline') => void }) {
   return <Modal open onClose={onClose} size="md" title={`Offer from ${share.ownerWorkspaceName}`}
     subtitle={share.assortmentName ?? undefined}
-    footer={<><Button onClick={onClose}>Close</Button><span className="grow" /><Button variant="danger-outline" onClick={() => onAnswer('decline')}>Decline</Button><Button variant="primary" onClick={() => onAnswer('accept')}>Accept</Button></>}>
+    footer={<><Button onClick={onClose}>Close</Button><span className="shared-products-footer-gap" /><Button variant="danger-outline" onClick={() => onAnswer('decline')}>Decline</Button><Button variant="primary" onClick={() => onAnswer('accept')}>Accept</Button></>}>
     <div className="business-profile-form">
       <KeyValue items={[
         { label: 'Offered by', value: share.ownerWorkspaceName, hint: dateWords(share.createdAt) },

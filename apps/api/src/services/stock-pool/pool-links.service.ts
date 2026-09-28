@@ -13,6 +13,7 @@ import prisma from '../../db.js'
 import { WorkspaceError, requireWorkspace } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
 import { resolveIntendedQuantity, resolveMembershipIntended, type IntendedResolution } from '../sync-control-core.js'
+import { connectionLabel } from '../connection-label.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
 import { resolveCascadePushMethod } from '../stock-movement.service.js'
 import { idList } from './grant-rules.js'
@@ -50,6 +51,16 @@ export interface ListingPreview {
   itemId?: string
   channel: string
   marketplace: string
+  /** The account the listing is on, and its name; null for a listing no account claims. */
+  accountId: string | null
+  accountLabel: string | null
+  /**
+   * Which of the product's listings on this account and market it is: 0 = the main listing, 1… = an alias, in
+   * position order. Null when the account and market hold only this one listing (a lone listing needs no mark).
+   */
+  listingMark: number | null
+  /** The alias's own name; null for the main listing. */
+  aliasLabel: string | null
   /** What the channel shows now (the last number sent). */
   showsNow: number | null
   /** What Nexus will send after the switch; null when it sends nothing to this listing. */
@@ -165,11 +176,14 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
     loadLedgerChoices(prisma, ids, grant?.status === 'active' ? grant.id : null),
     prisma.channelListing.findMany({
       where: { productId: { in: ids }, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
-      select: { id: true, productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true, followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, offerClosedAt: true, sourceLocationCodes: true },
+      select: {
+        id: true, productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true, followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, offerClosedAt: true, sourceLocationCodes: true,
+        channelConnectionId: true, aliasKey: true, channelConnection: { select: { channelType: true, id: true, externalAccountId: true, accountLabel: true, ebayStoreName: true, displayName: true, ebaySignInName: true } }, alias: { select: { label: true, position: true } },
+      },
     }),
     prisma.sharedListingMembership.findMany({
       where: { productId: { in: ids }, status: 'ACTIVE' },
-      select: { itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true },
+      select: { itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, channelConnectionId: true, channelConnection: { select: { channelType: true, id: true, externalAccountId: true, accountLabel: true, ebayStoreName: true, displayName: true, ebaySignInName: true } } },
     }),
     loadChannelPolicies(),
   ])
@@ -190,27 +204,37 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
 
     const rows: ListingPreview[] = []
     if (!refusal && after) {
-      for (const listing of listings.filter((l) => l.productId === productId)) {
+      const own = listings.filter((l) => l.productId === productId)
+      // How many of this product's listings share each account and market: a mark only where there is more than one.
+      const coordinate = (l: (typeof own)[number]) => `${l.channel}|${l.marketplace}|${l.channelConnectionId ?? ''}`
+      const perCoordinate = new Map<string, number>()
+      for (const l of own) perCoordinate.set(coordinate(l), (perCoordinate.get(coordinate(l)) ?? 0) + 1)
+      for (const listing of own) {
         const method = resolveCascadePushMethod({ listingFulfillmentMethod: listing.fulfillmentMethod, channel: listing.channel, fbaBucket: after.fbaBucket, productFulfillmentMethod: product.fulfillmentMethod })
         const r = resolveIntendedQuantity({
           channel: listing.channel, marketplace: listing.marketplace, isFba: method === 'FBA', offerClosed: !!listing.offerClosedAt,
           followMasterQuantity: listing.followMasterQuantity, syncPaused: listing.syncPaused, pinnedQuantity: listing.quantity,
-          stockBuffer: listing.stockBuffer ?? 0, channelPolicy: policyFor(policies, listing.channel, listing.marketplace),
+          stockBuffer: listing.stockBuffer ?? 0, channelPolicy: policyFor(policies, listing.channel, listing.marketplace, listing.channelConnectionId),
           ...ledgerInputs(after, listing.sourceLocationCodes ?? []),
         })
         rows.push({
-          listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace, showsNow: listing.quantity,
-          willShow: r.kind === 'FOLLOW' ? r.quantity : null, rule: listingRule(r),
+          listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace,
+          accountId: listing.channelConnectionId, accountLabel: listing.channelConnection ? connectionLabel(listing.channelConnection).label : null,
+          listingMark: (perCoordinate.get(coordinate(listing)) ?? 1) > 1 ? (listing.aliasKey ? listing.alias?.position ?? null : 0) : null,
+          aliasLabel: listing.aliasKey ? listing.alias?.label ?? null : null,
+          showsNow: listing.quantity, willShow: r.kind === 'FOLLOW' ? r.quantity : null, rule: listingRule(r),
         })
       }
       for (const m of memberships.filter((x) => x.productId === productId)) {
         const inputs = ledgerInputs(after)
         const r = resolveMembershipIntended({
           marketplace: m.marketplace, followPool: m.followPool, pinnedQuantity: m.pinnedQuantity, stockBuffer: m.stockBuffer ?? 0,
-          channelPolicy: policyFor(policies, 'EBAY', m.marketplace), ledger: inputs.ledger, uncountedIsZero: inputs.uncountedIsZero,
+          channelPolicy: policyFor(policies, 'EBAY', m.marketplace, m.channelConnectionId), ledger: inputs.ledger, uncountedIsZero: inputs.uncountedIsZero,
         })
         rows.push({
-          listingId: null, itemId: m.itemId, channel: 'EBAY', marketplace: m.marketplace, showsNow: m.lastQtyPushed,
+          listingId: null, itemId: m.itemId, channel: 'EBAY', marketplace: m.marketplace,
+          accountId: m.channelConnectionId, accountLabel: m.channelConnection ? connectionLabel(m.channelConnection).label : null, listingMark: null, aliasLabel: null,
+          showsNow: m.lastQtyPushed,
           willShow: r.kind === 'FOLLOW' ? r.quantity : null, rule: !m.followPool ? 'excluded' : listingRule(r),
         })
       }

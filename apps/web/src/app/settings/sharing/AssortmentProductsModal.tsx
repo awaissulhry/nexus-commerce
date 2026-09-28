@@ -9,7 +9,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { AsyncListboxPanel, Banner, Modal } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button } from '@/design-system/primitives'
-import { getBackendUrl } from '@/lib/backend-url'
 import { sharingApi, SharingError, type Assortment, type AssortmentMember } from './sharingApi'
 import { count, dateWords } from './words'
 
@@ -103,9 +102,8 @@ function ProductPicker({ label, exclude, onPick, onDone, busy }: { label: string
     setResult(null)
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`${getBackendUrl()}/api/products/lookup?${new URLSearchParams({ q: query, limit: '50' })}`, { cache: 'no-store', signal: abort.signal })
-        const body = await response.json()
-        if (!response.ok || !Array.isArray(body.items)) throw new Error('Products could not be loaded. Try again.')
+        const body = await sharingApi<{ items?: unknown }>(`products/lookup?${new URLSearchParams({ q: query, limit: '50' })}`, undefined, abort.signal)
+        if (!Array.isArray(body.items)) throw new Error('Products could not be loaded. Try again.')
         if (!cancelled) setResult({ choices: body.items.map((item: { id: string; sku: string; title: string }) => ({ id: item.id, sku: item.sku, title: item.title })) })
       } catch {
         if (!cancelled && !abort.signal.aborted) setResult({ choices: [], error: 'Products could not be loaded. Try again.' })

@@ -127,6 +127,8 @@ export interface ProductListQuery {
   driftOnly?: string
   /** A-36 (Step 3.5a) — only products whose listing holds a different value ON THE CHANNEL (`ChannelDrift`). */
   channelDrift?: string
+  /** Sharing studio step 2 — comma list of own | following | shared (the grid's Source column filter). */
+  sharing?: string
   includeCoverage?: string
   includeTags?: string
   // Lazy-load children of this parent. Pass the parent's ID
@@ -465,6 +467,9 @@ export async function resolveProductsScope(q: ProductListQuery) {
   // like the tag filter, and pushed into AND so it narrows whatever `where.id` already says.
   const channelDriftIds = q.channelDrift === 'true' ? await (await import('../channel-drift.service.js')).productIdsWithChannelDrift() : null
   if (channelDriftIds) where.AND = [...(where.AND ?? []), { id: { in: channelDriftIds } }]
+  // Sharing studio step 2 — the Source column's filter: an id condition, pushed into AND like the one above.
+  const sharingCondition = q.sharing ? await (await import('../assortment/product-sharing.service.js')).sharingSourceCondition(q.sharing.split(',')) : null
+  if (sharingCondition) where.AND = [...(where.AND ?? []), sharingCondition]
   if (tagIdList.length > 0) {
     // Filter products that have AT LEAST ONE of the selected tags
     where.id = {
@@ -576,6 +581,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
     // overrides, never the channel — the "differs on the channel" filter is `channelDrift` below.
     if (q.driftOnly === 'true') cacheWhere.driftCount = { gt: 0 }
     if (channelDriftIds) cacheWhere.AND = [...(cacheWhere.AND ?? []), { id: { in: channelDriftIds } }]
+    if (sharingCondition) cacheWhere.AND = [...(cacheWhere.AND ?? []), sharingCondition]
     // Price bounds apply to the cache exactly as to the table; stock is the roll-up (below).
     if (priceMin !== undefined || priceMax !== undefined) {
       cacheWhere.basePrice = { ...(priceMin !== undefined ? { gte: priceMin } : {}), ...(priceMax !== undefined ? { lte: priceMax } : {}) }
@@ -1023,6 +1029,8 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
   const salesByProduct = new Map<string, { units: number; revenueCents: number | null }>()
   /** Shared stock step 5 — the pool a row sells from (a parent: its pooled variations added up). */
   const poolByProduct = new Map<string, PoolSourceSummary>()
+  /** Sharing studio step 2 — the business a row follows, and the businesses that follow it (the Source column). */
+  let sharingByProduct = new Map<string, import('../assortment/product-sharing.service.js').ProductSharingSummary>()
   let salesUnattributed: Array<{ channel: string; orders: number; units: number; revenueCents: number }> = []
   if (pageProductIds.length > 0) {
     // Stock lives on the child (variation) products — a parent owns none
@@ -1074,6 +1082,8 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       stockByProduct.set(ownerId, cur)
     }
     rollupByProduct = foldStockRollup(stockRows, childToParent)
+
+    sharingByProduct = await (await import('../assortment/product-sharing.service.js')).sharingByProducts(pageProductIds)
 
     // Shared stock step 5 — beside the own numbers, never added to them (a product uses one source).
     const pools = await loadPoolSources(prisma, stockIds)
@@ -1237,6 +1247,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         fbaStock: stockBuckets.fba,
         fbmStock: stockBuckets.non,
         poolSource: poolByProduct.get(p.id) ?? null,
+        sharing: sharingByProduct.get(p.id) ?? null,
         family: (p.familyJson as any) ?? null,
         workflowStage: (p.workflowStageJson as any) ?? null,
         version: p.version,
@@ -1305,6 +1316,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       fbaStock: stockBuckets.fba,
       fbmStock: stockBuckets.non,
       poolSource: poolByProduct.get(p.id) ?? null,
+      sharing: sharingByProduct.get(p.id) ?? null,
       family: p.family ?? null,
       workflowStage: p.workflowStage ?? null,
       version: p.version,

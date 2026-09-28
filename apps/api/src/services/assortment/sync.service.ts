@@ -17,6 +17,7 @@
  *   structure a variation added under a followed parent is created and linked here.
  */
 import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
+import { channelLabel } from '@nexus/shared/channel-label'
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { inDatabaseTransaction } from '../../lib/database-context.js'
@@ -24,13 +25,17 @@ import { WorkspaceError, requireWorkspace } from '../../lib/workspace-context.js
 import { logger } from '../../utils/logger.js'
 import { isCloudinaryConfigured } from '../cloudinary.service.js'
 import { cleanUpUnreferencedMedia } from '../images/media-file-cleanup.service.js'
+import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { catalogRows, productInclude } from '../pim/catalog-transfer-export.js'
 import { buildTransferPlan, transferContracts } from '../pim/catalog-transfer-plan.js'
 import { applyTransferTarget, loadTransferContext } from '../pim/catalog-transfer.service.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
+import { draftListingFields } from '../pim/draft-listing.service.js'
+import { whereDelistTargets } from '../outbound-enqueue.js'
 import { productEventService } from '../product-event.service.js'
+import { productReadCacheService } from '../product-read-cache.service.js'
 import { notifyOwners } from '../stock-pool/pool-notify.js'
-import { copyImages, type PlannedImage } from './copy-media.service.js'
+import { PHOTOS_HELD, copyImages, imageLanguage, type PlannedImage } from './copy-media.service.js'
 import { missingDefinitions } from './copy-preview.service.js'
 import { applyManaged, createDefinitions } from './copy-run.service.js'
 import { linkSource, readLinkedCatalog, type LinkSource, type ManagedFields, type OfferedCatalog } from './copy-source.service.js'
@@ -421,18 +426,26 @@ async function ensureDefinitions(catalog: OfferedCatalog): Promise<string[]> {
 // ── SKU ─────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * R-AE-2. "Live" is the bulk editor's definition (bulk-edit.service.ts): a listing ACTIVE and
- * published, of the product or of one of its variations — the channel keeps the old seller SKU, so a
- * rename there would silently break the listing.
+ * R-AE-2. A rename waits while any listing of the product or of one of its variations is still on a
+ * channel: the channel keeps the old seller SKU, so a rename here would silently break that listing.
+ * "Still on a channel" is the bulk editor's "live" (ACTIVE and published), the delete path's listing
+ * that exists there (`whereDelistTargets`: ACTIVE or INACTIVE with a channel id — an INACTIVE listing
+ * still carries the old SKU), and an active shared eBay listing variant (it names the SKU too).
  */
 async function renameSku(target: { id: string; sku: string }, sku: string): Promise<{ held: string | null }> {
-  const live = await prisma.channelListing.findMany({
-    where: { listingStatus: 'ACTIVE', isPublished: true, OR: [{ productId: target.id }, { product: { parentId: target.id } }] },
-    select: { channel: true },
-  })
-  if (live.length) {
-    const channels = [...new Set(live.map((listing) => listing.channel))].sort().join(', ')
-    return { held: `This product is live on ${channels}. A channel keeps the old seller SKU, so the new SKU waits here. End or unpublish the listing, and the new SKU is applied by itself; then list it again under the new SKU.` }
+  const family = [target.id, ...(await prisma.product.findMany({ where: { parentId: target.id }, select: { id: true } })).map((p) => p.id)]
+  const [listings, shared] = await Promise.all([
+    prisma.channelListing.findMany({
+      where: { OR: [{ productId: { in: family }, listingStatus: 'ACTIVE', isPublished: true }, whereDelistTargets(family)] },
+      select: { channel: true, listingStatus: true, isPublished: true },
+    }),
+    prisma.sharedListingMembership.findMany({ where: { productId: { in: family }, status: 'ACTIVE' }, select: { id: true } }),
+  ])
+  if (listings.length || shared.length) {
+    const channels = [...new Set([...listings.map((listing) => listing.channel), ...(shared.length ? ['EBAY'] : [])])].sort().join(', ')
+    const live = shared.length > 0 || listings.some((listing) => listing.listingStatus === 'ACTIVE' && listing.isPublished)
+    const where = live ? `live on ${channels}` : `still listed on ${channels}, though not active there`
+    return { held: `This product is ${where}. A channel keeps the old seller SKU, so the new SKU waits here. End the listing, and the new SKU is applied by itself; then list it again under the new SKU.` }
   }
   const taken = await prisma.product.findFirst({ where: { sku, NOT: { id: target.id } }, select: { id: true } })
   if (taken) return { held: `This business already has a product with the SKU ${sku}. Rename or delete that product, and the new SKU is applied by itself.` }
@@ -462,7 +475,7 @@ async function syncMedia(targetId: string, catalog: OfferedCatalog, sourceId: st
   decision: Decision; media: AppliedState['media']; failed: string[]
 }> {
   const images = sourceImagesOf(catalog, sourceId)
-  const facts: ImageFacts[] = images.map((image) => ({ id: image.id, url: image.url, alt: image.alt, type: image.type, isPrimary: image.isPrimary, sortOrder: image.sortOrder }))
+  const facts: ImageFacts[] = images.map((image) => ({ id: image.id, url: image.url, alt: image.alt, type: image.type, isPrimary: image.isPrimary, sortOrder: image.sortOrder, languageTag: image.languageTag, versionGroupId: image.versionGroupId }))
   const current = await followerImages(targetId)
   if (overrides.has(MEDIA_KEY)) return { decision: 'override', media: state.media, failed: [] }
   const map = state.media?.map ?? []
@@ -477,6 +490,9 @@ async function syncMedia(targetId: string, catalog: OfferedCatalog, sourceId: st
   if (!plan.add.length && !plan.remove.length && !plan.update.length) {
     return { decision: 'same', media: state.media ?? { target: followerMediaPrint(current), map }, failed: [] }
   }
+  // A family on the media plan: nothing is written, and the change stays due (its fingerprint is not moved), so it
+  // is refused again until the family leaves the plan or media stops following — never applied behind the Media page.
+  if (await isOnMediaPlan(targetId)) return { decision: 'same', media: state.media, failed: [PHOTOS_HELD] }
 
   const failed: string[] = []
   const kept = new Map(map.map((entry) => [entry.source, entry]))
@@ -497,6 +513,7 @@ async function syncMedia(targetId: string, catalog: OfferedCatalog, sourceId: st
         alt: source.alt,
         type: source.type === 'MAIN' && others.some((image) => image.type === 'MAIN') ? 'ALT' : source.type,
         isPrimary: source.isPrimary && !others.some((image) => image.isPrimary),
+        ...imageLanguage(source),
       },
     })
     kept.set(source.id, { ...entry, meta: imageMetaPrint(source) })
@@ -505,6 +522,7 @@ async function syncMedia(targetId: string, catalog: OfferedCatalog, sourceId: st
     const planned: PlannedImage[] = images.filter((image) => plan.add.some((add) => add.id === image.id)).map((image) => ({
       id: image.id, url: image.url, alt: image.alt, type: image.type, isPrimary: image.isPrimary, sortOrder: image.sortOrder,
       width: image.width, height: image.height, mimeType: image.mimeType, fileSize: image.fileSize,
+      languageTag: image.languageTag, versionGroupId: image.versionGroupId,
     }))
     const copied = await copyImages(targetId, planned)
     failed.push(...copied.failed)
@@ -537,7 +555,8 @@ async function createNewVariations(link: { id: string; shareId: string }, door: 
     const existing = await prisma.product.findFirst({ where: { sku: variation.sku }, select: { id: true } })
     if (existing) {
       await notifyOwners({
-        type: 'assortment-variation-exists', severity: 'info',
+        // Once: the conflict stays until a person links or skips it, and each sync of the parent sees it again.
+        type: 'assortment-variation-exists', severity: 'info', once: true,
         title: `New shared variation ${variation.sku} was not linked`,
         body: `The shared ${door.source?.sku ?? 'product'} has a new variation ${variation.sku}, and this business already has a product with that SKU. Open Shared products and copy products to link or skip it.`,
         entityType: 'Product', entityId: existing.id, href: '/settings/sharing',
@@ -567,12 +586,45 @@ async function createNewVariations(link: { id: string; shareId: string }, door: 
     const images = sourceImagesOf(catalog, variation.id).map((image) => ({
       id: image.id, url: image.url, alt: image.alt, type: image.type, isPrimary: image.isPrimary, sortOrder: image.sortOrder,
       width: image.width, height: image.height, mimeType: image.mimeType, fileSize: image.fileSize,
+      languageTag: image.languageTag, versionGroupId: image.versionGroupId,
     }))
     const copied = await copyImages(made.id, images)
     await recordBaseline(newLink.id, { rows: catalog.rows, product, managed: product.managed, sku: variation.sku, market, images, pairs: copied.pairs })
+    await joinFamilyListings(parent, { id: made.id, sku: variation.sku })
     created.push(`variation ${variation.sku}`)
   }
   return created
+}
+
+/**
+ * Sharing studio step 3 — a variation made here by the sync joins its family's listings in THIS business. Absence is
+ * exclusion (family-projection.service.ts): with no row, it would stay out of every listing and alias. A DRAFT listing
+ * (unpublished, never on a channel) gains the variation as a draft row — `draftListingFields`, inert like its family.
+ * A listing that is on a channel is not changed: the owners are told to add it before its next publish.
+ */
+async function joinFamilyListings(parent: { id: string; sku: string }, variation: { id: string; sku: string }): Promise<void> {
+  const listings = await prisma.channelListing.findMany({
+    where: { productId: parent.id, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+    select: { channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, listingStatus: true, isPublished: true, externalListingId: true },
+  })
+  const draft = listings.filter((l) => l.listingStatus === 'DRAFT' && !l.isPublished && !l.externalListingId && l.channelConnectionId)
+  if (draft.length) {
+    await prisma.channelListing.createMany({
+      data: draft.map((l) => draftListingFields({ productId: variation.id, channel: l.channel, market: l.marketplace, accountId: l.channelConnectionId!, aliasKey: l.aliasKey })),
+      skipDuplicates: true,
+    })
+    await productReadCacheService.refreshMany([variation.id, parent.id]).catch(() => { /* the cache catches up on its own */ })
+  }
+  const live = listings.filter((l) => !draft.includes(l))
+  if (live.length) {
+    const where = [...new Set(live.map((l) => `${channelLabel(l.channel)} ${l.marketplace}`))].sort().join(', ')
+    await notifyOwners({
+      type: 'assortment-variation-live-listing', severity: 'warn', once: true,
+      title: `New variation ${variation.sku}: add it to ${parent.sku}'s live listings`,
+      body: `It came from the shared product and joined the draft listings. The listings already on a channel were not changed: ${where}. Add it there before their next publish.`,
+      entityType: 'Product', entityId: variation.id, href: `/products/${encodeURIComponent(parent.id)}/edit`,
+    })
+  }
 }
 
 // ── Baseline ────────────────────────────────────────────────────────────────────────────────
@@ -588,7 +640,7 @@ export async function recordBaseline(linkId: string, input: {
   managed: ManagedFields
   sku: string
   market: string
-  images: Array<Pick<PlannedImage, 'id' | 'url' | 'alt' | 'type' | 'isPrimary'>>
+  images: Array<Pick<PlannedImage, 'id' | 'url' | 'alt' | 'type' | 'isPrimary' | 'languageTag' | 'versionGroupId'>>
   pairs: Array<{ source: string; target: string }>
 }): Promise<void> {
   const link = await prisma.catalogLink.findFirst({ where: { id: linkId, status: 'active' }, select: { targetProductId: true } })
@@ -676,7 +728,7 @@ export async function catalogLinkState(productId: string): Promise<LinkStateView
 }
 
 /** A partial copy finished again: the images copied now join the link's image map. Writes nothing if none is new. */
-export async function mergeMediaPairs(linkId: string, images: Array<Pick<PlannedImage, 'id' | 'url' | 'alt' | 'type' | 'isPrimary'>>, pairs: Array<{ source: string; target: string }>): Promise<void> {
+export async function mergeMediaPairs(linkId: string, images: Array<Pick<PlannedImage, 'id' | 'url' | 'alt' | 'type' | 'isPrimary' | 'languageTag' | 'versionGroupId'>>, pairs: Array<{ source: string; target: string }>): Promise<void> {
   const link = await prisma.catalogLink.findFirst({ where: { id: linkId, status: 'active' }, select: { targetProductId: true, appliedState: true } })
   if (!link) return
   const state = readState(link.appliedState)

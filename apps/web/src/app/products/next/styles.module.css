@@ -343,3 +343,20 @@
 .ieDiscard { font-size: 13px; font-weight: 600; color: var(--nds-danger-text); }
 .ieMsgSuccess { font-size: 12.5px; color: var(--nds-success); max-width: 300px; }
 .ieMsgDanger { font-size: 12.5px; color: var(--nds-danger-text); max-width: 300px; }
+
+/* Sharing studio step 2 — the Source cell: its marks in one line, the whole cell one link to the product's sharing page. */
+.sourceLink {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.sourceLink:focus-visible {
+  /* The DS focus ring (DS1-18): solid, measured visible on DS surfaces. */
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+  border-radius: var(--nds-radius-sm);
+}
