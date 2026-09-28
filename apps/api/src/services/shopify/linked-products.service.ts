@@ -217,6 +217,17 @@ export async function previewLinkedWorkspace(productId: string, scope: ContentSc
 }
 
 /**
+ * Did a shared source change during the operation? A source that is still what was read is not a change, and neither is
+ * the operation's own planned edit of it — also when Shopify stores that edit in another spelling (compared by type, G10).
+ */
+export function sharedSourceChanged(before: ShopifyFieldSnapshot[], now: ShopifyFieldSnapshot[], changes: ShopifyFieldEdit[]): boolean {
+  return now.some((f, i) => {
+    const read = before[i], edit = changes.find(c => fieldAddress(c) === fieldAddress(f))
+    return !(f.value === read.value && f.compareDigest === read.compareDigest) && !(edit && shopifyValuesEqual(edit.type, f.value, edit.nextValue) && f.type === edit.type)
+  })
+}
+
+/**
  * Shopify's refusal of a batch as plain sentences (gap G9): which field, on which product or variant, and Shopify's own
  * words — one sentence per refused field. `elementIndex` (or the index in `field`) points at the refused input.
  */
@@ -312,7 +323,7 @@ export async function advanceLinkedSync(productId: string, scope: ContentScope, 
       await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: { ...current.operation, leaseUntil: Date.now() + 5 * 60_000 } })
     })
     const sourceValues = await readLinkedFields(graphql, operation.sources ?? [])
-    if (sourceValues.some((f, i) => { const before = operation.sources![i]; const edit = operation.changes.find(c => fieldAddress(c) === fieldAddress(f)); return !(f.value === before.value && f.compareDigest === before.compareDigest) && !(edit && f.value === edit.nextValue && f.type === edit.type) })) throw new WorkspaceScopeError('Shared source content changed during synchronization. Refresh and review its latest value.')
+    if (sharedSourceChanged(operation.sources ?? [], sourceValues, operation.changes)) throw new WorkspaceScopeError('Shared source content changed during synchronization. Refresh and review its latest value.')
     let advanced = 0
     if (operation.completed < operation.changes.length) {
       const batch = operation.changes.slice(operation.completed, operation.completed + 25)

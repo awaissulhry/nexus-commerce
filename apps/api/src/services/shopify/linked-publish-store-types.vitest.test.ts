@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ShopifyFieldEdit } from '@nexus/shared/shopify-linked-products'
 import { LAB_ENTRIES, LAB_FILES, LAB_PAGES, LAB_PRODUCTS, LAB_SCHEMA, LAB_STORE_FIELDS, labTypeField } from '@nexus/shared/shopify-lab-store'
-import { applyLinkedBatch, linkedRefusalSentence } from './linked-products.service.js'
+import { applyLinkedBatch, linkedRefusalSentence, sharedSourceChanged } from './linked-products.service.js'
 
 /*
  * Lane B slice B1 (docs/shopify-metafields/PLAN-2026-09-28.md §6.1, §7 L5): publishing the 11 store types to a stand-in
@@ -102,5 +102,21 @@ describe('B1 · Shopify’s refusal in plain words (G9)', () => {
   })
   it('keeps Shopify’s words when it does not say which input it refused', () => {
     expect(linkedRefusalSentence([{ message: 'Too many requests' }], [], LAB_SCHEMA)).toBe('Shopify did not save the fields: Too many requests.')
+  })
+})
+
+describe('B1 · a resumed sync reads its shared sources by type (G10, review finding)', () => {
+  const rating = '{"value":"4.5","scale_min":"1.0","scale_max":"5.0"}'
+  const read = { ownerId: product, namespace: 'lab_store', key: 'average_rating', type: 'rating', value: '{"value":"4.0","scale_min":"1.0","scale_max":"5.0"}', compareDigest: 'd-0' }
+  const own = { ...read, nextValue: rating, ownerLabel: 'Listed title' }
+  it('its own planned edit, stored by Shopify in another spelling, is not a change', () => {
+    expect(sharedSourceChanged([read], [{ ...read, value: '{"scale_max":"5.0","scale_min":"1.0","value":"4.50"}', compareDigest: 'd-1' }], [own])).toBe(false)
+  })
+  it('a source still as it was read is not a change', () => {
+    expect(sharedSourceChanged([read], [read], [])).toBe(false)
+  })
+  it('a value someone else wrote is a change', () => {
+    expect(sharedSourceChanged([read], [{ ...read, value: '{"value":"3.0","scale_min":"1.0","scale_max":"5.0"}', compareDigest: 'd-2' }], [own])).toBe(true)
+    expect(sharedSourceChanged([read], [{ ...read, value: rating, compareDigest: 'd-3' }], [])).toBe(true)
   })
 })
