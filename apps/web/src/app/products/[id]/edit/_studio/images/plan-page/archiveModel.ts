@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AmazonArchiveKind } from '@nexus/shared/media-plan-archive'
+import { AMAZON_ARCHIVE_MAX_FILES, AMAZON_ARCHIVE_MAX_SIZE, type AmazonArchiveKind } from '@nexus/shared/media-plan-archive'
 
 /**
  * Images rebuild P4d — the Amazon ZIP window's words and the preview's shape. The server builds the list
@@ -27,7 +27,7 @@ export type ArchivePreview = z.infer<typeof archivePreviewSchema>
 export const ARCHIVE_KIND_LABEL: Record<AmazonArchiveKind, string> = { slots: 'All photos', safety: 'Safety images', country: 'Country photos' }
 
 /** Nexus's own limits (Amazon takes up to 5 GB per upload); the server enforces them (`jpeg-archive.ts`). */
-export const ARCHIVE_LIMITS = 'Nexus makes a ZIP of at most 1,000 files and 100 MB. Making it can take up to 90 seconds.'
+export const ARCHIVE_LIMITS = `Nexus makes a ZIP of at most ${AMAZON_ARCHIVE_MAX_FILES.toLocaleString('en-US')} files and ${AMAZON_ARCHIVE_MAX_SIZE}. Making it can take up to 90 seconds.`
 
 /** "German" for `de`; the code itself when the browser does not know it. */
 export function languageName(code: string | null): string {

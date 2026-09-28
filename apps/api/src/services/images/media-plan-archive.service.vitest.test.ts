@@ -6,7 +6,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
  * the stand-in serves a small PNG, records each address, and can change the plan while it "downloads", as a colleague
  * on the Media page could.
  */
-const state = vi.hoisted(() => ({ db: null as any, fetched: [] as string[], during: null as null | (() => Promise<unknown>), failFetch: false, languageFault: false }))
+const state = vi.hoisted(() => ({ db: null as any, fetched: [] as string[], during: null as null | (() => Promise<unknown>), failFetch: false, languageFault: false,
+  archiveOptions: [] as unknown[] }))
 vi.mock('@nexus/database', async () => {
   const { concurrentDatabase, concurrentDatabaseUrl } = await import('../../test-support/concurrent-database.js')
   const { formulaDatabase } = await import('../../test-support/formula-database.js')
@@ -20,6 +21,11 @@ vi.mock('../product-event.service.js', () => ({ productEventService: { emit: asy
 vi.mock('../pim/market-languages.js', async original => {
   const real = await original<typeof import('../pim/market-languages.js')>()
   return { ...real, marketLanguages: ((...args: Parameters<typeof real.marketLanguages>) => state.languageFault && args.length === 2 ? Promise.reject(new Error('connection lost')) : real.marketLanguages(...args)) as typeof real.marketLanguages }
+})
+// The real engine, watched: the ZIP's own limits reach it.
+vi.mock('./jpeg-archive.js', async original => {
+  const real = await original<typeof import('./jpeg-archive.js')>()
+  return { ...real, buildJpegArchive: ((...args: Parameters<typeof real.buildJpegArchive>) => { state.archiveOptions.push(args[2]); return real.buildJpegArchive(...args) }) as typeof real.buildJpegArchive }
 })
 vi.mock('../pim/catalog-source-fetch.js', () => ({
   fetchCatalogSource: async (url: string) => {
@@ -145,6 +151,8 @@ describe('Amazon ZIPs for Seller Central (P4d)', () => {
     const it = await preview('IT', 'slots')
     const archive = await download('IT', 'slots', it.digest)
     expect(archive).toMatchObject({ filename: it.filename, fileCount: 8 })
+    // 1 GB (the Owner, 2026-09-28): 100 MB stopped a real 182-file family.
+    expect(state.archiveOptions.at(-1)).toEqual({ maxBytes: 1024 ** 3 })
     expect([...state.fetched].sort()).toEqual(['https://cdn.example/chart-it.jpg', 'https://cdn.example/cover.jpg', 'https://cdn.example/n1.jpg'])
     const zip = await JSZip.loadAsync(archive.buffer)
     expect(Object.keys(zip.files)).toEqual(it.files.map(f => f.name))
