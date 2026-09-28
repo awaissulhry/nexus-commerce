@@ -86,3 +86,39 @@ describe('entries in the stand-in store (same checks as saveLinkedEntry)', () =>
     expect(call('GET', '/entry', { id: saved.id }).status).toBe(404)
   })
 })
+
+/* Lane B slice B3c (PLAN §6.3, G18): the searches the new pickers make are answered like the server answers them
+   (`searchLinkedReferences`: entries by kind, resources by resource). */
+import { LAB_ARTICLES, LAB_COLLECTIONS, LAB_COMPANIES, LAB_CUSTOMERS, LAB_ORDERS, LAB_VARIANTS } from '@nexus/shared/shopify-lab-store'
+
+describe('B3c · the searches of the mixed, disclosure and resource pickers', () => {
+  const names = (answer: ReturnType<typeof call>) => (answer.body as { items: Array<{ label: string }> }).items.map(i => i.label)
+  it('a mixed field’s list, one kind at a time (the kind switch), and the same for its list form', () => {
+    for (const type of ['mixed_reference', 'list.mixed_reference']) {
+      expect(names(call('GET', '/references', { type, metaobjectType: 'lab_faq' })), type).toEqual(['FAQ 1', 'FAQ 2'])
+      expect(names(call('GET', '/references', { type, metaobjectType: 'lab_press' })), type).toEqual(['Press quote 1', 'Press quote 2'])
+    }
+    const press = items(call('GET', '/references', { type: 'list.mixed_reference', metaobjectType: 'lab_press', query: '2' }))
+    expect(press.map(i => i.id)).toEqual([LAB_ENTRIES.find(e => e.name === 'Press quote 2')!.id])
+    expect((press[0] as { image?: string | null }).image).toMatch(/^data:image\/svg\+xml,/)
+  })
+  it('a disclosure field’s list; with no kind named, the server’s refusal', () => {
+    expect(names(call('GET', '/references', { type: 'list.disclosure_reference', metaobjectType: 'shopify--disclosure-lab' }))).toEqual(['Disclosure (made up) 1', 'Disclosure (made up) 2'])
+    for (const type of ['mixed_reference', 'list.mixed_reference', 'disclosure_reference']) expect(call('GET', '/references', { type }), type).toEqual({ status: 400, body: { error: 'Choose the reusable entry type.' } })
+  })
+  it('an entry saved in the tab is found at once under its kind', () => {
+    const saved = call('POST', '/entry', {}, { type: 'lab_faq', handle: 'lab-sizes', fields: [{ key: 'question', value: 'Which size?' }] }).body as { id: string }
+    expect(items(call('GET', '/references', { type: 'list.mixed_reference', metaobjectType: 'lab_faq' })).map(i => i.id)).toContain(saved.id)
+  })
+  it.each([
+    ['variant_reference', LAB_VARIANTS], ['collection_reference', LAB_COLLECTIONS], ['article_reference', LAB_ARTICLES],
+    ['customer_reference', LAB_CUSTOMERS], ['company_reference', LAB_COMPANIES], ['order_reference', LAB_ORDERS],
+  ])('%s: every one of its kind, and only those, for the field and its list form', (type, all) => {
+    for (const t of [type, `list.${type}`]) expect(items(call('GET', '/references', { type: t })).map(i => i.id), t).toEqual(all.map(r => r.id))
+  })
+  it('the resource search matches the typed words', () => {
+    expect(names(call('GET', '/references', { type: 'variant_reference', query: '/ xl' }))).toEqual(['Sample Jacket / XL'])
+    expect(names(call('GET', '/references', { type: 'list.order_reference', query: '1002' }))).toEqual(['#1002'])
+    expect(names(call('GET', '/references', { type: 'customer_reference', query: 'nobody' }))).toEqual([])
+  })
+})

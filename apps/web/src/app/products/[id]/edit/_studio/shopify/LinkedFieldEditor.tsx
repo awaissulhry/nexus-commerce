@@ -8,7 +8,7 @@ import { Button, Input, Select, Textarea } from '@/design-system/primitives'
 import { ShopifyRichText } from '../images/shopify/ShopifyFieldValue'
 import { ReferencePicker } from './ReferencePicker'
 import { ShopifyReferenceField } from './ShopifyReferenceField'
-import { listMax, referenceUiFor } from './referenceFieldModel'
+import { listMax, olderPickerReason, referenceUiFor } from './referenceFieldModel'
 import { linkedEditorKind } from './linkedEditorKind'
 import { ShopifyRatingEditor } from './ShopifyRatingEditor'
 import { linkedEndpoint, linkedRequest } from './api'
@@ -65,6 +65,8 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
      get the picture pickers (Shopify's bulk-editor pop-ups); the rest keep the older picker. */
   const kind = linkedEditorKind(def, value, schema)
   const ui = reference ? referenceUiFor(def, schema) : 'legacy'
+  /* Why an entry field is still on the older picker, on screen; `blocked` = there is no kind to pick from (B3c, G18). */
+  const legacyReason = kind === 'older-picker' ? olderPickerReason(def, schema) : null
   const pictured = kind === 'entries' || kind === 'resources'
   /* The rules in plain words, once: not under each value of a list, and not under a rating (its hint states the scale). */
   const rules = nested || kind === 'rating' ? '' : shopifyRuleSummary(def, schema)
@@ -82,7 +84,8 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
         <Button size="xs" variant="quiet" disabled={locked} aria-label={`Remove ${item?.label ?? 'reference'}`} onClick={() => onChange(list ? JSON.stringify(values.filter(v => v !== id)) : null)}>Remove</Button></span>
     }} />}
     {nameError && <p role="status">{nameError}</p>}
-    {supportedReference ? <Button size="sm" disabled={locked || (!!refDefinition && !metaobjectType)} onClick={() => setPicker(true)}>{values.length && !list ? 'Replace reference' : 'Choose reference'}</Button> : <p>This reference type is preserved. A picker is not available yet.</p>}
+    {supportedReference ? <Button size="sm" disabled={locked || !!legacyReason?.blocked || (!!refDefinition && !metaobjectType)} aria-describedby={legacyReason ? `${def.id}-picker-reason` : undefined} onClick={() => setPicker(true)}>{values.length && !list ? 'Replace reference' : 'Choose reference'}</Button> : <p>This reference type is preserved. A picker is not available yet.</p>}
+    {legacyReason && <p id={`${def.id}-picker-reason`} className={styles.hint}>{legacyReason.text}</p>}
   </div>
   else if (kind === 'list' || kind === 'broken-list') {
     let items: unknown[] | null = []

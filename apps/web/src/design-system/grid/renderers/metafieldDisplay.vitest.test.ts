@@ -186,3 +186,68 @@ describe('B3a · every measurement kind shows its value in words, never raw JSON
     expect(cell('list.speed', '[{"value":2.5,"unit":"kilometers_per_hour"},{"value":3,"unit":"miles_per_hour"}]')).toContain('2.5 kilometers per hour')
   })
 })
+
+/* Lane B slice B3c (PLAN §6.3, §7 L1): the other references and mixed / disclosure entries in the cell — each by its
+   name, with its picture where the made-up store has one (variants, collections, press quotes), never a raw id. */
+import { labGoodValue as good } from '@nexus/shared/shopify-lab-store'
+
+const cellHtml = (type: string, raw = good(type)) => renderToStaticMarkup(createElement(MetafieldValue, { type, raw, ...maps }))
+
+describe('B3c · references and entries in the cell', () => {
+  it.each([
+    ['variant_reference', 'Sample Jacket / S', [true]],
+    ['list.variant_reference', 'Sample Jacket / S, Sample Jacket / M', [true, true]],
+    ['collection_reference', 'Jackets', [true]],
+    ['list.collection_reference', 'Jackets, Gloves', [true, true]],
+    ['article_reference', 'How to measure', [false]],
+    ['list.article_reference', 'How to measure, Wash guide', [false, false]],
+    ['customer_reference', 'Sample Customer A', [false]],
+    ['list.customer_reference', 'Sample Customer A, Sample Customer B', [false, false]],
+    ['company_reference', 'Sample Company', [false]],
+    ['list.company_reference', 'Sample Company', [false]],
+    ['order_reference', '#1001', [false]],
+    ['list.order_reference', '#1001, #1002', [false, false]],
+    ['mixed_reference', 'FAQ 1', [false]],
+    ['list.mixed_reference', 'FAQ 1, Press quote 1', [false, true]],
+    ['disclosure_reference', 'Disclosure (made up) 1', [false]],
+    ['list.disclosure_reference', 'Disclosure (made up) 1, Disclosure (made up) 2', [false, false]],
+  ])('%s → "%s"', (type, text, pictures) => {
+    const d = metafieldDisplay(type, good(type), maps)
+    expect(d.kind).toBe('references')
+    expect(d.text).toBe(text)
+    if (d.kind === 'references') {
+      expect(d.items.map(i => !!i.src)).toEqual(pictures)
+      expect(d.items.every(i => i.named)).toBe(true)
+    }
+  })
+  it('while names load: the kind’s word, never the raw id (article, customer, company and order say "Reference")', () => {
+    const words = (type: string) => { const d = metafieldDisplay(type, good(type)); return d.kind === 'references' ? d.items.map(i => i.label) : d.kind }
+    expect(words('list.variant_reference')).toEqual(['Variant', 'Variant'])
+    expect(words('collection_reference')).toEqual(['Collection'])
+    expect(['article_reference', 'customer_reference', 'company_reference', 'order_reference'].map(words)).toEqual([['Reference'], ['Reference'], ['Reference'], ['Reference']])
+    expect(words('list.mixed_reference')).toEqual(['Entry', 'Entry'])
+    expect(words('disclosure_reference')).toEqual(['Entry'])
+  })
+  it('draws chips with pictures where there is one and no empty picture slot where there is none', () => {
+    expect(cellHtml('list.variant_reference')).toContain('2 references: Sample Jacket / S, Sample Jacket / M')
+    expect(cellHtml('list.variant_reference').match(/<img/g)).toHaveLength(2)
+    expect(cellHtml('collection_reference').match(/<img/g)).toHaveLength(1)
+    const mixedCell = cellHtml('list.mixed_reference')
+    expect(mixedCell).toContain('2 references: FAQ 1, Press quote 1')
+    expect(mixedCell.match(/<img/g)).toHaveLength(1)
+    expect(mixedCell.match(/class="[^"]*nds-mf-refchip/g)).toHaveLength(2)
+    for (const type of ['list.article_reference', 'list.customer_reference', 'company_reference', 'list.order_reference', 'list.disclosure_reference']) {
+      expect(cellHtml(type), type).not.toContain('<img')
+      expect(cellHtml(type), type).not.toContain('nds-media-mark')
+    }
+    for (const type of ['list.variant_reference', 'list.collection_reference', 'list.article_reference', 'list.customer_reference', 'list.company_reference', 'list.order_reference', 'list.mixed_reference', 'list.disclosure_reference']) {
+      expect(cellHtml(type), type).not.toMatch(/>gid:\/\//)
+    }
+  })
+  it('three mixed entries: two chips and "+1"; a list that does not parse says so', () => {
+    const three = JSON.stringify([...JSON.parse(good('list.mixed_reference')!), refs.filter(r => r.type === 'lab_faq')[1].id])
+    expect(cellHtml('list.mixed_reference', three)).toContain('>+1</span>')
+    expect(metafieldDisplay('list.mixed_reference', '[1,').kind).toBe('invalid')
+    expect(metafieldDisplay('list.disclosure_reference', '["x", 2]').kind).toBe('invalid')
+  })
+})

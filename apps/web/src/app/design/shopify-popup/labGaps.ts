@@ -12,6 +12,5 @@ export function labGapsFor(type: string): LabGap[] {
   if (base === 'date_time') gaps.push({ id: 'G15', text: 'Plain text box; a loose date check.', slice: 'B3' })
   if (base === 'json' || base === 'jurisdiction') gaps.push({ id: 'G16', text: 'A text box with a wrong hint.', slice: 'B3' })
   if (base === 'link') gaps.push({ id: 'G17', text: 'The allowed sites are not checked.', slice: 'B3' })
-  if (base === 'mixed_reference' || base === 'disclosure_reference') gaps.push({ id: 'G18', text: 'The older picker (choose a kind first).', slice: 'B3' })
   return gaps
 }

@@ -8,11 +8,12 @@ import { shopifyJson, shopifyObjectType, validateShopifyField } from '@nexus/sha
 import { referenceUiFor } from './referenceFieldModel'
 
 export type LinkedEditorKind =
-  /** Entry tick list with swatches / icons (one entry kind). */
+  /** Entry tick list with swatches / icons (an entry field; a mixed or disclosure field with a kind switch, B3c). */
   | 'entries'
   /** Ordered list with photos + a picker dialog (products, pages, files, …). */
   | 'resources'
-  /** The older picker that asks for a type first (mixed, disclosure, taxonomy values; several entry kinds). */
+  /** The older picker that asks for a type first: an entry field whose kinds are not known (with its reason on screen), a
+   *  taxonomy value field with no attribute (a raw id). */
   | 'older-picker'
   /** A list of plain values: one editor per value, "Add value". */
   | 'list'
