@@ -992,6 +992,8 @@ CREATE TABLE "ProductImage" (
     "perceptualHash" TEXT,
     "dhash256" TEXT,
     "derivedFromImageId" TEXT,
+    "sameAsImageId" TEXT,
+    "distinctFromIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "aiAnalyzedAt" TIMESTAMP(3),
     "aiHasWhiteBackground" BOOLEAN,
     "aiFrameFillPct" INTEGER,
@@ -10089,6 +10091,9 @@ CREATE INDEX "ProductImage_productId_sortOrder_idx" ON "ProductImage"("productId
 CREATE INDEX "ProductImage_derivedFromImageId_idx" ON "ProductImage"("derivedFromImageId");
 
 -- CreateIndex
+CREATE INDEX "ProductImage_sameAsImageId_idx" ON "ProductImage"("sameAsImageId");
+
+-- CreateIndex
 CREATE INDEX "ProductImage_productId_perceptualHash_idx" ON "ProductImage"("productId", "perceptualHash");
 
 -- CreateIndex
@@ -14743,6 +14748,9 @@ ALTER TABLE "ProductImage" ADD CONSTRAINT "ProductImage_productId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "ProductImage" ADD CONSTRAINT "ProductImage_derivedFromImageId_fkey" FOREIGN KEY ("derivedFromImageId") REFERENCES "ProductImage"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProductImage" ADD CONSTRAINT "ProductImage_sameAsImageId_fkey" FOREIGN KEY ("sameAsImageId") REFERENCES "ProductImage"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ProductMediaPlan" ADD CONSTRAINT "ProductMediaPlan_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
