@@ -855,6 +855,22 @@ it('held inclusion checkboxes keep their focus and the theme refusal; an editabl
   expect(editable.some(input => !input.includes('disabled'))).toBe(true)
 })
 
+/* ── The Shared product's `+ Add axis` with nothing to offer (found by Lane B, 2026-09-28) ──────────────────────────── */
+
+it('🔴 the Shared product offers its candidates with the server\'s real shape (`addableAxes: []`), and is not held', () => {
+  const out = panel({ ...GALE_MASTER, addableAxes: [], masterCandidates: [...(GALE_MASTER.masterCandidates ?? []), { key: 'fit', label: 'Fit', axisKey: 'fit', valueCount: 2 }] })
+  expect(out).not.toContain(AXES_EDITOR_COPY.noSharedCandidates)
+  expect(out).not.toMatch(/<button[^>]*aria-disabled="true"[^>]*>[^<]*<svg[^>]*lucide-plus/)
+})
+
+it('🔴 the Shared product with no per-variant attribute left points to Classification, never back at itself', () => {
+  const out = panel({ ...GALE_MASTER, addableAxes: [], masterCandidates: [] })
+  expect(out).toContain(AXES_EDITOR_COPY.noSharedCandidates)
+  expect(out).not.toContain('Add an axis on the shared product first')
+  /* a channel keeps its own sentence: there the Shared product IS where an axis is added */
+  expect(AXES_EDITOR_COPY.everyAxisMapped('specific')).toBe('Every shared axis is already a specific. Add an axis on the shared product first.')
+})
+
 /* ── Sheet pop-up P3 A2 — the channel layout (the sheet's eBay / Etsy cell) ────────────────────────────────────────── */
 
 describe('P3 A2 — the channel layout', () => {

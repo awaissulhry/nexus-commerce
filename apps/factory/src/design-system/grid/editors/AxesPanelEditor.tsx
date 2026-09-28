@@ -98,6 +98,8 @@ export const AXES_EDITOR_COPY = {
    */
   atLimit: (channel: string, limit: number, plural: string) => `${channel} allows up to ${limit} ${plural} per listing.`,
   everyAxisMapped: (noun: string) => `Every shared axis is already ${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}. Add an axis on the shared product first.`,
+  /** The Shared product's own `+ Add axis` with nothing to offer: the axes come from the family's per-variant attributes. */
+  noSharedCandidates: 'No per-variant attribute is left to become an axis. Choose the product family in ⋯ → Classification…, or add a per-variant attribute to it.',
   targetAria: (channel: string, noun: string, axis: string) => `The ${channel} ${noun} for ${axis}`,
   targetLockedAria: (channel: string, noun: string, axis: string, target: string, reason: string) =>
     `${axis} is the ${channel} ${noun} ${target}, locked: ${reason}`,
@@ -602,15 +604,19 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
      * every family axis in `mapping`. So a panel that offered the three eBay aspects here would offer
      * three bogus axes where the dock correctly offered none.
      */
-    if (draft.addableAxes) {
-      return draft.addableAxes
-        .filter((c) => !chosen.has(c.axisKey))
-        .map((c) => ({ code: c.axisKey, label: c.label, meta: `not a ${draft.vocabulary.axisNoun} yet`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
-    }
+    /* 🔴 The Shared product FIRST: the server sends it `addableAxes: []` ("empty, never absent" — a channel's vocabulary),
+       and an empty array is truthy, so testing `addableAxes` first returned nothing and the Shared "+ Add axis" never
+       offered a candidate (found by Lane B building a family from a new product, 2026-09-28; the VT.1 fixture has no
+       `addableAxes`, which is why the suite did not see it). */
     if (master) {
       return (draft.masterCandidates ?? [])
         .filter((c) => !chosen.has(c.axisKey))
         .map((c) => ({ code: c.axisKey, label: c.label, meta: `attribute · ${c.valueCount} values`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
+    }
+    if (draft.addableAxes) {
+      return draft.addableAxes
+        .filter((c) => !chosen.has(c.axisKey))
+        .map((c) => ({ code: c.axisKey, label: c.label, meta: `not a ${draft.vocabulary.axisNoun} yet`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
     }
     return (draft.candidates?.items ?? [])
       .filter((i) => !draft.axes.some((a) => a.target === i.code))
@@ -718,7 +724,9 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
   const addHeldReason = atLimit
     ? AXES_EDITOR_COPY.atLimit(channelWord, limit as number, draft.vocabulary.axisNounPlural)
     : candidates.length === 0
-      ? AXES_EDITOR_COPY.everyAxisMapped(draft.vocabulary.axisNoun)
+      /* On the Shared product itself "add an axis on the shared product first" pointed back at this cell (found by Lane B
+         building a family from a new product, 2026-09-28): here the way forward is the family's per-variant attributes. */
+      ? (master ? AXES_EDITOR_COPY.noSharedCandidates : AXES_EDITOR_COPY.everyAxisMapped(draft.vocabulary.axisNoun))
       : null
 
   /** Every axis mutation goes through the gate, so a refusal can never report (and so never write). */
