@@ -10,6 +10,7 @@ The review facts were read from `origin/main` (c520befc5).
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-28 | R-SH-5 | "Go ahead, I'll go with your recommendations": the two-primaries defect (§11) is fixed in its own PR (#151, from main): a business's primary is its own account, never one another business shares with it. |
 | 2026-09-28 | R-SH-4 | "Keep it all running, and when everything's done, push it to production … AAA … if there is anything next in the plan, go ahead." |
 | 2026-09-28 | R-SH-3 | Step 3: "Go ahead." |
 | 2026-09-28 | R-SH-2 | Step 2: "Go ahead." |
@@ -411,3 +412,12 @@ auto-height minimum); they now take `maxHeight` like the studio's, so each grid 
   subtitle and category into B's drafts, not the description theme or shipping policy; drafts stayed DRAFT, unpublished,
   sync paused; nothing queued. Settings' dialog and the offer dialog; keyboard; light and dark; 390 px (no page scroll).
 - API and web typecheck; 59/59 static gates; policy parity; the fresh-vs-upgraded migration check (504 migrations).
+
+## 15. The two-primaries fix — PR #151 (2026-09-28, R-SH-5)
+
+From `origin/main`, independent of #149/#150. `chooseConnection` chooses only among the business's own accounts;
+a shared account is used only when named or derived. `listActiveConnections` lists own accounts first, so the layout's
+"account 1 of 2" ranks (§11) are always the sharing business's own. Screens never mark a shared account "Primary".
+Proof: 8 new tests (resolver unit, and the account-grant suite on the generated RLS) fail on main's resolver and pass
+with the fix; full API suite (the only failures are the env-only ones of a fresh worktree, identical on main).
+
