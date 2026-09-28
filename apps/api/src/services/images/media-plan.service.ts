@@ -1,5 +1,5 @@
 import prisma from '../../db.js'
-import { applyMediaOps, emptyMediaPlan, inverseMediaOps, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
+import { applyMediaOps, emptyMediaPlan, inverseMediaOps, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, replaceAssetInPlan, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
 import { channelNames, projectMediaDestination, rowGallery, type MediaAsset, type MediaFamily } from '@nexus/shared/media-plan-channels'
 import { storedVariationValues } from '../pim/stored-variation-projection.js'
 import { optionForValue, type DictionaryAttribute } from '../pim/family-variations-core.js'
@@ -12,7 +12,7 @@ import { publishListingEvent } from '../listing-events.service.js'
 import { readExcludedListingIds } from '../pim/variation-excluded.js'
 import { usesEbayInventory } from '../pim/ebay-listing-model.js'
 import { isOnMediaPlan } from './media-plan-switch.js'
-import { libraryEntries, samePhoto } from './media-library-identity.js'
+import { libraryEntries, lookalikes, pictureKeys, samePhoto } from './media-library-identity.js'
 
 /**
  * Images rebuild P1 — the media plan read and write (docs/images-studio-rebuild/PLAN.md §6). One read gives the page
@@ -83,7 +83,8 @@ export async function loadFamily(rootId: string) {
 export async function loadLibrary(productIds: string[]) {
   const rows = await prisma.productImage.findMany({ where: { productId: { in: productIds } }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], select: {
     id: true, productId: true, url: true, alt: true, type: true, mediaType: true, width: true, height: true, mimeType: true, fileSize: true,
-    languageTag: true, versionGroupId: true, isPrimary: true, posterUrl: true, durationSec: true, contentHash: true } })
+    languageTag: true, versionGroupId: true, isPrimary: true, posterUrl: true, durationSec: true, contentHash: true,
+    sameAsImageId: true, distinctFromIds: true, perceptualHash: true, dhash256: true } })
   return rows.map(r => ({ ...r, label: r.alt?.trim() || decodeURIComponent(r.url.split('/').pop()?.split('?')[0] ?? '') || 'Photo' }))
 }
 
@@ -173,7 +174,14 @@ async function loadMediaContext(rootId: string) {
   const assets = new Map<string, MediaAsset>(library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType, fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
   // Every row stays resolvable (a plan may point at any copy); the page's library shows each picture once.
   const referenced = new Set(layers.flatMap(l => [...JSON.stringify(l.plan).matchAll(/"assetId":"([^"]+)"/g)].map(m => m[1])))
-  const pictures = libraryEntries(library, root.id, referenced).map(({ contentHash: _hash, ...entry }) => entry)
+  const entries = libraryEntries(library, root.id, referenced)
+  // W4a — the same picture at another address ("Looks like …"), by the upload gate's calibrated rule.
+  const alike = lookalikes(library, entries)
+  const pictures = entries.map(({ contentHash: _hash, perceptualHash: _a, dhash256: _d, distinctFromIds: _n, sameAsImageId: _s, ...entry }) => {
+    // The photos the Owner marked the same as this one (W4a): the photo window lists them, each with "Separate".
+    const merged = library.filter(r => r.sameAsImageId === entry.id).map(r => ({ id: r.id, label: r.label }))
+    return { ...entry, ...(alike.has(entry.id) ? { lookalikes: alike.get(entry.id)! } : {}), ...(merged.length ? { merged } : {}) }
+  })
   return { root, family, axes, unmapped, library, pictures, layers, byKey: new Map(layers.map(l => [l.key, l])), assets, destinations, mainLanguage }
 }
 type MediaContext = Awaited<ReturnType<typeof loadMediaContext>>
@@ -390,4 +398,124 @@ export async function applyMediaPlanOps(productId: string, input: { address: Med
     }
   }
   throw new WorkspaceScopeError('Someone else changed these photos at the same moment. Reload the page and try again.', 409)
+}
+
+// ── W4a — the same picture at two addresses ─────────────────────────────────────────────────────────────────────
+
+/** One layer's way back after a merge: the ops that put it back, each bound to what the layer holds after the merge. */
+export interface SamePhotoLayerUndo { layer: MediaLayer; channel: string; marketplace: string; accountId: string; aliasKey: string; ops: MediaOp[] }
+export interface SamePhotoUndo { keep: string; drop: string; previous: string | null; repointed: string[]; layers: SamePhotoLayerUndo[] }
+
+async function familyPhotos(rootId: string) {
+  const ids = [rootId, ...(await prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true } })).map(c => c.id)]
+  return prisma.productImage.findMany({ where: { productId: { in: ids } }, select: { id: true, productId: true, url: true, contentHash: true, versionGroupId: true,
+    languageTag: true, mediaType: true, sameAsImageId: true, distinctFromIds: true } })
+}
+
+const textLanguage = (tag: string) => tag !== 'zxx' && tag !== 'mul'
+const planConflict = () => new WorkspaceScopeError('Someone else changed these photos at the same moment. Reload the page and try again.', 409)
+
+/** The stack a layer row is edited in (its own plan on top of the layers it follows). */
+function stackOf(rows: ReadonlyArray<{ layer: string; channel: string; plan: unknown }>, row: { layer: string; channel: string; plan: unknown }): MediaPlanStack {
+  const shared = rows.find(r => r.layer === 'SHARED'), channel = rows.find(r => r.layer === 'CHANNEL' && r.channel === row.channel)
+  return { shared: shared ? readPlan(shared.plan) : null, channel: row.layer !== 'SHARED' && channel ? readPlan(channel.plan) : null, listing: row.layer === 'LISTING' ? readPlan(row.plan) : null }
+}
+
+/**
+ * The Owner marks two library photos as one picture (an Amazon copy and ours): `drop` becomes a copy of `keep` — never
+ * deleted — and every layer of the family that shows `drop` (or its copies) shows `keep` instead: Shared, each channel,
+ * each listing, alias layers included. One transaction; the answer carries the way back.
+ */
+export async function markSamePhoto(productId: string, input: { keep: string; drop: string }, actorId: string | null) {
+  const rootId = await familyRoot(productId)
+  const rows = await familyPhotos(rootId)
+  const keep = rows.find(r => r.id === input.keep), drop = rows.find(r => r.id === input.drop)
+  if (!keep || !drop) throw new WorkspaceScopeError('A photo is not in this product\'s library any more. Reload the page.', 409)
+  if (keep.id === drop.id) throw new WorkspaceScopeError('Choose two different photos.', 422)
+  if (keep.mediaType !== 'IMAGE' || drop.mediaType !== 'IMAGE') throw new WorkspaceScopeError('Only photos can be marked as the same photo.', 422)
+  if (keep.sameAsImageId) throw new WorkspaceScopeError('The photo to keep is itself marked as a copy of another. Reload the page.', 409)
+  const keys = pictureKeys(rows)
+  if (keys.get(keep.id) === keys.get(drop.id)) throw new WorkspaceScopeError('These are already one photo.', 409)
+  if ((keep.versionGroupId && keep.versionGroupId === drop.versionGroupId) || (textLanguage(keep.languageTag) && textLanguage(drop.languageTag) && keep.languageTag !== drop.languageTag))
+    throw new WorkspaceScopeError('These are two languages of one photo. Keep both, as language versions.', 422)
+  const dropIds = rows.filter(r => keys.get(r.id) === keys.get(drop.id)).map(r => r.id)
+  const same = samePhoto(rows)
+  const repointed = rows.filter(r => r.sameAsImageId === drop.id).map(r => r.id)
+  const layers = await prisma.$transaction(async tx => {
+    const planRows = await tx.productMediaPlan.findMany({ where: { productId: rootId } })
+    const undo: SamePhotoLayerUndo[] = []
+    for (const row of planRows) {
+      const plan = readPlan(row.plan)
+      const next = dropIds.reduce((current, id) => replaceAssetInPlan(current, id, keep.id, same), plan)
+      if (next === plan) continue
+      const saved = await tx.productMediaPlan.updateMany({ where: { id: row.id, revision: row.revision }, data: { plan: next, revision: { increment: 1 }, updatedById: actorId } })
+      if (!saved.count) throw planConflict()
+      undo.push({ layer: row.layer as MediaLayer, channel: row.channel, marketplace: row.marketplace, accountId: row.channelConnectionId, aliasKey: row.aliasKey,
+        ops: inverseMediaOps(row.layer as MediaLayer, plan, next) })
+    }
+    await tx.productImage.update({ where: { id: drop.id }, data: { sameAsImageId: keep.id } })
+    if (repointed.length) await tx.productImage.updateMany({ where: { id: { in: repointed } }, data: { sameAsImageId: keep.id } })
+    return undo
+  })
+  publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'LIBRARY', ts: Date.now() })
+  const undo: SamePhotoUndo = { keep: keep.id, drop: drop.id, previous: drop.sameAsImageId, repointed, layers }
+  return { rootId, layersChanged: layers.length, undo }
+}
+
+/** The way back from `markSamePhoto`, refused (nothing changes) when a set it touched changed after the merge. */
+export async function undoSamePhoto(productId: string, undo: SamePhotoUndo) {
+  const rootId = await familyRoot(productId)
+  const rows = await familyPhotos(rootId)
+  const drop = rows.find(r => r.id === undo.drop)
+  if (!drop || drop.sameAsImageId !== undo.keep || undo.repointed.some(id => rows.find(r => r.id === id)?.sameAsImageId !== undo.keep))
+    throw new WorkspaceScopeError('This photo changed after it was marked the same, so the mark cannot be undone.', 409)
+  // The rule "a set never repeats a photo" as it stands after the undo: the two photos are two again.
+  const same = samePhoto(rows.map(r => r.id === drop.id ? { ...r, sameAsImageId: undo.previous } : undo.repointed.includes(r.id) ? { ...r, sameAsImageId: drop.id } : r))
+  await prisma.$transaction(async tx => {
+    const planRows = await tx.productMediaPlan.findMany({ where: { productId: rootId } })
+    for (const step of undo.layers) {
+      const row = planRows.find(r => r.layer === step.layer && r.channel === step.channel && r.marketplace === step.marketplace && r.channelConnectionId === step.accountId && r.aliasKey === step.aliasKey)
+      if (!row) throw new WorkspaceScopeError('A photo set changed after it was marked the same, so the mark cannot be undone.', 409)
+      let next: MediaPlan
+      try { next = applyMediaOps(stackOf(planRows, row), step.layer, step.ops, same) }
+      catch (error) { if (error instanceof MediaPlanEditError) throw new WorkspaceScopeError('A photo set changed after it was marked the same, so the mark cannot be undone.', 409); throw error }
+      const saved = await tx.productMediaPlan.updateMany({ where: { id: row.id, revision: row.revision }, data: { plan: next, revision: { increment: 1 } } })
+      if (!saved.count) throw planConflict()
+    }
+    await tx.productImage.update({ where: { id: drop.id }, data: { sameAsImageId: undo.previous } })
+    if (undo.repointed.length) await tx.productImage.updateMany({ where: { id: { in: undo.repointed } }, data: { sameAsImageId: drop.id } })
+  })
+  publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'LIBRARY', ts: Date.now() })
+  return { rootId }
+}
+
+/**
+ * The lasting way back from a merge (the Undo in the page lasts seconds): the copy is its own photo again. Photo sets
+ * keep showing the kept photo — nothing is sent and no set changes; the copy returns to the library, unused.
+ */
+export async function separateSamePhoto(productId: string, input: { drop: string }) {
+  const rootId = await familyRoot(productId)
+  const rows = await familyPhotos(rootId)
+  const drop = rows.find(r => r.id === input.drop)
+  if (!drop) throw new WorkspaceScopeError('A photo is not in this product\'s library any more. Reload the page.', 409)
+  if (!drop.sameAsImageId) throw new WorkspaceScopeError('This photo is already its own photo.', 409)
+  await prisma.productImage.update({ where: { id: drop.id }, data: { sameAsImageId: null } })
+  publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'LIBRARY', ts: Date.now() })
+  return { rootId }
+}
+
+/** "Not the same": the two photos stop suggesting each other (and `undo` brings the suggestion back). */
+export async function markDistinctPhotos(productId: string, input: { a: string; b: string }, undo = false) {
+  const rootId = await familyRoot(productId)
+  const rows = await familyPhotos(rootId)
+  const a = rows.find(r => r.id === input.a), b = rows.find(r => r.id === input.b)
+  if (!a || !b) throw new WorkspaceScopeError('A photo is not in this product\'s library any more. Reload the page.', 409)
+  if (a.id === b.id) throw new WorkspaceScopeError('Choose two different photos.', 422)
+  const answer = (list: string[], other: string) => undo ? list.filter(id => id !== other) : [...new Set([...list, other])]
+  await prisma.$transaction([
+    prisma.productImage.update({ where: { id: a.id }, data: { distinctFromIds: answer(a.distinctFromIds, b.id) } }),
+    prisma.productImage.update({ where: { id: b.id }, data: { distinctFromIds: answer(b.distinctFromIds, a.id) } }),
+  ])
+  publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'LIBRARY', ts: Date.now() })
+  return { rootId }
 }

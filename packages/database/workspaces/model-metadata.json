@@ -1287,6 +1287,21 @@
           "kind": "object",
           "type": "ProductImage",
           "relationFromFields": []
+        },
+        {
+          "name": "sameAs",
+          "kind": "object",
+          "type": "ProductImage",
+          "relationFromFields": [
+            "sameAsImageId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "sameAsCopies",
+          "kind": "object",
+          "type": "ProductImage",
+          "relationFromFields": []
         }
       ]
     },

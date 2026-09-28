@@ -55,7 +55,56 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
 - **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`), live and checked in production (below).
-- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases = PR #130 (below); W3 the first eBay photo send; W4 library duplicates Fix 2.
+- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases MERGED #130 (`0be048ee6`); W3 the first eBay photo send DONE (below); W4a same photo = PR #132 (below); W4b, W4c next.
+
+## W3 — The first real eBay photo send (2026-09-28, the Owner's "go ahead")
+- **Listing:** GALE-JACKET on eBay IT, alias ① IT-GALE-JACKET (Trading API). Nothing else was sent — not the main
+  listing (Inventory API), not the other aliases, not Amazon.
+- **Before:** Review & publish from that listing's own view checked it alone: Ready; "Gallery: will be replaced ·
+  Colour sets: same on eBay"; "Other fields of this listing have problems; only photos are sent" (the 21 off-list Season
+  values, P4c); the revision note. The way back (eBay's two gallery addresses — eBay-hosted copies of the same two
+  pictures) was recorded outside the repo. A fresh check just before the send said the same.
+- **Sent about 01:58 UTC:** "Sent — eBay accepted it."
+- **Verified:** a new review — gallery SAME, colour sets SAME; the live read (eBay GetItem, 01:59:27 UTC) — the gallery is
+  the two Nexus photos (Common: main, then the second); the buyer page on ebay.it — custom label IT-GALE-JACKET, the
+  first two gallery photos are the Nexus Common set, title and price unchanged.
+- **Seen:** ① IT-GALE-JACKET and ★ Main listing show the same photos, so the W2 check warns about eBay's duplicate-listings
+  rule. The Owner decides whether the titles differ enough.
+
+## W4a — Same photo at two addresses (2026-09-28, library duplicates Fix 2 part 1)
+- **The page:** a library card whose picture has a look-alike at another address shows **"Looks like <photo>"**; the
+  filter **"Looks like another photo"** lists them. The link (or "Compare them" in the photo window) opens **"Same photo?"**
+  (`plan-page/SamePhotoDialog.tsx`): both photos side by side (on a phone too), their source (Amazon image / Nexus
+  upload), size and where each is used; **Keep** one (default: a Nexus upload over an Amazon image, then the one in more
+  sets, then the larger); one sentence says which photo sets change. **Same photo — keep …** · **Not the same** · Cancel.
+  Done: a message with **Undo**; later, the photo window lists "X was marked the same photo as this one" with
+  **Separate it** (the copy is its own photo again; photo sets do not change). Nothing is deleted; nothing is sent.
+- **The rule:** aHash ≤ 6 AND dHash-256 ≤ 16 — the "same picture" band of the upload gate's IE.13 calibration
+  (`DHASH256_SAME_PICTURE_THRESHOLD`). 17–26 (same template, other text: a size chart per language) is not suggested
+  here; language versions are W4b. Not suggested: language versions of one photo, pairs answered "not the same", videos,
+  photos without fingerprints.
+- **Server:** `POST /products/:id/media/library/lookalikes` — `same` / `undo-same` / `separate` / `distinct` /
+  `undo-distinct` (permission `products.images.edit`). `markSamePhoto` replaces the copy (and its own copies) by the kept
+  photo in EVERY layer of the family — Shared, each channel, each listing, alias layers included — in one transaction,
+  each layer saved only at the revision it was read (`replaceAssetInPlan`, shared: where the set already shows the kept
+  photo, the copy is dropped). The answer carries the undo: per layer, the ops that put it back, each bound to what the
+  layer holds after the merge; an undo after someone changed one of those sets is refused and changes nothing. Refused:
+  two languages of one photo ("keep both, as language versions"), a photo already joined, a photo not in the family.
+- **Data:** additive migration `20260928a_images_same_photo` — `ProductImage.sameAsImageId` (self link, SetNull when the
+  kept photo is deleted) and `distinctFromIds TEXT[]`; `baseline.sql` regenerated (only these lines); drift, model
+  ownership and policy parity pass. The library identity joins a merged row to its kept photo (one card, the kept one).
+- **Checked on the local stack** (two test photos given one fingerprint): "Looks like" on both cards; the window's
+  sentence "…show Common 2 detail instead: eBay IT · Test eBay · ① Winter: Common; Shared: Safety" and the server after
+  the merge (the ① Winter alias layer and Shared changed, the library 16 → 15 cards); Undo (15 → 16); Separate it (the
+  sets stay); keyboard (Enter opens, Tab reaches both previews, both Keep choices and the three buttons, Escape returns
+  focus to the link); light and dark; 390 px (two columns of 150 px, no sideways scroll).
+- **Found and fixed on the way:** the photo window said "stored 1 more time (copies on other SKUs)" for a merged photo.
+- **Tests:** shared 2 (the swap, and a copy or version counted as the kept photo); identity 2 (join, card choice, the
+  band, exclusions); service 6 on the real schema (the read's suggestion, refusals, merge across Shared + channel + alias
+  and its undo, a stale undo refused, Separate, "not the same"); page model 1; permission matrix. Nine deliberate breaks,
+  each caught. Profiles ON: pass.
+- **Next:** W4c fills the fingerprints in production (the Owner's word): until then production shows no suggestion,
+  because the Amazon rows have none.
 
 ## W2 — Aliases on the Media page (2026-09-28)
 The Owner: "it is very important that the image manager supports aliases, especially for eBay". Five gaps against

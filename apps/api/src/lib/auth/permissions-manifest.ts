@@ -463,7 +463,7 @@ export const ENTRIES: Entry[] = [
   P(F.productsExport, pfx('/api/scheduled-exports')),
   P(F.productsExport, pfx('/api/export-jobs')),
   RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/product-media$/.test(p)),
-  RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/media(?:\/ops|\/switch|\/switch-preview|\/library|\/amazon-archive(?:\/file)?)?$/.test(p)),
+  RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/media(?:\/ops|\/switch|\/switch-preview|\/library(?:\/lookalikes)?|\/amazon-archive(?:\/file)?)?$/.test(p)),
   RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/videos$/.test(p)),
   RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/images-workspace\/ebay$/.test(p)),
   P(F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked\/rebase$/.test(p)),

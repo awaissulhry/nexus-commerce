@@ -41,6 +41,8 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   ['POST', '/api/products/123/media/switch', ['ADMIN', 'OPS_MANAGER']],
   // P4b — a photo's language and its language versions, from the upload dialog.
   ['PATCH', '/api/products/123/media/library', ['ADMIN', 'OPS_MANAGER']],
+  // W4a — the same picture at two addresses: mark, undo, "not the same".
+  ['POST', '/api/products/123/media/library/lookalikes', ['ADMIN', 'OPS_MANAGER']],
   // P4d — the Amazon ZIPs for Seller Central read photos only: every role that can view products.
   ['GET', '/api/products/123/media/amazon-archive', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
   ['GET', '/api/products/123/media/amazon-archive/file', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],

@@ -41,7 +41,11 @@ Measured on the local stack: TEST-JACKET with 3 SKUs × 2 copied pictures → **
 is the root's own card with 3 copies. Tests: identity rules 3; Media service 16 (real schema: one card per picture,
 a copy refused in a set that holds it, family-wide upload scope, bulk apply refused); page model 8; upload route 9.
 
-## Fix 2 — next (needs the Owner's word for one production step)
+## Fix 2 — in progress (plan: [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) W4; record: PROGRESS.md § W4a)
+- **Part 1 (W4a) built:** "Looks like …" and "Same photo?" (keep one; the other becomes its copy in every layer; Undo; Separate it); "Not the same".
+- **Part 2 (W4b):** language versions. **Part 3 (W4c):** fingerprints in production with `apps/api/src/scripts/backfill-image-facts.ts` (not the older script below), the Owner's word.
+
+### The original plan for Fix 2
 - **Same picture at two addresses** (Amazon's copy vs ours): mark it in the library ("Looks like …") with a
   **Same photo — keep one** action (the plan moves to the kept photo; the other becomes a copy of it, not deleted).
   Detection needs the fingerprints of the Amazon rows, which are empty today: the existing backfill script

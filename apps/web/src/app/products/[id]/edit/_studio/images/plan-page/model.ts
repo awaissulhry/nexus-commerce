@@ -19,6 +19,10 @@ export interface LibraryAsset {
   /** The same picture stored again (another SKU's copy, or the same bytes at another address): one card, these ids
    *  resolve to it (2026-09-28: the library showed one picture once per SKU). */
   copies?: string[]
+  /** Other cards that show the same picture at another address (W4a), closest first. */
+  lookalikes?: Array<{ id: string; distance: number }>
+  /** Photos the Owner marked the same as this one (W4a); each can be separated again. */
+  merged?: Array<{ id: string; label: string }>
 }
 export interface PlanLayer {
   key: string; layer: MediaLayer; channel: string; marketplace: string; accountId: string; aliasKey: string
@@ -174,7 +178,7 @@ export function libraryUsage(read: MediaRead): Map<string, string[]> {
   return usage
 }
 
-export type LibraryFilter = 'all' | 'unused' | 'used' | 'problems' | 'text'
+export type LibraryFilter = 'all' | 'unused' | 'used' | 'problems' | 'text' | 'lookalikes'
 /** The library filtered by what a person looks for; order stays the library's own. */
 export function filterLibrary(read: MediaRead, usage: Map<string, string[]>, filter: LibraryFilter, search: string) {
   const text = search.trim().toLowerCase()
@@ -184,8 +188,48 @@ export function filterLibrary(read: MediaRead, usage: Map<string, string[]>, fil
     if (filter === 'used') return usage.has(a.id)
     if (filter === 'problems') return assetProblems(a).length > 0
     if (filter === 'text') return a.languageTag !== 'zxx'
+    if (filter === 'lookalikes') return !!a.lookalikes?.length
     return true
   })
+}
+
+/**
+ * Where a photo (any of its ids) sits in the family's layers — "Shared: Common", "eBay IT · Test eBay · ① Winter: Nero"
+ * — which is what marking it the same as another photo changes (W4a).
+ */
+export function photoPlacements(read: MediaRead, ids: readonly string[]): string[] {
+  const wanted = new Set(ids)
+  const hit = (items?: Array<{ assetId: string }>) => !!items?.some(i => wanted.has(i.assetId))
+  const value = (key: string) => read.family.valueLabels[key] ?? key
+  const out: string[] = []
+  for (const layer of read.layers) {
+    const destination = read.destinations.find(d => d.key === layer.key)
+    const where = layer.layer === 'SHARED' ? 'Shared' : layer.layer === 'CHANNEL' ? `All ${CHANNEL_LABEL[layer.channel as MediaChannel] ?? layer.channel} listings`
+      : destination ? destinationLabel(destination) : 'One listing'
+    const sets = layer.plan.sets
+    if (hit(sets.common)) out.push(`${where}: Common`)
+    for (const [key, items] of Object.entries(sets.values ?? {})) if (hit(items)) out.push(`${where}: ${value(key)}`)
+    for (const [productId, items] of Object.entries(sets.skus ?? {})) if (hit(items)) out.push(`${where}: ${read.family.variants.find(v => v.productId === productId)?.sku ?? 'one SKU'}`)
+    if (hit(sets.safety)) out.push(`${where}: Safety`)
+    for (const [key, item] of Object.entries(sets.swatches ?? {})) if (item && wanted.has(item.assetId)) out.push(`${where}: ${value(key)} swatch`)
+  }
+  return out
+}
+
+/** The address a photo comes from, in words: an Amazon image or a Nexus upload (W4a: the two sides of a look-alike). */
+export function photoSource(url: string): string {
+  const host = (() => { try { return new URL(url).hostname } catch { return '' } })()
+  return /(^|\.)media-amazon\.com$/.test(host) ? 'Amazon image' : /(^|\.)cloudinary\.com$/.test(host) ? 'Nexus upload' : host || 'Unknown address'
+}
+
+/** Which of two look-alikes to keep by default: a Nexus upload over an Amazon image, then the one in more sets, then the larger. */
+export function defaultKeep(read: MediaRead, a: LibraryAsset, b: LibraryAsset): LibraryAsset {
+  const amazon = (x: LibraryAsset) => photoSource(x.url) === 'Amazon image'
+  if (amazon(a) !== amazon(b)) return amazon(a) ? b : a
+  const uses = (x: LibraryAsset) => photoPlacements(read, [x.id, ...(x.copies ?? [])]).length
+  if (uses(a) !== uses(b)) return uses(a) > uses(b) ? a : b
+  const area = (x: LibraryAsset) => (x.width ?? 0) * (x.height ?? 0)
+  return area(b) > area(a) ? b : a
 }
 
 /** What is wrong with one photo on its own (size, address) — the page's `Tag`s. Channel rules live in the checks. */

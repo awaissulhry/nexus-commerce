@@ -2552,6 +2552,14 @@ model ProductImage {
   derivedFrom        ProductImage?  @relation("ProductImageDerivation", fields: [derivedFromImageId], references: [id], onDelete: SetNull)
   derivatives        ProductImage[] @relation("ProductImageDerivation")
 
+  // Images rebuild W4a — the Owner marked this row as the same picture as another row at another address (an Amazon
+  // copy and ours): the Media library shows one card, the kept one. Null again when the kept photo is deleted.
+  sameAsImageId String?
+  sameAs        ProductImage?  @relation("ProductImageSameAs", fields: [sameAsImageId], references: [id], onDelete: SetNull)
+  sameAsCopies  ProductImage[] @relation("ProductImageSameAs")
+  // "Not the same" answers: the family photos this one only looks like. The Media page stops suggesting them.
+  distinctFromIds String[] @default([])
+
   /// IR.6 — Gemini Vision analysis results. Populated by
   /// POST /api/products/:id/images/:imageId/analyze. NULL until run.
   ///
@@ -2606,6 +2614,7 @@ model ProductImage {
   @@unique([workspaceId, productId, contentHash], name: "productId_contentHash", map: "ProductImage_productId_contentHash_key")
   @@index([productId, sortOrder])
   @@index([derivedFromImageId])
+  @@index([sameAsImageId])
   @@index([productId, perceptualHash])
   /// PG.4 — Partial unique index implemented as raw SQL in the
   /// 20260523_pg4_product_image_is_primary migration (Prisma's

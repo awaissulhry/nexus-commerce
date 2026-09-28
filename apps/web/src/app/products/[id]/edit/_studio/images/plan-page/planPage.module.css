@@ -89,6 +89,14 @@
 .checkList { margin: var(--nds-space-4) 0 0; padding-inline-start: var(--nds-space-16); }
 .checkList > li + li { margin-top: var(--nds-space-2); }
 
+/* Same photo? (W4a): the two look-alikes side by side, on a phone too — comparing them is the point. */
+.sameBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); }
+.samePair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nds-space-16); min-width: 0; }
+.sameSide { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; overflow-wrap: anywhere; }
+.sameSide > p { margin: 0; }
+.sameText { margin: 0; }
+@media (max-width: 640px) { .samePair { gap: var(--nds-space-10); } }
+
 /* Amazon ZIP for Seller Central (P4d): the files by ASIN, each slot with its photo. All text at the DS body size. */
 .zipBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); }
 .zipControls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--nds-space-12) var(--nds-space-20); }

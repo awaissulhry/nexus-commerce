@@ -284,6 +284,27 @@ export function inverseMediaOps(layer: MediaLayer, before: MediaPlan | null, aft
   return ops
 }
 
+/**
+ * Images W4a — the Owner marked `from` as the same picture as `to`: every set and swatch that uses `from` uses `to`
+ * instead, in the same place. Where the set already shows `to` (or a photo `same` counts as `to`: a copy, a language
+ * version), `from` is dropped, so a set never repeats a photo. The plan comes back unchanged (the same object) when it
+ * does not use `from`.
+ */
+export function replaceAssetInPlan(plan: MediaPlan, from: string, to: string, same: (a: string, b: string) => boolean = (a, b) => a === b): MediaPlan {
+  if (!planAssetIds(plan).includes(from)) return plan
+  const swap = (items: MediaItem[]) => !items.some(i => i.assetId === from) ? items
+    : items.some(i => i.assetId !== from && same(i.assetId, to)) ? items.filter(i => i.assetId !== from)
+    : items.map(i => i.assetId === from ? { ...i, assetId: to } : i)
+  const each = (record?: Record<string, MediaItem[]>) => record && Object.fromEntries(Object.entries(record).map(([key, items]) => [key, swap(items)]))
+  const sets: MediaPlan['sets'] = { ...plan.sets }
+  if (sets.common) sets.common = swap(sets.common)
+  if (sets.safety) sets.safety = swap(sets.safety)
+  if (sets.values) sets.values = each(sets.values)
+  if (sets.skus) sets.skus = each(sets.skus)
+  if (sets.swatches) sets.swatches = Object.fromEntries(Object.entries(sets.swatches).map(([key, item]) => [key, item?.assetId === from ? { ...item, assetId: to } : item]))
+  return mediaPlanSchema.parse({ ...plan, sets })
+}
+
 /** Asset ids the plan points at — to refuse ops that name a photo the family does not own. */
 export function planAssetIds(plan: MediaPlan | null | undefined): string[] {
   if (!plan) return []

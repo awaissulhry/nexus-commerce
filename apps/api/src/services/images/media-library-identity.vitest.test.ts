@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { libraryEntries, pictureKeys, samePhoto, type LibraryRow } from './media-library-identity.js'
+import { libraryEntries, lookalikes, pictureKeys, samePhoto, type LibraryRow, type LookalikeRow } from './media-library-identity.js'
 
 /** GALE-JACKET's shape (production, 2026-09-28): the root's own photos, and Amazon's pictures stored once per SKU. */
 const row = (id: string, productId: string, url: string, extra: Partial<LibraryRow & { versionGroupId: string | null }> = {}) => ({ id, productId, url, contentHash: null, isPrimary: false, versionGroupId: null, ...extra })
@@ -34,5 +34,35 @@ describe('one picture, one library card', () => {
     expect(same('root-cover', 'kid1-cover')).toBe(true)
     expect(same('chart-de', 'chart-it')).toBe(true)
     expect(same('root-chart', 'root-cover')).toBe(false)
+  })
+})
+
+describe('same picture at two addresses (W4a)', () => {
+  // 64-bit aHash (16 hex) and 256-bit dHash (64 hex): the numbers of differing bits are chosen per pair.
+  const flip = (hex: string, bits: number) => { const chars = hex.split(''); for (let i = 0; i < bits; i++) chars[i] = chars[i] === '0' ? '1' : '0'; return chars.join('') }
+  const A = '0'.repeat(16), D = '0'.repeat(64)
+  const flipEnd = (hex: string, bits: number) => flip(hex.split('').reverse().join(''), bits).split('').reverse().join('')
+  const pic = (id: string, extra: Partial<LookalikeRow> = {}): LookalikeRow => ({ id, productId: 'root', url: `https://cdn.test/${id}.jpg`, mediaType: 'IMAGE', perceptualHash: A, dhash256: D, ...extra })
+  it('a merged row joins the kept photo: one card, the kept one, whatever the address', () => {
+    const merged = [pic('ours'), pic('amz', { productId: 'kid1', url: 'https://m.media-amazon.com/images/I/9x.jpg', sameAsImageId: 'ours' })]
+    const keys = pictureKeys(merged)
+    expect(keys.get('amz')).toBe(keys.get('ours'))
+    // Even when the plan still points at the merged row, the kept one is the card.
+    expect(libraryEntries(merged, 'root', new Set(['amz'])).map(e => [e.id, e.copies])).toEqual([['ours', ['amz']]])
+    expect(samePhoto(merged)('amz', 'ours')).toBe(true)
+  })
+  it('suggests cards in the same-picture band only; leaves out versions, "not the same" answers, videos and unhashed photos', () => {
+    const list = [pic('ours'), pic('amz', { dhash256: flip(D, 16) }), pic('template', { dhash256: flipEnd(D, 20) }), pic('far', { perceptualHash: flip(A, 7) }),
+      pic('chart-it', { versionGroupId: 'chart' }), pic('chart-de', { versionGroupId: 'chart' }), pic('video', { mediaType: 'VIDEO' }), pic('bare', { dhash256: null })]
+    const entries = list.map(r => ({ id: r.id, copies: [] }))
+    const found = lookalikes(list, entries)
+    expect(found.get('amz')).toEqual([{ id: 'ours', distance: 16 }, { id: 'chart-it', distance: 16 }, { id: 'chart-de', distance: 16 }])
+    expect(found.get('template')).toBeUndefined()
+    expect(found.get('far')).toBeUndefined()
+    expect(found.get('chart-it')?.map(x => x.id)).not.toContain('chart-de')
+    expect(found.has('video') || found.has('bare')).toBe(false)
+    // "Not the same", answered on either photo, stops the suggestion both ways.
+    const answered = lookalikes([pic('ours', { distinctFromIds: ['amz'] }), pic('amz')], [{ id: 'ours', copies: [] }, { id: 'amz', copies: [] }])
+    expect(answered.size).toBe(0)
   })
 })
