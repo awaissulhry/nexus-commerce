@@ -196,7 +196,7 @@ describe('what the pop-up shows', () => {
     const r = read([{ key: 'SHARED', plan: plan({ ...SHARED.sets, common: ids('cover', 'gone') }, 'color') }])
     const parent = planBase(r, { rowProductId: 'root', address: onShared })
     const found = checks(r, parent, addItem(r, initialDraft(r, parent), 'small'))
-    expect(found).toContainEqual({ severity: 'error', message: 'A photo in this set was deleted from the library. Remove it or add it again.' })
+    expect(found).toContainEqual({ severity: 'error', message: 'A photo in this set was deleted from the library. Take it out of the set, or add it again.' })
     expect(found).toContainEqual({ severity: 'error', message: 'small: 420 px — eBay and Amazon need 500 px on the longest side.' })
     expect(saveLine(parent, initialDraft(r, parent))).toBe('Saves in Nexus · every channel follows it unless a listing has its own')
     const black = planBase(r, { rowProductId: 'b-s', address: onShared })

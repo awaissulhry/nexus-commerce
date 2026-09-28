@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MediaOp } from '@nexus/shared/media-plan'
 
-import { Banner, FileDropzone, MediaBoard, MediaCard, MediaPreview, MediaStrip, SourceIndicator, mediaTypeLabel, type MediaBoardItem, type MediaStripItem } from '@/design-system/components'
-import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag, ToolbarButton } from '@/design-system/primitives'
+import type { ProductMediaQuery, ProductMediaWorkspace } from '@nexus/shared/product-media'
+import { Banner, Field, MediaBoard, MediaStrip, SourceIndicator, mediaTypeLabel, type MediaBoardItem, type MediaStripItem } from '@/design-system/components'
+import { Button, Checkbox, Input, Spinner, Tag, Textarea } from '@/design-system/primitives'
 import { EDITOR_KEY_HINT_PANEL } from '@/design-system/grid'
 
 import type { SaveReporter } from '../types'
@@ -15,10 +15,12 @@ import { uploadPhoto } from '../images/plan-page/uploadApi'
 import { sendPlanOps, type PlanAddress } from './planCellTransfer'
 import * as model from './mediaPopupModel'
 import { useMediaPopupData } from './useMediaPopupData'
+import * as gallery from './galleryPopupModel'
+import { uploadGalleryFile, useGalleryPopupData } from './useGalleryPopupData'
+import { ChecksList, MediaPageLink, PhotoLibrary, PhotoViewer, PopupHead, photoKeys, useFirstPhotoFocus, usePopupGuards, type AppliedCells, type LibraryShow, type Upload } from './popupParts'
 import styles from './media.module.css'
 
-/** Photos changed in the cells at once; `restore` puts them back when the save is refused, `done` ends "saving". */
-export interface AppliedCells { restore(): void; done(): void }
+export type { AppliedCells } from './popupParts'
 
 export interface PlanMediaPopupProps {
   /** Any product of the family (the plan belongs to the family root). */
@@ -43,9 +45,9 @@ export interface PlanMediaPopupProps {
   reporter: SaveReporter
   /** "All sets and channels": the Media page. */
   onOpenMediaPage(): void
+  /** A change not yet saved, or a save on its way (switching scope or leaving the page asks first). */
+  onDirtyChange?(dirty: boolean): void
 }
-
-type Upload = { name: string; state: 'sending' | 'added' | 'exact' | 'similar' | 'failed'; message?: string; candidate?: { id: string; label: string }; file?: File }
 
 /**
  * Lane C — the Product media cell pop-up for a family on the photo plan (docs/product-media-popup/PLAN-2026-09-28.md §3).
@@ -53,7 +55,7 @@ type Upload = { name: string; state: 'sending' | 'added' | 'exact' | 'similar' |
  * photo in the same panel — no dialog on a dialog. Enter or a click outside saves ONE change; Esc cancels.
  */
 export function PlanMediaPopup(props: PlanMediaPopupProps) {
-  const { productId, rowProductId, title, address, locale, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage } = props
+  const { productId, rowProductId, title, address, locale, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange } = props
   const data = useMediaPopupData(productId)
   const language = locale === 'und' ? null : locale
   // Layers from the read the pop-up opened with (what a save may overwrite); the library from the latest read.
@@ -65,7 +67,7 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
-  const [show, setShow] = useState<model.LibraryShow>('not-in-set')
+  const [show, setShow] = useState<LibraryShow>('not-in-set')
   const [search, setSearch] = useState('')
   const [viewing, setViewing] = useState<string | null>(null)
   const [uploads, setUploads] = useState<Upload[]>([])
@@ -75,35 +77,11 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
   const editable = canEdit && !!base?.view && !!draft && !busy
   const changedElsewhere = !!(base && data.baseline && model.changedSince(data.baseline, data.latest, base))
   const ops: MediaOp[] = working && base && draft ? model.saveOps(working, base, draft) : []
+  useEffect(() => { onDirtyChange?.(ops.length > 0 || busy); return () => onDirtyChange?.(false) }, [ops.length, busy, onDirtyChange])
 
-  // Presses in a menu this pop-up opened (a photo's ⋯ menu draws outside it) are not "outside". Registered on the
-  // window, so it runs before the panel's own listener on the document. `press` marks a save asked by a press outside.
-  const menuPress = useRef(false)
-  const press = useRef(false)
-  useEffect(() => {
-    const onDown = (event: PointerEvent) => {
-      menuPress.current = !!(event.target as Element | null)?.closest?.('.nds-menu')
-      press.current = true
-      window.setTimeout(() => { menuPress.current = false; press.current = false }, 0)
-    }
-    window.addEventListener('pointerdown', onDown, true)
-    return () => window.removeEventListener('pointerdown', onDown, true)
-  }, [])
-  /** A press outside that is held back (refused, or saving) must not also click what is under it — another cell's
-   *  pencil would open a second pop-up over this one's answer. The panel stops the press; this stops its click. */
-  function holdClick() {
-    if (!press.current) return
-    const stop = (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); done() }
-    const done = () => { window.removeEventListener('click', stop, true); window.clearTimeout(timer) }
-    const timer = window.setTimeout(done, 1000)
-    window.addEventListener('click', stop, true)
-  }
-  const mounted = useRef(true)
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
-
-  // Focus the first photo (the panel focuses its first control first; this effect runs after the panel's).
+  const { menuPress, mounted, holdClick } = usePopupGuards()
   const root = useRef<HTMLDivElement>(null)
-  useEffect(() => { root.current?.querySelector<HTMLElement>('.nds-media-board-thumb[tabindex="0"]')?.focus({ preventScroll: true }) }, [])
+  useFirstPhotoFocus(root)
 
   // "+ Add" opens the family's photos under the strip: the search takes the focus and the list comes into view, so
   // the browser keeps it still while the strip above grows (scroll anchoring works once the panel has scrolled).
@@ -168,15 +146,7 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
     }
   }
 
-  const onKeyCapture = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    // Enter on a photo saves, like everywhere else in the pop-up (a click, or ⋯ → Open, shows the photo) — except while
-    // a photo is picked up, when Enter drops it.
-    if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return
-    const target = event.target as HTMLElement
-    if (!target.closest('.nds-media-board-thumb') || root.current?.querySelector('[data-picked]')) return
-    event.preventDefault(); event.stopPropagation()
-    save()
-  }
+  const onKeyCapture = photoKeys(root, save)
 
   async function upload(files: File[], force = false) {
     if (!working || !editable) return
@@ -229,10 +199,7 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
       <span className={styles.muted}>{base ? model.saveLine(base, draft ?? { skuOnly: base.skuOnly }) : ''}</span>
     </>}>
     <div ref={root} className={styles.popup} onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
-      <div className={styles.popupHead}>
-        <strong>Product media{context ? ` · ${context}` : ''}</strong>
-        <span>{title}</span>
-      </div>
+      <PopupHead context={context} title={title} />
 
       {error && <Banner tone="danger">{error}</Banner>}
       {!error && changedElsewhere && <Banner tone="warning">{model.POPUP_TEXT.changedElsewhere}</Banner>}
@@ -271,72 +238,234 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
         <span className={styles.muted}>change them on the parent row</span>
       </div>}
 
-      {found.length > 0 && <ul className={styles.checks} aria-label="Checks">
-        {found.map(c => <li key={c.message} data-severity={c.severity}><Tag tone={c.severity === 'error' ? 'danger' : 'warning'}>{c.severity === 'error' ? 'Refused' : 'Warning'}</Tag> {c.message}</li>)}
-        {found.some(c => c.severity === 'error') && base?.destination && <li className={styles.muted}>You can save. Publishing to {CHANNEL_LABEL[base.destination.channel]} stays blocked until it is fixed.</li>}
-      </ul>}
+      <ChecksList checks={found} blocked={base?.destination ? `You can save. Publishing to ${CHANNEL_LABEL[base.destination.channel]} stays blocked until it is fixed.` : null} />
 
-      {viewed && <section className={styles.viewer} aria-label={`Photo: ${viewed.label}`}>
-        <div className={styles.viewerHead}>
-          <span>{mediaTypeLabel(viewed.mediaType)}{viewed.width && viewed.height ? ` · ${viewed.width} × ${viewed.height}` : ''}{viewed.fileSize ? ` · ${(viewed.fileSize / 1024 / 1024).toFixed(1)} MB` : ''} · {viewed.languageTag === 'zxx' ? 'no text' : viewed.languageTag.toUpperCase()}</span>
-          <ToolbarButton label="Close the photo" icon={<X size={14} />} onClick={() => setViewing(null)} />
-        </div>
-        <MediaPreview type={viewed.mediaType} url={viewed.url} label={viewed.label} />
-        <p className={styles.muted}>{viewed.label}</p>
-      </section>}
+      {viewed && <PhotoViewer photo={{ type: viewed.mediaType, url: viewed.url, label: viewed.label, width: viewed.width, height: viewed.height, fileSize: viewed.fileSize, language: viewed.languageTag }}
+        onClose={() => setViewing(null)} />}
 
-      {adding && working && draft && <section className={styles.library} aria-label={`Add to ${headline.label}`}>
-        <p className={styles.muted}>Add to {headline.label} · tick photos, they join the end.</p>
-        <div className={styles.libraryTools}>
-          <Input ref={searchInput} size="sm" placeholder="Search the family's photos" aria-label="Search the family's photos" value={search} onChange={event => setSearch(event.target.value)} />
-          <SegmentedControl size="sm" ariaLabel="Show" value={show} onChange={value => setShow(value as model.LibraryShow)}
-            options={[{ value: 'not-in-set', label: 'Not in this set' }, { value: 'all', label: 'All' }]} />
-        </div>
-        {cards.length ? <ul className={styles.libraryGrid} aria-label="The family's photos">
-          {cards.map(asset => {
-            const picked = model.inSet(working, draft, asset.id)
-            const problems = assetProblems(asset)
-            return <li key={asset.id}>
-              <MediaCard compact src={asset.mediaType === 'VIDEO' ? null : asset.url} mediaType={asset.mediaType} label={asset.label}
-                selected={picked} disabled={busy}
-                onSelectedChange={on => edit(on ? model.addItem(working, draft, asset.id) : model.removePicture(working, draft, asset.id))}
-                onPreview={() => setViewing(asset.id)}
-                detail={<span className={styles.facts}>
-                  {asset.width && asset.height ? <span>{asset.width}×{asset.height}</span> : null}
-                  {asset.languageTag !== 'zxx' && <Tag tone="info">{asset.languageTag.toUpperCase()}</Tag>}
-                  {problems.slice(0, 1).map(p => <Tag key={p} tone="warning">{p}</Tag>)}
-                </span>} />
-            </li>
-          })}
-        </ul> : <p className={styles.muted}>{search ? 'No photo matches.' : show === 'not-in-set' ? 'Every photo of the family is already in this set.' : 'No photos yet.'}</p>}
-        <FileDropzone className={styles.upload} multiple accept=".jpg,.jpeg,.png,.webp,.gif,.avif" maxBytes={20 * 1024 * 1024} disabled={busy}
-          hint="Images up to 20 MB · they join this set on Enter and stay in the library"
-          onFiles={files => void upload(files)} />
-        {uploads.length > 0 && <ul className={styles.uploads} aria-label="Uploads">
-          {uploads.map(u => <li key={u.name} role="status">
-            {u.state === 'sending' && <><Spinner size={12} /> Uploading {u.name}…</>}
-            {u.state === 'added' && <>✓ {u.name} — added.</>}
-            {u.state === 'exact' && <>= {u.name} — already in the library; that photo is added.</>}
-            {u.state === 'failed' && <>✕ {u.name} — {u.message}</>}
-            {u.state === 'similar' && u.candidate && <>≈ {u.name} looks like “{u.candidate.label}” in the library.{' '}
-              <Button size="xs" variant="secondary" onClick={() => { setDraft(current => current && working ? model.addItem(working, current, u.candidate!.id) : current); setUploads(list => list.map(x => x.name === u.name ? { name: u.name, state: 'exact' } : x)) }}>Use “{u.candidate.label}”</Button>{' '}
-              <Button size="xs" variant="ghost" onClick={() => u.file && void upload([u.file], true)}>Upload anyway</Button></>}
-          </li>)}
-        </ul>}
-      </section>}
+      {adding && working && draft && <PhotoLibrary target={headline.label} noun="family's photos" searchInput={searchInput} disabled={busy}
+        cards={cards.map(asset => ({ id: asset.id, src: asset.mediaType === 'VIDEO' ? null : asset.url, mediaType: asset.mediaType, label: asset.label, width: asset.width, height: asset.height,
+          tags: <>{asset.languageTag !== 'zxx' && <Tag tone="info">{asset.languageTag.toUpperCase()}</Tag>}{assetProblems(asset).slice(0, 1).map(p => <Tag key={p} tone="warning">{p}</Tag>)}</> }))}
+        picked={id => model.inSet(working, draft, id)}
+        onToggle={(id, on) => edit(on ? model.addItem(working, draft, id) : model.removePicture(working, draft, id))}
+        onPreview={setViewing} search={search} onSearch={setSearch} show={show} onShow={setShow}
+        accept=".jpg,.jpeg,.png,.webp,.gif,.avif" maxBytes={20 * 1024 * 1024} uploadHint="Images up to 20 MB · they join this set on Enter and stay in the library"
+        onFiles={files => void upload(files)} uploads={uploads}
+        onUseCandidate={u => { setDraft(current => current && working && u.candidate ? model.addItem(working, current, u.candidate.id) : current); setUploads(list => list.map(x => x.name === u.name ? { name: u.name, state: 'exact' } : x)) }}
+        onUploadAnyway={u => { if (u.file) void upload([u.file], true) }} />}
 
-      <div className={styles.popupFoot}>
-        <Button size="xs" variant="link" disabled={busy} onClick={() => {
-          // "All sets and channels": save first (nothing to save = leave now), then the Media page.
-          if (busy) return
-          afterSave.current = onOpenMediaPage
-          if (!ops.length || !editable) { close(); onOpenMediaPage() } else save()
-        }}>All sets and channels: Media page</Button>
-      </div>
+      <MediaPageLink disabled={busy} onOpen={() => {
+        // "All sets and channels": save first (nothing to save = leave now), then the Media page.
+        afterSave.current = onOpenMediaPage
+        if (!ops.length || !editable) { close(); onOpenMediaPage() } else save()
+      }} />
     </div>
   </CellPanel>
 }
 
 function ownedHere(read: MediaRead | null, base: model.PlanPopupBase | null, draft: model.PlanDraft | null) {
   return !!read && !!base && !!draft && model.ownItems(read, base, model.mainRef(base, draft)) !== null
+}
+
+export interface GalleryMediaPopupProps {
+  /** The row's product (the older gallery belongs to one product and, on a channel sheet, one listing). */
+  productId: string
+  title: string
+  /** Where it saves: the Shared product in one language, or a listing's Nexus draft. */
+  context: ProductMediaQuery
+  /** "eBay IT · <account> · Main listing" on a channel sheet; null on the Shared sheet. */
+  contextLabel: string | null
+  channelLabel: string | null
+  canEdit: boolean
+  anchor: HTMLElement | null
+  initial: readonly MediaStripItem[]
+  /** Show the new list in the row's cell at once. */
+  onApply(items: MediaStripItem[]): AppliedCells
+  onSaved(): void
+  onClose(): void
+  reporter: SaveReporter
+  onOpenMediaPage(): void
+  onDirtyChange?(dirty: boolean): void
+}
+
+/**
+ * Lane C, C2 — the same pop-up for a product NOT on the photo plan: its own ordered list (per language on the Shared
+ * sheet, or a listing's draft), the alt text per language, a video's transcript and captions, and today's save
+ * (`PUT /product-media` bound to the revision read when it opened).
+ */
+export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
+  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange } = props
+  const data = useGalleryPopupData(productId, context)
+  // The list and its revision from the read the pop-up opened with; the library from the latest read.
+  const working: ProductMediaWorkspace | null = useMemo(() => data.baseline ? { ...data.baseline, assets: data.latest?.assets ?? data.baseline.assets } : null, [data.baseline, data.latest])
+  const [draft, setDraft] = useState<gallery.GalleryDraft | null>(null)
+  useEffect(() => { if (!draft && data.baseline) setDraft(gallery.galleryDraft(data.baseline)) }, [draft, data.baseline])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [show, setShow] = useState<LibraryShow>('not-in-set')
+  const [search, setSearch] = useState('')
+  const [viewing, setViewing] = useState<string | null>(null)
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const reported = useRef<string | null>(null)
+  const afterSave = useRef<(() => void) | null>(null)
+  const { menuPress, mounted, holdClick } = usePopupGuards()
+  const root = useRef<HTMLDivElement>(null)
+  useFirstPhotoFocus(root)
+  const searchInput = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (adding) searchInput.current?.focus({ preventScroll: false }) }, [adding])
+
+  const editable = canEdit && !!draft && !busy
+  const body = data.baseline && draft ? gallery.gallerySaveBody(data.baseline, draft) : null
+  useEffect(() => { onDirtyChange?.(!!body || busy); return () => onDirtyChange?.(false) }, [body, busy, onDirtyChange])
+  const locale = context.locale
+
+  function close() {
+    if (reported.current) reporter.cleared([reported.current])
+    onClose()
+  }
+  const edit = (next: gallery.GalleryDraft | null) => {
+    if (!next) { setError(`Not saved: ${gallery.GALLERY_TEXT.max}`); return }
+    setDraft(next); setError('')
+  }
+
+  function save(): boolean {
+    if (menuPress.current) return true
+    if (busy) { holdClick(); return false }
+    if (!working || !draft || !body || !canEdit) { close(); return true }
+    const local = gallery.galleryRefusal(draft)
+    if (local) { afterSave.current = null; setError(`Not saved: ${local}`); holdClick(); return false }
+    holdClick()
+    void send(working, draft, body)
+    return false
+  }
+
+  async function send(read: ProductMediaWorkspace, current: gallery.GalleryDraft, request: NonNullable<typeof body>) {
+    setBusy(true); setError('')
+    // The inherited list after a reset is the server's to resolve: the cell shows it when the sheet reads again.
+    const applied = request.collection ? onApply(gallery.galleryCell(read, current)) : { restore: () => undefined, done: () => undefined }
+    const subject = `product-media:${JSON.stringify([productId, context])}`
+    const writeId = crypto.randomUUID()
+    reporter.pending(writeId, subject)
+    try {
+      await data.save(request)
+      reporter.resolved(writeId, true, undefined, subject)
+      applied.done()
+      onSaved()
+      if (mounted.current) { onClose(); afterSave.current?.() }
+    } catch (e) {
+      applied.restore()
+      const network = e instanceof TypeError || (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError'))
+      const message = network ? model.POPUP_TEXT.unconfirmed : e instanceof Error ? e.message : model.POPUP_TEXT.unconfirmed
+      reporter.resolved(writeId, false, message, subject)
+      if (!mounted.current) return
+      reported.current = subject
+      setError(`Not saved: ${message}`)
+      setBusy(false)
+      afterSave.current = null
+    }
+  }
+  const onKeyCapture = photoKeys(root, save)
+
+  async function upload(files: File[], force = false) {
+    if (!editable) return
+    for (const file of files) {
+      setUploads(list => [...list.filter(u => u.name !== file.name), { name: file.name, state: 'sending' }])
+      if (!gallery.VIDEO_FILE.test(file.name) && file.size > 20 * 1024 * 1024) { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'failed', message: 'images must be no larger than 20 MB.' } : u)); continue }
+      const status = await uploadGalleryFile(productId, file, force)
+      if (status.kind === 'failed') { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'failed', message: status.message } : u)); continue }
+      if (status.kind === 'similar') { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'similar', candidate: status.candidate, file } : u)); continue }
+      const assetId = status.assetId
+      const fresh = await data.afterUpload([assetId])
+      // An upload is in the library at once: the sheet reads again (a product with no list of its own shows it).
+      onSaved()
+      if (!fresh) { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'failed', message: gallery.GALLERY_TEXT.uploadUnread } : u)); continue }
+      setDraft(current => current ? gallery.addAsset(current, assetId) ?? current : current)
+      setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: status.kind === 'exact' ? 'exact' : 'added' } : u))
+    }
+  }
+
+  const tiles = working && draft ? gallery.galleryTiles(working, draft) : null
+  const boardItems: MediaBoardItem[] = tiles
+    ? tiles.map(t => ({ id: t.id, src: t.src, label: t.label, mediaType: t.mediaType, tone: t.missing ? 'danger' : t.problem ? 'warning' : undefined,
+      badges: t.problem ? <Tag tone={t.missing ? 'danger' : 'warning'}>{t.problem}</Tag> : undefined }))
+    : initial.map(i => ({ id: i.id, src: i.preview ?? null, label: i.alt || mediaTypeLabel(i.type), mediaType: i.type }))
+  const source = working && draft ? gallery.gallerySource(working, draft) : null
+  const count = draft?.items.length ?? boardItems.length
+  const found = working && draft ? gallery.galleryChecks(working, draft) : []
+  const draftNow = useRef(draft); draftNow.current = draft
+  const listed = useMemo(() => adding && working && draftNow.current ? gallery.galleryCards(working, draftNow.current, show, search).map(a => a.id) : [], [adding, working, show, search])
+  const cards = working ? working.assets.filter(a => listed.includes(a.id)) : []
+  const viewedAsset = viewing && working ? working.assets.find(a => a.id === viewing) ?? null : null
+  const viewedItem = viewing && draft ? draft.items.find(i => i.assetId === viewing) ?? null : null
+  const listName = context.scope === 'MASTER' ? `${gallery.languageName(locale)} list` : 'This listing\'s list'
+  const target = source?.own ? 'this list' : context.scope === 'MASTER' ? `the ${gallery.languageName(locale)} list` : 'this listing\'s list'
+
+  return <CellPanel anchor={anchor} label={`Product media: ${title}`} onSave={save} onCancel={() => { if (!busy) close() }}
+    footer={<>
+      <span className="nds-editor-keyhint">{busy ? <><Spinner size={12} /> Saving…</> : EDITOR_KEY_HINT_PANEL}</span>
+      <span className={styles.muted}>{gallery.gallerySaveLine(context, channelLabel)}</span>
+    </>}>
+    <div ref={root} className={styles.popup} onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
+      <PopupHead context={contextLabel} title={title} />
+      {error && <Banner tone="danger">{error}</Banner>}
+      {data.state.status === 'error' && <Banner tone="danger" action={<Button size="xs" onClick={() => void data.reload()}>Try again</Button>}>{data.state.message}</Banner>}
+      {!canEdit && <Banner tone="neutral">{model.POPUP_TEXT.readOnly}</Banner>}
+
+      {draft?.reset
+        ? <p className={styles.muted} role="status">{source?.note}</p>
+        : <MediaBoard label={`${listName} of ${title}`} allowCopy={false} disabled={!editable} liveDrag
+          rows={[{
+            id: 'set', label: listName, detail: `${count} file${count === 1 ? '' : 's'}`, editable,
+            emptyLabel: 'No photos yet — + Add from the product\'s photos',
+            source: source?.own ? <SourceIndicator kind="override" showLabel label={source.label} description={`Only ${context.scope === 'MASTER' ? gallery.languageName(locale) : 'this listing'} uses this list.`} />
+              : source ? <span className={styles.muted}>{source.label}</span> : undefined,
+            actions: <>
+              {editable && <Button size="xs" variant="secondary" aria-expanded={adding} onClick={() => setAdding(on => !on)}>{adding ? '− Close' : '+ Add'}</Button>}
+              {editable && source?.own && <Button size="xs" variant="ghost" onClick={() => draft && edit({ items: draft.items, reset: true })}>Use the inherited list</Button>}
+            </>,
+            items: boardItems,
+          }]}
+          onMove={move => draft && edit(gallery.moveAsset(draft, move.itemId, move.index))}
+          onRemove={(_, id) => draft && edit(gallery.removeAsset(draft, id))}
+          onOpen={(_, id) => setViewing(current => current === id ? null : id)} />}
+      {draft?.reset && <Button size="xs" variant="ghost" onClick={() => edit({ items: draft.items, reset: false })}>Keep {target}</Button>}
+      {!draft?.reset && source?.note && <p className={styles.muted} role="status">{source.note}</p>}
+      {data.state.status === 'loading' && <p className={styles.muted} role="status"><Spinner size={12} /> Loading the list…</p>}
+
+      <ChecksList checks={found} blocked={channelLabel ? `You can save. Publishing to ${channelLabel} stays blocked until it is fixed.` : null} />
+
+      {viewedAsset && <PhotoViewer photo={{ type: viewedAsset.type, url: viewedAsset.url, poster: viewedAsset.preview, label: (viewedItem?.alt ?? viewedAsset.alt) || title,
+        width: viewedAsset.width, height: viewedAsset.height, fileSize: viewedAsset.fileSize }} onClose={() => setViewing(null)}>
+        {viewedItem && draft && <div className={styles.fields}>
+          <Field label={`Alt text · ${gallery.languageName(locale)}`} hint="Describe what matters in the picture, in this language.">
+            <Input size="sm" value={viewedItem.alt ?? viewedAsset.alt} maxLength={2000} readOnly={!editable} onChange={event => edit(gallery.setAlt(draft, viewedAsset.id, event.target.value))} />
+          </Field>
+          {gallery.hasText(viewedAsset.type) && <>
+            <Field label="Transcript" hint="Ctrl or ⌘ + Enter saves."><Textarea rows={4} maxLength={50000} value={viewedItem.transcript ?? ''} readOnly={!editable} onChange={event => edit(gallery.setTranscript(draft, viewedAsset.id, event.target.value))} /></Field>
+            <Field label={`Captions · ${locale}`} hint="Public HTTPS address of a WebVTT (.vtt) file. Other languages' captions are kept.">
+              <Input size="sm" type="url" value={viewedItem.captions?.find(c => c.language === locale)?.url ?? ''} readOnly={!editable} onChange={event => edit(gallery.setCaption(draft, viewedAsset.id, locale, event.target.value))} />
+            </Field>
+          </>}
+        </div>}
+      </PhotoViewer>}
+
+      {adding && working && draft && <PhotoLibrary target={target} noun="product's photos and videos" searchInput={searchInput} disabled={busy}
+        cards={cards.map(asset => ({ id: asset.id, src: asset.preview, mediaType: asset.type, label: asset.alt || mediaTypeLabel(asset.type), width: asset.width ?? null, height: asset.height ?? null,
+          tags: <>{gallery.galleryTiles(working, { items: [{ assetId: asset.id }], reset: false })[0]?.problem && <Tag tone="warning">{gallery.galleryTiles(working, { items: [{ assetId: asset.id }], reset: false })[0].problem}</Tag>}</> }))}
+        picked={id => gallery.inList(draft, id)}
+        onToggle={(id, on) => edit(on ? gallery.addAsset(draft, id) : gallery.removeAsset(draft, id))}
+        onPreview={setViewing} search={search} onSearch={setSearch} show={show} onShow={setShow}
+        accept=".jpg,.jpeg,.png,.webp,.gif,.avif,.mp4,.mov,.webm" maxBytes={200 * 1024 * 1024}
+        uploadHint="Images up to 20 MB · MP4, MOV and WebM up to 200 MB · they join the list on Enter and stay in the library"
+        onFiles={files => void upload(files)} uploads={uploads}
+        onUseCandidate={u => { setDraft(current => current && u.candidate ? gallery.addAsset(current, u.candidate.id) ?? current : current); setUploads(list => list.map(x => x.name === u.name ? { name: u.name, state: 'exact' } : x)) }}
+        onUploadAnyway={u => { if (u.file) void upload([u.file], true) }} />}
+
+      <MediaPageLink disabled={busy} onOpen={() => {
+        afterSave.current = onOpenMediaPage
+        if (!body || !editable) { close(); onOpenMediaPage() } else save()
+      }} />
+    </div>
+  </CellPanel>
 }

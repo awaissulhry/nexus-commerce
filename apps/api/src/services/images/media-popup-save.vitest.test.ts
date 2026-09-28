@@ -20,6 +20,7 @@ vi.mock('../product-event.service.js', () => ({ productEventService: { emit: asy
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { applyMediaPlanOps } from './media-plan.service.js'
+import { readProductMedia, saveProductMedia } from './product-media.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -43,6 +44,12 @@ beforeAll(async () => {
       ids[key] = (await prisma.product.create({ data: { sku, name: sku, basePrice: 10, parentId: root.id, categoryAttributes: { variations: { Colore: 'Nero' } } } as never })).id
     for (const name of ['front', 'back', 'side'])
       img[name] = (await prisma.productImage.create({ data: { productId: root.id, url: `https://cdn.example/${name}.jpg`, alt: name, type: 'ALT', width: 1600, height: 1600 } as never })).id
+  })
+  // A second product NOT on the plan: the older gallery (C2), with its own three photos.
+  await scoped(async () => {
+    ids.cap = (await prisma.product.create({ data: { sku: 'LAB-CAP', name: 'Lab cap', basePrice: 10 } as never })).id
+    for (const name of ['cap-front', 'cap-back', 'cap-side'])
+      img[name] = (await prisma.productImage.create({ data: { productId: ids.cap, url: `https://cdn.example/${name}.jpg`, alt: name, type: 'ALT', width: 1600, height: 1600 } as never })).id
   })
   // The family goes onto the plan with one colour set of three photos (the pop-up edits this set).
   await scoped(() => applyMediaPlanOps(ids.s, { address: SHARED, ops: [{ op: 'replace', set: 'value:color:black', assetIds: [img.front, img.back, img.side], expect: null }] }, null))
@@ -75,5 +82,24 @@ describe('the pop-up\'s one save', () => {
     expect(String(lost[0].reason?.message)).toMatch(/changed since your edit|at the same moment/)
     const winner = results[0].status === 'fulfilled' ? mine : theirs
     expect(await sharedSet('value:color:black')).toEqual(winner)
+  })
+})
+
+describe('the older gallery\'s one save (C2)', () => {
+  const context = { scope: 'MASTER', market: 'GLOBAL', locale: 'it' } as const
+  it('two pop-ups saving the same list at the same moment: one wins, the other is refused with the plain sentence', async () => {
+    const opened = await scoped(() => readProductMedia({ ...context, productId: ids.cap }))
+    const mine = [img['cap-side'], img['cap-front']], theirs = [img['cap-back']]
+    const body = (items: string[]) => ({ expectedRevision: opened.revision, collection: { version: 1, items: items.map(assetId => ({ assetId })) } })
+    const results = await Promise.allSettled([
+      scoped(() => saveProductMedia({ ...context, productId: ids.cap }, body(mine))),
+      scoped(() => saveProductMedia({ ...context, productId: ids.cap }, body(theirs))),
+    ])
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    const lost = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    expect(lost).toHaveLength(1)
+    expect(String(lost[0].reason?.message)).toMatch(/Media changed (since this editor opened|while saving)/)
+    const now = await scoped(() => readProductMedia({ ...context, productId: ids.cap }))
+    expect(now.collection.items.map(i => i.assetId)).toEqual(results[0].status === 'fulfilled' ? mine : theirs)
   })
 })

@@ -327,13 +327,14 @@ export function checks(read: MediaRead, base: PlanPopupBase, draft: PlanDraft): 
   const library = new Map(next.library.map(a => [a.id, a]))
   for (const id of draft.items) {
     const asset = library.get(card(id))
-    if (!asset) { add({ severity: 'error', message: 'A photo in this set was deleted from the library. Remove it or add it again.' }); continue }
+    if (!asset) { add({ severity: 'error', message: 'A photo in this set was deleted from the library. Take it out of the set, or add it again.' }); continue }
     for (const problem of assetProblems(asset)) add({ severity: problem === 'Size unknown' ? 'warning' : 'error', message: `${asset.label}: ${problemWords(problem)}` })
   }
   return out
 }
 
-function problemWords(problem: string) {
+/** A photo's own problem (`assetProblems`), as one plain sentence. */
+export function problemWords(problem: string) {
   if (problem === 'Not HTTPS') return 'not on a public HTTPS address — no channel accepts it.'
   if (problem === 'Size unknown') return 'size unknown — it cannot be checked.'
   if (/^\d+ px$/.test(problem)) return `${problem} — eBay and Amazon need 500 px on the longest side.`

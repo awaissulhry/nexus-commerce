@@ -11,11 +11,14 @@ import { Banner, MediaStrip, PressableRow } from '@/design-system/components'
 import { Button, Checkbox, SegmentedControl } from '@/design-system/primitives'
 
 import type { SaveReporter } from '../../products/[id]/edit/_studio/types'
-import { PlanMediaPopup, type AppliedCells } from '../../products/[id]/edit/_studio/media/MediaCellPopup'
+import type { ProductMediaQuery } from '@nexus/shared/product-media'
+import type { MediaStripItem } from '@/design-system/components'
+import { GalleryMediaPopup, PlanMediaPopup, type AppliedCells } from '../../products/[id]/edit/_studio/media/MediaCellPopup'
+import { galleryCell, galleryDraft } from '../../products/[id]/edit/_studio/media/galleryPopupModel'
 import { cellAfterSave, planBase, type PlanPopupBase } from '../../products/[id]/edit/_studio/media/mediaPopupModel'
 import type { PlanAddress } from '../../products/[id]/edit/_studio/media/planCellTransfer'
 import type { MediaRead } from '../../products/[id]/edit/_studio/images/plan-page/model'
-import { LAB_EBAY, LAB_PRODUCT, LAB_VARIANTS, installLabMedia, installLabPhotos, labRead, labSwitches, onLabChange, resetLab, type LabSwitches } from './mediaPopupFixture'
+import { LAB_CAP, LAB_EBAY, LAB_PRODUCT, LAB_VARIANTS, installLabMedia, installLabPhotos, labCapWorkspace, labRead, labSwitches, onLabChange, resetLab, type LabSwitches } from './mediaPopupFixture'
 
 installLabMedia()
 
@@ -36,6 +39,7 @@ export function MediaPopupLab() {
   const [canEdit, setCanEdit] = useState(true)
   const [open, setOpen] = useState<string | null>(null)
   const [overlay, setOverlay] = useState<Record<string, ReturnType<typeof cellAfterSave>>>({})
+  const [capOverlay, setCapOverlay] = useState<MediaStripItem[] | null>(null)
   const [notice, setNotice] = useState('')
   const [, redraw] = useState(0)
   const cells = useRef(new Map<string, HTMLDivElement | null>())
@@ -43,6 +47,9 @@ export function MediaPopupLab() {
   useEffect(() => onLabChange(() => { setRead(labRead()); redraw(n => n + 1) }), [])
 
   const address: PlanAddress = where === 'shared' ? { layer: 'SHARED' } : LAB_EBAY
+  const capContext: ProductMediaQuery = where === 'shared' ? { scope: 'MASTER', market: 'GLOBAL', locale: 'it' } : { scope: 'EBAY', market: 'IT', locale: 'it', accountId: 'lab-account', aliasKey: '' }
+  const capWorkspace = labCapWorkspace(capContext)
+  const capCell = capOverlay ?? galleryCell(capWorkspace, galleryDraft(capWorkspace))
   // Each cell as the sheet resolves it (the server's resolver), unless a save just showed it at once.
   const base = useMemo(() => planBase(read, { rowProductId: LAB_PRODUCT, address }), [read, where])
   const cellOf = (productId: string) => overlay[productId] ?? cellAfterSave(read, base, productId, 'it')
@@ -52,6 +59,7 @@ export function MediaPopupLab() {
     return { restore: () => setOverlay({}), done: () => undefined }
   }
   const openRow = ROWS.find(r => r.productId === open)
+  const capRow = useRef<HTMLDivElement | null>(null)
 
   return (
     <div style={{ display: 'grid', gap: 16, maxWidth: 760, padding: 24, color: 'var(--nds-text)' }}>
@@ -63,10 +71,10 @@ export function MediaPopupLab() {
       {ready === false && <Banner tone="warning">This browser cannot draw the lab&apos;s photos, so they show as unavailable. Everything else works.</Banner>}
       {notice && <Banner tone="neutral">{notice}</Banner>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-        <SegmentedControl ariaLabel="Sheet" value={where} onChange={value => { setWhere(value as Where); setOpen(null); setOverlay({}) }}
+        <SegmentedControl ariaLabel="Sheet" value={where} onChange={value => { setWhere(value as Where); setOpen(null); setOverlay({}); setCapOverlay(null) }}
           options={[{ value: 'shared', label: 'Shared sheet' }, { value: 'ebay', label: 'eBay IT listing' }]} />
         <Checkbox label="No photo editing permission" checked={!canEdit} onChange={event => setCanEdit(!event.target.checked)} />
-        <Button size="sm" variant="secondary" onClick={() => { resetLab(); setOverlay({}); setOpen(null) }}>Start again</Button>
+        <Button size="sm" variant="secondary" onClick={() => { resetLab(); setOverlay({}); setCapOverlay(null); setOpen(null) }}>Start again</Button>
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         {SWITCHES.map(s => <Checkbox key={s.key} label={s.label} checked={labSwitches[s.key]} onChange={event => { labSwitches[s.key] = event.target.checked; redraw(n => n + 1) }} />)}
@@ -81,6 +89,20 @@ export function MediaPopupLab() {
           </div>
         })}
       </div>}
+      {ready !== null && <>
+        <h2>A product not on the photo plan (its own list)</h2>
+        <div ref={capRow}>
+          <PressableRow label={`LAB-CAP · ${capWorkspace.hasOverride ? 'own list' : 'follows'}`} expanded={open === LAB_CAP} onClick={() => { setCapOverlay(null); setOpen(open === LAB_CAP ? null : LAB_CAP) }} stacked>
+            <MediaStrip items={capCell} label="Product media: LAB-CAP" limit={8} />
+          </PressableRow>
+        </div>
+      </>}
+      {open === LAB_CAP && <GalleryMediaPopup key={`cap:${where}`} productId={LAB_CAP} title="LAB-CAP" context={capContext}
+        contextLabel={where === 'shared' ? null : 'eBay IT · Lab eBay · Main listing'} channelLabel={where === 'shared' ? null : 'eBay'} canEdit={canEdit}
+        anchor={capRow.current} initial={capCell} reporter={reporter}
+        onApply={items => { setCapOverlay(items); return { restore: () => setCapOverlay(null), done: () => undefined } }}
+        onSaved={() => { setCapOverlay(null); setNotice('LAB-CAP: saved in the lab.') }} onClose={() => setOpen(null)}
+        onOpenMediaPage={() => setNotice('The Media page is not part of the lab.')} />}
       {openRow && <PlanMediaPopup key={`${openRow.productId}:${where}`} productId={openRow.productId} rowProductId={openRow.productId} title={openRow.sku}
         address={address} locale="it" canEdit={canEdit} anchor={cells.current.get(openRow.productId) ?? null}
         initial={cellOf(openRow.productId).items} onApply={onApply} reporter={reporter}

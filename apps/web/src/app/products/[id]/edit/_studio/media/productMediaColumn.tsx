@@ -1,15 +1,14 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CellAction, MediaStrip } from '@/design-system/components'
+import { CellAction, MediaStrip, type MediaStripItem } from '@/design-system/components'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import type { ColDef, GridApi, ICellRendererParams } from '@/design-system/grid'
 import { mediaLocaleSchema, type ProductMediaQuery } from '@nexus/shared/product-media'
 import { useSaveReporter, useStudioProduct, useStudioScope } from '../contracts'
 import type { SheetColumn } from '../sheet/master/types'
-import { ProductMediaDialog } from './ProductMediaDialog'
-import { PlanMediaPopup, type AppliedCells } from './MediaCellPopup'
+import { GalleryMediaPopup, PlanMediaPopup, type AppliedCells } from './MediaCellPopup'
 import { cellAfterSave, type PlanPopupBase } from './mediaPopupModel'
-import type { MediaRead } from '../images/plan-page/model'
+import { CHANNEL_LABEL, type MediaChannel, type MediaRead } from '../images/plan-page/model'
 import { planAddress } from './planCellTransfer'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import styles from './media.module.css'
@@ -35,6 +34,7 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   const [selected, setSelected] = useState<{ row: MediaRow; anchor: HTMLElement | null; api: GridApi | null } | null>(null)
   const dirty = useRef(false), busy = useRef(false)
   const canEdit = usePermission('products.images.edit')
+  // A pop-up with a change not yet saved (or a save on its way): switching scope or leaving the page asks first.
   const onDirtyChange = useCallback((value: boolean) => { dirty.current = value }, [])
   useEffect(() => scope.registerScopeChangeGuard(() => !dirty.current && !busy.current), [scope.registerScopeChangeGuard])
   const open = useCallback((row: MediaRow, anchor: HTMLElement | null, api?: GridApi | null) => setSelected({ row, anchor, api: api ?? null }), [])
@@ -45,7 +45,7 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   const context = contextFor(selected?.row)
   const actions = useMediaCellActions({ contextFor, canEdit, reporter, onSettled: onSaved, onBusyChange: value => { busy.current = value } })
   useEffect(() => {
-    const guard = (event: BeforeUnloadEvent) => { if (busy.current) { event.preventDefault(); event.returnValue = '' } }
+    const guard = (event: BeforeUnloadEvent) => { if (busy.current || dirty.current) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', guard); return () => window.removeEventListener('beforeunload', guard)
   }, [])
   // The photo plan changed (the Media page, another tab or person): the sheet refreshes this family's cells.
@@ -59,7 +59,8 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   })
   useEffect(() => () => { if (refreshTimer.current) window.clearTimeout(refreshTimer.current) }, [])
   const accountLabel = scope.accounts.find(account => account.id === scope.accountId)?.label
-  const contextLabel = [channel === 'MASTER' ? 'Shared product' : [channel, accountLabel, selected?.row.aliasId ? `Listing ${(selected.row.aliasPosition ?? 0) + 1}` : 'Primary listing'].filter(Boolean).join(' · '), context.market, context.locale === 'und' ? 'All languages' : context.locale].join(' · ')
+  const channelLabel = channel === 'MASTER' ? null : CHANNEL_LABEL[channel as MediaChannel] ?? channel
+  const contextLabel = channelLabel ? [`${channelLabel} ${context.market === 'GLOBAL' ? '' : context.market}`.trim(), accountLabel, selected?.row.aliasId ? `Listing ${(selected.row.aliasPosition ?? 0) + 1}` : 'Main listing'].filter(Boolean).join(' · ') : null
   const planTarget = selected?.row.productMediaSet ? planAddress(context) : null
   /** Enter in the plan pop-up: every row of this sheet's layer shows its new photos at once (all sizes of a colour). */
   const applyToCells = (next: MediaRead, base: PlanPopupBase): AppliedCells => {
@@ -82,6 +83,20 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
       done: () => { for (const t of touched) if (t.node.data) t.node.data.productMediaSaving = false; refresh() },
     }
   }
+  /** Enter in the gallery pop-up: the row's cell shows its new list at once. */
+  const applyToRow = (items: MediaStripItem[]): AppliedCells => {
+    const current = selected, api = current?.api
+    if (!current) return { restore: () => undefined, done: () => undefined }
+    const row = current.row, before = row.productMedia
+    let node: { data?: MediaRow } | null = null
+    api?.forEachNode(n => { if (n.data === row) node = n })
+    const refresh = () => { if (api && !api.isDestroyed() && node) api.refreshCells({ rowNodes: [node] as never, columns: [PRODUCT_MEDIA_COLUMN], force: true }) }
+    row.productMedia = items; row.productMediaSaving = true; refresh()
+    return {
+      restore: () => { row.productMedia = before; row.productMediaSaving = false; refresh() },
+      done: () => { row.productMediaSaving = false; refresh() },
+    }
+  }
   const closePlan = () => {
     const current = selected
     // Only this pop-up's own row: a late answer must never close a pop-up opened on another cell meanwhile.
@@ -99,10 +114,15 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   const planElement = selected?.row.productMediaSet
     ? <PlanMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} rowProductId={selected.row.productId ?? selected.row.id}
         title={selected.row.sku || selected.row.name || 'Product'} address={planTarget} locale={context.locale} canEdit={canEdit} anchor={selected.anchor}
-        initial={selected.row.productMedia ?? []} onApply={applyToCells} onSaved={onSaved} onClose={closePlan}
+        initial={selected.row.productMedia ?? []} onApply={applyToCells} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange}
         reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} />
     : undefined
-  return { open, actions, element: planElement !== undefined ? planElement : selected ? <ProductMediaDialog key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'} context={context} contextLabel={contextLabel} anchor={selected.anchor} onClose={() => setSelected(null)} onSaved={() => { actions.clearError(selected.row); onSaved() }} onDirtyChange={onDirtyChange} /> : null }
+  const galleryElement = selected && !selected.row.productMediaSet
+    ? <GalleryMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'}
+        context={context} contextLabel={contextLabel} channelLabel={channelLabel} canEdit={canEdit} anchor={selected.anchor} initial={selected.row.productMedia ?? []}
+        onApply={applyToRow} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} />
+    : null
+  return { open, actions, element: planElement ?? galleryElement }
 }
 
 /** AG owns fill/paste; a gallery edit opens the same editor from every native open gesture. */

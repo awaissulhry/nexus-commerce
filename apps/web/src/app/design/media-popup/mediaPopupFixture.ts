@@ -1,4 +1,5 @@
 import { applyMediaOps, MediaPlanEditError, mediaOpSchema, resolveSet, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
+import type { ProductMediaAsset, ProductMediaItem, ProductMediaQuery, ProductMediaWorkspace } from '@nexus/shared/product-media'
 import type { LibraryAsset, MediaDestinationRow, MediaRead, PlanLayer } from '../../products/[id]/edit/_studio/images/plan-page/model'
 
 /**
@@ -43,7 +44,31 @@ const listeners = new Set<() => void>()
 export function onLabChange(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn) } }
 const changed = () => listeners.forEach(fn => fn())
 
-export function resetLab() { library = [...START_LIBRARY]; layers = [{ key: 'SHARED', plan: START_SHARED, revision: 1 }]; uploads = 0; changed() }
+export function resetLab() { library = [...START_LIBRARY]; layers = [{ key: 'SHARED', plan: START_SHARED, revision: 1 }]; uploads = 0; capAssets = [...CAP_START]; capLists = { ...CAP_LISTS }; capRevision = 1; changed() }
+
+// ── A product NOT on the photo plan (the older gallery, C2): "Lab cap", its own list per language or listing ─────────
+export const LAB_CAP = 'lab-cap'
+const capFile = (name: string, hue: number, extra: Partial<ProductMediaAsset> = {}): ProductMediaAsset => ({ id: `cap-${name}`, type: 'IMAGE', url: `https://${LAB_PHOTO_HOST}/cap-${name}.svg?hue=${hue}`,
+  preview: `https://${LAB_PHOTO_HOST}/cap-${name}.svg?hue=${hue}`, alt: `cap ${name}`, width: 1600, height: 1600, fileSize: 150_000, ...extra })
+const CAP_START: ProductMediaAsset[] = [capFile('front', 340), capFile('back', 330), capFile('side', 350), capFile('label', 60, { width: 420, height: 300 }),
+  capFile('clip', 190, { type: 'VIDEO', url: `https://${LAB_PHOTO_HOST}/cap-clip.svg?hue=190`, preview: `https://${LAB_PHOTO_HOST}/cap-clip-poster.svg?hue=190`, alt: 'cap clip' })]
+const CAP_LISTS: Record<string, ProductMediaItem[]> = { 'MASTER|it': [{ assetId: 'cap-front' }, { assetId: 'cap-back', alt: 'Cap, back' }] }
+let capAssets = [...CAP_START]
+let capLists: Record<string, ProductMediaItem[] | undefined> = { ...CAP_LISTS }
+let capRevision = 1
+const hex = (n: number) => n.toString(16).padStart(64, '0')
+
+export function labCapWorkspace(context: ProductMediaQuery): ProductMediaWorkspace {
+  const own = capLists[`${context.scope}|${context.locale}`]
+  const shared = context.scope === 'MASTER' ? undefined : capLists[`MASTER|${context.locale}`]
+  const collection = { version: 1 as const, items: own ?? shared ?? capAssets.map(a => ({ assetId: a.id })) }
+  return { revision: hex(capRevision), productId: LAB_CAP, title: 'Lab cap', context, assets: capAssets, collection, hasOverride: !!own,
+    source: own ? 'locale' : shared ? 'shared' : 'library', missingAssetIds: [] }
+}
+function capContext(url: URL): ProductMediaQuery {
+  const q = Object.fromEntries(url.searchParams) as Record<string, string>
+  return { scope: q.scope, market: q.market, locale: q.locale, ...(q.accountId ? { accountId: q.accountId } : {}), ...(q.aliasKey !== undefined ? { aliasKey: q.aliasKey } : {}) }
+}
 
 export function labRead(): MediaRead {
   const destinations: MediaDestinationRow[] = [{ key: EBAY_KEY, channel: 'EBAY', marketplace: 'IT', markets: ['IT'], accountId: 'lab-account', accountLabel: 'Lab eBay',
@@ -90,10 +115,32 @@ export function installLabMedia() {
   const real = window.fetch.bind(window)
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, window.location.href)
-    if (!url.pathname.startsWith(`/api/products/${LAB_PRODUCT}`) && !LAB_VARIANTS.some(v => url.pathname.startsWith(`/api/products/${v.productId}/`))) return real(input, init)
+    const cap = url.pathname.startsWith(`/api/products/${LAB_CAP}/`)
+    if (!cap && !url.pathname.startsWith(`/api/products/${LAB_PRODUCT}`) && !LAB_VARIANTS.some(v => url.pathname.startsWith(`/api/products/${v.productId}/`))) return real(input, init)
     await new Promise(resolve => setTimeout(resolve, labSwitches.slow ? 1000 : 120))
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
     const method = (init?.method ?? 'GET').toUpperCase()
+    if (cap && url.pathname.endsWith('/product-media')) {
+      const context = capContext(url)
+      if (method === 'GET') return json(labCapWorkspace(context))
+      const body = JSON.parse(String(init?.body ?? '{}')) as { expectedRevision?: string; collection?: { items: ProductMediaItem[] } | null }
+      if (labSwitches.someoneElse) { labSwitches.someoneElse = false; const key = `${context.scope}|${context.locale}`; const list = labCapWorkspace(context).collection.items; capLists[key] = list.slice(0, -1); capRevision += 1 }
+      if (labSwitches.refuseNext) { labSwitches.refuseNext = false; changed(); return json({ error: 'Media changed while saving. Reload the gallery before retrying.' }, 409) }
+      if (body.expectedRevision !== hex(capRevision)) { changed(); return json({ error: 'Media changed since this editor opened. Reload the gallery before applying your changes.' }, 409) }
+      capLists[`${context.scope}|${context.locale}`] = body.collection ? body.collection.items : undefined
+      capRevision += 1
+      changed()
+      return json(labCapWorkspace(context))
+    }
+    if (cap && method === 'POST' && (url.pathname.endsWith('/images') || url.pathname.endsWith('/videos'))) {
+      if (labSwitches.nearDuplicate && url.pathname.endsWith('/images')) { labSwitches.nearDuplicate = false; changed(); return json({ error: 'NEAR_DUPLICATE', candidate: { id: 'cap-front', url: capAssets[0].url, alt: 'cap front' } }, 409) }
+      uploads += 1
+      const added = capFile(`upload-${uploads}`, 20 + uploads * 50, url.pathname.endsWith('/videos') ? { type: 'VIDEO' } : {})
+      capAssets = [...capAssets, added]
+      capRevision += 1
+      changed()
+      return json({ id: added.id }, 201)
+    }
     if (method === 'GET' && url.pathname.endsWith('/media')) return json(labRead())
     if (method === 'POST' && url.pathname.endsWith('/media/ops')) {
       const body = JSON.parse(String(init?.body ?? '{}')) as { address?: { layer?: string; channel?: string; marketplace?: string; accountId?: string; aliasKey?: string }; ops?: unknown[] }
