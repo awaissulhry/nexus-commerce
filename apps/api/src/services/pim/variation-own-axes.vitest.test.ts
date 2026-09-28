@@ -145,10 +145,39 @@ describe('the other channels', () => {
     expect(bad.axes.find(a => a.familyKey === NECK)!.unbound?.reason).toBe(VT_COPY.etsyOwnFromAttribute)
   })
 
-  it('Shopify: none offered and a stored one refused until P3b, so a publish can never drop it silently', () => {
+  it('Shopify (P3b, slice A4): a typed option name with values from a Shared attribute is BOUND and read like any axis', () => {
     const cell = resolveVariationProjection(input('SHOPIFY', { listing: mappedListing([{ axisKey: 'Colore', target: 'Color' }, { axisKey: FIT, target: 'Fit' }]) }))
-    expect(cell.ownNames).toEqual({ allowed: false, maxLength: 255, reason: VT_COPY.ownNotYet('Shopify') })
-    expect(cell.axes.find(a => a.familyKey === FIT)!.unbound?.reason).toBe(VT_COPY.ownNotYet('Shopify'))
+    expect(cell.ownNames).toEqual({ allowed: true, maxLength: 255, reason: null })
+    const fit = cell.axes.find(a => a.familyKey === FIT)!
+    expect(fit).toMatchObject({ channelName: 'Fit', target: 'Fit', included: true, own: { from: 'shared', field: 'fit', custom: true } })
+    expect(fit.unbound).toBeUndefined()
+    // the generic readers see it: its values in the cell's summary…
+    expect(cell.valueSummary![FIT]).toEqual({ values: ['Slim', 'Regular'], filled: 4, of: 4 })
+    // …and in the collision check: Size + Fit tells all four apart; unread (blank) Fit values would leave Size alone,
+    // where S and M each come twice (4 colliding variants) — the discriminating arm.
+    const sizeFit = resolveVariationProjection(input('SHOPIFY', { listing: mappedListing([{ axisKey: 'Taglia', target: 'Size' }, { axisKey: FIT, target: 'Fit' }]) }))
+    expect(sizeFit.collisions!.unresolved).toBe(0)
+    const sizeOnly = resolveVariationProjection(input('SHOPIFY', { listing: mappedListing([{ axisKey: 'Taglia', target: 'Size' }]) }))
+    expect(sizeOnly.collisions!.unresolved).toBe(4)
+    // no "only on Shopify" list exists: Shopify has no option catalogue of its own
+    expect(cell.ownCandidates).toEqual([])
+  })
+
+  it('Shopify: a channel column source and a name over 255 are refused with their reason (an empty name is never stored)', () => {
+    const at = (entries: Array<{ axisKey: string; target: string }>, key: string) =>
+      resolveVariationProjection(input('SHOPIFY', { listing: mappedListing(entries) })).axes.find(a => a.familyKey === key)!
+    expect(at([{ axisKey: NECK, target: 'Neckline' }], NECK).unbound?.reason).toBe(VT_COPY.shopifyOwnFromAttribute)
+    expect(at([{ axisKey: FIT, target: 'x'.repeat(256) }], FIT).unbound?.reason).toBe(VT_COPY.ownNameTooLong('Shopify', 'option', 255))
+    expect(at([{ axisKey: FIT, target: 'x'.repeat(255) }], FIT).unbound).toBeUndefined()
+  })
+
+  it('Shopify: an own option counts toward the 3-option limit — a 4th delivered option is dropped by the limit', () => {
+    const LINING = ownAxisKey({ from: 'shared', field: 'lining' })
+    const cell = resolveVariationProjection(input('SHOPIFY', { listing: mappedListing([
+      { axisKey: 'Colore', target: 'Color' }, { axisKey: 'Taglia', target: 'Size' }, { axisKey: FIT, target: 'Fit' }, { axisKey: LINING, target: 'Lining' },
+    ]) }))
+    expect(cell.axes.filter(a => a.included).map(a => a.channelName)).toEqual(['Color', 'Size', 'Fit'])
+    expect(cell.dropped).toContain(LINING)
   })
 
   it('Amazon: the theme decides — no own names, and a stored channel-only key is not read as a theme segment', () => {

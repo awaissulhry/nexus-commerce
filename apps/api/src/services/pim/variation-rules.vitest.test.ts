@@ -735,10 +735,17 @@ describe('VT.1b item 3 (VT.4) — ONE definition of locked', () => {
     expect(lock!.externalId).toBe('B0FXD0620C')
   })
 
-  it('eBay says relist and allows a reorder; Shopify says in place', () => {
+  it('eBay says relist and allows a reorder; Shopify says in place and — P3b A4, the Owner\'s D1 a — holds the order too', () => {
     const live = listing({ externalListingId: '938554736087', listingStatus: 'ACTIVE' })
     expect(variationLockFor({ coordinate: { channel: 'EBAY', market: 'IT' }, family, listing: live })).toMatchObject({ setChangeIs: 'relist', orderChangeAllowed: true })
-    expect(variationLockFor({ coordinate: { channel: 'SHOPIFY', market: 'GLOBAL' }, family, listing: live })).toMatchObject({ setChangeIs: 'in-place', orderChangeAllowed: true })
+    // Nexus has no Shopify option update call and refuses change-only publishing to an existing product, so a saved order
+    // could never reach the store: the lock says so, and the save refuses an order-only change with this sentence.
+    expect(variationLockFor({ coordinate: { channel: 'SHOPIFY', market: 'GLOBAL' }, family, listing: live })).toMatchObject({
+      setChangeIs: 'in-place', orderChangeAllowed: false,
+      reason: 'Live on Shopify GLOBAL (938554736087). Nexus cannot change the options of a product already on Shopify yet, so its options and their order are locked here.',
+    })
+    // Etsy and other channels keep their lock as it was (positive control: this arm is not a blanket change)
+    expect(variationLockFor({ coordinate: { channel: 'ETSY', market: 'GLOBAL' }, family, listing: live })).toMatchObject({ setChangeIs: 'relist', orderChangeAllowed: false, reason: VT_COPY.genericLock('Etsy', 'GLOBAL', '938554736087') })
   })
 })
 

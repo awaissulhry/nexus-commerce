@@ -122,15 +122,30 @@ export function ownAxisKeyFor(from: 'channel' | 'shared', field: string): string
 }
 
 /**
- * Does this cell open the channel layout (A2)? A channel coordinate that is not Amazon (whose theme decides) and not
- * Shopify (its own options arrive with P3b, tested in its lab). Master and the Variants dock keep their own layouts.
+ * Does this cell open the channel layout (A2)? A channel coordinate that is not Amazon (whose theme decides): eBay, Etsy
+ * and — since A4 (QUALITY-PLAN §4.11) — Shopify, whose option names are free text. Master and the Variants dock keep their
+ * own layouts.
  */
 export function usesChannelAxesLayout(cell: VariationThemeCell): boolean {
   const channel = cell.write?.coordinate.channel ?? null
   if (!channel || cell.masterCandidates) return false
   if (cell.candidates?.kind === 'theme-enum') return false
   const upper = channel.toUpperCase()
-  return upper === 'EBAY' || upper === 'ETSY'
+  return upper === 'EBAY' || upper === 'ETSY' || upper === 'SHOPIFY'
+}
+
+/**
+ * A4 — why a row's typed channel name (Shopify's free option name) cannot be saved, or null: empty, too long, or the same
+ * as another delivered row's name. Said under the row while typing; the save refuses in its own words behind it.
+ */
+export function freeNameRefusal(cell: VariationThemeCell, axis: VariationThemeAxis, channelWord: string): string | null {
+  const name = (axis.target ?? '').trim()
+  const noun = cell.vocabulary.axisNoun
+  if (!name) return CHANNEL_AXES_COPY.nameMissing(noun)
+  const max = cell.ownNames?.maxLength ?? null
+  if (max !== null && name.length > max) return CHANNEL_AXES_COPY.nameTooLong(channelWord, noun, max)
+  const same = cell.axes.some((a) => a.included && a.axisKey !== axis.axisKey && (a.target ?? a.channelName).trim().toLocaleLowerCase() === name.toLocaleLowerCase())
+  return same ? CHANNEL_AXES_COPY.duplicate : null
 }
 
 /** Where a row's axis comes from, in one short line. */

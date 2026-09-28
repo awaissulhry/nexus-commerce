@@ -1869,6 +1869,10 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-axes-chead > :last-child { margin-left: auto; flex: none; }
 .nds-axes-cname { flex: 1 1 auto; font-weight: var(--nds-font-weight-semibold); font-size: var(--nds-font-size-base); color: var(--nds-text); min-width: 0; overflow-wrap: anywhere; }
 .nds-axes-chead > .nds-listbox { flex: 1 1 auto; min-width: 0; }
+/* A4 — Shopify's free option name takes the same room as eBay's name list. */
+.nds-axes-chead > .nds-field { flex: 1 1 auto; min-width: 0; }
+/* …and its text field shrinks with it (its intrinsic 20-character width pushed the row's ↑ / ↓ out of a narrow pop-up). */
+.nds-axes-chead > .nds-field input { min-width: 0; width: 100%; }
 .nds-axes-origin { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); min-width: 0; overflow-wrap: anywhere; }
 .nds-axes-gap { font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); }
 .nds-axes-unbound { padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-md); background: var(--nds-danger-soft); color: var(--nds-danger-text); font-size: var(--nds-font-size-sm); }

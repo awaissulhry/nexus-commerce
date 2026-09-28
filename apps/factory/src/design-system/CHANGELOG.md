@@ -1,3 +1,7 @@
+## Variation theme pop-up on Shopify — 2026-09-28
+
+Mirrored from web. The channel layout on Shopify: free option names (`freeNameRefusal`), own options, the live-product lock; `.nds-axes-chead > .nds-field` (+ its input shrinks); a cell panel outside AG's popup layer does not take focus on load.
+
 ## Variation theme pop-up on a channel: "New attribute" — 2026-09-28
 
 Mirrored from web. `NewOwnAttribute` (say first, then Create; Use it for an existing attribute; held with its reason), `createOwnAxisAttribute` editor param, `OwnAxisSourcesLoader` answers `{ sources, newAttribute }`, `.nds-axes-newattr`.

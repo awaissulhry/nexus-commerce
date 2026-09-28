@@ -213,11 +213,13 @@ describe('two hosts, one panel', () => {
     expect(dock).toContain('nds-axes-dockname')
     expect(dock).toContain('nds-axes-arrow')
     expect(dock).not.toContain('type="checkbox"')
-    /* P3 A2: the SHEET's eBay cell is the channel layout — an axis leaves with ×, and a Shared one waits in "+ Add". The
-       include checkbox stays where that layout does not apply: Shopify's and Amazon's cell. */
+    /* P3 A2: the SHEET's eBay cell is the channel layout — an axis leaves with ×, and a Shared one waits in "+ Add". A4 gave
+       Shopify's cell the same layout; the include checkbox stays where it does not apply: Amazon's cell. */
     expect(cell).not.toContain('type="checkbox"')
     expect(cell).toContain('nds-axes-crow')
-    expect(panel(GALE_SHOPIFY_DROPPED, 'cell')).toContain('type="checkbox"')
+    expect(panel(GALE_SHOPIFY_DROPPED, 'cell')).toContain('nds-axes-crow')
+    expect(panel(GALE_SHOPIFY_DROPPED, 'cell')).not.toContain('type="checkbox"')
+    expect(panel(GALE_AMAZON_DE_DERIVED, 'cell')).toContain('type="checkbox"')
   })
 
   it('renders the dock own footer node when the dock gives it one (`Save mapping` stays)', () => {
@@ -566,8 +568,9 @@ describe('VT.2c — the per-axis lock ON SCREEN, in both hosts', () => {
   })
 
   it('fixes the locked axis CHECKBOX in the cell host — a locked axis cannot be dropped either', () => {
-    /* The checkbox rows are the Shopify / Amazon cell's (P3 A2 gave the eBay cell its own layout, tested below). */
-    const out = panel({ ...locked, write: { ...locked.write!, coordinate: { ...locked.write!.coordinate, channel: 'SHOPIFY' } } }, 'cell')
+    /* The checkbox rows are the Amazon cell's (P3 A2 gave eBay and Etsy their own layout, A4 Shopify; an Amazon coordinate
+       whose schema could not be read keeps the aspect rows, so this is a real cell). */
+    const out = panel({ ...locked, write: { ...locked.write!, coordinate: { ...locked.write!.coordinate, channel: 'AMAZON' } } }, 'cell')
     const boxes = out.match(/<input type="checkbox"[^>]*>/g) ?? []
     expect(boxes).toHaveLength(2)
     expect(boxes[0]).toContain('disabled')
@@ -846,8 +849,10 @@ it('held inclusion checkboxes keep their focus and the theme refusal; an editabl
     expect(input).toContain('aria-disabled="true"')
     expect(input).toContain('aria-description=')
   }
-  const editable = [...panel(GALE_SHOPIFY_DROPPED).matchAll(/<input\b[^>]*type="checkbox"[^>]*>/g)].map(m => m[0])
-  expect(editable.some(input => !input.includes('aria-disabled="true"'))).toBe(true)
+  /* A4: Shopify's cell has no checkbox any more; its editable control is each option's name box. */
+  const editable = [...panel(GALE_SHOPIFY_DROPPED).matchAll(/<input\b[^>]*aria-label="The Shopify option for [^"]*"[^>]*>/g)].map(m => m[0])
+  expect(editable.length).toBeGreaterThan(0)
+  expect(editable.some(input => !input.includes('disabled'))).toBe(true)
 })
 
 /* ── Sheet pop-up P3 A2 — the channel layout (the sheet's eBay / Etsy cell) ────────────────────────────────────────── */
@@ -907,7 +912,9 @@ describe('P3 A2 — the channel layout', () => {
 
   it('the sheet cell editor opens the channel layout in the wider `media` box; the dock keeps its own rows', () => {
     expect(editor(OPEN)).toContain('width:480px')
-    expect(editor(GALE_SHOPIFY_DROPPED)).toContain('width:420px')
+    /* A4: Shopify opens the channel layout too; Amazon keeps its theme panel in the `axes` box. */
+    expect(editor(GALE_SHOPIFY_DROPPED)).toContain('width:480px')
+    expect(editor(GALE_AMAZON_DE_DERIVED)).toContain('width:420px')
     expect(panel(OPEN, 'dock')).not.toContain('nds-axes-crow')
   })
 
@@ -937,6 +944,57 @@ describe('P3 A2 — the channel layout', () => {
     const movableChips = [...movable.matchAll(/<li\b[^>]*class="nds-mchip[^"]*"[^>]*>/g)].map((m) => m[0])
     expect(movableChips).toHaveLength(2)
     for (const chip of movableChips) expect(chip).toContain('tabindex="0"')
+  })
+})
+
+/* ── Sheet pop-up P3 A4 — the Shopify cell in the channel layout (QUALITY-PLAN §4.11) ───────────────────────────────── */
+
+describe('P3 A4 — Shopify options in the channel layout', () => {
+  /** GALE Shopify · GLOBAL with an own option ("Fit", values from a made-up Shared attribute), as the server serves it. */
+  const SHOP: VariationThemeCell = {
+    ...GALE_SHOPIFY_DROPPED,
+    ownNames: { allowed: true, maxLength: 255, reason: null },
+    axes: [
+      ...GALE_SHOPIFY_DROPPED.axes,
+      { axisKey: 'own:shared:fit', familyKey: 'own:shared:fit', label: 'Fit', channelName: 'Fit', target: 'Fit', included: true, own: { from: 'shared', field: 'fit', custom: true } },
+    ],
+    valueSummary: { 'own:shared:fit': { values: ['Slim'], filled: 1, of: 2 } },
+  }
+  const LIVE = 'Live on Shopify GLOBAL (made-up-id). Nexus cannot change the options of a product already on Shopify yet, so its options and their order are locked here.'
+
+  it('every option — Shared or own — has a free name box and says where it comes from; no search-filter line, no "Only on" group', () => {
+    const out = panel(SHOP)
+    for (const name of ['Color', 'Size', 'Fit']) expect(out).toMatch(new RegExp(`<input maxLength="255" aria-label="The Shopify option for ${name}" value="${name}"/>`))
+    expect(out).toContain('from Shared: Color')
+    expect(out).toContain('your name · values from fit')
+    expect(out).not.toContain('search filters')
+    expect(out).toContain('1 variant empty · Fill fit on the Shared product.')
+    /* three of three: "+ Add" is held with the channel's own cap sentence, never a dead button */
+    expect(out).toContain('3 of 3')
+    expect(out).toContain(AXES_EDITOR_COPY.atLimit('Shopify', 3, 'options'))
+  })
+
+  it('an empty name or another option\'s name is said under its row while typing', () => {
+    const dup = panel({ ...SHOP, axes: SHOP.axes.map((a) => (a.axisKey === 'own:shared:fit' ? { ...a, target: 'color' } : a)) })
+    expect(dup).toContain(`class="nds-axes-unbound" role="alert">${CHANNEL_AXES_COPY.duplicate}</span>`)
+    const empty = panel({ ...SHOP, axes: SHOP.axes.map((a) => (a.axisKey === 'own:shared:fit' ? { ...a, target: '' } : a)) })
+    expect(empty).toContain(`role="alert">Name this option.</span>`)
+    expect(panel(SHOP)).not.toContain('class="nds-axes-unbound" role="alert"')
+  })
+
+  it('🔴 D1 — a product already on Shopify: every name box, every × and the order are held with the server\'s sentence', () => {
+    const out = panel({ ...SHOP, locked: { reason: LIVE, externalId: 'made-up-id', setChangeIs: 'in-place', orderChangeAllowed: false } })
+    const boxes = [...out.matchAll(/<input\b[^>]*maxLength="255"[^>]*>/g)].map((m) => m[0])
+    expect(boxes).toHaveLength(3)
+    for (const box of boxes) { expect(box).toContain('disabled') ; expect(box).toContain(LIVE) }
+    expect(out).toContain(`${LIVE}</span>`)
+    expect(out).toContain(CHANNEL_AXES_COPY.setLockedShort)
+    /* the grips: every ↑ / ↓ is disabled, so nothing is saved that cannot reach Shopify */
+    const moves = [...out.matchAll(/<button type="button"[^>]*aria-label="Move [^"]*"[^>]*>/g)].map((m) => m[0])
+    expect(moves.length).toBeGreaterThan(0)
+    for (const move of moves) expect(move).toContain('disabled')
+    /* and no name refusal is shown on a held row */
+    expect(out).not.toContain('class="nds-axes-unbound" role="alert"')
   })
 })
 

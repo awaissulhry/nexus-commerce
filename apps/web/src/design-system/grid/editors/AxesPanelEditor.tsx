@@ -56,7 +56,7 @@ import { editorBox } from './editorBox'
 import { variationThemeChange } from './sheetWriter'
 import { axisRemovalRefusal, familyAxisFor, filterVariants, orderValues, valueOrderAfterDrag, type VariationFamilyLoader, type VariationFamilyState } from './variationFamily'
 import {
-  CHANNEL_AXES_COPY, channelAxisGapHint, channelAxisOrigin, channelAxisValues, channelSetChangeHeld, newAttributeDoneLine, newAttributeHeld,
+  CHANNEL_AXES_COPY, channelAxisGapHint, channelAxisOrigin, channelAxisValues, channelSetChangeHeld, freeNameRefusal, newAttributeDoneLine, newAttributeHeld,
   ownNameRefusal, remainingOwnCandidates, remainingSharedAxes, usesChannelAxesLayout, withOwnAxisSource, withOwnChannelAxis, withOwnSharedAxis,
   withSharedAxis, withoutAxis,
   type NewAttributeState, type OwnAxisAttributeCreator, type OwnAxisAttributeResult, type OwnAxisSourcesLoader, type OwnAxisSourcesState,
@@ -488,6 +488,9 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
     if (host !== 'cell') return
     const el = root.current
     if (!el) return
+    /* A cell panel outside AG's popup layer (the design-system catalog) never takes the page's focus on load (A4: the
+       Shopify catalog example made the catalog page jump to it). In the sheet the popup is always its ancestor here. */
+    if (!agPopupHostOf(el)) return
     const first = el.querySelector<HTMLElement>('input, button, [tabindex]:not([tabindex="-1"])')
     ;(first ?? el).focus()
   }, [host])
@@ -521,7 +524,9 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
    */
   const [draftStamp, setDraftStamp] = useState(0)
   useEffect(() => {
-    if (host !== 'cell') return
+    /* Only inside AG's popup layer: a cell panel shown anywhere else (the design-system catalog) never takes the page's
+       focus on load (A4, measured while adding the Shopify catalog example). */
+    if (host !== 'cell' || !popupHost) return
     const el = root.current
     if (!el || typeof document === 'undefined') return
     const active = document.activeElement
@@ -772,7 +777,18 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
         onChange={(v) => { setRefusal(null); retarget(a, v) }}
         ariaLabel={held ? AXES_EDITOR_COPY.targetLockedAria(channelWord, noun, a.label, a.target ?? '', held) : AXES_EDITOR_COPY.targetAria(channelWord, noun, a.label)}
       />
+    ) : draft.candidates?.kind === 'free' ? (
+      /* A4 — Shopify: every option's name is free text (Shared and own alike), held with the lock like every set change. */
+      <Input
+        size="sm"
+        value={a.target ?? ''}
+        maxLength={draft.ownNames?.maxLength ?? 255}
+        disabled={!!held}
+        onChange={(e) => { setRefusal(null); retarget(a, e.target.value) }}
+        aria-label={held ? AXES_EDITOR_COPY.targetLockedAria(channelWord, noun, a.label, a.target ?? '', held) : AXES_EDITOR_COPY.targetAria(channelWord, noun, a.label)}
+      />
     ) : <span className="nds-axes-cname">{a.channelName}</span>
+    const nameRefusal = draft.candidates?.kind === 'free' && !held ? freeNameRefusal(draft, a, channelWord) : null
     const remove = () => {
       if (held) { setRefusal(held); return }
       setRefusal(null)
@@ -792,6 +808,7 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
         )}
         {facts && facts.empty > 0 && <span className="nds-axes-gap">{CHANNEL_AXES_COPY.empty(facts.empty)} · {channelAxisGapHint(a, sources)}</span>}
         {a.unbound && <span className="nds-axes-unbound">{a.unbound.reason}</span>}
+        {nameRefusal && <span className="nds-axes-unbound" role="alert">{nameRefusal}</span>}
       </span>
     )
   }
