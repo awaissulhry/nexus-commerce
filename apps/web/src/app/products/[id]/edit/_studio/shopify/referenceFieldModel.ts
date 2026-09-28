@@ -92,6 +92,9 @@ export function referenceUiFor(def: Pick<ShopifyFieldDefinition, 'type' | 'valid
   return 'legacy'
 }
 
+/** The chip line's prompt: "Add color", "Add press quote" — a name in capitals ("FAQ") keeps them ("Add FAQ"). */
+export const addPrompt = (name: string) => `Add ${/^[A-Z][a-z]/.test(name) ? name[0].toLowerCase() + name.slice(1) : name}`
+
 /** The words for one / many of a reference field's items — the one shared list (`@nexus/shared` `shopifyNoun`). */
 export const referenceNoun = (type: string) => shopifyNoun(type)
 
