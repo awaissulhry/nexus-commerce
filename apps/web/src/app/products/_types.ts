@@ -26,6 +26,8 @@ export type ProductRow = {
   fbmStock?: number
   /** Shared stock step 5 — the pool this product sells from (a parent: its pooled variations), or null. */
   poolSource?: { lenderName: string; available: number; products?: number } | null
+  /** Sharing studio step 2 — the business this product follows, and the businesses that follow it; null for an own product. */
+  sharing?: { following: { businessName: string } | null; sharedWith: string[] } | null
   /**
    * W2.12 — ProductFamily attached via Product.familyId. Null when
    * the row hasn't been categorised yet (the legacy categoryAttributes

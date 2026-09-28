@@ -281,6 +281,58 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(after.fields.find((f) => f.key === 'description')?.state).toBe('follow')
   }, 60_000)
 
+  it('4b. one product\'s sharing, read from each business (the studio page), and the products grid\'s Source column and filter', async () => {
+    const sharing = await import('./product-sharing.service.js')
+    // B follows: where it comes from, each field in words, its own stock.
+    const followed = await as(B, user.ownerB, () => sharing.productSharing(product['b:JKT']))
+    expect(followed.following?.link).toMatchObject({ id: link.JKT, sourceBusiness: 'Business A', status: 'active' })
+    const description = followed.following?.fields.find((f) => f.key === 'description')
+    expect(description).toMatchObject({ state: 'follow', locale: null })
+    expect(description?.label.length).toBeGreaterThan(0)
+    expect(followed.following?.fields.find((f) => f.key === 'sku')).toMatchObject({ label: 'SKU', group: 'Product' })
+    expect(followed.stock).toEqual({ source: { kind: 'own' }, lentTo: [] })
+
+    // A shares: the assortment that holds it, and what B does with it — for the parent and for a variation.
+    const shared = await as(A, user.ownerA, () => sharing.productSharing(product.parent))
+    expect(shared.following).toBeNull()
+    expect(shared.sharedOut.assortments).toEqual([expect.objectContaining({ holds: true, openShares: 1 })])
+    expect(shared.sharedOut.businesses).toEqual([expect.objectContaining({ businessName: 'Business B', shareStatus: 'active', copy: 'following', heldSku: null })])
+    const variation = await as(A, user.ownerA, () => sharing.productSharing(product.medium))
+    expect(variation.product).toMatchObject({ isVariation: true, rootId: product.parent })
+    expect(variation.sharedOut.businesses).toEqual([expect.objectContaining({ businessName: 'Business B', copy: 'following' })])
+
+    // Add and take out, whatever the assortment's rule — on assortments nobody is offered, so no link moves.
+    const list = await as(A, user.ownerA, () => assortments.createAssortment({ name: 'Studio list', selection: 'list' }))
+    const every = await as(A, user.ownerA, () => assortments.createAssortment({ name: 'Studio every', selection: 'all' }))
+    const holds = async (id: string) => (await as(A, user.ownerA, () => sharing.productSharing(product.medium))).sharedOut.assortments.find((a) => a.id === id)?.holds
+    expect([await holds(list.id), await holds(every.id)]).toEqual([false, true])
+    // A variation is written as its main product.
+    const added = await as(A, user.ownerA, () => sharing.setProductInAssortment(list.id, { productId: product.medium, holds: true, expectedVersion: list.version }))
+    const leftOut = await as(A, user.ownerA, () => sharing.setProductInAssortment(every.id, { productId: product.parent, holds: false, expectedVersion: every.version }))
+    expect([await holds(list.id), await holds(every.id)]).toEqual([true, false])
+    expect(await sql(`SELECT "productId", mode FROM "AssortmentMember" WHERE "assortmentId" = ANY($1) ORDER BY mode`, [[list.id, every.id]]))
+      .toEqual([{ productId: product.parent, mode: 'exclude' }, { productId: product.parent, mode: 'include' }])
+    await as(A, user.ownerA, () => sharing.setProductInAssortment(list.id, { productId: product.parent, holds: false, expectedVersion: added.version }))
+    await as(A, user.ownerA, () => sharing.setProductInAssortment(every.id, { productId: product.parent, holds: true, expectedVersion: leftOut.version }))
+    expect([await holds(list.id), await holds(every.id)]).toEqual([false, true])
+    await expect(as(A, user.ownerA, () => sharing.setProductInAssortment(list.id, { productId: product.parent, holds: true, expectedVersion: list.version })))
+      .rejects.toMatchObject({ code: 'assortment_changed' })
+    await expect(as(B, user.ownerB, () => sharing.setProductInAssortment(list.id, { productId: product['b:JKT'], holds: true, expectedVersion: 3 })))
+      .rejects.toMatchObject({ code: 'assortment_not_found' })
+    for (const id of [list.id, every.id]) await sql(`DELETE FROM "Assortment" WHERE id = $1`, [id])
+
+    // The grid: each side sees its own fact, and the Source filter narrows by it.
+    expect((await as(A, user.ownerA, () => sharing.sharingByProducts([product.parent]))).get(product.parent)).toEqual({ following: null, sharedWith: ['Business B'] })
+    expect((await as(B, user.ownerB, () => sharing.sharingByProducts([product['b:JKT']]))).get(product['b:JKT'])).toEqual({ following: { businessName: 'Business A' }, sharedWith: [] })
+    const following = await as(B, user.ownerB, () => sharing.sharingSourceCondition(['following'])) as { id: { in: string[] } }
+    expect(following.id.in).toContain(product['b:JKT'])
+    const own = await as(B, user.ownerB, () => sharing.sharingSourceCondition(['own'])) as { id: { notIn: string[] } }
+    expect(own.id.notIn).toContain(product['b:JKT'])
+    const out = await as(A, user.ownerA, () => sharing.sharingSourceCondition(['shared'])) as { id: { in: string[] } }
+    expect(out.id.in).toContain(product.parent)
+    expect(await as(A, user.ownerA, () => sharing.sharingSourceCondition(['own', 'following', 'shared']))).toBeNull()
+  }, 60_000)
+
   it('5. images: a new source image is copied, a new alt text reaches the copy, a removed image removes the copy; B\'s own image change makes media an override', async () => {
     const bJacket = product['b:JKT']
     const uploads = storage.uploads.length

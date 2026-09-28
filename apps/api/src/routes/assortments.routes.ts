@@ -21,6 +21,7 @@ import { followerDecision, listShares, offerShare, ownerAction } from '../servic
 import { isFollowerDecision, isOwnerAction } from '../services/assortment/share-rules.js'
 import { previewCopy } from '../services/assortment/copy-preview.service.js'
 import { advanceCopyRun, confirmCopy, getCopyRun, listCopyRuns } from '../services/assortment/copy-run.service.js'
+import { productSharing, setProductInAssortment } from '../services/assortment/product-sharing.service.js'
 import { catalogLinkState } from '../services/assortment/sync.service.js'
 import { followAgain, resyncShare } from '../services/assortment/sync-worker.js'
 
@@ -54,6 +55,18 @@ const assortmentsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Params: { id: string }; Body: Body }>('/assortments/:id/members/remove', async (request, reply) =>
     respond(reply, async () => ({ success: true, ...(await removeMembers(request.params.id, request.body ?? {})) })),
+  )
+
+  // Sharing studio step 2 — one product in or out of an assortment, whatever the assortment's rule (list or
+  // "every product"). The product studio's "Other businesses" page. Writes at products.edit (/api/assortments).
+  fastify.post<{ Params: { id: string }; Body: Body }>('/assortments/:id/product', async (request, reply) =>
+    respond(reply, async () => ({ success: true, ...(await setProductInAssortment(request.params.id, request.body ?? {})) })),
+  )
+
+  // Sharing studio step 2 — one product's sharing on both sides of the wall, and its stock source. Reads at
+  // products.view (/api/products).
+  fastify.get<{ Params: { id: string } }>('/products/:id/sharing', async (request, reply) =>
+    respond(reply, async () => ({ success: true, sharing: await productSharing(request.params.id) })),
   )
 
   // ── Shares ────────────────────────────────────────────────────────────────

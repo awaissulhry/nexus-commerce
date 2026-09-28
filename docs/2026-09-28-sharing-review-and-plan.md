@@ -1,8 +1,8 @@
 # Sharing between businesses — review and plan
 
 Date: 2026-09-28
-Status: **APPROVED 2026-09-28** (D-1 A, D-2 A, reading confirmed, "yes, start"). **Step 1 BUILT and tested
-locally (§9).** Nothing pushed. Branch `feat/sharing-studio`, worktree `/private/tmp/nexus-sharing-studio`.
+Status: **APPROVED 2026-09-28** (D-1 A, D-2 A, reading confirmed, "yes, start"). **Steps 1 and 2 BUILT and tested
+locally (§9, §10).** Nothing pushed. Branch `feat/sharing-studio`, worktree `/private/tmp/nexus-sharing-studio`.
 Builds on: `docs/2026-09-16-assortment-engine-plan.md` (AE), `docs/2026-09-19-shared-stock-plan.md`.
 The review facts were read from `origin/main` (c520befc5).
 
@@ -10,6 +10,7 @@ The review facts were read from `origin/main` (c520befc5).
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-28 | R-SH-2 | Step 2: "Go ahead." |
 | 2026-09-28 | R-SH-1 | D-1 **A** (Settings keeps the deal; a studio page per product), D-2 **A** (copy the layout once as drafts), the reading of "no multiple aliases" is right, and "yes, start". |
 
 ## Summary
@@ -204,4 +205,43 @@ to the new shapes); all 59 static gates; the real-PostgreSQL runner (see the fin
   pauses every account. A button needs the Owner's word.
 - The stock preview's new names were checked by tests, not yet on screen. Step 2's browser check covers it (it needs
   a share, a copy and a grant on the local copy).
+
+## 10. Step 2 — build record (2026-09-28)
+
+**The studio page "Other businesses"** (`…/edit/studio?tab=sharing`, in THIS PRODUCT after Media, every scope):
+- *Comes from another business:* where the product comes from, how it was linked, when it was last updated, a waiting
+  SKU and sync errors. The fields this business keeps are listed with **Follow again** (one or all). The fields that
+  follow sit behind one button ("Show 220 followed fields"): 220 rows of "Follows" hid the rest of the page.
+- *Shared with other businesses:* the assortments of this business, whether each holds the product (a variation
+  through its main product), **Add / Take out** (list) or **Leave out / Put back** ("every product"), and each other
+  business's copy (follows, SKU waiting, not copied yet, offer not answered, stopped). Taking it out of an offered
+  assortment asks first with the DS `ActionConfirm`, naming each business and what it keeps.
+- *Stock:* own stock or the lender's pool (`PoolSourceNote`), and the businesses selling from this business's stock.
+- A person without "Edit products" sees every fact and a sentence saying why there is no button.
+
+**API:** `GET /api/products/:id/sharing`, `POST /api/assortments/:id/product` (service `product-sharing.service.ts`).
+**Products grid:** a **Source** column ("Follows <business>", "Shared with <business>"; empty for an own product; the
+mark opens the page) and its filter (Own / Follows another business / Shared with other businesses), server-side on
+both the live and the cached list.
+**Settings › Shared products:** the Tailwind `grow` is gone (a layout class), the product search uses the page's API
+helper. The headings stay: they match the profile manager page they sit beside.
+
+**Proof:**
+- `sync.vitest.test.ts` 4b (real PostgreSQL): the page's data from both businesses, add / take out on both kinds of
+  assortment, a stale version refused, another business's assortment refused, the grid facts and filter conditions.
+- `sharingWords.vitest.test.ts` (10): every sentence, and the take-out confirmation passes the DS `validateImpact` rules.
+- On the local copy with profiles ON, through the real screens: the share was accepted and 7 products copied in
+  Settings; in the receiving business the page showed the link, a field changed there showed as kept, **Follow again**
+  moved it back to following; in the sharing business the page showed the assortment, the other business and its copy;
+  **Take out** asked first, Escape closed it and focus went back to the button; the grid's Source column and filter
+  answered correctly in both businesses; the mark opened the page.
+- Keyboard: every control is in the accessibility tree. Contrast of the page's own text: 8.16–15.48:1 in light,
+  9.37–12.73:1 in dark (AAA is 7:1). Phone width (390 px, in a frame): the page does not scroll sideways; a table
+  scrolls inside its own box. A long button label was cut off at 390 px and was shortened.
+
+**Not done in step 2, said plainly:**
+- The stock-switch preview's account and alias names (step 1, D4) are still checked by tests only: the receiving
+  business has no listings yet. Step 3 makes them, and its browser check covers the preview.
+- The live sync worker did not run locally (it starts every queue consumer). "Follow again" is proven to record the
+  choice; the value arriving is proven by the real-PostgreSQL test.
 

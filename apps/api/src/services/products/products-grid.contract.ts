@@ -207,6 +207,7 @@ export function gridRequestToListQuery(body: ProductsGridRequest | undefined, lo
     else unsupported.push(`tag:${name}`)
   }
   list('tags', tagIds)
+  list('sharing', set('source'))
   const price = fm.price
   if (price && price.filterType === 'number') {
     const b = numberBounds(price)

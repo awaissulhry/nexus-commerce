@@ -147,7 +147,7 @@ function ShareActionModal({ pending, onClose, onDone }: { pending: Pending; onCl
 function ReviewOfferModal({ share, onClose, onAnswer }: { share: Share; onClose: () => void; onAnswer: (action: 'accept' | 'decline') => void }) {
   return <Modal open onClose={onClose} size="md" title={`Offer from ${share.ownerWorkspaceName}`}
     subtitle={share.assortmentName ?? undefined}
-    footer={<><Button onClick={onClose}>Close</Button><span className="grow" /><Button variant="danger-outline" onClick={() => onAnswer('decline')}>Decline</Button><Button variant="primary" onClick={() => onAnswer('accept')}>Accept</Button></>}>
+    footer={<><Button onClick={onClose}>Close</Button><span className="shared-products-footer-gap" /><Button variant="danger-outline" onClick={() => onAnswer('decline')}>Decline</Button><Button variant="primary" onClick={() => onAnswer('accept')}>Accept</Button></>}>
     <div className="business-profile-form">
       <KeyValue items={[
         { label: 'Offered by', value: share.ownerWorkspaceName, hint: dateWords(share.createdAt) },

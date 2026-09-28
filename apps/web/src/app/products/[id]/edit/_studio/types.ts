@@ -48,7 +48,7 @@ export const MASTER_SCOPE = 'master' as const
  * bookmarked `?tab=relationships` falls back to `sheet` in `contracts.tsx`, which reads the URL against
  * `STUDIO_TABS`.
  */
-export type StudioTabId = 'sheet' | 'matrix' | 'variants' | 'images' | 'analytics' | 'activity' | 'errors' | 'presentation' | 'variation-order' | 'shopify-family' | 'shopify-metafields'
+export type StudioTabId = 'sheet' | 'matrix' | 'variants' | 'images' | 'sharing' | 'analytics' | 'activity' | 'errors' | 'presentation' | 'variation-order' | 'shopify-family' | 'shopify-metafields'
 
 /**
  * How much of a publish actually reaches a channel — the SERVER's vocabulary, verbatim.
@@ -68,7 +68,7 @@ export type StudioTabId = 'sheet' | 'matrix' | 'variants' | 'images' | 'analytic
 export type PublishMode = 'gated' | 'dry-run' | 'sandbox' | 'live' | (string & {})
 
 /** Declaration order IS the order of the secondary navigation drawer. Canvas artboard "Product navigation". */
-export const STUDIO_TABS: readonly StudioTabId[] = ['sheet', 'matrix', 'variants', 'images', 'presentation', 'variation-order', 'shopify-family', 'shopify-metafields', 'errors', 'analytics', 'activity']
+export const STUDIO_TABS: readonly StudioTabId[] = ['sheet', 'matrix', 'variants', 'images', 'sharing', 'presentation', 'variation-order', 'shopify-family', 'shopify-metafields', 'errors', 'analytics', 'activity']
 
 /** A channel × marketplace pair. `null` on master scope — master has no coordinate. */
 export interface StudioCoordinate {

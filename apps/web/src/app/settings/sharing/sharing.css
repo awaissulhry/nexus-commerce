@@ -10,6 +10,8 @@
 .shared-products-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--nds-space-8); }
 .shared-products-picker { display: grid; gap: var(--nds-space-8); }
 .shared-products-drawer { display: grid; gap: var(--nds-space-16); min-width: 0; }
+/* A dialog footer: Close on the left, the answer on the right (the DS Modal footer is one row of buttons). */
+.shared-products-footer-gap { flex: 1; }
 .shared-products .business-profiles-heading h2 { font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); margin: 0 0 var(--nds-space-4); }
 /* Shared stock (lend / borrow tabs). Layout only. */
 .shared-stock-products, .shared-stock-preview { display: grid; gap: var(--nds-space-8); min-width: 0; }

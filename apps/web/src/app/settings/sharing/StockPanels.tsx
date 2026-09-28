@@ -134,7 +134,7 @@ function GrantActionModal({ pending, onClose, onDone }: { pending: Pending; onCl
 
 function ReviewStockOfferModal({ grant, onClose, onAnswer }: { grant: Grant; onClose: () => void; onAnswer: (action: 'accept' | 'decline') => void }) {
   return <Modal open onClose={onClose} size="md" title={`Stock offered by ${grant.ownerWorkspaceName}`}
-    footer={<><Button onClick={onClose}>Close</Button><span className="grow" /><Button variant="danger-outline" onClick={() => onAnswer('decline')}>Decline</Button><Button variant="primary" onClick={() => onAnswer('accept')}>Accept</Button></>}>
+    footer={<><Button onClick={onClose}>Close</Button><span className="shared-products-footer-gap" /><Button variant="danger-outline" onClick={() => onAnswer('decline')}>Decline</Button><Button variant="primary" onClick={() => onAnswer('accept')}>Accept</Button></>}>
     <div className="business-profile-form">
       <KeyValue items={[
         { label: 'Offered by', value: grant.ownerWorkspaceName },

@@ -270,17 +270,17 @@ describe('which tabs a scope offers', () => {
     }
   })
   it('offers Errors & Sync on master too — the strip is the same on every scope (CH.1, 2026-09-05); the tab itself says master holds no queue', () => {
-    expect(visibleTabs('master')).toEqual(['sheet', 'matrix', 'variants', 'images', 'errors', 'analytics', 'activity'])
+    expect(visibleTabs('master')).toEqual(['sheet', 'matrix', 'variants', 'images', 'sharing', 'errors', 'analytics', 'activity'])
     expect(tabAvailable('errors', 'master')).toBe(true)
   })
 
   it('offers it on any channel scope', () => {
-    expect(visibleTabs('EBAY')).toEqual(['sheet', 'matrix', 'variants', 'images', 'presentation', 'variation-order', 'errors', 'analytics', 'activity'])
+    expect(visibleTabs('EBAY')).toEqual(['sheet', 'matrix', 'variants', 'images', 'sharing', 'presentation', 'variation-order', 'errors', 'analytics', 'activity'])
     expect(tabAvailable('errors', 'AMAZON')).toBe(true)
   })
 
   it('leaves every unconditional tab in both', () => {
-    for (const t of ['sheet', 'images', 'analytics', 'activity'] as const) {
+    for (const t of ['sheet', 'images', 'sharing', 'analytics', 'activity'] as const) {
       expect(tabAvailable(t, 'master')).toBe(true)
       expect(tabAvailable(t, 'EBAY')).toBe(true)
     }

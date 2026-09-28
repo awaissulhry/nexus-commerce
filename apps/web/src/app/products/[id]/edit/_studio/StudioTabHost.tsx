@@ -29,6 +29,7 @@ import { MatrixTab } from './matrix/MatrixTab'
 import { ProductSheetTab } from './sheet/ProductSheetTab'
 import { MASTER_SCOPE, type StudioTabId } from './types'
 import { ShopifyFamilyTab, ShopifyMetafieldsTab } from './shopify/ShopifyLinkedRoute'
+import { SharingTab } from './sharing/SharingTab'
 import { VariantsTab } from './variants/VariantsTab'
 import styles from './studio.module.css'
 
@@ -52,6 +53,8 @@ const TABS: Record<StudioTabId, () => ReactNode> = {
   'shopify-family': ShopifyFamilyTab,
   'shopify-metafields': ShopifyMetafieldsTab,
   images: ImagesTabRoute,
+  // Sharing studio step 2 — one product between business profiles: what it follows, who it is shared with, its stock.
+  sharing: SharingTab,
   analytics: AnalyticsAdsTab,
   errors: ErrorsSyncTab,
   activity: ActivityTab,
