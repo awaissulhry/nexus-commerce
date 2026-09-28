@@ -45,7 +45,7 @@ import { AliasPublishControl } from './AliasPublishControl';
 import { useCellFormulas } from '../../useCellFormulas';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
-import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, variantRowsOf } from './rows';
+import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
 import { aliasMark, cascadeIntent, cascadeOf, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
 import type { AliasGroup as PreflightAlias } from './types';
@@ -792,9 +792,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }, [productId, channel, marketplace, accountId, reload, selectedAlias, setListing, toast]);
     const overflowItems = useMemo<MenuItemDef[]>(() => {
         const items: MenuItemDef[] = (data?.aliases ?? []).map((a) => {
-            const n = variantRowsOf(rows, a.id).length;
+            const synchronize = !!accountId && rows.some(row => row.aliasId === a.id && row.shopify);
+            const n = reviewRowsOf(rows, a.id, synchronize).length;
             const mark = aliasMark(a.position);
-            const copy = reviewCopy(accountId && rows.some(row => row.aliasId === a.id && row.shopify) ? 'synchronize' : 'check');
+            const copy = reviewCopy(synchronize ? 'synchronize' : 'check');
             if (n === 0)
                 return { id: `preflight:${a.id}`, label: `${copy.menu} ${mark}`, disabled: true, description: `${mark} has no applicable rows to check` };
             return {

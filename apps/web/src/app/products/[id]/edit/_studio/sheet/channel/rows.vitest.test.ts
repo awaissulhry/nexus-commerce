@@ -26,11 +26,12 @@ import {
   orderRows,
   summariseAlias,
   variantRowsOf,
+  reviewRowsOf,
   isRevealAnchor,
   withMappingRun,
   withRowIdentity,
 } from './rows'
-import { aliasKeyOf, type AliasGroup, type StudioCellValue, type StudioRow } from './types'
+import { aliasKeyOf, type AliasGroup, type ChannelSheetRow, type StudioCellValue, type StudioRow } from './types'
 
 const alias = (id: string | null, position: number, over: Partial<AliasGroup> = {}): AliasGroup => ({
   id,
@@ -378,5 +379,20 @@ describe('rowProgressUnscorable — when a channel row cannot be scored', () => 
     expect(rowProgressUnscorable(child, alias(null, 0))).toBe('No required attributes are defined for this row.')
     child.completeness.required = { filled: 4, total: 31, missing: [] }
     expect(rowProgressUnscorable(child, undefined)).toBe('Readiness cannot be scored until this coordinate’s requirements are available.')
+  })
+})
+
+/* Lane B slice B4 (found on a development store): a single product's Shopify fields need their review too. */
+describe('the rows a listing review covers', () => {
+  const linked = (r: ChannelSheetRow) => ({ ...r, shopify: { productId: 'p', listingId: 'l' } }) as unknown as ChannelSheetRow
+  it('a Shopify synchronization covers every linked row, a single product’s one row included', () => {
+    const single = withRowIdentity([row(null, 'LAB-SINGLE', 'parent')], [alias(null, 0)]).map(linked)
+    expect(variantRowsOf(single, null)).toHaveLength(0)
+    expect(reviewRowsOf(single, null, true)).toHaveLength(1)
+    expect(reviewRowsOf(ROWS.map(linked), 'a1', true)).toHaveLength(4)
+  })
+  it('the other checks still cover the variation rows', () => {
+    expect(reviewRowsOf(ROWS, 'a1', false)).toHaveLength(3)
+    expect(reviewRowsOf(ROWS, 'a1', true)).toHaveLength(0)
   })
 })

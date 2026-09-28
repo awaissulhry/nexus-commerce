@@ -33,6 +33,7 @@ export {
   rowIdOf,
   orderRows,
   variantRowsOf,
+  reviewRowsOf,
   bandRowOf,
   distinctVariantCount,
   summariseAlias,
