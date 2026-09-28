@@ -55,11 +55,15 @@ const retryDelayMinutes = (attempts: number) => Math.min(60, 2 ** Math.max(0, at
 export async function processAssortmentChanges(): Promise<SyncRun> {
   requireWorkspace()
   const run: SyncRun = { claimed: 0, synced: 0, unchanged: 0, detached: 0, skipped: 0, retried: 0, failed: 0 }
+  // "Due" compares at the column's own precision: availableAt is TIMESTAMP(3), so a note written now is stored
+  // ROUNDED to the millisecond — up to half a millisecond in the future — and a claim right after it read "not due
+  // yet" (measured 2026-09-28: availableAt .178, claim at .177x). Rounding keeps order, so CURRENT_TIMESTAMP(3) is
+  // never earlier than a note's rounded write time.
   const claimed = await prisma.$queryRaw<Claimed[]>(Prisma.sql`
     UPDATE "AssortmentChange" SET state = 'claimed', "claimedAt" = CURRENT_TIMESTAMP, attempts = attempts + 1, "updatedAt" = CURRENT_TIMESTAMP
     WHERE id IN (
       SELECT c.id FROM "AssortmentChange" c
-      WHERE ((c.state = 'pending' AND c."availableAt" <= CURRENT_TIMESTAMP)
+      WHERE ((c.state = 'pending' AND c."availableAt" <= CURRENT_TIMESTAMP(3))
           OR (c.state = 'claimed' AND c."claimedAt" < CURRENT_TIMESTAMP - ${STALE_CLAIM}::interval))
         AND NOT EXISTS (
           SELECT 1 FROM "AssortmentChange" o

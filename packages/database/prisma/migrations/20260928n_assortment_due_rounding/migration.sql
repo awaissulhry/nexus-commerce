@@ -1,3 +1,15 @@
+-- Sharing: a live-sync note is "due" at its column's precision.
+-- Review: docs/2026-09-28-sharing-review-and-plan.md §11.
+--
+-- AssortmentChange."availableAt" is TIMESTAMP(3): a note written now is stored rounded to the millisecond, possibly up,
+-- so a check right after it compared the rounded time with the unrounded CURRENT_TIMESTAMP and read "not due yet" (up
+-- to half a millisecond early; measured 2026-09-28). The worker then skipped the business until its next poll (2–60 s),
+-- and the live-sync tests failed at random. `nexus_assortment_pending_workspaces()` now compares with
+-- CURRENT_TIMESTAMP(3), rounded the same way; apps/api sync-worker.ts claims with the same rule.
+--
+-- Function body only: no table, column or row changes. This migration ENDS WITH
+-- packages/database/workspaces/assortment-sync.sql byte for byte (policy-migrations.json).
+
 -- AE.4 — live product sync: the database notes a change to a followed product, in the same
 -- transaction as the change, and the follower's worker applies it.
 -- Plan: docs/2026-09-19-shared-stock-plan.md step 6; contract docs/2026-09-19-shared-stock-build.md §6.

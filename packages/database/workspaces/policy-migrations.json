@@ -10,7 +10,7 @@
   "assortment-copy.sql": "20260916h_ae3_first_copy",
   "stock-pool.sql": "20260928m_sync_policy_account",
   "listing-end-times.sql": "20260919b_listing_end_times",
-  "assortment-sync.sql": "20260919d_ae4_live_sync",
+  "assortment-sync.sql": "20260928n_assortment_due_rounding",
   "ebay-quarantine.sql": "20260926s_cx_ebay_privacy_census",
   "cx-account-integrity.sql": "20260923d_cx_bootstrap_parity",
   "inbound-history.sql": "20260923e_cx_inbound_archive",
