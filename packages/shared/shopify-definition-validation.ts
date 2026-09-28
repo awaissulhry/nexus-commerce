@@ -3,6 +3,8 @@ import { Ajv2019 } from 'ajv/dist/2019.js'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
 import { shopifyBoundWords } from './shopify-field-rules.js'
+import { shopifyMeasurementUnits } from './shopify-field-codecs.js'
+import { numberOf, shopifyMeasurementBreaksLimit } from './shopify-measurement-limits.js'
 
 const validators = new Map<string, ValidateFunction>()
 export function shopifyJsonSchemaError(schema: string, value: string): string | null {
@@ -19,26 +21,24 @@ export function shopifyJsonSchemaError(schema: string, value: string): string | 
   } catch { return 'This definition’s JSON schema cannot be validated. Refresh the store schema; your value is preserved.' }
 }
 
-// Shopify's validation documentation also contains legacy abbreviated unit names. Convert the
-// constraint and the current unit into the same dimension; never compare unlike bare numbers.
-const factors: Record<string, Record<string, number>> = {
-  dimension: { mm: .001, millimeters: .001, cm: .01, centimeters: .01, m: 1, meters: 1, in: .0254, inches: .0254, ft: .3048, feet: .3048, yd: .9144, yards: .9144 },
-  weight: { g: .001, grams: .001, kg: 1, kilograms: 1, oz: .028349523125, ounces: .028349523125, lb: .45359237, pounds: .45359237 },
-  volume: { ml: .001, milliliters: .001, cl: .01, centiliters: .01, l: 1, liters: 1, m3: 1000, cubic_meters: 1000, us_fluid_ounces: .0295735295625, us_pints: .473176473, us_quarts: .946352946, us_gallons: 3.785411784, imperial_fluid_ounces: .0284130625, imperial_pints: .56826125, imperial_quarts: 1.1365225, imperial_gallons: 4.54609 },
-}
+/**
+ * A structured value against one `min` / `max` limit, with the limit in its own words: "Enter 500 g or less." (PLAN §5).
+ * A measurement limit may use any unit of its kind — all 32 kinds, short or long names (G14, `shopify-measurement-limits.ts`).
+ * Nexus refuses only when Shopify certainly would: a limit it cannot read or convert is left to Shopify's check at publish
+ * (it used to refuse every save with "measurement bound cannot be read", which the user could not fix).
+ */
 export function shopifyObjectBoundError(type: string, value: Record<string, unknown>, rule: { name: string; value: string }): string | null {
-  try {
-    const bound = JSON.parse(rule.value)
-    let actual = Number(type === 'money' ? value.amount : value.value), limit: number
-    if (typeof bound === 'number') limit = bound
-    else {
-      if (!bound || typeof bound.value !== 'number' || typeof bound.unit !== 'string') throw new Error('Invalid constraint')
-      const currentFactor = factors[type]?.[String(value.unit)], boundFactor = factors[type]?.[bound.unit]
-      if (String(value.unit) === bound.unit) limit = bound.value
-      else if (currentFactor && boundFactor) { actual *= currentFactor; limit = bound.value * boundFactor }
-      else throw new Error('Unknown unit conversion')
-    }
-    if (!Number.isFinite(actual) || !Number.isFinite(limit)) throw new Error('Invalid constraint')
-    return (rule.name === 'min' ? actual < limit : actual > limit) ? `Enter ${shopifyBoundWords(rule.value)} or ${rule.name === 'min' ? 'more' : 'less'}.` : null
-  } catch { return 'This definition’s measurement bound cannot be read. Refresh the store schema; your value is preserved.' }
+  if (rule.name !== 'min' && rule.name !== 'max') return null
+  let bound: unknown
+  try { bound = JSON.parse(rule.value) } catch { return null }
+  let breaks: boolean
+  if (shopifyMeasurementUnits[type]) {
+    const limit = bound && typeof bound === 'object' && !Array.isArray(bound) ? bound as Record<string, unknown> : {}
+    breaks = shopifyMeasurementBreaksLimit(type, rule.name, { value: numberOf(value.value), unit: String(value.unit) }, { value: numberOf(limit.value), unit: typeof limit.unit === 'string' ? limit.unit : '' })
+  } else {
+    // Money: Shopify offers no limit today; a plain number compares with the amount, as before.
+    const actual = numberOf(type === 'money' ? value.amount : value.value)
+    breaks = typeof bound === 'number' && Number.isFinite(actual) && (rule.name === 'min' ? actual < bound : actual > bound)
+  }
+  return breaks ? `Enter ${shopifyBoundWords(rule.value)} or ${rule.name === 'min' ? 'more' : 'less'}.` : null
 }

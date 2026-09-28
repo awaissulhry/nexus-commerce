@@ -206,6 +206,11 @@ const ITEM_RULES: Record<string, Array<[string, string]>> = {
   dimension: [['min', bound('cm', 1)], ['max', bound('m', 3)]],
   weight: [['min', bound('g', 10)], ['max', bound('kg', 25)]],
   volume: [['min', bound('ml', 5)], ['max', bound('l', 20)]],
+  /* B3a (G14): newer kinds with limits in another unit than their values; temperature on both of its other scales. */
+  temperature: [['min', bound('fahrenheit', 14)], ['max', bound('kelvin', 323.15)]],
+  speed: [['max', bound('miles_per_hour', 30)]],
+  data_storage_capacity: [['min', bound('kilobytes', 4)], ['max', bound('gigabytes', 2)]],
+  duration: [['min', bound('seconds', 30)], ['max', bound('hours', 2)]],
   file_reference: [['file_type_options', IMAGE]],
   product_taxonomy_value_reference: [['product_taxonomy_attribute_handle', 'pattern']],
   metaobject_reference: [['metaobject_definition_id', labKind('lab_summary').id]],
@@ -277,7 +282,16 @@ export const LAB_STORE_FIELDS: ShopifyFieldDefinition[] = [
 
 const firstEntry = (kindType: string, n = 0) => LAB_ENTRIES.filter(e => e.type === kindType)[n].id
 const RATING = (value: string) => JSON.stringify({ value, scale_min: '1.0', scale_max: '5.0' })
-const MEASURE: Record<string, { value: number; unit: string }> = { dimension: { value: 25, unit: 'centimeters' }, weight: { value: 1.2, unit: 'kilograms' }, volume: { value: 500, unit: 'milliliters' } }
+const MEASURE: Record<string, { value: number; unit: string }> = { dimension: { value: 25, unit: 'centimeters' }, weight: { value: 1.2, unit: 'kilograms' }, volume: { value: 500, unit: 'milliliters' },
+  data_storage_capacity: { value: 64, unit: 'megabytes' }, duration: { value: 45, unit: 'minutes' } }
+/** Per kind with limits: one value past each limit, in the value's own unit (B3a: the limit is in another unit). */
+const PAST_LIMITS: Record<string, Array<[string, { value: number; unit: string }]>> = {
+  dimension: [['max', { value: 30, unit: 'meters' }]], weight: [['max', { value: 30, unit: 'kilograms' }]], volume: [['max', { value: 30, unit: 'liters' }]],
+  temperature: [['min', { value: -10.5, unit: 'celsius' }], ['max', { value: 50.5, unit: 'celsius' }]],
+  speed: [['max', { value: 50, unit: 'kilometers_per_hour' }]],
+  data_storage_capacity: [['min', { value: 3999, unit: 'bytes' }], ['max', { value: 2049, unit: 'megabytes' }]],
+  duration: [['min', { value: 0.25, unit: 'minutes' }], ['max', { value: 121, unit: 'minutes' }]],
+}
 const measure = (kind: string) => MEASURE[kind] ?? { value: 2.5, unit: shopifyMeasurementUnits[kind][0] }
 
 /** One good item value, as the list's JSON item (not the stored string). */
@@ -375,7 +389,7 @@ export function labBadValues(type: string): LabBadValue[] {
       if (base.endsWith('_reference')) add('resource', base === 'page_reference' ? LAB_PRODUCTS[0].id : LAB_PAGES[0].id)
       else if (shopifyMeasurementUnits[base]) {
         add('unit', { value: 1, unit: 'parsecs' })
-        if (MEASURE[base]) add('max', { value: 30, unit: base === 'weight' ? 'kilograms' : base === 'dimension' ? 'meters' : 'liters' })
+        for (const [rule, value] of PAST_LIMITS[base] ?? []) add(rule, value)
       }
   }
   if (list) {
@@ -394,7 +408,7 @@ export const LAB_ODD_VALUES: Array<{ type: string; note: string; value: string }
   { type: 'list.metaobject_reference', note: 'a list that does not parse', value: '[1,' },
   { type: 'list.product_reference', note: 'a product that was deleted', value: JSON.stringify([LAB_PRODUCTS[0].id, labGid('Product', 999)]) },
   { type: 'date_time', note: 'a moment with a time zone', value: '2026-09-28T12:30:00+02:00' },
-  { type: 'temperature', note: 'a measurement kind the cell shows as raw JSON today (G13)', value: '{"value":21.5,"unit":"celsius"}' },
+  { type: 'temperature', note: 'a newer measurement kind (the cell showed raw JSON before B3a, G13)', value: '{"value":21.5,"unit":"celsius"}' },
   { type: 'rating', note: 'another scale than the store’s', value: '{"value":"8","scale_min":"0","scale_max":"10"}' },
   { type: 'color', note: 'a three-digit colour', value: '#abc' },
 ]

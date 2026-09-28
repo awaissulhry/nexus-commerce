@@ -201,3 +201,49 @@ describe('B1 · read-back compares values by type (G10)', () => {
     expect(shopifyValuesEqual('color', null, '#111111')).toBe(false)
   })
 })
+
+/* ── Slice B3a: the 32 measurement kinds (PLAN §6.3, G14) — the lab's limits in other units, the rule line, read-back. ── */
+
+describe('B3a · the lab’s newer measurement fields refuse with the exact sentence (limits in other units)', () => {
+  const sentences = (type: string) => labBadValues(type).filter(bad => bad.rule === 'min' || bad.rule === 'max').map(bad => [bad.rule, bad.value, validateShopifyField(labTypeField(type), bad.value)])
+  it.each([
+    ['temperature', [['min', '{"value":-10.5,"unit":"celsius"}', 'Enter 14 fahrenheit or more.'], ['max', '{"value":50.5,"unit":"celsius"}', 'Enter 323.15 kelvin or less.']]],
+    ['speed', [['max', '{"value":50,"unit":"kilometers_per_hour"}', 'Enter 30 miles per hour or less.']]],
+    ['data_storage_capacity', [['min', '{"value":3999,"unit":"bytes"}', 'Enter 4 kilobytes or more.'], ['max', '{"value":2049,"unit":"megabytes"}', 'Enter 2 gigabytes or less.']]],
+    ['duration', [['min', '{"value":0.25,"unit":"minutes"}', 'Enter 30 seconds or more.'], ['max', '{"value":121,"unit":"minutes"}', 'Enter 2 hours or less.']]],
+    ['list.temperature', [['min', '[{"value":-10.5,"unit":"celsius"}]', 'Value 1: Enter 14 fahrenheit or more.'], ['max', '[{"value":50.5,"unit":"celsius"}]', 'Value 1: Enter 323.15 kelvin or less.']]],
+  ] as const)('%s', (type, expected) => {
+    expect(sentences(type)).toEqual(expected)
+    expect(validateShopifyField(labTypeField(type), labGoodValue(type))).toBeNull()
+  })
+})
+
+describe('B3a · the rule line states a measurement limit in its own words, and who checks one Nexus cannot read', () => {
+  const weight = (...rules: Array<[string, string]>) => ({ type: 'weight', validations: rules.map(([name, value]) => ({ name, value })) })
+  it.each([
+    [labTypeField('temperature'), '14 fahrenheit to 323.15 kelvin'],
+    [labTypeField('list.temperature'), '14 fahrenheit to 323.15 kelvin each · Up to 5 values'],
+    [labTypeField('speed'), '30 miles per hour or less'],
+    [labTypeField('data_storage_capacity'), '4 kilobytes to 2 gigabytes'],
+    [labTypeField('duration'), '30 seconds to 2 hours'],
+    [{ type: 'antenna_gain', validations: [{ name: 'max', value: '{"unit":"dBi","value":5}' }] }, '5 dBi or less'],
+    [weight(['max', '{"unit":"parsecs","value":3}']), '3 parsecs or less · Shopify checks this limit when you publish'],
+    [weight(['min', '{"unit":"rankine","value":400}'], ['max', '{"unit":"rankine","value":600}']), '400 rankine to 600 rankine · Shopify checks these limits when you publish'],
+    [weight(['min', '{"unit":"g","value":10}'], ['max', '{"unit":"parsecs","value":3}']), '10 g to 3 parsecs · Shopify checks the 3 parsecs limit when you publish'],
+    [weight(['max', '5']), '5 or less · Shopify checks this limit when you publish'],
+  ] as const)('%j → %s', (def, line) => {
+    expect(shopifyRuleSummary(def, LAB_SCHEMA)).toBe(line)
+  })
+})
+
+describe('B3a · read-back compares every measurement kind by value and unit (G10)', () => {
+  it.each([
+    ['temperature', '{"value":21.5,"unit":"celsius"}', '{"unit":"celsius","value":21.50}', true],
+    ['temperature', '{"value":21.5,"unit":"celsius"}', '{"value":21.5,"unit":"fahrenheit"}', false],
+    ['speed', '{"value":2.5,"unit":"kilometers_per_hour"}', '{"value":"2.5","unit":"kilometers_per_hour"}', true],
+    ['list.duration', '[{"value":45,"unit":"minutes"},{"value":46,"unit":"minutes"}]', '[ {"unit":"minutes","value":45.0}, {"unit":"minutes","value":46} ]', true],
+    ['list.duration', '[{"value":45,"unit":"minutes"},{"value":46,"unit":"minutes"}]', '[{"value":46,"unit":"minutes"},{"value":45,"unit":"minutes"}]', false],
+  ] as const)('%s: %s vs %s → %s', (type, a, b, same) => {
+    expect(shopifyValuesEqual(type, a, b)).toBe(same)
+  })
+})
