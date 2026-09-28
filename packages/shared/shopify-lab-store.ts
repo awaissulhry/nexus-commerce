@@ -372,9 +372,9 @@ export function labBadValues(type: string): LabBadValue[] {
     case 'boolean': add('format', 'yes'); break
     case 'color': add('format', '#12345'); break
     case 'date': add('format', '2026-13-40'); add('min', '2019-12-31'); break
-    case 'date_time': add('format', 'tomorrow'); add('loose format', 'Sep 28 2026 12:30', 'G15'); add('max', '2031-01-01T00:00:00'); break
+    case 'date_time': add('format', 'tomorrow'); add('loose format', 'Sep 28 2026 12:30'); add('calendar', '2026-02-30T12:00:00'); add('min', '2019-12-31T23:59:59'); add('max', '2031-01-01T00:00:00'); break
     case 'url': add('format', 'example.com'); add('allowed_domains', 'https://other.test/size-guide'); break
-    case 'link': add('format', { text: '', url: 'https://example.com' }); add('allowed_domains', { text: 'Elsewhere', url: 'https://other.test/' }, 'G17'); break
+    case 'link': add('format', { text: '', url: 'https://example.com' }); add('allowed_domains', { text: 'Elsewhere', url: 'https://other.test/' }); break
     case 'money': add('format', { amount: 'abc', currency_code: 'EUR' }); break
     case 'rating': add('scale', { value: '6', scale_min: '1.0', scale_max: '5.0' }); break
     case 'json': add('format', '{"fit":'); add('schema', { size: 'M' }); break
@@ -411,6 +411,7 @@ export const LAB_ODD_VALUES: Array<{ type: string; note: string; value: string }
   { type: 'temperature', note: 'a newer measurement kind (the cell showed raw JSON before B3a, G13)', value: '{"value":21.5,"unit":"celsius"}' },
   { type: 'rating', note: 'another scale than the store’s', value: '{"value":"8","scale_min":"0","scale_max":"10"}' },
   { type: 'color', note: 'a three-digit colour', value: '#abc' },
+  { type: 'money', note: 'another currency than the store’s', value: '{"amount":"20.00","currency_code":"USD"}' },
 ]
 
 /** The lab's starting values for the store mirror (39 fields). */

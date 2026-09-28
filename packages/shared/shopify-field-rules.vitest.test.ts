@@ -192,7 +192,9 @@ describe('B1 · read-back compares values by type (G10)', () => {
     ['json', '{"a":"1.0"}', '{"a":"1"}', false],
     ['json', '{"a":1,"b":[1,2]}', '{"b":[1,2],"a":1.0}', true],
     ['list.number_decimal', '[1.5,2]', '[1.50,2.0]', true],
-    ['date_time', '2026-09-28T12:30:00', '2026-09-28T12:30:00Z', false],
+    /* Changed in B3b (G15): this row said `false` in B1, when dates compared as exact text. Shopify documents a
+       `date_time` with no zone as GMT, so both spellings are the same moment and a read-back of either is a good write. */
+    ['date_time', '2026-09-28T12:30:00', '2026-09-28T12:30:00Z', true],
   ] as const)('%s: %s vs %s → %s', (type, a, b, same) => {
     expect(shopifyValuesEqual(type, a, b)).toBe(same)
   })
@@ -245,5 +247,175 @@ describe('B3a · read-back compares every measurement kind by value and unit (G1
     ['list.duration', '[{"value":45,"unit":"minutes"},{"value":46,"unit":"minutes"}]', '[{"value":46,"unit":"minutes"},{"value":45,"unit":"minutes"}]', false],
   ] as const)('%s: %s vs %s → %s', (type, a, b, same) => {
     expect(shopifyValuesEqual(type, a, b)).toBe(same)
+  })
+})
+
+/* ── Slice B3b: dates, JSON, codes, link, money — the exact sentence for every rule (PLAN §5, §6.3; G15, G16, G17). ── */
+import { shopifyDateTimeMs, shopifyDateTimeValue, shopifyJsonProblem, shopifyMomentWords } from './shopify-field-rules'
+
+const moment = labTypeField('date_time'), moments = labTypeField('list.date_time')
+const withRules = (type: string, rules: Array<[string, string]>) => ({ type, validations: rules.map(([name, value]) => ({ name, value })) })
+/** Run `check` with the machine in another time zone, then restore it. Node reads `TZ` again when it changes. */
+function inZone<T>(zone: string, check: () => T): T {
+  const before = process.env.TZ
+  process.env.TZ = zone
+  try { return check() } finally { if (before === undefined) delete process.env.TZ; else process.env.TZ = before }
+}
+
+describe('B3b · date and time (G15): strict ISO 8601, no zone = UTC', () => {
+  it.each([
+    ['tomorrow'], ['Sep 28 2026 12:30'], ['2026-09-28 12:30:00'], ['2026-09-28'], ['2026-02-30T12:00:00'], ['2100-02-29T00:00:00'],
+    ['2026-09-28T24:00:00'], ['2026-09-28T12:60:00'], ['2026-09-28T12:30:00+25:00'], ['2026-09-28T12:30:00z'], ['2026-09-28T12:30:00+0200'], [''],
+  ])('refuses %j: "Choose a date and a time."', value => {
+    expect(validateShopifyField(moment, value)).toBe('Choose a date and a time.')
+  })
+  it.each([['2026-09-28T12:30'], ['2026-09-28T12:30:00'], ['2026-09-28T12:30:00Z'], ['2026-09-28T12:30:00.5Z'], ['2026-09-28T12:30:00.123456789Z'], ['2026-09-28T14:30:00+02:00'], ['2024-02-29T00:00:00']])('accepts %j', value => {
+    expect(validateShopifyField(moment, value)).toBeNull()
+  })
+  it('the limits, in UTC words, whatever zone the value is written in', () => {
+    expect(validateShopifyField(moment, '2019-12-31T23:59:59')).toBe('Choose 2020-01-01 00:00 (UTC) or later.')
+    expect(validateShopifyField(moment, '2031-01-01T00:00:00')).toBe('Choose 2030-12-31 23:59:59 (UTC) or earlier.')
+    expect(validateShopifyField(moment, '2020-01-01T00:30:00+01:00')).toBe('Choose 2020-01-01 00:00 (UTC) or later.') // 2019-12-31 23:30 UTC
+    expect(validateShopifyField(moment, '2031-01-01T00:30:00+01:00')).toBeNull() // 2030-12-31 23:30 UTC
+    expect(validateShopifyField(moments, JSON.stringify(['2026-09-28T12:30:00', '2031-01-01T00:00:00']))).toBe('Value 2: Choose 2030-12-31 23:59:59 (UTC) or earlier.')
+    expect(validateShopifyField(moments, JSON.stringify(['Sep 28 2026']))).toBe('Value 1: Choose a date and a time.')
+    const zoned = withRules('date_time', [['min', '2026-01-01T00:00:00+02:00']])
+    expect(validateShopifyField(zoned, '2025-12-31T21:59:00')).toBe('Choose 2025-12-31 22:00 (UTC) or later.')
+    expect(validateShopifyField(zoned, '2025-12-31T22:00:00')).toBeNull()
+    expect(validateShopifyField(withRules('date_time', [['max', 'soon']]), '2026-09-28T12:30:00'), 'a limit Nexus cannot read is left to Shopify').toBeNull()
+  })
+  it('the rule line says the limits in UTC, even when the store wrote a zone', () => {
+    expect(shopifyRuleSummary(moment, LAB_SCHEMA)).toBe('From 2020-01-01 00:00 (UTC) to 2030-12-31 23:59:59 (UTC)')
+    expect(shopifyRuleSummary(withRules('date_time', [['min', '2026-01-01T00:00:00+02:00']]))).toBe('From 2025-12-31 22:00 (UTC)')
+    expect(shopifyRuleSummary(labTypeField('date'), LAB_SCHEMA)).toBe('From 2020-01-01 to 2030-12-31')
+  })
+  it('never reads a value or a limit in the machine’s zone (Rome and Los Angeles give the UTC answer)', () => {
+    for (const zone of ['Europe/Rome', 'America/Los_Angeles', 'Asia/Kolkata']) inZone(zone, () => {
+      /* Control: the old reading (`Date.parse`) does move with the zone here, so this test would see the defect. */
+      expect(Date.parse('2026-09-28T12:30:00'), zone).not.toBe(Date.parse('2026-09-28T12:30:00Z'))
+      expect(shopifyDateTimeMs('2026-09-28T12:30:00'), zone).toBe(Date.parse('2026-09-28T12:30:00Z'))
+      expect(validateShopifyField(moment, '2019-12-31T23:59:59'), zone).toBe('Choose 2020-01-01 00:00 (UTC) or later.')
+      expect(validateShopifyField(moment, '2020-01-01T00:00:00'), zone).toBeNull()
+      expect(validateShopifyField(moment, '2030-12-31T23:59:59'), zone).toBeNull()
+      expect(shopifyValuesEqual('date_time', '2026-09-28T12:30:00', '2026-09-28T12:30:00Z'), zone).toBe(true)
+      expect(shopifyRuleSummary(moment, LAB_SCHEMA), zone).toBe('From 2020-01-01 00:00 (UTC) to 2030-12-31 23:59:59 (UTC)')
+    })
+  })
+  it('the picker’s instant is written in Shopify’s documented form: UTC, no zone', () => {
+    expect(shopifyDateTimeValue('2026-09-28T12:30:00.000Z')).toBe('2026-09-28T12:30:00')
+    expect(shopifyDateTimeValue('2026-09-28T12:30:00.250Z')).toBe('2026-09-28T12:30:00.250')
+    expect(shopifyDateTimeValue('2026-09-28T14:30:00+02:00')).toBe('2026-09-28T12:30:00')
+    for (const written of ['2026-09-28T12:30:00.000Z', '2026-09-28T12:30:00.250Z', '0099-01-01T00:00:00.000Z']) {
+      expect(shopifyDateTimeMs(shopifyDateTimeValue(written))).toBe(Date.parse(written))
+      expect(validateShopifyField({ type: 'date_time', validations: [] }, shopifyDateTimeValue(written))).toBeNull()
+    }
+    expect(shopifyMomentWords(Date.parse('2026-09-28T12:30:00Z'))).toBe('2026-09-28 12:30')
+    expect(shopifyMomentWords(Date.parse('2026-09-28T12:30:05Z'))).toBe('2026-09-28 12:30:05')
+  })
+  it.each([
+    ['date_time', '2026-09-28T12:30:00', '2026-09-28T14:30:00+02:00', true],
+    ['date_time', '2026-09-28T12:30:00', '2026-09-28T12:30:00.000Z', true],
+    ['date_time', '2026-09-28T12:30:00', '2026-09-28T12:31:00', false],
+    ['date_time', 'Sep 28 2026', 'Sep 28 2026 00:00', false],
+    ['list.date_time', '["2026-09-28T12:30:00"]', '["2026-09-28T12:30:00Z"]', true],
+    ['list.date_time', '["2026-09-28T12:30:00"]', '["2026-09-28T13:30:00Z"]', false],
+    ['date', '2026-09-28', '2026-09-28', true],
+    ['date', '2026-09-28', '2026-09-29', false],
+  ] as const)('read-back: %s %s vs %s → %s', (type, a, b, same) => {
+    expect(shopifyValuesEqual(type, a, b)).toBe(same)
+  })
+})
+
+describe('B3b · JSON (G16): the refusal says where and why, the same words in every engine', () => {
+  const json = labTypeField('json')
+  it.each([
+    ['{"fit":', 'This is not valid JSON: the text ends where a value is needed.'],
+    ['{fit: "regular"}', 'This is not valid JSON: a name in double quotes is needed at line 1, character 2.'],
+    ["{'fit':1}", 'This is not valid JSON: a name in double quotes is needed at line 1, character 2.'],
+    ['{"fit": "regular",}', 'This is not valid JSON: a name in double quotes is needed at line 1, character 19.'],
+    ['{"fit" "regular"}', 'This is not valid JSON: “:” is needed at line 1, character 8.'],
+    ['{"a":1 "b":2}', 'This is not valid JSON: “,” or “}” is needed at line 1, character 8.'],
+    ['[1,2', 'This is not valid JSON: the text ends where “,” or “]” is needed.'],
+    ['{"fit":"reg\nular"}', 'This is not valid JSON: a line break or tab inside quotes, at line 1, character 12, must be written as \\n or \\t.'],
+    ['{"fit":"regular}', 'This is not valid JSON: the text in quotes that starts at line 1, character 8 is not closed.'],
+    ['{"fit":"regular"}}', 'This is not valid JSON: there is more text after the end, at line 1, character 18.'],
+    ['{\n  "fit": regular\n}', 'This is not valid JSON: a value is needed at line 2, character 10.'],
+    ['"\\x"', 'This is not valid JSON: the “\\” at line 1, character 2 does not start a valid escape.'],
+    ['', 'This is not valid JSON: it is empty.'],
+    ['{"size":"M"}', 'The store’s JSON schema requires this value must have required property \'fit\'.'],
+  ])('%j → %s', (value, sentence) => {
+    expect(validateShopifyField(json, value)).toBe(sentence)
+  })
+  it('valid JSON of every kind passes the syntax check (the store schema is a separate rule)', () => {
+    for (const value of ['{"fit":"regular"}', '[]', '0', '-1.5e3', 'true', 'null', '"text"', '{"a":[1,{"b":"\\u00e9\\n"}]}']) {
+      expect(shopifyJsonProblem(value), value).toBeNull()
+      expect(validateShopifyField({ type: 'json', validations: [] }, value), value).toBeNull()
+    }
+  })
+  it('names a problem exactly when the parser refuses: every one-character cut of real JSON', () => {
+    const samples = [JSON.stringify({ fit: 'regular', sizes: [1, 2.5, -3e2], nested: { ok: true, none: null, text: 'a\\"b' } }, null, 2), '["a",{"b":[]},0]']
+    let checked = 0
+    for (const sample of samples) for (let i = 0; i < sample.length; i++) for (const text of [sample.slice(0, i) + sample.slice(i + 1), sample.slice(0, i)]) {
+      let parses = true
+      try { JSON.parse(text) } catch { parses = false }
+      expect(shopifyJsonProblem(text) === null, JSON.stringify(text)).toBe(parses)
+      checked++
+    }
+    expect(checked).toBeGreaterThan(300)
+  })
+  it('rich text: a tree that is not JSON gets the same JSON sentence; a wrong tree its own', () => {
+    const rich = labTypeField('rich_text_field')
+    expect(validateShopifyField(rich, '{"type":"root"')).toBe('This is not valid JSON: the text ends where “,” or “}” is needed.')
+    expect(validateShopifyField(rich, '{"type":"paragraph"}')).toBe('Use rich text with a root and children.')
+    expect(validateShopifyField(rich, '{"type":"root","children":"wrong"}')).toBe('Use rich text with a root and children.')
+    expect(validateShopifyField(rich, '{"type":"root","children":[]}')).toBeNull()
+    expect(validateShopifyField(rich, labGoodValue('rich_text_field'))).toBeNull()
+  })
+})
+
+describe('B3b · codes (G16)', () => {
+  it.each([
+    ['jurisdiction', 'Italy', 'Enter a country or subdivision code, such as US or US-CA.'],
+    ['jurisdiction', 'it', 'Enter a country or subdivision code, such as US or US-CA.'],
+    ['jurisdiction', 'US-', 'Enter a country or subdivision code, such as US or US-CA.'],
+    ['jurisdiction', 'IT', null], ['jurisdiction', 'US-CA', null],
+    ['language', 'english', 'Enter a language code, for example en or it-IT.'],
+    ['language', 'EN', 'Enter a language code, for example en or it-IT.'],
+    ['language', 'en', null], ['language', 'it-IT', null], ['language', 'pt-BR', null],
+  ])('%s %j → %s', (type, value, sentence) => {
+    expect(validateShopifyField(labTypeField(type), value)).toBe(sentence)
+  })
+})
+
+describe('B3b · link (G17): the allowed sites are checked on the link’s URL, with the url field’s words', () => {
+  const link = labTypeField('link'), links = labTypeField('list.link')
+  it('refuses a link on another site, alone and in a list; accepts the allowed site in any letter case', () => {
+    expect(validateShopifyField(link, JSON.stringify({ text: 'Elsewhere', url: 'https://other.test/' }))).toBe('Use a link on one of these sites: example.com.')
+    expect(validateShopifyField(labTypeField('url'), 'https://other.test/size-guide')).toBe('Use a link on one of these sites: example.com.')
+    expect(validateShopifyField(links, JSON.stringify([{ text: 'Size guide', url: 'https://example.com/a' }, { text: 'Elsewhere', url: 'https://other.test/' }]))).toBe('Value 2: Use a link on one of these sites: example.com.')
+    expect(validateShopifyField(link, JSON.stringify({ text: 'Size guide', url: 'https://EXAMPLE.com/size-guide' }))).toBeNull()
+    expect(validateShopifyField(link, JSON.stringify({ text: '', url: 'https://example.com' }))).toBe('Enter the link text.')
+    expect(validateShopifyField(link, JSON.stringify({ text: 'Size guide', url: 'example.com' }))).toBe('Enter a full web address, for example https://example.com.')
+  })
+  it('several sites are listed; an unreadable list says so (a url field used to crash on a non-list); an empty list sets no limit', () => {
+    expect(validateShopifyField(withRules('link', [['allowed_domains', '["example.com","shop.example"]']]), '{"text":"A","url":"https://b.test"}')).toBe('Use a link on one of these sites: example.com, shop.example.')
+    for (const type of ['link', 'url']) {
+      const value = type === 'link' ? '{"text":"A","url":"https://b.test"}' : 'https://b.test'
+      expect(validateShopifyField(withRules(type, [['allowed_domains', 'not json']]), value)).toBe('This definition’s allowed domains cannot be read. Refresh the store schema.')
+      expect(validateShopifyField(withRules(type, [['allowed_domains', '"example.com"']]), value)).toBe('This definition’s allowed domains cannot be read. Refresh the store schema.')
+      expect(validateShopifyField(withRules(type, [['allowed_domains', '[]']]), value)).toBeNull()
+    }
+  })
+})
+
+describe('B3b · money: the sentences of §5', () => {
+  it.each([
+    ['{"amount":"abc","currency_code":"EUR"}', 'Enter an amount, for example 12.50.'],
+    ['{"amount":"12,50","currency_code":"EUR"}', 'Enter an amount, for example 12.50.'],
+    ['{"amount":"12.50","currency_code":"eur"}', 'Enter a three-letter currency code, for example EUR.'],
+    ['{"amount":"12.50","currency_code":"EUR"}', null],
+    ['{"amount":"20.00","currency_code":"USD"}', null],
+  ])('%s → %s', (value, sentence) => {
+    expect(validateShopifyField(labTypeField('money'), value)).toBe(sentence)
   })
 })
