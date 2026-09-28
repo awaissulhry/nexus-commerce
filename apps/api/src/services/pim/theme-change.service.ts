@@ -564,7 +564,7 @@ function shopifyPlan(args: {
   const axes = ordered.map((e) => e.target)
   /* P3b, slice A4 — a Shopify-only option (`own:shared:<attribute>`) has no Shared axis value: its values are the
      projection's own-axis read (`family-projection.service.ts` `projectedAxisValues`, the one reader), exactly what the
-     publisher sends (`content-workspace.service.ts` `shopifyVariantOptions`). A family axis keeps the Shared value the
+     publisher sends (`content-workspace.service.ts` `withShopifyOwnOptions`). A family axis keeps the Shared value the
      publisher sends for it — so the plan and the send cannot disagree. */
   const valueOf = (child: ProjectionRead['children'][number], axisKey: string) =>
     (isOwnAxisKey(axisKey) ? child.projectedAxisValues?.[axisKey] : child.sharedAxisValues?.[axisKey]) ?? ''

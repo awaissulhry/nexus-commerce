@@ -6,7 +6,7 @@ import { mapRemoteVariants, publishContent, publishMetaobjects, SHOPIFY_OPTION_V
 // P3b A4 — the workspace's pure pieces (option order, variant options) are imported below; no database is used here.
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
-import { applyShopifyVariationProjection, shopifyVariantOptions } from './content-workspace.service.js'
+import { applyShopifyVariationProjection, withShopifyOwnOptions } from './content-workspace.service.js'
 import { resolveVariationProjection } from '../pim/variation-rules.service.js'
 import { limitsFor, vocabularyFor } from '../pim/family-projection-limits.js'
 import { ownAxisValuesFor } from '../pim/variation-own-axes.js'
@@ -220,12 +220,12 @@ describe('P3b A4 — a Shopify-only option (own:shared:fit), sheet cell ≡ publ
     listing: { version: 2, variationTheme: null, variationMapping: { axes: [{ axisKey: 'Colour', target: 'Colour', order: 0 }, { axisKey: FIT, target: 'Fit', order: 1 }] }, platformAttributes: null, externalListingId: null, listingStatus: 'DRAFT' },
     rule: null, schema: {}, limits: limitsFor('SHOPIFY'), vocabulary: vocabularyFor('SHOPIFY'),
   })
-  /** The publish side: the workspace's own builders (`applyShopifyVariationProjection`, `shopifyVariantOptions`). */
+  /** The publish side: the workspace's own builders (`applyShopifyVariationProjection`, `withShopifyOwnOptions`). */
   const publishInputFor = (cell: ReturnType<typeof cellFor>, fits: Record<string, string> = {}) => {
     const c = applyShopifyVariationProjection(content(), cell)
     const ownKeys = cell.axes.filter(a => a.included && a.own).map(a => a.familyKey)
     const vs: ContentVariant[] = products.map((p, i) => ({ id: p.id, sku: p.sku, price: '10.00', stock: i + 1,
-      options: shopifyVariantOptions({ categoryAttributes: { ...p.categoryAttributes, ...(fits[p.id] ? { fit: fits[p.id] } : {}) } }, ['Colour'], ownKeys) }))
+      options: withShopifyOwnOptions({ Colour: p.categoryAttributes.variations.Colour }, ownKeys, { ...p.categoryAttributes, ...(fits[p.id] ? { fit: fits[p.id] } : {}) }) }))
     return { c, vs }
   }
 

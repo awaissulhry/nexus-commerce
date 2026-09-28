@@ -41,17 +41,14 @@ export function shopifyAxisOrder(familyAxes: string[], variationMapping: unknown
 }
 
 /**
- * One variant's Shopify option values: the family axes from the Shared store (as before), and every Shopify-only option
- * this coordinate delivers (A4) through the ONE own-axis reader (`variation-own-axes.ts`) — the reader the sheet cell,
- * the save's gap and collision checks and the other publishers use, so what the pop-up counts is what is sent.
+ * One variant's Shopify option values plus every Shopify-only option this coordinate delivers (A4), read through the ONE
+ * own-axis reader (`variation-own-axes.ts`) — the reader the sheet cell, the save's gap and collision checks and the other
+ * publishers use, so what the pop-up counts is what is sent. It reads the Shared attributes only: the family axes stay on
+ * the caller's `variationBag` + `storedVariationValues` line, the one the store-reader gates name
+ * (`variation-store-readers` / `variation-one-writer`; measured in CI on #141 when a helper read the legacy bag itself).
  */
-export function shopifyVariantOptions(product: { categoryAttributes: unknown; variantAttributes?: unknown }, familyAxes: string[], ownKeys: readonly string[]): Record<string, string> {
-  const stored = { categoryAttributes: product.categoryAttributes, variantAttributes: product.variantAttributes ?? {} }
-  return {
-    ...variationBag(stored) as Record<string, string>,
-    ...storedVariationValues(stored, familyAxes),
-    ...ownAxisValuesFor(ownKeys, null, product.categoryAttributes),
-  }
+export function withShopifyOwnOptions(options: Record<string, string>, ownKeys: readonly string[], categoryAttributes: unknown): Record<string, string> {
+  return ownKeys.length ? { ...options, ...ownAxisValuesFor(ownKeys, null, categoryAttributes) } : options
 }
 
 export function applyShopifyVariationProjection(draft: ShopifyContent, projection: ReturnType<typeof resolveVariationProjection>): ShopifyContent {
@@ -127,7 +124,7 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
     const followed = sellable.get(p.id) ?? p.totalStock
     const stock = offer && !offer.followMasterQuantity ? offer.quantityOverride ?? offer.quantity ?? followed : followed
     const compareAtPrice = nativeListingValue(offer, 'compareAtPrice')
-    return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: shopifyVariantOptions({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes, ownOptionKeys), price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
+    return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: withShopifyOwnOptions({ ...variationBag({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }) as Record<string, string>, ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, ownOptionKeys, p.categoryAttributes), price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
   })
   const revision = digest([family, market?.schemaMapping, mediaFiles, listings.map(l => [l.id, l.version, l.platformAttributes, l.priceOverride, l.quantityOverride, l.price, l.quantity, l.followMasterPrice, l.followMasterQuantity, l.stockBuffer])])
   const errors = [...inspectShopifyContent(draft, variants), ...shopifyOptionValueProblems(draft, variants)]
