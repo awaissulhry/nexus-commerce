@@ -95,3 +95,34 @@ export function classifyRow(row: { field: string; locale?: string }, storage: Co
   // A key the map does not know is reported, never copied on a guess.
   return never('this field is not shared yet')
 }
+
+// ── Sharing studio step 4 — a channel listing's own fields ───────────────────────────────────────
+
+/**
+ * The channel-spec groups whose fields are a listing's own CONTENT: copied once, with the "listings" group, into the
+ * drafts the receiving business makes. An allow-list: a group not named here — offer terms, shipping, policies,
+ * photos, variations, listing format, business prices, anything new or ungrouped (Shopify's store fields) — is never
+ * copied on a guess. `category_attributes` is Etsy's item specifics.
+ */
+export const LISTING_CONTENT_GROUPS: ReadonlySet<string> = new Set(['content', 'aspects', 'category_attributes', 'product_details', 'product_identity', 'classification', 'safety_and_compliance'])
+
+/**
+ * Fields inside those groups that name something one business owns, so a copy would point at the other business's
+ * record: eBay's description theme (a template of the business), Etsy's shop section and production partners.
+ */
+export const BUSINESS_OWNED_LISTING_FIELDS: ReadonlySet<string> = new Set(['descriptionThemeId', 'shop_section_id', 'production_partner_ids'])
+
+/** The disposition of one listing field (a channel field-catalogue entry), or of the listing's channel category. */
+export function classifyListingField(field: { key?: string; group?: string | null; managed?: boolean; category?: boolean }): Disposition {
+  if (field.category) return g('listings')
+  if (field.managed) return never('price and stock belong to each business')
+  if (field.key && BUSINESS_OWNED_LISTING_FIELDS.has(field.key)) return never('it names a record of the business that shares')
+  const group = String(field.group ?? '').split(':').pop()!.toLowerCase()
+  if (LISTING_CONTENT_GROUPS.has(group)) return g('listings')
+  if (group === 'offer' || group === 'listing') return never('offer terms belong to each seller account')
+  if (group === 'shipping' || group === 'policies') return never('shipping and business policies belong to each seller account')
+  if (group === 'images') return never('photos per listing are not copied yet')
+  if (group === 'variations') return never('each business lays out its own variations')
+  return never('this listing field is not shared yet')
+}
+

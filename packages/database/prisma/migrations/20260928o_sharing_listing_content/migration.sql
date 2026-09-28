@@ -1,3 +1,16 @@
+-- Sharing studio step 4: a share may also offer "Listing content" (field group `listings`).
+-- Plan: docs/2026-09-28-sharing-review-and-plan.md §13.
+--
+-- The database's list of allowed field groups gains 'listings': a listing's own content (title, description, bullet
+-- points, item specifics, category, per language), copied ONCE into the drafts the receiving business makes from the
+-- shared product's listing layout. Never price, stock, offer terms, shipping, business policies, ids or photos: the
+-- application copies only an allow-list of fields (field-groups.ts `classifyListingField`), and only into a draft that
+-- has no content of its own.
+--
+-- Rules only: no table, column or row changes. The check "AssortmentShare_field_groups_check" is dropped and made
+-- again with the longer list, in the same transaction; every existing share already satisfies it. This migration
+-- ENDS WITH packages/database/workspaces/assortment-share.sql byte for byte (policy-migrations.json).
+
 -- AE.2 — offering an assortment to another business profile.
 -- Plan: docs/2026-09-16-assortment-engine-plan.md §14.
 --

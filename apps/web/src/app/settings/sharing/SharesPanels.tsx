@@ -183,5 +183,5 @@ function CopyRuns({ share, canAct, onOpen }: { share: Share; canAct: boolean; on
       ? <Button size="sm" onClick={() => onOpen(run.id)}>Continue</Button>
       : run.state === 'partial' ? <Button size="sm" onClick={() => onOpen(run.id)}>See problems</Button> : null }] : []),
   ]
-  return <DataGrid ariaLabel={`Copies from ${share.ownerWorkspaceName}`} columns={columns} rows={runs} rowKey={(run) => run.id} />
+  return <DataGrid maxHeight={320} ariaLabel={`Copies from ${share.ownerWorkspaceName}`} columns={columns} rows={runs} rowKey={(run) => run.id} />
 }

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { FIELD_GROUPS } from './share-rules.js'
-import { PRODUCT_COLUMNS, classifyRow } from './field-groups.js'
+import { PRODUCT_COLUMNS, classifyListingField, classifyRow } from './field-groups.js'
 
 const schemaPath = fileURLToPath(new URL('../../../../../packages/database/prisma/schema.prisma', import.meta.url))
 
@@ -61,5 +61,24 @@ describe('AE.3 field groups', () => {
     expect(classifyRow({ field: 'item_name' }, 'listing', 'it')).toMatchObject({ never: expect.stringMatching(/listing/) })
     expect(classifyRow({ field: 'gtin' }, 'column', 'it')).toEqual({ group: 'identity' })
     expect(classifyRow({ field: 'mystery' }, undefined, 'it')).toMatchObject({ never: 'this field is not shared yet' })
+  })
+})
+
+describe('sharing studio step 4 — which listing fields a copy of listing content carries', () => {
+  const copies = (field: Parameters<typeof classifyListingField>[0]) => 'group' in classifyListingField(field)
+  it('copies the content groups and the category, by the channel spec\'s own group keys', () => {
+    for (const group of ['content', 'aspects', 'category_attributes', 'product_details', 'product_identity', 'classification', 'safety_and_compliance']) expect(copies({ key: 'x', group }), group).toBe(true)
+    expect(copies({ key: 'categoryId', group: 'classification', category: true })).toBe(true)
+    expect(copies({ key: 'item_name', group: 'amazon:product_identity' })).toBe(true)
+  })
+  it('never copies price or stock, offer terms, shipping, policies, photos, variations or an unknown group', () => {
+    expect(copies({ key: 'price', group: 'offer', managed: true })).toBe(false)
+    expect(copies({ key: 'title', group: 'content', managed: true })).toBe(false)
+    for (const group of ['offer', 'listing', 'shipping', 'policies', 'images', 'variations', 'search', 'ungrouped', '', null]) expect(copies({ key: 'x', group }), String(group)).toBe(false)
+  })
+  it('never copies a field that names a record of the sharing business, whatever its group', () => {
+    expect(copies({ key: 'descriptionThemeId', group: 'content' })).toBe(false)
+    expect(copies({ key: 'shop_section_id', group: 'classification' })).toBe(false)
+    expect(copies({ key: 'production_partner_ids', group: 'classification' })).toBe(false)
   })
 })

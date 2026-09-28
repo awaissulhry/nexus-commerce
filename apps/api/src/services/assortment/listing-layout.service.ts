@@ -11,6 +11,9 @@
  * this business publishes. Made again, nothing is doubled: the main listing is `ensureDraftListings` (one row per
  * coordinate) and an alias with the same name on the same account and market is reused.
  *
+ * Step 4: when the share also offers "Listing content", each draft here that has no content of its own yet receives the
+ * sharing business's content for that listing, once (listing-content.service.ts).
+ *
  * Reading the sharing business: the database door (`nexus_assortment_sync_source`, via `linkSource`) answers only
  * the follower, for its own active link, and names the product; the rows are then read in the owner's context as
  * the system, and the context is checked back — the same path as the live sync (copy-source.service.ts).
@@ -25,6 +28,8 @@ import { DraftListingError, ensureDraftListingsInTransaction } from '../pim/draf
 import { createAlias } from '../pim/listing-alias.service.js'
 import { ProductRelationshipError } from '../pim/product-relationship.service.js'
 import { linkSource } from './copy-source.service.js'
+import { copyListingContent, draftsWithOwnContent, sourceContentSlots, type ListingContentResult } from './listing-content.service.js'
+import { logger } from '../../utils/logger.js'
 
 const LIVE_OR_DRAFT = { notIn: ['ENDED', 'REMOVED'] }
 
@@ -33,6 +38,8 @@ export interface LayoutSlot {
   position: number
   /** The alias's name; null for the main listing. */
   label: string | null
+  /** Only when the share offers listing content: the sharing business's listing has content a copy would carry. */
+  content?: boolean
 }
 
 export interface LayoutGroup {
@@ -58,19 +65,28 @@ export interface FollowerAccount {
   markets: string[]
 }
 
+export interface PresentSlots {
+  main: boolean
+  aliases: string[]
+  /** Only when the share offers listing content: the drafts here that have no content of their own yet. */
+  blank?: { main: boolean; aliases: string[] }
+}
+
 export interface LayoutHere {
   /** This business's account the group would be made on by default (its account of the same rank), or null. */
   suggestedAccountId: string | null
   /** Why the group cannot be made here, in words; null when it can. */
   blocked: string | null
   /** Per account of this business: which slots already exist there (main listing, aliases by name). */
-  present: Record<string, { main: boolean; aliases: string[] }>
+  present: Record<string, PresentSlots>
 }
 
 export interface ListingLayoutView {
   productId: string
   rootId: string
   sourceBusiness: string
+  /** The share offers "Listing content": each draft made here gets the sharing business's content, once. */
+  copiesContent: boolean
   groups: Array<LayoutGroup & { here: LayoutHere }>
   /** This business's accounts per channel of the layout. */
   accounts: Record<string, FollowerAccount[]>
@@ -90,7 +106,7 @@ async function followedRoot(productId: string) {
 }
 
 /** The sharing business's layout of the product the link follows. Call in the FOLLOWER's context. */
-async function sourceGroups(linkId: string): Promise<{ groups: SourceGroup[]; sourceBusiness: string }> {
+async function sourceGroups(linkId: string): Promise<{ groups: SourceGroup[]; sourceBusiness: string; copiesContent: boolean }> {
   const follower = requireWorkspace()
   const door = await linkSource(linkId)
   if (!door.source || door.source.deleted) throw new WorkspaceError('source_gone', 'The shared product is no longer shared, so its listing layout cannot be read.', 409)
@@ -131,18 +147,45 @@ async function sourceGroups(linkId: string): Promise<{ groups: SourceGroup[]; so
     group.sourceAccounts = new Set(groups.filter((g) => g.channel === group.channel).map((g) => g.sourceAccount)).size
   }
   groups.sort((a, b) => a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace) || a.sourceAccount - b.sourceAccount)
-  return { groups, sourceBusiness: read.name }
+  return { groups, sourceBusiness: read.name, copiesContent: (door.fieldGroups as string[]).includes('listings') }
 }
 
-/** This business's accounts, markets and existing listings for the layout's channels. */
-async function followerSide(rootId: string, channels: string[]) {
+/** This business's accounts, markets and existing listings for the layout's channels (and, for content, its blank drafts). */
+async function followerSide(rootId: string, channels: string[], copiesContent = false) {
   const accounts = await listableAccounts(channels)
   const [markets, listings, aliases] = await Promise.all([
     prisma.marketplace.findMany({ where: { channel: { in: channels }, isActive: true }, select: { channel: true, code: true } }),
     prisma.channelListing.findMany({ where: { productId: rootId, aliasKey: '', listingStatus: LIVE_OR_DRAFT }, select: { channel: true, marketplace: true, channelConnectionId: true } }),
-    prisma.productListingAlias.findMany({ where: { productId: rootId, status: 'ACTIVE' }, select: { channel: true, marketplace: true, channelConnectionId: true, label: true } }),
+    prisma.productListingAlias.findMany({ where: { productId: rootId, status: 'ACTIVE' }, select: { id: true, channel: true, marketplace: true, channelConnectionId: true, label: true } }),
   ])
-  return { accounts, markets: new Set(markets.map((m) => `${m.channel}|${m.code}`)), listings, aliases }
+  return { accounts, markets: new Set(markets.map((m) => `${m.channel}|${m.code}`)), listings, aliases, blank: copiesContent ? await blankDrafts(rootId, channels, aliases) : null }
+}
+
+/**
+ * Per `${channel}|${market}|${account}`: the slots (main listing, aliases by name) whose draft here — the family's own
+ * listing, which the layout names — has no listing content of its own yet: what a copy would fill.
+ */
+async function blankDrafts(rootId: string, channels: string[], aliases: Array<{ id: string; label: string }>): Promise<Map<string, { main: boolean; aliases: string[] }>> {
+  const drafts = await prisma.channelListing.findMany({
+    where: { productId: rootId, channel: { in: channels }, listingStatus: 'DRAFT', isPublished: false, externalListingId: null, channelConnectionId: { not: null } },
+    select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true },
+  })
+  const out = new Map<string, { main: boolean; aliases: string[] }>()
+  for (const market of new Set(drafts.map((d) => d.marketplace))) {
+    const here = drafts.filter((d) => d.marketplace === market)
+    const owned = await draftsWithOwnContent(here, [rootId], market)
+    for (const draft of here.filter((d) => !owned.has(d.id))) {
+      const key = `${draft.channel}|${draft.marketplace}|${draft.channelConnectionId}`
+      const slots = out.get(key) ?? { main: false, aliases: [] }
+      out.set(key, slots)
+      if (!draft.aliasKey) slots.main = true
+      else {
+        const label = aliases.find((a) => a.id === draft.aliasKey)?.label
+        if (label && !slots.aliases.includes(label)) slots.aliases.push(label)
+      }
+    }
+  }
+  return out
 }
 
 /**
@@ -174,7 +217,8 @@ function hereFor(group: SourceGroup, side: Awaited<ReturnType<typeof followerSid
   for (const account of accounts) {
     const at = (c: { channel: string; marketplace: string; channelConnectionId: string | null }) =>
       c.channel === group.channel && c.marketplace === group.marketplace && c.channelConnectionId === account.id
-    present[account.id] = { main: side.listings.some(at), aliases: side.aliases.filter(at).map((a) => a.label) }
+    const blank = side.blank?.get(`${group.channel}|${group.marketplace}|${account.id}`) ?? { main: false, aliases: [] }
+    present[account.id] = { main: side.listings.some(at), aliases: side.aliases.filter(at).map((a) => a.label), ...(side.blank ? { blank } : {}) }
   }
   const channelName = channelLabel(group.channel)
   const blocked = !accounts.length ? `This business has no ${channelName} account. Connect one in Settings › Channels.`
@@ -188,9 +232,11 @@ function hereFor(group: SourceGroup, side: Awaited<ReturnType<typeof followerSid
 /** The shared product's layout, and what this business has of it. `productId` may be a variation: its family's. */
 export async function listingLayout(productId: string): Promise<ListingLayoutView> {
   const { rootId, link } = await followedRoot(productId)
-  const { groups, sourceBusiness } = await sourceGroups(link.id)
-  const side = await followerSide(rootId, [...new Set(groups.map((g) => g.channel))])
-  return { productId, rootId, sourceBusiness, accounts: side.accounts, groups: groups.map((g) => ({ ...g, here: hereFor(g, side) })) }
+  const { groups, sourceBusiness, copiesContent } = await sourceGroups(link.id)
+  const side = await followerSide(rootId, [...new Set(groups.map((g) => g.channel))], copiesContent)
+  const content = copiesContent ? await sourceContentSlots(link.id, groups) : null
+  if (content) for (const group of groups) for (const slot of group.slots) slot.content = content.get(group.key)?.has(slot.label ? slot.label.trim().toLowerCase() : '') ?? false
+  return { productId, rootId, sourceBusiness, copiesContent, accounts: side.accounts, groups: groups.map((g) => ({ ...g, here: hereFor(g, side) })) }
 }
 
 export interface LayoutChoice { key: string; accountId: string | null }
@@ -202,6 +248,8 @@ export interface LayoutGroupResult {
   aliases: number
   /** Why this group was not made, in words; null when it was (or already was). */
   refused: string | null
+  /** Only when the share offers listing content: what was copied into the drafts of this group. */
+  content: ListingContentResult | null
 }
 
 /**
@@ -211,25 +259,35 @@ export interface LayoutGroupResult {
 export async function applyListingLayout(productId: string, input: { choices?: unknown }, actorUserId: string | null = requireWorkspace().actorUserId ?? null): Promise<{ results: LayoutGroupResult[] }> {
   const choices = parseChoices(input.choices)
   const { rootId, link } = await followedRoot(productId)
-  const { groups } = await sourceGroups(link.id)
+  const { groups, copiesContent } = await sourceGroups(link.id)
   const side = await followerSide(rootId, [...new Set(groups.map((g) => g.channel))])
   const results: LayoutGroupResult[] = []
+  const refuse = (key: string, refused: string) => results.push({ key, listings: 0, aliases: 0, refused, content: null })
   for (const choice of choices) {
     if (!choice.accountId) continue
     const group = groups.find((g) => g.key === choice.key)
-    if (!group) { results.push({ key: choice.key, listings: 0, aliases: 0, refused: 'The shared product is no longer listed like this. Reload the page.' }); continue }
+    if (!group) { refuse(choice.key, 'The shared product is no longer listed like this. Reload the page.'); continue }
     const here = hereFor(group, side)
-    if (here.blocked) { results.push({ key: group.key, listings: 0, aliases: 0, refused: here.blocked }); continue }
+    if (here.blocked) { refuse(group.key, here.blocked); continue }
     if (!(side.accounts[group.channel] ?? []).some((a) => a.id === choice.accountId && allows(a, group.marketplace))) {
-      results.push({ key: group.key, listings: 0, aliases: 0, refused: 'That account is not connected in this business. Reload the page.' }); continue
+      refuse(group.key, 'That account is not connected in this business. Reload the page.'); continue
     }
-    results.push(await makeGroup(rootId, group, choice.accountId, here.present[choice.accountId] ?? { main: false, aliases: [] }, actorUserId))
+    const result = await makeGroup(rootId, group, choice.accountId, here.present[choice.accountId] ?? { main: false, aliases: [] }, actorUserId)
+    // The content goes into the drafts, made now or before, that have none of their own yet. The drafts stand even
+    // when the copy cannot be made; the result says why.
+    if (copiesContent && !result.refused) {
+      result.content = await copyListingContent({ linkId: link.id, rootId, group, accountId: choice.accountId }).catch((error: unknown) => {
+        logger.warn('[assortment] listing content copy failed', { linkId: link.id, group: group.key, error: error instanceof Error ? error.message : String(error) })
+        return { listings: 0, copied: 0, notShared: 0, refused: [], noCategory: [], onChannel: [], ownContent: [], otherLanguages: [], error: error instanceof Error ? error.message : 'The listing content could not be read.' }
+      })
+    }
+    results.push(result)
   }
   return { results }
 }
 
 async function makeGroup(rootId: string, group: SourceGroup, accountId: string, present: { main: boolean; aliases: string[] }, actorUserId: string | null): Promise<LayoutGroupResult> {
-  const result: LayoutGroupResult = { key: group.key, listings: 0, aliases: 0, refused: null }
+  const result: LayoutGroupResult = { key: group.key, listings: 0, aliases: 0, refused: null, content: null }
   try {
     if (group.slots.some((s) => s.position === 0) && !present.main) {
       const rows = await ensureDraftListingsInTransaction({ channel: group.channel, market: group.marketplace, accountId, productIds: [rootId], family: true })
@@ -284,11 +342,14 @@ async function linkedRoots(shareId: string) {
 }
 
 /** Per channel and account of the sharing business: how many followed products it lists, where, with how many aliases. */
-export async function shareLayout(shareId: string): Promise<{ groups: ShareLayoutGroup[]; accounts: Record<string, FollowerAccount[]> }> {
+export async function shareLayout(shareId: string): Promise<{ groups: ShareLayoutGroup[]; accounts: Record<string, FollowerAccount[]>; copiesContent: boolean }> {
   const roots = await linkedRoots(shareId)
   const byKey = new Map<string, ShareLayoutGroup & { marketSet: Set<string>; productSet: Set<string> }>()
+  let copiesContent = false
   for (const root of roots) {
-    const { groups } = await sourceGroups(root.id)
+    const read = await sourceGroups(root.id)
+    const { groups } = read
+    copiesContent ||= read.copiesContent
     for (const g of groups) {
       const key = `${g.channel}|${g.sourceAccount}`
       const entry = byKey.get(key) ?? { key, channel: g.channel, sourceAccount: g.sourceAccount, sourceAccounts: 0, products: 0, markets: [], aliases: 0, suggestedAccountId: null, marketSet: new Set<string>(), productSet: new Set<string>() }
@@ -304,16 +365,18 @@ export async function shareLayout(shareId: string): Promise<{ groups: ShareLayou
   const groups = [...byKey.values()].map(({ marketSet, productSet, ...g }) => ({
     ...g, markets: [...marketSet].sort(), products: productSet.size, suggestedAccountId: (accounts[g.channel] ?? []).filter((a) => !a.sharedBy)[g.sourceAccount - 1]?.id ?? null,
   })).sort((a, b) => a.channel.localeCompare(b.channel) || a.sourceAccount - b.sourceAccount)
-  return { groups, accounts }
+  return { groups, accounts, copiesContent }
 }
 
+export interface ShareContentResult { listings: number; copied: number; ownContent: number; onChannel: number }
+
 /** Make the layout of every followed product of the share, one choice per channel and account of the sharing business. */
-export async function applyShareLayout(shareId: string, input: { choices?: unknown }): Promise<{ products: number; listings: number; aliases: number; refused: Array<{ productId: string; sku: string; reason: string }> }> {
+export async function applyShareLayout(shareId: string, input: { choices?: unknown }): Promise<{ products: number; listings: number; aliases: number; content: ShareContentResult | null; refused: Array<{ productId: string; sku: string; reason: string }> }> {
   const choices = parseChoices(input.choices)
   const pick = new Map(choices.map((c) => [c.key, c.accountId]))
   const roots = await linkedRoots(shareId)
   const skus = new Map((await prisma.product.findMany({ where: { id: { in: roots.map((r) => r.targetProductId) } }, select: { id: true, sku: true } })).map((p) => [p.id, p.sku]))
-  const out = { products: 0, listings: 0, aliases: 0, refused: [] as Array<{ productId: string; sku: string; reason: string }> }
+  const out = { products: 0, listings: 0, aliases: 0, content: null as ShareContentResult | null, refused: [] as Array<{ productId: string; sku: string; reason: string }> }
   for (const root of roots) {
     const { groups } = await sourceGroups(root.id)
     const mine = groups.map((g) => ({ key: g.key, accountId: pick.get(`${g.channel}|${g.sourceAccount}`) ?? null })).filter((c) => c.accountId)
@@ -323,7 +386,16 @@ export async function applyShareLayout(shareId: string, input: { choices?: unkno
     for (const r of results) {
       out.listings += r.listings
       out.aliases += r.aliases
-      if (r.refused) out.refused.push({ productId: root.targetProductId, sku: skus.get(root.targetProductId) ?? root.targetProductId, reason: r.refused })
+      const sku = skus.get(root.targetProductId) ?? root.targetProductId
+      if (r.refused) out.refused.push({ productId: root.targetProductId, sku, reason: r.refused })
+      if (!r.content) continue
+      const content = out.content ??= { listings: 0, copied: 0, ownContent: 0, onChannel: 0 }
+      content.listings += r.content.listings
+      content.copied += r.content.copied
+      content.ownContent += r.content.ownContent.length
+      content.onChannel += r.content.onChannel.length
+      for (const refusal of r.content.refused) out.refused.push({ productId: root.targetProductId, sku, reason: refusal.field ? `“${refusal.field}” of ${refusal.listing === 'main listing' ? 'the main listing' : `“${refusal.listing}”`} was not copied. ${refusal.message}` : `The content of ${refusal.listing === 'main listing' ? 'the main listing' : `“${refusal.listing}”`} was not copied. ${refusal.message}` })
+      for (const listing of r.content.noCategory) out.refused.push({ productId: root.targetProductId, sku, reason: `The content of ${listing === 'main listing' ? 'the main listing' : `“${listing}”`} was not copied: it has no channel category in either business. Choose one on the listing, then copy again.` })
     }
   }
   return out

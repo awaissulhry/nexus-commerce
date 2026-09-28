@@ -10,6 +10,7 @@ The review facts were read from `origin/main` (c520befc5).
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-28 | R-SH-5 | "Go ahead, I'll go with your recommendations": the two-primaries defect (§11) is fixed in its own PR (#151, from main): a business's primary is its own account, never one another business shares with it. |
 | 2026-09-28 | R-SH-4 | "Keep it all running, and when everything's done, push it to production … AAA … if there is anything next in the plan, go ahead." |
 | 2026-09-28 | R-SH-3 | Step 3: "Go ahead." |
 | 2026-09-28 | R-SH-2 | Step 2: "Go ahead." |
@@ -333,4 +334,90 @@ Copying it across businesses needs the field group (a CHECK-constraint migration
 sharing business's rank/alias to this business's account/alias, and a check on real listing content. Rushing that
 into this production push would put untested writes on live listing data. It is the next change: its own branch and
 PR, with the same local proof on a copy of real listing content first.
+
+## 13. Step 4 — design (2026-09-28, before any code; its own branch `feat/sharing-listing-content`)
+
+**What it adds.** A share may also offer **Listing content**: when the receiving business makes the listing layout
+(step 3), each draft it makes gets the sharing business's own content for that listing, **once**. After that the
+receiving business owns it; nothing follows live.
+
+**Field group `listings` — off by default.** Offered only when the sharing business ticks it (the default groups do not
+include it). The database's list of allowed groups gains `listings` (`assortment-share.sql`, a migration).
+- **Copied:** the listing's title, description and bullet points (its own, or "follows the product"), item specifics
+  (the channel's attribute fields), the channel category, and the same per language (`ChannelListingTranslation`).
+- **Never copied:** price, sale price, quantity and stock settings, seller SKU, listing status and publication, item
+  and offer ids, eBay business policies (payment, return, shipping — they belong to one seller account), and every
+  fulfilment setting.
+
+**How.** The only writer is the catalog transfer engine, as for a file import and the live sync: the sharing business's
+rows for that one listing are read through the guarded door (in its context, as the system), exported as the
+engine's `Listings`/`Overrides` rows, filtered to the copied fields, moved to the receiving coordinate (its SKU, its
+account, its alias of the same name), planned against the receiving business's channel contract, and applied. A field
+the contract refuses is left out and named. Only a listing that is still a **draft here** (never published, no channel
+id) receives content: a listing on a channel is never changed, and the result says so.
+
+**Screens.** Settings' offer dialog gets the "Listing content" choice with its words (off by default). The studio card
+and the Settings dialog say, before making, that content will be copied into the drafts, and after, how many fields
+were copied and which were refused.
+
+**Not in step 4a:** photos per alias (the media plan's listing layers). They need the receiving family on the media
+plan and a photo map per alias; that is step 4b.
+
+**Proof planned.** Real-PostgreSQL: a listing with its own title, specifics, a translation, a price and a policy in A;
+made in B → the title, specifics and translation arrive, the price and the policy do not; a listing in B already on a
+channel is untouched; made again changes nothing. Browser: the offer dialog, the studio card, Settings' dialog.
+
+
+## 14. Step 4 — build record (2026-09-28)
+
+**Built as designed (§13), with five findings folded in.**
+- `services/assortment/listing-content.service.ts` — the copy. The sharing business's rows at one coordinate are read
+  through the door (`linkSource`) in its context and exported by `catalogRows` (listings only; the bounded export already
+  leaves price and stock out). Each row is classified by the field its channel declares for the category the row was
+  read under (`classifyListingField`, an allow-list of spec groups: `content`, `aspects`, `category_attributes`,
+  `product_details`, `product_identity`, `classification`, `safety_and_compliance`). Rows move to this business's SKU
+  (through the share's links), account and alias of the same name, and are planned and applied **per listing** by the
+  transfer engine with no channel push (`queueOutbound: false`), under the sync-write flag.
+- Wired into `applyListingLayout` (studio and Settings): every chosen group copies into the family's drafts that have
+  no content of their own, made now or before. The drafts stand when the copy cannot be made; the result says why.
+- The studio's GET says, per slot, whether the other business has content to copy (`slot.content`) and which drafts
+  here are still blank (`present.blank`), so the card offers "Copy content into N listings" only when it would copy.
+- Migration `20260928o_sharing_listing_content` re-applies `assortment-share.sql`: the field-group check gains
+  `listings` (rules only; drop and re-add in one transaction).
+
+**Findings, fixed before commit.**
+1. A listing with no category (none of its own, none mapped by default) made the engine refuse its fields — and, with
+   every listing planned together, the same fields of the other listings too. Now each listing is planned alone; one
+   with no category on either side is named ("Choose one on the listing, then copy again"), never failed.
+2. A category is not content: a draft whose only own value is a category chosen here stays open to a copy, and the
+   copy never replaces that category (the source's category travels only as a value, only into a draft with none).
+3. A listing that over there only follows the product has nothing to copy: no refusal, no note.
+4. Fields inside allowed groups that name a record of one business are never copied: eBay's description theme (a
+   template of the business), Etsy's shop section and production partners (`BUSINESS_OWNED_LISTING_FIELDS`).
+5. A text in a language this business's market does not carry is left out and named ("Text in German was not copied").
+Shopify's store fields carry no spec group, so the allow-list copies none of them; its card offers no copy.
+
+**Also.** The offer dialog's words now name listing content ("live channel listings always stay with each business").
+The sharing page's grids without a height limit showed ~110 px of empty grid body under one row (AG Grid's
+auto-height minimum); they now take `maxHeight` like the studio's, so each grid is as tall as its rows.
+
+**Proof.**
+- Real PostgreSQL (`assortment/sync.vitest.test.ts` arm 4c, 16/16): A's listing with a title in Italian and German,
+  a subtitle, an item specific, a category, a price, a condition and a shipping policy; made in B → the category,
+  subtitle, item specific and Italian titles arrive; the German title, price, condition and policy do not; A is
+  untouched; made again → B's own title stays; a listing of B's on eBay is never changed; no category on either side →
+  named, nothing written; B chooses a category → the copy fills the title and keeps B's category.
+- Unit: the classifier (7), the share rules, the words (17); the AE.2 share tests take "listings" as a valid group.
+- Local stack (profiles ON, private DB copy): the studio card offered "Copy content into 2 listings", copied the title,
+  subtitle and category into B's drafts, not the description theme or shipping policy; drafts stayed DRAFT, unpublished,
+  sync paused; nothing queued. Settings' dialog and the offer dialog; keyboard; light and dark; 390 px (no page scroll).
+- API and web typecheck; 59/59 static gates; policy parity; the fresh-vs-upgraded migration check (504 migrations).
+
+## 15. The two-primaries fix — PR #151 (2026-09-28, R-SH-5)
+
+From `origin/main`, independent of #149/#150. `chooseConnection` chooses only among the business's own accounts;
+a shared account is used only when named or derived. `listActiveConnections` lists own accounts first, so the layout's
+"account 1 of 2" ranks (§11) are always the sharing business's own. Screens never mark a shared account "Primary".
+Proof: 8 new tests (resolver unit, and the account-grant suite on the generated RLS) fail on main's resolver and pass
+with the fix; full API suite (the only failures are the env-only ones of a fresh worktree, identical on main).
 

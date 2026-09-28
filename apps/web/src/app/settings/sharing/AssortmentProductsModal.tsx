@@ -84,7 +84,7 @@ export function AssortmentProductsModal({ assortment, canEdit, onClose }: { asso
         ? <ProductPicker label={list ? 'Add a product' : 'Exclude a product'} exclude={new Set((members ?? []).map((row) => row.productId))}
           onPick={(choice) => { void change('add', choice.id, choice.sku) }} onDone={() => setAdding(false)} busy={busy !== null} />
         : <div className="business-profile-actions"><Button variant="primary" onClick={() => setAdding(true)}>{list ? 'Add a product' : 'Exclude a product'}</Button></div>)}
-      {members && <DataGrid ariaLabel={list ? 'Products in this assortment' : 'Excluded products'} columns={columns} rows={members} rowKey={(row) => row.productId}
+      {members && <DataGrid maxHeight={420} ariaLabel={list ? 'Products in this assortment' : 'Excluded products'} columns={columns} rows={members} rowKey={(row) => row.productId}
         emptyState={<p>{list ? 'No products yet. Variations follow their parent, so add the parent product.' : 'No products are excluded.'}</p>} />}
       {nextCursor && <div className="business-profile-actions"><Button disabled={busy !== null} onClick={() => { void loadMore() }}>{busy === 'more' ? 'Loading…' : 'Show more'}</Button></div>}
     </div>

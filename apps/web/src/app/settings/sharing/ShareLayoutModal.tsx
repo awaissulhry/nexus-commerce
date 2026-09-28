@@ -9,11 +9,11 @@ import { useEffect, useState } from 'react'
 import { Banner, Listbox, Modal, ProgressBar } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button } from '@/design-system/primitives'
-import { accountOptions, shareLayoutRowWords, shareMadeWords, type FollowerAccount, type ShareLayoutGroup } from './layoutWords'
+import { accountOptions, contentNoteWords, shareLayoutRowWords, shareMadeWords, type FollowerAccount, type ShareContentResult, type ShareLayoutGroup } from './layoutWords'
 import { sharingApi, type Share } from './sharingApi'
 
-interface Layout { groups: ShareLayoutGroup[]; accounts: Record<string, FollowerAccount[]> }
-interface Made { products: number; listings: number; aliases: number; refused: Array<{ productId: string; sku: string; reason: string }> }
+interface Layout { groups: ShareLayoutGroup[]; accounts: Record<string, FollowerAccount[]>; copiesContent: boolean }
+interface Made { products: number; listings: number; aliases: number; content: ShareContentResult | null; refused: Array<{ productId: string; sku: string; reason: string }> }
 
 export function ShareLayoutModal({ share, onClose }: { share: Share; onClose: () => void }) {
   const [layout, setLayout] = useState<Layout | null>(null)
@@ -64,11 +64,11 @@ export function ShareLayoutModal({ share, onClose }: { share: Share; onClose: ()
       {error && <Banner tone="danger" action={layout ? undefined : <Button onClick={() => setAttempt((n) => n + 1)}>Retry</Button>}>{error}</Banner>}
       {!layout && !error && <ProgressBar indeterminate ariaLabel={`Reading where ${share.ownerWorkspaceName} lists these products`} />}
       {result && <div role="status"><Banner tone={result.refused.length ? 'warning' : 'success'} title={result.text}>
-        {result.refused.map((line) => <p key={line} className="shared-products-note">{line}</p>)}
+        {[...result.notes, ...result.refused].map((line) => <p key={line} className="shared-products-note">{line}</p>)}
       </Banner></div>}
       {layout && (layout.groups.length === 0
         ? <p className="shared-products-note">{share.ownerWorkspaceName} does not list the linked products on any channel yet. Copy products first, if none are linked.</p>
-        : <DataGrid maxHeight={420} ariaLabel="Where the other business lists these products" columns={columns} rows={layout.groups} rowKey={(g) => g.key} />)}
+        : <>{layout.copiesContent && !made && <p className="shared-products-note">{contentNoteWords(share.ownerWorkspaceName)}</p>}<DataGrid maxHeight={420} ariaLabel="Where the other business lists these products" columns={columns} rows={layout.groups} rowKey={(g) => g.key} /></>)}
       {layout && layout.groups.length > 0 && chosen.length === 0 && !made && <p className="shared-products-note">Choose an account for at least one row to make drafts.</p>}
     </div>
   </Modal>
