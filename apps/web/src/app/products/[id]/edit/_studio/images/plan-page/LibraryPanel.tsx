@@ -28,8 +28,8 @@ export interface LibraryPanelProps {
   draggable: boolean
   /** Keyboard: jump past the library (two Tab stops per photo) to the photo plan. */
   onSkip?(): void
-  /** "Looks like …" (W4a): compare this photo with a look-alike at another address. */
-  onLookalike?(a: string, b: string): void
+  /** "Looks like …" / "Similar to …" (W4a/W4b): compare this photo with a look-alike. */
+  onLookalike?(a: string, b: string, kind: 'same' | 'versions'): void
 }
 
 const FILTERS: Array<{ value: LibraryFilter; label: string }> = [
@@ -105,8 +105,11 @@ export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPendi
               {problems.map(p => <Tag key={p} tone="warning">{p}</Tag>)}
               {uses.slice(0, 2).map(u => <span key={u} className={styles.use}>{u}</span>)}
               {uses.length > 2 && <span className={styles.use}>+{uses.length - 2} more</span>}
-              {onLookalike && asset.lookalikes?.slice(0, 1).map(other => <Button key={other.id} size="xs" variant="link" onClick={() => onLookalike(asset.id, other.id)}>
-                Looks like {read.library.find(x => x.id === other.id)?.label ?? 'another photo'}</Button>)}
+              {onLookalike && asset.lookalikes?.slice(0, 1).map(other => {
+                const name = read.library.find(x => x.id === other.id)?.label ?? 'another photo'
+                return <Button key={other.id} size="xs" variant="link" onClick={() => onLookalike(asset.id, other.id, other.kind ?? 'same')}>
+                  {other.kind === 'versions' ? `Similar to ${name} — language versions?` : `Looks like ${name}`}</Button>
+              })}
             </span>} />
         </li>
       })}

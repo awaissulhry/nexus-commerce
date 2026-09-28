@@ -43,7 +43,7 @@ a copy refused in a set that holds it, family-wide upload scope, bulk apply refu
 
 ## Fix 2 — in progress (plan: [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) W4; record: PROGRESS.md § W4a)
 - **Part 1 (W4a) built:** "Looks like …" and "Same photo?" (keep one; the other becomes its copy in every layer; Undo; Separate it); "Not the same".
-- **Part 2 (W4b):** language versions. **Part 3 (W4c):** fingerprints in production with `apps/api/src/scripts/backfill-image-facts.ts` (not the older script below), the Owner's word.
+- **Part 2 (W4b) built:** "Similar to … — language versions?", the versions choice in the same window, the photo window's language, versions and "Leave its versions"; every library answer in the page's Undo/Redo. **Part 3 (W4c):** fingerprints in production with `apps/api/src/scripts/backfill-image-facts.ts` (not the older script below), the Owner's word.
 
 ### The original plan for Fix 2
 - **Same picture at two addresses** (Amazon's copy vs ours): mark it in the library ("Looks like …") with a

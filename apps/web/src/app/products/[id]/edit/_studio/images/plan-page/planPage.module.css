@@ -95,6 +95,9 @@
 .sameSide { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; overflow-wrap: anywhere; }
 .sameSide > p { margin: 0; }
 .sameText { margin: 0; }
+/* The photo window's language choice (W4b). */
+.photoLanguage { display: flex; flex-direction: column; gap: var(--nds-space-8); margin-top: var(--nds-space-8); min-width: 0; }
+.photoLanguage > p { margin: 0; }
 @media (max-width: 640px) { .samePair { gap: var(--nds-space-10); } }
 
 /* Amazon ZIP for Seller Central (P4d): the files by ASIN, each slot with its photo. All text at the DS body size. */

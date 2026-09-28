@@ -1,5 +1,5 @@
 import { normalizeAmazonImageUrl } from './normalize-amazon-image-url.js'
-import { DHASH256_SAME_PICTURE_THRESHOLD, hammingHex, NEAR_DUP_HAMMING_THRESHOLD } from './image-hash.service.js'
+import { DHASH256_NEAR_DUP_THRESHOLD, DHASH256_SAME_PICTURE_THRESHOLD, hammingHex, NEAR_DUP_HAMMING_THRESHOLD } from './image-hash.service.js'
 
 /**
  * One picture, one library card (Owner, 2026-09-28: "multiple duplicates of the same image. I do not want that to
@@ -76,11 +76,13 @@ export interface LookalikeRow extends LibraryRow {
 }
 
 /**
- * Images W4a — cards that show the same picture at two addresses (an Amazon copy and ours), by the calibrated rule of
- * the upload gate: aHash ≤ 6 AND dHash-256 ≤ 16 (image-hash.service.ts, IE.13). Pairs that are language versions of one
+ * Images W4a/W4b — cards that look alike, by the calibrated rule of the upload gate (image-hash.service.ts, IE.13):
+ * aHash ≤ 6 AND dHash-256 ≤ 16 is the same picture at two addresses (`same`, an Amazon copy and ours); 17–26 is the same
+ * template with other text (`versions`, a size chart per language). Pairs that already are language versions of one
  * photo, or that the Owner answered "not the same" for, are left out. Per card, the other cards, closest first.
  */
-export function lookalikes(rows: readonly LookalikeRow[], entries: ReadonlyArray<{ id: string; copies: readonly string[] }>): Map<string, Array<{ id: string; distance: number }>> {
+export type LookalikeKind = 'same' | 'versions'
+export function lookalikes(rows: readonly LookalikeRow[], entries: ReadonlyArray<{ id: string; copies: readonly string[] }>): Map<string, Array<{ id: string; distance: number; kind: LookalikeKind }>> {
   const byId = new Map(rows.map(r => [r.id, r]))
   const cards = entries.map(entry => {
     const group = [entry.id, ...entry.copies].map(id => byId.get(id)).filter((r): r is LookalikeRow => !!r)
@@ -88,8 +90,8 @@ export function lookalikes(rows: readonly LookalikeRow[], entries: ReadonlyArray
     return { id: entry.id, ids: new Set(group.map(r => r.id)), hashed, version: group.find(r => r.versionGroupId)?.versionGroupId ?? null,
       distinct: new Set(group.flatMap(r => r.distinctFromIds ?? [])) }
   }).filter(card => card.hashed)
-  const out = new Map<string, Array<{ id: string; distance: number }>>()
-  const add = (from: string, to: string, distance: number) => out.set(from, [...(out.get(from) ?? []), { id: to, distance }])
+  const out = new Map<string, Array<{ id: string; distance: number; kind: LookalikeKind }>>()
+  const add = (from: string, to: string, distance: number, kind: LookalikeKind) => out.set(from, [...(out.get(from) ?? []), { id: to, distance, kind }])
   for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) {
     const a = cards[i], b = cards[j]
     if (a.version && a.version === b.version) continue
@@ -97,7 +99,10 @@ export function lookalikes(rows: readonly LookalikeRow[], entries: ReadonlyArray
     const aHash = a.hashed!.perceptualHash!, bHash = b.hashed!.perceptualHash!, aD = a.hashed!.dhash256!, bD = b.hashed!.dhash256!
     if (aHash.length !== bHash.length || aD.length !== bD.length) continue
     const distance = hammingHex(aD, bD)
-    if (hammingHex(aHash, bHash) <= NEAR_DUP_HAMMING_THRESHOLD && distance <= DHASH256_SAME_PICTURE_THRESHOLD) { add(a.id, b.id, distance); add(b.id, a.id, distance) }
+    if (hammingHex(aHash, bHash) > NEAR_DUP_HAMMING_THRESHOLD || distance > DHASH256_NEAR_DUP_THRESHOLD) continue
+    // ≤ 16: the same picture (W4a). 17–26: the same template with other text — likely language versions (W4b).
+    const kind: LookalikeKind = distance <= DHASH256_SAME_PICTURE_THRESHOLD ? 'same' : 'versions'
+    add(a.id, b.id, distance, kind); add(b.id, a.id, distance, kind)
   }
   for (const list of out.values()) list.sort((x, y) => x.distance - y.distance)
   return out

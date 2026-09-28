@@ -1,4 +1,5 @@
 import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
+import { parseMediaFileName } from '@nexus/shared/media-plan-files'
 import { aliasMarkGlyph } from '@/design-system/primitives'
 import { duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
 
@@ -19,8 +20,9 @@ export interface LibraryAsset {
   /** The same picture stored again (another SKU's copy, or the same bytes at another address): one card, these ids
    *  resolve to it (2026-09-28: the library showed one picture once per SKU). */
   copies?: string[]
-  /** Other cards that show the same picture at another address (W4a), closest first. */
-  lookalikes?: Array<{ id: string; distance: number }>
+  /** Other cards that look alike (closest first): the same picture at another address (W4a), or the same template with
+   *  other text — likely language versions of one photo (W4b). */
+  lookalikes?: Array<{ id: string; distance: number; kind?: 'same' | 'versions' }>
   /** Photos the Owner marked the same as this one (W4a); each can be separated again. */
   merged?: Array<{ id: string; label: string }>
 }
@@ -230,6 +232,25 @@ export function defaultKeep(read: MediaRead, a: LibraryAsset, b: LibraryAsset): 
   if (uses(a) !== uses(b)) return uses(a) > uses(b) ? a : b
   const area = (x: LibraryAsset) => (x.width ?? 0) * (x.height ?? 0)
   return area(b) > area(a) ? b : a
+}
+
+/** The languages a photo version can have here: the destinations' languages, the main one, and any a photo already has. */
+export function versionLanguages(read: MediaRead): string[] {
+  const text = (tag: string) => tag !== 'zxx' && tag !== 'mul'
+  return [...new Set([read.mainLanguage, ...read.destinations.flatMap(d => d.languages), ...read.library.map(a => a.languageTag)].filter(text))].sort()
+}
+
+/** A photo's language for the versions choice: its own, else one its name says ("size-chart-es"), else none yet. */
+export function guessLanguage(a: LibraryAsset): string {
+  if (a.languageTag !== 'zxx' && a.languageTag !== 'mul') return a.languageTag
+  const named = parseMediaFileName(a.label, { values: [], skus: [] }).language
+  return named === 'zxx' ? '' : named
+}
+
+/** The photo sets that show both photos — where joining them as versions keeps one (W4b). */
+export function sharedPlacements(read: MediaRead, a: LibraryAsset, b: LibraryAsset): string[] {
+  const inB = new Set(photoPlacements(read, [b.id, ...(b.copies ?? [])]))
+  return photoPlacements(read, [a.id, ...(a.copies ?? [])]).filter(place => inB.has(place))
 }
 
 /** What is wrong with one photo on its own (size, address) — the page's `Tag`s. Channel rules live in the checks. */

@@ -305,6 +305,29 @@ export function replaceAssetInPlan(plan: MediaPlan, from: string, to: string, sa
   return mediaPlanSchema.parse({ ...plan, sets })
 }
 
+/**
+ * Images W4b — photos that became language versions of one photo: a set shows one of them, never two (each destination
+ * picks its market's version). Where a set holds several members, it keeps `keep` if present, else the first member in
+ * set order, at that position. The plan comes back unchanged (the same object) when no set holds two members.
+ */
+export function collapseVersionsInPlan(plan: MediaPlan, members: readonly string[], keep: string): MediaPlan {
+  const group = new Set(members)
+  const collapse = (items: MediaItem[]) => {
+    const inGroup = items.filter(i => group.has(i.assetId))
+    if (inGroup.length < 2) return items
+    const stay = inGroup.some(i => i.assetId === keep) ? keep : inGroup[0].assetId
+    return items.filter(i => !group.has(i.assetId) || i.assetId === stay)
+  }
+  const each = (record?: Record<string, MediaItem[]>) => record && Object.fromEntries(Object.entries(record).map(([key, items]) => [key, collapse(items)]))
+  const sets: MediaPlan['sets'] = { ...plan.sets }
+  if (sets.common) sets.common = collapse(sets.common)
+  if (sets.safety) sets.safety = collapse(sets.safety)
+  if (sets.values) sets.values = each(sets.values)
+  if (sets.skus) sets.skus = each(sets.skus)
+  const next = mediaPlanSchema.parse({ ...plan, sets })
+  return JSON.stringify(next) === JSON.stringify(plan) ? plan : next
+}
+
 /** Asset ids the plan points at — to refuse ops that name a photo the family does not own. */
 export function planAssetIds(plan: MediaPlan | null | undefined): string[] {
   if (!plan) return []
