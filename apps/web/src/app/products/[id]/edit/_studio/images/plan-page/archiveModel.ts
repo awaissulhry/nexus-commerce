@@ -71,7 +71,7 @@ export function archiveSummary(preview: ArchivePreview): string {
   const asins = new Set(preview.files.map(f => f.asin)).size
   const empty = preview.kind !== 'country' ? 'No photos to put in this ZIP'
     : preview.language === preview.apiLanguage ? `No photos for this ZIP: the API already sends the ${languageName(preview.language)} versions to Amazon ${preview.market}`
-      : `No photos for this ZIP: no photo on these ASINs has a ${languageName(preview.language)} version`
+      : `No photos for this ZIP: no photo on these ASINs has a version in ${languageName(preview.language)}`
   const parts = preview.files.length ? [`${preview.files.length} file${preview.files.length === 1 ? '' : 's'}`, `${asins} ASIN${asins === 1 ? '' : 's'}`] : [empty]
   if (preview.skipped.length) parts.push(`${preview.skipped.length} SKU${preview.skipped.length === 1 ? '' : 's'} left out`)
   return parts.join(' · ')

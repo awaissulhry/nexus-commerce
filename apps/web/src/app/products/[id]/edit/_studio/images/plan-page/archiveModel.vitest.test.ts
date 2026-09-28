@@ -15,7 +15,9 @@ describe('Amazon ZIP window (P4d)', () => {
   })
   it('an empty country ZIP says exactly why: the API already sends that language, or no photo has it', () => {
     expect(archiveSummary(preview({ kind: 'country', market: 'IT', language: 'it' }))).toBe('No photos for this ZIP: the API already sends the Italian versions to Amazon IT')
-    expect(archiveSummary(preview({ kind: 'country' }))).toBe('No photos for this ZIP: no photo on these ASINs has a German version')
+    expect(archiveSummary(preview({ kind: 'country' }))).toBe('No photos for this ZIP: no photo on these ASINs has a version in German')
+    // No article to get wrong ("a Italian", seen in production 2026-09-28).
+    expect(archiveSummary(preview({ kind: 'country', market: 'DE', language: 'it', apiLanguage: 'de' }))).toBe('No photos for this ZIP: no photo on these ASINs has a version in Italian')
     expect(archiveSummary(preview({ kind: 'safety', skipped: ['a', 'b'] }))).toBe('No photos to put in this ZIP · 2 SKUs left out')
   })
   it('groups the files by ASIN in the preview order, with every SKU once', () => {
