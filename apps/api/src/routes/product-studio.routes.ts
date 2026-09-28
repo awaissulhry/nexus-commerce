@@ -241,6 +241,20 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) { return sendError(reply, err, request.log, { id }) }
   })
 
+  /**
+   * Sheet pop-up P3 — "Values from": the Shared per-variant attributes a channel-only axis may take its values from,
+   * each with how many variants carry a value. Read only; the pop-up asks when the operator types an own name.
+   */
+  fastify.get('/products/:id/studio/own-axis-sources', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as Record<string, unknown>
+    if (!String(q.market ?? '').trim()) return missingMarket(reply, q)
+    try {
+      const { sharedOwnAxisSources } = await import('../services/pim/family-projection.service.js')
+      return { sources: await sharedOwnAxisSources(id, String(q.market).trim().toUpperCase()) }
+    } catch (err) { return sendError(reply, err, request.log, { id }) }
+  })
+
   fastify.patch('/products/:id/studio/projection', async (request, reply) => {
     const { id } = request.params as { id: string }
     const q = request.query as Record<string, unknown>

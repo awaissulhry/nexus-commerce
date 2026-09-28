@@ -18,7 +18,7 @@
  * to. They come from the spec's §4.5 table and say so in `source`, which is the honest state of that knowledge.
  */
 import { parseThemeAxes } from '../ebay-theme-axes.js'
-import { EBAY_MAX_VARIANTS_PER_LISTING } from '../ebay-variation-preflight.js'
+import { EBAY_MAX_SPECIFIC_NAME_LENGTH, EBAY_MAX_VARIANTS_PER_LISTING } from '../ebay-variation-preflight.js'
 
 export interface ProjectionVocabulary {
   /** Singular, lower case. */
@@ -35,6 +35,8 @@ export interface ProjectionLimits {
   /** Max variants per listing. `null` = no sourced limit — the UI omits the "of N allowed" half. */
   variants: number | null
   source: { axes: string | null; variants: string | null }
+  /** Sheet pop-up P3 — the longest channel-only axis NAME this channel takes. Absent / `null` = no sourced limit. */
+  nameLength?: number | null
 }
 
 export interface TargetOption {
@@ -84,6 +86,7 @@ export function limitsFor(channel: string, themeOptions: string[] = []): Project
       return {
         axes: EBAY_MAX_AXES,
         variants: EBAY_MAX_VARIANTS_PER_LISTING,
+        nameLength: EBAY_MAX_SPECIFIC_NAME_LENGTH,
         source: {
           axes: 'ebay-theme-axes.ts — parseThemeAxes truncates the declared theme at this many axes',
           variants: 'ebay-variation-preflight.ts — MAX_VARIANTS, the preflight that refuses a larger family',
@@ -104,7 +107,7 @@ export function limitsFor(channel: string, themeOptions: string[] = []): Project
       }
     }
     case 'SHOPIFY':
-      return { axes: 3, variants: 100, source: { axes: SPEC_TABLE, variants: SPEC_TABLE } }
+      return { axes: 3, variants: 100, source: { axes: SPEC_TABLE, variants: SPEC_TABLE }, nameLength: 255 }
     case 'ETSY':
       return { axes: 2, variants: 70, source: { axes: SPEC_TABLE, variants: SPEC_TABLE } }
     default:

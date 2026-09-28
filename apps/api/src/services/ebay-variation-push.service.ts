@@ -27,6 +27,8 @@ import { ebayTransport } from './gateway/ebay.js'
 import { ebayFixedPriceOfferOf } from './ebay-price-readback.service.js'
 import { confirmVariationPrices, type WrittenVariationPrice } from './ebay-variation-price-confirmation.js'
 import { ebayListingLanguage } from './gateway/channels.js'
+import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
+import { ebayRowAxes } from './pim/variation-own-axes.js'
 
 type EbaySend = ReturnType<typeof ebayTransport>
 
@@ -982,13 +984,16 @@ export async function pushVariationGroup(
     // passing it keeps ONE read of that store rather than a second one with its own filter.
     const family = prods.find(p => p.sku === parentSku && p.parentId === null)
     if (family?.variationAxes.length) {
-      const { cell } = await loadStoredVariationProjection({ productId: family.id, channel: 'EBAY', market: mp, accountId: connectionId, aliasKey: '' })
+      const { cell, input: projectionInput } = await loadStoredVariationProjection({ productId: family.id, channel: 'EBAY', market: mp, accountId: connectionId, aliasKey: '' })
       const invalid = cell.axes.find(a => a.included && a.unbound)
       if (invalid || cell.candidates?.state === 'unavailable') throw new Error(invalid?.unbound?.reason ?? cell.candidates?.unavailableReason)
-      declaredAxes = cell.axes.filter(a => a.included).map(a => a.familyKey)
+      // Sheet pop-up P3 — a channel-only axis is declared under its eBay NAME (the row scan below reads `aspect_<name>`),
+      // and a Shared-attribute one gets that aspect on each variant row (`ebayRowAxes`, shared with the family-axes read).
+      const rowAxes = ebayRowAxes(cell.axes.filter(a => a.included), projectionInput.family.variants, variantRows as Array<Record<string, unknown>>)
+      declaredAxes = rowAxes.declared
       storedAxisOrder = declaredAxes
-      nameLabels = Object.fromEntries(cell.axes.filter(a => a.included).map(a => [a.familyKey, a.channelName]))
-    } else declaredAxes = ebayDeclaredAxes({ _variationAxes: storedAxisOrder }, parentThemeRaw)
+      nameLabels = rowAxes.nameLabels
+    } else declaredAxes = ebayDeclaredAxes({ _variationAxes: storedAxisOrder }, parentThemeRaw)?.map(axis => isOwnAxisKey(axis) ? nameLabels[axis] ?? axis : axis) ?? null
   } catch (err) {
     throw new Error(`Could not resolve the eBay variation projection: ${err instanceof Error ? err.message : String(err)}`)
   }

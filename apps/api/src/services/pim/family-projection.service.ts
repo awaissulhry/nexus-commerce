@@ -2,7 +2,8 @@ import { variationAxisValue, variationCollisionGroups, variationCollisionSummary
 import { loadVariationProjectionInput } from './variation-theme-facts.js'
 import { resolveVariationProjection, type VariationThemeCell } from './variation-rules.service.js'
 import { familyAccountId } from './family-account.js'
-import { orderedVariationMapping, parseVariationMapping, variationMappingOrder, variationMappingTarget } from '@nexus/shared/variation-mapping'
+import { isOwnAxisKey, orderedVariationMapping, ownAxisKey, parseOwnAxisKey, parseVariationMapping, variationMappingOrder, variationMappingTarget } from '@nexus/shared/variation-mapping'
+import { ownAxisKeysToRead, ownAxisValue, ownAxisValuesFor, storedOwnAxisKeys } from './variation-own-axes.js'
 import { resolveWorkspaceDestination } from './workspace-destination.js'
 import { completeAxisValueOrder } from './shared-variation-values.js'
 import { isAsinPending } from '@nexus/shared/listing-risk'
@@ -33,7 +34,7 @@ import { readExcludedListingIds } from './variation-excluded.js'
 export { readExcludedListingIds }
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { marketplaceIdFor } from './variation-theme-segments.js'
-import { ebayDeclaredAxes, foldAvailability, lockedAxisKeysFrom, variationLockFor } from './variation-rules.service.js'
+import { ebayDeclaredAxes, foldAvailability, lockedAxisKeysFrom, variationLockFor, VT_COPY } from './variation-rules.service.js'
 import { loadAmazonThemeFacts, resolveVariationCategory } from './variation-theme-facts.js'
 import { addsForTheme, attributeTitle, bindSegmentToAttribute, classifyThemes, dropsForTheme, themeSegments } from './variation-theme-segments.js'
 import { ProductRelationshipError } from './product-relationship.service.js'
@@ -1322,10 +1323,23 @@ async function readProjection(input: ProjectionInput, proposed?: MappingWriteInp
             : { state: 'ok', reason: null }
   const platformAttributes = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
 
+  // Sheet pop-up P3 — channel-only axes read their values beside the family's (one reader, `variation-own-axes.ts`):
+  // the stored ones, the PROPOSED ones (a save is checked against the axes it would store) and this coordinate's
+  // variation-enabled columns no family axis uses (the pop-up counts them).
+  const familyAxisKeys = new Set(declared.map(canonicalVariantAxis))
+  const deliveredOwnKeys = ownAxisKeysToRead([...storedOwnAxisKeys(channel, parentListing), ...(proposed?.mapping ?? []).map(m => m.axisKey).filter(isOwnAxisKey)])
+  const ownKeys = ownAxisKeysToRead(
+    deliveredOwnKeys,
+    columns.filter(c => c.variantEligible && !familyAxisKeys.has(canonicalVariantAxis(c.key))).map(c => ownAxisKey({ from: 'channel', field: c.key })),
+  )
   const projectionInput = await loadVariationProjectionInput({
     coordinate: { channel, marketplace: market, label: coordinateLabel }, market, accountId: input.accountId ?? null, columns, categoriesByAlias: new Map([[aliasKey, category]]),
     family: { rootId: root.id, familyAxes: declared, productVersion: root.version, productTheme: root.variationTheme, productType: root.productType, childIds: children.map(c => c.id),
-      variants: children.map(child => { const own = listings.find(l => l.productId === child.id && l.aliasKey === aliasKey); return { id: child.id, sku: child.sku, included: !!own && !excluded.has(own.id), axisValues: channelSheet.rows.find(r => r.id === child.id && (r.aliasId ?? '') === aliasKey)?.axisValues ?? {} } }) },
+      variants: children.map(child => {
+        const own = listings.find(l => l.productId === child.id && l.aliasKey === aliasKey)
+        const row = channelSheet.rows.find(r => r.id === child.id && (r.aliasId ?? '') === aliasKey)
+        return { id: child.id, sku: child.sku, included: !!own && !excluded.has(own.id), axisValues: { ...(row?.axisValues ?? {}), ...ownAxisValuesFor(ownKeys, row?.values, child.categoryAttributes) } }
+      }) },
     parentListings: new Map([[aliasKey, parentListing ? { ...parentListing, platformAttributes } : null]]),
   }, aliasKey)
   if (proposed && projectionInput.listing) {
@@ -1505,7 +1519,8 @@ async function readProjection(input: ProjectionInput, proposed?: MappingWriteInp
       imageInherited: sheetRow?.imageInherited ?? false,
       included: !isExcluded,
       sharedAxisValues: values,
-      projectedAxisValues: sheetRow?.axisValues ?? {},
+      // P3: plus the stored or proposed channel-only axes, so the collision report reads the same values the cell does.
+      projectedAxisValues: { ...(sheetRow?.axisValues ?? {}), ...ownAxisValuesFor(deliveredOwnKeys, sheetRow?.values, child.categoryAttributes) },
       ...readinessOfRow(sheetRow as never, channelSheet?.meta?.schemaMissing ?? []),
       axisValuesSuspect: suspect,
       values: Object.fromEntries(axes.map((axis) => {
@@ -1800,6 +1815,49 @@ export function validateProjectionChange(current: ProjectionRead, proposed: Proj
   if (proposed.collisions && proposed.collisions.unresolved > 0) throw new ProjectionCollisionError(proposed.collisions.summary, proposed.collisions)
 }
 
+/**
+ * Sheet pop-up P3 — the Shared attributes a channel-only axis may take its values from ("Values from" in the pop-up):
+ * the master sheet's per-variant, editable, single-value columns stored in `Product.categoryAttributes` (the store
+ * `variation-own-axes.ts` reads) that are not already a family axis, each with how many variants carry a value and
+ * which values. Localised attributes are left out: a value that changes per language cannot tell variants apart.
+ */
+export async function sharedOwnAxisSources(productId: string, market: string): Promise<Array<{ field: string; label: string; filled: number; of: number; values: string[] }>> {
+  const root = await resolveFamilyRoot(productId)
+  const [sheet, children] = await Promise.all([
+    getStudioSheet({ productId: root.id, scope: 'master', market: market.toUpperCase(), includeMapping: false }),
+    prisma.product.findMany({ where: { parentId: root.id, deletedAt: null }, select: { id: true, categoryAttributes: true }, orderBy: { sku: 'asc' } }),
+  ])
+  const familyKeys = new Set((root.variationAxes ?? []).map(canonicalVariantAxis))
+  return (sheet?.columns ?? [])
+    .filter(c => c.scope === 'per_variant' && c.editable !== false && c.storage === 'categoryAttributes' && (!c.shape || c.shape === 'scalar') && !familyKeys.has(canonicalVariantAxis(c.key)))
+    .map(c => {
+      const values = children.map(child => ownAxisValue({ from: 'shared', field: c.key }, null, child.categoryAttributes))
+      return { field: c.key, label: c.label, filled: values.filter(Boolean).length, of: children.length, values: [...new Set(values.filter(Boolean))] }
+    })
+}
+
+/**
+ * Sheet pop-up P3 — a requested channel-only axis must name a real value source here: never on Amazon (its themes
+ * decide); `own:channel:<column>` = a variation-enabled column of THIS coordinate, stored under that aspect's own
+ * name; `own:shared:<attribute>` = one of `sharedOwnAxisSources`. Names, limits, 219451 and collisions are the
+ * resolver's and `validateProjectionChange`'s, as for every axis.
+ */
+async function assertOwnAxisSources(channel: string, market: string, productId: string, current: ProjectionRead, requested: Array<{ axisKey: string; target: string }>): Promise<void> {
+  const own = requested.flatMap(entry => { const source = parseOwnAxisKey(entry.axisKey); return source ? [{ entry, source }] : [] })
+  if (!own.length) return
+  if (channel === 'AMAZON') throw new ProjectionRequestError(VT_COPY.amazonOwnAxes)
+  for (const { entry, source } of own.filter(o => o.source.from === 'channel')) {
+    const option = current.targetOptions.find(o => !!o.columnKey && canonicalVariantAxis(o.columnKey) === canonicalVariantAxis(source.field))
+    if (!option) throw new ProjectionRequestError(`${entry.target} is not a variation ${current.vocabulary.axisNoun} on ${current.coordinate.label}.`)
+    if (option.code !== entry.target) throw new ProjectionRequestError(`${option.label} keeps its ${current.coordinate.channelLabel} name, ${option.code}.`)
+  }
+  const shared = own.filter(o => o.source.from === 'shared')
+  if (!shared.length) return
+  const sources = new Set((await sharedOwnAxisSources(productId, market)).map(s => s.field))
+  const unknown = shared.find(o => !sources.has(o.source.field))
+  if (unknown) throw new ProjectionRequestError(`${unknown.source.field} is not a per-variant attribute this family can take values from.`)
+}
+
 export async function writeProjectionMapping(input: MappingWriteInput): Promise<ProjectionRead> {
   const channel = input.channel.toUpperCase(), market = input.market.toUpperCase()
   const current = await getProjectionRead(input)
@@ -1825,11 +1883,12 @@ export async function writeProjectionMapping(input: MappingWriteInput): Promise<
     if (!Array.isArray(requested) || requested.some(e => !e || typeof e.axisKey !== 'string' || typeof e.target !== 'string' || !e.target.trim() || e.target !== e.target.trim() || (e.order !== undefined && (!Number.isSafeInteger(e.order) || e.order < 0)))) throw new ProjectionRequestError('Map each shared axis once to a nonempty channel name with a valid order.')
     requested = requested.slice().sort((a, b) => (a.order ?? requested!.indexOf(a)) - (b.order ?? requested!.indexOf(b)))
     const known = new Set(current.axes.map(a => canonicalVariantAxis(a.key)))
-    if (new Set(requested.map(e => canonicalVariantAxis(e.axisKey))).size !== requested.length || requested.some(e => !known.has(canonicalVariantAxis(e.axisKey)))) throw new ProjectionRequestError('Map each existing family axis at most once.')
+    if (new Set(requested.map(e => canonicalVariantAxis(e.axisKey))).size !== requested.length || requested.some(e => !isOwnAxisKey(e.axisKey) && !known.has(canonicalVariantAxis(e.axisKey)))) throw new ProjectionRequestError('Map each existing family axis at most once.')
+    await assertOwnAxisSources(channel, market, input.productId, current, requested)
     if (current.limits.axes !== null && requested.length > current.limits.axes) throw new ProjectionRequestError(`This channel takes at most ${current.limits.axes} variation axes.`)
     if (new Set(requested.map(e => e.target.toLocaleLowerCase())).size !== requested.length) throw new ProjectionRequestError('Each channel name can carry only one axis.')
     if (channel === 'SHOPIFY' && requested.some(e => e.target.length > 255)) throw new ProjectionRequestError('Shopify option names must be 255 characters or fewer.')
-    if (!current.freeform && requested.some(e => !current.targetOptions.some(o => o.code === e.target))) throw new ProjectionRequestError(current.targetOptionsReason ?? 'Choose a variation target from the category schema.')
+    if (!current.freeform && requested.some(e => parseOwnAxisKey(e.axisKey)?.from !== 'shared' && !current.targetOptions.some(o => o.code === e.target))) throw new ProjectionRequestError(current.targetOptionsReason ?? 'Choose a variation target from the category schema.')
   }
   const proposed = await readProjection(input, { ...input, mapping: requested })
   validateProjectionChange(current, proposed, requested)
@@ -1871,7 +1930,9 @@ export async function writeProjectionMapping(input: MappingWriteInput): Promise<
  */
 export function collisionReportFor(current: ProjectionRead, mappedAxisKeys: string[]): CollisionReport | null {
   const familyKeys = current.axes.map((a) => a.key)
-  const surviving = familyKeys.filter((key) => mappedAxisKeys.some((k) => canonicalVariantAxis(k) === canonicalVariantAxis(key)))
+  // Sheet pop-up P3 — a channel-only axis tells variants apart too, so it counts as surviving (its values ride in
+  // `projectedAxisValues` under the same raw key).
+  const surviving = [...familyKeys.filter((key) => mappedAxisKeys.some((k) => canonicalVariantAxis(k) === canonicalVariantAxis(key))), ...mappedAxisKeys.filter(isOwnAxisKey)]
   const dropped = familyKeys.filter((key) => !surviving.includes(key))
   const variants = current.children.map(child => ({ ...child, axisValues: child.projectedAxisValues ?? child.sharedAxisValues }))
   const colliding = variationCollisionGroups(surviving, variants)

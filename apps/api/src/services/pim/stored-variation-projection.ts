@@ -3,6 +3,8 @@ import { loadVariationProjectionInput } from './variation-theme-facts.js'
 import { resolveVariationProjection, type ResolveVariationInput } from './variation-rules.service.js'
 import { readExcludedListingIds } from './variation-excluded.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
+import { parseOwnAxisKey } from '@nexus/shared/variation-mapping'
+import { ownAxisValuesFor, storedOwnAxisKeys } from './variation-own-axes.js'
 
 export function storedVariationValues(product: { categoryAttributes: unknown; variantAttributes: unknown }, axes: string[]): Record<string, string> {
   const bag = (value: unknown): Record<string, string> => value && typeof value === 'object' && !Array.isArray(value)
@@ -29,7 +31,13 @@ export function channelAxisValues(
 ): Record<string, string> {
   const values = { ...stored }
   for (const axis of axes.filter(a => a.included)) {
-    const field = fields.find(f => canonicalVariantAxis(f.sheetKey ?? f.fieldKey) === axis.axisKey)
+    // Sheet pop-up P3 — a channel-only axis: `own:shared:` keeps the Shared attribute value it was loaded with; an
+    // `own:channel:<column>` value is that column's cell here (never the Shared value), matched on the sheet key.
+    const own = parseOwnAxisKey(axis.familyKey)
+    if (own?.from === 'shared') continue
+    const field = own
+      ? fields.find(f => (f.sheetKey ?? f.fieldKey) === own.field) ?? fields.find(f => canonicalVariantAxis(f.sheetKey ?? f.fieldKey) === canonicalVariantAxis(own.field))
+      : fields.find(f => canonicalVariantAxis(f.sheetKey ?? f.fieldKey) === axis.axisKey)
     const cell = field ? cells[field.fieldKey] : undefined
     if (cell?.status !== 'mapped') continue
     const value = cell.value
@@ -52,7 +60,9 @@ export async function loadStoredVariationProjection(address: { productId: string
   const alias = address.aliasKey ?? ''
   const input = await loadVariationProjectionInput({ coordinate: { channel: address.channel, marketplace: address.market, label: `${address.channel} · ${address.market}` }, market: address.market, accountId: listing?.channelConnectionId ?? address.accountId ?? null, columns: [],
     family: { rootId: family.id, familyAxes: family.variationAxes, productVersion: family.version, productTheme: family.variationTheme, productType: family.productType, childIds: family.children.map(c => c.id),
-      variants: family.children.map(c => { const own = children.find(l => l.productId === c.id); return { id: c.id, sku: c.sku, included: !!own && !excluded.has(own.id), axisValues: storedVariationValues(c, family.variationAxes) } }) },
+      // P3: plus the listing's channel-only axes — a Shared attribute's value here; a channel column's value is filled
+      // by `channelAxisValues` from the publisher's resolved cells (empty until then, never the Shared value).
+      variants: family.children.map(c => { const own = children.find(l => l.productId === c.id); return { id: c.id, sku: c.sku, included: !!own && !excluded.has(own.id), axisValues: { ...storedVariationValues(c, family.variationAxes), ...ownAxisValuesFor(storedOwnAxisKeys(address.channel, listing), null, c.categoryAttributes) } } }) },
     parentListings: new Map([[alias, listing ? { ...listing, platformAttributes: listing.platformAttributes as Record<string, unknown> | null } : null]]), ...(rule !== undefined ? { rule } : {}),
   }, alias)
   return { input, cell: resolveVariationProjection(input) }
