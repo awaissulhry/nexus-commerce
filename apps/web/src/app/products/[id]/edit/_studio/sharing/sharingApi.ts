@@ -2,6 +2,7 @@
  * Sharing studio step 2 — the "Other businesses" page's backend calls and the shapes they answer
  * (`apps/api/src/services/assortment/product-sharing.service.ts`, read through `GET /api/products/:id/sharing`).
  */
+import type { LayoutGroupResult, ListingLayout } from '@/app/settings/sharing/layoutWords'
 import { apiGet, apiSend, type ApiResult } from '../images/api'
 
 export interface FollowedLink {
@@ -84,4 +85,16 @@ export function followAgain(linkId: string, fields: string[] | 'all') {
 /** Put the product into an assortment, or take it out, whatever the assortment's rule. */
 export function setInAssortment(assortmentId: string, productId: string, holds: boolean, expectedVersion: number) {
   return apiSend<{ holds: boolean; version: number }>(`/api/assortments/${encodeURIComponent(assortmentId)}/product`, 'POST', { productId, holds, expectedVersion })
+}
+
+// ── Sharing studio step 3 — the shared product's listing layout, made here as drafts ─────────────────────────────
+
+export async function readLayout(productId: string, signal?: AbortSignal): Promise<ApiResult<ListingLayout>> {
+  const result = await apiGet<{ layout: ListingLayout }>(`/api/products/${encodeURIComponent(productId)}/sharing/layout`, signal)
+  return result.ok ? { ok: true, data: result.data.layout } : result
+}
+
+/** Make the chosen groups here as drafts: per group, an account of this business or null (not made). */
+export function applyLayout(productId: string, choices: Array<{ key: string; accountId: string | null }>) {
+  return apiSend<{ results: LayoutGroupResult[] }>(`/api/products/${encodeURIComponent(productId)}/sharing/layout`, 'POST', { choices })
 }

@@ -22,6 +22,7 @@ import { isFollowerDecision, isOwnerAction } from '../services/assortment/share-
 import { previewCopy } from '../services/assortment/copy-preview.service.js'
 import { advanceCopyRun, confirmCopy, getCopyRun, listCopyRuns } from '../services/assortment/copy-run.service.js'
 import { productSharing, setProductInAssortment } from '../services/assortment/product-sharing.service.js'
+import { applyListingLayout, applyShareLayout, listingLayout, shareLayout } from '../services/assortment/listing-layout.service.js'
 import { catalogLinkState } from '../services/assortment/sync.service.js'
 import { followAgain, resyncShare } from '../services/assortment/sync-worker.js'
 
@@ -69,6 +70,15 @@ const assortmentsRoutes: FastifyPluginAsync = async (fastify) => {
     respond(reply, async () => ({ success: true, sharing: await productSharing(request.params.id) })),
   )
 
+  // Sharing studio step 3 — the shared product's listing layout (channels, markets, aliases; never the other
+  // business's accounts or item ids), and making it here as drafts on accounts of this business.
+  fastify.get<{ Params: { id: string } }>('/products/:id/sharing/layout', async (request, reply) =>
+    respond(reply, async () => ({ success: true, layout: await listingLayout(request.params.id) })),
+  )
+  fastify.post<{ Params: { id: string }; Body: Body }>('/products/:id/sharing/layout', async (request, reply) =>
+    respond(reply, async () => ({ success: true, ...(await applyListingLayout(request.params.id, request.body ?? {})) })),
+  )
+
   // ── Shares ────────────────────────────────────────────────────────────────
   fastify.get('/assortment-shares', async (_request, reply) =>
     respond(reply, async () => ({ success: true, ...(await listShares()) })),
@@ -100,6 +110,15 @@ const assortmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // Idempotent: finishes the run if its product review has been applied, otherwise reports where it is.
   fastify.post<{ Params: { id: string } }>('/assortment-copy-runs/:id/advance', async (request, reply) =>
     respond(reply, async () => ({ success: true, run: await advanceCopyRun(request.params.id) })),
+  )
+
+  // Sharing studio step 3 — the listing layout of every product of an incoming share, one choice per channel and
+  // account of the sharing business, made here as drafts. Registered before the generic `/:action` route below.
+  fastify.get<{ Params: { id: string } }>('/assortment-shares/:id/layout', async (request, reply) =>
+    respond(reply, async () => ({ success: true, ...(await shareLayout(request.params.id)) })),
+  )
+  fastify.post<{ Params: { id: string }; Body: Body }>('/assortment-shares/:id/layout', async (request, reply) =>
+    respond(reply, async () => ({ success: true, ...(await applyShareLayout(request.params.id, request.body ?? {})) })),
   )
 
   // AE.4 — live sync. On demand: queue every link of an incoming share (an OWNER of this business).

@@ -13,6 +13,7 @@ import prisma from '../../db.js'
 import { WorkspaceError, requireWorkspace } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
 import { resolveIntendedQuantity, resolveMembershipIntended, type IntendedResolution } from '../sync-control-core.js'
+import { connectionLabel } from '../connection-label.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
 import { resolveCascadePushMethod } from '../stock-movement.service.js'
 import { idList } from './grant-rules.js'
@@ -177,12 +178,12 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
       where: { productId: { in: ids }, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
       select: {
         id: true, productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true, followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, offerClosedAt: true, sourceLocationCodes: true,
-        channelConnectionId: true, aliasKey: true, channelConnection: { select: { accountLabel: true } }, alias: { select: { label: true, position: true } },
+        channelConnectionId: true, aliasKey: true, channelConnection: { select: { channelType: true, id: true, externalAccountId: true, accountLabel: true, ebayStoreName: true, displayName: true, ebaySignInName: true } }, alias: { select: { label: true, position: true } },
       },
     }),
     prisma.sharedListingMembership.findMany({
       where: { productId: { in: ids }, status: 'ACTIVE' },
-      select: { itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, channelConnectionId: true, channelConnection: { select: { accountLabel: true } } },
+      select: { itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, channelConnectionId: true, channelConnection: { select: { channelType: true, id: true, externalAccountId: true, accountLabel: true, ebayStoreName: true, displayName: true, ebaySignInName: true } } },
     }),
     loadChannelPolicies(),
   ])
@@ -218,7 +219,7 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
         })
         rows.push({
           listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace,
-          accountId: listing.channelConnectionId, accountLabel: listing.channelConnection?.accountLabel ?? null,
+          accountId: listing.channelConnectionId, accountLabel: listing.channelConnection ? connectionLabel(listing.channelConnection).label : null,
           listingMark: (perCoordinate.get(coordinate(listing)) ?? 1) > 1 ? (listing.aliasKey ? listing.alias?.position ?? null : 0) : null,
           aliasLabel: listing.aliasKey ? listing.alias?.label ?? null : null,
           showsNow: listing.quantity, willShow: r.kind === 'FOLLOW' ? r.quantity : null, rule: listingRule(r),
@@ -232,7 +233,7 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
         })
         rows.push({
           listingId: null, itemId: m.itemId, channel: 'EBAY', marketplace: m.marketplace,
-          accountId: m.channelConnectionId, accountLabel: m.channelConnection?.accountLabel ?? null, listingMark: null, aliasLabel: null,
+          accountId: m.channelConnectionId, accountLabel: m.channelConnection ? connectionLabel(m.channelConnection).label : null, listingMark: null, aliasLabel: null,
           showsNow: m.lastQtyPushed,
           willShow: r.kind === 'FOLLOW' ? r.quantity : null, rule: !m.followPool ? 'excluded' : listingRule(r),
         })

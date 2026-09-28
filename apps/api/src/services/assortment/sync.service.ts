@@ -17,6 +17,7 @@
  *   structure a variation added under a followed parent is created and linked here.
  */
 import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
+import { channelLabel } from '@nexus/shared/channel-label'
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { inDatabaseTransaction } from '../../lib/database-context.js'
@@ -29,8 +30,10 @@ import { catalogRows, productInclude } from '../pim/catalog-transfer-export.js'
 import { buildTransferPlan, transferContracts } from '../pim/catalog-transfer-plan.js'
 import { applyTransferTarget, loadTransferContext } from '../pim/catalog-transfer.service.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
+import { draftListingFields } from '../pim/draft-listing.service.js'
 import { whereDelistTargets } from '../outbound-enqueue.js'
 import { productEventService } from '../product-event.service.js'
+import { productReadCacheService } from '../product-read-cache.service.js'
 import { notifyOwners } from '../stock-pool/pool-notify.js'
 import { PHOTOS_HELD, copyImages, imageLanguage, type PlannedImage } from './copy-media.service.js'
 import { missingDefinitions } from './copy-preview.service.js'
@@ -587,9 +590,41 @@ async function createNewVariations(link: { id: string; shareId: string }, door: 
     }))
     const copied = await copyImages(made.id, images)
     await recordBaseline(newLink.id, { rows: catalog.rows, product, managed: product.managed, sku: variation.sku, market, images, pairs: copied.pairs })
+    await joinFamilyListings(parent, { id: made.id, sku: variation.sku })
     created.push(`variation ${variation.sku}`)
   }
   return created
+}
+
+/**
+ * Sharing studio step 3 — a variation made here by the sync joins its family's listings in THIS business. Absence is
+ * exclusion (family-projection.service.ts): with no row, it would stay out of every listing and alias. A DRAFT listing
+ * (unpublished, never on a channel) gains the variation as a draft row — `draftListingFields`, inert like its family.
+ * A listing that is on a channel is not changed: the owners are told to add it before its next publish.
+ */
+async function joinFamilyListings(parent: { id: string; sku: string }, variation: { id: string; sku: string }): Promise<void> {
+  const listings = await prisma.channelListing.findMany({
+    where: { productId: parent.id, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+    select: { channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, listingStatus: true, isPublished: true, externalListingId: true },
+  })
+  const draft = listings.filter((l) => l.listingStatus === 'DRAFT' && !l.isPublished && !l.externalListingId && l.channelConnectionId)
+  if (draft.length) {
+    await prisma.channelListing.createMany({
+      data: draft.map((l) => draftListingFields({ productId: variation.id, channel: l.channel, market: l.marketplace, accountId: l.channelConnectionId!, aliasKey: l.aliasKey })),
+      skipDuplicates: true,
+    })
+    await productReadCacheService.refreshMany([variation.id, parent.id]).catch(() => { /* the cache catches up on its own */ })
+  }
+  const live = listings.filter((l) => !draft.includes(l))
+  if (live.length) {
+    const where = [...new Set(live.map((l) => `${channelLabel(l.channel)} ${l.marketplace}`))].sort().join(', ')
+    await notifyOwners({
+      type: 'assortment-variation-live-listing', severity: 'warn', once: true,
+      title: `New variation ${variation.sku}: add it to ${parent.sku}'s live listings`,
+      body: `It came from the shared product and joined the draft listings. The listings already on a channel were not changed: ${where}. Add it there before their next publish.`,
+      entityType: 'Product', entityId: variation.id, href: `/products/${encodeURIComponent(parent.id)}/edit`,
+    })
+  }
 }
 
 // ── Baseline ────────────────────────────────────────────────────────────────────────────────

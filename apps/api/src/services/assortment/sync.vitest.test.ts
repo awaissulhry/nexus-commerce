@@ -38,7 +38,7 @@ vi.mock('../pim/sheet-columns.service.js', () => ({
   coordinatesFor: () => [],
 }))
 vi.mock('../pim/mapping/field-catalogue.service.js', () => ({ getFieldCatalogue: async () => ({ fields: [], schema: { present: true } }), clearFieldCatalogueCache: () => {} }))
-vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: async () => {}, refresh: async () => {} } }))
+vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: async () => {}, refresh: async () => {}, refreshMany: async () => {} } }))
 vi.mock('../../lib/queue.js', () => {
   const queue = { add: async () => ({}), addBulk: async () => [], getJobCounts: async () => ({}), close: async () => {} }
   return {
@@ -333,6 +333,68 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(await as(A, user.ownerA, () => sharing.sharingSourceCondition(['own', 'following', 'shared']))).toBeNull()
   }, 60_000)
 
+  it('4c. the shared product\'s listing layout: read from A without its accounts, made in B as drafts on B\'s own account, never doubled', async () => {
+    const layout = await import('./listing-layout.service.js')
+    // A lists JKT on two eBay accounts: account 1 (primary) on IT with the main listing and an alias "Winter", account 2 on DE.
+    const a1 = randomUUID(), a2 = randomUUID(), b1 = randomUUID(), winter = randomUUID()
+    await sql(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "accountLabel", "externalAccountId", "isActive", "isPrimary", "updatedAt") VALUES ($1,$3,'EBAY','A main','a-seller-1',true,true,CURRENT_TIMESTAMP), ($2,$3,'EBAY','A outlet','a-seller-2',true,false,CURRENT_TIMESTAMP)`, [a1, a2, A])
+    await sql(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "accountLabel", "externalAccountId", "isActive", "isPrimary", "updatedAt") VALUES ($1,$2,'EBAY','B store','b-seller-1',true,true,CURRENT_TIMESTAMP)`, [b1, B])
+    await sql(`INSERT INTO "Marketplace" (id, "workspaceId", channel, code, name, region, currency, language, "updatedAt") VALUES ($1,$2,'EBAY','IT','eBay Italy','EU','EUR','it',CURRENT_TIMESTAMP)`, [randomUUID(), B])
+    await sql(`INSERT INTO "ProductListingAlias" (id, "workspaceId", "productId", channel, marketplace, "channelConnectionId", label, position, "updatedAt") VALUES ($1,$2,$3,'EBAY','IT',$4,'Winter',1,CURRENT_TIMESTAMP)`, [winter, A, product.parent, a1])
+    const listing = (workspaceId: string, productId: string, market: string, connection: string, aliasKey = '') => sql(
+      `INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "aliasKey", "aliasId", "listingStatus", "isPublished", "syncPaused", "updatedAt")
+       VALUES ($1,$2,$3,'EBAY',$4,$4,$5,$6,$7,$8,'ACTIVE',true,false,CURRENT_TIMESTAMP)`, [randomUUID(), workspaceId, productId, market, `EBAY_${market}`, connection, aliasKey, aliasKey || null])
+    await listing(A, product.parent, 'IT', a1)
+    await listing(A, product.parent, 'IT', a1, winter)
+    await listing(A, product.parent, 'DE', a2)
+
+    const view = await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT-M']))
+    expect(view).toMatchObject({ rootId: product['b:JKT'], sourceBusiness: 'Business A', accounts: { EBAY: [{ id: b1, label: 'B store', primary: true }] } })
+    expect(view.groups.map((g) => [g.key, g.sourceAccount, g.sourceAccounts, g.slots, g.here.suggestedAccountId, g.here.blocked])).toEqual([
+      ['EBAY|DE|2', 2, 2, [{ position: 0, label: null }], null, 'eBay DE is not a market of this business. Add it in Settings › Channels.'],
+      ['EBAY|IT|1', 1, 2, [{ position: 0, label: null }, { position: 1, label: 'Winter' }], b1, null],
+    ])
+    // The wall: none of A's accounts crosses it, by id or by name.
+    for (const secret of [a1, a2, 'A main', 'A outlet', 'a-seller-1']) expect(JSON.stringify(view)).not.toContain(secret)
+
+    const made = await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }, { key: 'EBAY|DE|2', accountId: b1 }] }))
+    expect(made.results).toEqual([
+      { key: 'EBAY|IT|1', listings: 3, aliases: 1, refused: null },
+      { key: 'EBAY|DE|2', listings: 0, aliases: 0, refused: 'eBay DE is not a market of this business. Add it in Settings › Channels.' },
+    ])
+    // Inert drafts for the whole family, on B's account: the main listing and the alias "Winter".
+    const rows = await sql(`SELECT l."productId", l."aliasKey" = '' AS main, l."listingStatus", l."isPublished", l."syncPaused", l."channelConnectionId"
+      FROM "ChannelListing" l WHERE l."workspaceId" = $1 AND l.channel = 'EBAY' ORDER BY 1, 2`, [B])
+    expect(rows).toHaveLength(6)
+    for (const row of rows) expect(row).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, syncPaused: true, channelConnectionId: b1 })
+    expect(await sql(`SELECT label, position FROM "ProductListingAlias" WHERE "workspaceId" = $1`, [B])).toEqual([{ label: 'Winter', position: 1 }])
+    // Made again: nothing doubled, and the page says what is here.
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }] }))).results)
+      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: null }])
+    expect(Number((await one(`SELECT count(*) AS n FROM "ChannelListing" WHERE "workspaceId" = $1`, [B])).n)).toBe(6)
+    expect((await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT']))).groups.find((g) => g.key === 'EBAY|IT|1')?.here.present[b1]).toEqual({ main: true, aliases: ['Winter'] })
+    // A choice naming another business's account, or none, makes nothing.
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: a1 }, { key: 'EBAY|DE|2', accountId: null }] }))).results)
+      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: 'That account is not connected in this business. Reload the page.' }])
+
+    // A's accounts shared with B: one for reading only is never offered (the database refuses a listing on it); one for
+    // publishing is, named as A's, and never suggested.
+    await sql(`INSERT INTO "ChannelAccountGrant" ("connectionId", "workspaceId", "ownerWorkspaceId", mode, "grantedByUserId") VALUES ($1,$3,$4,'publish',$5), ($2,$3,$4,'read',$5)`, [a1, a2, B, A, user.ownerA])
+    const withShared = await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT']))
+    expect(withShared.accounts.EBAY.map((a) => [a.label, a.sharedBy])).toEqual([['B store', null], ['A main', 'Business A']])
+    expect(withShared.groups.find((g) => g.key === 'EBAY|IT|1')?.here.suggestedAccountId).toBe(b1)
+    await sql(`DELETE FROM "ChannelAccountGrant" WHERE "workspaceId" = $1`, [B])
+
+    // The whole share at once, as Settings offers it: one choice per channel and account of A.
+    const summary = await as(B, user.ownerB, () => layout.shareLayout(shareId))
+    expect(summary.groups).toEqual([
+      expect.objectContaining({ key: 'EBAY|1', sourceAccount: 1, sourceAccounts: 2, products: 1, markets: ['IT'], aliases: 1, suggestedAccountId: b1 }),
+      expect.objectContaining({ key: 'EBAY|2', sourceAccount: 2, products: 1, markets: ['DE'], aliases: 0, suggestedAccountId: null }),
+    ])
+    expect(await as(B, user.ownerB, () => layout.applyShareLayout(shareId, { choices: [{ key: 'EBAY|1', accountId: b1 }] })))
+      .toEqual({ products: 1, listings: 0, aliases: 0, refused: [] })
+  }, 60_000)
+
   it('5. images: a new source image is copied, a new alt text reaches the copy, a removed image removes the copy; B\'s own image change makes media an override', async () => {
     const bJacket = product['b:JKT']
     const uploads = storage.uploads.length
@@ -440,6 +502,11 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
   }, 90_000)
 
   it('7. a variation added in A is created and linked in B; one whose SKU B already has is left for a person; one deleted in A is detached, and B keeps it', async () => {
+    // Sharing studio step 3: B's family has draft listings (test 4c) and one listing on a channel, on eBay UK.
+    const bStore = (await one(`SELECT id FROM "ChannelConnection" WHERE "workspaceId" = $1`, [B])).id as string
+    const onChannel = randomUUID()
+    await sql(`INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "listingStatus", "isPublished", "externalListingId", "updatedAt")
+      VALUES ($1,$2,$3,'EBAY','UK','UK','EBAY_UK',$4,'ACTIVE',true,'EXT-UK',CURRENT_TIMESTAMP)`, [onChannel, B, product['b:JKT'], bStore])
     const large = randomUUID()
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, description, "basePrice", status, "productType", "parentId", "familyId", "updatedAt")
       VALUES ($1,$2,'JKT-L','JKT-L name','Large',99,'ACTIVE','COAT',$3,$4,CURRENT_TIMESTAMP)`, [large, A, product.parent, familyA])
@@ -452,6 +519,15 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(largeLink).toMatchObject({ targetProductId: made.id, linkedBy: 'created', syncMarket: 'IT' })
     expect(Object.keys((largeLink.appliedState as { fields: object }).fields)).toEqual(expect.arrayContaining(['name', 'sku', 'managed:basePrice']))
     expect((await notices('assortment-sync-created')).at(-1)?.body).toContain('variation JKT-L')
+    // It joined the family's draft listings (the main one and the alias), as drafts; the listing on eBay UK is untouched,
+    // and the owners are told to add it there.
+    expect(await sql(`SELECT marketplace, "aliasKey" = '' AS main, "listingStatus", "syncPaused" FROM "ChannelListing" WHERE "productId" = $1 ORDER BY 2 DESC`, [made.id]))
+      .toEqual([{ marketplace: 'IT', main: true, listingStatus: 'DRAFT', syncPaused: true }, { marketplace: 'IT', main: false, listingStatus: 'DRAFT', syncPaused: true }])
+    expect((await notices('assortment-variation-live-listing')).map((n) => [n.title, n.body]).at(-1)).toEqual([
+      "New variation JKT-L: add it to JKT's live listings",
+      'It came from the shared product and joined the draft listings. The listings already on a channel were not changed: eBay UK. Add it there before their next publish.',
+    ])
+    await sql(`DELETE FROM "ChannelListing" WHERE id = $1`, [onChannel])
 
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", "updatedAt") VALUES ($1,$2,'JKT-XL','B own XL',5,CURRENT_TIMESTAMP)`, [randomUUID(), B])
     await sql(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", status, "parentId", "familyId", "updatedAt") VALUES ($1,$2,'JKT-XL','JKT-XL name',99,'ACTIVE',$3,$4,CURRENT_TIMESTAMP)`, [randomUUID(), A, product.parent, familyA])
@@ -514,7 +590,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
       expect(String(waiting.lastError)).toContain('permission denied')
       // A fresh change in A makes the waiting note ready now: the new state may apply.
       await sql(`UPDATE "Product" SET description = 'Fresh while waiting' WHERE id = $1`, [product.small])
-      expect(await sql(`SELECT "availableAt" <= CURRENT_TIMESTAMP AS ready, attempts FROM "AssortmentChange" WHERE "linkId" = $1 AND state = 'pending'`, [link['JKT-S']])).toEqual([{ ready: true, attempts: 1 }])
+      expect(await sql(`SELECT "availableAt" <= CURRENT_TIMESTAMP(3) AS ready, attempts FROM "AssortmentChange" WHERE "linkId" = $1 AND state = 'pending'`, [link['JKT-S']])).toEqual([{ ready: true, attempts: 1 }])
       // The seventh retry has happened; the eighth try is the last.
       await sql(`UPDATE "AssortmentChange" SET attempts = 7, "availableAt" = CURRENT_TIMESTAMP WHERE "linkId" = $1 AND state = 'pending'`, [link['JKT-S']])
       expect(await as(B, null, () => worker.processAssortmentChanges())).toMatchObject({ claimed: 1, failed: 1, retried: 0 })

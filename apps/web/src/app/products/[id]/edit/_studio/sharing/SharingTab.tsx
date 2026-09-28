@@ -22,6 +22,7 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { PoolSourceNote } from '@/app/_shared/stock-pool/PoolSourceTag'
 
 import { useStudioProduct } from '../contracts'
+import { LayoutCard } from './LayoutCard'
 import { followAgain, readSharing, setInAssortment, type AssortmentPlace, type LentUsage, type ProductSharing, type ShareCopy, type SharedField } from './sharingApi'
 import {
   businessName, copyWords, count, detachedWords, fieldListWords, fieldName, fieldSource, followingFacts, holdsWords, placeActionLabel, shareStateWords, stockWords, takeOutImpact,
@@ -74,6 +75,7 @@ export function SharingTab() {
               const result = await followAgain(data.following!.link.id, fields)
               return result.ok ? { ok: true } : { ok: false, message: result.message }
             }, `${label} follows ${businessName(data.following!.link.sourceBusiness)} again. The next update brings its value here.`)} />
+          {data.following?.link.status === 'active' && <LayoutCard productId={data.product.id} canEdit={canEdit} />}
           <SharedOut data={data} canEdit={canEdit} busy={busy}
             onChange={(place, holds) => {
               const run = () => act(`place:${place.id}`, async () => {

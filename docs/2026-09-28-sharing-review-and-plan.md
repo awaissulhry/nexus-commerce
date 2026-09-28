@@ -1,8 +1,8 @@
 # Sharing between businesses — review and plan
 
 Date: 2026-09-28
-Status: **APPROVED 2026-09-28** (D-1 A, D-2 A, reading confirmed, "yes, start"). **Steps 1 and 2 BUILT and tested
-locally (§9, §10).** Nothing pushed. Branch `feat/sharing-studio`, worktree `/private/tmp/nexus-sharing-studio`.
+Status: **APPROVED 2026-09-28** (D-1 A, D-2 A, reading confirmed, "yes, start"). **Steps 1, 2 and 3 BUILT and tested
+locally (§9–§11).** Nothing pushed. Branch `feat/sharing-studio`, worktree `/private/tmp/nexus-sharing-studio`.
 Builds on: `docs/2026-09-16-assortment-engine-plan.md` (AE), `docs/2026-09-19-shared-stock-plan.md`.
 The review facts were read from `origin/main` (c520befc5).
 
@@ -10,6 +10,7 @@ The review facts were read from `origin/main` (c520befc5).
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-28 | R-SH-3 | Step 3: "Go ahead." |
 | 2026-09-28 | R-SH-2 | Step 2: "Go ahead." |
 | 2026-09-28 | R-SH-1 | D-1 **A** (Settings keeps the deal; a studio page per product), D-2 **A** (copy the layout once as drafts), the reading of "no multiple aliases" is right, and "yes, start". |
 
@@ -244,4 +245,64 @@ helper. The headings stay: they match the profile manager page they sit beside.
   business has no listings yet. Step 3 makes them, and its browser check covers the preview.
 - The live sync worker did not run locally (it starts every queue consumer). "Follow again" is proven to record the
   choice; the value arriving is proven by the real-PostgreSQL test.
+
+## 11. Step 3 — build record (2026-09-28)
+
+**The layout.** Where the sharing business lists the product: per channel and market, per account of its own, the
+main listing and each alias by name. Its accounts never cross the wall: an account is its **rank** on the channel
+("account 2 of 2", primary first), shown only when it uses more than one. Item ids and listing values do not cross.
+Read through the same guarded door as the live sync (`nexus_assortment_sync_source`), then in the owner's context as
+the system, with the context checked back. Service: `listing-layout.service.ts`.
+
+**Making it here.** The receiving business picks, per row, one of ITS accounts (or "Don't make it here"). The
+default is its account of the same rank. Nexus makes the main listing with `ensureDraftListings` (the whole family)
+and each missing alias with `createAlias` (the whole family). Everything is an inert draft: DRAFT, unpublished,
+sync paused, no channel id. Made again, nothing doubles (one main listing per coordinate; an alias with the same
+name on the same account and market is reused). A row that cannot be made says why: no account for the channel,
+the market is not a market of this business, the account is not connected.
+
+**Accounts the business may list on.** Its own, and another business's account shared with it **for publishing**.
+An account shared **for reading only** is never offered (the database refuses a listing on it); a shared account is
+named with its owner and never suggested; a shared account limited to some markets is offered only there.
+
+**Screens.**
+- Studio page, new card **Listings in this business** (on a product that follows another business).
+- Settings › Shared products › Shared with this business: **Make draft listings** on an active share with linked
+  products — one choice per channel and account of the sharing business, for every product at once.
+
+**A new variation that arrives by sync** joins its family's DRAFT listings and aliases as draft rows. A listing that is
+on a channel is not changed; the owners get one notice to add it there before its next publish.
+
+**Step 1's D4 now uses the app's account-name rule** (`connectionLabel`): real accounts often have an empty label, and
+the preview showed no account.
+
+**Proof:**
+- `sync.vitest.test.ts` 4c (real PostgreSQL): the layout from A with two accounts and an alias; none of A's account ids
+  or names in the answer; made on B's account as drafts (6 family rows); a blocked market refused with its reason;
+  made again = nothing; another business's account refused; the per-share summary and apply; a read-only shared
+  account not offered, a publish-shared one offered and named, never suggested.
+- `sync.vitest.test.ts` 7: the new variation JKT-L got draft rows on the main listing and the alias; the listing on
+  eBay UK was untouched and one notice named it.
+- `layoutWords.vitest.test.ts` (7): every sentence.
+- On the local copy through the real screens: the first business got two aliases (Winter, Summer) on eBay IT; the
+  second business got two eBay accounts. The studio card offered "Second store (primary)", said why the Amazon rows
+  could not be made, and made 1 main listing and 2 aliases (3 × 7 draft rows, unpublished, paused, nothing queued to a
+  channel). The eBay sheet then showed the three listings. Settings' dialog showed one row per channel; made again,
+  it said nothing new was needed. The account picker works by keyboard; the page does not scroll sideways at 390 px.
+- **Step 1's D4, now checked on screen:** the stock-switch preview names "eBay IT · Second store · ★ Main listing",
+  "① Winter", "② Summer".
+
+**Found, not fixed (older code, outside this plan):** in a business that has another business's account shared with
+it, the account list can hold two "primary" eBay accounts: its own and the shared one (a connection's primary flag is
+its owner's). Code that resolves "the channel's primary account" (for example `resolveDraftAccount`) can then pick the
+other business's account; with a read-only grant the write is refused by the database. Worth its own look.
+
+**A timing defect found by a flaky test, and fixed (D8).** The live-sync suite failed in about 3 of 12 runs (test 5: a
+photo still there; test 9: a retry not picked up). Measured at a failure: the job's `availableAt` was `…54.178` and the
+claim ran a fraction of a millisecond before it. Cause: `availableAt` is `TIMESTAMP(3)`, so a job written now is stored
+rounded to the millisecond, sometimes up, and "due" compared it with the unrounded `CURRENT_TIMESTAMP`. The business
+was then skipped until the next poll (2–60 s in production: a small delay, never a loss). Fix: "due" compares with
+`CURRENT_TIMESTAMP(3)`, rounded the same way (rounding keeps order), in the worker's claim (`sync-worker.ts`) and in
+`nexus_assortment_pending_workspaces()` (`assortment-sync.sql`, migration `20260928n_assortment_due_rounding`,
+function body only). Proof: the combination that failed ran repeatedly after the fix (result in the PR).
 
