@@ -89,12 +89,14 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
     if (!active || active === document.body) ref.current?.focus({ preventScroll: true })
   })
   /* A press outside saves, like Shopify. Presses inside a dialog it opened (the picker, the entry editor), a tooltip or
-     a picture preview are not "outside". A value that cannot be saved holds the press back. */
+     a picture preview are not "outside" — nor are the date calendar and the option lists its controls open in <body>:
+     a day picked with the mouse closed the pop-up unsaved (measured on the lab's Date row, B3b). A value that cannot be
+     saved holds the press back. */
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
       const target = event.target as Element | null
       if (!target || ref.current?.contains(target)) return
-      if (target.closest('[aria-modal="true"], .nds-backdrop, [role="tooltip"], .nds-thumb-preview')) return
+      if (target.closest('[aria-modal="true"], .nds-backdrop, [role="tooltip"], .nds-thumb-preview, .nds-dp-pop, .nds-combo-pop')) return
       if (!save.current()) { event.preventDefault(); event.stopPropagation() }
     }
     document.addEventListener('pointerdown', onDown, true)
@@ -116,6 +118,8 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
       else if (!event.shiftKey && i === all.length - 1) { event.preventDefault(); all[0].focus() }
       return
     }
+    /* In a multi-line box Enter adds a line, so Ctrl/⌘+Enter saves there — and anywhere else in the panel (gap G5). */
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.altKey) { event.preventDefault(); onSave(); return }
     if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey) {
       if ((event.target as HTMLElement).closest('textarea, button, a[href], [contenteditable="true"]')) return
       event.preventDefault()
@@ -137,6 +141,8 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   const canPublish = usePermission('products.publish')
   const canEdit = usePermission('products.edit'), canAdjustInventory = usePermission('inventory.adjust')
   const [entry, setEntry] = useState<{ id: string | null; copy?: boolean; type?: string } | null>(null)
+  /* Bumped after an entry is saved: the pop-up's pick list is read again, so a new entry shows at once (B2). */
+  const [referenceVersion, setReferenceVersion] = useState(0)
   const [selected, setSelected] = useState<Selected | null>(null), [value, setValue] = useState<string | null>(null), [error, setError] = useState('')
   const dirty = useRef(false); dirty.current = !!entry || !!selected && value !== selected.baseline
   useEffect(() => scope.registerScopeChangeGuard(() => !dirty.current), [scope.registerScopeChangeGuard])
@@ -170,7 +176,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     if (!selected || !field || !schema) return true
     if (locked || value === selected.baseline) { close(); return true }
     const current = schema.definitions.find(d => d.ownerType === field.owner && d.namespace === field.definition?.namespace && d.key === field.definition?.key)
-    const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'This definition changed. Reopen the editor; your input is preserved here.'
+    const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'Shopify changed this field’s rules. Your value stays here; reload the sheet to use the new rules.'
       : translated && value === null ? null : field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected.baseline)
     if (problem) { setError(`Not saved: ${problem}`); return false }
     const node = getApi()?.getRowNode(selected.row.rowId)
@@ -186,7 +192,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     <div className={styles.stack}>
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
       {error && <Banner tone="danger">{error}</Banner>}{reason && <Banner tone="neutral">{reason}</Banner>}
-      {field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} onChange={next => { setValue(next); setError('') }}
+      {field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} referenceVersion={referenceVersion} onChange={next => { setValue(next); setError('') }}
         onOpenEntry={id => setEntry({ id })} onCopyEntry={!locked && canPublish ? id => setEntry({ id, copy: true }) : undefined}
         onCreateEntry={!locked && canPublish ? type => setEntry({ id: null, type }) : undefined} />
         : field.id === 'tags' ? <InformationTagsEditor original={selected.baseline} disabled={locked} onChange={setValue} />
@@ -195,6 +201,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     </div>
   </CellPanel>{entry && <EntryEditor key={`${entry.id}:${!!entry.copy}:${entry.type ?? ''}`} id={entry.id} copy={entry.copy} initialType={entry.type} path={path} schema={schema} canPublish={canPublish && !locked}
     onClose={() => setEntry(null)} onSaved={saved => {
+      setReferenceVersion(v => v + 1)
       /* A copy replaces the entry it was copied from; a NEW entry is picked straight away (Shopify's "Add new entry"). */
       const list = field.type.startsWith('list.')
       if (entry.copy) setValue(previous => list ? JSON.stringify(JSON.parse(previous ?? '[]').map((id: string) => id === entry.id ? saved.id : id)) : saved.id)

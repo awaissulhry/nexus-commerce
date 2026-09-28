@@ -1,5 +1,5 @@
 'use client'
-import { shopifyMeasurementUnits, shopifyJson, type ShopifyFieldDefinition } from '@nexus/shared/shopify-linked-products'
+import { shopifyMeasurementUnits, shopifyJson, shopifyUnitName, type ShopifyFieldDefinition } from '@nexus/shared/shopify-linked-products'
 import { Field } from '@/design-system/components'
 import { Input, Select, Textarea } from '@/design-system/primitives'
 import styles from './linked.module.css'
@@ -20,13 +20,22 @@ export function ShopifyCompoundEditor({ definition, value, disabled, currency, o
   const initial = units ? { value: '', unit: units[0] } : type === 'money' ? { amount: '', currency_code: currency ?? '' }
     : type === 'rating' ? { value: '', scale_min: rules.scale_min ?? '', scale_max: rules.scale_max ?? '' } : { text: '', url: '' }
   const current: Record<string, unknown> = { ...initial, ...object }
+  /* Shopify returns the unit in capitals (`KILOGRAMS`): it is the listed unit, and is written back by its listed name (B4). */
+  if (units && shopifyUnitName(type, current.unit)) current.unit = shopifyUnitName(type, current.unit)
   const update = (key: string, raw: string) => onChange(shopifyJson.stringify({ ...current, [key]: units && key === 'value' && /^-?\d+(\.\d+)?$/.test(raw) ? shopifyJson.parse(raw) : raw }))
   const input = (key: string, label: string, numeric = false) => <Field key={key} label={label}><Input size="sm" disabled={disabled} value={String(current[key] ?? '')} inputMode={numeric ? 'decimal' : undefined} onChange={e => update(key, e.target.value)} /></Field>
+  /* Money: the currency is the store's — a fact beside the amount, not an input. A stored amount in another currency
+     shows that currency and says so; a changed amount is written in the store's currency, the only one Shopify takes. */
+  const code = String(current.currency_code ?? '')
+  const money = () => !currency && !code ? <div className={styles.inline}>{input('amount', 'Amount', true)}{input('currency_code', 'Currency')}</div>
+    : <Field label="Amount" hint={currency && code && code !== currency ? `This amount is in ${code}, but the store uses ${currency}: enter the amount in ${currency}.` : undefined}>
+      <Input size="sm" disabled={disabled} value={String(current.amount ?? '')} inputMode="decimal" suffix={code || currency} aria-label={`Amount in ${code || currency}`}
+        onChange={e => onChange(shopifyJson.stringify({ ...current, amount: e.target.value, ...(currency ? { currency_code: currency } : {}) }))} /></Field>
   return <div className={styles.stack}>
     {units ? <div className={styles.inline}>{input('value', name, true)}<Field label="Unit"><Select size="sm" disabled={disabled} value={String(current.unit)} onChange={e => update('unit', e.target.value)}>
       {!units.includes(String(current.unit)) && <option value={String(current.unit)}>{String(current.unit)} (current)</option>}
       {units.map(unit => <option key={unit} value={unit}>{unit.replace(/_/g, ' ')}</option>)}
-    </Select></Field></div> : type === 'money' ? <div className={styles.inline}>{input('amount', 'Amount', true)}{input('currency_code', 'Currency')}</div>
+    </Select></Field></div> : type === 'money' ? money()
       : type === 'rating' ? <>{input('value', 'Rating', true)}<div className={styles.inline}>{input('scale_min', 'Scale minimum', true)}{input('scale_max', 'Scale maximum', true)}</div></>
       : <>{input('text', 'Link text')}{input('url', 'URL')}</>}
   </div>

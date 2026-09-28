@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import prisma from '../../db.js'
-import { emptyShopifyLinkedDraft, fieldAddress, linkedFamilyChanges, shopifyLinkedDraftSchema, validateShopifyField, shopifyReferenceError, shopifyDefinitionApplicability,
+import { emptyShopifyLinkedDraft, fieldAddress, linkedFamilyChanges, shopifyLinkedDraftSchema, validateShopifyField, shopifyValuesEqual, shopifyReferenceError, shopifyDefinitionApplicability,
   type ShopifyFieldEdit, type ShopifyFieldSnapshot, type ShopifyStoreSchema, type ShopifyLinkedAutomation, type ShopifyLinkedDraft, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace } from '@nexus/shared/shopify-linked-products'
 import { contentDestination, object, PUBLISH_KEY, type ContentScope } from './content-workspace.service.js'
 import { shopifyAdmin, assertShopifyResult, type ShopifyGraphql } from './admin-client.js'
@@ -216,22 +216,53 @@ export async function previewLinkedWorkspace(productId: string, scope: ContentSc
   return { workspace, plan }
 }
 
-/** Atomic set batches; ambiguous results are reconciled by exact value before retrying. */
+/**
+ * Did a shared source change during the operation? A source that is still what was read is not a change, and neither is
+ * the operation's own planned edit of it — also when Shopify stores that edit in another spelling (compared by type, G10).
+ */
+export function sharedSourceChanged(before: ShopifyFieldSnapshot[], now: ShopifyFieldSnapshot[], changes: ShopifyFieldEdit[]): boolean {
+  return now.some((f, i) => {
+    const read = before[i], edit = changes.find(c => fieldAddress(c) === fieldAddress(f))
+    return !(f.value === read.value && f.compareDigest === read.compareDigest) && !(edit && shopifyValuesEqual(edit.type, f.value, edit.nextValue) && f.type === edit.type)
+  })
+}
+
+/**
+ * Shopify's refusal of a batch as plain sentences (gap G9): which field, on which product or variant, and Shopify's own
+ * words — one sentence per refused field. `elementIndex` (or the index in `field`) points at the refused input.
+ */
+export function linkedRefusalSentence(errors: Array<{ field?: string[] | null; message: string; elementIndex?: number | null }>, sets: ShopifyFieldEdit[], schema?: ShopifyStoreSchema): string {
+  return errors.map(error => {
+    const index = error.elementIndex ?? Number(error.field?.find(part => /^\d+$/.test(part)))
+    const change = Number.isInteger(index) ? sets[index] : undefined
+    const words = error.message.trim().replace(/([^.!?])$/, '$1.')
+    if (!change) return `Shopify did not save the fields: ${words}`
+    const owner = change.ownerId.includes('/ProductVariant/') ? 'PRODUCTVARIANT' : 'PRODUCT'
+    const name = schema?.definitions.find(d => d.ownerType === owner && d.namespace === change.namespace && d.key === change.key)?.name ?? `${change.namespace}.${change.key}`
+    return `Shopify did not save ${name} on ${change.ownerLabel}: ${words}`
+  }).join(' ')
+}
+
+/** Atomic set batches; ambiguous results are reconciled by value (compared by type, `shopifyValuesEqual`) before retrying. */
 export async function applyLinkedBatch(gql: ShopifyGraphql, changes: ShopifyFieldEdit[], schema?: ShopifyStoreSchema) {
   const live = await readLinkedFields(gql, changes)
   const pending: ShopifyFieldEdit[] = []
   for (let i = 0; i < changes.length; i++) {
     const change = changes[i], current = live[i]
-    if (current.value === change.nextValue && (current.value === null || current.type === change.type)) continue
+    if (shopifyValuesEqual(change.type, current.value, change.nextValue) && (current.value === null || current.type === change.type)) continue
     if (current.value !== change.value || current.compareDigest !== change.compareDigest || (current.value !== null && current.type !== change.type)) throw new WorkspaceScopeError(`${change.ownerLabel}: Shopify changed this field. Review the latest values before retrying.`)
     pending.push(change)
   }
   const sets = pending.filter(c => c.nextValue !== null), clears = pending.filter(c => c.nextValue === null)
   if (sets.length) await verifyFieldApplicability(gql, sets, schema ?? await readLinkedStoreSchema(gql))
-  if (sets.length) assertShopifyResult((await gql(`mutation NexusLinkedSet($metafields:[MetafieldsSetInput!]!) { metafieldsSet(metafields:$metafields) { metafields { id } userErrors { field message } } }`, { metafields: sets.map(c => ({ ownerId: c.ownerId, namespace: c.namespace, key: c.key, type: c.type, value: c.nextValue, compareDigest: c.compareDigest })) })).metafieldsSet, 'Save Shopify fields')
+  if (sets.length) {
+    const result = (await gql(`mutation NexusLinkedSet($metafields:[MetafieldsSetInput!]!) { metafieldsSet(metafields:$metafields) { metafields { id } userErrors { field message code elementIndex } } }`, { metafields: sets.map(c => ({ ownerId: c.ownerId, namespace: c.namespace, key: c.key, type: c.type, value: c.nextValue, compareDigest: c.compareDigest })) })).metafieldsSet
+    if (result?.userErrors?.length) throw new Error(linkedRefusalSentence(result.userErrors, sets, schema ?? await readLinkedStoreSchema(gql).catch(() => undefined)))
+    assertShopifyResult(result, 'Save Shopify fields')
+  }
   if (clears.length) assertShopifyResult((await gql(`mutation NexusLinkedClear($metafields:[MetafieldIdentifierInput!]!) { metafieldsDelete(metafields:$metafields) { userErrors { field message } } }`, { metafields: clears.map(c => ({ ownerId: c.ownerId, namespace: c.namespace, key: c.key })) })).metafieldsDelete, 'Clear Shopify fields')
   const verified = await readLinkedFields(gql, changes)
-  if (changes.some((c, i) => verified[i].value !== c.nextValue || (c.nextValue !== null && verified[i].type !== c.type))) throw new WorkspaceScopeError('Shopify readback differs from the reviewed changes. Synchronization remains unverified.', 502)
+  if (changes.some((c, i) => !shopifyValuesEqual(c.type, verified[i].value, c.nextValue) || (c.nextValue !== null && verified[i].type !== c.type))) throw new WorkspaceScopeError('Shopify readback differs from the reviewed changes. Synchronization remains unverified.', 502)
 }
 
 export async function beginLinkedSync(productId: string, scope: ContentScope, body: unknown, origin: 'MANUAL' | 'AUTOMATIC' = 'MANUAL', actorUserId: string | null = null) {
@@ -292,7 +323,7 @@ export async function advanceLinkedSync(productId: string, scope: ContentScope, 
       await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: { ...current.operation, leaseUntil: Date.now() + 5 * 60_000 } })
     })
     const sourceValues = await readLinkedFields(graphql, operation.sources ?? [])
-    if (sourceValues.some((f, i) => { const before = operation.sources![i]; const edit = operation.changes.find(c => fieldAddress(c) === fieldAddress(f)); return !(f.value === before.value && f.compareDigest === before.compareDigest) && !(edit && f.value === edit.nextValue && f.type === edit.type) })) throw new WorkspaceScopeError('Shared source content changed during synchronization. Refresh and review its latest value.')
+    if (sharedSourceChanged(operation.sources ?? [], sourceValues, operation.changes)) throw new WorkspaceScopeError('Shared source content changed during synchronization. Refresh and review its latest value.')
     let advanced = 0
     if (operation.completed < operation.changes.length) {
       const batch = operation.changes.slice(operation.completed, operation.completed + 25)
@@ -338,7 +369,7 @@ export async function advanceLinkedSync(productId: string, scope: ContentScope, 
     if (finished) {
       const expected = operation.verification ?? operation.changes
       const all = await readLinkedFields(graphql, expected)
-      if (expected.some((c, i) => all[i].value !== c.nextValue || (c.nextValue !== null && all[i].type !== c.type))) throw new WorkspaceScopeError('A family field changed before final verification. Review Shopify again.')
+      if (expected.some((c, i) => !shopifyValuesEqual(c.type, all[i].value, c.nextValue) || (c.nextValue !== null && all[i].type !== c.type))) throw new WorkspaceScopeError('A family field changed before final verification. Review Shopify again.')
       for (const field of all) verified.set(fieldAddress(field), field)
       if (operation.nativeEdits?.length || operation.mediaEdits?.length) {
         const info = await readInformation(graphql, [...new Set([...(operation.nativeEdits ?? []), ...(operation.mediaEdits ?? [])].map(e => e.productId))], schema)

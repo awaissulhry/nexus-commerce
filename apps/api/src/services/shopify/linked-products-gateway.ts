@@ -156,7 +156,66 @@ export async function readLinkedFields(gql: ShopifyGraphql, addresses: { ownerId
   return out
 }
 
-export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type: string; query?: string; cursor?: string; metaobjectType?: string }): Promise<ShopifyReferencePage> {
+/** A file's name for pickers and cells (gap G11): its alt text, else the video's file name or the last part of its address.
+ *  Never an empty name and never a raw id. */
+const FILE_TYPENAMES = ['MediaImage', 'GenericFile', 'Video', 'Model3d']
+export function linkedFileLabel(n: any): string {
+  if (typeof n?.alt === 'string' && n.alt.trim()) return n.alt
+  if (typeof n?.filename === 'string' && n.filename) return n.filename
+  const url = n?.image?.url ?? n?.url ?? null
+  if (typeof url === 'string') { try { const last = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? ''); if (last) return last } catch { /* fall through */ } }
+  return 'Untitled file'
+}
+/** `Image,Video` (a field's `file_type_options`) → Shopify's file search filter. Unknown kinds are ignored, never guessed. */
+export function linkedFileKindsQuery(fileTypes: string | undefined): string | null {
+  const kinds = (fileTypes ?? '').split(',').map(kind => ({ Image: 'media_type:IMAGE', Video: 'media_type:VIDEO' } as Record<string, string>)[kind.trim()]).filter(Boolean)
+  return kinds.length ? kinds.join(' OR ') : null
+}
+/**
+ * Shopify's values for one taxonomy attribute ("color", "pattern", …) — the values a category Color entry's "Base color"
+ * and "Base pattern" take (gap G12; docs/shopify-metafields/PLAN-2026-09-28.md §6.2). Shopify lists an attribute's values
+ * only through a category: the attribute is found by its handle among a category's attributes, then its values are read
+ * page by page. Taxonomy is Shopify's public data, the same for every store, so both reads are cached for a day.
+ * `attribute: null` means no given category carries the attribute — the caller says so; it never guesses.
+ */
+export const taxonomyHandle = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+const TAXONOMY_TTL_MS = 24 * 60 * 60 * 1000
+const taxonomyCache = new WorkspaceCache<string, { expires: number; value: Promise<unknown> }>(500)
+function cachedTaxonomy<T>(key: string, read: () => Promise<T>): Promise<T> {
+  const hit = taxonomyCache.get(key)
+  if (hit && hit.expires > Date.now()) return hit.value as Promise<T>
+  const value = read()
+  taxonomyCache.set(key, { expires: Date.now() + TAXONOMY_TTL_MS, value })
+  value.catch(() => { if (taxonomyCache.get(key)?.value === value) taxonomyCache.delete(key) })
+  return value
+}
+export function invalidateTaxonomyCache() { taxonomyCache.clear() }
+/** A category as Shopify's node id. A definition's category constraint holds the bare code (`aa-1-13`, measured on a live
+ *  store 2026-09-28); a product's category holds the full id. Anything else is not a category: null, never guessed. */
+export function taxonomyCategoryId(category: string): string | null {
+  if (/^gid:\/\/shopify\/TaxonomyCategory\/[a-z]{2}(-\d+)*$/.test(category)) return category
+  return /^[a-z]{2}(-\d+)*$/.test(category) ? `gid://shopify/TaxonomyCategory/${category}` : null
+}
+export async function readTaxonomyAttributeValues(gql: ShopifyGraphql, handle: string, categoryIds: string[]): Promise<{ attribute: { id: string; name: string } | null; values: ShopifyReference[] }> {
+  let attribute: { id: string; name: string } | null = null
+  for (const category of [...new Set(categoryIds.map(taxonomyCategoryId).filter((id): id is string => !!id))].slice(0, 5)) {
+    const attributes = await cachedTaxonomy(`category|${category}`, async () => {
+      const data = await gql(`query NexusTaxonomyCategoryAttributes($id:ID!) { node(id:$id) { ... on TaxonomyCategory { attributes(first:250) { nodes { __typename ... on TaxonomyChoiceListAttribute { id name } } } } } }`, { id: category })
+      return ((data?.node?.attributes?.nodes ?? []) as any[]).filter(n => n?.id && n?.name).map(n => ({ id: String(n.id), name: String(n.name) }))
+    })
+    attribute = attributes.find(a => taxonomyHandle(a.name) === handle) ?? null
+    if (attribute) break
+  }
+  if (!attribute) return { attribute: null, values: [] }
+  const found = attribute
+  const values = await cachedTaxonomy(`values|${found.id}`, async () => (await collectShopifyPages<{ id: string; name: string }>(async after => {
+    const data = await gql(`query NexusTaxonomyAttributeValues($id:ID!,$after:String) { node(id:$id) { ... on TaxonomyChoiceListAttribute { values(first:250,after:$after) { nodes { id name } ${pageInfo} } } } }`, { id: found.id, after })
+    return data?.node?.values
+  }, 5000)).map(v => ({ id: v.id, label: v.name, image: null, type: 'TaxonomyValue', available: true } as ShopifyReference)))
+  return { attribute: found, values }
+}
+
+export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type: string; query?: string; cursor?: string; metaobjectType?: string; fileTypes?: string; attribute?: string; categories?: string }): Promise<ShopifyReferencePage> {
   const type = input.type.replace(/^list\./, '')
   const query = input.query?.trim().slice(0, 200) || null, after = input.cursor || null
   let selection: string, root: string, args = 'first:40,after:$after,query:$query', variables: Record<string, unknown> = { after, query }, extra = ''
@@ -168,11 +227,23 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   else if (type === 'order_reference') { root = 'orders'; selection = 'id name' }
   else if (type === 'page_reference') { root = 'pages'; selection = 'id title' }
   else if (type === 'article_reference') { root = 'articles'; selection = 'id title' }
-  else if (type === 'file_reference') { root = 'files'; selection = 'id __typename alt ... on MediaImage { image { url } } ... on GenericFile { url } ... on Video { preview { image { url } } }' }
+  else if (type === 'file_reference') {
+    root = 'files'; selection = 'id __typename alt ... on MediaImage { image { url } } ... on GenericFile { url } ... on Video { filename preview { image { url } } }'
+    /* Only the kinds the field allows (gap G8), combined with the typed search like the product-media search below. */
+    const kinds = linkedFileKindsQuery(input.fileTypes)
+    if (kinds) variables.query = query ? `(${kinds}) AND (${query})` : kinds
+  }
   else if (type === 'product_media') { root = 'files'; selection = '__typename id alt fileStatus preview { image { url } } ... on MediaImage { image { url } } ... on Video { sources { url mimeType } } ... on Model3d { sources { url mimeType } }'; variables.query = `media_type:IMAGE OR media_type:VIDEO OR media_type:MODEL_3D`; if (query) variables.query = `(${variables.query}) AND (${query})` }
   else if (type === 'metaobject_reference' || type === 'mixed_reference' || type === 'disclosure_reference') {
     if (!input.metaobjectType) throw new WorkspaceScopeError('Choose the reusable entry type.', 400)
     root = 'metaobjects'; selection = `id displayName handle type ${entryThumbnail}`; args += ',type:$type'; extra = ',$type:String!'; variables.type = input.metaobjectType
+  } else if (type === 'product_taxonomy_value_reference' && input.attribute) {
+    /* The attribute's own list, searched by name (gap G12): no raw id is typed any more. */
+    const { attribute, values } = await readTaxonomyAttributeValues(gql, input.attribute, (input.categories ?? '').split(',').map(c => c.trim()).filter(Boolean))
+    if (!attribute) throw new WorkspaceScopeError(`Shopify lists the “${input.attribute}” values only through a product category, and this field has none that carries it. The stored value is kept.`, 422)
+    const needle = query?.toLowerCase() ?? '', start = Number(after ?? 0) || 0
+    const matches = values.filter(v => !needle || v.label.toLowerCase().includes(needle))
+    return { items: matches.slice(start, start + 40), cursor: start + 40 < matches.length ? String(start + 40) : null }
   } else if (type === 'product_taxonomy_value_reference') {
     if (!query || !/^gid:\/\/shopify\/TaxonomyValue\/\d+$/.test(query)) return { items: [], cursor: null }
     const refs = await resolveLinkedReferences(gql, [query])
@@ -193,7 +264,7 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   const data = await gql(`query NexusLinkedReferenceSearch($after:String,$query:String${extra}) { ${root}(${args}) { nodes { ${selection} } ${pageInfo} } }`, variables)
   const page = data[root]
   if (!page || !Array.isArray(page.nodes) || (page.pageInfo.hasNextPage && !page.pageInfo.endCursor)) throw new WorkspaceScopeError('The search result is incomplete. Retry.', 502)
-  return { items: page.nodes.filter((n: any) => type !== 'product_media' || ['MediaImage', 'Video', 'Model3d'].includes(n.__typename)).map((n: any) => ({ id: n.id, label: n.displayName ?? (n.product ? `${n.product.title} / ${n.title}${n.sku ? ` · ${n.sku}` : ''}` : n.title ?? n.name ?? n.alt ?? n.id), image: referenceImage(n), ...(n.thumbnailField?.thumbnail?.hex ? { swatch: n.thumbnailField.thumbnail.hex } : {}), ...(n.type || n.__typename ? { type: n.type ?? n.__typename } : {}), ...(n.handle ? { handle: n.handle } : {}),
+  return { items: page.nodes.filter((n: any) => type !== 'product_media' || ['MediaImage', 'Video', 'Model3d'].includes(n.__typename)).map((n: any) => ({ id: n.id, label: n.displayName ?? (n.product ? `${n.product.title} / ${n.title}${n.sku ? ` · ${n.sku}` : ''}` : n.title ?? n.name ?? (FILE_TYPENAMES.includes(n.__typename) ? linkedFileLabel(n) : n.alt ?? n.id)), image: referenceImage(n), ...(n.thumbnailField?.thumbnail?.hex ? { swatch: n.thumbnailField.thumbnail.hex } : {}), ...(n.type || n.__typename ? { type: n.type ?? n.__typename } : {}), ...(n.handle ? { handle: n.handle } : {}),
     ...(type === 'product_media' ? { media: { id: n.id, alt: n.alt ?? '', type: ({ MediaImage: 'IMAGE', Video: 'VIDEO', Model3d: 'MODEL_3D' } as Record<string, string>)[n.__typename], status: n.fileStatus, preview: n.preview?.image?.url ?? n.image?.url ?? null, url: n.image?.url ?? n.sources?.[0]?.url ?? null, ...(n.sources ? { sources: n.sources } : {}) } } : {}) })), cursor: page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null }
 }
 
@@ -206,9 +277,9 @@ function referenceImage(n: any): string | null {
 
 export async function resolveLinkedReferences(gql: ShopifyGraphql, ids: string[]): Promise<ShopifyReference[]> {
   if (ids.length > 100 || ids.some(id => !shopifyGid.safeParse(id).success)) throw new WorkspaceScopeError('Select at most 100 references at a time.', 400)
-  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title featuredMedia { preview { image { url } } } } ... on ProductVariant { title product { title featuredMedia { preview { image { url } } } } media(first:1) { nodes { preview { image { url } } } } } ... on Collection { title image { url } } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type ${entryThumbnail} } ... on MediaImage { alt image { url } } ... on GenericFile { alt } ... on Model3d { alt } ... on Video { alt preview { image { url } } } } }`, { ids })
+  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title featuredMedia { preview { image { url } } } } ... on ProductVariant { title product { title featuredMedia { preview { image { url } } } } media(first:1) { nodes { preview { image { url } } } } } ... on Collection { title image { url } } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type ${entryThumbnail} } ... on MediaImage { alt image { url } } ... on GenericFile { alt url } ... on Model3d { alt } ... on Video { alt filename preview { image { url } } } } }`, { ids })
   if (!Array.isArray(nodes) || nodes.length !== ids.length || nodes.some((n: any, i: number) => n && n.id !== ids[i])) throw new WorkspaceScopeError('Shopify returned incomplete or mismatched references. Retry before synchronizing.', 502)
-  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? n?.alt ?? (n ? ids[i] : 'Unavailable reference')), image: referenceImage(n), ...(entryPicture(n).swatch ? { swatch: entryPicture(n).swatch } : {}), available: !!n, type: n?.type ?? n?.__typename }))
+  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? (FILE_TYPENAMES.includes(n?.__typename) ? linkedFileLabel(n) : n?.alt ?? (n ? ids[i] : 'Unavailable reference'))), image: referenceImage(n), ...(entryPicture(n).swatch ? { swatch: entryPicture(n).swatch } : {}), available: !!n, type: n?.type ?? n?.__typename }))
 }
 
 /**

@@ -181,6 +181,14 @@
     "./media-plan-archive": {
       "types": "./dist/media-plan-archive.d.ts",
       "default": "./dist/media-plan-archive.js"
+    },
+    "./shopify-type-catalog": {
+      "types": "./dist/shopify-type-catalog.d.ts",
+      "default": "./dist/shopify-type-catalog.js"
+    },
+    "./shopify-lab-store": {
+      "types": "./dist/shopify-lab-store.d.ts",
+      "default": "./dist/shopify-lab-store.js"
     }
   },
   "scripts": {

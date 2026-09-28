@@ -67,8 +67,22 @@ export const isReferenceType = (type: string) => /_reference$/.test(type.replace
 
 const parse = (raw: string): unknown => JSON.parse(raw)
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+/**
+ * Shopify's 32 measurement kinds, each stored as `{"value":2.5,"unit":"kilograms"}` and shown "2.5 kilograms" (gap G13;
+ * docs/shopify-metafields/PLAN-2026-09-28.md §6.3). Named here, not read from `@nexus/shared`: the design system is copied
+ * into apps/factory, which may not import packages/*. A list and not a shape rule, so a broken stored measurement says
+ * "needs review" and a text field that happens to hold `{"value":…}` stays text. `metafieldDisplay.vitest.test.ts` pins the
+ * list to Shopify's unit table in `@nexus/shared`.
+ */
+const MEASUREMENTS = new Set(['antenna_gain', 'area', 'battery_charge_capacity', 'battery_energy_capacity', 'capacitance', 'concentration',
+  'data_storage_capacity', 'data_transfer_rate', 'dimension', 'display_density', 'distance', 'duration', 'electric_current', 'electrical_resistance',
+  'energy', 'frequency', 'illuminance', 'inductance', 'luminous_flux', 'mass_flow_rate', 'power', 'pressure', 'resolution', 'rotational_speed',
+  'sound_level', 'speed', 'temperature', 'thermal_power', 'voltage', 'volume', 'volumetric_flow_rate', 'weight'])
 /** Types stored as a JSON object; every other scalar type is stored as its plain text. */
-const STRUCTURED = new Set(['money', 'rating', 'link', 'weight', 'volume', 'dimension', 'rich_text_field', 'json'])
+const STRUCTURED = new Set(['money', 'rating', 'link', 'rich_text_field', 'json', ...MEASUREMENTS])
+/** A stored measurement: a number (or its text) and a unit. */
+const isMeasurement = (v: unknown) => isRecord(v) && typeof v.unit === 'string' && v.unit !== ''
+  && (typeof v.value === 'number' ? Number.isFinite(v.value) : typeof v.value === 'string' && v.value.trim() !== '' && Number.isFinite(Number(v.value)))
 const COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 
 /** Rich text is a node tree; its words are what a cell can show. */
@@ -79,11 +93,26 @@ function richText(node: unknown): string {
   return children.join(node.type === 'root' ? ' · ' : '')
 }
 
+/**
+ * A Shopify `date_time` as "YYYY-MM-DD HH:MM UTC". A moment with no zone is UTC — Shopify documents it "without a
+ * presumed timezone. Defaults to Greenwich Mean Time" — never the viewer's zone, which `new Date()` would use (Lane B,
+ * gap G15: "12:30" stored showed "10:30 UTC" in Rome). Free text, or a day that is not in the calendar (`Date` rolls
+ * 30 February over to 2 March), is shown as stored.
+ */
+const MOMENT = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/
+function momentText(raw: string): string {
+  const m = MOMENT.exec(raw)
+  if (!m) return raw
+  const day = new Date(`${m[1]}T00:00:00Z`), at = new Date(m[2] ? raw : `${raw}Z`)
+  return Number.isNaN(at.getTime()) || Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== m[1] ? raw : `${at.toISOString().replace('T', ' ').slice(0, 16)} UTC`
+}
+
 /** One scalar value (a list's item or a single value) as words. */
 function scalarText(base: string, value: unknown): string {
   if (value === null || value === undefined) return ''
   if (typeof value !== 'object') {
     if (base === 'boolean') return value === true || value === 'true' ? 'Yes' : value === false || value === 'false' ? 'No' : String(value)
+    if (base === 'date_time') return momentText(String(value))
     return String(value)
   }
   if (!isRecord(value)) return JSON.stringify(value)
@@ -92,7 +121,8 @@ function scalarText(base: string, value: unknown): string {
   if (base === 'link' && typeof value.text === 'string') return value.text || String(value.url ?? '')
   if (value.value !== undefined && value.unit !== undefined) return `${value.value} ${String(value.unit).toLowerCase().replace(/_/g, ' ')}`
   if (base === 'rich_text_field') return richText(value)
-  return `${Object.keys(value).length} properties`
+  const count = Object.keys(value).length
+  return `${count} ${count === 1 ? 'property' : 'properties'}`
 }
 
 /**
@@ -119,6 +149,7 @@ export function metafieldDisplay(type: string, raw: string | null | undefined, o
     if (!Array.isArray(parsed)) return { kind: 'invalid', text: METAFIELD_INVALID_TEXT }
     const values: unknown[] = parsed
     if (!values.length) return { kind: 'empty', text: '' }
+    if (MEASUREMENTS.has(base) && !values.every(isMeasurement)) return { kind: 'invalid', text: METAFIELD_INVALID_TEXT }
     if (base === 'color') {
       const colors = values.map(String)
       if (colors.some(c => !COLOR.test(c))) return { kind: 'text', text: colors.join(', ') }
@@ -138,10 +169,7 @@ export function metafieldDisplay(type: string, raw: string | null | undefined, o
     const words = values.map(v => scalarText(base, v))
     if (list) return { kind: 'values', items: words, text: words.join(', ') }
     if (['number_integer', 'number_decimal'].includes(base)) return { kind: 'number', text: words[0] }
-    if (['date', 'date_time'].includes(base)) {
-      const at = new Date(raw)
-      return { kind: 'text', text: Number.isNaN(at.getTime()) ? raw : base === 'date' ? raw : at.toISOString().replace('T', ' ').slice(0, 16) + ' UTC' }
-    }
+    if (['date', 'date_time'].includes(base)) return { kind: 'text', text: base === 'date' ? raw : momentText(raw) }
     // Multi-line text: the first line in the cell, the whole text in the editor.
     return { kind: 'text', text: base === 'multi_line_text_field' ? words[0].split('\n').find(Boolean) ?? '' : words[0] }
   } catch {
