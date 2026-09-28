@@ -4,7 +4,7 @@
  * this returns and nothing else decides.
  */
 import type { ShopifyFieldDefinition, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { shopifyJson, shopifyObjectType, validateShopifyField } from '@nexus/shared/shopify-linked-products'
+import { shopifyDateTimeMs, shopifyJson, shopifyObjectType, validateShopifyField } from '@nexus/shared/shopify-linked-products'
 import { referenceUiFor } from './referenceFieldModel'
 
 export type LinkedEditorKind =
@@ -27,15 +27,21 @@ export type LinkedEditorKind =
   | 'yes-no'
   | 'choices'
   | 'date'
+  /** The design-system date and time picker: the viewer's zone on screen, a UTC moment stored (B3b, G15). */
+  | 'date-time'
   | 'colour'
-  /** One line of text, a number, a web address, a code. */
+  /** One line of text, a number, a web address, an id — and the repair box of a date that cannot be read. */
   | 'line'
+  /** A language or a country / region code: one line with an example (B3b, G16). */
+  | 'code'
   /** A multi-line box: Enter adds a line, Ctrl/⌘+Enter saves. */
   | 'multi-line'
-  /** Any other text box (JSON, jurisdiction, a broken reference list). */
+  /** A JSON box whose error line says where the JSON breaks (B3b, G16). */
+  | 'json'
+  /** Any other text box (a broken reference list). */
   | 'box'
 
-const LINE_TYPES = ['single_line_text_field', 'number_integer', 'number_decimal', 'url', 'date', 'date_time', 'id', 'language']
+const LINE_TYPES = ['single_line_text_field', 'number_integer', 'number_decimal', 'url', 'date', 'date_time', 'id']
 
 export function linkedEditorKind(def: ShopifyFieldDefinition, value: string | null, schema: ShopifyStoreSchema): LinkedEditorKind {
   const list = def.type.startsWith('list.'), type = list ? def.type.slice(5) : def.type, reference = type.endsWith('_reference')
@@ -60,8 +66,12 @@ export function linkedEditorKind(def: ShopifyFieldDefinition, value: string | nu
   try { const parsed = JSON.parse(def.validations.find(v => v.name === 'choices')?.value ?? 'null'); choices = Array.isArray(parsed) && parsed.every(v => typeof v === 'string') } catch { choices = false }
   if (choices) return 'choices'
   if (type === 'date' && !validateShopifyField(def, value)) return 'date'
+  /* Empty or a moment the rules can read (a value outside the limits is still a moment); else the repair box. */
+  if (type === 'date_time' && (!value || shopifyDateTimeMs(value) !== null)) return 'date-time'
   if (type === 'color') return 'colour'
   if (LINE_TYPES.includes(type)) return 'line'
+  if (type === 'language' || type === 'jurisdiction') return 'code'
   if (type === 'multi_line_text_field') return 'multi-line'
+  if (type === 'json') return 'json'
   return 'box'
 }

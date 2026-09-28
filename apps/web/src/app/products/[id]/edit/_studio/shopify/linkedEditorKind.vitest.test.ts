@@ -24,8 +24,8 @@ describe('B1 · the editor each store type opens', () => {
   it('gives every Shopify type an editor and never throws (118 types)', () => {
     const kinds = Object.fromEntries(SHOPIFY_TYPE_CATALOG.map(({ name }) => [name, linkedEditorKind(labTypeField(name), labGoodValue(name), LAB_SCHEMA)]))
     expect(kinds).toMatchObject({
-      temperature: 'compound', 'list.temperature': 'list', multi_line_text_field: 'multi-line', json: 'box', jurisdiction: 'box',
-      rich_text_field: 'rich-text', date: 'date', date_time: 'line', mixed_reference: 'entries',
+      temperature: 'compound', 'list.temperature': 'list', multi_line_text_field: 'multi-line', json: 'json', jurisdiction: 'code', language: 'code', id: 'line',
+      rich_text_field: 'rich-text', date: 'date', date_time: 'date-time', mixed_reference: 'entries',
       /* No category on this made-up field, so Shopify cannot list its values: the older picker keeps it settable (B2 review). */
       product_taxonomy_value_reference: 'older-picker',
       'list.variant_reference': 'resources', metaobject_reference: 'entries', rating: 'rating', money: 'compound', link: 'compound',
@@ -163,5 +163,97 @@ describe('B3c · what the mixed and disclosure editors show', () => {
     expect(gone).toMatch(/<button[^>]*disabled=""[^>]*aria-describedby="([^"]+)-picker-reason"[^>]*>Choose reference<\/button>/)
     const id = /aria-describedby="([^"]+-picker-reason)"/.exec(gone)![1]
     expect(gone).toContain(`id="${id}"`)
+  })
+})
+
+/* ── Slice B3b (PLAN §6.3): dates, JSON, codes, link, money, rich text. ── */
+import { renderToStaticMarkup as html } from 'react-dom/server'
+import { ShopifyRichText } from '../images/shopify/ShopifyFieldValue'
+
+describe('B3b · the editor each type opens', () => {
+  it('date and time: the picker for a moment or nothing; a repair box for what cannot be read (G15)', () => {
+    const def = labTypeField('date_time')
+    for (const value of [null, '', '2026-09-28T12:30:00', '2026-09-28T12:30:00+02:00', '2031-01-01T00:00:00']) expect(linkedEditorKind(def, value, LAB_SCHEMA), String(value)).toBe('date-time')
+    for (const value of ['Sep 28 2026 12:30', '2026-02-30T12:00:00', 'tomorrow']) expect(linkedEditorKind(def, value, LAB_SCHEMA), value).toBe('line')
+    expect(linkedEditorKind(labTypeField('list.date_time'), '["2026-09-28T12:30:00"]', LAB_SCHEMA)).toBe('list')
+  })
+  it('JSON gets the checked JSON box; language and jurisdiction a code line; id stays a plain line (G16)', () => {
+    expect(linkedEditorKind(labTypeField('json'), '{"fit":', LAB_SCHEMA)).toBe('json')
+    expect(linkedEditorKind(labTypeField('jurisdiction'), 'Italy', LAB_SCHEMA)).toBe('code')
+    expect(linkedEditorKind(labTypeField('language'), null, LAB_SCHEMA)).toBe('code')
+    expect(linkedEditorKind(labTypeField('id'), 'LAB-1', LAB_SCHEMA)).toBe('line')
+    expect(linkedEditorKind(labTypeField('link'), null, LAB_SCHEMA)).toBe('compound')
+    expect(linkedEditorKind(labTypeField('money'), null, LAB_SCHEMA)).toBe('compound')
+  })
+})
+
+describe('B3b · what the editors show', () => {
+  it('date and time: the design-system picker in the viewer’s zone, the UTC moment in words, no text box (G15)', () => {
+    const out = render(labTypeField('date_time'), '2026-09-28T12:30:00')
+    expect(out).toContain('nds-datetimefield')
+    expect(out).toContain('That is 2026-09-28 12:30 (UTC).')
+    expect(out).toContain('nds-datetimefield-zone')
+    expect(out).toContain('>2026-09-28<')
+    expect(out).toContain('From 2020-01-01 00:00 (UTC) to 2030-12-31 23:59:59 (UTC)')
+    expect(out).not.toContain('<input')
+    const zoned = render(labTypeField('date_time'), '2026-09-28T14:30:00+02:00')
+    expect(zoned).toContain('That is 2026-09-28 12:30 (UTC).')
+    const empty = render(labTypeField('date_time'), null)
+    expect(empty).toContain('Choose a date'); expect(empty).not.toContain('That is')
+  })
+  it('date and time that cannot be read: a repair box that says how to write it, and why it is refused (G15)', () => {
+    const out = render(labTypeField('date_time'), 'Sep 28 2026 12:30')
+    expect(out).toContain('>Repair Date time<')
+    expect(out).toContain('value="Sep 28 2026 12:30"')
+    expect(out).toContain('Type it as 2026-09-28T12:30:00 (UTC), or clear the value to use the date picker.')
+    expect(out).toContain('Choose a date and a time.')
+    expect(out).not.toContain('nds-datetimefield')
+  })
+  it('JSON: a box with the key line, and the error line names the place of the mistake (G16)', () => {
+    const out = render(labTypeField('json'), '{"fit":"regular"}}')
+    expect(out).toContain('<textarea')
+    expect(out).toContain('Enter adds a line · Ctrl+Enter (⌘+Enter on a Mac) saves')
+    expect(out).toContain('This is not valid JSON: there is more text after the end, at line 1, character 18.')
+    expect(out).not.toContain('Structured Shopify value')
+    expect(render(labTypeField('json'), '{"size":"M"}')).toContain('The store’s JSON schema requires this value must have required property &#x27;fit&#x27;.')
+  })
+  it('codes: one line with an example, not the structured box (G16)', () => {
+    const jurisdiction = render(labTypeField('jurisdiction'), 'IT')
+    expect(jurisdiction).toContain('For example IT, or US-CA for a region.'); expect(jurisdiction).toMatch(/<input[^>]*value="IT"/); expect(jurisdiction).not.toContain('<textarea')
+    expect(jurisdiction).toContain('autoCapitalize="characters"')
+    const language = render(labTypeField('language'), 'english')
+    expect(language).toContain('For example en or it-IT.'); expect(language).toContain('Enter a language code, for example en or it-IT.')
+    expect(language).toContain('autoCapitalize="off"')
+  })
+  it('link: text and address, the allowed sites on the rule line, a link elsewhere refused in the same words as a url (G17)', () => {
+    const out = render(labTypeField('link'), '{"text":"Elsewhere","url":"https://other.test/"}')
+    expect(out).toContain('Link text'); expect(out).toContain('Only links on example.com')
+    expect(out).toContain('Use a link on one of these sites: example.com.')
+  })
+  it('money: the store’s currency is fixed text beside the amount, not an input', () => {
+    const out = render(labTypeField('money'), '{"amount":"149.90","currency_code":"EUR"}')
+    expect(out).toMatch(/<input[^>]*value="149.90"/)
+    expect(out).toContain('<span class="ad suf">EUR</span>')
+    expect(out).toContain('aria-label="Amount in EUR"')
+    expect(out).not.toContain('>Currency<')
+    expect(out).not.toContain('value="EUR"')
+    const empty = render(labTypeField('money'), null)
+    expect(empty).toContain('<span class="ad suf">EUR</span>')
+  })
+  it('money in another currency: that currency is shown, with one sentence about it', () => {
+    const out = render(labTypeField('money'), '{"amount":"20.00","currency_code":"USD"}')
+    expect(out).toContain('<span class="ad suf">USD</span>')
+    expect(out).toContain('This amount is in USD, but the store uses EUR: enter the amount in EUR.')
+    expect(render(labTypeField('money'), '{"amount":"20.00","currency_code":"EUR"}')).not.toContain('but the store uses')
+  })
+  it('rich text: the words to edit, and a repair box for a broken tree with the reason under it', () => {
+    const good = render(labTypeField('rich_text_field'), labGoodValue('rich_text_field'))
+    expect(good).toContain('Made-up '); expect(good).toContain('Bold'); expect(good).toContain('Add paragraph'); expect(good).not.toContain('Repair rich text JSON')
+    const broken = render(labTypeField('rich_text_field'), '{"type":"root"')
+    expect(broken).toContain('aria-label="Repair rich text JSON"'); expect(broken).not.toContain('Add paragraph')
+    expect(broken).toContain('This is not valid JSON: the text ends where “,” or “}” is needed.')
+    const wrong = render(labTypeField('rich_text_field'), '{"type":"paragraph"}')
+    expect(wrong).toContain('aria-label="Repair rich text JSON"'); expect(wrong).toContain('Use rich text with a root and children.')
+    expect(html(createElement(ShopifyRichText, { raw: '', disabled: false, onChange: () => {} }))).toContain('Text 1')
   })
 })

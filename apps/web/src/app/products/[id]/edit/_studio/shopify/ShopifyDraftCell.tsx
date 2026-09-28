@@ -89,12 +89,14 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
     if (!active || active === document.body) ref.current?.focus({ preventScroll: true })
   })
   /* A press outside saves, like Shopify. Presses inside a dialog it opened (the picker, the entry editor), a tooltip or
-     a picture preview are not "outside". A value that cannot be saved holds the press back. */
+     a picture preview are not "outside" — nor are the date calendar and the option lists its controls open in <body>:
+     a day picked with the mouse closed the pop-up unsaved (measured on the lab's Date row, B3b). A value that cannot be
+     saved holds the press back. */
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
       const target = event.target as Element | null
       if (!target || ref.current?.contains(target)) return
-      if (target.closest('[aria-modal="true"], .nds-backdrop, [role="tooltip"], .nds-thumb-preview')) return
+      if (target.closest('[aria-modal="true"], .nds-backdrop, [role="tooltip"], .nds-thumb-preview, .nds-dp-pop, .nds-combo-pop')) return
       if (!save.current()) { event.preventDefault(); event.stopPropagation() }
     }
     document.addEventListener('pointerdown', onDown, true)

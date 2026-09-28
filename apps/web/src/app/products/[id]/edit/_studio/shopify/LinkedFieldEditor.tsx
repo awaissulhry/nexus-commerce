@@ -1,9 +1,9 @@
 'use client'
 import { ShopifyCompoundEditor } from './ShopifyCompoundEditor'
-import { shopifyObjectType, shopifyTypeReason, shopifyJson, shopifyReferenceTypes, shopifyReferenceError, shopifyRuleSummary } from '@nexus/shared/shopify-linked-products'
-import { useEffect, useState } from 'react'
+import { shopifyObjectType, shopifyTypeReason, shopifyJson, shopifyReferenceTypes, shopifyReferenceError, shopifyRuleSummary, shopifyDateTimeMs, shopifyDateTimeValue, shopifyLimitMs, shopifyMomentWords } from '@nexus/shared/shopify-linked-products'
+import { useEffect, useRef, useState } from 'react'
 import { type ShopifyFieldDefinition, type ShopifyReference, type ShopifyStoreSchema, validateShopifyField } from '@nexus/shared/shopify-linked-products'
-import { DateField, Field, MediaMark, OrderedList } from '@/design-system/components'
+import { DateField, DateTimeField, Field, MediaMark, OrderedList } from '@/design-system/components'
 import { Button, Input, Select, Textarea } from '@/design-system/primitives'
 import { ShopifyRichText } from '../images/shopify/ShopifyFieldValue'
 import { ReferencePicker } from './ReferencePicker'
@@ -63,7 +63,12 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
   const supportedReference = ['product_reference', 'variant_reference', 'collection_reference', 'page_reference', 'article_reference', 'file_reference', 'metaobject_reference', 'mixed_reference', 'customer_reference', 'company_reference', 'order_reference', 'disclosure_reference', 'product_taxonomy_value_reference'].includes(type)
   /* Which editor opens is decided in one pure place (`linkedEditorKind`, tested per type). Entry and product-like fields
      get the picture pickers (Shopify's bulk-editor pop-ups); the rest keep the older picker. */
-  const kind = linkedEditorKind(def, value, schema)
+  const chosen = linkedEditorKind(def, value, schema)
+  /* A date and time that cannot be read opens a repair box, and the box stays while it is typed in: else the first
+     valid keystroke would swap it for the picker and drop the focus. Clearing the value brings the picker (G15). */
+  const repairing = useRef(chosen === 'line' && type === 'date_time')
+  if (!value) repairing.current = false
+  const kind = repairing.current ? 'line' : chosen
   const ui = reference ? referenceUiFor(def, schema) : 'legacy'
   /* Why an entry field is still on the older picker, on screen; `blocked` = there is no kind to pick from (B3c, G18). */
   const legacyReason = kind === 'older-picker' ? olderPickerReason(def, schema) : null
@@ -123,6 +128,15 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
   else if (kind === 'rich-text') control = <ShopifyRichText raw={text} disabled={locked} onChange={onChange} />
   else if (kind === 'yes-no' || kind === 'choices') control = <Field label={def.name}><Select size="sm" disabled={locked} value={text} onChange={e => onChange(e.target.value || null)}><option value="">Not set</option>{text && !(choices ?? ['true', 'false']).includes(text) && <option value={text}>{text} (current value)</option>}{(choices ?? ['true', 'false']).map(v => <option key={v} value={v}>{choices ? v : v === 'true' ? 'Yes' : 'No'}</option>)}</Select></Field>
   else if (kind === 'date') control = <Field label={def.name}><DateField value={text} disabled={locked} format="yyyy-mm-dd" onChange={v => onChange(v || null)} ariaLabel={def.name} /></Field>
+  else if (kind === 'date-time') {
+    /* The picker shows the viewer's zone; Shopify gets the UTC moment with no zone, its documented form (G15). The
+       store's limits are UTC moments too, so the picker offers no day or time outside them. */
+    const at = value ? shopifyDateTimeMs(value) : null
+    const limit = (name: 'min' | 'max') => { const raw = def.validations.find(r => r.name === name)?.value, ms = raw === undefined ? null : shopifyLimitMs(raw); return ms === null ? undefined : new Date(ms).toISOString() }
+    control = <Field label={def.name} hint={at === null ? undefined : `That is ${shopifyMomentWords(at)} (UTC).`}>
+      <DateTimeField value={at === null ? '' : new Date(at).toISOString()} min={limit('min')} max={limit('max')} format="yyyy-mm-dd" ariaLabel={def.name} disabled={locked}
+        onChange={v => onChange(v ? shopifyDateTimeValue(v) : null)} /></Field>
+  }
   else if (kind === 'colour') {
     /* Shopify's colour field: the swatch, the hex text and a colour picker — the swatch is the stored value itself. */
     const hex = /^#[0-9a-f]{6}$/i.test(text) ? text : null
@@ -132,8 +146,14 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
       <Input size="sm" type="color" disabled={locked} value={hex ?? '#000000'} onChange={e => onChange(e.target.value)} aria-label={`Pick ${def.name}`} fieldClassName={styles.colourPick} />
     </span></Field>
   }
+  else if (kind === 'line' && type === 'date_time') control = <Field label={`Repair ${def.name}`} hint="Type it as 2026-09-28T12:30:00 (UTC), or clear the value to use the date picker.">
+    <Input size="sm" disabled={locked} value={text} onChange={e => onChange(e.target.value)} /></Field>
   else if (kind === 'line') control = <Field label={def.name}><Input size="sm" disabled={locked} value={text} inputMode={type.startsWith('number_') ? 'decimal' : undefined} onChange={e => onChange(e.target.value)} /></Field>
+  else if (kind === 'code') control = <Field label={def.name} hint={type === 'language' ? 'For example en or it-IT.' : 'For example IT, or US-CA for a region.'}>
+    <Input size="sm" disabled={locked} value={text} spellCheck={false} autoCapitalize={type === 'jurisdiction' ? 'characters' : 'off'} onChange={e => onChange(e.target.value)} /></Field>
   else if (kind === 'multi-line') control = <Field label={def.name} hint={multiLineHint}><Textarea disabled={locked} rows={3} value={text} onChange={e => onChange(e.target.value)} /></Field>
+  /* The error line under it says where the JSON breaks (G16); an empty box is no value. */
+  else if (kind === 'json') control = <Field label={def.name} hint={multiLineHint}><Textarea disabled={locked} rows={4} spellCheck={false} value={text} onChange={e => onChange(e.target.value || null)} /></Field>
   else control = <Field label={def.name} hint="Structured Shopify value. Its fields are preserved exactly."><Textarea disabled={locked} rows={3} value={text} onChange={e => onChange(e.target.value)} /></Field>
   return <div className={styles.stack}>
     {control}
