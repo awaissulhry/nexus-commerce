@@ -30,7 +30,9 @@ export const shortId = (gid: string) => gid.split('/').at(-1)!
 export async function readRemoteProduct(gql: ShopifyGraphql, productId?: string | null, familyIdentity?: string): Promise<ShopifyRemoteProduct | null> {
   if (!productId) {
     const existing = await definitions(gql, 'PRODUCT')
-    if (!existing.some(d => d.namespace === 'nexus' && d.key === 'family_id' && d.capabilities.uniqueValues.enabled)) return null
+    /* A custom-ID lookup needs the `id` type (shopify.dev "Working with custom IDs"): with a plain-text definition from an
+       earlier try, Shopify refuses the lookup, and no product can have been created by it — so there is nothing to find. */
+    if (!existing.some(d => d.namespace === 'nexus' && d.key === 'family_id' && d.type.name === 'id' && d.capabilities.uniqueValues.enabled)) return null
   }
   const data = productId ? await gql(`query NexusProduct($id:ID!) { product(id:$id) { ${PRODUCT_SELECTION} } }`, { id: toGid('Product', productId) })
     : await gql(`query NexusProductIdentity($identifier:ProductIdentifierInput!) { product:productByIdentifier(identifier:$identifier) { ${PRODUCT_SELECTION} } }`, { identifier: { customId: { namespace: 'nexus', key: 'family_id', value: familyIdentity } } })
@@ -56,8 +58,18 @@ async function definitions(gql: ShopifyGraphql, ownerType: string): Promise<Defi
   return all
 }
 
+/**
+ * The family identity Nexus finds and upserts a product by (`productByIdentifier` / `productSet` with a custom ID). Shopify
+ * requires custom IDs to be metafields of type `id` ("Metafield definition of type 'id' is required when using custom
+ * ids"; unique values come with the type) and cannot migrate a field to `id` — so a store that kept the plain-text field
+ * from an earlier try is told what to do; Nexus never deletes a merchant's definition itself.
+ */
+export const SHOPIFY_IDENTITY_NOT_ID = 'This Shopify store already has the field “Nexus family identity” (nexus.family_id) as plain text, from an earlier publish. Shopify needs it as type “id” and cannot change a field’s type. Delete that field in Shopify (Settings → Custom data → Products), then publish again.'
+
 /** Reuse compatible merchant definitions; never overwrite their types, access or validation. */
 export async function ensureContentDefinitions(gql: ShopifyGraphql, content: ShopifyContent) {
+  /* The identity FIRST: a store that kept the plain-text field is refused before any definition is created. */
+  if ((await definitions(gql, 'PRODUCT')).some(d => d.namespace === 'nexus' && d.key === 'family_id' && d.type.name !== 'id')) throw new Error(SHOPIFY_IDENTITY_NOT_ID)
   const metaIds: Record<string, string> = {}
   const pending = [...content.metaobjectDefinitions]
   while (pending.length) {
@@ -81,13 +93,14 @@ export async function ensureContentDefinitions(gql: ShopifyGraphql, content: Sho
   }
   for (const ownerType of ['PRODUCT', 'PRODUCTVARIANT']) {
     const existing = await definitions(gql, ownerType)
-    const fields = [...content.fields, { namespace: 'nexus', key: 'resolved', label: 'Nexus resolved content', type: 'json' as const }, ...(ownerType === 'PRODUCT' ? [{ namespace: 'nexus', key: 'family_id', label: 'Nexus family identity', type: 'single_line_text_field' as const }] : [])]
+    const fields = [...content.fields, { namespace: 'nexus', key: 'resolved', label: 'Nexus resolved content', type: 'json' as const }, ...(ownerType === 'PRODUCT' ? [{ namespace: 'nexus', key: 'family_id', label: 'Nexus family identity', type: 'id' as const }] : [])]
     for (const f of fields) {
       const isIdentity = f.namespace === 'nexus' && f.key === 'family_id'
       const validations = 'metaobjectType' in f && f.metaobjectType ? [{ name: 'metaobject_definition_id', value: metaIds[f.metaobjectType] }] : []
       if (validations.some(v => !v.value)) throw new Error(`Missing metaobject definition for ${fieldKey(f)}.`)
       const current = existing.find(d => d.namespace === f.namespace && d.key === f.key)
       if (current) {
+        if (isIdentity && current.type.name !== 'id') throw new Error(SHOPIFY_IDENTITY_NOT_ID)
         if (current.type.name !== f.type || current.access.storefront !== 'PUBLIC_READ' || (isIdentity && !current.capabilities.uniqueValues.enabled) || validations.some(v => !current.validations.some(a => a.name === v.name && a.value === v.value))) throw new Error(`${ownerType} ${fieldKey(f)} has an incompatible type, reference validation or storefront access.`)
       } else {
         checked((await gql(`mutation NexusCreateDefinition($definition:MetafieldDefinitionInput!) { metafieldDefinitionCreate(definition:$definition) { createdDefinition { id } userErrors { field message } } }`, { definition: { namespace: f.namespace, key: f.key, name: f.label, type: f.type, ownerType, access: { storefront: 'PUBLIC_READ' }, validations, ...(isIdentity ? { capabilities: { uniqueValues: { enabled: true } } } : {}) } })).metafieldDefinitionCreate, 'Create metafield definition')
