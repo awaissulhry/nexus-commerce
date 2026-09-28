@@ -19,10 +19,11 @@ export const FIELD_GROUP_WORDS: Record<string, { label: string; description: str
   structure: { label: 'Family and variations', description: 'Product family, and which products are variations of which' },
   price: { label: 'Prices', description: 'Base, minimum, maximum and business prices' },
   status: { label: 'Active or draft', description: 'Whether each product is active, draft or inactive' },
+  listings: { label: 'Listing content', description: 'Each listing’s title, description, item specifics and category, copied once into the other business’s drafts' },
 }
 
 /** The API's own order, so a list of groups always reads the same way. */
-export const FIELD_GROUP_ORDER = ['identity', 'content', 'attributes', 'translations', 'media', 'physical', 'compliance', 'structure', 'price', 'status'] as const
+export const FIELD_GROUP_ORDER = ['identity', 'content', 'attributes', 'translations', 'media', 'physical', 'compliance', 'structure', 'price', 'status', 'listings'] as const
 /** Offered unless the owner changes it; prices and status are each business's own decision. */
 export const DEFAULT_FIELD_GROUPS: readonly string[] = ['identity', 'content', 'attributes', 'translations', 'media', 'physical', 'compliance', 'structure']
 

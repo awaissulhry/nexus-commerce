@@ -154,7 +154,7 @@ function WhatArrives({ share, options, busy, setBusy, onClose, onConfirmed }: {
       ]} />
       {preview.counts.mediaNotCopied > 0 && <p className="shared-products-note">{otherMediaWords(preview.counts.mediaNotCopied)} not copied yet.</p>}
       {preview.counts.match > 0 && <p>This business already has {count(preview.counts.match, 'product')} with the same SKU. <strong>Link</strong> replaces its shared details with the ones from {share.ownerWorkspaceName}; you see every change in the next step. <strong>Skip</strong> leaves it as it is. A variation follows its main product.</p>}
-      <DataGrid ariaLabel="Shared products and what happens to each" columns={columns} rows={preview.products} rowKey={(p) => p.sku}
+      <DataGrid maxHeight={480} ariaLabel="Shared products and what happens to each" columns={columns} rows={preview.products} rowKey={(p) => p.sku}
         emptyState={<p>This assortment has no products right now.</p>} />
       <CreatedHere preview={preview} />
       {preview.conflicts.length > 0 && <Banner tone="warning" title={`${count(preview.conflicts.length, 'attribute')} cannot be copied`}>

@@ -65,7 +65,7 @@ export function PoolProductsSection({ grant, canAct, onChanged }: { grant: Grant
         : <p className="shared-products-note">This shared stock is paused: products can switch to it again when {grant.ownerWorkspaceName} resumes it.</p>)}
       {toOwn.length > 0 && <Button onClick={() => setSwitching({ to: 'own', productIds: toOwn })}>Use own stock for {count(toOwn.length, 'product')}</Button>}
     </div>}
-    <DataGrid ariaLabel={`Products shared by ${grant.ownerWorkspaceName}`} columns={columns} rows={products} rowKey={(p) => p.productId}
+    <DataGrid maxHeight={420} ariaLabel={`Products shared by ${grant.ownerWorkspaceName}`} columns={columns} rows={products} rowKey={(p) => p.productId}
       selectable={canAct} selected={selected} onSelectedChange={setSelected}
       selectAllHint="Choose every product in this list" selectRowHint="Choose this product" />
     {cursor && <div className="business-profile-actions"><Button onClick={() => { void load(cursor) }}>Show more products</Button></div>}
@@ -127,7 +127,7 @@ function SwitchPreviewModal({ grant, to, productIds, onClose, onSwitched }: {
         <h4 className="shared-stock-subheading">{p.sku}{p.costPriceMissing && <> <Pill tone="warning">No cost price</Pill></>}</h4>
         {p.listings.length === 0
           ? <p className="shared-products-note">No live listing: nothing changes on any channel.</p>
-          : <DataGrid ariaLabel={`Listings of ${p.sku}`} columns={columns} rows={p.listings} rowKey={(row) => `${row.listingId ?? row.itemId}:${row.channel}:${row.marketplace}`} />}
+          : <DataGrid maxHeight={320} ariaLabel={`Listings of ${p.sku}`} columns={columns} rows={p.listings} rowKey={(row) => `${row.listingId ?? row.itemId}:${row.channel}:${row.marketplace}`} />}
       </section>)}
     </div>
   </Modal>

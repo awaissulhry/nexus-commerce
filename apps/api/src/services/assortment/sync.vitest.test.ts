@@ -37,7 +37,22 @@ vi.mock('../pim/sheet-columns.service.js', () => ({
   clearSheetColumnCache: () => {},
   coordinatesFor: () => [],
 }))
-vi.mock('../pim/mapping/field-catalogue.service.js', () => ({ getFieldCatalogue: async () => ({ fields: [], schema: { present: true } }), clearFieldCatalogueCache: () => {} }))
+// Sharing studio step 4 (arm 4c): eBay's own field list, built by the real eBay spec with one item specific, in the shape
+// the catalogue serves it; the transfer engine exports and plans listing rows against it. Every other channel: none.
+vi.mock('../pim/mapping/field-catalogue.service.js', async () => {
+  const { ebaySpecFromCache } = await import('../pim/channel-specs/ebay.js')
+  const spec = ebaySpecFromCache({ marketplace: 'IT', categoryId: '57988', aspects: [{ id: 'Materiale', label: 'Materiale', localizedName: 'Materiale', englishName: 'Material', kind: 'text' }] })
+  const fields = spec.fields.map((f) => ({
+    fieldKey: f.key, sheetKey: f.managedBy ?? f.masterKey ?? f.key, shape: f.shape, kind: f.kind, cardinality: f.cardinality, channelStore: f.channelStore,
+    label: f.label, helpText: null, group: f.group?.key ?? 'ungrouped', groupOrder: f.group?.order ?? 999, priority: f.requirement, prioritySource: 'channelSchema',
+    maxLength: f.maxLength ?? null, maxBytes: null, options: f.options ?? null, optionLabels: f.optionLabels ?? null, selectionOnly: f.mode === 'strict', editable: f.editable !== false,
+    deprecatedOptions: null, rule: null, ruleKind: 'none', ruleSummary: null, ruleRef: null, overlay: false, status: 'unmapped',
+  }))
+  return {
+    getFieldCatalogue: async ({ channel }: { channel: string }) => channel === 'EBAY' ? { fields, masterLocalizableKeys: [], schema: { present: true, version: 'live', fetchedAt: null } } : { fields: [], schema: { present: true } },
+    clearFieldCatalogueCache: () => {},
+  }
+})
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: async () => {}, refresh: async () => {}, refreshMany: async () => {} } }))
 vi.mock('../../lib/queue.js', () => {
   const queue = { add: async () => ({}), addBulk: async () => [], getJobCounts: async () => ({}), close: async () => {} }
@@ -187,7 +202,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     await as(A, user.ownerA, () => assortments.addMembers(created.id, { productIds: [product.parent], expectedVersion: 1 }))
     const offer = await as(A, user.ownerA, () => shares.offerShare({
       assortmentId: created.id, destinationWorkspaceId: B,
-      fieldGroups: ['identity', 'content', 'attributes', 'translations', 'media', 'physical', 'structure', 'price', 'status'],
+      fieldGroups: ['identity', 'content', 'attributes', 'translations', 'media', 'physical', 'structure', 'price', 'status', 'listings'],
     }))
     shareId = offer.id
     await as(B, user.ownerB, () => shares.followerDecision(shareId, 'accept', { expectedVersion: 1 }))
@@ -333,7 +348,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(await as(A, user.ownerA, () => sharing.sharingSourceCondition(['own', 'following', 'shared']))).toBeNull()
   }, 60_000)
 
-  it('4c. the shared product\'s listing layout: read from A without its accounts, made in B as drafts on B\'s own account, never doubled', async () => {
+  it('4c. the shared product\'s listing layout: read from A without its accounts, made in B as drafts on B\'s own account with A\'s listing content, never doubled', async () => {
     const layout = await import('./listing-layout.service.js')
     // A lists JKT on two eBay accounts: account 1 (primary) on IT with the main listing and an alias "Winter", account 2 on DE.
     const a1 = randomUUID(), a2 = randomUUID(), b1 = randomUUID(), winter = randomUUID()
@@ -341,41 +356,100 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     await sql(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "accountLabel", "externalAccountId", "isActive", "isPrimary", "updatedAt") VALUES ($1,$2,'EBAY','B store','b-seller-1',true,true,CURRENT_TIMESTAMP)`, [b1, B])
     await sql(`INSERT INTO "Marketplace" (id, "workspaceId", channel, code, name, region, currency, language, "updatedAt") VALUES ($1,$2,'EBAY','IT','eBay Italy','EU','EUR','it',CURRENT_TIMESTAMP)`, [randomUUID(), B])
     await sql(`INSERT INTO "ProductListingAlias" (id, "workspaceId", "productId", channel, marketplace, "channelConnectionId", label, position, "updatedAt") VALUES ($1,$2,$3,'EBAY','IT',$4,'Winter',1,CURRENT_TIMESTAMP)`, [winter, A, product.parent, a1])
-    const listing = (workspaceId: string, productId: string, market: string, connection: string, aliasKey = '') => sql(
-      `INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "aliasKey", "aliasId", "listingStatus", "isPublished", "syncPaused", "updatedAt")
-       VALUES ($1,$2,$3,'EBAY',$4,$4,$5,$6,$7,$8,'ACTIVE',true,false,CURRENT_TIMESTAMP)`, [randomUUID(), workspaceId, productId, market, `EBAY_${market}`, connection, aliasKey, aliasKey || null])
-    await listing(A, product.parent, 'IT', a1)
-    await listing(A, product.parent, 'IT', a1, winter)
+    const listing = async (workspaceId: string, productId: string, market: string, connection: string, aliasKey = '') => {
+      const id = randomUUID()
+      await sql(`INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, marketplace, region, "channelMarket", "channelConnectionId", "aliasKey", "aliasId", "listingStatus", "isPublished", "syncPaused", "updatedAt")
+        VALUES ($1,$2,$3,'EBAY',$4,$4,$5,$6,$7,$8,'ACTIVE',true,false,CURRENT_TIMESTAMP)`, [id, workspaceId, productId, market, `EBAY_${market}`, connection, aliasKey, aliasKey || null])
+      return id
+    }
+    const aMain = await listing(A, product.parent, 'IT', a1)
+    const aWinter = await listing(A, product.parent, 'IT', a1, winter)
     await listing(A, product.parent, 'DE', a2)
+    // Step 4 — A's own content on IT (A writes eBay IT in Italian and German; B's eBay IT is Italian only): a title per
+    // language, a subtitle, an item specific and the category; and what stays A's: its price, condition and shipping policy.
+    // A has no eBay DE market set up, so its DE listing cannot be read for content (and B has no DE market either).
+    await sql(`INSERT INTO "Marketplace" (id, "workspaceId", channel, code, name, region, currency, language, languages, "updatedAt") VALUES ($1,$2,'EBAY','IT','eBay Italy','EU','EUR','it',ARRAY['it','de'],CURRENT_TIMESTAMP)`, [randomUUID(), A])
+    await sql(`UPDATE "ChannelListing" SET price = 120, "platformAttributes" = $2 WHERE id = $1`,
+      [aMain, JSON.stringify({ categoryId: '57988', subtitle: 'Pelle vera', itemSpecifics: { Materiale: 'Pelle' }, conditionId: 'NEW', fulfillmentPolicyId: 'A-SHIP-1' })])
+    await sql(`UPDATE "ChannelListing" SET "platformAttributes" = $2 WHERE id = $1`, [aWinter, JSON.stringify({ categoryId: '57988' })])
+    await sql(`INSERT INTO "ChannelListingTranslation" (id, "workspaceId", "channelListingId", language, name, "updatedAt") VALUES ($1,$2,$3,'it','Giacca A',CURRENT_TIMESTAMP), ($4,$2,$3,'de','Jacke A',CURRENT_TIMESTAMP), ($5,$2,$6,'it','Giacca inverno A',CURRENT_TIMESTAMP)`,
+      [randomUUID(), A, aMain, randomUUID(), randomUUID(), aWinter])
 
     const view = await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT-M']))
-    expect(view).toMatchObject({ rootId: product['b:JKT'], sourceBusiness: 'Business A', accounts: { EBAY: [{ id: b1, label: 'B store', primary: true }] } })
+    expect(view).toMatchObject({ rootId: product['b:JKT'], sourceBusiness: 'Business A', copiesContent: true, accounts: { EBAY: [{ id: b1, label: 'B store', primary: true }] } })
     expect(view.groups.map((g) => [g.key, g.sourceAccount, g.sourceAccounts, g.slots, g.here.suggestedAccountId, g.here.blocked])).toEqual([
-      ['EBAY|DE|2', 2, 2, [{ position: 0, label: null }], null, 'eBay DE is not a market of this business. Add it in Settings › Channels.'],
-      ['EBAY|IT|1', 1, 2, [{ position: 0, label: null }, { position: 1, label: 'Winter' }], b1, null],
+      ['EBAY|DE|2', 2, 2, [{ position: 0, label: null, content: false }], null, 'eBay DE is not a market of this business. Add it in Settings › Channels.'],
+      ['EBAY|IT|1', 1, 2, [{ position: 0, label: null, content: true }, { position: 1, label: 'Winter', content: true }], b1, null],
     ])
-    // The wall: none of A's accounts crosses it, by id or by name.
-    for (const secret of [a1, a2, 'A main', 'A outlet', 'a-seller-1']) expect(JSON.stringify(view)).not.toContain(secret)
+    // The wall: none of A's accounts crosses it, by id or by name, and no listing value is read into the layout.
+    for (const secret of [a1, a2, 'A main', 'A outlet', 'a-seller-1', 'A-SHIP-1', 'Giacca A']) expect(JSON.stringify(view)).not.toContain(secret)
 
     const made = await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }, { key: 'EBAY|DE|2', accountId: b1 }] }))
     expect(made.results).toEqual([
-      { key: 'EBAY|IT|1', listings: 3, aliases: 1, refused: null },
-      { key: 'EBAY|DE|2', listings: 0, aliases: 0, refused: 'eBay DE is not a market of this business. Add it in Settings › Channels.' },
+      { key: 'EBAY|IT|1', listings: 3, aliases: 1, refused: null, content: expect.objectContaining({ listings: 2, refused: [], noCategory: [], onChannel: [], ownContent: [], otherLanguages: ['de'], error: null }) },
+      { key: 'EBAY|DE|2', listings: 0, aliases: 0, refused: 'eBay DE is not a market of this business. Add it in Settings › Channels.', content: null },
     ])
+    expect(made.results[0].content?.notShared, 'A\'s condition and shipping policy, among others, stay A\'s').toBeGreaterThanOrEqual(2)
     // Inert drafts for the whole family, on B's account: the main listing and the alias "Winter".
     const rows = await sql(`SELECT l."productId", l."aliasKey" = '' AS main, l."listingStatus", l."isPublished", l."syncPaused", l."channelConnectionId"
       FROM "ChannelListing" l WHERE l."workspaceId" = $1 AND l.channel = 'EBAY' ORDER BY 1, 2`, [B])
     expect(rows).toHaveLength(6)
     for (const row of rows) expect(row).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, syncPaused: true, channelConnectionId: b1 })
-    expect(await sql(`SELECT label, position FROM "ProductListingAlias" WHERE "workspaceId" = $1`, [B])).toEqual([{ label: 'Winter', position: 1 }])
-    // Made again: nothing doubled, and the page says what is here.
+    const bAlias = await one(`SELECT id, label, position FROM "ProductListingAlias" WHERE "workspaceId" = $1`, [B])
+    expect(bAlias).toMatchObject({ label: 'Winter', position: 1 })
+    // Step 4 — A's content arrived in B's drafts: the category, subtitle and item specific, the Italian titles; not the
+    // German one (B's market has no German), and none of what stays A's (price, condition, shipping policy).
+    const draft = (productId: string, aliasKey: string) => one(`SELECT id, price, "platformAttributes", "listingStatus", "isPublished" FROM "ChannelListing" WHERE "workspaceId" = $1 AND "productId" = $2 AND marketplace = 'IT' AND "aliasKey" = $3`, [B, productId, aliasKey])
+    const titles = (listingId: string) => sql(`SELECT language, name FROM "ChannelListingTranslation" WHERE "channelListingId" = $1 ORDER BY language`, [listingId])
+    const bMain = await draft(product['b:JKT'], '')
+    const bWinter = await draft(product['b:JKT'], bAlias.id as string)
+    expect(bMain).toMatchObject({ price: null, listingStatus: 'DRAFT', isPublished: false, platformAttributes: { categoryId: '57988', subtitle: 'Pelle vera', itemSpecifics: { Materiale: 'Pelle' } } })
+    expect(JSON.stringify(bMain.platformAttributes)).not.toMatch(/A-SHIP-1|conditionId|fulfillmentPolicyId/)
+    expect(await titles(bMain.id as string)).toEqual([{ language: 'it', name: 'Giacca A' }])
+    expect(await titles(bWinter.id as string)).toEqual([{ language: 'it', name: 'Giacca inverno A' }])
+    // A lists only the family's parent: its variations' drafts stay empty.
+    expect(await titles((await draft(product['b:JKT-M'], '')).id as string)).toEqual([])
+    // A is untouched.
+    expect(await titles(aMain)).toEqual([{ language: 'de', name: 'Jacke A' }, { language: 'it', name: 'Giacca A' }])
+
+    // Made again: nothing doubled, and nothing copied over what B now owns — B's own title stays.
+    await sql(`UPDATE "ChannelListingTranslation" SET name = 'Giacca di B' WHERE "channelListingId" = $1`, [bMain.id])
     expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }] }))).results)
-      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: null }])
+      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: null, content: expect.objectContaining({ listings: 0, copied: 0, onChannel: [], ownContent: ['main listing', 'Winter'], error: null }) }])
+    expect(await titles(bMain.id as string)).toEqual([{ language: 'it', name: 'Giacca di B' }])
     expect(Number((await one(`SELECT count(*) AS n FROM "ChannelListing" WHERE "workspaceId" = $1`, [B])).n)).toBe(6)
-    expect((await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT']))).groups.find((g) => g.key === 'EBAY|IT|1')?.here.present[b1]).toEqual({ main: true, aliases: ['Winter'] })
+    expect((await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT']))).groups.find((g) => g.key === 'EBAY|IT|1')?.here.present[b1])
+      .toEqual({ main: true, aliases: ['Winter'], blank: { main: false, aliases: [] } })
+    // A listing of B's that is on eBay is never changed, even with no content of its own.
+    await sql(`DELETE FROM "ChannelListingTranslation" WHERE "channelListingId" = $1`, [bWinter.id])
+    await sql(`UPDATE "ChannelListing" SET "listingStatus" = 'ACTIVE', "isPublished" = true, "externalListingId" = 'B-ITEM-W' WHERE id = $1`, [bWinter.id])
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }] }))).results[0].content)
+      .toMatchObject({ listings: 0, onChannel: ['Winter'], ownContent: ['main listing'] })
+    expect(await titles(bWinter.id as string)).toEqual([])
+    // Back to a draft with no content, and no category on either side (A's alias lost its, B's draft never had one): the
+    // page offers the copy; the copy says why it cannot be made, and changes nothing.
+    await sql(`UPDATE "ChannelListing" SET "listingStatus" = 'DRAFT', "isPublished" = false, "externalListingId" = NULL, "platformAttributes" = '{}' WHERE id = $1`, [bWinter.id])
+    await sql(`UPDATE "ChannelListing" SET "platformAttributes" = '{}' WHERE id = $1`, [aWinter])
+    expect((await as(B, user.ownerB, () => layout.listingLayout(product['b:JKT']))).groups.find((g) => g.key === 'EBAY|IT|1')?.here.present[b1])
+      .toEqual({ main: true, aliases: ['Winter'], blank: { main: false, aliases: ['Winter'] } })
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }] }))).results[0].content)
+      .toMatchObject({ listings: 0, noCategory: ['Winter'], refused: [], ownContent: ['main listing'] })
+    expect(await titles(bWinter.id as string)).toEqual([])
+    // An alias that over there only follows the product has nothing to copy: no refusal, nothing written.
+    const parked = await sql(`DELETE FROM "ChannelListingTranslation" WHERE "channelListingId" = $1 RETURNING id, language, name`, [aWinter])
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }] }))).results[0].content)
+      .toMatchObject({ listings: 0, noCategory: [], refused: [] })
+    for (const row of parked) await sql(`INSERT INTO "ChannelListingTranslation" (id, "workspaceId", "channelListingId", language, name, "updatedAt") VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)`, [row.id, A, aWinter, row.language, row.name])
+    // B chooses a category on its draft: a category alone is not content, so the copy is still offered, fills the
+    // title, and keeps B's category.
+    await sql(`UPDATE "ChannelListing" SET "platformAttributes" = $2 WHERE id = $1`, [bWinter.id, JSON.stringify({ categoryId: '11450' })])
+    expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: b1 }] }))).results[0].content)
+      .toMatchObject({ listings: 1, noCategory: [], refused: [], ownContent: ['main listing'] })
+    expect(await titles(bWinter.id as string)).toEqual([{ language: 'it', name: 'Giacca inverno A' }])
+    expect((await draft(product['b:JKT'], bAlias.id as string)).platformAttributes).toEqual({ categoryId: '11450' })
     // A choice naming another business's account, or none, makes nothing.
     expect((await as(B, user.ownerB, () => layout.applyListingLayout(product['b:JKT'], { choices: [{ key: 'EBAY|IT|1', accountId: a1 }, { key: 'EBAY|DE|2', accountId: null }] }))).results)
-      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: 'That account is not connected in this business. Reload the page.' }])
+      .toEqual([{ key: 'EBAY|IT|1', listings: 0, aliases: 0, refused: 'That account is not connected in this business. Reload the page.', content: null }])
 
     // A's accounts shared with B: one for reading only is never offered (the database refuses a listing on it); one for
     // publishing is, named as A's, and never suggested.
@@ -391,8 +465,9 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
       expect.objectContaining({ key: 'EBAY|1', sourceAccount: 1, sourceAccounts: 2, products: 1, markets: ['IT'], aliases: 1, suggestedAccountId: b1 }),
       expect.objectContaining({ key: 'EBAY|2', sourceAccount: 2, products: 1, markets: ['DE'], aliases: 0, suggestedAccountId: null }),
     ])
+    expect(summary.copiesContent).toBe(true)
     expect(await as(B, user.ownerB, () => layout.applyShareLayout(shareId, { choices: [{ key: 'EBAY|1', accountId: b1 }] })))
-      .toEqual({ products: 1, listings: 0, aliases: 0, refused: [] })
+      .toEqual({ products: 1, listings: 0, aliases: 0, content: { listings: 0, copied: 0, ownContent: 2, onChannel: 0 }, refused: [] })
 
     // Step 5 — the publish warning: the same product live on eBay in the other business, in either direction.
     const warning = await import('./shared-listing-warning.js')

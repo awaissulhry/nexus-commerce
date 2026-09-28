@@ -68,13 +68,13 @@ export function OfferShareModal({ assortments, initialAssortmentId, onClose, onO
       </Banner>}
       <fieldset className="business-profile-form shared-products-fieldset">
         <legend>What to share</legend>
-        <p>These details of each product can be copied into the other business. Stock, costs and channel listings always stay with each business.</p>
+        <p>These details of each product can be copied into the other business. Stock, costs and live channel listings always stay with each business.</p>
         <div className="shared-products-groups">
           {FIELD_GROUP_ORDER.map((group) => <CheckboxCard key={group} checked={groups.includes(group)} selected={groups.includes(group)} disabled={busy}
             onChange={(event) => toggle(group, event.target.checked)}
             title={FIELD_GROUP_WORDS[group].label} description={FIELD_GROUP_WORDS[group].description} />)}
         </div>
-        <p>Prices and active or draft status are not shared unless you choose them: each business usually decides those itself. What you offer cannot be changed later; end the share and offer again instead.</p>
+        <p>Prices, active or draft status and listing content are not shared unless you choose them: each business usually decides those itself. What you offer cannot be changed later; end the share and offer again instead.</p>
       </fieldset>
     </form>
   </Modal>

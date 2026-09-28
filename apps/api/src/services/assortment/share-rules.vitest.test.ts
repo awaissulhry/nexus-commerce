@@ -94,7 +94,8 @@ describe('AE.2 share rules — field groups input', () => {
   })
 
   it('an empty, unknown or malformed list is refused, never narrowed or widened', () => {
-    for (const bad of [[], ['listings'], ['identity', 42], 'identity', {}]) {
+    // "listings" became a group in sharing studio step 4 (a listing's own content); an item number never is.
+    for (const bad of [[], ['itemIds'], ['identity', 42], 'identity', {}]) {
       expect(() => normaliseFieldGroups(bad)).toThrow(expect.objectContaining({ code: 'invalid_field_groups', statusCode: 400 }))
     }
   })

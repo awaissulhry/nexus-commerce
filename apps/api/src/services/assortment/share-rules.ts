@@ -12,9 +12,13 @@
  */
 import { WorkspaceError } from '@nexus/database/workspace-context'
 
-/** Plan §3.4. Channel listings are never a group: each business lists with its own accounts. */
+/**
+ * Plan §3.4. A listing is never shared: each business lists with its own accounts. "listings" (sharing studio step 4)
+ * is a listing's own CONTENT, copied once into the drafts the receiving business makes (listing-layout.service.ts) —
+ * never its price, stock, offer terms, shipping, policies or ids. Off by default.
+ */
 export const FIELD_GROUPS = [
-  'identity', 'content', 'attributes', 'translations', 'media', 'physical', 'compliance', 'structure', 'price', 'status',
+  'identity', 'content', 'attributes', 'translations', 'media', 'physical', 'compliance', 'structure', 'price', 'status', 'listings',
 ] as const
 export type FieldGroup = (typeof FIELD_GROUPS)[number]
 

@@ -178,8 +178,8 @@ describe('AE.2 — assortments and shares between business profiles', () => {
       expect(await refusal(as(A, user.ownerA, () => shares.offerShare({ assortmentId, destinationWorkspaceId: C })))).toBe('destination_unavailable')
       // Its own business.
       expect(await refusal(as(A, user.ownerA, () => shares.offerShare({ assortmentId, destinationWorkspaceId: A })))).toBe('invalid_destination')
-      // A malformed field-group list.
-      expect(await refusal(as(A, user.ownerA, () => shares.offerShare({ assortmentId, destinationWorkspaceId: B, fieldGroups: ['listings'] })))).toBe('invalid_field_groups')
+      // A malformed field-group list ("listings" is a group since sharing studio step 4; an item id never is).
+      expect(await refusal(as(A, user.ownerA, () => shares.offerShare({ assortmentId, destinationWorkspaceId: B, fieldGroups: ['itemIds'] })))).toBe('invalid_field_groups')
     })
 
     it('CONTROL — the owner of A offers to B: pending, default field groups, audited in BOTH businesses', async () => {
@@ -328,7 +328,14 @@ describe('AE.2 — assortments and shares between business profiles', () => {
          VALUES ($1, $2, $3, $4, $5, $6::text[], $7, CURRENT_TIMESTAMP)`, randomUUID(), assortmentId, A, C, status, groups, user.ownerA))
       expect(await dbError(insert('active', ['identity']))).toMatch(/starts pending/)
       expect(await dbError(insert('pending', []))).toMatch(/AssortmentShare_field_groups_check/)
-      expect(await dbError(insert('pending', ['listings']))).toMatch(/AssortmentShare_field_groups_check/)
+      expect(await dbError(insert('pending', ['itemIds']))).toMatch(/AssortmentShare_field_groups_check/)
+      // Sharing studio step 4: "listings" (a listing's own content) is a group the database accepts.
+      const listings = randomUUID()
+      await sql(`INSERT INTO "Assortment" (id, "workspaceId", name, "updatedAt") VALUES ($1,$2,'listing content arm',CURRENT_TIMESTAMP)`, [listings, A])
+      await as(A, user.ownerA, () => database.client.$executeRawUnsafe(
+        `INSERT INTO "AssortmentShare" (id, "assortmentId", "ownerWorkspaceId", "workspaceId", status, "fieldGroups", "createdByUserId", "updatedAt")
+         VALUES ($1, $2, $3, $4, 'pending', $5::text[], $6, CURRENT_TIMESTAMP)`, randomUUID(), listings, A, C, ['identity', 'listings'], user.ownerA))
+      expect(await sql(`SELECT "fieldGroups" FROM "AssortmentShare" WHERE "assortmentId" = $1`, [listings])).toEqual([{ fieldGroups: ['identity', 'listings'] }])
     })
 
     it('the trigger allows EXACTLY the transitions share-rules.ts allows — all 50 (side, from, to)', async () => {
