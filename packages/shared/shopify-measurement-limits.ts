@@ -21,7 +21,7 @@
  *   the horsepower (metric, mechanical or electrical). A value is refused only when every reading refuses it.
  * Temperature is not a factor: Celsius and Fahrenheit have their own zero, so both sides are compared in kelvin.
  */
-import { shopifyMeasurementUnits } from './shopify-field-codecs.js'
+import { shopifyUnitName } from './shopify-field-codecs.js'
 
 /** A unit's size in one reading: the base it converts through, and how many of that base it is. */
 type Size = readonly [base: string, size: number]
@@ -128,8 +128,7 @@ const SHORT: Record<string, Record<string, string>> = {
 
 /** A unit of `kind` as Shopify's long name (`g` → `grams`); null when Nexus does not know it for that kind. */
 export function shopifyMeasurementUnit(kind: string, unit: string): string | null {
-  if (shopifyMeasurementUnits[kind]?.includes(unit)) return unit
-  return SHORT[kind]?.[unit] ?? null
+  return shopifyUnitName(kind, unit) ?? SHORT[kind]?.[unit] ?? null
 }
 
 /** Whether Nexus can read a stored limit (`{"unit":"g","value":10}`) of `kind`: a number and a unit it knows. */

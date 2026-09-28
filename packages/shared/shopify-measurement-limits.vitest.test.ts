@@ -43,7 +43,8 @@ describe('B3a · the unit table covers every kind and every unit', () => {
     expect(shopifyMeasurementUnit('power', 'MW')).toBeNull()
     expect(shopifyMeasurementUnit('electrical_resistance', 'Ω')).toBe('ohms')
     expect(shopifyMeasurementUnit('electrical_resistance', 'Ω')).toBe('ohms')
-    expect(shopifyMeasurementUnit('weight', 'KILOGRAMS')).toBeNull()
+    /* A long name in capitals is how Shopify stores it (measured on a development store in B4): the same unit. */
+    expect(shopifyMeasurementUnit('weight', 'KILOGRAMS')).toBe('kilograms')
     expect(shopifyMeasurementUnit('weight', 'liters')).toBeNull()
     expect(shopifyMeasurementUnit('weight', 'parsecs')).toBeNull()
   })
@@ -180,5 +181,16 @@ describe('B3a · refused only when Shopify certainly refuses', () => {
     expect(shopifyMeasurementLimitReadable('temperature', '{"value":14}')).toBe(false)
     expect(shopifyMeasurementLimitReadable('temperature', '14')).toBe(false)
     expect(shopifyMeasurementLimitReadable('temperature', 'not json')).toBe(false)
+  })
+})
+
+/* B4: Shopify stores a unit in capitals (`KILOGRAMS`); it is the long name. A symbol keeps its case (mW is not MW). */
+describe('B4 · a unit as Shopify stores it', () => {
+  it('reads capitals as the long name, and nothing else', () => {
+    expect(shopifyMeasurementUnit('weight', 'KILOGRAMS')).toBe('kilograms')
+    expect(shopifyMeasurementUnit('speed', 'MILES_PER_HOUR')).toBe('miles_per_hour')
+    expect(shopifyMeasurementUnit('weight', 'kg')).toBe('kilograms')
+    expect(shopifyMeasurementUnit('power', 'MW')).toBeNull()
+    expect(shopifyMeasurementUnit('weight', 'METERS')).toBeNull()
   })
 })
