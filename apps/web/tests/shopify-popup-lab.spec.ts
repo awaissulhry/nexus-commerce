@@ -305,6 +305,9 @@ test.describe('B3c · mixed and disclosure references', () => {
     /* Chips of both kinds, each with its own picture or none (FAQ entries have no picture: no empty slot). */
     await expect(chip(page, name, 'Press quote 1').locator('img')).toHaveCount(1)
     await expect(chip(page, name, 'FAQ 2').locator('img, .nds-media-mark')).toHaveCount(0)
+    /* Each chip names its own kind (its tooltip), whatever kind the list shows now. */
+    await expect(chip(page, name, 'FAQ 2')).toHaveAttribute('title', 'FAQ')
+    await expect(chip(page, name, 'Press quote 1')).toHaveAttribute('title', 'Press quote')
     await page.keyboard.press('Enter')
     await expect(p).toHaveCount(0)
     await expect(page.getByText(`${name} saved in the lab.`)).toBeVisible()
@@ -324,6 +327,8 @@ test.describe('B3c · mixed and disclosure references', () => {
     await expect(p.getByRole('radio', { name: 'FAQ' })).toBeFocused()
     await page.keyboard.press('ArrowRight')
     await expect(p.getByRole('radio', { name: 'Press quote' })).toBeFocused()
+    /* The card still names the chosen entry's own kind, not the kind the list now shows. */
+    await expect(p.locator('small')).toHaveText('FAQ')
     await page.keyboard.press('Tab')
     await expect(p.getByRole('combobox', { name: 'Search Press quote' })).toBeFocused()
     await page.keyboard.type('2')
