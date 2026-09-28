@@ -70,6 +70,12 @@ export interface MasterCommitContext {
    * the schema that declared the columns writable.
    */
   market: string
+  /**
+   * An accepted variation-theme save changed the FAMILY's axes. The family bar and "Add child" read those axes from their
+   * own family read, which nothing refreshed: they said "no variation axes set" until a reload (found by Lane B building a
+   * family, 2026-09-28). The host reloads that read here.
+   */
+  onVariationThemeSaved?: () => void
 }
 
 async function commitMasterLanguage(
@@ -461,7 +467,7 @@ export function commitMasterRow(req: SheetWriteRequest<StudioRow>, ctx: MasterCo
   if (theme.length > 0) {
     const rest = req.cells.filter((c) => byKey.get(c.colId)?.kind !== 'variationTheme')
     return (async () => {
-      const themed = await commitVariationTheme({ ...req, cells: theme }, req.rowId)
+      const themed = await commitVariationTheme({ ...req, cells: theme }, req.rowId, () => ctx.onVariationThemeSaved?.())
       if (rest.length === 0) return themed
       const other = await commitMasterRow({ ...req, cells: rest }, ctx)
       return {

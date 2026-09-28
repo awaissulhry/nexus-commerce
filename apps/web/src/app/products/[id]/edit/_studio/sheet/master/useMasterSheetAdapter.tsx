@@ -120,8 +120,12 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             refreshReadinessSoon();
         }
     }, [refreshReadinessSoon]);
+    /* The family read (`useFamily`, below) is refreshed after an accepted theme save — the family bar and "Add child" read
+       the axes from it. A ref, because that read is created after this hook. */
+    const reloadFamilyRef = useRef<() => void>(() => undefined);
     const { sheet: loadedSheet, loading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
         productId, market, locale, locales: languageScope.locales, onWriteStart, onWriteEnd, onSettled,
+        onVariationThemeSaved: () => reloadFamilyRef.current(),
         /* R-VT-15 — the server's refusal sentence, said the moment it arrives, through the ONE DS
            toast provider this route mounts (`_studio/StudioClient.tsx`; the root layout's is the old
            library's — `reference_ds_toast_two_providers`). `announceRefusals` is the shared
@@ -174,6 +178,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         exprFor: (row, key) => formulaWiring.exprFor(row.id, key),
     }), [formulaWiring]);
     const familyQuery = useFamily(productId);
+    reloadFamilyRef.current = familyQuery.reload;
     const familySummary = familySummaryOf(familyQuery.family, familyQuery.loading);
     const { has, status: authStatus } = useAuth();
     const [newVariation, setNewVariation] = useState<NewVariationDraft | null>(null);

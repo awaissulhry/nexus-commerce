@@ -872,7 +872,12 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
     if (c.key.startsWith('shopify_metafield:')) continue
     if ((labelCounts.get(c.label) ?? 0) < 2) continue
     const position = c.key.match(/_(\d+)$/)?.[1]
-    c.label = position ? `${c.label} ${position}` : `${c.label} · ${humanizeKey(c.key)}`
+    /* Qualified by its key only when the key READS differently: a column keyed `fit` and labelled "Fit" became
+       "Fit · Fit", which told nothing apart (found by Lane B on the Shared sheet, 2026-09-28) — the other "Fit" column,
+       whose key reads differently, is still qualified. */
+    const qualifier = humanizeKey(c.key)
+    if (!position && qualifier.toLocaleLowerCase() === c.label.toLocaleLowerCase()) continue
+    c.label = position ? `${c.label} ${position}` : `${c.label} · ${qualifier}`
   }
 
   columns.sort((a, b) => {

@@ -34,6 +34,8 @@ export interface UseMasterSheetOptions {
   /** Reported to PES.1's header so it can say "autosave ✓" without guessing. */
   onWriteStart?: (writeId: string, rowId: string) => void
   onWriteEnd?: (writeId: string, ok: boolean, message?: string, rowId?: string) => void
+  /** An accepted variation-theme save changed the family's axes (`MasterCommitContext.onVariationThemeSaved`). */
+  onVariationThemeSaved?: () => void
   /**
    * A batch SETTLED — the server answered, or we gave up on it.
    *
@@ -106,7 +108,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       const result = await commitMasterRow(req, { sheet: sheetRef.current, opts: {
         onWriteStart: (id, rowId) => optsRef.current.onWriteStart?.(id, rowId),
         onWriteEnd: (...args) => { completed = args },
-      }, locale, market })
+      }, locale, market, onVariationThemeSaved: () => optsRef.current.onVariationThemeSaved?.() })
       if (completed) {
         if (result.unreachable) unsettledWrites.current.set(req.rowId, completed[0])
         else optsRef.current.onWriteEnd?.(...completed)

@@ -51,6 +51,7 @@ import {
   axesSectionTitle,
   axesTabStaysInside,
   axesAddEdit,
+  channelInlineRefusal,
   axesAddSource,
   moveHighlight,
   NewOwnAttribute,
@@ -961,6 +962,13 @@ describe('P3 A2 — the channel layout', () => {
     expect(panel(OPEN, 'dock')).not.toContain('nds-axes-crow')
   })
 
+  it('🔴 no variant included here yet is not "0 variants": the count is left out until the channel has some', () => {
+    const none = panel({ ...OPEN, valueSummary: Object.fromEntries(Object.keys(OPEN.valueSummary!).map((k) => [k, { values: [], filled: 0, of: 0 }])) })
+    expect(none).toContain('>4 of 5</span>')
+    expect(none).not.toContain('0 variants')
+    expect(panel(OPEN)).toContain('4 of 5 · 20 variants')
+  })
+
   it('a live listing\'s "+ Add" hint is the short line; the full sentence stays on the lock banner and the button', () => {
     const live = panel({ ...OPEN, locked: GALE_EBAY_IT_OVERRIDDEN.locked })
     expect(live).toContain(`>${CHANNEL_AXES_COPY.setLockedShort}</span>`)
@@ -1023,6 +1031,22 @@ describe('P3 A4 — Shopify options in the channel layout', () => {
     const empty = panel({ ...SHOP, axes: SHOP.axes.map((a) => (a.axisKey === 'own:shared:fit' ? { ...a, target: '' } : a)) })
     expect(empty).toContain(`role="alert">Name this option.</span>`)
     expect(panel(SHOP)).not.toContain('class="nds-axes-unbound" role="alert"')
+  })
+
+  it('🔴 a live product: "Reset to Shared" is held with the lock (a reset would drop an own option from live options)', () => {
+    const live = panel({ ...SHOP, source: { kind: 'override', ruleLabel: null, category: null, label: 'Overridden here' }, locked: { reason: LIVE, externalId: 'made-up-id', setChangeIs: 'in-place', orderChangeAllowed: false } })
+    const reset = live.match(/<button[^>]*>Reset to Shared<\/button>/)?.[0] ?? ''
+    expect(reset).toContain('aria-disabled="true"')
+    expect(reset).toContain(`title="${LIVE}"`)
+    const open = panel({ ...SHOP, source: { kind: 'override', ruleLabel: null, category: null, label: 'Overridden here' } })
+    expect(open.match(/<button[^>]*>Reset to Shared<\/button>/)?.[0]).not.toContain('aria-disabled')
+  })
+
+  it('a held × does not repeat the lock sentence the banner already shows; any other reason is said inline', () => {
+    const locked = { locked: { reason: LIVE, externalId: 'made-up-id', setChangeIs: 'in-place' as const, orderChangeAllowed: false } }
+    expect(channelInlineRefusal(LIVE, locked)).toBeNull()
+    expect(channelInlineRefusal('Color is locked: it is published.', locked)).toBe('Color is locked: it is published.')
+    expect(channelInlineRefusal(LIVE, { locked: null })).toBe(LIVE)
   })
 
   it('🔴 D1 — a product already on Shopify: every name box, every × and the order are held with the server\'s sentence', () => {

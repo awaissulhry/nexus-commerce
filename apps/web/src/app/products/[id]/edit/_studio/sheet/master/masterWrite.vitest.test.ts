@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { commitMasterRow, type MasterCommitContext } from './masterWrite'
 import type { SheetColumn, StudioSheet, StudioRow } from './types'
 import type { SheetWriteRequest } from '@/design-system/grid'
+import { GALE_MASTER } from '../../../../../../../../../../docs/fixtures/vt1/fixtures'
 
 /*
  * The master sheet's write path. It had NO tests at all — it was declared inside the hook and was
@@ -361,3 +362,28 @@ describe('commitMasterRow — a PARTIAL success is reported as progress, not as 
     expect(r.ok).toBe(false)
   })
 })
+
+/* An accepted Shared theme save changed the family's axes; the family bar and "Add child" read them from their own family
+   read, which said "no variation axes set" until a reload (found by Lane B building a family, 2026-09-28). */
+describe('commitMasterRow — a variation-theme save tells the host the family changed', () => {
+  const themeSheet = { ...sheet, columns: [...sheet.columns, col('variation_theme', { kind: 'variationTheme', storage: 'column' } as never)] } as unknown as StudioSheet
+  const changed = { ...GALE_MASTER, axes: GALE_MASTER.axes.slice(0, 1), baseline: GALE_MASTER }
+
+  it('an accepted save calls `onVariationThemeSaved` once', async () => {
+    fetchMock.mockResolvedValue(json(200, { version: 60 }))
+    const onVariationThemeSaved = vi.fn()
+    const result = await commitMasterRow(req([{ colId: 'variation_theme', value: changed }] as never), ctx({ sheet: themeSheet, onVariationThemeSaved }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('variation-axes')
+    expect(cellsOf(result).variation_theme.ok).toBe(true)
+    expect(onVariationThemeSaved).toHaveBeenCalledTimes(1)
+  })
+
+  it('a refused save (409) does not', async () => {
+    fetchMock.mockResolvedValue(json(409, { error: 'version_conflict', message: 'Reload.' }))
+    const onVariationThemeSaved = vi.fn()
+    await commitMasterRow(req([{ colId: 'variation_theme', value: changed }] as never), ctx({ sheet: themeSheet, onVariationThemeSaved }))
+    expect(onVariationThemeSaved).not.toHaveBeenCalled()
+  })
+})
+
