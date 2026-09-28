@@ -129,9 +129,8 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
       afterSave.current = null
     }
     try {
-      // A set this layer does not own yet binds the save only to "owned nothing"; a change to the set it follows would
-      // not stop it. So read once more and compare what the row resolves to, before anything is sent.
-      if (model.changedSince(baseline, await data.reload(), popupBase)) { refused(model.POPUP_TEXT.conflict); return }
+      const held = model.beforeSend(baseline, await data.reload(), popupBase)
+      if (held) { refused(held); return }
       try {
         await sendPlanOps(productId, target, request)
         landed()

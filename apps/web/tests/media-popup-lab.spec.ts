@@ -122,7 +122,7 @@ test.describe('Product media pop-up — photo plan', () => {
     }
   })
 
-  test('the drag is live: the photo lifts and follows, the others slide', async ({ page }) => {
+  test('the drag is live: the photo lifts and follows, the others slide; Enter while dragging saves nothing', async ({ page }) => {
     await openLab(page)
     await openRow(page, /^LAB-JACKET · Common/)
     const tiles = panel(page).locator('.nds-media-board-thumb')
@@ -136,8 +136,15 @@ test.describe('Product media pop-up — photo plan', () => {
     // The lifted photo is under the pointer (it moved), not left in its slot.
     const lifted = (await tiles.nth(0).boundingBox())!
     expect(lifted.x - a.x).toBeGreaterThan((c.x - a.x) / 2)
+    // Enter while dragging does nothing: the drop decides the order, then Enter saves it.
+    await page.keyboard.press('Enter')
+    await expect(panel(page)).toBeVisible()
+    await expect(saves(page)).toHaveText('Saves received by the lab: 0')
     await page.mouse.up()
     await expect(tiles.nth(2)).toHaveAttribute('aria-label', /^front, position 3 of 3/)
+    await tiles.nth(2).focus(); await page.keyboard.press('Enter')
+    await expect(panel(page)).toHaveCount(0)
+    await expect(saves(page)).toHaveText('Saves received by the lab: 1')
   })
 })
 

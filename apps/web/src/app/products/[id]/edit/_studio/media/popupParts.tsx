@@ -61,12 +61,14 @@ export function useFirstPhotoFocus(root: RefObject<HTMLDivElement | null>) {
 
 /**
  * Enter on a photo saves, like everywhere else in the pop-up (a click, or ⋯ → Open, shows the photo). Ctrl/⌘ + Enter
- * saves from anywhere, a text box included. While a photo is picked up, neither saves: Enter drops it.
+ * saves from anywhere, a text box included. While a photo is picked up, neither saves: Enter drops it. While a photo is
+ * dragged with the pointer, Enter does nothing (the drop decides the order; a save now would lose it).
  */
 export function photoKeys(root: RefObject<HTMLDivElement | null>, save: () => boolean) {
   return (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.altKey) return
     const target = event.target as HTMLElement
+    if (root.current?.querySelector('.nds-media-board-list.dragging')) { event.preventDefault(); event.stopPropagation(); return }
     // While a photo is picked up (keyboard move), Enter drops it; nothing saves until it is down.
     if (root.current?.querySelector('[data-picked]')) return
     if (event.metaKey || event.ctrlKey) { event.preventDefault(); event.stopPropagation(); save(); return }

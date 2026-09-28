@@ -3,7 +3,7 @@ import type { MediaPlan } from '@nexus/shared/media-plan'
 
 import type { LibraryAsset, MediaDestinationRow, MediaRead } from '../images/plan-page/model'
 import {
-  POPUP_TEXT, addItem, afterSave, cellAfterSave, changedSince, checks, followAgain, initialDraft, landedAnyway, localRefusal, mainRef, moveItem, planBase, planView,
+  POPUP_TEXT, addItem, afterSave, beforeSend, cellAfterSave, changedSince, checks, followAgain, initialDraft, landedAnyway, localRefusal, mainRef, moveItem, planBase, planView,
   refusalSentence, removeItem, removePicture, saveLine, saveOps, setSkuOnly, setSource, setTitle, tiles,
 } from './mediaPopupModel'
 
@@ -142,6 +142,10 @@ describe('review findings (2026-09-28)', () => {
     // Another colour's set is not this row's.
     expect(changedSince(r, read([{ key: 'SHARED', plan: plan({ ...SHARED.sets, values: { ...SHARED.sets.values, 'color:yellow': ids('y1', 'cover') } }, 'color') }]), base)).toBe(false)
     expect(changedSince(r, null, base)).toBe(false)
+    // The last check before Enter sends: changed → refused; the check read failed → held, never sent unchecked.
+    expect(beforeSend(r, sharedChanged, base)).toBe(POPUP_TEXT.conflict)
+    expect(beforeSend(r, null, base)).toBe(POPUP_TEXT.recheckFailed)
+    expect(beforeSend(r, read([{ key: 'SHARED', plan: SHARED }]), base)).toBeNull()
   })
   it('a lost answer: the save landed when the photos are exactly what it makes, not when they are unchanged', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])

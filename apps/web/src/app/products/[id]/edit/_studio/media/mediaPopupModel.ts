@@ -25,6 +25,7 @@ export const POPUP_TEXT = {
   conflict: 'Someone changed these photos while this pop-up was open. Nothing was changed. Press Esc and open the cell again to see their change.',
   changedElsewhere: 'Someone changed these photos. Enter will not overwrite them — press Esc, then open the cell again.',
   unconfirmed: 'The photo change could not be confirmed. Reload the sheet before trying again.',
+  recheckFailed: 'The photos could not be checked again before saving, so nothing was sent. Press Enter to try again.',
   loading: 'Loading the photo plan…',
 } as const
 
@@ -219,6 +220,16 @@ function rowRefs(base: PlanPopupBase): MediaSetRef[] {
  * of a set this layer does not own yet binds only to "owned nothing" (`expect: null`), which a change to the inherited set
  * does not break; so the pop-up compares what the row RESOLVES to, and refuses before sending (the server cannot).
  */
+/**
+ * The last check before Enter sends. A set this layer does not own yet binds the save only to "owned nothing"; a change to
+ * the set it follows would not stop it. So the row is read once more: changed → refused; the read failed → held (nothing
+ * else would stop it). Answers the sentence that holds the save, or null to send.
+ */
+export function beforeSend(baseline: MediaRead, fresh: MediaRead | null, base: PlanPopupBase): string | null {
+  if (!fresh) return POPUP_TEXT.recheckFailed
+  return changedSince(baseline, fresh, base) ? POPUP_TEXT.conflict : null
+}
+
 export function changedSince(baseline: MediaRead, fresh: MediaRead | null, base: PlanPopupBase): boolean {
   if (!fresh) return false
   const before = stackFor(baseline, base), after = stackFor(fresh, base)
