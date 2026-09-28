@@ -234,8 +234,8 @@ cell in the `media` box, with no Save / Cancel buttons.
 - **Not done, said plainly:** A-E7 (a sixth axis — the knee slider has one "Values from" attribute, so it cannot reach 5 in
   the browser; the rule is the existing `atLimit` path), A-E13 = slice A3, A-E14 publish parity = A1's parity tests (no new
   publish code in A2), A-A2 / A-A3 (Amazon's theme pick and live lock are the unchanged P2 / VT.2 paths). The editor-open gate
-  (`scripts/check-editor-open.mjs`) has no arm for opening the theme pop-up (it measures the column's width and place only);
-  an arm needs a contract-table row too — its own small slice. Note: with a list open inside the pop-up, one Esc closes the whole
+  arm was added later (2026-09-28, `0f933be67` on #141): `popup:axes` + the contract row `axes / fresh / variation_theme` —
+  every gesture opens the pop-up on Shared, AMAZON·IT and EBAY·IT, 0 writes armed; red on all three with the marker removed. Note: with a list open inside the pop-up, one Esc closes the whole
   pop-up (discards; nothing written) — Esc is AG's everywhere by design.
 
 ### 4.10 A3 — "New attribute" from the pop-up: SPEC and BUILT (2026-09-28, local commit, not pushed)
