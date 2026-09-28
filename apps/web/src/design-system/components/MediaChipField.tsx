@@ -117,7 +117,9 @@ export function MediaChipField(props: MediaChipFieldProps) {
       onMouseDown={event => { if (event.target === event.currentTarget) { event.preventDefault(); ownInput.current?.focus() } }}>
       <ul ref={sort.listRef as unknown as Ref<HTMLUListElement>} className={`nds-mchips-list${sort.drag ? ' dragging' : ''}`} aria-label={label} data-nds-reorder-list>
         {items.map((item, index) => (
-          <li key={item.value} ref={el => { chipRefs.current.set(item.value, el) }} data-nds-reorder-item tabIndex={0} {...sort.itemProps(index)}
+          /* A static chip row (nothing to remove or move) is read as a list, not tabbed through chip by chip (P3 A2, measured:
+             eight value chips were eight Tab stops between a row's × and the next row). */
+          <li key={item.value} ref={el => { chipRefs.current.set(item.value, el) }} data-nds-reorder-item tabIndex={removable || reorderable ? 0 : -1} {...sort.itemProps(index)}
             className={['nds-mchip', item.unknown ? 'unknown' : ''].filter(Boolean).join(' ')}
             aria-label={`${item.label}${item.unknown ? ' (not found)' : ''}, ${index + 1} of ${items.length}${reorderable ? '; Alt and arrow keys move it' : ''}`}
             title={item.unknown ? 'Not found — it may have been deleted. It is kept until you remove it.' : item.detail ?? item.label}

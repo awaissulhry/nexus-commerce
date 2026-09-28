@@ -122,7 +122,16 @@ export interface VariationThemeCell {
    * Sheet pop-up P3 — may this coordinate take an axis under a name the operator types? `allowed: false` always
    * carries the reason (Amazon: its own themes only). `maxLength` is the channel's sourced name cap, or `null`.
    */
-  ownNames: { allowed: boolean; maxLength: number | null; reason: string | null }
+  ownNames: {
+    allowed: boolean
+    maxLength: number | null
+    reason: string | null
+    /**
+     * eBay: the names the category lists but NOT for variations, each with the server's own refusal (219451), so the pop-up
+     * refuses a typed name before it saves, in the words the save would use. Absent where the channel refuses none.
+     */
+    refused?: Array<{ name: string; reason: string }>
+  }
   /**
    * Sheet pop-up P3 — per delivered axis (`familyKey`), the distinct values the INCLUDED variants carry here, in
    * variant order, and how many carry one. The pop-up's chips and its "N variants empty" line read this, and it is
@@ -558,9 +567,9 @@ function resolveMaster(input: ResolveVariationInput): VariationThemeCell {
  * variation slots) may; Amazon never (its themes only, the Owner's rule); Shopify's own options arrive with P3b,
  * so until then the pop-up offers none and a stored one is refused with this reason (no silent drop at publish).
  */
-function ownNamesFor(channel: string, limits: ProjectionLimits | undefined): VariationThemeCell['ownNames'] {
+function ownNamesFor(channel: string, limits: ProjectionLimits | undefined, refused?: string[]): VariationThemeCell['ownNames'] {
   const maxLength = limits?.nameLength ?? null
-  if (channel === 'EBAY' || channel === 'ETSY') return { allowed: true, maxLength, reason: null }
+  if (channel === 'EBAY' || channel === 'ETSY') return { allowed: true, maxLength, reason: null, ...(refused?.length ? { refused: refused.map(name => ({ name, reason: VT_COPY.ebayNotForVariations(name) })) } : {}) }
   if (channel === 'AMAZON') return { allowed: false, maxLength: null, reason: VT_COPY.amazonOwnAxes }
   return { allowed: false, maxLength, reason: VT_COPY.ownNotYet(channelDisplayName(channel)) }
 }
@@ -637,7 +646,7 @@ function channelShell(input: ResolveVariationInput): VariationThemeCell {
        each resolver, so no branch can forget it and no branch computes its own list. */
     addableAxes: [],
     ownCandidates: [],
-    ownNames: ownNamesFor(channel, input.limits),
+    ownNames: ownNamesFor(channel, input.limits, channel === 'EBAY' ? input.schema.ebay?.nonVariationAspects : undefined),
     write: blockedReason ? null : {
       endpoint: 'projection',
       expectedVersion: input.listing?.version ?? 0,
@@ -804,6 +813,8 @@ function resolveEbay(input: ResolveVariationInput): VariationThemeCell {
   const kind: VariationSourceKind = set.from === 'coordinate' ? 'override' : rule ? 'rule' : wanted.length || set.names.length ? 'derived' : 'none'
   cell.source = { kind, ruleLabel: kind === 'rule' ? input.rule!.label : null, category: kind === 'rule' ? input.rule!.category : null,
     label: kind === 'override' ? VT_COPY.override : kind === 'rule' ? VT_COPY.rule(input.rule!.label) : kind === 'derived' ? (set.from === 'product' ? 'Inherited from the shared variation theme' : VT_COPY.derived) : VT_COPY.setAxes }
+  // P3 A2 — a category eBay could not be read for cannot check a typed name (219451): own names wait, with the reason.
+  if (unavailable) cell.ownNames = { allowed: false, maxLength: cell.ownNames.maxLength, reason: unavailableReason }
   cell.candidates = { kind: 'aspects', items: eligible.map(a => ({ code: a.name, label: a.name, coversAll: false, drops: [], adds: [], deprecated: false, required: !!a.required })),
     limit: input.limits.axes, schemaFetchedAt: null, state: unavailable ? 'unavailable' : eligible.length ? 'ok' : 'no-theme', ...(unavailable ? { unavailableReason } : {}) }
   applyLimitAndCollisions(cell, input)

@@ -95,7 +95,12 @@ describe('eBay — own axes from the category list or under a typed name (P3-D1 
   it('offers the unused variation aspects with their fill count, and never one a family axis already uses', () => {
     const cell = resolveVariationProjection(input('EBAY'))
     expect(cell.ownCandidates).toEqual([{ axisKey: NECK, name: 'Scollatura', label: 'Neckline', filled: 3, of: 4 }])
-    expect(cell.ownNames).toEqual({ allowed: true, maxLength: 40, reason: null })
+    expect(cell.ownNames).toEqual({ allowed: true, maxLength: 40, reason: null, refused: ['Marca', 'Brand', 'Stile', 'Style'].map(name => ({ name, reason: VT_COPY.ebayNotForVariations(name) })) })
+  })
+
+  it('a category eBay could not read turns own names off, with the reason', () => {
+    const cell = resolveVariationProjection(input('EBAY', { schema: { ebay: { categoryId: null, aspects: [], unavailableReason: 'No category yet.' } } }))
+    expect(cell.ownNames).toMatchObject({ allowed: false, reason: 'No category yet.' })
   })
 
   it('a typed name outside eBay\'s list is a custom specific; values come from the Shared attribute', () => {

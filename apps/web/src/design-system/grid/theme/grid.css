@@ -1861,3 +1861,26 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 /* The `+ Add axis` note wraps inside the wider media box instead of running past its edge. */
 .nds-axes-editor .nds-axes-add { flex-wrap: wrap; }
 .nds-axes-editor .nds-axes-add .nds-axes-filterhint { flex: 1 1 12rem; white-space: normal; min-width: 0; }
+
+/* ── Sheet pop-up P3 A2 — the variation-theme pop-up on a CHANNEL scope (eBay, Etsy): rows with values, and "+ Add" with
+      three groups (from Shared, only on the channel, your own name). DS tokens only; the P2 master rows' rhythm. ── */
+.nds-axes-crow { display: flex; flex-direction: column; gap: var(--nds-space-4); flex: 1; min-width: 0; padding: var(--nds-space-4) 0; }
+.nds-axes-chead { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.nds-axes-chead > :last-child { margin-left: auto; flex: none; }
+.nds-axes-cname { flex: 1 1 auto; font-weight: var(--nds-font-weight-semibold); font-size: var(--nds-font-size-base); color: var(--nds-text); min-width: 0; overflow-wrap: anywhere; }
+.nds-axes-chead > .nds-listbox { flex: 1 1 auto; min-width: 0; }
+.nds-axes-origin { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); min-width: 0; overflow-wrap: anywhere; }
+.nds-axes-gap { font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); }
+.nds-axes-unbound { padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-md); background: var(--nds-danger-soft); color: var(--nds-danger-text); font-size: var(--nds-font-size-sm); }
+.nds-axes-addpanel { display: flex; flex-direction: column; gap: var(--nds-space-8); padding: var(--nds-space-4) var(--nds-space-12) var(--nds-space-8); }
+.nds-axes-addpanel .nds-axes-opt { margin: 0; width: 100%; }
+.nds-axes-addgroup { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.nds-axes-addlabel { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.nds-axes-ownform { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); min-width: 0; }
+.nds-axes-ownform > :first-child { flex: 1 1 140px; min-width: 0; }
+.nds-axes-ownform > :nth-child(2) { flex: 1 1 160px; min-width: 0; }
+.nds-axes-addnote { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+/* The channel's own rule under a section label (Amazon: its theme list only), in the rows' gutter. */
+.nds-axes-channelrule { margin: 0; padding: 0 var(--nds-space-12) var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+/* A refusal under the rows sits in the rows' own gutter. */
+.nds-axes-editor > .nds-axes-refusal { margin: var(--nds-space-4) var(--nds-space-12) 0; }

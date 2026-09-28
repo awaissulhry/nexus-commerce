@@ -1,7 +1,7 @@
 # Sheet pop-up editor — quality plan (2026-09-28)
 
 Status: **APPROVED 2026-09-28** (Owner: "I'll go with your recommendations … For everything else, I'll go with your recommendations.") — the plan and Q-D1 … Q-D4 = (a). Lane B runs in a new session (prompt: `LANE-B-PROMPT.md`). **Each slice still starts only on the Owner's "build <slice>".**
-**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7). **A1c approved** (Owner: "I'll go with your recommendations.") and built (§4.8).
+**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7). **A1c approved** (Owner: "I'll go with your recommendations.") and built (§4.8). **A2 approved** (Owner: "I'll go with your recommendation. Go ahead.") and built (§4.9).
 It replaces the loose next steps in `PLAN-2026-09-27.md` §10 for the work that is left.
 
 ## 0. What the Owner asked (2026-09-28)
@@ -192,6 +192,51 @@ What A1 contains (server only; the pop-up is A2):
   suites: all pass (exit 0), including the draft-listings, live-listings and first-theme-save races.
 - Note: excluding a variant also lowers its `isPublished` (by design: a tick never restores publishing). The check did this
   to one variant of the private copy; it was set back by hand there. Production data was never touched.
+
+### 4.9 A2 — the pop-up on eBay, Etsy and Amazon (2026-09-28, local commit on `feat/sheet-popup-channel-axes`, not pushed)
+
+Approved (Owner: "I'll go with your recommendation. Go ahead." after "build A2?"). Built as §4.4 shows; the pop-up opens under the
+cell in the `media` box, with no Save / Cancel buttons.
+
+- **What it contains:** web + factory `AxesPanel` channel layout (eBay and Etsy cells; Amazon keeps its theme list and gets the
+  server's line "Amazon decides the axes. Choose a theme from its list."; Shopify waits for A4), NEW `grid/editors/channelAxes.ts`
+  (pure rules + copy), `suppressAxesPanelKeys` on the column, one `MediaChipField` attribute, one appended `grid.css` block; web
+  NEW `_studio/sheet/master/ownAxisSourcesLoader.ts` ("Values from" = `GET /studio/own-axis-sources`); API `ownNames.refused`
+  (the names eBay lists but not for variations, so the pop-up refuses "Marca" before the save does).
+- **Browser run (private copy, API :8099, web :3109, `xavia-knee-slider` eBay · IT, REGAL-JACKET, Etsy and Amazon cells):**
+  A-E1, A-E2, A-E3, A-E4, A-E5, A-E6, A-E8, A-E9, A-E10, A-E11, A-E12, A-E15, A-A1, A-T1, A-T2, A-X1 (keyboard only), A-X2
+  (light and dark), A-X3, A-X4 (0 console errors), A-X5 — all as expected.
+  - **A-X3 phone:** a 390 × 780 frame (the Chrome window does not resize): the pop-up is 374 px wide with 8 px each side
+    (a full-width sheet), nothing sticks out (every element inside its box), "+ Add" and "Values from…" usable, the list opens
+    inside the screen, a 579 px tall content scrolls inside the 480 px box; dark mode the same. The round "N" badge over its
+    bottom-left corner is Next.js's development badge — not in a production build.
+  - **A-X5 labels:** every × "Remove <name>", ↑ / ↓ "Move <name> up / down", the name Input "Name of the new specific",
+    "Values from" "Where the values of the new specific come from", the chip rows "<name> values", "+ Add" with its hint as
+    description and `aria-expanded`, refusals `role="alert"`, the reset line and "Loading…" `role="status"`. **Found and fixed:**
+    the add choices read as one run-together word ("Taglia0 of 8 filled") → each has a label "Add Taglia, 0 of 8 filled".
+- **The 10 browser bugs found during the build (all fixed):** the add panel had no padding · an endless "Loading the
+  attributes…" (React's development double mount turned the "open" flag off for good) · "Stile" broke over two lines (the
+  origin now has its own line) · Enter and Esc stopped working after × or an add removed the focused control (focus returns
+  to the pop-up) · "Reset to Shared" looked unchanged until ⏎ (a status line now says ⏎ applies it) · the refusal box had no
+  gutter · the lock sentence showed 3 times (a short "+ Add" hint now) · the Amazon line had no gutter · Tab left the pop-up
+  for the next cell (`suppressAxesPanelKeys`) · every static value chip was a Tab stop (`MediaChipField` `tabIndex -1`).
+- **Tests:** web `AxesPanelEditor` + `channelAxes` 97 (8 new this close-out: Tab rule and the column hook, hidden controls not
+  counted, Enter / Esc stay AG's, static chips not Tab stops and movable ones are, the reset status line, the short live
+  hint, the add-choice label); each new test fails when its code is broken on purpose (5 mutations, 5 red). Web design system +
+  studio sheet: 201 files, 2,450 pass, 13 skipped. API `variation-own-axes` + `family-projection-own-axes` 25/25 (profiles off
+  and on); `variation-rules`, `family-projection*`, `variation-theme*`, `studio-sheet*`: 179 pass, 1 skipped.
+- **Checks:** typecheck web 0, api 0, factory 0; 59/59 static gates; every web design-system file this branch changed is
+  byte-identical in `apps/factory` (the CHANGELOG gets its short "Mirrored from web" line, as P0–P2; `components.css` already
+  differed on main — this branch's added lines are identical). Real-id scan of every commit on the branch (+ a positive control):
+  no listing, account or product id; the SKU names in the docs are already on main in 57–735 files; `EBAY_IT` (eBay's public
+  market code) matches inside a fixture name; one path to the main checkout in the Owner's home folder, in `LANE-B-PROMPT.md`
+  (A1 commit) — 399 files on main already hold that same path, so it adds nothing new.
+- **Not done, said plainly:** A-E7 (a sixth axis — the knee slider has one "Values from" attribute, so it cannot reach 5 in
+  the browser; the rule is the existing `atLimit` path), A-E13 = slice A3, A-E14 publish parity = A1's parity tests (no new
+  publish code in A2), A-A2 / A-A3 (Amazon's theme pick and live lock are the unchanged P2 / VT.2 paths). The editor-open gate
+  (`scripts/check-editor-open.mjs`) has no arm for opening the theme pop-up (it measures the column's width and place only);
+  an arm needs a contract-table row too — its own small slice. Note: with a list open inside the pop-up, one Esc closes the whole
+  pop-up (discards; nothing written) — Esc is AG's everywhere by design.
 
 ## 5. Workstream B — Shopify metafields, every type (AAA)
 

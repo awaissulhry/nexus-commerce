@@ -94,7 +94,7 @@ describe('eBay · IT draft — channel-only axes through writeProjectionMapping'
     const read = await scoped(() => getProjectionRead(ebay))
     // the label is the aspect's English name from the site's own dictionary (`englishEbayAspectLabel`)
     expect(read.variation?.ownCandidates).toEqual([{ axisKey: NECK, name: 'Scollatura', label: 'Neckline', filled: 2, of: 3 }])
-    expect(read.variation?.ownNames).toEqual({ allowed: true, maxLength: 40, reason: null })
+    expect(read.variation?.ownNames).toEqual({ allowed: true, maxLength: 40, reason: null, refused: [{ name: 'Marca', reason: VT_COPY.ebayNotForVariations('Marca') }, { name: 'Brand', reason: VT_COPY.ebayNotForVariations('Brand') }] })
     // Colore alone cannot tell own-a from own-c: the measured starting point
     expect(read.variation?.collisions?.unresolved).toBe(2)
     const sources = await scoped(() => sharedOwnAxisSources('own-demo', 'IT'))

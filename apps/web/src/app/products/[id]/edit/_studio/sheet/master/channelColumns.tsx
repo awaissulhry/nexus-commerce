@@ -17,6 +17,11 @@ import { productMediaColumn, PRODUCT_MEDIA_COLUMN, type useProductMediaEditor } 
 import { shopifyDraftColumn, type useShopifyDraftCell } from '../../shopify/ShopifyDraftCell'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelSheetRow, SheetColumn, ChannelScopePage } from '../channel/types'
+import { loadOwnAxisSources } from './ownAxisSourcesLoader'
+
+/* Sheet pop-up P3 A2 — the channel variation pop-up reads "Values from" through this host loader (a STABLE object: AG re-runs
+   its column model on a new params object, reference_ag_react_inline_options_rerun_column_model). */
+const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({ loadOwnAxisSources })
 import {
   classifyProvenance, provenanceClassRules, roundTripClassRules, type CellSaveTracker,
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
@@ -171,12 +176,12 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
      * (`reference_two_column_builders_drift`).
      */
     ...(col.kind === 'variationTheme'
-      ? variationThemeColumnDef<ChannelSheetRow>(col, (d) => d.values?.[col.key]?.value, composeSheetCellClassRules<ChannelSheetRow>({
+      ? { ...variationThemeColumnDef<ChannelSheetRow>(col, (d) => d.values?.[col.key]?.value, composeSheetCellClassRules<ChannelSheetRow>({
           validation: channelValidation(col),
           provenance: provenanceClassRules<ChannelSheetRow>((d, colId) =>
             classifyProvenance({ ...withMappingRun(d.values?.[colId], productLevelOnly), refusedReason: refusedReasonFor(d.rowId, colId) }, 'channel')),
           roundTrip: roundTripClassRules<ChannelSheetRow>(tracker, (d) => d.rowId),
-        }) as never)
+        }) as never), cellEditorParams: CHANNEL_VARIATION_EDITOR_PARAMS }
       : {}),
   }))
   const rank = new Map(orderColumnKeys(gridColumns as never, viewCtx).map((k, i) => [k, i]))

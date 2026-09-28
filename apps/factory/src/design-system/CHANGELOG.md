@@ -1,3 +1,7 @@
+## Variation theme pop-up on a channel — 2026-09-28
+
+Mirrored from web. `AxesPanel` channel layout (eBay, Etsy): rows with origin, value chips and empty-variant hints; "+ Add" with Shared, channel-list and own-name groups; `channelAxes.ts`; `suppressAxesPanelKeys`; `MediaChipField` static chips are not Tab stops.
+
 ## Variation theme pop-up, shared product — 2026-09-28
 
 Mirrored from web. `AxesPanel` master rows with value chips (photos on the photo axis only) and a variant list, refused axis removal, `variationFamily.ts`, `MediaChipField` `searchable`/`removable`, nested `useSortableDrag`.
