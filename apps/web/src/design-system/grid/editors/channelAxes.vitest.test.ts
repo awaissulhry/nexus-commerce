@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { VariationThemeCell } from '../renderers/variationTheme'
 import {
-  CHANNEL_AXES_COPY, channelAxisGapHint, channelAxisOrigin, channelAxisValues, channelSetChangeHeld, newAttributeDoneLine, newAttributeHeld,
+  CHANNEL_AXES_COPY, channelAxisGapHint, channelAxisOrigin, channelAxisValues, channelSetChangeHeld, freeNameRefusal, newAttributeDoneLine, newAttributeHeld,
   ownAxisKeyFor, ownNameRefusal, remainingOwnCandidates, remainingSharedAxes, usesChannelAxesLayout, withOwnAxisSource, withOwnChannelAxis,
   withOwnSharedAxis, withSharedAxis, withoutAxis,
 } from './channelAxes'
@@ -40,10 +40,11 @@ const EBAY: VariationThemeCell = {
 }
 
 describe('which cell opens the channel layout', () => {
-  it('eBay and Etsy do; Amazon (its theme), Shopify (P3b), master and the dock adapter (no write) do not', () => {
+  it('eBay, Etsy and (A4) Shopify do; Amazon (its theme), master and the dock adapter (no write) do not', () => {
     expect(usesChannelAxesLayout(EBAY)).toBe(true)
     expect(usesChannelAxesLayout({ ...EBAY, write: { ...EBAY.write!, coordinate: { ...EBAY.write!.coordinate, channel: 'ETSY' } } })).toBe(true)
-    expect(usesChannelAxesLayout({ ...EBAY, write: { ...EBAY.write!, coordinate: { ...EBAY.write!.coordinate, channel: 'SHOPIFY' } } })).toBe(false)
+    expect(usesChannelAxesLayout({ ...EBAY, write: { ...EBAY.write!, coordinate: { ...EBAY.write!.coordinate, channel: 'SHOPIFY' } } })).toBe(true)
+    expect(usesChannelAxesLayout({ ...EBAY, write: { ...EBAY.write!, coordinate: { ...EBAY.write!.coordinate, channel: 'AMAZON' } } })).toBe(false)
     expect(usesChannelAxesLayout({ ...EBAY, candidates: { ...EBAY.candidates!, kind: 'theme-enum' } })).toBe(false)
     expect(usesChannelAxesLayout({ ...EBAY, masterCandidates: [] })).toBe(false)
     expect(usesChannelAxesLayout({ ...EBAY, write: null })).toBe(false)
@@ -130,6 +131,30 @@ describe('what a row says', () => {
     expect(CHANNEL_AXES_COPY.addOption(c.name, CHANNEL_AXES_COPY.filled(c.filled, c.of))).toBe('Add Scollatura, 2 of 4 filled')
     expect(CHANNEL_AXES_COPY.addOption('Size', CHANNEL_AXES_COPY.notHere('specific'))).toBe('Add Size, not a specific here')
     expect(CHANNEL_AXES_COPY.notHere('option')).toBe('not an option here')
+  })
+})
+
+describe('P3 A4 — a Shopify option\'s free name', () => {
+  const SHOP: VariationThemeCell = {
+    ...EBAY,
+    candidates: { kind: 'free', items: [], limit: 3, schemaFetchedAt: null, state: 'freeform' },
+    ownCandidates: [],
+    ownNames: { allowed: true, maxLength: 255, reason: null },
+    vocabulary: { axisNoun: 'option', axisNounPlural: 'options', sectionTitle: 'Options' },
+    write: { ...EBAY.write!, coordinate: { ...EBAY.write!.coordinate, channel: 'SHOPIFY', market: 'GLOBAL' } },
+  }
+
+  it('empty, too long, or another delivered option\'s name is refused; a dropped option\'s name is free', () => {
+    const color = SHOP.axes[0]
+    expect(freeNameRefusal(SHOP, color, 'Shopify')).toBeNull()
+    expect(freeNameRefusal(SHOP, { ...color, target: '  ' }, 'Shopify')).toBe('Name this option.')
+    expect(freeNameRefusal({ ...SHOP, ownNames: { allowed: true, maxLength: 5, reason: null } }, { ...color, target: 'Colours' }, 'Shopify'))
+      .toBe('Shopify option names are at most 5 characters.')
+    const withFit = withOwnSharedAxis(SHOP, 'Fit', FIT)
+    const fit = withFit.axes.at(-1)!
+    expect(freeNameRefusal(withFit, { ...fit, target: 'colore' }, 'Shopify')).toBe(CHANNEL_AXES_COPY.duplicate)
+    /* Taglia is not delivered here (dropped), so its name is free for another option */
+    expect(freeNameRefusal(withFit, { ...fit, target: 'Taglia' }, 'Shopify')).toBeNull()
   })
 })
 

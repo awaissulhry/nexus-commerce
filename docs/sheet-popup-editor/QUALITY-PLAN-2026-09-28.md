@@ -1,7 +1,7 @@
 # Sheet pop-up editor — quality plan (2026-09-28)
 
 Status: **APPROVED 2026-09-28** (Owner: "I'll go with your recommendations … For everything else, I'll go with your recommendations.") — the plan and Q-D1 … Q-D4 = (a). Lane B runs in a new session (prompt: `LANE-B-PROMPT.md`). **Each slice still starts only on the Owner's "build <slice>".**
-**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7). **A1c approved** (Owner: "I'll go with your recommendations.") and built (§4.8). **A2 approved** (Owner: "I'll go with your recommendation. Go ahead.") and built (§4.9). **A3 approved** (Owner: "Okay, go ahead.") and built (§4.10). **A4 spec drafted** (§4.11, read-only research; waiting for "build A4" and D1/D2).
+**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7). **A1c approved** (Owner: "I'll go with your recommendations.") and built (§4.8). **A2 approved** (Owner: "I'll go with your recommendation. Go ahead.") and built (§4.9). **A3 approved** (Owner: "Okay, go ahead.") and built (§4.10). **A4 approved** (Owner: "I'll go with your recommendations." — D1 a, D2 a) and built (§4.11).
 It replaces the loose next steps in `PLAN-2026-09-27.md` §10 for the work that is left.
 
 ## 0. What the Owner asked (2026-09-28)
@@ -324,7 +324,7 @@ helper agent (reviewed line by line), pop-up half in this session. Local commit,
   cache-clear one cannot fail because the column caches key on the dictionary version) · area: web design system + sheet 2,459
   pass; API 327 pass, 2 skipped (the real-PG files) — profiles off and on for the new files.
 
-### 4.11 A4 — Shopify's own options: SPEC DRAFT (2026-09-28, read-only research; waiting for the Owner's "build A4")
+### 4.11 A4 — Shopify's own options: SPEC and BUILT (2026-09-28, local commit, not pushed)
 
 Line numbers are at commit `391267ee2` (branch `feat/sheet-popup-channel-axes`). "Not checked" means not checked.
 
@@ -459,6 +459,35 @@ store until the Owner's dev store exists.
 3. The publisher itself is generic (axes + optionNames) — a parity test with the existing stand-in `gql` proves options sent = sheet.
 4. A live Shopify product can get no option change and no change-only publish today → D1: lock options and order (recommended).
 5. About 1 day; two small display fixes sit in other lanes' files (ask first); the real proof needs the Owner's Shopify dev store.
+
+**BUILT 2026-09-28** (Owner: "I'll go with your recommendations." — build A4 with D1 (a) lock options AND order on a product already
+on Shopify, D2 (a) one real publish on a Shopify development store before the PR merges). Server half by a helper agent (reviewed
+line by line), pop-up half in this session. Branch `feat/sheet-popup-shopify-options` (stacked on #139). Local commit, not pushed.
+- **Server:** `ownNamesFor` allows Shopify (≤ 255); a Shopify option from a channel column is refused ("A Shopify-only option takes
+  its values from an attribute."); D1: `shopifyLock` locks set AND order with the Owner's sentence; `shopifyAxisOrder` keeps own keys;
+  NEW `shopifyVariantOptions` reads own values through the one own-axis reader (keys from the projection, so a category rule counts
+  too); `SHOPIFY_OPTION_VALUE_MAX = 255` + `shopifyOptionValueProblems` in the publish checks and again in `publishContent`
+  before any call (the sentence names the option, never a key); the plan reads own values from the projection.
+- **Shopify's docs (shopify.dev Admin API 2026-07, read 2026-09-28):** 3 options max (`OPTIONS_OVER_LIMIT`, "Can only specify a
+  maximum of 3 options"); a too-long option value is refused (`OPTION_VALUE_NAME_TOO_LONG`) but the docs found do NOT state the
+  number — 255 is our guess, to confirm on the development store (D2). Note: Shopify HAS `productOptionsCreate/Update/Delete`;
+  Nexus does not use them yet, which is why D1 locks live products.
+- **Pop-up:** the channel layout opens on Shopify: a free name box per option (Shared and own), where it comes from, its values;
+  "+ Add" with "From Shared" and "Your own name" (+ A3's "New attribute"), no "Only on Shopify" group; a name that is empty or
+  used by another option is said under its row (`freeNameRefusal`); a live product holds every box, × and the order.
+- **Found and fixed on the way:** (1) the name box's text field kept its 20-character width, pushing ↑ / ↓ out of a narrow pop-up
+  (seen at 228 px) — it now shrinks; (2) both pop-up focus rules ran outside AG's popup too, so a catalog example took the page's
+  focus on load — they now need AG's popup as an ancestor (re-checked in the sheet: focus on open, Esc after an add).
+- **Browser:** the Shopify scope cannot load locally ("NEXUS_CREDENTIAL_ENC_KEY is missing" — no Shopify keys), so the pop-up was
+  checked on the design-system catalog (`ShopifyOptionsExample`, made-up data): keyboard only (Add an option → own name → New
+  attribute → Create → Add; 3 of 3), name refusals, the live lock, a 390 px frame (rows fit, arrows visible), dark mode, 0 console
+  errors during the flows (11 identical React `removeChild` errors came from the test's own page-body wipe for the phone frame).
+- **Tests:** web design system + studio 3,831 pass; pop-up files 107 (A4 new + 4 old tests re-pointed from Shopify's retired
+  checkbox rows to Amazon's); 4 mutations, 4 red. API: new Shopify save DB test 6/6 (profiles off and on); area 128/128 off and on;
+  the helper's 9 mutations, 9 red; `theme-change` 4 failures with profiles on are the same on the code before A4 (checked).
+- **Open (other lanes' files, not edited):** `packages/shared/shopify-content.ts:133` (Lane B) prints `<sku>: missing own:shared:<x>.`
+  when a variant lacks an own option's value, and `_studio/images/shopify/ShopifyContentWorkspace.tsx:176` shows "Any own:shared:<x>"
+  — both should print the option name (a one-line change each; asked in the ledger). The readiness list already names the option.
 
 ## 5. Workstream B — Shopify metafields, every type (AAA)
 

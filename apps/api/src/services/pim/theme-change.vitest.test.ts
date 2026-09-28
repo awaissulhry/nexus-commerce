@@ -229,6 +229,33 @@ describe('VT.4 — the theme-change plan is built from the publish path’s own 
   })
 })
 
+describe('P3b A4 — a Shopify-only option in the in-place plan', () => {
+  it('a SAVED own option reads its values from the projection\'s own-axis read, so it never says "would arrive with no values"', async () => {
+    const FIT = 'own:shared:fit'
+    // the own option is already stored on this coordinate (the plan takes only axes the listing knows)
+    const read = readFor('SHOPIFY', 'GLOBAL', [['Taglia', 'Size'], ['Colore', 'Color'], [FIT, 'Fit']])
+    // the own option lives only in the projection's read (the one own-axis reader) — never in the Shared axis tuple
+    read.children = read.children.map((child, i) => ({ ...child, projectedAxisValues: { ...child.sharedAxisValues, [FIT]: i % 2 ? 'Regular' : 'Slim' } }))
+    getProjectionRead.mockResolvedValue(read)
+    const plan = await buildThemeChangePlan({
+      productId: 'p-root', channel: 'SHOPIFY', market: 'GLOBAL', expectedVersion: 3, dryRun: true,
+      mapping: [
+        { axisKey: 'Taglia', target: 'Size', order: 0 },
+        { axisKey: FIT, target: 'Fit', order: 1 },
+      ],
+    })
+    const fit = plan.steps.find((s) => s.target === 'Fit' && !!s.payload)!
+    expect((fit.payload as { values: Array<{ name: string }> }).values.map((v) => v.name)).toEqual(['Slim', 'Regular'])
+    expect(plan.warnings.join(' ')).not.toContain('Fit would arrive with no values')
+    // a FAMILY axis still reads the Shared value the publisher sends, even where the projection read differs
+    read.children = read.children.map((child) => ({ ...child, projectedAxisValues: { ...child.projectedAxisValues, Taglia: 'XXL' } }))
+    const again = await buildThemeChangePlan({ productId: 'p-root', channel: 'SHOPIFY', market: 'GLOBAL', expectedVersion: 3, dryRun: true,
+      mapping: [{ axisKey: 'Taglia', target: 'Size', order: 0 }, { axisKey: FIT, target: 'Fit', order: 1 }] })
+    const size = again.steps.find((s) => s.target === 'Size')!
+    expect((size.payload as { values: Array<{ name: string }> }).values.map((v) => v.name)).toEqual(['M', 'L'])
+  })
+})
+
 describe('VT.4 — zero provider calls, with a positive control in the same run', () => {
   it('builds all three plans with the network counter at 0, then the control fires', async () => {
     for (const [channel, market, body] of [

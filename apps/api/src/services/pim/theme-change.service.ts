@@ -40,7 +40,7 @@
  *     codebase** (0 occurrences outside the web design mock's fixture strings). The plan NAMES the three
  *     mutations and their constraints, and pins only the option list.
  */
-import { orderedVariationMapping } from '@nexus/shared/variation-mapping'
+import { isOwnAxisKey, orderedVariationMapping } from '@nexus/shared/variation-mapping'
 import prisma from '../../db.js'
 import { AmazonPublishAdapter } from '../listing-wizard/amazon-publish.adapter.js'
 import { buildShopifyProductOptions, shopifyOptionAxes } from '../shopify/content-publisher.js'
@@ -562,8 +562,14 @@ function shopifyPlan(args: {
   const { read, included, requested, before, after, title, t0 } = args
   const ordered = [...requested].sort((a, b) => a.order - b.order)
   const axes = ordered.map((e) => e.target)
+  /* P3b, slice A4 — a Shopify-only option (`own:shared:<attribute>`) has no Shared axis value: its values are the
+     projection's own-axis read (`family-projection.service.ts` `projectedAxisValues`, the one reader), exactly what the
+     publisher sends (`content-workspace.service.ts` `shopifyVariantOptions`). A family axis keeps the Shared value the
+     publisher sends for it — so the plan and the send cannot disagree. */
+  const valueOf = (child: ProjectionRead['children'][number], axisKey: string) =>
+    (isOwnAxisKey(axisKey) ? child.projectedAxisValues?.[axisKey] : child.sharedAxisValues?.[axisKey]) ?? ''
   const variants = included.map((child) => ({
-    options: Object.fromEntries(ordered.map((e) => [e.target, child.sharedAxisValues?.[e.axisKey] ?? ''])),
+    options: Object.fromEntries(ordered.map((e) => [e.target, valueOf(child, e.axisKey)])),
   }))
   const productOptions = buildShopifyProductOptions(axes, variants)
 

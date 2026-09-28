@@ -2,7 +2,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { parse } from 'graphql'
 import { emptyShopifyContent, inspectShopifyContent, resolveShopifyContent, shopifyContentSchema, collectionCards, type ContentVariant, type ShopifyContent } from '@nexus/shared/shopify-content'
 vi.mock('./admin-client.js', () => ({ assertShopifyResult: (payload: any, operation: string) => { if (!payload || payload.userErrors?.length) throw new Error(`${operation}: ${payload?.userErrors?.[0]?.message ?? 'missing result'}`); return payload } }))
-import { mapRemoteVariants, publishContent, publishMetaobjects, type PublishContentInput } from './content-publisher.js'
+import { mapRemoteVariants, publishContent, publishMetaobjects, SHOPIFY_OPTION_VALUE_MAX, shopifyOptionValueProblems, type PublishContentInput } from './content-publisher.js'
+// P3b A4 — the workspace's pure pieces (option order, variant options) are imported below; no database is used here.
+vi.mock('../../db.js', () => ({ default: {} }))
+vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
+import { applyShopifyVariationProjection, shopifyVariantOptions } from './content-workspace.service.js'
+import { resolveVariationProjection } from '../pim/variation-rules.service.js'
+import { limitsFor, vocabularyFor } from '../pim/family-projection-limits.js'
+import { ownAxisValuesFor } from '../pim/variation-own-axes.js'
 
 export const variants: ContentVariant[] = [
   { id: 'rs', sku: 'RED-S', options: { Colour: 'Red', Size: 'S' }, price: '99.00', stock: 4 },
@@ -191,5 +198,70 @@ describe('native Shopify publication', () => {
     expect(writes[0].handle).toEqual(writes[1].handle)
     c.metaobjects[0].fields.text.value = 'Another version'; await publishMetaobjects(gql, c)
     expect(writes[2].handle.handle).not.toBe(writes[0].handle.handle)
+  })
+})
+
+/* ── Sheet pop-up P3b, slice A4 — a Shopify-only option: what the sheet cell shows is what productSet sends ─────────────── */
+
+describe('P3b A4 — a Shopify-only option (own:shared:fit), sheet cell ≡ publish payload', () => {
+  const FIT = 'own:shared:fit'
+  /** Four made-up variants: the family axis Colour, and a Shared per-variant attribute `fit` no family axis uses. */
+  const products = [
+    { id: 'rs', sku: 'RED-SLIM', categoryAttributes: { variations: { Colour: 'Red' }, fit: 'Slim' } },
+    { id: 'rr', sku: 'RED-REG', categoryAttributes: { variations: { Colour: 'Red' }, fit: 'Regular' } },
+    { id: 'bs', sku: 'BLUE-SLIM', categoryAttributes: { variations: { Colour: 'Blue' }, fit: 'Slim' } },
+    { id: 'br', sku: 'BLUE-REG', categoryAttributes: { variations: { Colour: 'Blue' }, fit: 'Regular' } },
+  ]
+  /** The sheet cell: the resolver over the same products, their own-option values through the ONE reader. */
+  const cellFor = () => resolveVariationProjection({
+    coordinate: { channel: 'SHOPIFY', market: 'GLOBAL', accountId: 'acct-1', aliasKey: '', label: 'Shopify · GLOBAL' },
+    family: { familyAxes: ['Colour'], axisLabels: {}, productVersion: 1, productTheme: null, childIds: products.map(p => p.id),
+      variants: products.map(p => ({ id: p.id, sku: p.sku, included: true, axisValues: { Colour: p.categoryAttributes.variations.Colour, ...ownAxisValuesFor([FIT], null, p.categoryAttributes) } })) },
+    listing: { version: 2, variationTheme: null, variationMapping: { axes: [{ axisKey: 'Colour', target: 'Colour', order: 0 }, { axisKey: FIT, target: 'Fit', order: 1 }] }, platformAttributes: null, externalListingId: null, listingStatus: 'DRAFT' },
+    rule: null, schema: {}, limits: limitsFor('SHOPIFY'), vocabulary: vocabularyFor('SHOPIFY'),
+  })
+  /** The publish side: the workspace's own builders (`applyShopifyVariationProjection`, `shopifyVariantOptions`). */
+  const publishInputFor = (cell: ReturnType<typeof cellFor>, fits: Record<string, string> = {}) => {
+    const c = applyShopifyVariationProjection(content(), cell)
+    const ownKeys = cell.axes.filter(a => a.included && a.own).map(a => a.familyKey)
+    const vs: ContentVariant[] = products.map((p, i) => ({ id: p.id, sku: p.sku, price: '10.00', stock: i + 1,
+      options: shopifyVariantOptions({ categoryAttributes: { ...p.categoryAttributes, ...(fits[p.id] ? { fit: fits[p.id] } : {}) } }, ['Colour'], ownKeys) }))
+    return { c, vs }
+  }
+
+  it('🔴 the option list and every variant\'s value equal the cell\'s summary, and the read-back verifies', async () => {
+    const cell = cellFor()
+    const fit = cell.axes.find(a => a.familyKey === FIT)!
+    expect(fit.unbound).toBeUndefined()
+    const { c, vs } = publishInputFor(cell)
+    expect(c.axes).toEqual(['Colour', FIT])
+    expect(c.optionNames).toEqual({ Colour: 'Colour', [FIT]: 'Fit' })
+    const shop = fakeShopify(c)
+    const result = await publishContent(shop.gql, { ...input(c), variants: vs }, async () => {})
+    expect(result.status).toBe('VERIFIED')
+    const write = shop.calls.find(call => call.name === 'NexusProductSet')!.variables.input
+    // the Shopify option is named as the pop-up names it — never the stored key
+    expect(write.productOptions.map((o: any) => o.name)).toEqual(['Colour', 'Fit'])
+    const sent = write.productOptions.find((o: any) => o.name === 'Fit').values.map((v: any) => v.name)
+    expect([...sent].sort()).toEqual([...cell.valueSummary![FIT].values].sort())
+    expect(cell.valueSummary![FIT]).toMatchObject({ filled: 4, of: 4 })
+    for (const variant of write.variants) {
+      const product = products.find(p => p.sku === variant.sku)!
+      expect(variant.optionValues).toEqual([{ optionName: 'Colour', name: product.categoryAttributes.variations.Colour }, { optionName: 'Fit', name: product.categoryAttributes.fit }])
+    }
+    expect(JSON.stringify(write)).not.toContain('own:shared')
+  })
+
+  it('an option value longer than Shopify takes is refused before any call, naming the option — never its key', async () => {
+    const cell = cellFor()
+    const long = 'x'.repeat(SHOPIFY_OPTION_VALUE_MAX + 1)
+    const { c, vs } = publishInputFor(cell, { rr: long })
+    const sentence = `RED-REG: the Fit value is longer than Shopify’s ${SHOPIFY_OPTION_VALUE_MAX} characters. Shorten it on the Shared product.`
+    expect(shopifyOptionValueProblems(c, vs)).toEqual([sentence])
+    const gql = vi.fn()
+    await expect(publishContent(gql, { ...input(c), variants: vs }, async () => {})).rejects.toThrow(sentence)
+    expect(gql).not.toHaveBeenCalled()
+    // the limit itself is allowed (positive control: the check is not "any long value")
+    expect(shopifyOptionValueProblems(c, publishInputFor(cell, { rr: 'x'.repeat(SHOPIFY_OPTION_VALUE_MAX) }).vs)).toEqual([])
   })
 })

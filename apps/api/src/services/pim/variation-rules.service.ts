@@ -251,6 +251,13 @@ export const VT_COPY = {
     `Live on eBay ${site} (item ${id}) — changing the set relists it. Reordering does not.`,
   genericLock: (channelName: string, market: string, id: string) =>
     `Live on ${channelName} ${market} (${id}) — changing the set is an operation. Commit opens the plan.`,
+  /**
+   * Sheet pop-up P3b, slice A4 (QUALITY-PLAN §4.11, the Owner's D1 a) — a product already on Shopify: Nexus has no
+   * option create / update / delete call and refuses every change-only publish to it (`studio-publication.service.ts`),
+   * so a saved order would never reach the store. Its options AND their order are locked here.
+   */
+  shopifyLock: (market: string, id: string) =>
+    `Live on Shopify ${market} (${id}). Nexus cannot change the options of a product already on Shopify yet, so its options and their order are locked here.`,
   /** No listing here yet (product-sheet create path, step 4): the first save starts the coordinate's draft. */
   draftNote: (channelName: string, market: string) => `Saved to the ${channelName} · ${market} draft. Publish sends it.`,
   /** The draft creator's own refusal (`ensureDraftListings`), word for word, so the cell and the save agree. */
@@ -276,6 +283,7 @@ export const VT_COPY = {
   amazonOwnAxes: 'Amazon decides the axes. Choose a theme from its list.',
   ownNotYet: (channelName: string) => `Axes that exist only on ${channelName} are not available yet.`,
   etsyOwnFromAttribute: 'An Etsy-only property takes its values from an attribute.',
+  shopifyOwnFromAttribute: 'A Shopify-only option takes its values from an attribute.',
 } as const
 
 /** Amazon joins delivered names with ` / `; every other channel with a middot (design §3.3). */
@@ -431,7 +439,7 @@ function lockFor(input: ResolveVariationInput): VariationThemeCell['locked'] {
     return { reason: VT_COPY.ebayLock(coordinate.market, id), externalId: id, setChangeIs: 'relist', orderChangeAllowed: true, lockedAxisKeys }
   }
   if (channel === 'SHOPIFY') {
-    return { reason: VT_COPY.genericLock('Shopify', coordinate.market, id), externalId: id, setChangeIs: 'in-place', orderChangeAllowed: true, lockedAxisKeys }
+    return { reason: VT_COPY.shopifyLock(coordinate.market, id), externalId: id, setChangeIs: 'in-place', orderChangeAllowed: false, lockedAxisKeys }
   }
   return { reason: VT_COPY.genericLock(channelDisplayName(channel), coordinate.market, id), externalId: id, setChangeIs: 'relist', orderChangeAllowed: false, lockedAxisKeys }
 }
@@ -563,13 +571,13 @@ function resolveMaster(input: ResolveVariationInput): VariationThemeCell {
 }
 
 /**
- * Sheet pop-up P3 — may this channel take an axis under a typed name? eBay (P3-D1 b) and Etsy (its two custom
- * variation slots) may; Amazon never (its themes only, the Owner's rule); Shopify's own options arrive with P3b,
- * so until then the pop-up offers none and a stored one is refused with this reason (no silent drop at publish).
+ * Sheet pop-up P3 — may this channel take an axis under a typed name? eBay (P3-D1 b), Etsy (its two custom variation
+ * slots) and Shopify (P3b, slice A4: a free option name ≤ 255, values from a Shared per-variant attribute) may; Amazon
+ * never (its themes only, the Owner's rule). Any other channel is refused with this reason (no silent drop at publish).
  */
 function ownNamesFor(channel: string, limits: ProjectionLimits | undefined, refused?: string[]): VariationThemeCell['ownNames'] {
   const maxLength = limits?.nameLength ?? null
-  if (channel === 'EBAY' || channel === 'ETSY') return { allowed: true, maxLength, reason: null, ...(refused?.length ? { refused: refused.map(name => ({ name, reason: VT_COPY.ebayNotForVariations(name) })) } : {}) }
+  if (channel === 'EBAY' || channel === 'ETSY' || channel === 'SHOPIFY') return { allowed: true, maxLength, reason: null, ...(refused?.length ? { refused: refused.map(name => ({ name, reason: VT_COPY.ebayNotForVariations(name) })) } : {}) }
   if (channel === 'AMAZON') return { allowed: false, maxLength: null, reason: VT_COPY.amazonOwnAxes }
   return { allowed: false, maxLength, reason: VT_COPY.ownNotYet(channelDisplayName(channel)) }
 }
@@ -617,7 +625,9 @@ function namedOwnAxis(key: string, own: OwnAxisSource, typedName: string | null,
   const policy = ownNamesFor(channel, input.limits)
   const problem = !policy.allowed ? policy.reason
     : channel === 'ETSY' && own.from !== 'shared' ? VT_COPY.etsyOwnFromAttribute
-      : ownNameProblem(name, channel, input.vocabulary.axisNoun, policy.maxLength)
+      /* A4 — Shopify has no option list of its own: an own option is a typed name over a Shared attribute's values. */
+      : channel === 'SHOPIFY' && own.from !== 'shared' ? VT_COPY.shopifyOwnFromAttribute
+        : ownNameProblem(name, channel, input.vocabulary.axisNoun, policy.maxLength)
   return { axisKey: canonicalVariantAxis(key), familyKey: key, label: name || humanise(own.field), channelName: name || humanise(own.field), target: name || null, included: true,
     own: { ...own, custom: true }, ...(problem ? { unbound: { reason: problem } } : {}) }
 }

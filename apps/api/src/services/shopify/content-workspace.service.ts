@@ -6,7 +6,9 @@ import { canonicalVariantAxis } from '../pim/variant-attribute-keys.js'
 import { getVariationRule, parseMappingWithWarnings } from '../pim/schema-mapping.service.js'
 import { resolveVariationProjection } from '../pim/variation-rules.service.js'
 import { limitsFor, vocabularyFor } from '../pim/family-projection-limits.js'
-import { parseVariationMapping, variationMappingOrder } from '@nexus/shared/variation-mapping'
+import { isOwnAxisKey, parseVariationMapping, variationMappingOrder } from '@nexus/shared/variation-mapping'
+import { ownAxisValuesFor } from '../pim/variation-own-axes.js'
+import { shopifyOptionValueProblems } from './content-publisher.js'
 import { marketLanguages } from '../pim/market-languages.js'
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -25,13 +27,31 @@ import { mediaLayoutFor } from '../images/media-plan.service.js'
 import { applyMediaPlanToShopifyContent } from './media-plan-content.js'
 import type { ShopifyMediaLayout } from '@nexus/shared/media-plan-channels'
 
-/** Stable family keys in the explicitly selected order; omissions remain omitted. */
+/**
+ * Stable family keys in the explicitly selected order; omissions remain omitted. A Shopify-only option (P3b, slice A4 —
+ * `own:shared:<attribute>`) keeps its stored key in its place: dropping it here would publish the family without it.
+ */
 export function shopifyAxisOrder(familyAxes: string[], variationMapping: unknown): string[] {
   if (!hasVariationMappingOverride(variationMapping)) return familyAxes
   return parseVariationMapping(variationMapping).entries.flatMap(entry => {
+    if (isOwnAxisKey(entry.axisKey)) return [entry.axisKey]
     const key = familyAxes.find(key => canonicalVariantAxis(key) === canonicalVariantAxis(entry.axisKey))
     return key ? [key] : []
   })
+}
+
+/**
+ * One variant's Shopify option values: the family axes from the Shared store (as before), and every Shopify-only option
+ * this coordinate delivers (A4) through the ONE own-axis reader (`variation-own-axes.ts`) — the reader the sheet cell,
+ * the save's gap and collision checks and the other publishers use, so what the pop-up counts is what is sent.
+ */
+export function shopifyVariantOptions(product: { categoryAttributes: unknown; variantAttributes?: unknown }, familyAxes: string[], ownKeys: readonly string[]): Record<string, string> {
+  const stored = { categoryAttributes: product.categoryAttributes, variantAttributes: product.variantAttributes ?? {} }
+  return {
+    ...variationBag(stored) as Record<string, string>,
+    ...storedVariationValues(stored, familyAxes),
+    ...ownAxisValuesFor(ownKeys, null, product.categoryAttributes),
+  }
 }
 
 export function applyShopifyVariationProjection(draft: ShopifyContent, projection: ReturnType<typeof resolveVariationProjection>): ShopifyContent {
@@ -88,6 +108,8 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
     rule: storedRule ? { label: storedRule.rule.label ?? 'Channel variations', category: storedRule.scope === 'category' ? category : null, mapping: storedRule.rule.axes } : null,
     schema: {}, limits: limitsFor('SHOPIFY'), vocabulary: vocabularyFor('SHOPIFY') })
   draft = applyShopifyVariationProjection(draft, projection)
+  // A4 — the Shopify-only options this coordinate delivers (a stored override or a category rule), in the draft's keys.
+  const ownOptionKeys = projection.axes.filter(a => a.included && isOwnAxisKey(a.familyKey)).map(a => a.familyKey)
   const publish = object(pa[PUBLISH_KEY])
   const mediaFiles = await tx.productImage.findMany({ where: { productId: { in: [family.id, ...family.children.map(c => c.id)] } }, select: { id: true, productId: true, url: true, mediaType: true, alt: true, updatedAt: true } })
   // Images rebuild P2f — a family on the media plan publishes the plan's Shopify layout instead of the sheet galleries.
@@ -105,10 +127,10 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
     const followed = sellable.get(p.id) ?? p.totalStock
     const stock = offer && !offer.followMasterQuantity ? offer.quantityOverride ?? offer.quantity ?? followed : followed
     const compareAtPrice = nativeListingValue(offer, 'compareAtPrice')
-    return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: { ...variationBag({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }) as Record<string, string>, ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
+    return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: shopifyVariantOptions({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes, ownOptionKeys), price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
   })
   const revision = digest([family, market?.schemaMapping, mediaFiles, listings.map(l => [l.id, l.version, l.platformAttributes, l.priceOverride, l.quantityOverride, l.price, l.quantity, l.followMasterPrice, l.followMasterQuantity, l.stockBuffer])])
-  const errors = inspectShopifyContent(draft, variants)
+  const errors = [...inspectShopifyContent(draft, variants), ...shopifyOptionValueProblems(draft, variants)]
   if (!family.children.length && (family.isParent || family.isMaster)) errors.push('This family has no sellable child products. Add its variants before publishing.')
   return { family, listing, listings, variants, draft, revision, storedDocumentRevision: digest(pa[CONTENT_KEY]), publish, errors, destination }
 }
