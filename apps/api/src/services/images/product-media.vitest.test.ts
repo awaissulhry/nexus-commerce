@@ -23,6 +23,9 @@ vi.mock('../pim/workspace-destination.js', async importOriginal => ({ ...await i
 // The draft creator's own rules run on PostgreSQL (draft-listing.service tests). Here it stands in for the one creator:
 // it starts an inert draft row for the product (the family is the product alone in this fixture).
 vi.mock('../pim/draft-listing.service.js', async importOriginal => ({ ...await importOriginal<object>(), ensureDraftListings: mocks.ensure }))
+// The database is a stand-in here, so the live "media changed" event is too; media-popup-save.vitest.test.ts proves it
+// (the real bus needs a business profile, which every real save has).
+vi.mock('../listing-events.service.js', () => ({ publishListingEvent: vi.fn() }))
 import { readProductMedia, saveProductMedia, copyProductMedia } from './product-media.service.js'
 const context = { productId: 'p1', scope: 'MASTER', market: 'GLOBAL', locale: 'it' }
 const collection = { version: 1 as const, items: [{ assetId: 'video1', alt: 'Video italiano', captions: [{ language: 'it', label: 'Italiano', url: 'https://cdn.example/it.vtt' }] }] }

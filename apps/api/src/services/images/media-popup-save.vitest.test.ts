@@ -7,14 +7,17 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * saving the same set at the same moment give ONE winner — never a silent overwrite. On PGlite (one connection) the two
  * saves run one after the other; scripts/run-real-postgres-tests.mjs runs this file on PostgreSQL 17, where they race.
  */
-const state = vi.hoisted(() => ({ db: null as any, events: [] as Array<{ type: string; productId: string; layer: string }> }))
+const state = vi.hoisted(() => ({ db: null as any, events: [] as Array<{ type: string; productId: string; layer: string }>, failNextEvent: false }))
 vi.mock('@nexus/database', async () => {
   const { concurrentDatabase, concurrentDatabaseUrl } = await import('../../test-support/concurrent-database.js')
   const { formulaDatabase } = await import('../../test-support/formula-database.js')
   state.db = concurrentDatabaseUrl() ? await concurrentDatabase() : await formulaDatabase()
   return { default: state.db.client }
 })
-vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: { type: string; productId: string; layer: string }) => { state.events.push(event) } }))
+vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: { type: string; productId: string; layer: string }) => {
+  if (state.failNextEvent) { state.failNextEvent = false; throw new Error('the event bus is down') }
+  state.events.push(event)
+} }))
 vi.mock('../product-event.service.js', () => ({ productEventService: { emit: async () => undefined } }))
 
 import prisma from '../../db.js'
@@ -106,7 +109,7 @@ describe('the older gallery\'s one save (C2)', () => {
 
 describe('real time for the older gallery (C3, Owner D2 = a)', () => {
   const context = { scope: 'MASTER', market: 'GLOBAL', locale: 'it' } as const
-  it('a save tells every open screen (the family root, layer GALLERY); a refused save tells nobody; a variant\'s save names its parent', async () => {
+  it('a save tells every open screen (the family root, layer GALLERY); a refused save tells nobody; a variant\'s save names its parent; an event that cannot be sent never fails the save', async () => {
     const opened = await scoped(() => readProductMedia({ ...context, productId: ids.cap }))
     state.events.length = 0
     await scoped(() => saveProductMedia({ ...context, productId: ids.cap }, { expectedRevision: opened.revision, collection: { version: 1, items: [{ assetId: img['cap-front'] }] } }))
@@ -121,5 +124,11 @@ describe('real time for the older gallery (C3, Owner D2 = a)', () => {
     expect(read.assets.length).toBeGreaterThan(0)
     await scoped(() => saveProductMedia({ ...context, productId: variant }, { expectedRevision: read.revision, collection: { version: 1, items: [{ assetId: read.assets[0].id }] } }))
     expect(state.events).toEqual([expect.objectContaining({ type: 'product.media.changed', productId: ids.cap, layer: 'GALLERY' })])
+    // The event cannot be sent: the save is committed, so it still answers the saved list — never "not saved".
+    const now = await scoped(() => readProductMedia({ ...context, productId: variant }))
+    state.failNextEvent = true
+    const saved = await scoped(() => saveProductMedia({ ...context, productId: variant }, { expectedRevision: now.revision, collection: { version: 1, items: [] } }))
+    expect(saved.collection.items).toEqual([])
+    expect((await scoped(() => readProductMedia({ ...context, productId: variant }))).revision).toBe(saved.revision)
   })
 })

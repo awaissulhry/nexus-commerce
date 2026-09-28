@@ -10,6 +10,7 @@ import { resolveWorkspaceDestination, WorkspaceScopeError } from '../pim/workspa
 import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { publishListingEvent } from '../listing-events.service.js'
+import { logger } from '../../utils/logger.js'
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type Input = ProductMediaQuery & { productId: string }
@@ -56,10 +57,16 @@ export async function readProductMedia(input: Input) {
 
 /**
  * A saved list is told to every open screen — the same live event the photo plan sends (Lane C, Owner D2 = a, 2026-09-28) —
- * keyed by the family root, so every sheet of the family reads its cells again. Sent only after the commit.
+ * keyed by the family root, so every sheet of the family reads its cells again. Sent only after the commit, and it never
+ * turns a committed save into a failure: an event that cannot be sent is logged; open screens read it on their next load.
  */
 function announce(rootId: string | null) {
-  if (rootId) publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'GALLERY', ts: Date.now() })
+  if (!rootId) return
+  try {
+    publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'GALLERY', ts: Date.now() })
+  } catch (error) {
+    logger.warn('[product-media] saved, but the live update could not be sent', { productId: rootId, reason: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 export async function saveProductMedia(input: Input, body: unknown) {
