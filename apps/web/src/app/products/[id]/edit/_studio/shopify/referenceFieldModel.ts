@@ -127,15 +127,30 @@ export function referenceChoice(ref: ShopifyReference): MediaChoice {
 }
 
 /**
+ * Choices for a list of references. Two entries with one name — an entry and its copy — are told apart by their handle,
+ * shown as the second line only then: an entry is otherwise named by its display name alone (B4, seen on a development store).
+ */
+export function referenceChoices(refs: readonly ShopifyReference[]): MediaChoice[] {
+  const named = new Map<string, number>()
+  for (const ref of refs) if (ref.id.includes('/Metaobject/')) named.set(ref.label, (named.get(ref.label) ?? 0) + 1)
+  return refs.map(ref => {
+    const choice = referenceChoice(ref)
+    return ref.id.includes('/Metaobject/') && ref.handle && (named.get(ref.label) ?? 0) > 1 ? { ...choice, detail: ref.handle } : choice
+  })
+}
+
+/**
  * Chosen values as choices, in the field's order. A value whose name has not arrived yet shows the kind's word ("Loading
  * product…"), never its raw id; one the store does not have is marked unknown and kept until it is removed.
  */
 export function chosenChoices(values: readonly string[], names: readonly ShopifyReference[], noun: { one: string }, failed: boolean): Array<MediaChoice & { unknown?: boolean }> {
   const byId = new Map(names.map(n => [n.id, n]))
+  const known = values.map(id => byId.get(id)).filter((ref): ref is ShopifyReference => !!ref)
+  const choices = new Map(referenceChoices(known).map(choice => [choice.value, choice]))
   return values.map(id => {
     const ref = byId.get(id)
     if (!ref) return { value: id, label: failed ? `${noun.one[0].toUpperCase()}${noun.one.slice(1)} preview unavailable` : `Loading ${noun.one}…` }
-    const choice = referenceChoice(ref)
+    const choice = choices.get(id)!
     return ref.available === false ? { ...choice, unknown: true } : choice
   })
 }
