@@ -63,7 +63,8 @@ export const LAB_TAXONOMY_VALUES: Array<ShopifyReference & { attribute: 'color' 
     .map((label, i) => ({ ...resource('TaxonomyValue', 9101 + i, label, null, { handle: undefined }), attribute: 'pattern' as const })),
 ]
 const taxonomy = (label: string) => LAB_TAXONOMY_VALUES.find(value => value.label === label)!.id
-export const LAB_CATEGORIES = [labGid('TaxonomyCategory', 'lab-1'), labGid('TaxonomyCategory', 'lab-2')]
+/** Made-up category codes, bare, as a real definition's category constraint holds them (`aa-1-13`; measured 2026-09-28). */
+export const LAB_CATEGORIES = ['zz-1', 'zz-2']
 
 /* ── 2a. Entry kinds: a mirror of a real store's 23 kinds (field types, required, file limits), plus one for disclosures. ── */
 

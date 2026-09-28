@@ -7,7 +7,7 @@
  * Fields that need a type chosen first, or a raw id (taxonomy values), keep the older picker (`legacy`).
  */
 import type { ShopifyFieldDefinition, ShopifyReference, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { shopifyNoun, shopifyReferenceTypes } from '@nexus/shared/shopify-linked-products'
+import { shopifyNoun, shopifyReferenceTypes, shopifyTaxonomyCategories } from '@nexus/shared/shopify-linked-products'
 import type { MediaChoice } from '@/design-system/components'
 
 export type ReferenceUi = 'entries' | 'resources' | 'legacy'
@@ -28,11 +28,13 @@ export function singleEntryType(def: Pick<ShopifyFieldDefinition, 'type' | 'vali
   return types && types.length === 1 ? types[0] : null
 }
 
-export function referenceUiFor(def: Pick<ShopifyFieldDefinition, 'type' | 'validations'>, schema: ShopifyStoreSchema): ReferenceUi {
+export function referenceUiFor(def: Pick<ShopifyFieldDefinition, 'type' | 'validations'> & Partial<Pick<ShopifyFieldDefinition, 'ownerType' | 'namespace' | 'constraints'>>, schema: ShopifyStoreSchema): ReferenceUi {
   const base = baseReferenceType(def.type)
   if (base === 'metaobject_reference') return singleEntryType(def, schema) ? 'entries' : 'legacy'
-  /* A taxonomy value with its attribute named ("color", "pattern") picks from Shopify's list of that attribute (B2, G12). */
-  if (base === 'product_taxonomy_value_reference') return def.validations.some(v => v.name === 'product_taxonomy_attribute_handle') ? 'entries' : 'legacy'
+  /* A taxonomy value with its attribute named ("color", "pattern") picks from Shopify's list of that attribute (B2, G12).
+     Shopify lists those values only through a category: a field with no category it applies to keeps the older picker,
+     where a value can still be entered, instead of a list that can only say it is empty. */
+  if (base === 'product_taxonomy_value_reference') return def.validations.some(v => v.name === 'product_taxonomy_attribute_handle') && shopifyTaxonomyCategories({ ownerType: def.ownerType ?? 'PRODUCT', namespace: def.namespace ?? '', constraints: def.constraints ?? null }, schema).length ? 'entries' : 'legacy'
   if ((RESOURCE_TYPES as readonly string[]).includes(base)) return 'resources'
   return 'legacy'
 }

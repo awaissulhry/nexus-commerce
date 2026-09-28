@@ -1,11 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { shopifyTypeReason, validateShopifyField, type ShopifyReusableEntry, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import { shopifyTypeReason, type ShopifyReusableEntry, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { Banner, Disclosure, Field, Modal } from '@/design-system/components'
 import { Button, Input, Select } from '@/design-system/primitives'
 import { LinkedFieldEditor } from './LinkedFieldEditor'
 import { linkedEndpoint, linkedRequest } from './api'
-import { ENTRY_HANDLE, entryHandle, entryDisplayKey } from './entryHandle'
+import { ENTRY_HANDLE, entryHandle, entryDisplayKey, entrySaveProblems } from './entryHandle'
 import styles from './linked.module.css'
 
 /** A nested entry opened from one of this entry's fields: an existing one to edit, or a new one for that field (B2). */
@@ -44,11 +44,8 @@ export function EntryEditor({ id, copy = false, initialType, path, schema, canPu
     return () => controller.abort()
   }, [id, path, copy])
   const close = () => { if (busy) return; if (dirty) setDiscard(true); else onClose() }
-  /** Every writable field against its rules, as it would be sent. */
-  const problems = (definition?.fields ?? []).filter(def => !unwritable.includes(def)).flatMap(def => {
-    const problem = validateShopifyField(def, valueOf(def.key))
-    return problem ? [{ def, problem }] : []
-  })
+  /** What stops the save: the server's own checks, on what this save sends (a copy sends every field it can write). */
+  const problems = entrySaveProblems((definition?.fields ?? []).filter(def => !unwritable.includes(def)), valueOf, key => copying || Object.prototype.hasOwnProperty.call(fields, key))
   const review = () => {
     setTried(true)
     if (creating && !copying && !ENTRY_HANDLE.test(handle)) { setError('Use small letters, digits and hyphens in the handle, for example water-repellent.'); return }
@@ -92,7 +89,7 @@ export function EntryEditor({ id, copy = false, initialType, path, schema, canPu
         {copying ? <Banner tone="info" title="Separate content for this reference">The copy can have its own images and text. Its replacement reference will be staged in your draft after creation. Nested reusable entries stay shared.{unwritable.length > 0 && ` Not copied, because Nexus cannot write ${unwritable.length === 1 ? 'it' : 'them'}: ${unwritable.map(f => f.name).join(', ')}.`}</Banner>
           : entry && <Banner tone="neutral" title="Shared reusable content">{entry.moreUses ? `This entry has at least ${entry.usedBy.length} references.` : `This entry has ${entry.usedBy.length} ${entry.usedBy.length === 1 ? 'reference' : 'references'}.`} Changes affect every reference to this entry.{entry.usedBy.length > 0 && <Disclosure summary="Where this entry is used"><ul>{entry.usedBy.map((u, i) => <li key={`${u.id}-${i}`}>{u.label}</li>)}</ul>{entry.moreUses && <p>Additional references exist beyond the first 100 shown here.</p>}</Disclosure>}</Banner>}
         {definition?.fields.map(def => <section key={def.key} className={styles.field} aria-label={def.name}>{(def.type.startsWith('list.') || def.type.endsWith('_reference') || ['money', 'rating', 'link', 'rich_text_field'].includes(def.type)) && <h3>{def.name}</h3>}
-          <LinkedFieldEditor path={path} schema={schema} definition={def} value={valueOf(def.key)} disabled={busy || !canPublish} showErrors={tried} multiLineHint="Enter adds a line" referenceVersion={referenceVersion}
+          <LinkedFieldEditor path={path} schema={schema} definition={def} value={valueOf(def.key)} disabled={busy || !canPublish} showErrors={tried && problems.some(p => p.def === def)} multiLineHint="Enter adds a line" referenceVersion={referenceVersion}
             onOpenEntry={copying ? undefined : entryId => setNested({ id: entryId })}
             onCreateEntry={canPublish ? entryType => setNested({ id: null, type: entryType, fieldKey: def.key }) : undefined}
             onChange={v => { setFields(old => ({ ...old, [def.key]: v })); setSaved(false) }} /></section>)}

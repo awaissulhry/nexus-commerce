@@ -149,6 +149,9 @@ test('a new category Color entry: plain rules only after the first try, taxonomy
   await expect(baseColor.getByRole('option', { name: /Solid/ })).toHaveCount(0)
   const basePattern = editor.getByRole('region', { name: 'Base pattern' })
   await basePattern.getByRole('option', { name: /Solid/ }).click()
+  /* A taxonomy value is Shopify's own data, not an entry: nothing offers to edit or copy it (B2 review). */
+  await expect(baseColor.getByRole('button', { name: /Edit entry|Make a separate copy/ })).toHaveCount(0)
+  await expect(basePattern.getByRole('button', { name: /Edit entry|Make a separate copy/ })).toHaveCount(0)
   await editor.getByRole('button', { name: 'Review entry changes' }).click()
   await page.getByRole('dialog', { name: 'Save reusable entry to Shopify?' }).getByRole('button', { name: 'Save to Shopify' }).click()
   await expect(editor).toHaveCount(0)
