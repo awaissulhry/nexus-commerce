@@ -7,7 +7,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   flatVariationMapping,
+  isOwnAxisKey,
   orderedVariationMapping,
+  ownAxisKey,
+  parseOwnAxisKey,
   parseVariationMapping,
   setVariationMappingTarget,
   variationMappingAxisKeys,
@@ -138,5 +141,30 @@ describe('setVariationMappingTarget — a per-axis editor must not drop the orde
     expect(setVariationMappingTarget(FLAT, 'Style', 'style').axes.map(e => e.axisKey)).toEqual(['Colore', 'Taglia', 'Style'])
     expect(setVariationMappingTarget(FLAT, 'Colore', '  ').axes).toEqual([{ axisKey: 'Taglia', target: 'size', order: 0 }])
     expect(setVariationMappingTarget(null, 'Colore', 'color').axes).toEqual([{ axisKey: 'Colore', target: 'color', order: 0 }])
+  })
+})
+
+describe('channel-only axes (sheet pop-up P3) — the key names where the values live', () => {
+  it('round-trips both sources, keeping the field exactly as the column spells it', () => {
+    expect(ownAxisKey({ from: 'channel', field: 'scollatura' })).toBe('own:channel:scollatura')
+    expect(parseOwnAxisKey('own:shared:item_type_name')).toEqual({ from: 'shared', field: 'item_type_name' })
+    expect(parseOwnAxisKey(ownAxisKey({ from: 'channel', field: 'Fit Type' }))).toEqual({ from: 'channel', field: 'Fit Type' })
+  })
+
+  it('reads every key written before P3 as a family axis', () => {
+    for (const key of ['Colore', 'size', 'own', 'own:', 'own:channel:', 'own:other:x', 'channel:size', '', null, 7]) {
+      expect(parseOwnAxisKey(key)).toBeNull()
+      expect(isOwnAxisKey(key)).toBe(false)
+    }
+  })
+
+  it('travels through both stores unchanged, in its delivery position', () => {
+    const stored = orderedVariationMapping([
+      { axisKey: 'Colore', target: 'Color', order: 0 },
+      { axisKey: 'own:shared:fit', target: 'Fit', order: 1 },
+    ])
+    const parsed = parseVariationMapping(JSON.parse(JSON.stringify(stored)))
+    expect(parsed.entries.map(e => [e.axisKey, e.target, e.order])).toEqual([['Colore', 'Color', 0], ['own:shared:fit', 'Fit', 1]])
+    expect(isOwnAxisKey(parsed.entries[1]!.axisKey)).toBe(true)
   })
 })

@@ -53,3 +53,13 @@ describe('independent order property precedence', () => {
     expect(applyPresentationOrder([{ name: 'Size', key: '__dim1__', values: ['XL', 'M', 'S'] }], result.value)[0].values).toEqual(['S', 'M', 'XL'])
   })
 })
+
+describe('a stored channel-only axis (sheet pop-up P3)', () => {
+  it('is ranked under its eBay name, the name the resolved axes carry', () => {
+    const attrs = { _variationAxes: ['own:channel:scollatura', 'Colore'], _axisNameLabels: { 'own:channel:scollatura': 'Scollatura' } }
+    const result = resolvePresentationOrder([], context, attrs)
+    expect(result.value.axes).toEqual(['Scollatura', 'Colore'])
+    expect(applyPresentationOrder([{ name: 'Colore', key: 'c', values: [] }, { name: 'Scollatura', key: 's', values: [] }], result.value).map(a => a.name)).toEqual(['Scollatura', 'Colore'])
+  })
+})
+

@@ -43,6 +43,8 @@ import { EbayCategoryService } from './ebay-category.service.js'
 import { resolveChannelConnectionId } from './connection-resolver.service.js'
 import { resolveBatch } from './pim/mapping/resolve-batch.service.js'
 import { applyPresentationOrder } from './pim/mapping/presentation-rules.js'
+import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
+import { ebayRowAxes } from './pim/variation-own-axes.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -235,9 +237,12 @@ export async function resolveFamilyAxes(
   // this same change. Measured over all 38 eBay parent listing rows: this READ is identical on **37 of 38**, and the
   // one row that changes is GALE-JACKET eBay-IT (ACTIVE, item 938554736087), which read `["Color","Size"]` from that
   // column while the push has been sending `["Colore","Taglia"]` — the read now agrees with what ships.
-  const effective = parent.variationAxes.length ? (await loadStoredVariationProjection({ productId: parentProductId, channel: 'EBAY', market: marketplace, accountId: channelConnectionId, aliasKey })).cell : null
-  const declaredAxes: string[] | null = effective ? effective.axes.filter(a => a.included).map(a => a.familyKey) : ebayDeclaredAxes(pa, parent.variationTheme)
-  if (effective) for (const axis of effective.axes.filter(a => a.included)) nameLabels[axis.familyKey] = axis.channelName
+  const stored = parent.variationAxes.length ? await loadStoredVariationProjection({ productId: parentProductId, channel: 'EBAY', market: marketplace, accountId: channelConnectionId, aliasKey }) : null
+  // Sheet pop-up P3 — declared exactly as the push declares them (`ebayRowAxes`): a channel-only axis under its eBay
+  // name, a Shared-attribute one with its values on each row, so this read and what ships agree.
+  const rowAxes = stored ? ebayRowAxes(stored.cell.axes.filter(a => a.included), stored.input.family.variants, rowsForAxes as Array<Record<string, unknown>>) : null
+  const declaredAxes: string[] | null = rowAxes ? rowAxes.declared : ebayDeclaredAxes(pa, parent.variationTheme)?.map(axis => isOwnAxisKey(axis) ? nameLabels[axis] ?? axis : axis) ?? null
+  if (rowAxes) Object.assign(nameLabels, rowAxes.nameLabels)
 
   // D8 — the operator's explicit image-axis pick (Product.imageAxisPreference),
   // the SAME source the push passes as pictureAxisOverride.

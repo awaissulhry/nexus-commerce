@@ -80,3 +80,27 @@ describe('eBay order tab — restore inherited', () => {
     expect(ebayCell(next).axes.filter(a => a.included).map(a => a.axisKey)).toEqual(['color', 'size'])
   })
 })
+
+describe('eBay order tab — a channel-only axis (sheet pop-up P3)', () => {
+  const NECK = 'own:channel:scollatura'
+  const OWN = { _variationAxesMode: 'override', _variationAxes: ['Colore', 'Taglia', NECK], _axisNameLabels: { Colore: 'Colore', Taglia: 'Taglia', [NECK]: 'Scollatura' } }
+  const OWN_AXES = [...AXES, { name: 'Scollatura', key: axisSynonymKey('Scollatura'), values: ['V', 'Tondo'] }]
+
+  it('a reorder writes the axis back under its stored key, never its eBay name', () => {
+    const next = changePresentationOrder(OWN, { axes: ['Scollatura', 'Colore', 'Taglia'] }, OWN_AXES)
+    expect(next._variationAxes).toEqual([NECK, 'Colore', 'Taglia'])
+    expect(next._axisNameLabels).toEqual(OWN._axisNameLabels)
+  })
+
+  it('positive control: without the fix the name would be stored, and the resolver would read it as a family axis the family lacks', () => {
+    const named = { ...OWN, _variationAxes: ['Scollatura', 'Colore', 'Taglia'] }
+    expect(ebayCell(named).axes.find(a => a.channelName === 'Scollatura')?.unbound?.reason).toBe('The family has no Scollatura axis.')
+  })
+
+  it('restore inherited clears the channel-only axis with the rest', () => {
+    const next = changePresentationOrder(OWN, { axes: null }, OWN_AXES)
+    expect(next._variationAxes).toBeUndefined()
+    expect(next._variationAxesMode).toBe('inherit')
+  })
+})
+

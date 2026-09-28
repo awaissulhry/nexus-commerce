@@ -222,10 +222,35 @@ export function buildShopifyProductOptions(
   }))
 }
 
+/**
+ * Sheet pop-up P3b, slice A4 — the longest option VALUE this publisher sends. Shopify refuses long option values
+ * (OPTION_VALUE_NAME_TOO_LONG, shopify.dev Admin API 2026-07); the docs do not state the number — 255 matches the
+ * option-name limit and is checked here so the refusal comes before the call. Confirm on the development store (D2).
+ */
+export const SHOPIFY_OPTION_VALUE_MAX = 255
+
+/**
+ * A4 — every variant whose option value is longer than Shopify takes, as one sentence each, naming the OPTION (its
+ * Shopify name, never a stored key such as `own:shared:fit`). Read by the workspace's publish checks and again by
+ * `publishContent` before any write, so the preview and the send refuse in the same words.
+ */
+export function shopifyOptionValueProblems(content: Pick<ShopifyContent, 'axes' | 'optionNames'>, variants: Array<{ sku: string; options: Record<string, string> }>): string[] {
+  const problems: string[] = []
+  for (const variant of variants) {
+    for (const axis of content.axes) {
+      const value = variant.options[axis]
+      if (typeof value === 'string' && value.length > SHOPIFY_OPTION_VALUE_MAX) {
+        problems.push(`${variant.sku}: the ${content.optionNames?.[axis] ?? axis} value is longer than Shopify’s ${SHOPIFY_OPTION_VALUE_MAX} characters. Shorten it on the Shared product.`)
+      }
+    }
+  }
+  return problems
+}
+
 export interface PublishContentInput { identity: string; title: string; description: string; vendor: string; productType: string; tags?: string[]; content: ShopifyContent; variants: ContentVariant[]; locationId: string; remote: ShopifyRemoteProduct | null; confirmActive?: boolean; managedMediaIds?: string[]; reconcileGallery?: boolean; galleryOperation?: ContentGalleryOperation }
 export async function publishContent(gql: ShopifyGraphql, input: PublishContentInput, checkpoint: (patch: Record<string, unknown>) => Promise<void>) {
   const { content, variants, remote } = input
-  const problems = inspectShopifyContent(content, variants)
+  const problems = [...inspectShopifyContent(content, variants), ...shopifyOptionValueProblems(content, variants)]
   if (problems.length) throw new Error(problems.join('\n'))
   if (remote && remote.status !== 'DRAFT' && !input.confirmActive) throw new Error('This product is live or archived. Review the remote changes and explicitly approve synchronisation before continuing.')
   if (input.galleryOperation && !input.galleryOperation.verified) await resumeContentGallery(gql, input.galleryOperation, remote?.id, checkpoint)

@@ -101,6 +101,43 @@ export function parseVariationMapping(value: unknown): ParsedVariationMapping {
   return { shape: 'flat', entries }
 }
 
+/**
+ * Sheet pop-up P3 (the Owner, 2026-09-28: "I should be able to create custom [axes] … name them myself") — a
+ * CHANNEL-ONLY axis: an axis this coordinate delivers that the family does not have.
+ *
+ * Its KEY says where its values live, so neither store needs a second field and every existing reader keeps
+ * parsing it as the string it is:
+ *
+ *     own:channel:<column key>   each variant's cell of that column on THIS coordinate (an eBay aspect column)
+ *     own:shared:<attribute key> each variant's Shared per-variant attribute (`Product.categoryAttributes`)
+ *
+ * The key is stored as-is in `_variationAxes` (eBay) and in `variationMapping.axes[].axisKey` (the others); the
+ * channel NAME stays where every axis keeps it (`_axisNameLabels` / `target`). `canonicalVariantAxis` folds `_`
+ * away, so the FIELD is only ever parsed from the raw key a store holds, never from a canonical one.
+ */
+export interface OwnAxisSource {
+  from: 'channel' | 'shared'
+  field: string
+}
+
+const OWN_AXIS = /^own:(channel|shared):(.+)$/
+
+export function ownAxisKey(source: OwnAxisSource): string {
+  return `own:${source.from}:${source.field}`
+}
+
+/** `null` for a family axis (every key written before P3), and for anything that is not a string. */
+export function parseOwnAxisKey(key: unknown): OwnAxisSource | null {
+  if (typeof key !== 'string') return null
+  const match = OWN_AXIS.exec(key.trim())
+  if (!match || !match[2]!.trim()) return null
+  return { from: match[1] as OwnAxisSource['from'], field: match[2]!.trim() }
+}
+
+export function isOwnAxisKey(key: unknown): boolean {
+  return parseOwnAxisKey(key) !== null
+}
+
 /** The value a writer stores. Dense 0-based `order`, in the order given. */
 export function orderedVariationMapping(
   entries: ReadonlyArray<{ axisKey: string; target: string; order?: number }>,

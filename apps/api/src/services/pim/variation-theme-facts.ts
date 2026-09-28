@@ -258,7 +258,17 @@ export async function loadVariationProjectionInput(input: BuildVariationCellsInp
     const spec = category ? await loadEbaySpec(input.coordinate!.marketplace, [category]) : null
     schema.ebay = {
       categoryId: category,
-      aspects: (spec?.fields ?? []).filter(f => f.variantEligible).map(f => ({ name: ('path' in f.channelStore ? f.channelStore.path.at(-1) : null) ?? f.key, englishName: f.englishLabel ?? f.label, variantEligible: true, required: f.requirement === 'required' })),
+      // P3: `columnKey` is the aspect's column on THIS coordinate's sheet, so a channel-only axis `own:channel:<column>`
+      // finds its aspect and its values. The sheet keys a channel field by its master key, else by the master column its
+      // normalised key matches (`sheet-columns.service.ts` channel fields), so the served column is looked up here; with no
+      // columns (a publisher's read) the spec's own key stands and every reader compares keys canonically.
+      aspects: (spec?.fields ?? []).filter(f => f.variantEligible).map(f => {
+        const own = f.masterKey ?? f.key
+        const column = input.columns.find(c => c.variantEligible && canonicalVariantAxis(c.key) === canonicalVariantAxis(own))
+        return { name: ('path' in f.channelStore ? f.channelStore.path.at(-1) : null) ?? f.key, englishName: f.englishLabel ?? f.label, variantEligible: true, required: f.requirement === 'required', columnKey: column?.key ?? own }
+      }),
+      nonVariationAspects: (spec?.fields ?? []).filter(f => !f.variantEligible && f.group?.key === 'aspects')
+        .flatMap(f => [('path' in f.channelStore ? f.channelStore.path.at(-1) : null) ?? f.key, f.englishLabel ?? f.label].filter((n): n is string => typeof n === 'string' && !!n)),
       unavailableReason: !spec || spec.absent ? `The variation specifics for this category on ${input.coordinate!.marketplace} have not been loaded.` : null,
     }
   }

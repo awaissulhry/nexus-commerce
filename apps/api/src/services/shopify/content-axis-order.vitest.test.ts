@@ -31,6 +31,18 @@ describe('shopifyAxisOrder', () => {
     expect(shopifyAxisOrder(family, mapping)).toEqual(['Taglia'])
   })
 
+  it('P3b A4 — a Shopify-only option keeps its stored key IN ITS PLACE (dropping it would publish the family without it)', () => {
+    const mapping = { axes: [
+      { axisKey: 'Taglia', target: 'Size', order: 0 },
+      { axisKey: 'own:shared:fit', target: 'Fit', order: 1 },
+      { axisKey: 'Colore', target: 'Colour', order: 2 },
+    ] }
+    expect(shopifyAxisOrder(family, mapping)).toEqual(['Taglia', 'own:shared:fit', 'Colore'])
+    // an unknown FAMILY key is still never invented (control: the own key is kept because it is an own key, not blindly)
+    expect(shopifyAxisOrder(family, { axes: [{ axisKey: 'Materiale', target: 'Material', order: 0 }, { axisKey: 'own:shared:fit', target: 'Fit', order: 1 }] }))
+      .toEqual(['own:shared:fit'])
+  })
+
   it('keeps stable source keys and never invents a family axis', () => {
     const mapping = { axes: [{ axisKey: 'Taglia', target: 'Size', order: 0 }, { axisKey: 'Colore', target: 'Colour', order: 1 }] }
     expect([...shopifyAxisOrder(family, mapping)].sort()).toEqual(['Colore', 'Taglia'])

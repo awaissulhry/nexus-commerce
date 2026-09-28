@@ -55,6 +55,12 @@ import { ProvenanceMark } from '../renderers/provenanceMark'
 import { editorBox } from './editorBox'
 import { variationThemeChange } from './sheetWriter'
 import { axisRemovalRefusal, familyAxisFor, filterVariants, orderValues, valueOrderAfterDrag, type VariationFamilyLoader, type VariationFamilyState } from './variationFamily'
+import {
+  CHANNEL_AXES_COPY, channelAxisGapHint, channelAxisOrigin, channelAxisValues, channelSetChangeHeld, freeNameRefusal, newAttributeDoneLine, newAttributeHeld,
+  ownNameRefusal, remainingOwnCandidates, remainingSharedAxes, usesChannelAxesLayout, withOwnAxisSource, withOwnChannelAxis, withOwnSharedAxis,
+  withSharedAxis, withoutAxis,
+  type NewAttributeState, type OwnAxisAttributeCreator, type OwnAxisAttributeResult, type OwnAxisSourcesLoader, type OwnAxisSourcesState,
+} from './channelAxes'
 
 /* ── copy (Appendix A, verbatim — one source for every lane) ──────────────────────────────── */
 
@@ -290,6 +296,92 @@ export function axesReorder(cell: VariationThemeCell, order: string[]): AxesEdit
   return { ok: true, next: { ...cell, axes: reorderAxes(cell.axes, order) } }
 }
 
+/* ── P3 A2: Tab inside the pop-up ─────────────────────────────────────────────────────────── */
+
+/**
+ * Does Tab stay INSIDE the pop-up? Between its controls, yes; from the last (Tab) or the first (Shift+Tab), no — the grid
+ * keeps Tab there and moves on, as it does from every editor (the bullets editor's rule). `index -1` = the panel itself has
+ * focus (after a control removed itself), and Tab then goes to its first control.
+ */
+export function axesTabStaysInside(index: number, count: number, shift: boolean): boolean {
+  if (count === 0) return false
+  if (index < 0) return true
+  return shift ? index > 0 : index < count - 1
+}
+
+const AXES_FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * 🔴 The ColDef's `suppressKeyboardEvent` for this pop-up. AG owns Tab inside a popup editor and measured it: Tab left the
+ * eBay pop-up for the NEXT CELL, so a keyboard user could reach none of its controls. Returning `true` hands Tab to the
+ * browser while focus moves between the pop-up's own controls. Enter (save) and Esc (discard) stay AG's everywhere.
+ */
+export function suppressAxesPanelKeys({ event, editing }: { event: KeyboardEvent | { key: string; shiftKey?: boolean; target?: unknown }; editing: boolean }): boolean {
+  if (!editing || event.key !== 'Tab') return false
+  const target = event.target as HTMLElement | null
+  const panel = typeof target?.closest === 'function' ? target.closest<HTMLElement>('.nds-axes-editor') : null
+  if (!panel) return false
+  const focusables = Array.from(panel.querySelectorAll<HTMLElement>(AXES_FOCUSABLE)).filter((el) => el.offsetParent !== null)
+  return axesTabStaysInside(target === panel ? -1 : focusables.indexOf(target!), focusables.length, !!event.shiftKey)
+}
+
+/* ── P3 A3: "New attribute" in "Your own name" ─────────────────────────────────────────────── */
+
+export type NewAttributePhase =
+  | { phase: 'idle' }
+  | { phase: 'confirm' }
+  | { phase: 'creating' }
+  | { phase: 'done'; line: string }
+  | { phase: 'offer'; message: string }
+  | { phase: 'refused'; message: string }
+
+/**
+ * 🔴 P3 A3 (QUALITY-PLAN §4.10) — make the attribute an own name takes its values from, without leaving the sheet. Two steps
+ * on purpose: the first press only SAYS what happens (the family, how many products get the empty column, and that Esc
+ * does not take it back — it is written at once, outside the draft); "Create" writes. A held button keeps its reason on
+ * screen (no family, no permission, a name the channel refuses), never a dead control.
+ */
+export function NewOwnAttribute({ name, state, held, phase, onStart, onCreate, onUseExisting }: {
+  name: string
+  state: NewAttributeState
+  held: string | null
+  phase: NewAttributePhase
+  onStart: () => void
+  onCreate: () => void
+  onUseExisting: () => void
+}) {
+  const reasonId = useId()
+  if (phase.phase === 'creating') return <span className="nds-axes-familynote" role="status"><Spinner size={12} /> {CHANNEL_AXES_COPY.creating}</span>
+  if (phase.phase === 'done') return <p className="nds-axes-addnote" role="status">{phase.line}</p>
+  if (phase.phase === 'confirm' && !held) {
+    return (
+      <div className="nds-axes-newattr">
+        <p className="nds-axes-addnote" role="status">{CHANNEL_AXES_COPY.createLine(name, state.familyLabel ?? 'this product’s family', state.familyProducts ?? 1)}</p>
+        <Button size="sm" variant="secondary" onClick={onCreate}>{CHANNEL_AXES_COPY.create}</Button>
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="nds-axes-newattr">
+        <span className="nds-axes-addnote">{CHANNEL_AXES_COPY.noFit}</span>
+        <Button size="sm" variant="quiet" aria-disabled={held ? true : undefined} aria-describedby={held ? reasonId : undefined} title={held ?? undefined}
+          onClick={() => { if (!held) onStart() }}>
+          <Plus size={13} aria-hidden /> {name ? CHANNEL_AXES_COPY.newAttribute(name) : CHANNEL_AXES_COPY.newAttributeUnnamed}
+        </Button>
+      </div>
+      {held && <span id={reasonId} className="nds-axes-filterhint">{held}</span>}
+      {phase.phase === 'offer' && (
+        <div className="nds-axes-newattr">
+          <p className="nds-axes-refusal" role="alert">{phase.message}</p>
+          <Button size="sm" variant="secondary" onClick={onUseExisting}>{CHANNEL_AXES_COPY.useExisting}</Button>
+        </div>
+      )}
+      {phase.phase === 'refused' && <p className="nds-axes-refusal" role="alert">{phase.message}</p>}
+    </>
+  )
+}
+
 /* ── the panel ────────────────────────────────────────────────────────────────────────────── */
 
 export type AxesEditorHost = 'cell' | 'dock'
@@ -303,6 +395,17 @@ export interface AxesPanelProps {
    * still loading, the rows are today's. Channel scopes ignore it.
    */
   family?: VariationFamilyState
+  /**
+   * Sheet pop-up P3 A2 — "Values from" for an axis under the operator's own name (a CHANNEL cell, eBay / Etsy): the Shared
+   * per-variant attributes, read by the host when the panel asks (`onRequestOwnSources`). Other scopes ignore both.
+   */
+  ownSources?: OwnAxisSourcesState
+  onRequestOwnSources?: () => void
+  /**
+   * P3 A3 — "New attribute": the host makes (or places) a per-variant attribute in the product's family and answers with the
+   * new "Values from" entry. It writes at once, outside the draft; absent → the pop-up offers no such control.
+   */
+  onCreateOwnAttribute?: (name: string, useExisting: boolean) => Promise<OwnAxisAttributeResult>
   /** Called on EVERY change with the whole edited cell. The cell host wires this to `onValueChange`. */
   onChange: (next: VariationThemeCell) => void
   /**
@@ -318,7 +421,7 @@ export interface AxesPanelProps {
   style?: CSSProperties
 }
 
-export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer, width, maxHeight, style }: AxesPanelProps) {
+export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources, onCreateOwnAttribute, onChange, onPlanRequired, footer, width, maxHeight, style }: AxesPanelProps) {
   /**
    * 🔴 The BASELINE is captured once, at open — it is NOT the `cell` prop.
    *
@@ -340,6 +443,14 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
   /** A refused removal's sentence, shown until the next change (P2: the VT master rule, measured as missing 2026-09-27). */
   const [refusal, setRefusal] = useState<string | null>(null)
   const [variantQuery, setVariantQuery] = useState('')
+  /* P3 A2 — the channel layout's add panel and its "Your own name" form. */
+  const [addOpen, setAddOpen] = useState(false)
+  const [ownName, setOwnName] = useState('')
+  const [ownSource, setOwnSource] = useState('')
+  const [ownRefusal, setOwnRefusal] = useState<string | null>(null)
+  /* P3 A3 — "New attribute": where its short flow stands, and the "Add" it hands focus to once the attribute exists. */
+  const [newAttr, setNewAttr] = useState<NewAttributePhase>({ phase: 'idle' })
+  const ownAddButton = useRef<HTMLButtonElement | null>(null)
   /**
    * 🔴 The FIRST NON-EMPTY group opens, not always `Covers every axis`.
    *
@@ -377,6 +488,9 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
     if (host !== 'cell') return
     const el = root.current
     if (!el) return
+    /* A cell panel outside AG's popup layer (the design-system catalog) never takes the page's focus on load (A4: the
+       Shopify catalog example made the catalog page jump to it). In the sheet the popup is always its ancestor here. */
+    if (!agPopupHostOf(el)) return
     const first = el.querySelector<HTMLElement>('input, button, [tabindex]:not([tabindex="-1"])')
     ;(first ?? el).focus()
   }, [host])
@@ -402,9 +516,34 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
     setPopupHost(agPopupHostOf(root.current))
   }, [host])
 
+  /**
+   * 🔴 P3 A2 — KEEP focus in the popup after every change. A control that removes ITSELF (a row's ×, a "+ Add" option that
+   * leaves its list once added) drops focus to `<body>`, and Chrome sends no focusout for a removed element — so AG's Enter
+   * and Esc stopped reaching the editor: measured on the eBay cell, Esc after × left the pop-up open. Focus inside the popup
+   * (its Listbox panels are portalled into `popupHost`) is left where it is.
+   */
+  const [draftStamp, setDraftStamp] = useState(0)
+  useEffect(() => {
+    /* Only inside AG's popup layer: a cell panel shown anywhere else (the design-system catalog) never takes the page's
+       focus on load (A4, measured while adding the Shopify catalog example). */
+    if (host !== 'cell' || !popupHost) return
+    const el = root.current
+    if (!el || typeof document === 'undefined') return
+    const active = document.activeElement
+    if (!active || active === document.body || !(popupHost ?? el).contains(active)) el.focus()
+    /* P3 A3 — the "New attribute" steps replace their own buttons too (Create → the result line), so they re-run this. */
+  }, [draftStamp, newAttr.phase, host, popupHost])
+
   const master = isMasterProjection(baseline)
   const amazon = draft.candidates?.kind === 'theme-enum'
   const change = variationThemeChange(baseline, draft)
+  /** P3 A2 — the sheet's eBay / Etsy cell: rows with their values, and axes from Shared, the channel's list or a typed name. */
+  const channelLayout = host === 'cell' && usesChannelAxesLayout(baseline)
+  const sources = ownSources?.state === 'ready' ? ownSources.sources : undefined
+  /* A stored axis under the operator's own name shows its attribute's label: read the sources once when there is one. */
+  useEffect(() => {
+    if (channelLayout && baseline.axes.some((a) => a.own?.from === 'shared')) onRequestOwnSources?.()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once per opening
 
   /**
    * 🔴 The ONE report path. Every mutation goes through here, so `onChange` cannot be forgotten on a
@@ -417,6 +556,7 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
          nothing while the editor's own footer says `order`. */
       const next: VariationThemeCell = { ...raw, baseline, collisions: variationThemeChange(baseline, raw).kind === 'none' ? baseline.collisions : null }
       setDraft(next)
+      setDraftStamp((n) => n + 1)
       const moved = variationThemeChange(baseline, next)
       if (next.locked && moved.kind !== 'none' && !(moved.orderOnly && next.locked.orderChangeAllowed)) {
         onPlanRequired?.({ cell: baseline, draft: next, reason: next.locked.reason })
@@ -606,6 +746,107 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
     [draft, setAxis],
   )
 
+  /** P3 A2 — why the SET cannot change here (a live listing: the server's own sentence), else the channel's cap. */
+  const setHeld = channelLayout ? channelSetChangeHeld(draft) : null
+  const sharedLeft = channelLayout ? remainingSharedAxes(draft) : []
+  const ownLeft = channelLayout ? remainingOwnCandidates(draft) : []
+  /** Included variants here, from the server's value summary (every axis counts the same variants); null = not read. */
+  const variantCount = channelLayout ? Object.values(draft.valueSummary ?? {})[0]?.of ?? null : null
+
+  /**
+   * 🔴 P3 A2 — one CHANNEL row: the channel's name (a Shared axis keeps its target control), where the axis comes from, its
+   * values as chips, how many variants lack one and where to fill them, and the server's refusal when the axis is unbound.
+   * Removing is a SET change: held with the lock's sentence on a live listing (it would relist), never silently inert.
+   */
+  const channelRow = (axisKey: string): ReactNode => {
+    const a = draft.axes.find((x) => x.axisKey === axisKey)
+    if (!a) return null
+    const lockReason = axisLockReason(draft, a.axisKey)
+    const held = setHeld ?? lockReason
+    const facts = channelAxisValues(draft, a, sources)
+    const noun = draft.vocabulary.axisNoun
+    const name = !a.own && draft.candidates?.kind === 'aspects' && draft.candidates.items.length > 0 ? (
+      <Listbox
+        size="sm"
+        value={a.target ?? ''}
+        options={draft.candidates.items.map((i) => ({ value: i.code, label: i.label }))}
+        emptyLabel={`Choose a ${noun}`}
+        emptyIsPlaceholder
+        disabled={!!held}
+        portalTo={popupHost}
+        onChange={(v) => { setRefusal(null); retarget(a, v) }}
+        ariaLabel={held ? AXES_EDITOR_COPY.targetLockedAria(channelWord, noun, a.label, a.target ?? '', held) : AXES_EDITOR_COPY.targetAria(channelWord, noun, a.label)}
+      />
+    ) : draft.candidates?.kind === 'free' ? (
+      /* A4 — Shopify: every option's name is free text (Shared and own alike), held with the lock like every set change. */
+      <Input
+        size="sm"
+        value={a.target ?? ''}
+        maxLength={draft.ownNames?.maxLength ?? 255}
+        disabled={!!held}
+        onChange={(e) => { setRefusal(null); retarget(a, e.target.value) }}
+        aria-label={held ? AXES_EDITOR_COPY.targetLockedAria(channelWord, noun, a.label, a.target ?? '', held) : AXES_EDITOR_COPY.targetAria(channelWord, noun, a.label)}
+      />
+    ) : <span className="nds-axes-cname">{a.channelName}</span>
+    const nameRefusal = draft.candidates?.kind === 'free' && !held ? freeNameRefusal(draft, a, channelWord) : null
+    const remove = () => {
+      if (held) { setRefusal(held); return }
+      setRefusal(null)
+      report(withoutAxis(draft, a.axisKey))
+    }
+    return (
+      <span className="nds-axes-crow">
+        <span className="nds-axes-chead">
+          {name}
+          <ToolbarButton label={CHANNEL_AXES_COPY.remove(a.channelName)} description={held ?? undefined} icon={<X size={14} />} onClick={remove} />
+        </span>
+        {/* Its own line: a long name and a long origin never squeeze each other (measured: "Stile" broke as "Stil / e"). */}
+        <span className="nds-axes-origin">{channelAxisOrigin(a, channelWord, sources)}</span>
+        {facts && facts.values.length > 0 && (
+          <MediaChipField label={`${a.channelName} values`} searchable={false} removable={false} reorderable={false}
+            items={facts.values.map((v) => ({ value: v, label: v }))} onChange={() => undefined} />
+        )}
+        {facts && facts.empty > 0 && <span className="nds-axes-gap">{CHANNEL_AXES_COPY.empty(facts.empty)} · {channelAxisGapHint(a, sources)}</span>}
+        {a.unbound && <span className="nds-axes-unbound">{a.unbound.reason}</span>}
+        {nameRefusal && <span className="nds-axes-unbound" role="alert">{nameRefusal}</span>}
+      </span>
+    )
+  }
+
+  /** P3 A2 — add an axis under a typed name, after the same checks the save makes (the server stays the authority). */
+  const addOwn = () => {
+    const source = sources?.find((x) => x.field === ownSource)
+    const refused = ownNameRefusal(draft, ownName, !!source, channelWord)
+    if (refused) { setOwnRefusal(refused); return }
+    setOwnRefusal(null)
+    setRefusal(null)
+    report(withOwnSharedAxis(draft, ownName, source!))
+    setOwnName('')
+    setOwnSource('')
+    setNewAttr({ phase: 'idle' })
+  }
+
+  /**
+   * P3 A3 — "Create" / "Use it": the host writes the attribute (it is NOT part of the draft: Esc keeps it, as the line before
+   * said), and a returned source is chosen in "Values from" with focus on "Add", the next step. A refusal is the server's
+   * sentence; a failed call says so — never a silent nothing.
+   */
+  const createOwnAttribute = (useExisting: boolean) => {
+    if (!onCreateOwnAttribute) return
+    const name = ownName.trim()
+    setNewAttr({ phase: 'creating' })
+    onCreateOwnAttribute(name, useExisting)
+      .then((result) => {
+        if (result.outcome === 'offer') { setNewAttr({ phase: 'offer', message: result.message }); return }
+        if (result.outcome === 'refused') { setNewAttr({ phase: 'refused', message: result.message }); return }
+        setOwnSource(result.source.field)
+        setOwnRefusal(null)
+        setNewAttr({ phase: 'done', line: newAttributeDoneLine(result.outcome) })
+        requestAnimationFrame(() => ownAddButton.current?.focus())
+      })
+      .catch((error: unknown) => setNewAttr({ phase: 'refused', message: CHANNEL_AXES_COPY.createFailed(error instanceof Error ? error.message : 'the call failed') }))
+  }
+
   const axisRow = (axisKey: string): ReactNode => {
     const a = draft.axes.find((x) => x.axisKey === axisKey)
     if (!a) return null
@@ -746,8 +987,13 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
 
   /* ── chrome ─────────────────────────────────────────────────────────────────────────────── */
 
-  const sourceAction =
+  const sourceAction = channelLayout ? (
+    /* P3 A2 — the channel layout: any edit makes an own setup on save, so there is no separate `Override`; an own setup can
+       go back to Shared in one click (the existing reset, which may not travel with a mapping). */
     draft.source.kind === 'override' ? (
+      <Button variant="quiet" size="sm" onClick={() => report({ ...draft, resetRequested: true })}>{CHANNEL_AXES_COPY.resetToShared}</Button>
+    ) : null
+  ) : draft.source.kind === 'override' ? (
       <Button
         variant="quiet"
         size="sm"
@@ -801,6 +1047,8 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
             <span className="nds-axes-sourcetext">{master ? AXES_EDITOR_COPY.masterStrap : draft.source.label}</span>
             {sourceAction && <span className="nds-axes-sourceact">{sourceAction}</span>}
           </div>
+          {/* P3 A2 — a pressed "Reset to Shared" waits for ⏎ like every other edit; the pop-up says so rather than looking unchanged. */}
+          {channelLayout && draft.resetRequested && <div className="nds-axes-banner"><Banner tone="info">{CHANNEL_AXES_COPY.resetPending}</Banner></div>}
         </>
       )}
 
@@ -831,6 +1079,8 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
               {draft.candidates?.schemaFetchedAt ? `schema from ${draft.candidates.schemaFetchedAt.slice(0, 10)}` : 'from the cached schema'}
             </span>
           </div>
+          {/* P3 A2 — the Owner's rule for Amazon, in the server's own words: its theme list is the only way to set the axes. */}
+          {host === 'cell' && draft.ownNames?.reason && <p className="nds-axes-channelrule">{draft.ownNames.reason}</p>}
           <div className="nds-axes-filter">
             <Search size={13} aria-hidden />
             <input
@@ -883,7 +1133,7 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
           <span className="nds-axes-sectionname">{axesSectionTitle(draft)}</span>
           <span className="nds-axes-sectionhint" title={orderState.reason ?? undefined}>
             {orderState.hint ?? (
-              <Tag tone="neutral">{limit != null ? `${included.length} of ${limit}` : `${included.length} ${included.length === 1 ? draft.vocabulary.axisNoun : draft.vocabulary.axisNounPlural}`}</Tag>
+              <Tag tone="neutral">{limit != null ? `${included.length} of ${limit}` : `${included.length} ${included.length === 1 ? draft.vocabulary.axisNoun : draft.vocabulary.axisNounPlural}`}{channelLayout && variantCount != null ? ` · ${variantCount} ${variantCount === 1 ? 'variant' : 'variants'}` : ''}</Tag>
             )}
           </span>
         </div>
@@ -905,17 +1155,18 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
             VT.2b's witnessed master write went through. */}
         <OrderedList
           label={axesSectionTitle(draft)}
-          items={draft.axes.map((a) => a.axisKey)}
-          itemLabel={(k) => draft.axes.find((a) => a.axisKey === k)?.label ?? k}
+          /* P3 A2: the channel layout lists the DELIVERED axes; a Shared one not delivered here waits in "+ Add". */
+          items={(channelLayout ? included : draft.axes).map((a) => a.axisKey)}
+          itemLabel={(k) => { const a = draft.axes.find((x) => x.axisKey === k); return (channelLayout ? a?.channelName : a?.label) ?? k }}
           onChange={(order) => {
             const edit = axesReorder(draft, order)
             if (edit.ok) report(edit.next)
           }}
-          renderItem={axisRow}
+          renderItem={channelLayout ? channelRow : axisRow}
           disabled={!orderState.writable}
           keyboardGrip={host === 'dock'}
           /* P2: the shared product's rows lift and slide while dragged (the DS's live drag); the ↑/↓ buttons stay. */
-          liveDrag={master && host === 'cell'}
+          liveDrag={(master || channelLayout) && host === 'cell'}
           compact
         />
       </div>
@@ -924,7 +1175,117 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
       {/* The dock's `+ Add` adds a FAMILY AXIS (`addableAxes`) and that is meaningful on every channel,
           Amazon included — VP.4's section rendered it unconditionally. In the CELL host on Amazon the
           rows are the theme's own projection, so there is nothing to add there. */}
-      {(!amazon || master || host === 'dock') && (
+      {channelLayout && (() => {
+        /* P3 A2 — "+ Add a specific": three groups, the channel's cap and a live listing hold it with their own sentence. */
+        const addHeld = setHeld ?? (atLimit ? AXES_EDITOR_COPY.atLimit(channelWord, limit as number, draft.vocabulary.axisNounPlural) : null)
+        const ownAllowed = !!draft.ownNames?.allowed
+        const available = sharedLeft.length + ownLeft.length
+        return (
+          <>
+            <div className="nds-axes-add">
+              <Button
+                variant="quiet"
+                size="sm"
+                aria-disabled={!!addHeld || undefined}
+                title={addHeld ?? undefined}
+                aria-describedby={addReasonId}
+                aria-expanded={addOpen}
+                onClick={() => {
+                  if (addHeld) { setRefusal(addHeld); return }
+                  if (!addOpen && ownAllowed) onRequestOwnSources?.()
+                  setAddOpen((o) => !o)
+                }}
+              >
+                <Plus size={13} aria-hidden /> {axesAddLabel(draft).replace(/^\+\s*/, '')}
+              </Button>
+              <span id={addReasonId} className="nds-axes-filterhint">{setHeld ? CHANNEL_AXES_COPY.setLockedShort : addHeld ?? `${available} available${ownAllowed ? ' · or your own name' : ''}`}</span>
+            </div>
+            {addOpen && !addHeld && (
+              <div className="nds-axes-addpanel">
+                {sharedLeft.length > 0 && (
+                  <div className="nds-axes-addgroup" role="group" aria-label={CHANNEL_AXES_COPY.groupShared}>
+                    <span className="nds-axes-addlabel">{CHANNEL_AXES_COPY.groupShared}</span>
+                    {sharedLeft.map((a) => (
+                      <button type="button" key={a.axisKey} className="nds-axes-opt" aria-label={CHANNEL_AXES_COPY.addOption(a.label, CHANNEL_AXES_COPY.notHere(draft.vocabulary.axisNoun))} onClick={() => { setRefusal(null); report(withSharedAxis(draft, a.axisKey)) }}>
+                        <Plus size={13} aria-hidden /><span>{a.label}</span><span className="nds-axes-optmeta">{CHANNEL_AXES_COPY.notHere(draft.vocabulary.axisNoun)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {ownLeft.length > 0 && (
+                  <div className="nds-axes-addgroup" role="group" aria-label={CHANNEL_AXES_COPY.groupOnly(channelWord)}>
+                    <span className="nds-axes-addlabel">{CHANNEL_AXES_COPY.groupOnly(channelWord)}</span>
+                    {ownLeft.map((c) => (
+                      <button type="button" key={c.axisKey} className="nds-axes-opt" aria-label={CHANNEL_AXES_COPY.addOption(c.name, CHANNEL_AXES_COPY.filled(c.filled, c.of))} onClick={() => { setRefusal(null); report(withOwnChannelAxis(draft, c)) }}>
+                        <Plus size={13} aria-hidden /><span>{c.name}</span><span className="nds-axes-optmeta">{CHANNEL_AXES_COPY.filled(c.filled, c.of)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {ownAllowed ? (
+                  <div className="nds-axes-addgroup" role="group" aria-label={CHANNEL_AXES_COPY.groupOwn}>
+                    <span className="nds-axes-addlabel">{CHANNEL_AXES_COPY.groupOwn}</span>
+                    {ownSources?.state === 'loading' || ownSources?.state === 'idle' || !ownSources ? (
+                      <span className="nds-axes-familynote" role="status"><Spinner size={12} /> {CHANNEL_AXES_COPY.sourcesLoading}</span>
+                    ) : ownSources.state === 'error' ? (
+                      <Banner tone="warning">{CHANNEL_AXES_COPY.sourcesFailed(ownSources.message)}</Banner>
+                    ) : ownSources.sources.length === 0 && !(ownSources.newAttribute && onCreateOwnAttribute) ? (
+                      <span className="nds-axes-addnote">{CHANNEL_AXES_COPY.noSources}</span>
+                    ) : (
+                      <>
+                        <div className="nds-axes-ownform">
+                          <Input
+                            size="sm"
+                            value={ownName}
+                            placeholder={CHANNEL_AXES_COPY.namePlaceholder}
+                            aria-label={`Name of the new ${draft.vocabulary.axisNoun}`}
+                            onChange={(e) => { setOwnName(e.target.value); setOwnRefusal(null); if (newAttr.phase !== 'creating') setNewAttr({ phase: 'idle' }) }}
+                            onKeyDown={(e) => { if (e.key === ',') { e.preventDefault(); addOwn() } }}
+                          />
+                          {/* P3 A3 — with no attribute yet, the name still leads to "New attribute" below; the list appears once one exists. */}
+                          {ownSources.sources.length > 0 && (
+                            <>
+                              <Listbox
+                                size="sm"
+                                value={ownSource}
+                                options={ownSources.sources.map((x) => ({ value: x.field, label: `${x.label} · ${CHANNEL_AXES_COPY.filled(x.filled, x.of)}` }))}
+                                emptyLabel={CHANNEL_AXES_COPY.valuesPlaceholder}
+                                emptyIsPlaceholder
+                                portalTo={popupHost}
+                                onChange={(v) => { setOwnSource(v); setOwnRefusal(null) }}
+                                ariaLabel={`Where the values of the new ${draft.vocabulary.axisNoun} come from`}
+                              />
+                              <Button ref={ownAddButton} size="sm" variant="secondary" onClick={addOwn}>{CHANNEL_AXES_COPY.add}</Button>
+                            </>
+                          )}
+                        </div>
+                        <span className="nds-axes-filterhint">{ownSources.sources.length > 0 ? CHANNEL_AXES_COPY.addHint : CHANNEL_AXES_COPY.noSourcesYet}</span>
+                        {ownRefusal && <p className="nds-axes-refusal" role="alert">{ownRefusal}</p>}
+                        {ownSources.newAttribute && onCreateOwnAttribute && (
+                          <NewOwnAttribute
+                            name={ownName.trim()}
+                            state={ownSources.newAttribute}
+                            held={newAttributeHeld(draft, ownSources.newAttribute, ownName, channelWord)}
+                            phase={newAttr}
+                            onStart={() => setNewAttr({ phase: 'confirm' })}
+                            onCreate={() => createOwnAttribute(false)}
+                            onUseExisting={() => createOwnAttribute(true)}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : draft.ownNames?.reason ? (
+                  <span className="nds-axes-addnote">{draft.ownNames.reason}</span>
+                ) : null}
+                {available === 0 && !ownAllowed && !draft.ownNames?.reason && <span className="nds-axes-addnote">{CHANNEL_AXES_COPY.nothingToAdd(draft.vocabulary.axisNoun)}</span>}
+              </div>
+            )}
+          </>
+        )
+      })()}
+
+      {!channelLayout && (!amazon || master || host === 'dock') && (
         <div className="nds-axes-add">
           {/**
             * 🔴 HELD, with the reason ON the control — never silently inert. The two sentences are
@@ -949,7 +1310,7 @@ export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer
         </div>
       )}
 
-      {!amazon && open.coversAll && candidates.length > 0 && (
+      {!channelLayout && !amazon && open.coversAll && candidates.length > 0 && (
         <>
           <div className="nds-axes-filter">
             <Search size={13} aria-hidden />
@@ -1305,6 +1666,10 @@ export interface AxesPanelEditorParams {
   data?: { id?: string }
   /** P2 — reads the family's values, photos and variants for a MASTER cell. Absent → today's rows. */
   loadFamily?: VariationFamilyLoader
+  /** P3 A2 — reads "Values from" (the Shared per-variant attributes) for a CHANNEL cell, when its panel asks. */
+  loadOwnAxisSources?: OwnAxisSourcesLoader
+  /** P3 A3 — makes (or places) a per-variant attribute in the product's family for "Values from". Absent → no "New attribute". */
+  createOwnAxisAttribute?: OwnAxisAttributeCreator
 }
 
 export function AxesPanelEditor(props: AxesPanelEditorParams) {
@@ -1338,6 +1703,38 @@ export function AxesPanelEditor(props: AxesPanelEditorParams) {
     return () => { live = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- one read per opening
 
+  /* P3 A2 — "Values from", read once per opening and only when the panel asks (opening "+ Add", or a stored own-name axis). */
+  const [ownSources, setOwnSources] = useState<OwnAxisSourcesState>({ state: 'idle' })
+  const sourcesAsked = useRef(false)
+  /* Mounted, for the read's answer. Set on EVERY mount: React's development double-mount runs the cleanup once, and a flag
+     that only ever turned off threw the answer away (measured in the browser: "Loading…" for good after a 200). */
+  const open = useRef(false)
+  useEffect(() => { open.current = true; return () => { open.current = false } }, [])
+  const requestOwnSources = useCallback(() => {
+    const id = props.data?.id
+    const market = cell?.write?.coordinate.market
+    if (sourcesAsked.current) return
+    sourcesAsked.current = true
+    /* A host with no reader (or a cell with no product or market) says so — never an endless "Loading". */
+    if (!props.loadOwnAxisSources || !id || !market) { setOwnSources({ state: 'error', message: 'this sheet cannot read the attributes here' }); return }
+    setOwnSources({ state: 'loading' })
+    props.loadOwnAxisSources(id, market)
+      .then((found) => { if (open.current) setOwnSources({ state: 'ready', sources: found.sources, newAttribute: found.newAttribute }) })
+      .catch((error: unknown) => { if (open.current) setOwnSources({ state: 'error', message: error instanceof Error ? error.message : 'the read failed' }) })
+  }, [cell, props.data?.id, props.loadOwnAxisSources])
+  /* P3 A3 — "New attribute": a returned source joins "Values from" here, so the panel can choose it at once. */
+  const createOwnAttribute = useCallback(async (name: string, useExisting: boolean): Promise<OwnAxisAttributeResult> => {
+    const id = props.data?.id
+    const market = cell?.write?.coordinate.market
+    if (!props.createOwnAxisAttribute || !id || !market) return { outcome: 'refused', message: CHANNEL_AXES_COPY.createFailed('this sheet cannot create attributes here') }
+    const result = await props.createOwnAxisAttribute(id, market, name, useExisting)
+    if ('source' in result && open.current) {
+      setOwnSources((now) => (now.state === 'ready' ? { ...now, sources: withOwnAxisSource(now.sources, result.source) } : now))
+    }
+    return result
+  }, [cell, props.data?.id, props.createOwnAxisAttribute])
+  const channelLayout = !!cell && usesChannelAxesLayout(cell)
+
   const [, refreshViewport] = useState(0)
   useEffect(() => {
     const onResize = () => refreshViewport(value => value + 1)
@@ -1360,7 +1757,7 @@ export function AxesPanelEditor(props: AxesPanelEditorParams) {
     // Reserve viewport gutters; this panel uses fixed placement below the anchor where it fits.
     roomToRight: Math.max(0, viewportWidth - 16),
     /* P2: the shared product's panel carries value chips with photos and a variant list — the `media` box. */
-    kind: master && props.loadFamily ? 'media' : 'axes',
+    kind: (master && props.loadFamily) || channelLayout ? 'media' : 'axes',
   })
 
   const onChange = useCallback(
@@ -1375,7 +1772,7 @@ export function AxesPanelEditor(props: AxesPanelEditorParams) {
      this is the second door, because a renderer that can be reached two ways must answer both. */
   if (!cell) return null
 
-  return <AxesPanel cell={cell} host="cell" family={family} onChange={onChange} onPlanRequired={props.onPlanRequired} width={box.width} maxHeight={Math.min(box.height, viewportHeight - 16)} style={cellRect ? { position: 'fixed', left: Math.max(8, Math.min(cellRect.left, viewportWidth - box.width - 8)), top: Math.max(8, Math.min(cellRect.bottom, viewportHeight - Math.min(box.height, viewportHeight - 16) - 8)) } : undefined} />
+  return <AxesPanel cell={cell} host="cell" family={family} ownSources={ownSources} onRequestOwnSources={requestOwnSources} onCreateOwnAttribute={props.createOwnAxisAttribute ? createOwnAttribute : undefined} onChange={onChange} onPlanRequired={props.onPlanRequired} width={box.width} maxHeight={Math.min(box.height, viewportHeight - 16)} style={cellRect ? { position: 'fixed', left: Math.max(8, Math.min(cellRect.left, viewportWidth - box.width - 8)), top: Math.max(8, Math.min(cellRect.bottom, viewportHeight - Math.min(box.height, viewportHeight - 16) - 8)) } : undefined} />
 }
 
 /** The text the grid shows for this cell — re-exported so a host never re-derives it. */

@@ -61,6 +61,8 @@ const MAX_ASPECT_NAME_LEN = 40
  * Nothing else changes: the const and every use of it above are untouched.
  */
 export { MAX_VARIANTS as EBAY_MAX_VARIANTS_PER_LISTING }
+/** Sheet pop-up P3 — the same one value for a channel-only eBay specific's NAME, checked before a save. */
+export { MAX_ASPECT_NAME_LEN as EBAY_MAX_SPECIFIC_NAME_LENGTH }
 
 /**
  * Resolve the aspect value a variant carries for a given spec name — mirrors the
