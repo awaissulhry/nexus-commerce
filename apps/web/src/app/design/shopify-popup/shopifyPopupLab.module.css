@@ -1,0 +1,101 @@
+/* /design/shopify-popup — layout only; every colour, size and space is a design-system token. */
+.page {
+  display: grid;
+  gap: var(--nds-space-12);
+  max-width: 1040px;
+  padding: var(--nds-space-24) var(--nds-space-16);
+  color: var(--nds-text);
+  background: var(--nds-surface);
+  min-height: 100vh;
+}
+.header p,
+.intro {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-base);
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-base);
+}
+.panel {
+  display: grid;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.group {
+  display: grid;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.groupTitle {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+}
+.count {
+  color: var(--nds-text-muted);
+  font-weight: 400;
+}
+.rows {
+  display: grid;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.rowBody {
+  display: grid;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+/* The cell as the sheet draws it: one line, the sheet's height, clipped like a grid cell. */
+.cell {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 var(--nds-space-6);
+  overflow: hidden;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-raised);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.kind {
+  display: grid;
+  gap: var(--nds-space-4);
+}
+.entryList {
+  display: grid;
+  gap: var(--nds-space-4);
+  padding-left: var(--nds-space-16);
+}
+.panelBody {
+  display: grid;
+  gap: var(--nds-space-12);
+}
+.footerNote {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
