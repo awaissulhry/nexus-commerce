@@ -9,7 +9,8 @@
  *     links and fields, which keep their clicks;
  *   - past `DRAG_THRESHOLD_PX` the item LIFTS (`data-sort-state="lifted"`) and follows the pointer;
  *   - `list`: the other items SLIDE to open the gap where it will land; `wrap` (chips over several lines): the target
- *     chip shows an insertion mark before or after it;
+ *     chip shows an insertion mark before or after it; `grid` (tiles of one size over several lines — a photo set): the
+ *     other tiles slide into their neighbours' slots, so the grid shows its order after the drop;
  *   - Esc cancels and puts everything back; a drag never also fires a click;
  *   - near the top or bottom of a scrolling container the container scrolls, and the geometry follows the scroll;
  *   - it works with touch and pen (pointer events, `touch-action: none` on items in CSS).
@@ -20,11 +21,12 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 
-import { AUTO_SCROLL_EDGE_PX, DRAG_THRESHOLD_PX, autoScrollDelta, listDropIndex, listShift, listStep, wrapDropIndex, type SortRect } from '../lib/sortable'
+import { AUTO_SCROLL_EDGE_PX, DRAG_THRESHOLD_PX, autoScrollDelta, gridDropIndex, gridShift, listDropIndex, listShift, listStep, wrapDropIndex, type SortRect } from '../lib/sortable'
 
 export interface SortableDragOptions {
-  /** `list`: one column (or row) that slides. `wrap`: items that flow onto several lines (chips). */
-  layout?: 'list' | 'wrap'
+  /** `list`: one column (or row) that slides. `wrap`: items that flow onto several lines (chips). `grid`: tiles of one
+   *  size that flow onto several lines and slide into each other's slots (a photo set). */
+  layout?: 'list' | 'wrap' | 'grid'
   /** The list axis; ignored by `wrap`. */
   axis?: 'x' | 'y'
   disabled?: boolean
@@ -102,6 +104,8 @@ export function useSortableDrag({ layout = 'list', axis = 'y', disabled = false,
     let side: SortableDragState['side'] = null
     if (layout === 'wrap') {
       ;({ to, side } = wrapDropIndex(s.rects, s.from, { x: event.clientX, y: event.clientY + scrolled }))
+    } else if (layout === 'grid') {
+      to = gridDropIndex(s.rects, s.from, { x: self.left + self.width / 2 + dx, y: self.top + self.height / 2 + dy })
     } else {
       const center = axis === 'y' ? self.top + self.height / 2 + dy : self.left + self.width / 2 + dx
       to = listDropIndex(s.rects, s.from, center, axis)
@@ -124,8 +128,11 @@ export function useSortableDrag({ layout = 'list', axis = 'y', disabled = false,
     let mark: 'before' | 'after' | undefined
     if (d) {
       if (index === d.from) {
-        transform = layout === 'wrap' ? `translate3d(${d.dx}px, ${d.dy}px, 0)` : axis === 'y' ? `translate3d(0, ${d.dy}px, 0)` : `translate3d(${d.dx}px, 0, 0)`
+        transform = layout !== 'list' ? `translate3d(${d.dx}px, ${d.dy}px, 0)` : axis === 'y' ? `translate3d(0, ${d.dy}px, 0)` : `translate3d(${d.dx}px, 0, 0)`
         state = 'lifted'
+      } else if (layout === 'grid') {
+        const shift = gridShift(session.current?.rects ?? [], index, d.from, d.to)
+        if (shift.x || shift.y) { transform = `translate3d(${shift.x}px, ${shift.y}px, 0)`; state = 'shifted' }
       } else if (layout === 'list') {
         const shift = listShift(index, d.from, d.to, session.current?.step ?? 0)
         if (shift) { transform = axis === 'y' ? `translate3d(0, ${shift}px, 0)` : `translate3d(${shift}px, 0, 0)`; state = 'shifted' }

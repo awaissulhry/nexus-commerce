@@ -30,6 +30,7 @@ every column kind × every state, and what the sheet must do. `scripts/check-edi
 | `pop:sale` | the Matrix sale editor — price + start + end in AG's popup (`SaleCellEditor`, MX.G) |
 | `pop:slots` | the bullets editor — a form of positions in AG's popup (`SlotListEditor`, Step 4.3 #3): a channel's fixed slots shown as ONE cell, or Shared bullets in list mode |
 | `pop:axes` | the variation-theme pop-up for a `shape: axes` cell (`AxesPanelEditor`, sheet pop-up P2/P3): the family's axes on Shared, the channel's layout on eBay / Etsy / Shopify, the theme list on Amazon |
+| `pop:media` | the Product media pop-up for the `productMedia` cell (`MediaCellPopup`, sheet pop-up Lane C): the row's photo set on the photo plan, or its own list on the older gallery; opened under the cell, not in AG's popup |
 
 ## The states
 
@@ -75,6 +76,7 @@ saying otherwise would claim coverage this build cannot give.
 | slotlist | fresh | slots:bulletPoints | pop:slots · | pop:slots · | pop:slots · | pop:slots · | pop:slots · |
 | bullets | fresh | bulletPoints | pop:slots · | pop:slots · | pop:slots · | pop:slots · | pop:fx · |
 | axes | fresh | variation_theme | pop:axes ✓ | pop:axes ✓ | pop:axes ✓ | pop:axes ✓ | pop:axes ✓ |
+| media | fresh | productMedia | pop:media · | pop:media · | pop:media · | pop:media · | pop:media · |
 
 <!-- CONTRACT-TABLE-END -->
 

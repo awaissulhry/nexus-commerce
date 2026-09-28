@@ -1,13 +1,14 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CellAction, MediaStrip } from '@/design-system/components'
+import { CellAction, MediaStrip, type MediaStripItem } from '@/design-system/components'
 import { usePermission } from '@/lib/auth/AuthProvider'
-import type { ColDef, ICellRendererParams } from '@/design-system/grid'
+import type { ColDef, GridApi, ICellRendererParams } from '@/design-system/grid'
 import { mediaLocaleSchema, type ProductMediaQuery } from '@nexus/shared/product-media'
 import { useSaveReporter, useStudioProduct, useStudioScope } from '../contracts'
 import type { SheetColumn } from '../sheet/master/types'
-import { ProductMediaDialog } from './ProductMediaDialog'
-import { PlanSetDialog } from './PlanSetDialog'
+import { GalleryMediaPopup, PlanMediaPopup, type AppliedCells } from './MediaCellPopup'
+import { cellAfterSave, type PlanPopupBase } from './mediaPopupModel'
+import { CHANNEL_LABEL, type MediaChannel, type MediaRead } from '../images/plan-page/model'
 import { planAddress } from './planCellTransfer'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import styles from './media.module.css'
@@ -30,12 +31,13 @@ export function withProductMediaColumn<T extends SheetColumn>(columns: T[]): T[]
 export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string | null) {
   const scope = useStudioScope()
   const reporter = useSaveReporter()
-  const [selected, setSelected] = useState<{ row: MediaRow; anchor: HTMLElement | null } | null>(null)
+  const [selected, setSelected] = useState<{ row: MediaRow; anchor: HTMLElement | null; api: GridApi | null } | null>(null)
   const dirty = useRef(false), busy = useRef(false)
   const canEdit = usePermission('products.images.edit')
+  // A pop-up with a change not yet saved (or a save on its way): switching scope or leaving the page asks first.
   const onDirtyChange = useCallback((value: boolean) => { dirty.current = value }, [])
   useEffect(() => scope.registerScopeChangeGuard(() => !dirty.current && !busy.current), [scope.registerScopeChangeGuard])
-  const open = useCallback((row: MediaRow, anchor: HTMLElement | null) => setSelected({ row, anchor }), [])
+  const open = useCallback((row: MediaRow, anchor: HTMLElement | null, api?: GridApi | null) => setSelected({ row, anchor, api: api ?? null }), [])
   const channel = scope.scope === 'master' ? 'MASTER' : scope.scope.toUpperCase()
   const language = mediaLocaleSchema.safeParse(sheetLocale ?? scope.locale ?? 'und')
   const contextFor = (row?: MediaRow): ProductMediaQuery => ({ scope: channel, market: channel === 'MASTER' ? 'GLOBAL' : scope.coordinate?.marketplace ?? scope.market ?? 'GLOBAL', locale: language.success ? language.data : sheetLocale ?? scope.locale ?? 'und',
@@ -43,7 +45,7 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   const context = contextFor(selected?.row)
   const actions = useMediaCellActions({ contextFor, canEdit, reporter, onSettled: onSaved, onBusyChange: value => { busy.current = value } })
   useEffect(() => {
-    const guard = (event: BeforeUnloadEvent) => { if (busy.current) { event.preventDefault(); event.returnValue = '' } }
+    const guard = (event: BeforeUnloadEvent) => { if (busy.current || dirty.current) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', guard); return () => window.removeEventListener('beforeunload', guard)
   }, [])
   // The photo plan changed (the Media page, another tab or person): the sheet refreshes this family's cells.
@@ -57,23 +59,92 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   })
   useEffect(() => () => { if (refreshTimer.current) window.clearTimeout(refreshTimer.current) }, [])
   const accountLabel = scope.accounts.find(account => account.id === scope.accountId)?.label
-  const contextLabel = [channel === 'MASTER' ? 'Shared product' : [channel, accountLabel, selected?.row.aliasId ? `Listing ${(selected.row.aliasPosition ?? 0) + 1}` : 'Primary listing'].filter(Boolean).join(' · '), context.market, context.locale === 'und' ? 'All languages' : context.locale].join(' · ')
+  const channelLabel = channel === 'MASTER' ? null : CHANNEL_LABEL[channel as MediaChannel] ?? channel
+  const contextLabel = channelLabel ? [`${channelLabel} ${context.market === 'GLOBAL' ? '' : context.market}`.trim(), accountLabel, selected?.row.aliasId ? `Listing ${(selected.row.aliasPosition ?? 0) + 1}` : 'Main listing'].filter(Boolean).join(' · ') : null
   const planTarget = selected?.row.productMediaSet ? planAddress(context) : null
+  /** Enter in the plan pop-up: every row of this sheet's layer shows its new photos at once (all sizes of a colour). */
+  const applyToCells = (next: MediaRead, base: PlanPopupBase): AppliedCells => {
+    const api = selected?.api
+    if (!api || api.isDestroyed()) return { restore: () => undefined, done: () => undefined }
+    const target = JSON.stringify(planTarget)
+    const touched: Array<{ node: { data?: MediaRow }; before: Pick<MediaRow, 'productMedia' | 'productMediaSet'> }> = []
+    api.forEachNode(node => {
+      const row = node.data as MediaRow | undefined
+      if (!row?.productMediaSet || JSON.stringify(planAddress(contextFor(row))) !== target) return
+      const cell = cellAfterSave(next, base, row.productId ?? row.id, context.locale)
+      if (JSON.stringify(cell.items) === JSON.stringify(row.productMedia) && JSON.stringify(cell.set) === JSON.stringify(row.productMediaSet)) return
+      touched.push({ node, before: { productMedia: row.productMedia, productMediaSet: row.productMediaSet } })
+      row.productMedia = cell.items; row.productMediaSet = cell.set; row.productMediaSaving = true
+    })
+    const refresh = () => { if (!api.isDestroyed() && touched.length) api.refreshCells({ rowNodes: touched.map(t => t.node) as never, columns: [PRODUCT_MEDIA_COLUMN], force: true }) }
+    refresh()
+    return {
+      restore: () => { for (const t of touched) if (t.node.data) Object.assign(t.node.data, t.before, { productMediaSaving: false }); refresh() },
+      done: () => { for (const t of touched) if (t.node.data) t.node.data.productMediaSaving = false; refresh() },
+    }
+  }
+  /** Enter in the gallery pop-up: the row's cell shows its new list at once. The row is found again by its product and
+   *  listing, not by object: an upload makes the sheet read again, and that swaps in new row objects. */
+  const applyToRow = (items: MediaStripItem[]): AppliedCells => {
+    const current = selected, api = current?.api
+    const node = current && api && !api.isDestroyed() ? findNode(api, current.row) : null
+    const row = node?.data
+    if (!api || !node || !row) return { restore: () => undefined, done: () => undefined }
+    const before = row.productMedia
+    const refresh = () => { if (!api.isDestroyed()) api.refreshCells({ rowNodes: [node] as never, columns: [PRODUCT_MEDIA_COLUMN], force: true }) }
+    row.productMedia = items; row.productMediaSaving = true; refresh()
+    return {
+      restore: () => { row.productMedia = before; row.productMediaSaving = false; refresh() },
+      done: () => { row.productMediaSaving = false; refresh() },
+    }
+  }
+  const closePlan = () => {
+    const current = selected
+    // Closing ends the pop-up's pending change at once (its own cleanup runs only after it unmounts): a "Media page"
+    // move right after the save must not be held back by the scope guard.
+    dirty.current = false
+    // Only this pop-up's own row: a late answer must never close a pop-up opened on another cell meanwhile.
+    setSelected(now => now && current && now.row === current.row ? null : now)
+    if (current) actions.clearError(current.row)
+    // Focus goes back to the cell, as after every sheet pop-up.
+    const api = current?.api
+    if (api && current) requestAnimationFrame(() => {
+      if (api.isDestroyed()) return
+      const index = findNode(api, current.row)?.rowIndex
+      if (index != null) api.setFocusedCell(index, PRODUCT_MEDIA_COLUMN)
+    })
+  }
   const planElement = selected?.row.productMediaSet
-    ? <PlanSetDialog key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} rowProductId={selected.row.productId ?? selected.row.id}
-        title={selected.row.sku || selected.row.name || 'Product'} address={planTarget} language={context.locale === 'und' ? null : context.locale} anchor={selected.anchor}
-        onClose={edited => { setSelected(null); actions.clearError(selected.row); if (edited) onSaved() }} />
+    ? <PlanMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} rowProductId={selected.row.productId ?? selected.row.id}
+        title={selected.row.sku || selected.row.name || 'Product'} address={planTarget} locale={context.locale} canEdit={canEdit} anchor={selected.anchor}
+        initial={selected.row.productMedia ?? []} onApply={applyToCells} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange}
+        reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} />
     : undefined
-  return { open, actions, element: planElement !== undefined ? planElement : selected ? <ProductMediaDialog key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'} context={context} contextLabel={contextLabel} anchor={selected.anchor} onClose={() => setSelected(null)} onSaved={() => { actions.clearError(selected.row); onSaved() }} onDirtyChange={onDirtyChange} /> : null }
+  const galleryElement = selected && !selected.row.productMediaSet
+    ? <GalleryMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'}
+        context={context} contextLabel={contextLabel} channelLabel={channelLabel} canEdit={canEdit} anchor={selected.anchor} initial={selected.row.productMedia ?? []}
+        onApply={applyToRow} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} familyId={familyRoot} />
+    : null
+  return { open, actions, element: planElement ?? galleryElement }
 }
 
-/** AG owns fill/paste; a gallery edit opens the same dialog from every native open gesture. */
-function MediaEditorGateway(p: { data: MediaRow; eGridCell: HTMLElement; api: { stopEditing(cancel: boolean): void }; open(row: MediaRow, anchor: HTMLElement | null): void }) {
-  useEffect(() => { p.api.stopEditing(true); p.open(p.data, p.eGridCell) }, [])
+/** The grid's node for a row — by its product and listing alias, because a re-read swaps in new row objects. */
+function findNode(api: GridApi, row: MediaRow): { data?: MediaRow; rowIndex: number | null } | null {
+  let found: { data?: MediaRow; rowIndex: number | null } | null = null
+  api.forEachNode(node => {
+    const data = node.data as MediaRow | undefined
+    if (!found && data && (data.productId ?? data.id) === (row.productId ?? row.id) && (data.aliasId ?? '') === (row.aliasId ?? '')) found = node as never
+  })
+  return found
+}
+
+/** AG owns fill/paste; a gallery edit opens the same editor from every native open gesture. */
+function MediaEditorGateway(p: { data: MediaRow; eGridCell: HTMLElement; api: GridApi; open(row: MediaRow, anchor: HTMLElement | null, api?: GridApi | null): void }) {
+  useEffect(() => { p.api.stopEditing(true); p.open(p.data, p.eGridCell, p.api) }, [])
   return null
 }
 
-export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor: HTMLElement | null) => void, actions?: MediaCellActions): ColDef<Row> {
+export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor: HTMLElement | null, api?: GridApi | null) => void, actions?: MediaCellActions): ColDef<Row> {
   return { colId: PRODUCT_MEDIA_COLUMN, headerName: 'Product media', width: 280, minWidth: 170,
     editable: p => !!p.data && !!actions?.canEdit() && !p.data.productMediaSaving && !p.data.productMediaError,
     sortable: false, filter: false, cellDataType: false,
@@ -85,8 +156,8 @@ export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor
     cellEditor: MediaEditorGateway, cellEditorParams: { open },
     // Only controls own their pointer gesture; the cell body and bottom-right fill handle stay native.
     cellRendererParams: { suppressMouseEventHandling: (p: { event: MouseEvent }) => p.event.target instanceof Element && !!p.event.target.closest('[data-nds-cell-action], [data-nds-media-drag]') },
-    onCellDoubleClicked: p => { if (p.data && !p.column.isCellEditable(p.node) && !p.isEventHandlingSuppressed) open(p.data, p.event?.target instanceof HTMLElement ? p.event.target.closest('[role="gridcell"]') : null) },
-    suppressKeyboardEvent: p => { if (p.data && ['Enter', 'F2', 'Delete', 'Backspace'].includes(p.event.key) && !p.event.ctrlKey && !p.event.metaKey && !p.event.altKey) { p.event.preventDefault(); p.event.stopPropagation(); open(p.data, p.event.target instanceof HTMLElement ? p.event.target.closest('[role="gridcell"]') : null); return true } return false },
+    onCellDoubleClicked: p => { if (p.data && !p.column.isCellEditable(p.node) && !p.isEventHandlingSuppressed) open(p.data, p.event?.target instanceof HTMLElement ? p.event.target.closest('[role="gridcell"]') : null, p.api as GridApi) },
+    suppressKeyboardEvent: p => { if (p.data && ['Enter', 'F2', 'Delete', 'Backspace'].includes(p.event.key) && !p.event.ctrlKey && !p.event.metaKey && !p.event.altKey) { p.event.preventDefault(); p.event.stopPropagation(); open(p.data, p.event.target instanceof HTMLElement ? p.event.target.closest('[role="gridcell"]') : null, p.api as GridApi); return true } return false },
     cellRenderer: (p: ICellRendererParams<Row>) => {
       if (!p.data) return null
       const row = p.data, label = row.sku || row.name || 'Product'
@@ -96,9 +167,9 @@ export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor
         {row.productMediaError ? <span>Media needs attention</span> : row.productMedia ? <MediaStrip items={row.productMedia} label={label}
           limit={Math.max(1, Math.min(5, Math.floor(((p.column?.getActualWidth() ?? 280) - 80) / 36)))}
           onReorder={actions?.canEdit() && !row.productMediaSaving && !row.productMediaSet ? ids => actions.reorder(row, ids, refresh) : undefined}
-          onFocusCell={focus} onOpen={() => open(row, p.eGridCell)} /> : <span>Manage media</span>}
+          onFocusCell={focus} onOpen={() => open(row, p.eGridCell, p.api as GridApi)} /> : <span>Manage media</span>}
         <CellAction label={`${actions?.canEdit() ? 'Edit' : 'View'} product media: ${label}`} description={actions?.error(row) || (row.productMediaSaving ? 'Saving media…' : !actions?.canEdit() ? 'View images and videos. Media editing is unavailable with your current permissions.'
-          : row.productMediaSet ? planCellHint(row) : 'Drag thumbnails to reorder. Drag the bottom-right handle to copy the gallery. Enter or F2 opens the editor.')} onFocusCell={focus} onActivate={anchor => open(row, anchor)} />
+          : row.productMediaSet ? planCellHint(row) : 'Drag thumbnails to reorder. Drag the bottom-right handle to copy the gallery. Enter or F2 opens the editor.')} onFocusCell={focus} onActivate={anchor => open(row, anchor, p.api as GridApi)} />
       </div>
     },
   }

@@ -160,7 +160,7 @@ function readContract(markers = 'CONTRACT-TABLE') {
     for (let i = 0; i < gestures.length; i++) {
       /* Strip the provenance mark; it is for the reader, not the assertion. An unknown token FAILS. */
       const token = c[3 + i].replace(/[✓·]/g, '').trim()
-      if (!/^(inline|pop:value|pop:text|pop:list|pop:multi|pop:measure|pop:sale|pop:slots|pop:axes|pop:fx|none|none\+say)$/.test(token)) {
+      if (!/^(inline|pop:value|pop:text|pop:list|pop:multi|pop:measure|pop:sale|pop:slots|pop:axes|pop:media|pop:fx|none|none\+say)$/.test(token)) {
         return { rows: null, error: `unknown expectation "${c[3 + i]}" for ${c[0]}/${c[1]}/${gestures[i]}` }
       }
       expect[gestures[i]] = token
@@ -440,7 +440,9 @@ await page.route('**/*', async (r) => {
   return r.abort()
 })
 
-const EDITOR_SEL = '.ag-cell-inline-editing, .ag-popup-editor'
+/* Sheet pop-up Lane C (2026-09-28) — the Product media pop-up is not an AG editor: the cell's editor (`MediaEditorGateway`)
+   stops AG's editing at once and opens the pop-up under the cell (`CellPanel`). Its own marker is `[data-cell-editor]`. */
+const EDITOR_SEL = '.ag-cell-inline-editing, .ag-popup-editor, [data-cell-editor="product-media"]'
 /**
  * 🔴 EVERY SHAPE IS MATCHED ON ITS OWN MARKER, and an unmatched popup is `popup:UNCLASSIFIED`,
  * never quietly attributed to whichever branch happens to be last. The first draft of this fell
@@ -450,6 +452,8 @@ const EDITOR_SEL = '.ag-cell-inline-editing, .ag-popup-editor'
  * (`FormulaCellEditor`), `ListboxPanel` (`SelectPanelEditor`), AG's own `.ag-large-text-input`.
  */
 const shapeOf = () => {
+  /* Lane C — FIRST: while AG's own editing is still closing, the cell can carry AG's editing class for a frame. */
+  if (document.querySelector('[data-cell-editor="product-media"]')) return 'popup:media'
   const p = document.querySelector('.ag-popup-editor')
   if (!p) return document.querySelector('.ag-cell-inline-editing') ? 'inline' : 'NONE'
   if (p.querySelector('.nds-formula-editor [aria-label="Formula"]')) return 'popup:formula'
@@ -471,7 +475,7 @@ const shapeOf = () => {
   if (p.querySelector('[role="listbox"], [class*="listbox"], [class*="Listbox"]')) return 'popup:listbox'
   return 'popup:UNCLASSIFIED:' + (p.firstElementChild?.className || '?').toString().split(' ')[0].slice(0, 24)
 }
-const idle = () => ({ n: document.querySelectorAll('.ag-cell-inline-editing, .ag-popup-editor').length })
+const idle = () => ({ n: document.querySelectorAll('.ag-cell-inline-editing, .ag-popup-editor, [data-cell-editor="product-media"]').length })
 const escape_ = async () => {
   for (let i = 0; i < 4; i++) {
     if ((await page.evaluate(idle)).n === 0) return true
@@ -1302,12 +1306,16 @@ if (RUN.includes('contract')) {
           return m
         }, new Map()).entries()].map(([key, keys]) => ({ key, label: 'Bullet points', kind: 'slotlist',
           editable: keys.every((k) => rowFacts?.values?.[k]?.editable !== false && rowFacts?.values?.[k]?.writable !== false) }))
+        /* Sheet pop-up Lane C — `media` is the Product media column (`productMedia`): client-only like `slotlist` (the sheet
+           adds it; the API contract never serves it), editable while the user may edit photos. */
+        const mediaCells = row.kind !== 'media' ? [] : [{ key: 'productMedia', label: 'Product media', kind: 'media', editable: true }]
         /* Sheet pop-up P3 A2 — `axes` is a SHAPE row like `list` / `measure`: the variation theme column is
            `kind: variationTheme, shape: axes` on the wire (`sheet-columns.service.ts` `variationThemeColumn`). */
         const kindMatches = (c) => row.kind === 'slotlist' ? c.kind === 'slotlist'
+          : row.kind === 'media' ? c.kind === 'media'
           : row.kind === 'bullets' ? isBulletList(c)
           : (row.kind === 'list' || row.kind === 'measure' || row.kind === 'axes' ? c.shape === row.kind && !isBulletList(c) : editorKind(c) === row.kind && (!c.shape || c.shape === 'scalar'))
-        const declared = [...(scopeCols ?? []), ...oneCells].filter((c) => kindMatches(c)
+        const declared = [...(scopeCols ?? []), ...oneCells, ...mediaCells].filter((c) => kindMatches(c)
           && (row.state === 'locked' ? !editable(c)
             : row.state === 'fxblocked' ? c.formulaWritable === false
             : editable(c)))
@@ -1433,7 +1441,10 @@ if (RUN.includes('contract')) {
         const got = {}
         let bad = 0
         for (const g of contractGestures) {
-          await escape_()
+          const closed = await escape_()
+          /* Lane C — the media pop-up is found by its own marker, so one that never closed on Esc would read as every later
+             gesture opening it: that row stops here instead of passing on the previous gesture's pop-up. */
+          if (row.kind === 'media' && !closed) { got[g] = 'STUCK'; failures.push(`contract ${scope.key} · media/${row.state}/${g}: NOT MEASURED — the pop-up of the previous gesture did not close on Esc`); bad++; continue }
           /* A previous gesture (or an editor closing) can scroll the grid, and virtualisation then
              removes the target again — so this is re-asserted per gesture, not once per row. */
           if (!(await bringOnScreen(rowId, target))) { got[g] = 'GONE'; failures.push(`contract ${scope.key} · ${row.kind}/${row.state}/${g}: NOT MEASURED — ${target} left the DOM`); bad++; continue }
@@ -1480,7 +1491,7 @@ if (RUN.includes('contract')) {
             /read-only|cannot be edited|does not apply|per variation|not writable|calculated from.*relationship|is a fact|set with the tick|Amazon-managed|has no listing of its own|not buyable|Guard reads FBA|cannot be changed here|A formula owns this cell/i.test(
               [...document.querySelectorAll('.nds-toasts')].map((n) => n.textContent ?? '').join(' ')))
           const actual = opened
-            ? { inline: 'inline', 'popup:value': 'pop:value', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:sale': 'pop:sale', 'popup:slots': 'pop:slots', 'popup:axes': 'pop:axes', 'popup:formula': 'pop:fx' }[shape] ?? shape
+            ? { inline: 'inline', 'popup:value': 'pop:value', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:sale': 'pop:sale', 'popup:slots': 'pop:slots', 'popup:axes': 'pop:axes', 'popup:media': 'pop:media', 'popup:formula': 'pop:fx' }[shape] ?? shape
             : (said ? 'none+say' : 'none')
           got[g] = actual
           if (actual !== row.expect[g]) {

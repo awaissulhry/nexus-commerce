@@ -1,10 +1,12 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import { ImageOff, MoreHorizontal, Star } from 'lucide-react'
 import { Menu, type MenuItemDef } from './Menu'
 import { cdnFit } from '../lib/cdn-image'
 import { MediaTypeIcon, mediaImageUrl } from './MediaPreview'
+import { useSortableDrag } from './useSortableDrag'
+import { previewIndex } from '../lib/sortable'
 
 /**
  * MediaBoard — several ordered photo sets on one board (images rebuild P3b; DS-GAPS 2026-09-27).
@@ -17,6 +19,11 @@ import { MediaTypeIcon, mediaImageUrl } from './MediaPreview'
  * - Space picks a tile up, arrows choose a row and a position, Space drops it, Escape cancels; Alt+Space drops a copy;
  * - dragging moves; holding Alt (⌥) while dropping adds a copy and keeps the original ("Also use in…").
  * Photos dragged in from outside the board (a library) carry `externalType` with a JSON array of ids.
+ *
+ * `liveDrag` (a board with ONE row — the sheet's Product media pop-up, 2026-09-28; Owner: "The UI of the drag-and-drop
+ * has to be better"): the pointer drag shows the result while it happens — the tile lifts and follows the pointer, the
+ * other tiles slide into their neighbours' slots, Esc cancels, the panel scrolls near its edges, touch works
+ * (`useSortableDrag`, layout `grid`). Off by default: the Media page's several rows keep their drag between rows.
  */
 
 export const MEDIA_BOARD_EXTERNAL_TYPE = 'application/x-nexus-media-ids'
@@ -66,12 +73,14 @@ export interface MediaBoardProps {
   allowCopy?: boolean
   firstLabel?: string
   disabled?: boolean
+  /** A ONE-row board drags live (lift, follow, slide). Ignored when the board has several rows. */
+  liveDrag?: boolean
 }
 
 interface Moving { itemId: string; from: string; fromIndex: number; to: string; index: number }
 interface DropAt { row: string; index: number }
 
-export function MediaBoard({ label, rows, onMove, onDropExternal, externalType = MEDIA_BOARD_EXTERNAL_TYPE, onRemove, onOpen, itemMenu, allowCopy = true, firstLabel = 'Main photo', disabled = false }: MediaBoardProps) {
+export function MediaBoard({ label, rows, onMove, onDropExternal, externalType = MEDIA_BOARD_EXTERNAL_TYPE, onRemove, onOpen, itemMenu, allowCopy = true, firstLabel = 'Main photo', disabled = false, liveDrag = false }: MediaBoardProps) {
   const board = useRef<HTMLDivElement>(null)
   const dragging = useRef<{ itemId: string; from: string; fromIndex: number } | null>(null)
   const focusAfter = useRef<{ row: string; itemId: string } | null>(null)
@@ -79,6 +88,13 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
   const [moving, setMoving] = useState<Moving | null>(null)
   const [dropAt, setDropAt] = useState<DropAt | null>(null)
   const [announcement, setAnnouncement] = useState('')
+  const only = rows.length === 1 ? rows[0] : null
+  const live = liveDrag && !!only && !disabled && only.editable !== false && only.items.length > 1
+  const sort = useSortableDrag({
+    layout: 'grid', disabled: !live,
+    onMove: (from, to) => { const item = only?.items[from]; if (only && item) commit({ itemId: item.id, from: only.id, to: only.id, index: to, copy: false }) },
+    onDragState: state => { if (state && only) setAnnouncement(`${only.items[state.from]?.label ?? 'Photo'}, moving to position ${state.to + 1} of ${only.items.length}.`) },
+  })
 
   const rowOf = (id: string) => rows.find(r => r.id === id)
   const editable = (row: MediaBoardRow | undefined) => !!row && !disabled && row.editable !== false
@@ -248,14 +264,18 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
           {row.source != null && <span className="nds-media-board-source">{row.source}</span>}
           {row.actions != null && <span className="nds-media-board-actions">{row.actions}</span>}
         </header>
-        <ol className="nds-media-board-list" aria-label={`${row.label}, ${row.items.length} photo${row.items.length === 1 ? '' : 's'}`}>
+        <ol ref={live ? sort.listRef as unknown as Ref<HTMLOListElement> : undefined} className={`nds-media-board-list${live ? ' live' : ''}${live && sort.drag ? ' dragging' : ''}`}
+          aria-label={`${row.label}, ${row.items.length} photo${row.items.length === 1 ? '' : 's'}`}>
           {row.items.map((item, index) => {
             const isFocus = current?.row === row.id && current.index === index
             const picked = moving?.itemId === item.id && moving.from === row.id
-            return <li key={item.id} data-board-index={index} data-drop-before={target === index || undefined} data-picked={picked || undefined}
+            // While a live drag runs, each tile shows the position it WILL have (the lifted one its target).
+            const d = live ? sort.drag : null
+            const shown = d ? previewIndex(index, d.from, d.to) : index
+            return <li key={item.id} {...(live ? sort.itemProps(index) : {})} data-board-index={index} data-drop-before={target === index || undefined} data-picked={picked || undefined}
               onDragOver={event => overTile(event, row, index)}>
               <div className={`nds-media-board-tile${item.tone ? ` is-${item.tone}` : ''}`}>
-                <button type="button" className="nds-media-board-thumb" tabIndex={isFocus ? 0 : -1} draggable={editable(row)}
+                <button type="button" className="nds-media-board-thumb" tabIndex={isFocus ? 0 : -1} draggable={editable(row) && !live} data-nds-sort-handle={live ? '' : undefined}
                   aria-label={`${item.label}, ${index === 0 ? firstLabel.toLowerCase() : `position ${index + 1} of ${row.items.length}`} in ${row.label}`}
                   aria-keyshortcuts={editable(row) ? 'Space M Delete' : undefined}
                   onFocus={() => { if (!isFocus) setFocus({ row: row.id, index }) }}
@@ -271,7 +291,7 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
                   }}
                   onDragEnd={() => { dragging.current = null; setDropAt(null) }}>
                   <Tile item={item} />
-                  <span className="nds-media-board-pos" aria-hidden>{index === 0 ? <Star size={12} fill="currentColor" /> : index + 1}</span>
+                  <span className="nds-media-board-pos" aria-hidden>{shown === 0 ? <Star size={12} fill="currentColor" /> : shown + 1}</span>
                 </button>
                 <span className="nds-media-board-caption" title={item.label}>{item.label}</span>
                 {item.badges != null && <span className="nds-media-board-badges">{item.badges}</span>}

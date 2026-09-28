@@ -9,6 +9,8 @@ import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
+import { publishListingEvent } from '../listing-events.service.js'
+import { logger } from '../../utils/logger.js'
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type Input = ProductMediaQuery & { productId: string }
@@ -53,19 +55,37 @@ export async function readProductMedia(input: Input) {
   return (await snapshot(input, prisma)).workspace
 }
 
+/**
+ * A saved list is told to every open screen — the same live event the photo plan sends (Lane C, Owner D2 = a, 2026-09-28) —
+ * keyed by the family root, so every sheet of the family reads its cells again. Sent only after the commit, and it never
+ * turns a committed save into a failure: an event that cannot be sent is logged; open screens read it on their next load.
+ */
+function announce(rootId: string | null) {
+  if (!rootId) return
+  try {
+    publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'GALLERY', ts: Date.now() })
+  } catch (error) {
+    logger.warn('[product-media] saved, but the live update could not be sent', { productId: rootId, reason: error instanceof Error ? error.message : String(error) })
+  }
+}
+
 export async function saveProductMedia(input: Input, body: unknown) {
   if (await isOnMediaPlan(input.productId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const { expectedRevision, collection } = productMediaSaveSchema.parse(body)
   await validateProductMediaDestination(input)
+  let rootId: string | null = null
   try {
-    return await prisma.$transaction(async tx => {
+    const saved = await prisma.$transaction(async tx => {
       const state = await snapshot(input, tx)
+      rootId = state.product.parentId ?? state.product.id
       const { workspace } = state
       if (workspace.revision !== expectedRevision) throw new WorkspaceScopeError('Media changed since this editor opened. Reload the gallery before applying your changes.')
       const known = new Set(workspace.assets.map(asset => asset.id))
       if (collection?.items.some(item => !known.has(item.assetId))) throw new WorkspaceScopeError('A selected file is no longer in this product’s media library. Reload the gallery.', 422)
       return persistCollection(input, state, collection, tx)
     }, { isolationLevel: 'Serializable' })
+    announce(rootId)
+    return saved
   } catch (error) { throw mediaConflict(error) }
 }
 
@@ -104,9 +124,11 @@ export async function copyProductMedia(input: Input, body: unknown) {
   const sourceInput = { productId: command.source.productId, ...command.source.context }
   await validateProductMediaDestination(input)
   await validateProductMediaDestination(sourceInput)
+  let rootId: string | null = null
   try {
-    return await prisma.$transaction(async tx => {
+    const copied = await prisma.$transaction(async tx => {
       const source = await snapshot(sourceInput, tx), target = await snapshot(input, tx)
+      rootId = target.product.parentId ?? target.product.id
       if (source.workspace.revision !== command.source.expectedRevision || target.workspace.revision !== command.expectedRevision) {
         throw new WorkspaceScopeError('A source or destination gallery changed. Refresh the sheet before copying again.')
       }
@@ -152,5 +174,7 @@ export async function copyProductMedia(input: Input, body: unknown) {
       }
       return persistCollection(input, target, { version: 1, items }, tx)
     }, { isolationLevel: 'Serializable', timeout: 30000 })
+    announce(rootId)
+    return copied
   } catch (error) { throw mediaConflict(error) }
 }

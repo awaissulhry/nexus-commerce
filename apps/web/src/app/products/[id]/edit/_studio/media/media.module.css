@@ -1,14 +1,26 @@
-.stack { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
-.stack p { margin: 0; }
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
-.toolbar > span { margin-inline-end: auto; }
-.library { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: var(--nds-space-16); }
-.details { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: var(--nds-space-24); align-items: start; }
-.note { color: var(--nds-text); font-size: var(--nds-font-size-base); line-height: 1.6; }
 .cell { display: flex; align-items: center; gap: var(--nds-space-8); width: 100%; min-width: 0; height: 100%; }
 .cell > :last-child { margin-inline-start: auto; }
-@media (max-width: 700px) { .details { grid-template-columns: minmax(0, 1fr); } }
-/* Images P3c — the photo plan set editor in the cell dialog. */
-.planDialog { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-12); min-width: 0; }
-.planDialog > :not(:first-child):not([role="radiogroup"]) { width: 100%; }
-.planDialog .note { margin: 0; }
+/* Lane C — the Product media pop-up under the cell (docs/product-media-popup/PLAN-2026-09-28.md §3). */
+.popup { display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
+.popup p { margin: 0; }
+.popupHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nds-space-8); min-width: 0; }
+.popupHead strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-base); }
+.popupHead span { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); font-family: var(--nds-font-mono, inherit); }
+.muted { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.commonLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6) var(--nds-space-8); min-width: 0; }
+.checks { display: flex; flex-direction: column; gap: var(--nds-space-4); margin: 0; padding: 0; list-style: none; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.viewer { display: flex; flex-direction: column; gap: var(--nds-space-6); padding: var(--nds-space-8); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); }
+.viewerHead { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-8); font-size: var(--nds-font-size-sm); }
+.viewer :global(.nds-media-preview-stage) { min-height: 0; }
+.viewer :global(.nds-media-preview-stage) img, .viewer :global(.nds-media-preview-stage) video { max-width: 100%; max-height: 240px; object-fit: contain; }
+.library { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; padding-top: var(--nds-space-8); border-top: 1px solid var(--nds-border-subtle); }
+.libraryTools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.libraryTools > :first-child { flex: 1 1 160px; min-width: 0; }
+.libraryGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--nds-space-8); max-height: 280px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-xs); }
+.upload :global(.nds-dropzone) { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: var(--nds-space-4) var(--nds-space-8); padding: var(--nds-space-8) var(--nds-space-12); border-radius: var(--nds-radius-lg); text-align: start; }
+.upload :global(.nds-dropzone) > svg { width: 16px; height: 16px; }
+.upload :global(.nds-dropzone-primary) { font-size: var(--nds-font-size-sm); }
+.uploads { display: flex; flex-direction: column; gap: var(--nds-space-4); margin: 0; padding: 0; list-style: none; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.popupFoot { display: flex; justify-content: flex-end; }
+.fields { display: flex; flex-direction: column; gap: var(--nds-space-8); }
