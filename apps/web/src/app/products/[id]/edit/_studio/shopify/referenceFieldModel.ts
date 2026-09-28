@@ -7,26 +7,13 @@
  * Fields that need a type chosen first, or a raw id (taxonomy values), keep the older picker (`legacy`).
  */
 import type { ShopifyFieldDefinition, ShopifyReference, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { shopifyReferenceTypes } from '@nexus/shared/shopify-linked-products'
+import { shopifyNoun, shopifyReferenceTypes } from '@nexus/shared/shopify-linked-products'
 import type { MediaChoice } from '@/design-system/components'
 
 export type ReferenceUi = 'entries' | 'resources' | 'legacy'
 
 const RESOURCE_TYPES = ['product_reference', 'variant_reference', 'collection_reference', 'page_reference', 'article_reference', 'file_reference',
   'customer_reference', 'company_reference', 'order_reference'] as const
-
-const NOUNS: Record<string, { one: string; other: string }> = {
-  product_reference: { one: 'product', other: 'products' },
-  variant_reference: { one: 'variant', other: 'variants' },
-  collection_reference: { one: 'collection', other: 'collections' },
-  page_reference: { one: 'page', other: 'pages' },
-  article_reference: { one: 'article', other: 'articles' },
-  file_reference: { one: 'file', other: 'files' },
-  customer_reference: { one: 'customer', other: 'customers' },
-  company_reference: { one: 'company', other: 'companies' },
-  order_reference: { one: 'order', other: 'orders' },
-  metaobject_reference: { one: 'entry', other: 'entries' },
-}
 
 /** `list.product_reference` → `product_reference`. */
 export const baseReferenceType = (type: string) => (type.startsWith('list.') ? type.slice(5) : type)
@@ -48,7 +35,8 @@ export function referenceUiFor(def: Pick<ShopifyFieldDefinition, 'type' | 'valid
   return 'legacy'
 }
 
-export const referenceNoun = (type: string) => NOUNS[baseReferenceType(type)] ?? { one: 'reference', other: 'references' }
+/** The words for one / many of a reference field's items — the one shared list (`@nexus/shared` `shopifyNoun`). */
+export const referenceNoun = (type: string) => shopifyNoun(type)
 
 /** The most values a list field takes (`list.max`), when its definition declares it. */
 export function listMax(def: Pick<ShopifyFieldDefinition, 'validations'>): number | null {

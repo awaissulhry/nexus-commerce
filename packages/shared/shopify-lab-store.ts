@@ -355,7 +355,7 @@ export function labBadValues(type: string): LabBadValue[] {
     case 'id': add('max', 'x'.repeat(21)); break
     case 'language': add('format', 'english'); break
     case 'jurisdiction': add('format', 'Italy'); break
-    case 'file_reference': add('file_type_options', list ? LAB_FILES[6].id : LAB_FILES[4].id, 'G8'); add('resource', LAB_PRODUCTS[0].id); break
+    case 'file_reference': add('file_type_options', list ? LAB_FILES[6].id : LAB_FILES[4].id); add('resource', LAB_PRODUCTS[0].id); break
     case 'product_taxonomy_value_reference': add('product_taxonomy_attribute_handle', list ? taxonomy('Solid') : taxonomy('Black'), 'G12'); break
     case 'metaobject_reference': case 'mixed_reference': case 'disclosure_reference': add('resource', LAB_PRODUCTS[0].id); break
     case 'product_taxonomy_disclosure_reference': break

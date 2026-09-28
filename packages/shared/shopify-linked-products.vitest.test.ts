@@ -44,8 +44,8 @@ describe('Shopify separate-product relationship contract', () => {
 describe('store-driven field types and validation', () => {
   it.each([
     ['boolean', 'false', null], ['number_integer', '0', null], ['number_integer', '1.2', 'whole number'],
-    ['list.product_reference', JSON.stringify([gid(1)]), null], ['product_reference', 'gid://shopify/Metaobject/1', 'Product reference'],
-    ['date', '2026-02-30', 'valid date'], ['date', '2026-09-09', null], ['json', '{', 'valid JSON'],
+    ['list.product_reference', JSON.stringify([gid(1)]), null], ['product_reference', 'gid://shopify/Metaobject/1', 'This field takes products only.'],
+    ['date', '2026-02-30', 'Enter a date as YYYY-MM-DD'], ['date', '2026-09-09', null], ['json', '{', 'valid JSON'],
     ['list.single_line_text_field', '["Red","Blue"]', null], ['single_line_text_field', 'first\nsecond', 'one line'],
   ])('%s validates without discarding the stored value', (type, value, error) => {
     const result = validateShopifyField({ type: type!, validations: [] }, value)
@@ -54,10 +54,10 @@ describe('store-driven field types and validation', () => {
   it('distinguishes explicit clears, empty lists, false and zero', () => {
     expect(validateShopifyField({ type: 'boolean', validations: [] }, null)).toBeNull()
     expect(validateShopifyField({ type: 'boolean', validations: [], required: true }, null)).toContain('required')
-    expect(validateShopifyField({ type: 'list.product_reference', validations: [{ name: 'list.min', value: '1' }] }, '[]')).toContain('at least 1')
+    expect(validateShopifyField({ type: 'list.product_reference', validations: [{ name: 'list.min', value: '1' }] }, '[]')).toBe('Add at least 1 product.')
   })
   it('loads store-specific choices and text length limits', () => {
-    expect(validateShopifyField({ type: 'single_line_text_field', validations: [{ name: 'choices', value: '["Rouge","Bleu"]' }] }, 'Red')).toContain('allowed values')
-    expect(validateShopifyField({ type: 'single_line_text_field', validations: [{ name: 'max', value: '3' }] }, 'four')).toContain('at most 3')
+    expect(validateShopifyField({ type: 'single_line_text_field', validations: [{ name: 'choices', value: '["Rouge","Bleu"]' }] }, 'Red')).toBe('Choose one of these values: Rouge, Bleu.')
+    expect(validateShopifyField({ type: 'single_line_text_field', validations: [{ name: 'max', value: '3' }] }, 'four')).toBe('Use 3 characters or fewer. Now: 4.')
   })
 })

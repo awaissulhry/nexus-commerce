@@ -13,11 +13,6 @@ export function labGapsFor(type: string): LabGap[] {
   const gaps: LabGap[] = []
   if (!list && RAW_JSON.has(base)) gaps.push({ id: 'G13', text: 'The cell shows raw JSON.', slice: 'B3' })
   if (RAW_JSON.has(base)) gaps.push({ id: 'G14', text: 'A limit in another unit cannot be checked.', slice: 'B3' })
-  if (base === 'rating') gaps.push({ id: 'G2', text: 'The editor lets you type the scale.', slice: 'B1' })
-  if (base === 'boolean') gaps.push({ id: 'G3', text: 'The cell says Yes/No; the editor says True/False.', slice: 'B1' })
-  if (list && !base.endsWith('_reference')) gaps.push({ id: 'G4', text: '"Add value" stays active at the list limit.', slice: 'B1' })
-  if (base === 'multi_line_text_field') gaps.push({ id: 'G5', text: 'Enter adds a line, but the key line says "Enter saves".', slice: 'B1' })
-  if (base === 'file_reference') gaps.push({ id: 'G8', text: 'The file list shows every kind; a pasted wrong kind passes the draft.', slice: 'B1' })
   if (base === 'date_time') gaps.push({ id: 'G15', text: 'Plain text box; a loose date check.', slice: 'B3' })
   if (base === 'json' || base === 'jurisdiction') gaps.push({ id: 'G16', text: 'A text box with a wrong hint.', slice: 'B3' })
   if (base === 'link') gaps.push({ id: 'G17', text: 'The allowed sites are not checked.', slice: 'B3' })

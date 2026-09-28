@@ -20,7 +20,7 @@ import { SHOPIFY_WEBHOOKS_OFF_CODE, SHOPIFY_WEBHOOKS_OFF_MESSAGE, shopifyOrderIn
 
 const querySchema = z.object({ accountId: z.string().min(1), listingId: z.string().min(1).optional(), market: z.literal('GLOBAL').default('GLOBAL'),
   locale: z.string().min(2).max(35).optional(), refreshConstraints: z.literal('1').optional(),
-  ownerId: z.string().optional(), id: z.string().optional(), type: z.string().optional(), query: z.string().max(200).optional(), cursor: z.string().max(2000).optional(), metaobjectType: z.string().optional() }).strict()
+  ownerId: z.string().optional(), id: z.string().optional(), type: z.string().optional(), query: z.string().max(200).optional(), cursor: z.string().max(2000).optional(), metaobjectType: z.string().optional(), fileTypes: z.string().max(100).optional() }).strict()
 export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
   const routes = [['GET', ''], ['PUT', ''], ['POST', '/cells'], ['GET', '/schema'], ['POST', '/schema-subscriptions'], ['POST', '/webhook-subscriptions'], ['GET', '/information'], ['GET', '/owner'], ['GET', '/references'], ['POST', '/reference-names'],
     ['POST', '/discover'], ['POST', '/suggest-sharing'], ['POST', '/automation'], ['POST', '/automation-check'], ['POST', '/products'], ['POST', '/read-links'], ['POST', '/field-values'], ['POST', '/import'], ['POST', '/preview'], ['POST', '/rebase'], ['POST', '/synchronize'], ['POST', '/advance'], ['GET', '/entry'], ['POST', '/entry']] as const
@@ -102,7 +102,7 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
           return await readShopifyDisplaySchema(destination.accountId)
         }
         if (suffix === '/owner') return await readLinkedOwner(graphql, query.ownerId ?? '')
-        if (suffix === '/references') return await searchLinkedReferences(graphql, { type: query.type ?? '', query: query.query, cursor: query.cursor, metaobjectType: query.metaobjectType })
+        if (suffix === '/references') return await searchLinkedReferences(graphql, { type: query.type ?? '', query: query.query, cursor: query.cursor, metaobjectType: query.metaobjectType, fileTypes: query.fileTypes })
         if (suffix === '/reference-names') return await resolveLinkedReferenceNames(graphql, destination.accountId, z.object({ ids: z.array(z.string()).max(100) }).parse(request.body).ids)
         if (suffix === '/products') return await readLinkedProducts(graphql, z.object({ ids: z.array(shopifyProductGid).max(2048) }).parse(request.body).ids)
         if (suffix === '/field-values') return await readLinkedFields(graphql, z.object({ addresses: z.array(z.object({ ownerId: shopifyProductGid, namespace: z.string().min(1), key: z.string().min(1) })).max(2048) }).parse(request.body).addresses)

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import prisma from '../../db.js'
 import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, mediaOrderEditSchema, nativeSchemaError,
   type InformationField, type InformationRow, type InformationSnapshot, type ShopifySheetWrite } from '@nexus/shared/shopify-information'
-import { shopifyLinkedDraftSchema, type ShopifyLinkedDraft, type ShopifyLinkedWorkspace, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import { shopifyLinkedDraftSchema, shopifyReferenceError, validateShopifyField, type ShopifyLinkedDraft, type ShopifyLinkedWorkspace, type ShopifyReference, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
 import { getStudioSheet } from '../pim/studio-sheet.service.js'
 import { readShopifyDisplaySchema, readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
@@ -13,6 +13,7 @@ import { contentDestination, object, PUBLISH_KEY, type ContentScope } from './co
 import { shopifyAdmin } from './admin-client.js'
 import { readInformation } from './information-gateway.js'
 import { AUTOMATION_KEY, LINKED_KEY, getLinkedWorkspace, linkedState, linkedTransaction, writeLinkedState } from './linked-products.service.js'
+import { resolveLinkedReferenceNames } from './linked-products-gateway.js'
 
 export async function enrichShopifyChannelSheet(page: StudioSheet): Promise<StudioSheet> {
   if (page.scope.channel !== 'SHOPIFY' || !page.scope.connectionId) return page
@@ -71,6 +72,25 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
     if (error) throw new Error(error)
     return next
   }
+  // LB-D2 (Owner, 2026-09-28; docs/shopify-metafields/PLAN-2026-09-28.md §12): a pasted or imported reference is checked
+  // against the store at the draft save — its entry kind, its file kind, and that it still exists — not first at publish.
+  // Names come through the display cache (10 minutes), so a value picked in the pop-up costs no extra read. Read here,
+  // before the transaction: no Shopify call runs inside it.
+  const referenceRefusals = new Map<string, string>()
+  const referenceCells = input.cells.flatMap(change => {
+    const def = fields.find(f => f.id === change.fieldId)?.definition
+    if (!def || !def.type.includes('_reference') || change.value === null || change.intent === 'reset' || change.intent === 'reset-list' || validateShopifyField(def, change.value)) return []
+    const ids: string[] = def.type.startsWith('list.') ? JSON.parse(change.value) : [change.value]
+    return ids.length ? [{ change, def, ids }] : []
+  })
+  if (referenceCells.length) {
+    const ids = [...new Set(referenceCells.flatMap(cell => cell.ids))], refs = new Map<string, ShopifyReference>()
+    for (let i = 0; i < ids.length; i += 100) for (const ref of await resolveLinkedReferenceNames(graphql, destination.accountId, ids.slice(i, i + 100))) refs.set(ref.id, ref)
+    for (const { change, def, ids: cellIds } of referenceCells) {
+      const problem = shopifyReferenceError(def, cellIds.map(id => refs.get(id) ?? { available: false }), schema)
+      if (problem) referenceRefusals.set(change.colId, problem)
+    }
+  }
   // Resolve reset from the authoritative common mapping, never from client-supplied text.
   const resetValues = new Map<string, string | null>()
   if (input.cells.some(c => c.intent === 'reset' || c.intent === 'reset-list')) {
@@ -108,6 +128,12 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
         if (change.token !== shopifyCellToken(current.workspace, row.id, field, row.locale)) throw new Error('Another editor changed this draft cell. Your input is retained; review the saved value before retrying.')
         const reason = informationRestriction(row, field, draft, false)
         if (reason) throw new Error(reason)
+        const referenceRefusal = referenceRefusals.get(change.colId)
+        if (referenceRefusal) {
+          /* Same form as every other draft-save refusal (`applyInformationCells`): "<owner> / <field>: <sentence>". */
+          const ownerLabel = row.kind === 'PRODUCT' ? row.title : `${snapshot.rows.find(r => r.id === row.productId)?.title ?? row.handle} / ${row.title}`
+          throw new Error(`${ownerLabel} / ${field.label}: ${referenceRefusal}`)
+        }
         if (informationPendingValue(row, field, current.draft) === undefined && informationStoredValue(row, field) !== change.baseline) throw new Error('Shopify changed this value since it was read. Your input is retained; reload to review it.')
         if (change.intent === 'reset' || change.intent === 'reset-list') {
           if (!resetValues.has(change.colId)) throw new Error('The inherited source is unavailable. Reload the sheet before resetting this cell.')

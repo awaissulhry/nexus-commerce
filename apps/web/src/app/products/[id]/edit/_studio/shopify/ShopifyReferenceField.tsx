@@ -24,7 +24,7 @@ import { baseReferenceType, chosenChoices, listMax, referenceChoice, referenceNo
 import styles from './linked.module.css'
 
 /** A page of search results for one field, re-read 200 ms after typing stops; older answers never overwrite newer. */
-function useReferenceSearch(path: string, type: string, metaobjectType: string | undefined, enabled: boolean) {
+function useReferenceSearch(path: string, type: string, metaobjectType: string | undefined, enabled: boolean, fileTypes?: string) {
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<ShopifyReference[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
@@ -37,7 +37,7 @@ function useReferenceSearch(path: string, type: string, metaobjectType: string |
     const request = ++generation.current
     setLoading(true); setError(null)
     try {
-      const page = await linkedRequest<ShopifyReferencePage>(linkedEndpoint(path, '/references', { type, query, cursor: after, metaobjectType }), 'GET', undefined, controller.signal)
+      const page = await linkedRequest<ShopifyReferencePage>(linkedEndpoint(path, '/references', { type, query, cursor: after, metaobjectType, fileTypes }), 'GET', undefined, controller.signal)
       if (generation.current === request) { setItems(old => after ? [...old, ...page.items.filter(i => !old.some(o => o.id === i.id))] : page.items); setCursor(page.cursor) }
     } catch (e) { if (!controller.signal.aborted && generation.current === request) setError((e as Error).message) }
     finally { if (generation.current === request) setLoading(false) }
@@ -48,8 +48,16 @@ function useReferenceSearch(path: string, type: string, metaobjectType: string |
     return () => { clearTimeout(timer); abort.current?.abort(); generation.current++ }
     // The query, type and path own a result generation; fetchPage reads their current render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, query, path, type, metaobjectType])
+  }, [enabled, query, path, type, metaobjectType, fileTypes])
   return { query, setQuery, items, loading, error, hasMore: !!cursor, loadMore: () => { if (cursor) void fetchPage(cursor) } }
+}
+
+/** `file_type_options` as the search parameter (`Image,Video`), or undefined when every file is allowed. */
+export function fileTypeOptions(def: Pick<ShopifyFieldDefinition, 'validations'>): string | undefined {
+  try {
+    const kinds = JSON.parse(def.validations.find(v => v.name === 'file_type_options')?.value ?? '[]')
+    return Array.isArray(kinds) && kinds.length ? kinds.map(String).join(',') : undefined
+  } catch { return undefined }
 }
 
 export interface ShopifyReferenceFieldProps {
@@ -82,7 +90,9 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
   const chosen = chosenChoices(values, names, noun, namesFailed)
   const [browsing, setBrowsing] = useState(ui === 'entries' && (list || values.length === 0))
   const [dialog, setDialog] = useState(false)
-  const search = useReferenceSearch(path, list ? def.type : type, entryType, !locked && (ui === 'entries' ? browsing : dialog))
+  /* A file field limited to some kinds lists only those kinds (gap G8): the store is asked for them, nothing is hidden after. */
+  const fileTypes = fileTypeOptions(def)
+  const search = useReferenceSearch(path, list ? def.type : type, entryType, !locked && (ui === 'entries' ? browsing : dialog), fileTypes)
   const pick = useRef<MediaPickListHandle>(null)
   const [active, setActive] = useState<string>()
 

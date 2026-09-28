@@ -31,7 +31,7 @@ describe('which pop-up a reference field gets', () => {
   it('names the thing being picked', () => {
     expect(baseReferenceType('list.variant_reference')).toBe('variant_reference')
     expect(referenceNoun('list.product_reference')).toEqual({ one: 'product', other: 'products' })
-    expect(referenceNoun('mixed_reference')).toEqual({ one: 'reference', other: 'references' })
+    expect(referenceNoun('mixed_reference')).toEqual({ one: 'entry', other: 'entries' })
   })
   it('reads the list cap only when it is a positive whole number', () => {
     expect(listMax({ validations: [{ name: 'list.max', value: '5' }] })).toBe(5)

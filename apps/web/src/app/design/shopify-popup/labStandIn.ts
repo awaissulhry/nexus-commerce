@@ -4,7 +4,7 @@
  * It answers the Shopify pop-up's calls for ONE made-up product — `/schema`, `/references`, `/reference-names`, `/entry`
  * (read and save) — from the made-up store in `@nexus/shared/shopify-lab-store`. It copies what the real server does today
  * (`apps/api/src/services/shopify/linked-products-gateway.ts`, `linked-metaobjects.service.ts`), including today's gaps
- * (the file list is not filtered by kind; a taxonomy value is found only by its raw id), so the lab shows the truth. Pure:
+ * (a taxonomy value is found only by its raw id), so the lab shows the truth. Pure:
  * `installLabShopify` wires it to `fetch`; the tests call it directly.
  *
  * Nothing leaves the browser tab. Saved entries live in memory until the page reloads or "Reset the lab".
@@ -35,7 +35,6 @@ const refuse = (status: number, error: string): LabAnswer => ({ status, body: { 
 const RESOURCES: Record<string, string[]> = {
   product_reference: ['Product'], variant_reference: ['ProductVariant'], collection_reference: ['Collection'], page_reference: ['Page'],
   article_reference: ['Article'], customer_reference: ['Customer'], company_reference: ['Company'], order_reference: ['Order'],
-  /* Today's gateway reads every file with no kind filter (linked-products-gateway.ts:171) — gap G8. */
   file_reference: ['MediaImage', 'Video', 'GenericFile'],
 }
 
@@ -53,7 +52,11 @@ function search(params: URLSearchParams): LabAnswer {
     const raw = params.get('query') ?? ''
     return ok({ items: labStoreReferences().filter(r => r.id === raw && r.type === 'TaxonomyValue'), cursor: null } satisfies ShopifyReferencePage)
   } else if (RESOURCES[type]) {
-    items = labStoreReferences().filter(r => RESOURCES[type].includes(r.type ?? ''))
+    /* A file field limited to some kinds asks only for those (`fileTypes`, like the gateway's `media_type` filter). */
+    const kinds = type === 'file_reference' && params.get('fileTypes')
+      ? params.get('fileTypes')!.split(',').map(kind => ({ Image: 'MediaImage', Video: 'Video' } as Record<string, string>)[kind.trim()]).filter(Boolean)
+      : RESOURCES[type]
+    items = labStoreReferences().filter(r => kinds.includes(r.type ?? ''))
   } else return refuse(422, 'This reference type has no browser yet. Its existing value is preserved.')
   const matches = items.filter(item => !query || item.label.toLowerCase().includes(query))
   const page = matches.slice(start, start + PAGE)

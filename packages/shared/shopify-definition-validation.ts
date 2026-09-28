@@ -2,6 +2,7 @@ import { Ajv, type ValidateFunction } from 'ajv'
 import { Ajv2019 } from 'ajv/dist/2019.js'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
+import { shopifyBoundWords } from './shopify-field-rules.js'
 
 const validators = new Map<string, ValidateFunction>()
 export function shopifyJsonSchemaError(schema: string, value: string): string | null {
@@ -38,6 +39,6 @@ export function shopifyObjectBoundError(type: string, value: Record<string, unkn
       else throw new Error('Unknown unit conversion')
     }
     if (!Number.isFinite(actual) || !Number.isFinite(limit)) throw new Error('Invalid constraint')
-    return (rule.name === 'min' ? actual < limit : actual > limit) ? `Shopify requires ${rule.name} ${rule.value}.` : null
+    return (rule.name === 'min' ? actual < limit : actual > limit) ? `Enter ${shopifyBoundWords(rule.value)} or ${rule.name === 'min' ? 'more' : 'less'}.` : null
   } catch { return 'This definition’s measurement bound cannot be read. Refresh the store schema; your value is preserved.' }
 }

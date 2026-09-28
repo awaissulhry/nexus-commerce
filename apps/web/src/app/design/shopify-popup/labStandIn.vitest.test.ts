@@ -24,9 +24,11 @@ describe('the lab stand-in store', () => {
     const found = items(call('GET', '/references', { type: 'metaobject_reference', metaobjectType: 'lab_icon_text', query: 'air' }))
     expect(found.map(i => i.id)).toEqual([LAB_ENTRIES.find(e => e.name === 'Air vents')!.id])
   })
-  it('lists every file kind for a file field, as today’s gateway does (gap G8)', () => {
-    const kinds = new Set(items(call('GET', '/references', { type: 'file_reference' })).map(i => i.type))
-    expect([...kinds].sort()).toEqual(['GenericFile', 'MediaImage', 'Video'])
+  it('lists only the file kinds a field allows, and every kind when it has no limit (gap G8, closed in B1)', () => {
+    const kinds = (params: Record<string, string>) => [...new Set(items(call('GET', '/references', { type: 'file_reference', ...params })).map(i => i.type))].sort()
+    expect(kinds({})).toEqual(['GenericFile', 'MediaImage', 'Video'])
+    expect(kinds({ fileTypes: 'Image' })).toEqual(['MediaImage'])
+    expect(kinds({ fileTypes: 'Image,Video' })).toEqual(['MediaImage', 'Video'])
   })
   it('finds a taxonomy value only by its raw id, as today (gap G12)', () => {
     const black = LAB_TAXONOMY_VALUES.find(v => v.label === 'Black')!
@@ -65,8 +67,7 @@ describe('entries in the stand-in store (same checks as saveLinkedEntry)', () =>
     const existing = LAB_ENTRIES.find(e => e.type === colour.type)!
     const read = call('GET', '/entry', { id: existing.id }).body as { revision: string }
     const answer = call('POST', '/entry', {}, { id: existing.id, expectedRevision: read.revision, type: colour.type, handle: existing.handle, fields: [{ key: 'image', value: video }] })
-    expect(answer.status).toBe(422)
-    expect((answer.body as { error: string }).error).toMatch(/file type/)
+    expect(answer).toEqual({ status: 422, body: { error: 'Image: This field takes images only.' } })
   })
   it('refuses a stale save ("changed in Shopify")', () => {
     const existing = LAB_ENTRIES.find(e => e.type === 'lab_faq')!
