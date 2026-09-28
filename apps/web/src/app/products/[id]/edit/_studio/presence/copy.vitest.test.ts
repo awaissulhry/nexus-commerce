@@ -24,7 +24,9 @@ describe('W0 honest absence and review vocabulary', () => {
     expect(reviewCopy('synchronize')).toMatchObject({ menu: 'Review and synchronize…', title: 'Review and synchronize' })
     const source = readFileSync(new URL('../sheet/channel/useChannelSheetAdapter.tsx', import.meta.url), 'utf8')
     expect(source).toContain("reviewCopy(reviewPath != null ? 'synchronize' : 'check')")
-    expect(source).toContain("reviewCopy(accountId && rows.some(row => row.aliasId === a.id && row.shopify) ? 'synchronize' : 'check')")
+    /* The menu's mode is Shopify synchronization exactly when a row of that listing is linked to Shopify (B4 named it). */
+    expect(source).toContain("const synchronize = !!accountId && rows.some(row => row.aliasId === a.id && row.shopify)")
+    expect(source).toContain("reviewCopy(synchronize ? 'synchronize' : 'check')")
   })
   it('all saved-value checks use the same words', () => {
     for (const file of ['../variants/channel/ChannelProjection.tsx', '../variants/channel/ProjectionPreflight.tsx', '../sheet/channel/AliasPublishControl.tsx']) {
