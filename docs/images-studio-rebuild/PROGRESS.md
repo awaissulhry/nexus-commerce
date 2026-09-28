@@ -55,7 +55,7 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
 - **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`), live and checked in production (below).
-- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases MERGED #130 (`0be048ee6`); W3 the first eBay photo send DONE (below); W4a same photo = PR #132; W4b language versions = PR (below); W4c the fill for GALE-JACKET waits for the Owner's word.
+- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases MERGED #130 (`0be048ee6`); W3 the first eBay photo send DONE (below); W4a same photo MERGED #132 (`d82a285b1`); W4b language versions = PR (below); W4c the fill for GALE-JACKET waits for the Owner's word.
 
 ## W4b — Language versions of one photo (2026-09-28, library duplicates Fix 2 part 2)
 - **The page:** photos with the same template and other text (dHash-256 17–26 with aHash ≤ 6 — a size chart per
