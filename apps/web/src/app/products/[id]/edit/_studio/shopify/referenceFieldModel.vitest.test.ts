@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { baseReferenceType, chosenChoices, listMax, referenceChoice, referenceNoun, referenceUiFor, singleEntryType } from './referenceFieldModel'
+import { addPrompt, baseReferenceType, chosenChoices, listMax, referenceChoice, referenceNoun, referenceUiFor, singleEntryType } from './referenceFieldModel'
 
 /* Made-up store: two entry definitions. */
 const schema = {
@@ -41,6 +41,9 @@ describe('which pop-up a reference field gets', () => {
     expect(olderPickerReason(baseColour, withProducts(null))).toEqual({ text: 'Shopify lists these values only through a product category, and this field has none. Paste a value’s Shopify ID to choose it.', blocked: false })
     expect(olderPickerReason({ ...baseColour, validations: [] }, withProducts(null))).toEqual({ text: 'This field does not name its list of values. Paste a value’s Shopify ID to choose it.', blocked: false })
     expect(olderPickerReason(baseColour, withProducts({ key: 'category', values: ['zz-1'] }))).toBeNull()
+  })
+  it('asks to add in plain case, keeping a name in capitals', () => {
+    expect(['FAQ', 'Color', 'Press quote', 'entry', 'SKU list'].map(addPrompt)).toEqual(['Add FAQ', 'Add color', 'Add press quote', 'Add entry', 'Add SKU list'])
   })
   it('names the thing being picked', () => {
     expect(baseReferenceType('list.variant_reference')).toBe('variant_reference')

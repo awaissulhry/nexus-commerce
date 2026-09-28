@@ -21,7 +21,7 @@ import {
 } from '@/design-system/components'
 import { Button, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { linkedEndpoint, linkedRequest } from './api'
-import { baseReferenceType, chosenChoices, kindSwitchFor, listMax, pickerEntryKinds, referenceChoice, referenceNoun, type ReferenceUi } from './referenceFieldModel'
+import { addPrompt, baseReferenceType, chosenChoices, kindSwitchFor, listMax, pickerEntryKinds, referenceChoice, referenceNoun, type ReferenceUi } from './referenceFieldModel'
 import styles from './linked.module.css'
 
 /** A page of search results for one field, re-read 200 ms after typing stops; older answers never overwrite newer. */
@@ -168,7 +168,7 @@ export function ShopifyReferenceField(props: ShopifyReferenceFieldProps) {
   if (ui === 'entries') {
     if (list) return <div className={styles.stack}>
       <MediaChipField label={`Chosen ${multi ? def.name : entryName ?? def.name}`} items={chosen} disabled={locked} onChange={next => accept(next, [])}
-        query={search.query} onQueryChange={search.setQuery} placeholder={`Add ${(entryName ?? noun.one).toLowerCase()}`}
+        query={search.query} onQueryChange={search.setQuery} placeholder={addPrompt(entryName ?? noun.one)}
         onClear={() => accept([], [])} controls={pick.current?.listId} activeDescendant={active}
         onInputKeyDown={event => { pick.current?.handleKey(event) }} />
       {!locked && pickList(false)}
