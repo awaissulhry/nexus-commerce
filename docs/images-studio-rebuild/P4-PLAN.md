@@ -96,11 +96,15 @@ complete whatever is left … AAA quality", and moved the Amazon ZIP from P5 int
     live in that tool. A family on the plan never shows that tool, and its route now refuses such a family (409) and
     names the new place, because that store is not the family's photos. Both use one engine (`jpeg-archive.ts`). The
     previous edit page's ZIP API (§7.1 "A") has no screen and goes in P6.
-  - **Limits (Nexus's own; Amazon takes 5 GB per upload):** 1,000 files; 100 MB (a photo counts once per file it
-    fills); 90 s to make the ZIP. The deadline now also stops a download in progress, so the answer starts before
+  - **Limits (Nexus's own; Amazon takes 5 GB per upload):** 1,000 files; 1 GB (a photo counts once per file it
+    fills; 100 MB at first, raised the same day — below); 90 s to make the ZIP. The deadline now also stops a download in progress, so the answer starts before
     Vercel's proxy stops waiting (120 s for the first byte, Vercel docs "proxied request timeout"); after that the file
     streams as long as it needs. The browser waits 130 s for the answer; a proxy's 502/504 page becomes a sentence. The
     window states the limits before the download.
-  - **Open risk:** All photos repeats a photo in every ASIN's file, so a large family can pass 100 MB. The window then
-    says so and saves nothing. If that happens in production, the next step is to stream the ZIP (memory then holds
-    each photo once).
+  - **Size limit raised to 1 GB (2026-09-28, the Owner chose it):** All photos repeats a photo in every ASIN's file.
+    In production, GALE-JACKET's IT All photos (182 files, photos 2,000–2,250 px) stopped at 100 MB in about 2 s. The
+    limit protected nothing that costs: the API has 8 GB (about 0.7 GB used on average, 2.4 GB at most over 24 h), a
+    ZIP is held for seconds, and Railway bills about $0.05 per GB sent. Time is the real limit — the first byte must
+    leave within Vercel's 120 s — and the 90 s guard stays. The older "Export PS images" keeps 100 MB (you choose SKUs
+    there). Not stated by Vercel: a size limit for proxied responses; the first large real download shows it. Next
+    step only if needed (above 1 GB, or slow phones): stream the ZIP.

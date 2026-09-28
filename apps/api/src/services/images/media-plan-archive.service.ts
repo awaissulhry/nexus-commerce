@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import prisma from '../../db.js'
-import { planAmazonArchive, type AmazonArchiveKind } from '@nexus/shared/media-plan-archive'
+import { AMAZON_ARCHIVE_MAX_BYTES, AMAZON_ARCHIVE_MAX_SIZE, planAmazonArchive, type AmazonArchiveKind } from '@nexus/shared/media-plan-archive'
 import type { AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { marketLanguages } from '../pim/market-languages.js'
@@ -20,7 +20,7 @@ import { buildJpegArchive } from './jpeg-archive.js'
  */
 const ZIP_WORDS = {
   tooLong: 'Making the ZIP took more than 90 seconds, so Nexus stopped. No ZIP was saved. Try again in a minute.',
-  tooBig: (mb: number) => `This ZIP would be larger than ${mb} MB, the most Nexus makes in one ZIP. No ZIP was saved.`,
+  tooBig: () => `This ZIP would be larger than ${AMAZON_ARCHIVE_MAX_SIZE}, the most Nexus makes in one ZIP. No ZIP was saved.`,
   nothingSaved: 'No ZIP was saved.',
 }
 
@@ -65,7 +65,7 @@ export async function amazonArchiveDownload(productId: string, input: AmazonArch
   if (before.digest !== input.digest) throw new WorkspaceScopeError('The photos changed since the preview. Check the list again, then download.', 409)
   if (before.plan.issues.length) throw new WorkspaceScopeError(before.plan.issues.join('\n'), 422)
   if (!before.files.length) throw new WorkspaceScopeError('This ZIP has no photos, so none was made.', 422)
-  const buffer = await buildJpegArchive(before.files, ZIP_WORDS)
+  const buffer = await buildJpegArchive(before.files, ZIP_WORDS, { maxBytes: AMAZON_ARCHIVE_MAX_BYTES })
   // The photos must not have changed while they were downloaded: the archive matches the preview exactly.
   const after = await archivePlan(productId, input)
   if (after.digest !== before.digest) throw new WorkspaceScopeError('The photos changed while the ZIP was made. Check the list again, then download.', 409)

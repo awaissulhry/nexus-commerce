@@ -101,8 +101,8 @@ PLAN §4.5 and §11, closed in one PR:
   German (DE is the account's first market). Found: "has a Italian version" → now "has a version in Italian" (the fix PR after #129).
   **Size, measured** (Owner's word, one real download, read only): IT All photos (182 files, photos 2,000–2,250 px)
   stops at the limit in about 2 s — "This ZIP would be larger than 100 MB, the most Nexus makes in one ZIP. No ZIP was
-  saved." Nothing reached the Downloads folder. So the open risk in P4-PLAN § P4d is real for this family: All photos
-  needs a streamed ZIP (next step, the Owner decides).
+  saved." Nothing reached the Downloads folder. The 100 MB limit protected nothing that costs (P4-PLAN § P4d), so the
+  Owner chose to raise it: **1 GB** (the fix PR after #131), one shared constant for the server and the window.
 - **Open:** the Amazon channel view → **Export ZIP for Seller Central**. One window (`plan-page/AmazonZipDialog.tsx`):
   **Market** (the account's markets), **What to export** (All photos · Safety images · Country photos), what the ZIP
   holds and in which language, **Where to upload it** (Seller Central's own names), then the list: every file

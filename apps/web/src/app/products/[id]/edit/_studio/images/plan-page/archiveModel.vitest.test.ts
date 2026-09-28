@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { archiveKindHint, archivePreviewSchema, archiveSummary, countryName, filesByAsin, languageName, type ArchivePreview } from './archiveModel'
+import { ARCHIVE_LIMITS, archiveKindHint, archivePreviewSchema, archiveSummary, countryName, filesByAsin, languageName, type ArchivePreview } from './archiveModel'
 
 const file = (asin: string, slot: string, skus: string[], photo = slot.toLowerCase()) => ({ name: `${asin}.${slot}.jpg`, asin, slot, skus, assetId: `a-${photo}`, photo })
 const preview = (extra: Partial<ArchivePreview> = {}): ArchivePreview => ({ market: 'DE', kind: 'slots', language: 'de', apiLanguage: 'it', apiMarket: 'IT', digest: 'a'.repeat(64),
@@ -39,6 +39,9 @@ describe('Amazon ZIP window (P4d)', () => {
     expect(country).toMatch(/Do not use the normal upload for this ZIP: that changes the global photos\.$/)
     expect(countryName('UK')).toBe('United Kingdom')
     expect(languageName('not a language')).toBe('NOT A LANGUAGE')
+  })
+  it('states the limits the server uses', () => {
+    expect(ARCHIVE_LIMITS).toBe('Nexus makes a ZIP of at most 1,000 files and 1 GB. Making it can take up to 90 seconds.')
   })
   it('refuses a preview answer without a digest (the download is bound to it)', () => {
     expect(archivePreviewSchema.safeParse({ ...preview(), digest: 'short' }).success).toBe(false)

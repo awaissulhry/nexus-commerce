@@ -15,6 +15,10 @@ import { AMAZON_SLOTS, MEDIA_LIMITS, type AmazonMediaLayout, type MediaAsset } f
 export type AmazonArchiveKind = 'slots' | 'safety' | 'country'
 export const AMAZON_ARCHIVE_KINDS: readonly AmazonArchiveKind[] = ['slots', 'safety', 'country']
 export const AMAZON_ARCHIVE_MAX_FILES = 1000
+/** Nexus's own size limit (Amazon takes up to 5 GB per upload). A photo counts once per file it fills. The Owner chose
+ *  1 GB on 2026-09-28: 100 MB stopped GALE-JACKET's 182-file ZIP; the API has 8 GB and a ZIP is held for seconds. */
+export const AMAZON_ARCHIVE_MAX_BYTES = 1024 ** 3
+export const AMAZON_ARCHIVE_MAX_SIZE = '1 GB'
 const ASIN = /^[A-Z0-9]{10}$/
 const SLOTS = [...AMAZON_SLOTS, 'SWCH'] as const
 
