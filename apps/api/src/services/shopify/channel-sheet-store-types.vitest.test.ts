@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 import { informationRegistry, informationStoredValue } from '@nexus/shared/shopify-information'
-import { LAB_ENTRIES, LAB_FILES, LAB_PAGES, LAB_PRODUCTS, LAB_SCHEMA, LAB_STORE_FIELDS, labReferences, labTypeField } from '@nexus/shared/shopify-lab-store'
+import { LAB_CATEGORIES, LAB_ENTRIES, LAB_FILES, LAB_PAGES, LAB_PRODUCTS, LAB_SCHEMA, LAB_STORE_FIELDS, LAB_TAXONOMY_VALUES, labReferences, labTypeField } from '@nexus/shared/shopify-lab-store'
 import { shopifyCellToken } from './channel-sheet-projection.js'
 
 /*
@@ -23,7 +23,9 @@ vi.mock('./linked-products-gateway.js', () => ({ resolveLinkedReferenceNames: as
   s.nameReads.push(ids)
   if (s.namesDown) throw new Error('Shopify request failed (HTTP 429).')
   return ids.map(id => s.refs.find((r: any) => r.id === id) ?? { id, label: 'Unavailable reference', image: null, available: false })
-} }))
+}, readTaxonomyAttributeValues: async (_gql: unknown, handle: string, categories: string[]) => categories.length
+  ? { attribute: { id: `gid://shopify/TaxonomyAttribute/${handle}`, name: handle }, values: LAB_TAXONOMY_VALUES.filter(v => v.attribute === handle) }
+  : { attribute: null, values: [] } }))
 vi.mock('./linked-products.service.js', () => ({ LINKED_KEY: '_nexusLinkedProducts', AUTOMATION_KEY: '_nexusLinkedAutomation',
   getLinkedWorkspace: async () => structuredClone(s.workspace),
   linkedState: async () => ({ workspace: structuredClone(s.workspace), draft: structuredClone(s.workspace.draft), listing: { id: 'listing-a', version: 1 } }),
@@ -35,9 +37,11 @@ import { saveShopifySheetCells } from './channel-sheet.service.js'
 const product = 'gid://shopify/Product/10', variant = 'gid://shopify/ProductVariant/11'
 const scope = { accountId: 'store-a', listingId: 'listing-a', market: 'GLOBAL' as const, locale: 'en' }
 const limitedFile = labTypeField('file_reference')
+/* A category-bound taxonomy field (made up), so the draft save can check its attribute (B2, G12). */
+const baseColors = { ...labTypeField('list.product_taxonomy_value_reference'), name: 'Base colors', key: 'base_colors', constraints: { key: 'category', values: LAB_CATEGORIES } }
 beforeEach(() => {
   s.writes = []; s.nameReads = []; s.refs = labReferences(); s.namesDown = false; graphql.mockClear()
-  s.schema = { ...LAB_SCHEMA, definitions: [...LAB_STORE_FIELDS, limitedFile] }
+  s.schema = { ...LAB_SCHEMA, definitions: [...LAB_STORE_FIELDS, limitedFile, baseColors] }
   s.workspace = { productId: 'family', familyId: 'family', revision: '1', destination: { accountId: 'store-a', listingId: 'listing-a', market: 'GLOBAL' }, suggestedProductIds: [product], operation: null,
     draft: { ...emptyShopifyLinkedDraft(), informationOnly: true, members: [{ id: product, title: 'Listed title', handle: 'listed', image: null }] } }
   s.snapshot = { currency: 'EUR', timezone: 'Europe/Rome', rows: [
@@ -46,7 +50,7 @@ beforeEach(() => {
   ] }
 })
 const fieldFor = (key: string) => {
-  const def = key === 'limited_file' ? limitedFile : LAB_STORE_FIELDS.find(d => d.key === key)!
+  const def = key === 'limited_file' ? limitedFile : key === 'base_colors' ? baseColors : LAB_STORE_FIELDS.find(d => d.key === key)!
   return informationRegistry(s.schema).find(f => f.definition?.id === def.id)!
 }
 function cell(key: string, value: string | null) {
@@ -56,6 +60,7 @@ function cell(key: string, value: string | null) {
 }
 const save = (key: string, value: string | null) => saveShopifySheetCells('family', scope, { cells: [cell(key, value)] }, 'user-1')
 const drafted = (key: string) => s.workspace.draft.edits.find((e: any) => e.key === (key === 'limited_file' ? limitedFile.key : key))?.nextValue
+const tax = (label: string) => LAB_TAXONOMY_VALUES.find(v => v.label === label)!.id
 const entry = (kind: string, n = 0) => LAB_ENTRIES.filter(e => e.type === kind)[n].id
 
 describe('B1 · draft save of the 11 store types (no Shopify write)', () => {
@@ -121,6 +126,12 @@ describe('B1 · LB-D2: a pasted entry is checked against the store at the draft 
     expect(result.cells[fieldFor('variation_label').id]).toMatchObject({ ok: true })
     expect(drafted('variation_label')).toBe('Navy')
     expect(drafted('short_summary')).toBeUndefined()
+  })
+  it('a taxonomy value must be a value of the field’s attribute (B2)', async () => {
+    const good = await save('base_colors', JSON.stringify([tax('Black'), tax('Navy')]))
+    expect(good.cells[fieldFor('base_colors').id]).toMatchObject({ ok: true })
+    const bad = await save('base_colors', JSON.stringify([tax('Solid')]))
+    expect(bad.cells[fieldFor('base_colors').id]).toEqual({ ok: false, reason: 'Listed title / Base colors: Choose a Base colors value from Shopify’s list.' })
   })
   it('lets a clear through without a read', async () => {
     s.workspace.draft.edits = []

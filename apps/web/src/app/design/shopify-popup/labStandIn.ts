@@ -4,13 +4,14 @@
  * It answers the Shopify pop-up's calls for ONE made-up product — `/schema`, `/references`, `/reference-names`, `/entry`
  * (read and save) — from the made-up store in `@nexus/shared/shopify-lab-store`. It copies what the real server does today
  * (`apps/api/src/services/shopify/linked-products-gateway.ts`, `linked-metaobjects.service.ts`), including today's gaps
- * (a taxonomy value is found only by its raw id), so the lab shows the truth. Pure:
+ * so the lab shows the truth. Pure:
  * `installLabShopify` wires it to `fetch`; the tests call it directly.
  *
  * Nothing leaves the browser tab. Saved entries live in memory until the page reloads or "Reset the lab".
  */
 import { shopifyReferenceError, validateShopifyField, type ShopifyReference, type ShopifyReferencePage, type ShopifyReusableEntry } from '@nexus/shared/shopify-linked-products'
-import { LAB_ENTRIES, LAB_ENTRY_KINDS, LAB_FILES, LAB_SCHEMA, labEntryReference, labGid, labReferences, type LabEntry } from '@nexus/shared/shopify-lab-store'
+import { shopifyTaxonomyCategories } from '@nexus/shared/shopify-linked-products'
+import { LAB_ENTRIES, LAB_ENTRY_KINDS, LAB_FILES, LAB_SCHEMA, LAB_TAXONOMY_VALUES, labEntryReference, labGid, labReferences, type LabEntry } from '@nexus/shared/shopify-lab-store'
 
 /** The lab's Nexus product id. Only calls addressed to it are answered here. */
 export const LAB_PRODUCT = 'design-lab-product'
@@ -47,8 +48,12 @@ function search(params: URLSearchParams): LabAnswer {
     const kind = params.get('metaobjectType')
     if (!kind) return refuse(400, 'Choose the reusable entry type.')
     items = state.entries.filter(e => e.type === kind).map(labEntryReference)
+  } else if (type === 'product_taxonomy_value_reference' && params.get('attribute')) {
+    /* The attribute's own list, through a category the field applies to — like the gateway (B2, G12). */
+    const attribute = params.get('attribute')!
+    if (!(params.get('categories') ?? '').trim()) return refuse(422, `Shopify lists the “${attribute}” values only through a product category, and this field has none that carries it. The stored value is kept.`)
+    items = LAB_TAXONOMY_VALUES.filter(v => v.attribute === attribute).map(({ attribute: _a, ...value }) => value)
   } else if (type === 'product_taxonomy_value_reference') {
-    /* Today a taxonomy value is found only by its raw id (linked-products-gateway.ts:176-179) — gap G12. */
     const raw = params.get('query') ?? ''
     return ok({ items: labStoreReferences().filter(r => r.id === raw && r.type === 'TaxonomyValue'), cursor: null } satisfies ShopifyReferencePage)
   } else if (RESOURCES[type]) {
@@ -90,7 +95,7 @@ function saveEntry(body: unknown): LabAnswer {
   const input = body as { id?: string; expectedRevision?: string; type?: string; handle?: string; status?: 'ACTIVE' | 'DRAFT'; fields?: Array<{ key: string; value: string }> }
   if (!input?.type || !input.handle || !/^[a-z0-9][a-z0-9-]{0,254}$/.test(input.handle) || !Array.isArray(input.fields)) return refuse(400, 'Choose an entry type, handle and valid fields.')
   const kind = kindOf(input.type)
-  if (!kind || kind.fields.some(f => f.readOnlyReason)) return refuse(422, 'This reusable entry type is unavailable or read-only.')
+  if (!kind) return refuse(422, 'This reusable entry type is no longer in the store. Reload the store schema.')
   if (input.status && !kind.publishable) return refuse(422, 'This entry type does not support a publication status.')
   if (new Set(input.fields.map(f => f.key)).size !== input.fields.length) return refuse(400, 'Each entry field must appear once.')
   let existing = input.id ? state.entries.find(e => e.id === input.id) ?? null : null
@@ -101,16 +106,19 @@ function saveEntry(body: unknown): LabAnswer {
   for (const field of input.fields) {
     const def = kind.fields.find(d => d.key === field.key)
     if (!def) return refuse(422, `The entry field ${field.key} is no longer defined.`)
+    if (def.readOnlyReason) return refuse(422, `${def.name} cannot be changed here: ${def.readOnlyReason}`)
     const error = validateShopifyField(def, field.value === '' ? null : field.value)
     if (error) return refuse(422, `${def.name}: ${error}`)
     if (def.type.includes('_reference') && field.value) {
       const ids: string[] = def.type.startsWith('list.') ? JSON.parse(field.value) : [field.value]
       const problem = shopifyReferenceError(def, ids.map(id => refs.find(r => r.id === id) ?? { available: false }), LAB_SCHEMA)
       if (problem) return refuse(422, problem)
+      const handle = def.validations.find(v => v.name === 'product_taxonomy_attribute_handle')?.value
+      if (handle && shopifyTaxonomyCategories(def, LAB_SCHEMA).length && ids.some(id => !LAB_TAXONOMY_VALUES.some(v => v.id === id && v.attribute === handle))) return refuse(422, `${def.name}: Choose a ${def.name} value from Shopify’s list.`)
     }
   }
   for (const def of kind.fields.filter(d => d.required)) {
-    if (!(input.fields.find(f => f.key === def.key)?.value ?? existing?.fields[def.key])) return refuse(422, `${def.name} is required.`)
+    if (!(input.fields.find(f => f.key === def.key)?.value ?? existing?.fields[def.key])) return refuse(422, `${def.name}: Enter a value. Shopify needs this field.`)
   }
   if (existing && (!input.id || input.expectedRevision !== revision(existing.id))) return refuse(409, 'This entry changed in Shopify. Reload it before saving.')
   /* A Shopify `userErrors` answer reaches the pop-up today as the route's 502 with `ShopifyUserErrors`' text

@@ -14,10 +14,17 @@ import { ShopifyRatingEditor } from './ShopifyRatingEditor'
 import { linkedEndpoint, linkedRequest } from './api'
 import styles from './linked.module.css'
 
-export function LinkedFieldEditor({ path, definition: def, value, disabled, schema, onChange, onOpenEntry, onCopyEntry, onCreateEntry, nested = false }: {
+export function LinkedFieldEditor({ path, definition: def, value, disabled, schema, onChange, onOpenEntry, onCopyEntry, onCreateEntry, nested = false,
+  showErrors = true, multiLineHint = 'Enter adds a line · Ctrl+Enter (⌘+Enter on a Mac) saves', referenceVersion }: {
   path: string; definition: ShopifyFieldDefinition; value: string | null; disabled: boolean; schema: ShopifyStoreSchema
   /** One value inside a list editor: the list states the rules once, above its values. */
   nested?: boolean
+  /** False until the host's first save try: a form that just opened is not shouting "required" at every empty field (B2). */
+  showErrors?: boolean
+  /** A multi-line box's key fact — the entry editor has no Ctrl+Enter save, so it says only "Enter adds a line". */
+  multiLineHint?: string
+  /** Bumped by the host after an entry is saved, so a picker's list is read again. */
+  referenceVersion?: number
   onChange(value: string | null): void; onOpenEntry?(id: string): void; onCopyEntry?(id: string): void
   /** "Add new entry" in an entry picker (sheet pop-up rebuild P1, D2 a). Absent ⇒ no create button. */
   onCreateEntry?(entryType: string): void
@@ -65,7 +72,7 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
   if (pictured && ui !== 'legacy') control = <ShopifyReferenceField ui={ui} path={path} definition={def} schema={schema} values={values} names={names} namesFailed={!!nameError}
     locked={locked} onChange={next => onChange(list ? JSON.stringify(next) : next[0] ?? null)} onError={setPickError}
     onPicked={refs => setNames(old => [...old.filter(n => !refs.some(r => r.id === n.id)), ...refs])}
-    onOpenEntry={onOpenEntry} onCopyEntry={onCopyEntry} onCreateEntry={onCreateEntry} />
+    onOpenEntry={onOpenEntry} onCopyEntry={onCopyEntry} onCreateEntry={onCreateEntry} referenceVersion={referenceVersion} />
   else if (kind === 'older-picker') control = <div className={styles.stack}>
     {values.length > 0 && <OrderedList label={`${def.name} references`} items={values} disabled={locked || !list} draggable keyboardGrip itemLabel={id => names.find(n => n.id === id)?.label ?? 'Referenced item'} onChange={next => onChange(JSON.stringify(next))} renderItem={id => {
       const item = names.find(n => n.id === id)
@@ -95,7 +102,7 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
           const i = Number(id), item = listItems[i]
           const raw = typeof item === 'object' ? shopifyJson.stringify(item) : String(item)
           const definition = { ...def, name: `${def.name} ${i + 1}`, type, validations: def.validations.filter(r => !r.name.startsWith('list.')) }
-          return <div className={styles.stack}><LinkedFieldEditor nested path={path} schema={schema} definition={definition} value={raw} disabled={locked}
+          return <div className={styles.stack}><LinkedFieldEditor nested showErrors={showErrors} multiLineHint={multiLineHint} path={path} schema={schema} definition={definition} value={raw} disabled={locked}
             onChange={next => onChange(shopifyJson.stringify(listItems.map((v, index) => index === i ? serialize(next) : v)))} />
             <Button size="xs" variant="quiet" disabled={locked} aria-label={`Remove ${def.name} value ${i + 1}`} onClick={() => onChange(shopifyJson.stringify(listItems.filter((_, index) => index !== i)))}>Remove value</Button></div>
         }} />
@@ -123,12 +130,12 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
     </span></Field>
   }
   else if (kind === 'line') control = <Field label={def.name}><Input size="sm" disabled={locked} value={text} inputMode={type.startsWith('number_') ? 'decimal' : undefined} onChange={e => onChange(e.target.value)} /></Field>
-  else if (kind === 'multi-line') control = <Field label={def.name} hint="Enter adds a line · Ctrl+Enter (⌘+Enter on a Mac) saves"><Textarea disabled={locked} rows={3} value={text} onChange={e => onChange(e.target.value)} /></Field>
+  else if (kind === 'multi-line') control = <Field label={def.name} hint={multiLineHint}><Textarea disabled={locked} rows={3} value={text} onChange={e => onChange(e.target.value)} /></Field>
   else control = <Field label={def.name} hint="Structured Shopify value. Its fields are preserved exactly."><Textarea disabled={locked} rows={3} value={text} onChange={e => onChange(e.target.value)} /></Field>
   return <div className={styles.stack}>
     {control}
     {def.description && <p className={styles.hint}>{def.description}</p>}
-    {def.readOnlyReason ? <p className={styles.hint}>{def.readOnlyReason}</p> : (pickError || error) && <p role="status" className={styles.validation}>{pickError || error}</p>}
+    {def.readOnlyReason ? <p className={styles.hint}>{def.readOnlyReason}</p> : (pickError || (showErrors && error)) && <p role="status" className={styles.validation}>{pickError || error}</p>}
     {/* A value inside a list has its own "Remove value"; a second "Clear value" beside it only confused. */}
     {!locked && value !== null && !pictured && !nested && <Button size="xs" variant="quiet" onClick={() => onChange(null)}>Clear value</Button>}
     {rules && <p className={styles.hint}>{rules}</p>}

@@ -31,6 +31,8 @@ export function singleEntryType(def: Pick<ShopifyFieldDefinition, 'type' | 'vali
 export function referenceUiFor(def: Pick<ShopifyFieldDefinition, 'type' | 'validations'>, schema: ShopifyStoreSchema): ReferenceUi {
   const base = baseReferenceType(def.type)
   if (base === 'metaobject_reference') return singleEntryType(def, schema) ? 'entries' : 'legacy'
+  /* A taxonomy value with its attribute named ("color", "pattern") picks from Shopify's list of that attribute (B2, G12). */
+  if (base === 'product_taxonomy_value_reference') return def.validations.some(v => v.name === 'product_taxonomy_attribute_handle') ? 'entries' : 'legacy'
   if ((RESOURCE_TYPES as readonly string[]).includes(base)) return 'resources'
   return 'legacy'
 }

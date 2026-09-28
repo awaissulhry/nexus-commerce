@@ -65,7 +65,7 @@ const BAD_ROWS: LabRow[] = [
   ...LAB_TYPE_FIELDS.flatMap(field => labBadValues(field.type).map((bad, i) => {
     const today = validateShopifyField(field, bad.value)
     return { id: `bad:${field.type}:${i}`, label: `${field.name} — breaks “${bad.rule}”`, field, start: bad.value, group: 'Values the rules must refuse',
-      note: today ? { tone: 'neutral' as const, text: 'Refused today' } : { tone: 'warning' as const, text: `Accepted today — gap ${bad.gap ?? '?'}` } }
+      note: today ? { tone: 'neutral' as const, text: 'Refused today' } : bad.storeCheck ? { tone: 'neutral' as const, text: 'Checked against Shopify’s list when saved' } : { tone: 'warning' as const, text: `Accepted today — gap ${bad.gap ?? '?'}` } }
   })),
   ...LAB_ODD_VALUES.map((odd, i) => ({ id: `odd:${i}`, label: `${labTypeField(odd.type).name} — ${odd.note}`, field: labTypeField(odd.type), start: odd.value, group: 'Old or odd stored values' })),
 ]
@@ -253,7 +253,7 @@ export function ShopifyPopupLab() {
           <div className={styles.panelBody}>
             <strong>{openRow.field.name} · SAMPLE-100</strong>
             {error && <Banner tone="danger">{error}</Banner>}
-            <LinkedFieldEditor path={LAB_PATH} schema={LAB_SCHEMA} definition={openRow.field} value={draft} disabled={false}
+            <LinkedFieldEditor path={LAB_PATH} schema={LAB_SCHEMA} definition={openRow.field} value={draft} disabled={false} referenceVersion={storeVersion}
               onChange={next => { setDraft(next); setError('') }}
               onOpenEntry={id => setEntry({ id })} onCopyEntry={id => setEntry({ id, copy: true })} onCreateEntry={type => setEntry({ id: null, type })} />
           </div>

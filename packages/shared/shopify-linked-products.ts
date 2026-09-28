@@ -116,7 +116,7 @@ export interface ShopifyMetaobjectDefinition {
   id: string; name: string; type: string; description: string | null
   access: { admin: string | null; storefront: string | null }; fields: ShopifyFieldDefinition[]; publishable?: boolean
 }
-export { shopifyReferenceError, shopifyReferenceTypes } from './shopify-reference-validation.js'
+export { shopifyReferenceError, shopifyReferenceTypes, shopifyTaxonomyCategories } from './shopify-reference-validation.js'
 export interface ShopifyStoreSchema {
   definitions: ShopifyFieldDefinition[]; metaobjectDefinitions: ShopifyMetaobjectDefinition[]
   native?: { enums: Record<string, { name: string; description: string | null }[]>; scopes: string[]; inputs: Record<string, string[]> };
@@ -196,7 +196,7 @@ export function linkedFamilyChanges(draft: ShopifyLinkedDraft): ShopifyFieldEdit
 export function validateShopifyField(def: Pick<ShopifyFieldDefinition, 'type' | 'validations' | 'required'>, raw: string | null): string | null {
   const unsupported = shopifyTypeReason(def.type)
   if (unsupported) return unsupported
-  if (raw === null) return def.required ? 'This field is required.' : null
+  if (raw === null) return def.required ? 'Enter a value. Shopify needs this field.' : null
   if (raw.length > 2000000) return 'This field exceeds the supported value size.'
   const list = def.type.startsWith('list.'), type = list ? def.type.slice(5) : def.type
   const noun = shopifyNoun(def.type)
