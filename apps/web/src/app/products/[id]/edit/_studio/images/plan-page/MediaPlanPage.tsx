@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { Redo2, Send, Undo2, Upload } from 'lucide-react'
 import type { MediaOp, MediaSetRef } from '@nexus/shared/media-plan'
 
-import { Banner, Drawer, Listbox, MediaPreview, Modal, SourceIndicator, useToast } from '@/design-system/components'
-import { Button, ToolbarButton } from '@/design-system/primitives'
+import { Banner, Drawer, Field, Listbox, MediaPreview, Modal, SourceIndicator, useToast } from '@/design-system/components'
+import { Button, Select, ToolbarButton } from '@/design-system/primitives'
 
 import { MASTER_SCOPE } from '../../types'
 import { useStudioScope } from '../../contracts'
@@ -19,12 +19,13 @@ import { CompareDialog } from './CompareDialog'
 import { UploadDialog } from './UploadDialog'
 import { PublishPhotosDialog } from './PublishPhotosDialog'
 import { SamePhotoDialog } from './SamePhotoDialog'
-import { markDistinct, markSame, separate, undoSame } from './lookalikeApi'
+import { joinVersions, leaveVersions, markDistinct, markSame, separate, undoSame, undoVersions, type SamePhotoUndo, type VersionsUndo } from './lookalikeApi'
 import {
   CHANNEL_LABEL, assetMap, cardOf, libraryUsage, ownedSkuSets, setRows, showAsOptions, swatchRows, viewAxis, viewStack,
-  type LayerView, type LibraryAsset, type MediaChannel, type MediaRead,
+  languageName, versionLanguages, versionsOf, type LayerView, type LibraryAsset, type MediaChannel, type MediaRead,
 } from './model'
-import type { MediaPlanState } from './useMediaPlan'
+import { apiSend } from '../api'
+import type { ActionEntry, MediaPlanState } from './useMediaPlan'
 import styles from './planPage.module.css'
 
 const WIDE = 1180
@@ -70,7 +71,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   // Review & publish: false = closed, 'all' = every destination (toolbar), else the destination key it was opened from.
   const [publishing, setPublishing] = useState<false | 'all' | string>(false)
   // W4a — two library photos that look the same ("Same photo?").
-  const [lookalike, setLookalike] = useState<{ a: string; b: string } | null>(null)
+  const [lookalike, setLookalike] = useState<{ a: string; b: string; kind?: 'same' | 'versions' } | null>(null)
 
   const assets = useMemo(() => assetMap(read), [read])
   const usage = useMemo(() => libraryUsage(read), [read])
@@ -97,24 +98,47 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   }, [plan, toast])
 
   const openAsset = (id: string) => { setLibraryOpen(false); setViewing(id) }
-  const markSamePhoto = async (keep: LibraryAsset, drop: LibraryAsset) => {
-    const done = await markSame(read.rootId, keep.id, drop.id)
+  // W4a/W4b — library answers go into the page's Undo/Redo (⌘Z, ⌘⇧Z), like plan edits; the message's Undo is the same entry.
+  const sameEntry = (keep: LibraryAsset, drop: LibraryAsset, undo: SamePhotoUndo): ActionEntry => ({ label: `Same photo: ${drop.label} and ${keep.label}`,
+    run: async () => {
+      await undoSame(read.rootId, undo)
+      toast(`${drop.label} is its own photo again.`, 'success')
+      return { label: `Same photo: ${drop.label} and ${keep.label}`, run: async () => sameEntry(keep, drop, (await markSame(read.rootId, keep.id, drop.id)).undo) }
+    } })
+  const versionsEntry = (a: LibraryAsset, b: LibraryAsset, languages: Record<string, string>, undo: VersionsUndo): ActionEntry => ({ label: `Language versions: ${a.label} and ${b.label}`,
+    run: async () => {
+      await undoVersions(read.rootId, undo)
+      toast(`${a.label} and ${b.label} are two photos again.`, 'success')
+      return { label: `Language versions: ${a.label} and ${b.label}`, run: async () => versionsEntry(a, b, languages, (await joinVersions(read.rootId, [a.id, b.id], languages)).undo) }
+    } })
+  const distinctEntry = (a: LibraryAsset, b: LibraryAsset): ActionEntry => ({ label: `Not the same: ${a.label} and ${b.label}`,
+    run: async () => {
+      await markDistinct(read.rootId, a.id, b.id, true)
+      return { label: `Not the same: ${a.label} and ${b.label}`, run: async () => { await markDistinct(read.rootId, a.id, b.id); return distinctEntry(a, b) } }
+    } })
+  const done = (entry: ActionEntry, text: string) => {
+    plan.record(entry)
     void plan.reload()
-    const undo = async () => {
-      try { await undoSame(read.rootId, done.undo); void plan.reload(); toast(`${drop.label} is its own photo again.`, 'success') }
-      catch (e) { toast(e instanceof Error ? e.message : String(e), 'danger') }
-    }
-    toast(<span className={styles.toast}>{drop.label} is now a copy of {keep.label}{done.layersChanged ? ` (${done.layersChanged} photo layer${done.layersChanged === 1 ? '' : 's'} changed)` : ''}.{' '}
-      <Button size="xs" variant="secondary" onClick={() => void undo()}>Undo</Button></span>, 'success', { duration: 10000 })
+    toast(<span className={styles.toast}>{text}{' '}<Button size="xs" variant="secondary" onClick={() => void plan.undoAction(entry)}>Undo</Button></span>, 'success', { duration: 10000 })
+  }
+  const layers = (n: number) => n ? ` (${n} photo layer${n === 1 ? '' : 's'} changed)` : ''
+  const markSamePhoto = async (keep: LibraryAsset, drop: LibraryAsset) => {
+    const answer = await markSame(read.rootId, keep.id, drop.id)
+    done(sameEntry(keep, drop, answer.undo), `${drop.label} is now a copy of ${keep.label}${layers(answer.layersChanged)}. Undo is also in the toolbar (⌘Z).`)
   }
   const markNotSame = async (a: LibraryAsset, b: LibraryAsset) => {
     await markDistinct(read.rootId, a.id, b.id)
+    done(distinctEntry(a, b), `${a.label} and ${b.label} are marked as different photos.`)
+  }
+  const makeVersions = async (a: LibraryAsset, b: LibraryAsset, languages: Record<string, string>) => {
+    const answer = await joinVersions(read.rootId, [a.id, b.id], languages)
+    done(versionsEntry(a, b, languages, answer.undo), `${a.label} and ${b.label} are language versions of one photo${layers(answer.layersChanged)}. Undo is also in the toolbar (⌘Z).`)
+  }
+  const setPhotoLanguage = async (asset: LibraryAsset, languageTag: string) => {
+    const res = await apiSend<unknown>(`/api/products/${encodeURIComponent(read.rootId)}/media/library`, 'PATCH', { languages: [{ id: asset.id, languageTag }], groups: [] })
+    if (!res.ok) { toast(res.message, 'danger'); return }
     void plan.reload()
-    const undo = async () => {
-      try { await markDistinct(read.rootId, a.id, b.id, true); void plan.reload() } catch (e) { toast(e instanceof Error ? e.message : String(e), 'danger') }
-    }
-    toast(<span className={styles.toast}>{a.label} and {b.label} are marked as different photos.{' '}
-      <Button size="xs" variant="secondary" onClick={() => void undo()}>Undo</Button></span>, 'success', { duration: 8000 })
+    toast(`${asset.label}: ${languageName(languageTag)}.`, 'success')
   }
   const requestAdd = (view: LayerView, ref: MediaSetRef, label: string) => {
     setPending({ view, target: { id: ref, label, group: 'Sets' } })
@@ -170,7 +194,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   const library = <LibraryPanel read={read} usage={usage} targets={targets} pendingTarget={pending?.target ?? null} onClearPending={() => setPending(null)}
     onAdd={addTo} onOpen={asset => openAsset(asset.id)} onManage={() => { setLibraryOpen(false); setManaging(true) }} onDragging={plan.hold} draggable={wide}
     onSkip={() => { setLibraryOpen(false); const board = box.current; (board?.querySelector<HTMLElement>('.nds-media-board-thumb[tabindex="0"]') ?? board?.querySelector<HTMLElement>('.nds-media-board-row button'))?.focus() }}
-    onLookalike={(a, b) => { setLibraryOpen(false); setViewing(null); setLookalike({ a, b }) }} />
+    onLookalike={(a, b, kind) => { setLibraryOpen(false); setViewing(null); setLookalike({ a, b, kind }) }} />
   // A plan may point at another SKU's copy of a picture: the preview opens its library card.
   const viewingAsset = viewing ? read.library.find(a => a.id === cardOf(read)(viewing)) ?? null : null
   // Copies of the same picture on other SKUs; the photos marked the same (W4a) are listed apart, each with "Separate it".
@@ -250,7 +274,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
     <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} onReview={() => setPublishing('all')} />
     <PublishPhotosDialog read={read} open={publishing !== false} only={publishing === 'all' || publishing === false ? null : publishing} onClose={() => setPublishing(false)} />
     <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)} onOpenDestination={setOpen} />
-    <SamePhotoDialog read={read} pair={lookalike} onClose={() => setLookalike(null)} onSame={markSamePhoto} onDistinct={markNotSame} />
+    <SamePhotoDialog read={read} pair={lookalike} onClose={() => setLookalike(null)} onSame={markSamePhoto} onVersions={makeVersions} onDistinct={markNotSame} />
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}
       {viewingAsset && <p className={styles.muted}>{viewingAsset.width && viewingAsset.height ? `${viewingAsset.width} × ${viewingAsset.height} px · ` : ''}{usage.get(viewingAsset.id)?.join(' · ') || 'Not in any set'}</p>}
@@ -258,8 +282,28 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
       {viewingAsset?.merged?.map(copy => <p key={copy.id} className={styles.muted}>{copy.label} was marked the same photo as this one, so the library shows it here.{' '}
         <Button size="xs" variant="link" onClick={() => void separate(read.rootId, copy.id).then(() => { void plan.reload(); toast(`${copy.label} is its own photo again. Photo sets did not change.`, 'success') },
           (e: unknown) => toast(e instanceof Error ? e.message : String(e), 'danger'))}>Separate it</Button></p>)}
-      {viewingAsset?.lookalikes?.map(other => <p key={other.id} className={styles.muted}>Looks like {read.library.find(x => x.id === other.id)?.label ?? 'another photo'}, at another address.{' '}
-        <Button size="xs" variant="link" onClick={() => { setViewing(null); setLookalike({ a: viewingAsset.id, b: other.id }) }}>Compare them</Button></p>)}
+      {viewingAsset?.lookalikes?.map(other => <p key={other.id} className={styles.muted}>
+        {other.kind === 'versions' ? 'Similar to' : 'Looks like'} {read.library.find(x => x.id === other.id)?.label ?? 'another photo'}{other.kind === 'versions' ? ' — maybe another language of this photo.' : ', at another address.'}{' '}
+        <Button size="xs" variant="link" onClick={() => { setViewing(null); setLookalike({ a: viewingAsset.id, b: other.id, kind: other.kind }) }}>Compare them</Button></p>)}
+      {viewingAsset && viewingAsset.mediaType === 'IMAGE' && <div className={styles.photoLanguage}>
+        <Field label="Language of the text in this photo">
+          <Select size="sm" value={viewingAsset.languageTag} onChange={e => void setPhotoLanguage(viewingAsset, e.target.value)}>
+            <option value="zxx">No text</option>
+            <option value="mul">Several languages</option>
+            {[...new Set([...versionLanguages(read), viewingAsset.languageTag])].filter(t => t !== 'zxx' && t !== 'mul').map(tag => <option key={tag} value={tag}>{languageName(tag)}</option>)}
+          </Select>
+        </Field>
+        {versionsOf(read, viewingAsset.id).length > 1 && <p className={styles.muted}>
+          Versions: {versionsOf(read, viewingAsset.id).map(v => `${v.label} (${languageName(v.languageTag)})`).join('; ')}.{' '}
+          <Button size="xs" variant="link" onClick={() => void leaveVersions(read.rootId, viewingAsset.id).then(() => { void plan.reload(); toast(`${viewingAsset.label} is its own photo again. Photo sets did not change.`, 'success') },
+            (e: unknown) => toast(e instanceof Error ? e.message : String(e), 'danger'))}>Leave its versions</Button></p>}
+        <Field label="Add a language version of this photo">
+          <Select size="sm" value="" onChange={e => { const other = e.target.value; if (other) { setViewing(null); setLookalike({ a: viewingAsset.id, b: other, kind: 'versions' }) } }}>
+            <option value="">Choose a photo</option>
+            {read.library.filter(x => x.mediaType === 'IMAGE' && x.id !== viewingAsset.id && !versionsOf(read, viewingAsset.id).some(v => v.id === x.id)).map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </Select>
+        </Field>
+      </div>}
     </Modal>
   </div>
 }

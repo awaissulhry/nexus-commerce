@@ -55,7 +55,34 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
 - **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`), live and checked in production (below).
-- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases MERGED #130 (`0be048ee6`); W3 the first eBay photo send DONE (below); W4a same photo = PR #132 (below); W4b, W4c next.
+- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases MERGED #130 (`0be048ee6`); W3 the first eBay photo send DONE (below); W4a same photo = PR #132; W4b language versions = PR (below); W4c the fill for GALE-JACKET waits for the Owner's word.
+
+## W4b — Language versions of one photo (2026-09-28, library duplicates Fix 2 part 2)
+- **The page:** photos with the same template and other text (dHash-256 17–26 with aHash ≤ 6 — a size chart per
+  language) show **"Similar to <photo> — language versions?"**. The window (now "Same photo, or language versions?")
+  has a choice **The same photo | Language versions of one photo**; for versions, each photo gets its language (a guess
+  from its own tag or its name, "size-chart-es"), the sentence names the sets that show both today and which one they
+  keep (the business's main language), and **Make them language versions** stays off until both languages are chosen
+  and differ. The photo window gains **Language of the text in this photo**, the list of its versions with **Leave its
+  versions**, and **Add a language version of this photo** (for photos without fingerprints).
+- **Undo, for every library answer:** "same photo", "language versions" and "not the same" now go into the page's own
+  Undo/Redo (↶ ↷, ⌘Z ⌘⇧Z) beside the plan edits — found testing: the message's Undo closed after 10 s, before a person
+  could press it. The message's Undo runs the same entry.
+- **Server:** `POST …/media/library/lookalikes` gains `versions` (2–20 photos, each with its language), `undo-versions`
+  and `leave-versions`. Joining collapses every set that held two versions to one — the main-language photo, or a copy
+  of it — in every layer (Shared, channels, listings, aliases), in one transaction at the revisions read
+  (`collapseVersionsInPlan`, shared); photos already in a group bring the group along; refused: the same language twice,
+  a version without text, two copies of one photo. The undo restores each photo's language and group and each layer,
+  refused when a photo or a set changed after it. Leaving a group changes no set; a group of one ends. A photo's own
+  language change is refused when its versions already have that language.
+- **Checked on the local stack:** "Similar to … — language versions?" on both cards; the window's sentence ("…will
+  keep Nero 1 (IT, the main language): ① Winter: Nero; Shared: Nero; Shared: TEST-JACKET-NERO-M"); after the join the
+  Nero sets show Nero 1 only and both cards "IT · DE"; the toolbar Undo after the message had closed restored both sets
+  and cleared the group; Redo and Undo again; the refused language change shows its sentence; keyboard (Enter opens,
+  Escape returns focus to the link).
+- **Tests:** shared 1 (the collapse keeps the main language, else the first), identity (the versions band), service 4 on
+  the real schema (the suggestion, refusals, join across Shared + alias and its undo, the language guard, leave, a stale
+  undo refused), page model 1. Eight deliberate breaks, each caught. Profiles ON: pass.
 
 ## W3 — The first real eBay photo send (2026-09-28, the Owner's "go ahead")
 - **Listing:** GALE-JACKET on eBay IT, alias ① IT-GALE-JACKET (Trading API). Nothing else was sent — not the main

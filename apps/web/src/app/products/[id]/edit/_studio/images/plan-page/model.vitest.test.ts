@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
-  applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, photoPlacements, photoSource, followAllOps, libraryUsage, setRows, showAsOptions,
+  applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, guessLanguage, photoPlacements, photoSource, sharedPlacements, versionLanguages, followAllOps, libraryUsage, setRows, showAsOptions,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
 
@@ -141,5 +141,16 @@ describe('Media page model', () => {
     // Between two uploads: the one in more sets, then the larger.
     expect(defaultKeep(r, { ...ours, id: 'n1' }, { ...ours, id: 'spare' }).id).toBe('n1')
     expect(defaultKeep(r, { ...ours, id: 'x1' }, { ...ours, id: 'x2', width: 2000, height: 2000 }).id).toBe('x2')
+  })
+
+  it('language versions (W4b): the languages to offer, a guess from the name, and the sets that show both', () => {
+    const r = read([{ key: 'SHARED', plan: plan({ common: ids('cover', 'spare') }) }, { key: WINTER, plan: plan({ common: ids('spare', 'cover') }) }])
+    expect(versionLanguages(r)).toEqual(['de', 'it'])
+    expect(guessLanguage({ ...r.library[0], label: 'size-chart-es', languageTag: 'zxx' })).toBe('es')
+    expect(guessLanguage({ ...r.library[0], label: 'size chart', languageTag: 'zxx' })).toBe('')
+    expect(guessLanguage({ ...r.library[0], label: 'size-chart-es', languageTag: 'fr' })).toBe('fr')
+    const cover = r.library.find(a => a.id === 'cover')!, spare = r.library.find(a => a.id === 'spare')!, n1 = r.library.find(a => a.id === 'n1')!
+    expect(sharedPlacements(r, cover, spare)).toEqual(['Shared: Common', 'eBay IT · Test eBay · Winter: Common'])
+    expect(sharedPlacements(r, cover, n1)).toEqual([])
   })
 })

@@ -51,13 +51,14 @@ describe('same picture at two addresses (W4a)', () => {
     expect(libraryEntries(merged, 'root', new Set(['amz'])).map(e => [e.id, e.copies])).toEqual([['ours', ['amz']]])
     expect(samePhoto(merged)('amz', 'ours')).toBe(true)
   })
-  it('suggests cards in the same-picture band only; leaves out versions, "not the same" answers, videos and unhashed photos', () => {
+  it('suggests the same picture (≤ 16) and language versions (17–26); leaves out versions already joined, "not the same" answers, videos and unhashed photos', () => {
     const list = [pic('ours'), pic('amz', { dhash256: flip(D, 16) }), pic('template', { dhash256: flipEnd(D, 20) }), pic('far', { perceptualHash: flip(A, 7) }),
       pic('chart-it', { versionGroupId: 'chart' }), pic('chart-de', { versionGroupId: 'chart' }), pic('video', { mediaType: 'VIDEO' }), pic('bare', { dhash256: null })]
     const entries = list.map(r => ({ id: r.id, copies: [] }))
     const found = lookalikes(list, entries)
-    expect(found.get('amz')).toEqual([{ id: 'ours', distance: 16 }, { id: 'chart-it', distance: 16 }, { id: 'chart-de', distance: 16 }])
-    expect(found.get('template')).toBeUndefined()
+    expect(found.get('amz')).toEqual([{ id: 'ours', distance: 16, kind: 'same' }, { id: 'chart-it', distance: 16, kind: 'same' }, { id: 'chart-de', distance: 16, kind: 'same' }])
+    // 17–26 bits: the same template with other text — suggested as language versions (W4b), never as the same photo.
+    expect(found.get('template')).toEqual([{ id: 'ours', distance: 20, kind: 'versions' }, { id: 'chart-it', distance: 20, kind: 'versions' }, { id: 'chart-de', distance: 20, kind: 'versions' }])
     expect(found.get('far')).toBeUndefined()
     expect(found.get('chart-it')?.map(x => x.id)).not.toContain('chart-de')
     expect(found.has('video') || found.has('bare')).toBe(false)

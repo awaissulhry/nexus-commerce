@@ -18,7 +18,13 @@ import { applyLocal, computeLayouts, viewAddress, viewKey, withLayer, type Layer
  */
 
 export interface OpsResult { rootId: string; key: string; plan: MediaPlan | null; revision: number; undo: MediaOp[] }
-interface HistoryEntry { view: LayerView; ops: MediaOp[]; label: string }
+/**
+ * A library action in the page's Undo/Redo (W4a/W4b: "same photo", "language versions", "not the same"): `run` does the
+ * step on the server and returns the entry that reverses it (or null). Plan edits are ops entries; both share one stack.
+ */
+export interface ActionEntry { label: string; run(): Promise<ActionEntry | null> }
+type HistoryEntry = { view: LayerView; ops: MediaOp[]; label: string } | ActionEntry
+const isAction = (entry: HistoryEntry): entry is ActionEntry => 'run' in entry
 export type EditOutcome = { ok: true; undo: MediaOp[] } | { ok: false; message: string }
 
 type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; read: MediaRead }
@@ -126,23 +132,39 @@ export function useMediaPlan(productId: string) {
   }, [load, productId, refreshSoon, reporter, writer])
 
   const edit = useCallback((view: LayerView, ops: MediaOp[], label: string) => send(view, ops, label, 'edit'), [send])
+  /** A library action done on the server: its way back goes on top of Undo (and Redo is cleared, as for an edit). */
+  const record = useCallback((entry: ActionEntry) => setHistory(h => ({ undo: [entry, ...h.undo].slice(0, 50), redo: [] })), [])
+  /** Run one action entry from Undo (or Redo), wherever it is in the stack; its reverse goes on the other stack. */
+  const runAction = useCallback(async (entry: ActionEntry, from: 'undo' | 'redo') => {
+    setHistory(h => from === 'undo' ? { ...h, undo: h.undo.filter(e => e !== entry) } : { ...h, redo: h.redo.filter(e => e !== entry) })
+    try {
+      const reverse = await entry.run()
+      if (reverse) setHistory(h => from === 'undo' ? { ...h, redo: [reverse, ...h.redo].slice(0, 50) } : { ...h, undo: [reverse, ...h.undo].slice(0, 50) })
+    } catch (error) {
+      setWriteError({ message: error instanceof Error ? error.message : String(error) })
+    }
+    await load(true)
+  }, [load])
   const undo = useCallback(() => {
     const [entry, ...rest] = history.undo
     if (!entry) return
+    if (isAction(entry)) { void runAction(entry, 'undo'); return }
     setHistory(h => ({ ...h, undo: rest }))
     void send(entry.view, entry.ops, entry.label, 'undo')
-  }, [history.undo, send])
+  }, [history.undo, runAction, send])
   const redo = useCallback(() => {
     const [entry, ...rest] = history.redo
     if (!entry) return
+    if (isAction(entry)) { void runAction(entry, 'redo'); return }
     setHistory(h => ({ ...h, redo: rest }))
     void send(entry.view, entry.ops, entry.label, 'redo')
-  }, [history.redo, send])
+  }, [history.redo, runAction, send])
+  const undoAction = useCallback((entry: ActionEntry) => runAction(entry, 'undo'), [runAction])
 
   const layouts = useMemo(() => state.status === 'ready' ? computeLayouts(state.read) : {}, [state])
 
   return {
-    state, layouts, reload: load, edit, undo, redo, hold,
+    state, layouts, reload: load, edit, undo, redo, hold, record, undoAction,
     canUndo: history.undo.length > 0, canRedo: history.redo.length > 0,
     undoLabel: history.undo[0]?.label ?? null, redoLabel: history.redo[0]?.label ?? null,
     writeError, clearWriteError: () => setWriteError(null), notice, clearNotice: () => setNotice(null),

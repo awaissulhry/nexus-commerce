@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyMediaOps, emptyMediaPlan, inverseMediaOps, knownSetRefs, mediaLayerKey, MediaPlanEditError, mediaOpSchema, mediaPlanSchema, planAssetIds, replaceAssetInPlan, resolveAxis, resolveSet, resolveSwatch, type MediaPlan, type MediaPlanStack } from './media-plan'
+import { applyMediaOps, emptyMediaPlan, inverseMediaOps, knownSetRefs, mediaLayerKey, MediaPlanEditError, mediaOpSchema, mediaPlanSchema, collapseVersionsInPlan, planAssetIds, replaceAssetInPlan, resolveAxis, resolveSet, resolveSwatch, type MediaPlan, type MediaPlanStack } from './media-plan'
 
 const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
@@ -141,5 +141,17 @@ describe('same photo at two addresses (W4a)', () => {
     expect(replaceAssetInPlan(plan, 'amz', 'ours', (a, b) => a.startsWith(b)).sets.common).toEqual(ids('ours-de'))
     const other: MediaPlan = { version: 1, sets: { common: ids('cover') } }
     expect(replaceAssetInPlan(other, 'amz', 'ours')).toBe(other)
+  })
+})
+
+describe('language versions of one photo (W4b)', () => {
+  it('a set that holds two versions keeps the main-language one in its place; one version per set is left alone', () => {
+    const plan: MediaPlan = { version: 1, sets: { common: ids('cover', 'chart-es', 'chart-it', 'chart-fr'), values: { 'color:black': ids('chart-fr', 'n1') } } }
+    const next = collapseVersionsInPlan(plan, ['chart-it', 'chart-es', 'chart-fr'], 'chart-it')
+    expect(next.sets.common).toEqual(ids('cover', 'chart-it'))
+    expect(next.sets.values).toEqual({ 'color:black': ids('chart-fr', 'n1') })
+    // Without the main-language one in the set, the first member in set order stays.
+    expect(collapseVersionsInPlan({ version: 1, sets: { common: ids('chart-fr', 'chart-es') } }, ['chart-it', 'chart-es', 'chart-fr'], 'chart-it').sets.common).toEqual(ids('chart-fr'))
+    expect(collapseVersionsInPlan(plan, ['n1', 'cover'], 'n1')).toBe(plan)
   })
 })
