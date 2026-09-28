@@ -54,8 +54,22 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 - **Library duplicates (Owner, 2026-09-28: "multiple duplicates of the same image … I do not want that to happen ever"):**
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
-- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`).
-- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases MERGED #130 (`0be048ee6`, below); W4a same photo = PR (below); W3 the first eBay photo send; W4 library duplicates Fix 2.
+- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos MERGED #128 (`a9f254060`, live on the API 2026-09-28 00:33 UTC); P4d Export ZIP for Seller Central MERGED #129 (`c8fd585b5`), live and checked in production (below).
+- **What is left in this session:** [NEXT-PLAN-2026-09-28.md](NEXT-PLAN-2026-09-28.md) — W1 done; W2 aliases MERGED #130 (`0be048ee6`); W3 the first eBay photo send DONE (below); W4a same photo = PR #132 (below); W4b, W4c next.
+
+## W3 — The first real eBay photo send (2026-09-28, the Owner's "go ahead")
+- **Listing:** GALE-JACKET on eBay IT, alias ① IT-GALE-JACKET (Trading API). Nothing else was sent — not the main
+  listing (Inventory API), not the other aliases, not Amazon.
+- **Before:** Review & publish from that listing's own view checked it alone: Ready; "Gallery: will be replaced ·
+  Colour sets: same on eBay"; "Other fields of this listing have problems; only photos are sent" (the 21 off-list Season
+  values, P4c); the revision note. The way back (eBay's two gallery addresses — eBay-hosted copies of the same two
+  pictures) was recorded outside the repo. A fresh check just before the send said the same.
+- **Sent about 01:58 UTC:** "Sent — eBay accepted it."
+- **Verified:** a new review — gallery SAME, colour sets SAME; the live read (eBay GetItem, 01:59:27 UTC) — the gallery is
+  the two Nexus photos (Common: main, then the second); the buyer page on ebay.it — custom label IT-GALE-JACKET, the
+  first two gallery photos are the Nexus Common set, title and price unchanged.
+- **Seen:** ① IT-GALE-JACKET and ★ Main listing show the same photos, so the W2 check warns about eBay's duplicate-listings
+  rule. The Owner decides whether the titles differ enough.
 
 ## W4a — Same photo at two addresses (2026-09-28, library duplicates Fix 2 part 1)
 - **The page:** a library card whose picture has a look-alike at another address shows **"Looks like <photo>"**; the
@@ -127,6 +141,17 @@ PLAN §4.5 and §11, closed in one PR:
   slide up when a script scrolls an element into view (normal wheel and Tab do not move it).
 
 ## P4d — Export ZIP for Seller Central (Amazon)
+- **LIVE 2026-09-28** (#129, squash `c8fd585b5`, merged 00:46 UTC on the Owner's word; API, worker and scheduler
+  redeployed by 01:14 UTC; Vercel production done). **Production proof, read only, through the app** (Owner's word;
+  preview only, nothing downloaded, nothing changed), the test family GALE-JACKET, account XAVIA RACING, markets DE ES
+  FR IT SE: All photos DE/ES/FR 164 files · 19 ASINs, IT 182 files · 21 ASINs, no errors, no warnings; SE nothing,
+  "Left out — 21 SKUs", each "its Amazon SE listing has no ASIN yet" (the SE drafts); Safety images: none (the plan's
+  Safety set is empty); Country photos: none on any market (no photo has language versions); the API language is
+  German (DE is the account's first market). Found: "has a Italian version" → now "has a version in Italian" (the fix PR after #129).
+  **Size, measured** (Owner's word, one real download, read only): IT All photos (182 files, photos 2,000–2,250 px)
+  stops at the limit in about 2 s — "This ZIP would be larger than 100 MB, the most Nexus makes in one ZIP. No ZIP was
+  saved." Nothing reached the Downloads folder. So the open risk in P4-PLAN § P4d is real for this family: All photos
+  needs a streamed ZIP (next step, the Owner decides).
 - **Open:** the Amazon channel view → **Export ZIP for Seller Central**. One window (`plan-page/AmazonZipDialog.tsx`):
   **Market** (the account's markets), **What to export** (All photos · Safety images · Country photos), what the ZIP
   holds and in which language, **Where to upload it** (Seller Central's own names), then the list: every file
