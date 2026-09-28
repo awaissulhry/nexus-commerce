@@ -251,3 +251,53 @@ describe('B3c · references and entries in the cell', () => {
     expect(metafieldDisplay('list.disclosure_reference', '["x", 2]').kind).toBe('invalid')
   })
 })
+
+/* Lane B slice B3b (PLAN §6.3, §7 L1): dates, JSON, codes, link, money and rich text in the cell. */
+import { shopifyDateTimeMs } from '@nexus/shared/shopify-linked-products'
+
+const zoneRun = <T,>(zone: string, check: () => T): T => {
+  const before = process.env.TZ
+  process.env.TZ = zone
+  try { return check() } finally { if (before === undefined) delete process.env.TZ; else process.env.TZ = before }
+}
+const cellText = (type: string, raw: string | null) => metafieldDisplay(type, raw).text
+
+describe('B3b · the cell', () => {
+  it('a date and time with no zone is UTC, whatever the viewer’s zone (G15)', () => {
+    for (const zone of ['UTC', 'Europe/Rome', 'America/Los_Angeles']) zoneRun(zone, () => {
+      expect(cellText('date_time', '2026-09-28T12:30:00'), zone).toBe('2026-09-28 12:30 UTC')
+      expect(cellText('date_time', '2026-09-28T14:30:00+02:00'), zone).toBe('2026-09-28 12:30 UTC')
+      expect(cellText('date_time', '2026-09-28T12:30Z'), zone).toBe('2026-09-28 12:30 UTC')
+      expect(cellText('list.date_time', '["2026-09-28T12:30:00","2027-01-15T09:00:00+01:00"]'), zone).toBe('2026-09-28 12:30 UTC, 2027-01-15 08:00 UTC')
+    })
+  })
+  it('free text and a day that is not in the calendar are shown as stored, never as another moment (G15)', () => {
+    zoneRun('Europe/Rome', () => {
+      expect(cellText('date_time', 'Sep 28 2026 12:30')).toBe('Sep 28 2026 12:30')
+      expect(cellText('date_time', '2026-02-30T12:00:00')).toBe('2026-02-30T12:00:00')
+      expect(cellText('date_time', '2026-09-28T24:00:00')).toBe('2026-09-28T24:00:00')
+    })
+  })
+  it('formats exactly the moments the rules accept (the cell and the rules read dates alike)', () => {
+    const samples = ['2026-09-28T12:30', '2026-09-28T12:30:00', '2026-09-28T12:30:00.5Z', '2026-09-28T12:30:00.123456789Z', '2026-09-28T14:30:00+02:00', '2026-09-28T12:30:00-11:30',
+      '2024-02-29T00:00:00', '2100-02-29T00:00:00', '2026-02-30T12:00:00', '2026-09-28T24:00:00', '2026-09-28T12:60:00', '2026-09-28 12:30:00', '2026-09-28', 'Sep 28 2026', '2026-09-28T12:30:00+0200', '2026-09-28T12:30:00z']
+    for (const raw of samples) {
+      const ms = shopifyDateTimeMs(raw)
+      expect(cellText('date_time', raw), raw).toBe(ms === null ? raw : `${new Date(ms).toISOString().replace('T', ' ').slice(0, 16)} UTC`)
+    }
+  })
+  it('JSON, codes, link, money and rich text read as words', () => {
+    expect(metafieldDisplay('json', '{"fit":"regular","size":"M"}')).toEqual({ kind: 'text', text: '2 properties' })
+    expect(cellText('json', '{"fit":"regular"}')).toBe('1 property')
+    expect(cellText('json', '{}')).toBe('0 properties')
+    expect(metafieldDisplay('json', '{"fit":')).toEqual({ kind: 'invalid', text: 'Stored value needs review' })
+    expect(cellText('jurisdiction', 'US-CA')).toBe('US-CA')
+    expect(cellText('language', 'it-IT')).toBe('it-IT')
+    expect(cellText('link', '{"text":"Size guide","url":"https://example.com/size-guide"}')).toBe('Size guide')
+    expect(cellText('money', '{"amount":"149.90","currency_code":"EUR"}')).toBe('149.90 EUR')
+    expect(cellText('money', '{"amount":"20.00","currency_code":"USD"}')).toBe('20.00 USD')
+    expect(cellText('rich_text_field', JSON.stringify({ type: 'root', children: [{ type: 'heading', children: [{ type: 'text', value: 'Fit' }] }, { type: 'paragraph', children: [{ type: 'text', value: 'Made-up ', bold: true }, { type: 'text', value: 'rich text.' }] }] }))).toBe('Fit · Made-up rich text.')
+    expect(metafieldDisplay('rich_text_field', '{"type":"root"')).toEqual({ kind: 'invalid', text: 'Stored value needs review' })
+    expect(cellText('rich_text_field', '{"type":"root","children":[]}')).toBe('')
+  })
+})
