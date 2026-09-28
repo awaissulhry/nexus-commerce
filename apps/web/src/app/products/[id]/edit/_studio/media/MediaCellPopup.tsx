@@ -200,7 +200,7 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
       <span className="nds-editor-keyhint">{busy ? <><Spinner size={12} /> Saving…</> : EDITOR_KEY_HINT_PANEL}</span>
       <span className={styles.muted}>{base ? model.saveLine(base, draft ?? { skuOnly: base.skuOnly }) : ''}</span>
     </>}>
-    <div ref={root} className={styles.popup} onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
+    <div ref={root} className={styles.popup} data-cell-editor="product-media" onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
       <PopupHead context={context} title={title} />
 
       {error && <Banner tone="danger">{error}</Banner>}
@@ -425,7 +425,7 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
       <span className="nds-editor-keyhint">{busy ? <><Spinner size={12} /> Saving…</> : EDITOR_KEY_HINT_PANEL}</span>
       <span className={styles.muted}>{gallery.gallerySaveLine(context, channelLabel)}</span>
     </>}>
-    <div ref={root} className={styles.popup} onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
+    <div ref={root} className={styles.popup} data-cell-editor="product-media" onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
       <PopupHead context={contextLabel} title={title} />
       {error && <Banner tone="danger">{error}</Banner>}
       {!error && changedElsewhere && <Banner tone="warning">{model.POPUP_TEXT.changedElsewhere}</Banner>}
