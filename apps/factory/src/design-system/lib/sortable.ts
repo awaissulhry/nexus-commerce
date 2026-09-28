@@ -11,6 +11,11 @@
  *     Linear's reorder;
  *   - a WRAP (chips that flow onto several lines): the nearest item to the pointer, and whether the insertion mark
  *     sits before or after it (`wrapDropIndex`) — sliding a wrapped line would reflow it under the hand.
+ *   - a GRID (tiles of one size that flow onto several lines — a photo set): the slot nearest the dragged tile's centre
+ *     is where it lands, and every tile between slides into its neighbour's slot, so the grid shows the order it will
+ *     have after the drop (`gridDropIndex`, `gridShift`; Owner 2026-09-28 on the media pop-up: "The UI of the
+ *     drag-and-drop has to be better"). Slots are the boxes measured when the drag starts, so a sliding tile never
+ *     moves the target under the hand.
  * Pure: the web's Vitest runs without a DOM.
  */
 
@@ -69,6 +74,37 @@ export function wrapDropIndex(rects: readonly SortRect[], from: number, point: {
   })
   if (best === from) return { to: from, side: null }
   return { to: best, side: best < from ? 'before' : 'after' }
+}
+
+/**
+ * Grid layout: the slot whose box is nearest the dragged tile's CENTRE (inside a box = distance 0; ties go to the lower
+ * index). Slots do not overlap, so while the centre is inside its own slot nothing moves.
+ */
+export function gridDropIndex(rects: readonly SortRect[], from: number, center: { x: number; y: number }): number {
+  let best = from
+  let bestDistance = Number.POSITIVE_INFINITY
+  rects.forEach((r, i) => {
+    const dx = Math.max(r.left - center.x, 0, center.x - (r.left + r.width))
+    const dy = Math.max(r.top - center.y, 0, center.y - (r.top + r.height))
+    const d = dx * dx + dy * dy
+    if (d < bestDistance) { bestDistance = d; best = i }
+  })
+  return best
+}
+
+/** Where item `i` sits while `from` is dragged to `to`: the dragged one at `to`, the ones between one step toward the hole. */
+export function previewIndex(i: number, from: number, to: number): number {
+  if (i === from) return to
+  if (from < to && i > from && i <= to) return i - 1
+  if (from > to && i >= to && i < from) return i + 1
+  return i
+}
+
+/** How far tile `i` moves while `from` is dragged to `to`: into the slot of the neighbour on the hole's side. */
+export function gridShift(rects: readonly SortRect[], i: number, from: number, to: number): { x: number; y: number } {
+  const slot = i === from ? i : previewIndex(i, from, to)
+  if (slot === i || !rects[slot] || !rects[i]) return { x: 0, y: 0 }
+  return { x: rects[slot].left - rects[i].left, y: rects[slot].top - rects[i].top }
 }
 
 /** A press becomes a drag only past this many pixels, so a click on a row stays a click. */

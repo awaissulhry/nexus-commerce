@@ -1,3 +1,7 @@
+## Live photo drag: MediaBoard `liveDrag`, `useSortableDrag` layout `grid` — 2026-09-28
+
+Mirrored from web. `gridDropIndex` / `gridShift` in `lib/sortable.ts`, `layout: 'grid'` in `useSortableDrag`, opt-in `liveDrag` on `MediaBoard` (one-row boards; off by default) and its `.nds-media-board-list.live` / `.dragging` rules.
+
 ## Variation theme pop-up on Shopify — 2026-09-28
 
 Mirrored from web. The channel layout on Shopify: free option names (`freeNameRefusal`), own options, the live-product lock; `.nds-axes-chead > .nds-field` (+ its input shrinks); a cell panel outside AG's popup layer does not take focus on load.
