@@ -45,7 +45,8 @@ export interface PlanPopupBase {
   skuRef: MediaSetRef | null
   /** The SKU's own set applies to this row now. */
   skuOnly: boolean
-  /** The SKU's own set comes from a layer above the one edited here (changed there). */
+  /** The SKU's own set comes from, or also exists on, a layer above the one edited here: "Only this SKU" is changed there
+   *  (unticking here would show that layer's SKU photos, not the value's). */
   skuElsewhere: boolean
 }
 
@@ -87,7 +88,8 @@ export function planBase(read: MediaRead, input: { rowProductId: string; address
     valueLabel: valueKey ? valueLabel(read, valueKey) : null,
     valueSkus: valueKey && axis ? read.family.variants.filter(v => v.values[axis] === valueKey).length : 0,
     skuRef, skuOnly,
-    skuElsewhere: skuOnly && !!view && sku!.source !== view.layer,
+    skuElsewhere: skuOnly && !!view && (sku!.source !== view.layer
+      || (view.layer !== 'SHARED' && resolveSet({ shared: stack.shared, channel: stack.channel }, skuRef!).source !== null)),
   }
 }
 
@@ -181,9 +183,11 @@ export function saveOps(read: MediaRead, base: PlanPopupBase, draft: PlanDraft):
   if (base.variant && base.skuRef && draft.skuOnly !== base.skuOnly) {
     if (draft.skuOnly) return [{ op: 'replace', set: base.skuRef, assetIds: draft.items, expect: ownItems(read, base, base.skuRef) }]
     ops.push({ op: 'follow', set: base.skuRef, expect: ownItems(read, base, base.skuRef) })
-    // Unticked AND the value's photos changed in the same pop-up: both go in the one request.
+    // Unticked AND the value's set changed in the same pop-up (its photos, or "Follow … again"): both in the one request.
     const ref = base.valueRef ?? 'common'
-    if (!same(draft.items, resolveSet(stack, ref).items)) ops.push({ op: 'replace', set: ref, assetIds: draft.items, expect: ownItems(read, base, ref) })
+    const own = ownItems(read, base, ref)
+    if (draft.follow) { if (own !== null) ops.push({ op: 'follow', set: ref, expect: own }) }
+    else if (!same(draft.items, resolveSet(stack, ref).items)) ops.push({ op: 'replace', set: ref, assetIds: draft.items, expect: own })
     return ops
   }
   const ref = mainRef(base, draft)
@@ -203,6 +207,35 @@ export function localRefusal(read: MediaRead, base: PlanPopupBase, ops: readonly
 export function afterSave(read: MediaRead, base: PlanPopupBase, ops: readonly MediaOp[]): MediaRead {
   if (!base.view || !ops.length) return read
   try { return applyLocal(read, base.view, ops) } catch { return read }
+}
+
+/** The sets this row's save is about: the SKU's own set and the value's (or Common's). */
+function rowRefs(base: PlanPopupBase): MediaSetRef[] {
+  return base.variant ? [...(base.skuRef ? [base.skuRef] : []), base.valueRef ?? 'common'] : ['common']
+}
+
+/**
+ * Did the photos this row shows change since the pop-up opened — on this layer OR on a layer it follows? A save on top
+ * of a set this layer does not own yet binds only to "owned nothing" (`expect: null`), which a change to the inherited set
+ * does not break; so the pop-up compares what the row RESOLVES to, and refuses before sending (the server cannot).
+ */
+export function changedSince(baseline: MediaRead, fresh: MediaRead | null, base: PlanPopupBase): boolean {
+  if (!fresh) return false
+  const before = stackFor(baseline, base), after = stackFor(fresh, base)
+  return rowRefs(base).some(ref => {
+    const a = resolveSet(before, ref), b = resolveSet(after, ref)
+    return a.source !== b.source || !same(a.items, b.items)
+  })
+}
+
+/** The answer was lost, but the photos are exactly what the save would have made: it landed. (`saveOps` never sends an
+ *  op that changes nothing, so "what it makes" always differs from what was there.) */
+export function landedAnyway(baseline: MediaRead, fresh: MediaRead | null, base: PlanPopupBase, ops: readonly MediaOp[]): boolean {
+  if (!fresh || !base.view || !ops.length) return false
+  let expected: MediaRead
+  try { expected = applyLocal(baseline, base.view, ops) } catch { return false }
+  const refs = ops.flatMap(op => ('set' in op ? [op.set] : []))
+  return refs.every(ref => JSON.stringify(ownItems(fresh, base, ref)) === JSON.stringify(ownItems(expected, base, ref)))
 }
 
 /**

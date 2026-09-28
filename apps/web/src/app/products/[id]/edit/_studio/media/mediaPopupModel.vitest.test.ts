@@ -3,8 +3,8 @@ import type { MediaPlan } from '@nexus/shared/media-plan'
 
 import type { LibraryAsset, MediaDestinationRow, MediaRead } from '../images/plan-page/model'
 import {
-  POPUP_TEXT, addItem, cellAfterSave, checks, followAgain, initialDraft, localRefusal, mainRef, moveItem, planBase, planView, refusalSentence,
-  removeItem, removePicture, saveLine, saveOps, setSkuOnly, setSource, setTitle, tiles,
+  POPUP_TEXT, addItem, afterSave, cellAfterSave, changedSince, checks, followAgain, initialDraft, landedAnyway, localRefusal, mainRef, moveItem, planBase, planView,
+  refusalSentence, removeItem, removePicture, saveLine, saveOps, setSkuOnly, setSource, setTitle, tiles,
 } from './mediaPopupModel'
 
 // A made-up family: two colours, three SKUs (two black sizes, one yellow), photos with made-up ids.
@@ -111,6 +111,46 @@ describe('Enter sends ONE change, bound to what the layer held when the pop-up o
     expect(saveOps(withSku, base, off)).toEqual([{ op: 'follow', set: 'sku:b-s', expect: ['b2'] }])
     // Unticked AND the colour changed: both in the one request.
     expect(saveOps(withSku, base, removeItem(off, 'b1'))).toEqual([{ op: 'follow', set: 'sku:b-s', expect: ['b2'] }, { op: 'replace', set: 'value:color:black', assetIds: ['b2'], expect: ['b1', 'b2'] }])
+  })
+})
+
+describe('review findings (2026-09-28)', () => {
+  it('unticking "Only this SKU" and then "Follow Shared again" sends both follows', () => {
+    const r = read([{ key: 'SHARED', plan: plan({ ...SHARED.sets, values: { ...SHARED.sets.values, 'color:black': ids('b1', 'b2', 'cover') } }, 'color') },
+      { key: EBAY, plan: plan({ values: { 'color:black': ids('b1', 'b2') }, skus: { 'b-s': ids('b2') } }) }])
+    const base = planBase(r, { rowProductId: 'b-s', address: onEbay })
+    const off = setSkuOnly(r, base, initialDraft(r, base), false)
+    const back = followAgain(r, base, off)
+    expect(back.items).toEqual(['b1', 'b2', 'cover'])
+    expect(saveOps(r, base, back)).toEqual([{ op: 'follow', set: 'sku:b-s', expect: ['b2'] }, { op: 'follow', set: 'value:color:black', expect: ['b1', 'b2'] }])
+  })
+  it('a SKU set this listing owns AND Shared owns: "Only this SKU" is changed on Shared', () => {
+    const r = read([{ key: 'SHARED', plan: plan({ ...SHARED.sets, skus: { 'b-s': ids('b1') } }, 'color') }, { key: EBAY, plan: plan({ skus: { 'b-s': ids('b2') } }) }])
+    expect(planBase(r, { rowProductId: 'b-s', address: onEbay })).toMatchObject({ skuOnly: true, skuElsewhere: true })
+    // Only the listing owns it: unticking here is right.
+    const own = read([{ key: 'SHARED', plan: SHARED }, { key: EBAY, plan: plan({ skus: { 'b-s': ids('b2') } }) }])
+    expect(planBase(own, { rowProductId: 'b-s', address: onEbay })).toMatchObject({ skuOnly: true, skuElsewhere: false })
+  })
+  it('a change to the set a listing FOLLOWS is seen, so the save does not freeze an old copy', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }])
+    const base = planBase(r, { rowProductId: 'b-s', address: onEbay })
+    const sharedChanged = read([{ key: 'SHARED', plan: plan({ ...SHARED.sets, values: { ...SHARED.sets.values, 'color:black': ids('b1', 'b2', 'y1') } }, 'color') }])
+    expect(changedSince(r, sharedChanged, base)).toBe(true)
+    expect(changedSince(r, read([{ key: 'SHARED', plan: SHARED }]), base)).toBe(false)
+    // A new photo in the library (an upload) is not a change of the set.
+    expect(changedSince(r, read([{ key: 'SHARED', plan: SHARED }], [...LIBRARY, asset('new')]), base)).toBe(false)
+    // Another colour's set is not this row's.
+    expect(changedSince(r, read([{ key: 'SHARED', plan: plan({ ...SHARED.sets, values: { ...SHARED.sets.values, 'color:yellow': ids('y1', 'cover') } }, 'color') }]), base)).toBe(false)
+    expect(changedSince(r, null, base)).toBe(false)
+  })
+  it('a lost answer: the save landed when the photos are exactly what it makes, not when they are unchanged', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }])
+    const black = planBase(r, { rowProductId: 'b-s', address: onShared })
+    const ops = saveOps(r, black, moveItem(initialDraft(r, black), 'b2', 0))
+    expect(landedAnyway(r, afterSave(r, black, ops), black, ops)).toBe(true)
+    expect(landedAnyway(r, r, black, ops)).toBe(false)
+    expect(landedAnyway(r, null, black, ops)).toBe(false)
+    expect(landedAnyway(r, r, black, [])).toBe(false)
   })
 })
 

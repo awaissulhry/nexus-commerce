@@ -74,13 +74,13 @@ function applyOps(key: string, ops: MediaOp[]) {
   return { plan: empty ? null : next, revision: (old?.revision ?? 0) + 1 }
 }
 
-/** "Someone else" changes the set the save is about (reverses its order) just before the save lands, as a second screen would. */
+/** "Someone else" changes the set the save is about (drops its last photo) just before the save lands, as a second screen would. */
 function someoneElseChanges(key: string, set: MediaSetRef) {
   const read = labRead()
   const stack: MediaPlanStack = { shared: read.layers.find(l => l.key === 'SHARED')?.plan ?? null, channel: null, listing: read.layers.find(l => l.key === key && key !== 'SHARED')?.plan ?? null }
   const items = resolveSet(stack, set).items
-  if (items.length < 2) return
-  applyOps(key, [{ op: 'replace', set, assetIds: [...items].reverse() }])
+  if (!items.length) return
+  applyOps(key, [{ op: 'replace', set, assetIds: items.slice(0, -1) }])
 }
 
 let installed = false

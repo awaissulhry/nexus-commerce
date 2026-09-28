@@ -73,21 +73,33 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
   const afterSave = useRef<(() => void) | null>(null)
 
   const editable = canEdit && !!base?.view && !!draft && !busy
-  const ref = base && draft ? model.mainRef(base, draft) : null
-  const changedElsewhere = !!(base && data.latest && data.baseline && ref && [ref, base.skuRef].some(r => r && JSON.stringify(model.ownItems(data.latest!, base, r)) !== JSON.stringify(model.ownItems(data.baseline!, base, r))))
+  const changedElsewhere = !!(base && data.baseline && model.changedSince(data.baseline, data.latest, base))
   const ops: MediaOp[] = working && base && draft ? model.saveOps(working, base, draft) : []
 
   // Presses in a menu this pop-up opened (a photo's ⋯ menu draws outside it) are not "outside". Registered on the
-  // window, so it runs before the panel's own listener on the document.
+  // window, so it runs before the panel's own listener on the document. `press` marks a save asked by a press outside.
   const menuPress = useRef(false)
+  const press = useRef(false)
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
       menuPress.current = !!(event.target as Element | null)?.closest?.('.nds-menu')
-      if (menuPress.current) window.setTimeout(() => { menuPress.current = false }, 0)
+      press.current = true
+      window.setTimeout(() => { menuPress.current = false; press.current = false }, 0)
     }
     window.addEventListener('pointerdown', onDown, true)
     return () => window.removeEventListener('pointerdown', onDown, true)
   }, [])
+  /** A press outside that is held back (refused, or saving) must not also click what is under it — another cell's
+   *  pencil would open a second pop-up over this one's answer. The panel stops the press; this stops its click. */
+  function holdClick() {
+    if (!press.current) return
+    const stop = (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); done() }
+    const done = () => { window.removeEventListener('click', stop, true); window.clearTimeout(timer) }
+    const timer = window.setTimeout(done, 1000)
+    window.addEventListener('click', stop, true)
+  }
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
 
   // Focus the first photo (the panel focuses its first control first; this effect runs after the panel's).
   const root = useRef<HTMLDivElement>(null)
@@ -106,36 +118,51 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
   /** Enter, or a click outside. `false` holds a click outside back (refused, or saving). */
   function save(): boolean {
     if (menuPress.current) return true
-    if (busy) return false
-    if (!working || !base || !draft || !ops.length || !base.view || !address || !canEdit) { close(); return true }
+    if (busy) { holdClick(); return false }
+    if (!working || !data.baseline || !base || !draft || !ops.length || !base.view || !address || !canEdit) { close(); return true }
     const local = model.localRefusal(working, base, ops)
-    if (local) { afterSave.current = null; setError(`Not saved: ${local}`); return false }
-    void send(working, base, draft, address, ops)
+    if (local) { afterSave.current = null; setError(`Not saved: ${local}`); holdClick(); return false }
+    holdClick()
+    void send(working, data.baseline, base, draft, address, ops)
     return false
   }
 
-  async function send(read: MediaRead, popupBase: model.PlanPopupBase, current: model.PlanDraft, target: PlanAddress, request: MediaOp[]) {
+  async function send(read: MediaRead, baseline: MediaRead, popupBase: model.PlanPopupBase, current: model.PlanDraft, target: PlanAddress, request: MediaOp[]) {
     setBusy(true); setError(''); data.setSaving(true)
     const applied = onApply(model.afterSave(read, popupBase, request), popupBase)
     const subject = `product-media:plan:${JSON.stringify([target, model.mainRef(popupBase, current)])}`
     const writeId = crypto.randomUUID()
     reporter.pending(writeId, subject)
-    try {
-      await sendPlanOps(productId, target, request)
+    const landed = () => {
       reporter.resolved(writeId, true, undefined, subject)
       applied.done()
       onSaved()
-      onClose()
-      afterSave.current?.()
-    } catch (e) {
+      // Closed meanwhile (Esc waits, but the sheet may have moved on): the cells and the save status still tell.
+      if (mounted.current) { onClose(); afterSave.current?.() }
+    }
+    const refused = (message: string) => {
       applied.restore()
-      const fresh = await data.reload()
-      const message = model.refusalSentence(fresh, popupBase, request, e instanceof Error ? e.message : model.POPUP_TEXT.unconfirmed)
       reporter.resolved(writeId, false, message, subject)
+      if (!mounted.current) return
       reported.current = subject
       setError(`Not saved: ${message}`)
       setBusy(false)
       afterSave.current = null
+    }
+    try {
+      // A set this layer does not own yet binds the save only to "owned nothing"; a change to the set it follows would
+      // not stop it. So read once more and compare what the row resolves to, before anything is sent.
+      if (model.changedSince(baseline, await data.reload(), popupBase)) { refused(model.POPUP_TEXT.conflict); return }
+      try {
+        await sendPlanOps(productId, target, request)
+        landed()
+      } catch (e) {
+        const network = e instanceof TypeError || (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError'))
+        const fresh = await data.reload()
+        // The answer was lost but the photos are what the save makes: it landed.
+        if (model.landedAnyway(baseline, fresh, popupBase, request)) { landed(); return }
+        refused(network ? model.POPUP_TEXT.unconfirmed : model.refusalSentence(fresh, popupBase, request, e instanceof Error ? e.message : model.POPUP_TEXT.unconfirmed))
+      }
     } finally {
       data.setSaving(false)
     }
@@ -161,7 +188,8 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
       if (status.kind !== 'new' && status.kind !== 'exact') continue
       const assetId = status.assetId
       const fresh = await data.reload()
-      setDraft(current => current && fresh ? model.addItem(fresh, current, assetId) : current)
+      if (!fresh) { setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: 'failed', message: 'uploaded to the library, but the photos could not be read again. Reload the page, then add it.' } : u)); continue }
+      setDraft(current => current ? model.addItem(fresh, current, assetId) : current)
       setUploads(list => list.map(u => u.name === file.name ? { name: file.name, state: status.kind === 'exact' ? 'exact' : 'added' } : u))
     }
   }
@@ -298,8 +326,9 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
       </section>}
 
       <div className={styles.popupFoot}>
-        <Button size="xs" variant="link" onClick={() => {
+        <Button size="xs" variant="link" disabled={busy} onClick={() => {
           // "All sets and channels": save first (nothing to save = leave now), then the Media page.
+          if (busy) return
           afterSave.current = onOpenMediaPage
           if (!ops.length || !editable) { close(); onOpenMediaPage() } else save()
         }}>All sets and channels: Media page</Button>

@@ -84,7 +84,8 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   }
   const closePlan = () => {
     const current = selected
-    setSelected(null)
+    // Only this pop-up's own row: a late answer must never close a pop-up opened on another cell meanwhile.
+    setSelected(now => now && current && now.row === current.row ? null : now)
     if (current) actions.clearError(current.row)
     // Focus goes back to the cell, as after every sheet pop-up.
     const api = current?.api
