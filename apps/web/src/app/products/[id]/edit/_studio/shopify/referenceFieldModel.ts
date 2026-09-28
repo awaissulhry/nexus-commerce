@@ -81,7 +81,9 @@ export function olderPickerReason(def: Pick<ShopifyFieldDefinition, 'type' | 'va
 
 export function referenceUiFor(def: Pick<ShopifyFieldDefinition, 'type' | 'validations'> & Partial<Pick<ShopifyFieldDefinition, 'ownerType' | 'namespace' | 'constraints'>>, schema: ShopifyStoreSchema): ReferenceUi {
   const base = baseReferenceType(def.type)
-  if (base === 'metaobject_reference') return singleEntryType(def, schema) ? 'entries' : 'legacy'
+  /* An entry field's one kind must be in the store: a kind named only by its type can be gone, and a list of it cannot
+     load. That field keeps the older picker, which says why (B3 review). */
+  if (base === 'metaobject_reference') { const one = singleEntryType(def, schema); return one && schema.metaobjectDefinitions.some(d => d.type === one) ? 'entries' : 'legacy' }
   /* Mixed and disclosure fields: the tick list with a kind switch, when at least one allowed kind is known (B3c, G18). */
   if (MULTI_KIND_TYPES.includes(base)) return entryKinds(def, schema)?.length ? 'entries' : 'legacy'
   /* A taxonomy value with its attribute named ("color", "pattern") picks from Shopify's list of that attribute (B2, G12).

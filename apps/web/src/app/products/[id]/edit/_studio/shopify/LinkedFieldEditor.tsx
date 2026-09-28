@@ -9,7 +9,7 @@ import { ShopifyRichText } from '../images/shopify/ShopifyFieldValue'
 import { ReferencePicker } from './ReferencePicker'
 import { ShopifyReferenceField } from './ShopifyReferenceField'
 import { listMax, olderPickerReason, referenceUiFor } from './referenceFieldModel'
-import { linkedEditorKind } from './linkedEditorKind'
+import { dateTimeRepairing, linkedEditorKind } from './linkedEditorKind'
 import { ShopifyRatingEditor } from './ShopifyRatingEditor'
 import { linkedEndpoint, linkedRequest } from './api'
 import styles from './linked.module.css'
@@ -64,11 +64,9 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
   /* Which editor opens is decided in one pure place (`linkedEditorKind`, tested per type). Entry and product-like fields
      get the picture pickers (Shopify's bulk-editor pop-ups); the rest keep the older picker. */
   const chosen = linkedEditorKind(def, value, schema)
-  /* A date and time that cannot be read opens a repair box, and the box stays while it is typed in: else the first
-     valid keystroke would swap it for the picker and drop the focus. Clearing the value brings the picker (G15). */
-  const repairing = useRef(chosen === 'line' && type === 'date_time')
-  if (!value) repairing.current = false
-  const kind = repairing.current ? 'line' : chosen
+  /* A date and time that cannot be read opens a repair box, and the box stays while it is typed in (G15). */
+  const typedRepair = useRef<string | null>(null)
+  const kind = dateTimeRepairing(chosen, type, value, typedRepair.current) ? 'line' : chosen
   const ui = reference ? referenceUiFor(def, schema) : 'legacy'
   /* Why an entry field is still on the older picker, on screen; `blocked` = there is no kind to pick from (B3c, G18). */
   const legacyReason = kind === 'older-picker' ? olderPickerReason(def, schema) : null
@@ -147,7 +145,7 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
     </span></Field>
   }
   else if (kind === 'line' && type === 'date_time') control = <Field label={`Repair ${def.name}`} hint="Type it as 2026-09-28T12:30:00 (UTC), or clear the value to use the date picker.">
-    <Input size="sm" disabled={locked} value={text} onChange={e => onChange(e.target.value)} /></Field>
+    <Input size="sm" disabled={locked} value={text} onChange={e => { typedRepair.current = e.target.value; onChange(e.target.value) }} /></Field>
   else if (kind === 'line') control = <Field label={def.name}><Input size="sm" disabled={locked} value={text} inputMode={type.startsWith('number_') ? 'decimal' : undefined} onChange={e => onChange(e.target.value)} /></Field>
   else if (kind === 'code') control = <Field label={def.name} hint={type === 'language' ? 'For example en or it-IT.' : 'For example IT, or US-CA for a region.'}>
     <Input size="sm" disabled={locked} value={text} spellCheck={false} autoCapitalize={type === 'jurisdiction' ? 'characters' : 'off'} onChange={e => onChange(e.target.value)} /></Field>

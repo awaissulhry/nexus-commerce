@@ -205,7 +205,7 @@ export function shopifyRuleSummary(def: Pick<ShopifyFieldDefinition, 'type' | 'v
   const regex = rule('regex')
   if (regex) parts.push(`Format: ${regex}`)
   const domains = rule('allowed_domains')
-  if (domains) { const values = parse(domains); if (Array.isArray(values)) parts.push(`Only links on ${joinOr(values.map(String))}`) }
+  if (domains) { const values = parse(domains); if (Array.isArray(values) && values.length) parts.push(`Only links on ${joinOr(values.map(String))}`) }
   if (rule('schema')) parts.push('Must match the store’s JSON schema')
   const files = rule('file_type_options')
   if (files) { const kinds = parse(files); if (Array.isArray(kinds) && kinds.length) { const words = shopifyFileKindsWords(kinds.map(String)); parts.push(`${words.charAt(0).toUpperCase()}${words.slice(1)} only`) } }

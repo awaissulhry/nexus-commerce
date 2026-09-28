@@ -419,3 +419,15 @@ describe('B3b · money: the sentences of §5', () => {
     expect(validateShopifyField(labTypeField('money'), value)).toBe(sentence)
   })
 })
+
+/* B3 review: an empty allowed-sites list sets no limit (the check accepts every site), so the rule line says nothing of it. */
+describe('B3 review · allowed sites in the rule line', () => {
+  it('names the sites of a list, and nothing for an empty list', () => {
+    for (const type of ['url', 'link']) {
+      const withSites = (value: string) => ({ ...labTypeField(type), validations: [{ name: 'allowed_domains', value }] })
+      expect(shopifyRuleSummary(withSites('["shop.test","help.test"]'), LAB_SCHEMA), type).toContain('Only links on shop.test or help.test')
+      expect(shopifyRuleSummary(withSites('[]'), LAB_SCHEMA), type).not.toContain('Only links')
+      expect(validateShopifyField(withSites('[]'), type === 'url' ? 'https://x.test/' : '{"text":"X","url":"https://x.test/"}'), type).toBeNull()
+    }
+  })
+})

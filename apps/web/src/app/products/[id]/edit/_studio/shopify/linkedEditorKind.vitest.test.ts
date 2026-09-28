@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SHOPIFY_TYPE_CATALOG } from '@nexus/shared/shopify-type-catalog'
 import { LAB_ENTRIES, LAB_SCHEMA, LAB_STORE_FIELDS, LAB_STORE_START, labGoodValue, labTypeField } from '@nexus/shared/shopify-lab-store'
-import { linkedEditorKind } from './linkedEditorKind'
+import { linkedEditorKind, dateTimeRepairing } from './linkedEditorKind'
 import { LinkedFieldEditor } from './LinkedFieldEditor'
 
 /* Lane B slice B1 (docs/shopify-metafields/PLAN-2026-09-28.md §6.1, §7 L2): which editor each type opens, and what the
@@ -193,7 +193,9 @@ describe('B3b · what the editors show', () => {
     expect(out).toContain('nds-datetimefield')
     expect(out).toContain('That is 2026-09-28 12:30 (UTC).')
     expect(out).toContain('nds-datetimefield-zone')
-    expect(out).toContain('>2026-09-28<')
+    /* The picker shows the viewer's own day (12:30 UTC is 29 September from UTC+12): expect that day, in any zone. */
+    const at = new Date('2026-09-28T12:30:00Z'), localDay = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
+    expect(out).toContain(`>${localDay}<`)
     expect(out).toContain('From 2020-01-01 00:00 (UTC) to 2030-12-31 23:59:59 (UTC)')
     expect(out).not.toContain('<input')
     const zoned = render(labTypeField('date_time'), '2026-09-28T14:30:00+02:00')
@@ -255,5 +257,18 @@ describe('B3b · what the editors show', () => {
     const wrong = render(labTypeField('rich_text_field'), '{"type":"paragraph"}')
     expect(wrong).toContain('aria-label="Repair rich text JSON"'); expect(wrong).toContain('Use rich text with a root and children.')
     expect(html(createElement(ShopifyRichText, { raw: '', disabled: false, onChange: () => {} }))).toContain('Text 1')
+  })
+})
+
+/* B3 review: the date-time repair box follows the value typed in it, never a list position. */
+describe('B3 review · the date-time repair box', () => {
+  it('opens for a value that cannot be read, stays for the text typed in it, and never for another readable value', () => {
+    expect(dateTimeRepairing('line', 'date_time', 'Sep 28 2026 12:30', null)).toBe(true)
+    expect(dateTimeRepairing('date-time', 'date_time', '2026-09-28T12:30', '2026-09-28T12:30')).toBe(true)
+    /* A list lost its first (broken) value: the readable value now in that place gets the picker. */
+    expect(dateTimeRepairing('date-time', 'date_time', '2026-10-01T09:00:00', 'Sep 28 2026 12:30')).toBe(false)
+    expect(dateTimeRepairing('date-time', 'date_time', '', 'x')).toBe(false)
+    expect(dateTimeRepairing('date-time', 'date_time', null, null)).toBe(false)
+    expect(dateTimeRepairing('line', 'single_line_text_field', 'x', 'x')).toBe(false)
   })
 })
