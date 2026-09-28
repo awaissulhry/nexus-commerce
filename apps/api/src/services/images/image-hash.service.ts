@@ -166,3 +166,10 @@ export const NEAR_DUP_HAMMING_THRESHOLD = 6
  * to the template-swap band while silently admitting different shots.
  */
 export const DHASH256_NEAR_DUP_THRESHOLD = 26
+
+/**
+ * Images W4a — the "same picture" band of the same IE.13 calibration: dHash-256 ≤ 16 (with aHash ≤
+ * NEAR_DUP_HAMMING_THRESHOLD) was always the same image re-exported or resized. The Media library suggests "Looks like
+ * …" only in this band; 17–26 (same template, other text — a size chart per language) is not a merge candidate.
+ */
+export const DHASH256_SAME_PICTURE_THRESHOLD = 16

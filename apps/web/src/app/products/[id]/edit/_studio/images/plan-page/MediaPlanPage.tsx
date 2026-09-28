@@ -18,9 +18,11 @@ import { ChannelView } from './ChannelView'
 import { CompareDialog } from './CompareDialog'
 import { UploadDialog } from './UploadDialog'
 import { PublishPhotosDialog } from './PublishPhotosDialog'
+import { SamePhotoDialog } from './SamePhotoDialog'
+import { markDistinct, markSame, separate, undoSame } from './lookalikeApi'
 import {
   CHANNEL_LABEL, assetMap, cardOf, libraryUsage, ownedSkuSets, setRows, showAsOptions, swatchRows, viewAxis, viewStack,
-  type LayerView, type MediaChannel, type MediaRead,
+  type LayerView, type LibraryAsset, type MediaChannel, type MediaRead,
 } from './model'
 import type { MediaPlanState } from './useMediaPlan'
 import styles from './planPage.module.css'
@@ -67,6 +69,8 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   const [dropping, setDropping] = useState(false)
   // Review & publish: false = closed, 'all' = every destination (toolbar), else the destination key it was opened from.
   const [publishing, setPublishing] = useState<false | 'all' | string>(false)
+  // W4a — two library photos that look the same ("Same photo?").
+  const [lookalike, setLookalike] = useState<{ a: string; b: string } | null>(null)
 
   const assets = useMemo(() => assetMap(read), [read])
   const usage = useMemo(() => libraryUsage(read), [read])
@@ -93,6 +97,25 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   }, [plan, toast])
 
   const openAsset = (id: string) => { setLibraryOpen(false); setViewing(id) }
+  const markSamePhoto = async (keep: LibraryAsset, drop: LibraryAsset) => {
+    const done = await markSame(read.rootId, keep.id, drop.id)
+    void plan.reload()
+    const undo = async () => {
+      try { await undoSame(read.rootId, done.undo); void plan.reload(); toast(`${drop.label} is its own photo again.`, 'success') }
+      catch (e) { toast(e instanceof Error ? e.message : String(e), 'danger') }
+    }
+    toast(<span className={styles.toast}>{drop.label} is now a copy of {keep.label}{done.layersChanged ? ` (${done.layersChanged} photo layer${done.layersChanged === 1 ? '' : 's'} changed)` : ''}.{' '}
+      <Button size="xs" variant="secondary" onClick={() => void undo()}>Undo</Button></span>, 'success', { duration: 10000 })
+  }
+  const markNotSame = async (a: LibraryAsset, b: LibraryAsset) => {
+    await markDistinct(read.rootId, a.id, b.id)
+    void plan.reload()
+    const undo = async () => {
+      try { await markDistinct(read.rootId, a.id, b.id, true); void plan.reload() } catch (e) { toast(e instanceof Error ? e.message : String(e), 'danger') }
+    }
+    toast(<span className={styles.toast}>{a.label} and {b.label} are marked as different photos.{' '}
+      <Button size="xs" variant="secondary" onClick={() => void undo()}>Undo</Button></span>, 'success', { duration: 8000 })
+  }
   const requestAdd = (view: LayerView, ref: MediaSetRef, label: string) => {
     setPending({ view, target: { id: ref, label, group: 'Sets' } })
     if (!wide) setLibraryOpen(true)
@@ -146,9 +169,12 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
 
   const library = <LibraryPanel read={read} usage={usage} targets={targets} pendingTarget={pending?.target ?? null} onClearPending={() => setPending(null)}
     onAdd={addTo} onOpen={asset => openAsset(asset.id)} onManage={() => { setLibraryOpen(false); setManaging(true) }} onDragging={plan.hold} draggable={wide}
-    onSkip={() => { setLibraryOpen(false); const board = box.current; (board?.querySelector<HTMLElement>('.nds-media-board-thumb[tabindex="0"]') ?? board?.querySelector<HTMLElement>('.nds-media-board-row button'))?.focus() }} />
+    onSkip={() => { setLibraryOpen(false); const board = box.current; (board?.querySelector<HTMLElement>('.nds-media-board-thumb[tabindex="0"]') ?? board?.querySelector<HTMLElement>('.nds-media-board-row button'))?.focus() }}
+    onLookalike={(a, b) => { setLibraryOpen(false); setViewing(null); setLookalike({ a, b }) }} />
   // A plan may point at another SKU's copy of a picture: the preview opens its library card.
   const viewingAsset = viewing ? read.library.find(a => a.id === cardOf(read)(viewing)) ?? null : null
+  // Copies of the same picture on other SKUs; the photos marked the same (W4a) are listed apart, each with "Separate it".
+  const skuCopies = (viewingAsset?.copies ?? []).filter(id => !viewingAsset?.merged?.some(m => m.id === id)).length
 
   if (managing) return <div ref={box} className={styles.page}><LibraryManager productId={read.productId} onClose={() => { setManaging(false); void plan.reload(true) }} /></div>
 
@@ -224,10 +250,16 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
     <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} onReview={() => setPublishing('all')} />
     <PublishPhotosDialog read={read} open={publishing !== false} only={publishing === 'all' || publishing === false ? null : publishing} onClose={() => setPublishing(false)} />
     <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)} onOpenDestination={setOpen} />
+    <SamePhotoDialog read={read} pair={lookalike} onClose={() => setLookalike(null)} onSame={markSamePhoto} onDistinct={markNotSame} />
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}
       {viewingAsset && <p className={styles.muted}>{viewingAsset.width && viewingAsset.height ? `${viewingAsset.width} × ${viewingAsset.height} px · ` : ''}{usage.get(viewingAsset.id)?.join(' · ') || 'Not in any set'}</p>}
-      {viewingAsset?.copies?.length ? <p className={styles.muted}>The same picture is stored {viewingAsset.copies.length} more time{viewingAsset.copies.length === 1 ? '' : 's'} (copies on other SKUs). The library shows it once.</p> : null}
+      {skuCopies ? <p className={styles.muted}>The same picture is stored {skuCopies} more time{skuCopies === 1 ? '' : 's'} (copies on other SKUs). The library shows it once.</p> : null}
+      {viewingAsset?.merged?.map(copy => <p key={copy.id} className={styles.muted}>{copy.label} was marked the same photo as this one, so the library shows it here.{' '}
+        <Button size="xs" variant="link" onClick={() => void separate(read.rootId, copy.id).then(() => { void plan.reload(); toast(`${copy.label} is its own photo again. Photo sets did not change.`, 'success') },
+          (e: unknown) => toast(e instanceof Error ? e.message : String(e), 'danger'))}>Separate it</Button></p>)}
+      {viewingAsset?.lookalikes?.map(other => <p key={other.id} className={styles.muted}>Looks like {read.library.find(x => x.id === other.id)?.label ?? 'another photo'}, at another address.{' '}
+        <Button size="xs" variant="link" onClick={() => { setViewing(null); setLookalike({ a: viewingAsset.id, b: other.id }) }}>Compare them</Button></p>)}
     </Modal>
   </div>
 }

@@ -1,4 +1,5 @@
 import { normalizeAmazonImageUrl } from './normalize-amazon-image-url.js'
+import { DHASH256_SAME_PICTURE_THRESHOLD, hammingHex, NEAR_DUP_HAMMING_THRESHOLD } from './image-hash.service.js'
 
 /**
  * One picture, one library card (Owner, 2026-09-28: "multiple duplicates of the same image. I do not want that to
@@ -17,6 +18,8 @@ export interface LibraryRow {
   url: string
   contentHash?: string | null
   isPrimary?: boolean | null
+  /** The Owner marked this row the same picture as that row (W4a): one card, the kept row's. */
+  sameAsImageId?: string | null
 }
 
 /** Picture key per row: rows that share an address or bytes get the same key (the first row's id). */
@@ -31,6 +34,8 @@ export function pictureKeys(rows: readonly LibraryRow[]): Map<string, string> {
     if (seen) union(seen, row.id); else byAddress.set(address, row.id)
     if (row.contentHash) { const same = byBytes.get(row.contentHash); if (same) union(same, row.id); else byBytes.set(row.contentHash, row.id) }
   }
+  // A merged row (W4a) joins the photo it was marked the same as — another address, other bytes, one picture.
+  for (const row of rows) if (row.sameAsImageId && parent.has(row.sameAsImageId)) union(row.sameAsImageId, row.id)
   return new Map(rows.map(r => [r.id, find(r.id)]))
 }
 
@@ -43,7 +48,8 @@ export function libraryEntries<T extends LibraryRow>(rows: readonly T[], rootId:
   const keys = pictureKeys(rows)
   const groups = new Map<string, T[]>()
   for (const row of rows) groups.set(keys.get(row.id)!, [...(groups.get(keys.get(row.id)!) ?? []), row])
-  const rank = (row: T) => (referenced.has(row.id) ? 0 : 4) + (row.productId === rootId ? 0 : 2) + (row.isPrimary ? 0 : 1)
+  // A row merged into another (W4a) is never the card: the kept photo is.
+  const rank = (row: T) => (row.sameAsImageId ? 8 : 0) + (referenced.has(row.id) ? 0 : 4) + (row.productId === rootId ? 0 : 2) + (row.isPrimary ? 0 : 1)
   const entries = [...groups.values()].map(group => {
     const chosen = group.reduce((best, row) => rank(row) < rank(best) ? row : best, group[0])
     return { ...chosen, copies: group.filter(r => r.id !== chosen.id).map(r => r.id), first: rows.indexOf(group[0]), own: group.some(r => r.productId === rootId) }
@@ -59,4 +65,40 @@ export function samePhoto(rows: ReadonlyArray<LibraryRow & { versionGroupId?: st
   for (const row of rows) if (row.versionGroupId) versions.set(keys.get(row.id)!, row.versionGroupId)
   const key = (id: string) => keys.get(id) ?? id
   return (a: string, b: string) => a === b || key(a) === key(b) || (!!versions.get(key(a)) && versions.get(key(a)) === versions.get(key(b)))
+}
+
+export interface LookalikeRow extends LibraryRow {
+  mediaType?: string | null
+  perceptualHash?: string | null
+  dhash256?: string | null
+  versionGroupId?: string | null
+  distinctFromIds?: readonly string[] | null
+}
+
+/**
+ * Images W4a — cards that show the same picture at two addresses (an Amazon copy and ours), by the calibrated rule of
+ * the upload gate: aHash ≤ 6 AND dHash-256 ≤ 16 (image-hash.service.ts, IE.13). Pairs that are language versions of one
+ * photo, or that the Owner answered "not the same" for, are left out. Per card, the other cards, closest first.
+ */
+export function lookalikes(rows: readonly LookalikeRow[], entries: ReadonlyArray<{ id: string; copies: readonly string[] }>): Map<string, Array<{ id: string; distance: number }>> {
+  const byId = new Map(rows.map(r => [r.id, r]))
+  const cards = entries.map(entry => {
+    const group = [entry.id, ...entry.copies].map(id => byId.get(id)).filter((r): r is LookalikeRow => !!r)
+    const hashed = group.find(r => (r.mediaType ?? 'IMAGE') === 'IMAGE' && r.perceptualHash && r.dhash256)
+    return { id: entry.id, ids: new Set(group.map(r => r.id)), hashed, version: group.find(r => r.versionGroupId)?.versionGroupId ?? null,
+      distinct: new Set(group.flatMap(r => r.distinctFromIds ?? [])) }
+  }).filter(card => card.hashed)
+  const out = new Map<string, Array<{ id: string; distance: number }>>()
+  const add = (from: string, to: string, distance: number) => out.set(from, [...(out.get(from) ?? []), { id: to, distance }])
+  for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) {
+    const a = cards[i], b = cards[j]
+    if (a.version && a.version === b.version) continue
+    if ([...b.ids].some(id => a.distinct.has(id)) || [...a.ids].some(id => b.distinct.has(id))) continue
+    const aHash = a.hashed!.perceptualHash!, bHash = b.hashed!.perceptualHash!, aD = a.hashed!.dhash256!, bD = b.hashed!.dhash256!
+    if (aHash.length !== bHash.length || aD.length !== bD.length) continue
+    const distance = hammingHex(aD, bD)
+    if (hammingHex(aHash, bHash) <= NEAR_DUP_HAMMING_THRESHOLD && distance <= DHASH256_SAME_PICTURE_THRESHOLD) { add(a.id, b.id, distance); add(b.id, a.id, distance) }
+  }
+  for (const list of out.values()) list.sort((x, y) => x.distance - y.distance)
+  return out
 }

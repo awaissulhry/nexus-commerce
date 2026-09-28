@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
-  applyLocal, compareDestinations, computeLayouts, copyFromOps, destinationCells, destinationLabel, filterLibrary, followAllOps, libraryUsage, setRows, showAsOptions,
+  applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, photoPlacements, photoSource, followAllOps, libraryUsage, setRows, showAsOptions,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
 
@@ -123,5 +123,23 @@ describe('Media page model', () => {
     expect(computeLayouts(same)[WINTER].checks.find(c => c.code === 'duplicate-listing-photos')?.message).toMatch(/^Same photos as Main listing on this account and market/)
     // Winter's own Nero set makes it different: no warning on either.
     expect(warned(read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ values: { 'color:black': ids('n1') } }) }]))).toEqual([])
+  })
+
+  it('look-alikes (W4a): the filter, where a photo sits in every layer, and which one to keep by default', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ values: { 'color:black': ids('n1') }, swatches: { 'color:black': { assetId: 'n1' } } }) }])
+    r.destinations[1].listingMark = 1
+    r.library = r.library.map(a => a.id === 'spare' ? { ...a, lookalikes: [{ id: 'n1', distance: 4 }] } : a)
+    expect(filterLibrary(r, new Map(), 'lookalikes', '').map(a => a.id)).toEqual(['spare'])
+    expect(photoPlacements(r, ['n1'])).toEqual(['Shared: Nero', 'eBay IT · Test eBay · ① Winter: Nero', 'eBay IT · Test eBay · ① Winter: Nero swatch'])
+    expect(photoPlacements(r, ['spare'])).toEqual([])
+    expect(photoSource('https://m.media-amazon.com/images/I/81x.jpg')).toBe('Amazon image')
+    expect(photoSource('https://res.cloudinary.com/x/a.jpg')).toBe('Nexus upload')
+    const amazon = { ...r.library[0], id: 'amz', url: 'https://m.media-amazon.com/images/I/81x.jpg', width: 3000, height: 3000 }
+    const ours = { ...r.library[0], id: 'ours', url: 'https://res.cloudinary.com/x/a.jpg', width: 1000, height: 1000 }
+    // A Nexus upload wins over an Amazon image even when the Amazon one is larger.
+    expect(defaultKeep(r, amazon, ours).id).toBe('ours')
+    // Between two uploads: the one in more sets, then the larger.
+    expect(defaultKeep(r, { ...ours, id: 'n1' }, { ...ours, id: 'spare' }).id).toBe('n1')
+    expect(defaultKeep(r, { ...ours, id: 'x1' }, { ...ours, id: 'x2', width: 2000, height: 2000 }).id).toBe('x2')
   })
 })
