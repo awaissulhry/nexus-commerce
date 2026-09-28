@@ -67,8 +67,22 @@ export const isReferenceType = (type: string) => /_reference$/.test(type.replace
 
 const parse = (raw: string): unknown => JSON.parse(raw)
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+/**
+ * Shopify's 32 measurement kinds, each stored as `{"value":2.5,"unit":"kilograms"}` and shown "2.5 kilograms" (gap G13;
+ * docs/shopify-metafields/PLAN-2026-09-28.md §6.3). Named here, not read from `@nexus/shared`: the design system is copied
+ * into apps/factory, which may not import packages/*. A list and not a shape rule, so a broken stored measurement says
+ * "needs review" and a text field that happens to hold `{"value":…}` stays text. `metafieldDisplay.vitest.test.ts` pins the
+ * list to Shopify's unit table in `@nexus/shared`.
+ */
+const MEASUREMENTS = new Set(['antenna_gain', 'area', 'battery_charge_capacity', 'battery_energy_capacity', 'capacitance', 'concentration',
+  'data_storage_capacity', 'data_transfer_rate', 'dimension', 'display_density', 'distance', 'duration', 'electric_current', 'electrical_resistance',
+  'energy', 'frequency', 'illuminance', 'inductance', 'luminous_flux', 'mass_flow_rate', 'power', 'pressure', 'resolution', 'rotational_speed',
+  'sound_level', 'speed', 'temperature', 'thermal_power', 'voltage', 'volume', 'volumetric_flow_rate', 'weight'])
 /** Types stored as a JSON object; every other scalar type is stored as its plain text. */
-const STRUCTURED = new Set(['money', 'rating', 'link', 'weight', 'volume', 'dimension', 'rich_text_field', 'json'])
+const STRUCTURED = new Set(['money', 'rating', 'link', 'rich_text_field', 'json', ...MEASUREMENTS])
+/** A stored measurement: a number (or its text) and a unit. */
+const isMeasurement = (v: unknown) => isRecord(v) && typeof v.unit === 'string' && v.unit !== ''
+  && (typeof v.value === 'number' ? Number.isFinite(v.value) : typeof v.value === 'string' && v.value.trim() !== '' && Number.isFinite(Number(v.value)))
 const COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 
 /** Rich text is a node tree; its words are what a cell can show. */
@@ -119,6 +133,7 @@ export function metafieldDisplay(type: string, raw: string | null | undefined, o
     if (!Array.isArray(parsed)) return { kind: 'invalid', text: METAFIELD_INVALID_TEXT }
     const values: unknown[] = parsed
     if (!values.length) return { kind: 'empty', text: '' }
+    if (MEASUREMENTS.has(base) && !values.every(isMeasurement)) return { kind: 'invalid', text: METAFIELD_INVALID_TEXT }
     if (base === 'color') {
       const colors = values.map(String)
       if (colors.some(c => !COLOR.test(c))) return { kind: 'text', text: colors.join(', ') }
