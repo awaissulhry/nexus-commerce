@@ -86,6 +86,22 @@
 .checkList { margin: var(--nds-space-4) 0 0; padding-inline-start: var(--nds-space-16); }
 .checkList > li + li { margin-top: var(--nds-space-2); }
 
+/* Amazon ZIP for Seller Central (P4d): the files by ASIN, each slot with its photo. All text at the DS body size. */
+.zipBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); }
+.zipControls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--nds-space-12) var(--nds-space-20); }
+.zipText { margin: 0; }
+.zipStatus { display: inline-flex; align-items: center; gap: var(--nds-space-6); margin: 0; color: var(--nds-text-2); }
+.zipSummary { margin: 0; font-weight: var(--nds-font-weight-semibold); font-variant-numeric: tabular-nums; }
+.zipLimits { margin: 0; color: var(--nds-text-2); }
+.zipGroups { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.zipGroup { display: flex; flex-direction: column; gap: var(--nds-space-6); padding: var(--nds-space-8) 0; border-top: 1px solid var(--nds-border-subtle); min-width: 0; }
+.zipGroupHead { margin: 0; overflow-wrap: anywhere; }
+.zipFiles { display: flex; flex-wrap: wrap; gap: var(--nds-space-10); margin: 0; padding: 0; list-style: none; }
+.zipFile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); width: 96px; min-width: 0; }
+.zipName { font-family: var(--nds-font-mono); }
+.zipSkus { color: var(--nds-text-2); }
+.zipPhoto { max-width: 100%; overflow: hidden; color: var(--nds-text-2); text-overflow: ellipsis; white-space: nowrap; }
+
 /* Switch preview and the library tools */
 /* Every surface sets the DS body size: unstyled text otherwise shows at the browser's 16 px and reads as a foreign font
    (Owner, 2026-09-27, the preview's "Shared photos would come from" line: "I still noticed Arial" — it was Inter at 16 px). */

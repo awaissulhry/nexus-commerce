@@ -177,6 +177,10 @@
     "./media-plan-files": {
       "types": "./dist/media-plan-files.d.ts",
       "default": "./dist/media-plan-files.js"
+    },
+    "./media-plan-archive": {
+      "types": "./dist/media-plan-archive.d.ts",
+      "default": "./dist/media-plan-archive.js"
     }
   },
   "scripts": {
