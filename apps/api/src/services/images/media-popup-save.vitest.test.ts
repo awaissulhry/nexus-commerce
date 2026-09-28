@@ -106,7 +106,7 @@ describe('the older gallery\'s one save (C2)', () => {
 
 describe('real time for the older gallery (C3, Owner D2 = a)', () => {
   const context = { scope: 'MASTER', market: 'GLOBAL', locale: 'it' } as const
-  it('a save tells every open screen (the family root, layer GALLERY); a refused save tells nobody', async () => {
+  it('a save tells every open screen (the family root, layer GALLERY); a refused save tells nobody; a variant\'s save names its parent', async () => {
     const opened = await scoped(() => readProductMedia({ ...context, productId: ids.cap }))
     state.events.length = 0
     await scoped(() => saveProductMedia({ ...context, productId: ids.cap }, { expectedRevision: opened.revision, collection: { version: 1, items: [{ assetId: img['cap-front'] }] } }))
@@ -115,5 +115,11 @@ describe('real time for the older gallery (C3, Owner D2 = a)', () => {
     await expect(scoped(() => saveProductMedia({ ...context, productId: ids.cap }, { expectedRevision: opened.revision, collection: { version: 1, items: [] } })))
       .rejects.toThrow(/Media changed since this editor opened/)
     expect(state.events).toEqual([])
+    // A variant's own list names its PARENT: every open screen of the family listens on the family root.
+    const variant = (await scoped(() => prisma.product.create({ data: { sku: 'LAB-CAP-RED', name: 'Lab cap red', basePrice: 10, parentId: ids.cap } as never }))).id
+    const read = await scoped(() => readProductMedia({ ...context, productId: variant }))
+    expect(read.assets.length).toBeGreaterThan(0)
+    await scoped(() => saveProductMedia({ ...context, productId: variant }, { expectedRevision: read.revision, collection: { version: 1, items: [{ assetId: read.assets[0].id }] } }))
+    expect(state.events).toEqual([expect.objectContaining({ type: 'product.media.changed', productId: ids.cap, layer: 'GALLERY' })])
   })
 })

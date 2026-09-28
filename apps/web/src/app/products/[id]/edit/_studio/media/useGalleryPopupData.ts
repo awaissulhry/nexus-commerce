@@ -32,15 +32,18 @@ export function useGalleryPopupData(productId: string, context: ProductMediaQuer
   const [baseline, setBaseline] = useState<ProductMediaWorkspace | null>(null)
   const [latest, setLatest] = useState<ProductMediaWorkspace | null>(null)
   const alive = useRef(true)
+  // Reads can answer out of order (a live event's read can overtake the first one): only the newest one started is shown.
+  const newest = useRef(0)
 
   const read = useCallback(async (): Promise<ProductMediaWorkspace | null> => {
+    const mine = ++newest.current
     try {
       const value = await answer(await fetch(url, { credentials: 'include', cache: 'no-store' })) as ProductMediaWorkspace
       // The first read that works is the baseline — also when it is the "Try again" after a failed first read.
-      if (alive.current) { setLatest(value); setBaseline(current => current ?? value); setState({ status: 'ready' }) }
+      if (alive.current && mine === newest.current) { setLatest(value); setBaseline(current => current ?? value); setState({ status: 'ready' }) }
       return value
     } catch (error) {
-      if (alive.current) setState(current => current.status === 'ready' ? current : { status: 'error', message: error instanceof Error ? error.message : 'Media could not be loaded.' })
+      if (alive.current && mine === newest.current) setState(current => current.status === 'ready' ? current : { status: 'error', message: error instanceof Error ? error.message : 'Media could not be loaded.' })
       return null
     }
   }, [url])
@@ -53,10 +56,14 @@ export function useGalleryPopupData(productId: string, context: ProductMediaQuer
 
   // Someone else saved this family's photos (the live event, Owner D2): read again quietly — the pop-up then says the list
   // changed (its revision moved) and Enter would be refused; its own save's echo is not "someone else".
+  // One read for a burst of events (a paste across many rows sends one per row), like the sheet's own column.
   const saving = useRef(false)
+  const soon = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(soon.current), [])
   useInvalidationChannel(['product-media.changed'], event => {
     if (saving.current || !event.id || (event.id !== familyId && event.id !== productId)) return
-    void read()
+    window.clearTimeout(soon.current)
+    soon.current = window.setTimeout(() => { void read() }, 400)
   })
 
   /** Today's save. Answers the saved list, or throws with the server's own sentence. */

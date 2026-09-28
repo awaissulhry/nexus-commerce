@@ -40,11 +40,14 @@ export const labSwitches: LabSwitches = { refuseNext: false, someoneElse: false,
 let library = [...START_LIBRARY]
 let layers: Array<{ key: string; plan: MediaPlan; revision: number }> = [{ key: 'SHARED', plan: START_SHARED, revision: 1 }]
 let uploads = 0
+/** Every save request the lab answered (a plan change or a gallery list), refused ones included: a test counts them. */
+let saves = 0
+export const labSaves = () => saves
 const listeners = new Set<() => void>()
 export function onLabChange(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn) } }
 const changed = () => listeners.forEach(fn => fn())
 
-export function resetLab() { library = [...START_LIBRARY]; layers = [{ key: 'SHARED', plan: START_SHARED, revision: 1 }]; uploads = 0; capAssets = [...CAP_START]; capLists = { ...CAP_LISTS }; capRevision = 1; changed() }
+export function resetLab() { library = [...START_LIBRARY]; layers = [{ key: 'SHARED', plan: START_SHARED, revision: 1 }]; uploads = 0; saves = 0; capAssets = [...CAP_START]; capLists = { ...CAP_LISTS }; capRevision = 1; changed() }
 
 // ── A product NOT on the photo plan (the older gallery, C2): "Lab cap", its own list per language or listing ─────────
 export const LAB_CAP = 'lab-cap'
@@ -115,14 +118,17 @@ export function installLabMedia() {
   const real = window.fetch.bind(window)
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, window.location.href)
-    const cap = url.pathname.startsWith(`/api/products/${LAB_CAP}/`)
-    if (!cap && !url.pathname.startsWith(`/api/products/${LAB_PRODUCT}`) && !LAB_VARIANTS.some(v => url.pathname.startsWith(`/api/products/${v.productId}/`))) return real(input, init)
+    // With business profiles on, the app calls the API through the page's own `/backend` proxy: the same lab paths.
+    const path = url.pathname.replace(/^\/backend(?=\/api\/)/, '')
+    const cap = path.startsWith(`/api/products/${LAB_CAP}/`)
+    if (!cap && !path.startsWith(`/api/products/${LAB_PRODUCT}`) && !LAB_VARIANTS.some(v => path.startsWith(`/api/products/${v.productId}/`))) return real(input, init)
     await new Promise(resolve => setTimeout(resolve, labSwitches.slow ? 1000 : 120))
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
     const method = (init?.method ?? 'GET').toUpperCase()
     if (cap && url.pathname.endsWith('/product-media')) {
       const context = capContext(url)
       if (method === 'GET') return json(labCapWorkspace(context))
+      saves += 1; changed()
       const body = JSON.parse(String(init?.body ?? '{}')) as { expectedRevision?: string; collection?: { items: ProductMediaItem[] } | null }
       if (labSwitches.someoneElse) { labSwitches.someoneElse = false; const key = `${context.scope}|${context.locale}`; const list = labCapWorkspace(context).collection.items; capLists[key] = list.slice(0, -1); capRevision += 1 }
       if (labSwitches.refuseNext) { labSwitches.refuseNext = false; changed(); return json({ error: 'Media changed while saving. Reload the gallery before retrying.' }, 409) }
@@ -143,6 +149,7 @@ export function installLabMedia() {
     }
     if (method === 'GET' && url.pathname.endsWith('/media')) return json(labRead())
     if (method === 'POST' && url.pathname.endsWith('/media/ops')) {
+      saves += 1; changed()
       const body = JSON.parse(String(init?.body ?? '{}')) as { address?: { layer?: string; channel?: string; marketplace?: string; accountId?: string; aliasKey?: string }; ops?: unknown[] }
       const key = body.address?.layer === 'SHARED' ? 'SHARED' : `LISTING:${body.address?.channel}:${body.address?.marketplace}:${body.address?.accountId}:${body.address?.aliasKey ?? ''}`
       if (key !== 'SHARED' && key !== EBAY_KEY) return json({ error: 'This listing is not one of the product\'s photo destinations yet. Reload the Media page.' }, 409)

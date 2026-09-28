@@ -5,10 +5,11 @@
  *
  * What is asserted, each the thing that would actually break:
  *  - it opens under the cell from the keyboard, with focus on the main photo, and Tab never leaves it;
- *  - Enter saves ONE change and every size of the colour shows it; Esc and open + close save nothing;
+ *  - Enter sends ONE save (the lab counts them) and every size of the colour shows it; Esc and open + close send none;
  *  - a click outside saves; a refused save keeps the pop-up open, says why, and holds that click back;
- *  - someone else's change is refused with the plain sentence, never overwritten;
- *  - the photo drag is live (the photo lifts, the others slide);
+ *  - someone else's change is refused with the plain sentence; the cells keep theirs, not mine;
+ *  - the photo drag is live (the photo lifts and moves with the pointer, the others slide);
+ *  - no test sends a write to a real API: every non-GET to `/api/` or `/backend/api/` is stopped and fails the test;
  *  - the older gallery: this language's alt text, a video's transcript saved with Ctrl/⌘ + Enter, eBay's own checks;
  *  - phone width: a sheet across the screen, 12 px each side; light and dark; no console errors.
  *
@@ -19,6 +20,18 @@ import { expect, test, type Page } from '@playwright/test'
 const panel = (page: Page) => page.locator('[role="dialog"][aria-label^="Product media"]')
 const notice = (page: Page) => page.locator('.nds-banner').filter({ hasText: 'saved in the lab' })
 const cellCount = (page: Page, sku: string) => page.locator(`[aria-label^="Product media: ${sku},"]`).getAttribute('aria-label')
+const firstPhoto = (page: Page, sku: string) => page.locator(`[aria-label^="Product media: ${sku},"] .nds-media-strip-thumbnail img`).first().getAttribute('src')
+const saves = (page: Page) => page.locator('#main-content').getByText(/^Saves received by the lab: \d+$/)
+
+/** The lab answers its own paths in the page; anything that still reaches the network as a write is stopped and fails. */
+let apiWrites: string[] = []
+test.beforeEach(async ({ page }) => {
+  apiWrites = []
+  const write = (method: string, url: string) => method !== 'GET' && method !== 'HEAD' && /\/(backend\/)?api\//.test(new URL(url).pathname)
+  page.context().on('request', request => { if (write(request.method(), request.url())) apiWrites.push(`${request.method()} ${request.url()}`) })
+  await page.route(/\/(backend\/)?api\//, route => write(route.request().method(), route.request().url()) ? route.abort() : route.continue())
+})
+test.afterEach(() => { expect(apiWrites).toEqual([]) })
 
 /** The lab page has no signed-in user: the page frame's own "who am I" and notifications reads answer 401. */
 function watchErrors(page: Page) {
@@ -44,9 +57,10 @@ async function openRow(page: Page, name: RegExp) {
 const toggle = (page: Page, name: string) => page.getByRole('checkbox', { name, exact: true }).check()
 
 test.describe('Product media pop-up — photo plan', () => {
-  test('keyboard: opens with focus on the main photo; Tab stays inside; M + Enter saves once for every size of the colour', async ({ page }) => {
+  test('keyboard: opens with focus on the main photo; Tab stays inside; M + Enter sends one save for every size of the colour', async ({ page }) => {
     const errors = watchErrors(page)
     await openLab(page)
+    await expect(saves(page)).toHaveText('Saves received by the lab: 0')
     await openRow(page, /^LAB-JACKET-BLACK-S/)
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press('Tab')
@@ -56,8 +70,9 @@ test.describe('Product media pop-up — photo plan', () => {
     await page.keyboard.press('ArrowRight'); await page.keyboard.press('m'); await page.keyboard.press('Enter')
     await expect(panel(page)).toHaveCount(0)
     await expect(notice(page)).toHaveCount(1)
+    await expect(saves(page)).toHaveText('Saves received by the lab: 1')
     for (const sku of ['LAB-JACKET-BLACK-S', 'LAB-JACKET-BLACK-M', 'LAB-JACKET-BLACK-L'])
-      expect(await page.locator(`[aria-label^="Product media: ${sku},"] .nds-media-strip-thumbnail img`).first().getAttribute('src')).toContain('black-side')
+      expect(await firstPhoto(page, sku)).toContain('black-side')
     expect(errors).toEqual([])
   })
 
@@ -71,6 +86,7 @@ test.describe('Product media pop-up — photo plan', () => {
     await page.keyboard.press('Enter')
     await expect(panel(page)).toHaveCount(0)
     await expect(notice(page)).toHaveCount(0)
+    await expect(saves(page)).toHaveText('Saves received by the lab: 0')
     expect(await cellCount(page, 'LAB-JACKET-BLACK-S')).toBe(before)
   })
 
@@ -90,13 +106,20 @@ test.describe('Product media pop-up — photo plan', () => {
     await expect(panel(page)).toHaveAttribute('aria-label', 'Product media: LAB-JACKET-GREY-S')
   })
 
-  test('someone else changed the set while it was open: refused with the plain sentence, nothing overwritten', async ({ page }) => {
+  test('someone else changed the set while it was open: refused with the plain sentence; the cells keep theirs, not mine', async ({ page }) => {
     await openLab(page)
+    const count = (label: string | null) => Number(/, (\d+) media items?/.exec(label ?? '')?.[1])
+    const before = count(await cellCount(page, 'LAB-JACKET-BLACK-M'))
     await toggle(page, 'Someone else changes the set before my next save lands')
     await openRow(page, /^LAB-JACKET-BLACK-M/)
     await page.keyboard.press('ArrowRight'); await page.keyboard.press('m'); await page.keyboard.press('Enter')
     await expect(panel(page)).toContainText('Not saved: Someone changed these photos while this pop-up was open. Nothing was changed.')
     await expect(notice(page)).toHaveCount(0)
+    // Their change (the last photo out) is in every size of the colour; mine (side photo first) is not.
+    for (const sku of ['LAB-JACKET-BLACK-S', 'LAB-JACKET-BLACK-M', 'LAB-JACKET-BLACK-L']) {
+      await expect.poll(async () => count(await cellCount(page, sku))).toBe(before - 1)
+      expect(await firstPhoto(page, sku)).not.toContain('black-side')
+    }
   })
 
   test('the drag is live: the photo lifts and follows, the others slide', async ({ page }) => {
@@ -110,6 +133,9 @@ test.describe('Product media pop-up — photo plan', () => {
     const items = panel(page).locator('.nds-media-board-list > li')
     await expect(items.nth(0)).toHaveAttribute('data-sort-state', 'lifted')
     await expect(items.nth(1)).toHaveAttribute('data-sort-state', 'shifted')
+    // The lifted photo is under the pointer (it moved), not left in its slot.
+    const lifted = (await tiles.nth(0).boundingBox())!
+    expect(lifted.x - a.x).toBeGreaterThan((c.x - a.x) / 2)
     await page.mouse.up()
     await expect(tiles.nth(2)).toHaveAttribute('aria-label', /^front, position 3 of 3/)
   })

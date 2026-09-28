@@ -18,7 +18,7 @@ import { galleryCell, galleryDraft } from '../../products/[id]/edit/_studio/medi
 import { cellAfterSave, planBase, type PlanPopupBase } from '../../products/[id]/edit/_studio/media/mediaPopupModel'
 import type { PlanAddress } from '../../products/[id]/edit/_studio/media/planCellTransfer'
 import type { MediaRead } from '../../products/[id]/edit/_studio/images/plan-page/model'
-import { LAB_CAP, LAB_EBAY, LAB_PRODUCT, LAB_VARIANTS, installLabMedia, installLabPhotos, labCapWorkspace, labRead, labSwitches, onLabChange, resetLab, type LabSwitches } from './mediaPopupFixture'
+import { LAB_CAP, LAB_EBAY, LAB_PRODUCT, LAB_VARIANTS, installLabMedia, installLabPhotos, labCapWorkspace, labRead, labSaves, labSwitches, onLabChange, resetLab, type LabSwitches } from './mediaPopupFixture'
 
 installLabMedia()
 
@@ -70,6 +70,7 @@ export function MediaPopupLab() {
       {ready === null && <p role="status">Preparing the lab&apos;s photos…</p>}
       {ready === false && <Banner tone="warning">This browser cannot draw the lab&apos;s photos, so they show as unavailable. Everything else works.</Banner>}
       {notice && <Banner tone="neutral">{notice}</Banner>}
+      <p>Saves received by the lab: {labSaves()}</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <SegmentedControl ariaLabel="Sheet" value={where} onChange={value => { setWhere(value as Where); setOpen(null); setOverlay({}); setCapOverlay(null) }}
           options={[{ value: 'shared', label: 'Shared sheet' }, { value: 'ebay', label: 'eBay IT listing' }]} />
