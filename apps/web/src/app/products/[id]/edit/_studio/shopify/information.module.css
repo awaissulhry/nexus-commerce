@@ -28,6 +28,9 @@
 /* The Shopify cell pop-up (sheet pop-up rebuild P1): a panel under the cell, sized by the grid's `media` editor kind.
    Layout only — every control inside is a design-system control. */
 .cellPanel { z-index: var(--nds-z-popover); display: flex; flex-direction: column; overflow: hidden; color: var(--nds-text); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xl); box-shadow: var(--nds-shadow-pop); outline: none; }
+/* A window the pop-up opened (the entry editor, a picker) comes first. Pop-ups sit above windows in the design system, so
+   the cell pop-up steps out of sight while any window is open and returns, as it was, when it closes (B4, measured). */
+:global(body:has([aria-modal="true"])) .cellPanel { visibility: hidden; }
 .cellPanelBody { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--nds-space-12); }
 .cellPanelHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nds-space-8); min-width: 0; }
 .cellPanelHead strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-base); }

@@ -136,6 +136,9 @@ test('a new category Color entry: plain rules only after the first try, taxonomy
   await openByKeyboard(page, 'Colour (category)')
   await popup(page, 'Colour (category)').getByRole('button', { name: 'Add new entry' }).click()
   const editor = page.getByRole('dialog', { name: 'New Color' })
+  /* The window comes first: the cell pop-up is out of sight while it is open, and nothing of it covers the window (B4). */
+  await expect(editor).toBeVisible()
+  await expect(popup(page, 'Colour (category)')).toBeHidden()
   await expect(editor.getByText('Saves to Shopify now — for every product that uses this entry. To delete an entry, use Shopify admin.')).toBeVisible()
   await expect(editor.getByText('Enter a value. Shopify needs this field.')).toHaveCount(0)
   await editor.getByRole('button', { name: 'Review entry changes' }).click()
@@ -156,6 +159,7 @@ test('a new category Color entry: plain rules only after the first try, taxonomy
   await page.getByRole('dialog', { name: 'Save reusable entry to Shopify?' }).getByRole('button', { name: 'Save to Shopify' }).click()
   await expect(editor).toHaveCount(0)
   const cellPopup = popup(page, 'Colour (category)')
+  await expect(cellPopup).toBeVisible()
   await expect(cellPopup.getByRole('option', { name: /Teal Green/ })).toBeVisible()
   await page.keyboard.press('Enter')
   await expect(page.locator('.nds-prow').filter({ has: row(page, 'Colour (category)') }).locator('[aria-label*="Teal Green"]')).toHaveCount(1)
