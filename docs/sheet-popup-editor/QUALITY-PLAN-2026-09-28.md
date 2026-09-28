@@ -1,7 +1,7 @@
 # Sheet pop-up editor — quality plan (2026-09-28)
 
 Status: **APPROVED 2026-09-28** (Owner: "I'll go with your recommendations … For everything else, I'll go with your recommendations.") — the plan and Q-D1 … Q-D4 = (a). Lane B runs in a new session (prompt: `LANE-B-PROMPT.md`). **Each slice still starts only on the Owner's "build <slice>".**
-**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7).
+**A1 approved 2026-09-28** (Owner: "Please continue. Go ahead." after "Can I start A1 now?"). **A1 built — local commit, not pushed** (§4.6). **A1b approved** (Owner: "Yes, I'll go with your recommendation.") and built (§4.7). **A1c approved** (Owner: "I'll go with your recommendations.") and built (§4.8).
 It replaces the loose next steps in `PLAN-2026-09-27.md` §10 for the work that is left.
 
 ## 0. What the Owner asked (2026-09-28)
@@ -181,6 +181,17 @@ What A1 contains (server only; the pop-up is A2):
   0.9 s. Area tests: 0 new failures (same 3 / 19 as a clean copy). Real-PostgreSQL suites: the three that race this save (first theme save, draft listings, live listings) pass; one unrelated suite (live product sync, test 9, a retry claimed "now") failed once and passed 14/14 on a rerun — a timing flake, no changed file in its path.
 - **Same gap, not fixed (your word needed): the include / exclude save** (`writeProjectionInclusion`) also changes gaps and
   collisions and does not refresh the index either. Same fix, same size (A1c).
+
+### 4.8 A1c — include / exclude refreshes the readiness index too (2026-09-28)
+
+- `writeProjectionInclusion` now writes inside the content transaction and runs `produceReadinessForProducts` for this
+  coordinate before the commit (a lost race is retried, then answered "reload" by the version check, as before).
+- Proven: database test — ticking out the variant with the gap clears it from the index, ticking it back brings it back
+  (profiles off and on); a mutation check (the producer call removed) makes that test fail. Private stack, real routes:
+  8 empty variants → exclude one → the index says 7 → include it → 8 → Reset. Area tests: 0 new failures. Real-PostgreSQL
+  suites: all pass (exit 0), including the draft-listings, live-listings and first-theme-save races.
+- Note: excluding a variant also lowers its `isPublished` (by design: a tick never restores publishing). The check did this
+  to one variant of the private copy; it was set back by hand there. Production data was never touched.
 
 ## 5. Workstream B — Shopify metafields, every type (AAA)
 

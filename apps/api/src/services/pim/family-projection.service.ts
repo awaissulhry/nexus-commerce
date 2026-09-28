@@ -2048,7 +2048,11 @@ export async function writeProjectionInclusion(input: InclusionWriteInput): Prom
     // response reports the state rather than a no-op the client would have to interpret.
   }
 
-  await prisma.$transaction(async (tx) => {
+  // QUALITY-PLAN A1c — the content transaction, so the readiness index follows an include / exclude before the commit
+  // (a variant ticked out takes its value gap and its collision with it; ticked back in, they return), as the theme save
+  // does since A1b. Only this coordinate is rebuilt.
+  await inDatabaseTransaction(prisma, async () => {
+    const tx = activeDatabaseTransaction()!
     const fresh = await tx.channelListing.findFirst({
       where: { productId: root.id, channel, marketplace: market, channelConnectionId: before.coordinate.accountId, aliasKey },
       select: { id: true, version: true },
@@ -2091,6 +2095,7 @@ export async function writeProjectionInclusion(input: InclusionWriteInput): Prom
     }
     await setVariationExcluded(toExclude, true, tx)
     await setVariationExcluded(toInclude, false, tx)
+    await produceReadinessForProducts([root.id, ...before.children.map(child => child.id)], { channel, market, accountId: before.coordinate.accountId })
   }, { isolationLevel: 'Serializable' })
 
   const after = await getProjectionRead(input)

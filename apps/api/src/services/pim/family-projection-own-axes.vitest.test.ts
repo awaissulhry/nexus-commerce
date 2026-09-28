@@ -37,7 +37,7 @@ import { ownAxisKey } from '@nexus/shared/variation-mapping'
 import studioRoutes from '../../routes/product-studio.routes.js'
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { getProjectionRead, sharedOwnAxisSources, writeProjectionMapping } from './family-projection.service.js'
+import { getProjectionRead, sharedOwnAxisSources, writeProjectionInclusion, writeProjectionMapping } from './family-projection.service.js'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
 import { VT_COPY } from './variation-rules.service.js'
 
@@ -164,6 +164,23 @@ describe('eBay · IT draft — channel-only axes through writeProjectionMapping'
     const bag = (await scoped(() => prisma.channelListing.findUniqueOrThrow({ where: { id: 'ebay-own-own-demo' } }))).platformAttributes as Record<string, unknown>
     expect(bag._variationAxes).toBeUndefined()
     expect(bag._variationAxesMode).toBe('inherit')
+  })
+})
+
+describe('A1c — include / exclude refreshes the readiness index too', () => {
+  const gaps = async () => (await scoped(() => prisma.readinessIndex.findMany({ where: { productId: 'own-demo', channel: 'EBAY', market: 'IT' } })))
+    .flatMap(row => row.missing as Array<{ kind?: string; reason?: string }>).filter(item => item.kind === 'value-missing').map(item => item.reason)
+  const include = async (id: string, included: boolean) =>
+    scoped(async () => writeProjectionInclusion({ ...ebay, expectedVersion: await version(), changes: [{ id, included }] }))
+
+  it('ticking out the variant with the gap clears it from the index; ticking it back in brings it back', async () => {
+    await save([{ axisKey: 'Colore', target: 'Colore' }, { axisKey: NECK, target: 'Scollatura' }])
+    expect(await gaps()).toEqual(['1 variant has no value for an axis on eBay · IT: OWN-JACKET-C (Neckline).'])
+    const out = await include('own-c', false)
+    expect(out.results).toEqual([expect.objectContaining({ id: 'own-c', included: false })])
+    expect(await gaps()).toEqual([])
+    await include('own-c', true)
+    expect(await gaps()).toEqual(['1 variant has no value for an axis on eBay · IT: OWN-JACKET-C (Neckline).'])
   })
 })
 
