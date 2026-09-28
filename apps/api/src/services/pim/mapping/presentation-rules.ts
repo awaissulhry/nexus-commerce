@@ -1,5 +1,6 @@
 import { axisSynonymKey, storedPresentationValues } from '../../ebay-theme-axes.js'
 import { orderAxisValues } from '../../ebay-value-order.js'
+import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
 
 export interface PresentationRule {
   id: string; name: string; version: number; priority: number
@@ -67,7 +68,11 @@ export function applyPresentationOrder(axes: Array<{ name: string; key: string; 
 }
 
 export function resolvePresentationOrder(rules: PresentationRule[], context: PresentationContext, attrs: Record<string, unknown>) {
-  const axes = Array.isArray(attrs._variationAxes) ? attrs._variationAxes.filter((v): v is string => typeof v === 'string') : undefined
+  // Sheet pop-up P3 — a stored channel-only key (`own:…`) is ranked under its eBay NAME, the name the resolved axes carry.
+  const labels = attrs._axisNameLabels && typeof attrs._axisNameLabels === 'object' ? attrs._axisNameLabels as Record<string, unknown> : {}
+  const axes = Array.isArray(attrs._variationAxes)
+    ? attrs._variationAxes.filter((v): v is string => typeof v === 'string').map(v => isOwnAxisKey(v) && typeof labels[v] === 'string' ? labels[v] as string : v)
+    : undefined
   const stored = storedPresentationValues(attrs)
   const matching = rules.filter(r => r.order && matchesPresentationScope(r.scope, context)).sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))
   const conflicts: string[] = []

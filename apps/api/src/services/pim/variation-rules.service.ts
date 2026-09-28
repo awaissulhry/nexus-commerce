@@ -18,7 +18,7 @@
  *    `color_name` does not exist on OUTERWEAR, so that fallback named nothing on every push that reached it).
  */
 
-import { hasVariationMappingOverride, parseVariationMapping } from '@nexus/shared/variation-mapping'
+import { hasVariationMappingOverride, isOwnAxisKey, ownAxisKey, parseOwnAxisKey, parseVariationMapping, type OwnAxisSource } from '@nexus/shared/variation-mapping'
 import { variationAxisValue, variationCollisionGroups, variationCollisionSummary } from './variation-collisions.js'
 import type { ProjectionLimits, ProjectionVocabulary } from './family-projection-limits.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
@@ -50,6 +50,12 @@ export interface VariationThemeAxis {
   included: boolean
   segment?: string
   unbound?: { reason: string }
+  /**
+   * Sheet pop-up P3 — present on a CHANNEL-ONLY axis (one the family does not have): where its values come from
+   * (`own:<from>:<field>`, `familyKey` is that raw key) and, on eBay, whether its name is outside eBay's list for the
+   * category (`custom`: shown on the listing, not in eBay's search filters).
+   */
+  own?: OwnAxisSource & { custom: boolean }
 }
 
 export type VariationSourceKind = 'derived' | 'rule' | 'override' | 'none'
@@ -106,6 +112,32 @@ export interface VariationThemeCell {
    * now feeds both hosts.
    */
   addableAxes: Array<{ axisKey: string; familyKey: string; label: string }>
+  /**
+   * Sheet pop-up P3 — the channel's own axes this coordinate could ADD that live in a channel column (eBay: the
+   * category's variation-enabled aspects no delivered axis uses yet), each with how many INCLUDED variants already
+   * carry a value. `filled`/`of` are `null` when the variants were not read (not computed is not zero).
+   */
+  ownCandidates: Array<{ axisKey: string; name: string; label: string; filled: number | null; of: number | null }>
+  /**
+   * Sheet pop-up P3 — may this coordinate take an axis under a name the operator types? `allowed: false` always
+   * carries the reason (Amazon: its own themes only). `maxLength` is the channel's sourced name cap, or `null`.
+   */
+  ownNames: {
+    allowed: boolean
+    maxLength: number | null
+    reason: string | null
+    /**
+     * eBay: the names the category lists but NOT for variations, each with the server's own refusal (219451), so the pop-up
+     * refuses a typed name before it saves, in the words the save would use. Absent where the channel refuses none.
+     */
+    refused?: Array<{ name: string; reason: string }>
+  }
+  /**
+   * Sheet pop-up P3 — per delivered axis (`familyKey`), the distinct values the INCLUDED variants carry here, in
+   * variant order, and how many carry one. The pop-up's chips and its "N variants empty" line read this, and it is
+   * computed from the same variants as `valueGaps`, so the two cannot disagree. Absent when variants were not read.
+   */
+  valueSummary?: Record<string, { values: string[]; filled: number; of: number }>
   write: {
     endpoint: 'variation-axes' | 'projection'
     expectedVersion: number
@@ -182,8 +214,13 @@ export interface VariationSchemaFacts {
    */
   ebay?: {
     categoryId: string | null
-    aspects: Array<{ name: string; englishName?: string | null; variantEligible: boolean; required: boolean }>
+    aspects: Array<{ name: string; englishName?: string | null; variantEligible: boolean; required: boolean; columnKey?: string }>
     unavailableReason?: string | null
+    /**
+     * Sheet pop-up P3 — the category's aspects that are NOT enabled for variations (localised and English names). An
+     * own axis under one of these names is refused: eBay answers 219451 ("… is not allowed as a variation specific").
+     */
+    nonVariationAspects?: string[]
   } | null
 }
 
@@ -214,6 +251,13 @@ export const VT_COPY = {
     `Live on eBay ${site} (item ${id}) — changing the set relists it. Reordering does not.`,
   genericLock: (channelName: string, market: string, id: string) =>
     `Live on ${channelName} ${market} (${id}) — changing the set is an operation. Commit opens the plan.`,
+  /**
+   * Sheet pop-up P3b, slice A4 (QUALITY-PLAN §4.11, the Owner's D1 a) — a product already on Shopify: Nexus has no
+   * option create / update / delete call and refuses every change-only publish to it (`studio-publication.service.ts`),
+   * so a saved order would never reach the store. Its options AND their order are locked here.
+   */
+  shopifyLock: (market: string, id: string) =>
+    `Live on Shopify ${market} (${id}). Nexus cannot change the options of a product already on Shopify yet, so its options and their order are locked here.`,
   /** No listing here yet (product-sheet create path, step 4): the first save starts the coordinate's draft. */
   draftNote: (channelName: string, market: string) => `Saved to the ${channelName} · ${market} draft. Publish sends it.`,
   /** The draft creator's own refusal (`ensureDraftListings`), word for word, so the cell and the save agree. */
@@ -230,6 +274,16 @@ export const VT_COPY = {
   schemaUnavailable:
     'No cached schema for this product type on this marketplace, so its themes cannot be listed.',
   noCollisions: '0 collisions on this coordinate',
+  /* Sheet pop-up P3 — channel-only axes. */
+  ownNameMissing: (noun: string) => `Name this ${noun}.`,
+  ownNameTooLong: (channelName: string, noun: string, max: number) => `${channelName} ${noun} names are at most ${max} characters.`,
+  ebayNotForVariations: (name: string) =>
+    `eBay lists ${name} for this category, but not for variations. eBay refuses it as a variation specific (error 219451). Choose another name.`,
+  ebayNotAnAspect: (name: string) => `${name} is not a variation specific in this eBay category.`,
+  amazonOwnAxes: 'Amazon decides the axes. Choose a theme from its list.',
+  ownNotYet: (channelName: string) => `Axes that exist only on ${channelName} are not available yet.`,
+  etsyOwnFromAttribute: 'An Etsy-only property takes its values from an attribute.',
+  shopifyOwnFromAttribute: 'A Shopify-only option takes its values from an attribute.',
 } as const
 
 /** Amazon joins delivered names with ` / `; every other channel with a middot (design §3.3). */
@@ -385,7 +439,7 @@ function lockFor(input: ResolveVariationInput): VariationThemeCell['locked'] {
     return { reason: VT_COPY.ebayLock(coordinate.market, id), externalId: id, setChangeIs: 'relist', orderChangeAllowed: true, lockedAxisKeys }
   }
   if (channel === 'SHOPIFY') {
-    return { reason: VT_COPY.genericLock('Shopify', coordinate.market, id), externalId: id, setChangeIs: 'in-place', orderChangeAllowed: true, lockedAxisKeys }
+    return { reason: VT_COPY.shopifyLock(coordinate.market, id), externalId: id, setChangeIs: 'in-place', orderChangeAllowed: false, lockedAxisKeys }
   }
   return { reason: VT_COPY.genericLock(channelDisplayName(channel), coordinate.market, id), externalId: id, setChangeIs: 'relist', orderChangeAllowed: false, lockedAxisKeys }
 }
@@ -500,6 +554,8 @@ function resolveMaster(input: ResolveVariationInput): VariationThemeCell {
        empty and the panel reads `masterCandidates` on that host. Empty, never absent: an optional
        field would put the two hosts back on two shapes. */
     addableAxes: [],
+    ownCandidates: [],
+    ownNames: { allowed: false, maxLength: null, reason: null },
     write: {
       endpoint: 'variation-axes',
       expectedVersion: input.family.productVersion,
@@ -512,6 +568,68 @@ function resolveMaster(input: ResolveVariationInput): VariationThemeCell {
     vocabulary: input.vocabulary,
     separator: separatorFor(null),
   }
+}
+
+/**
+ * Sheet pop-up P3 — may this channel take an axis under a typed name? eBay (P3-D1 b), Etsy (its two custom variation
+ * slots) and Shopify (P3b, slice A4: a free option name ≤ 255, values from a Shared per-variant attribute) may; Amazon
+ * never (its themes only, the Owner's rule). Any other channel is refused with this reason (no silent drop at publish).
+ */
+function ownNamesFor(channel: string, limits: ProjectionLimits | undefined, refused?: string[]): VariationThemeCell['ownNames'] {
+  const maxLength = limits?.nameLength ?? null
+  if (channel === 'EBAY' || channel === 'ETSY' || channel === 'SHOPIFY') return { allowed: true, maxLength, reason: null, ...(refused?.length ? { refused: refused.map(name => ({ name, reason: VT_COPY.ebayNotForVariations(name) })) } : {}) }
+  if (channel === 'AMAZON') return { allowed: false, maxLength: null, reason: VT_COPY.amazonOwnAxes }
+  return { allowed: false, maxLength, reason: VT_COPY.ownNotYet(channelDisplayName(channel)) }
+}
+
+/** A channel-only axis's name check, shared by every channel that takes typed names. `null` = the name is fine. */
+function ownNameProblem(name: string, channel: string, noun: string, maxLength: number | null): string | null {
+  if (!name) return VT_COPY.ownNameMissing(noun)
+  if (maxLength !== null && name.length > maxLength) return VT_COPY.ownNameTooLong(channelDisplayName(channel), noun, maxLength)
+  return null
+}
+
+/**
+ * Sheet pop-up P3 — one eBay channel-only axis. `own:channel:<column>` is a variation-enabled aspect of the category
+ * and keeps eBay's own name; `own:shared:<attribute>` carries the operator's name (P3-D1 b): refused when empty,
+ * too long, or one eBay lists for the category but not for variations (219451); `custom` when eBay does not list it.
+ */
+function ebayOwnAxis(
+  key: string,
+  own: OwnAxisSource,
+  typedName: string | null,
+  ebay: NonNullable<VariationSchemaFacts['ebay']> | null,
+  unavailableReason: string | null,
+  input: ResolveVariationInput,
+): VariationThemeAxis {
+  const eligible = (ebay?.aspects ?? []).filter(a => a.variantEligible)
+  const noun = input.vocabulary.axisNoun
+  if (own.from === 'channel') {
+    const aspect = eligible.find(a => !!a.columnKey && canonicalVariantAxis(a.columnKey) === canonicalVariantAxis(own.field))
+    const name = aspect?.name ?? typedName ?? humanise(own.field)
+    return { axisKey: canonicalVariantAxis(key), familyKey: key, label: aspect?.englishName ?? name, channelName: name, target: aspect?.name ?? null, included: true,
+      own: { ...own, custom: false },
+      ...(aspect ? {} : { unbound: { reason: unavailableReason ?? VT_COPY.ebayNotAnAspect(name) } }) }
+  }
+  const name = (typedName ?? '').trim()
+  const listed = eligible.some(a => a.name.toLocaleLowerCase() === name.toLocaleLowerCase())
+  const refused = !listed && (ebay?.nonVariationAspects ?? []).some(n => n.toLocaleLowerCase() === name.toLocaleLowerCase())
+  const problem = unavailableReason ?? ownNameProblem(name, 'EBAY', noun, input.limits?.nameLength ?? null) ?? (refused ? VT_COPY.ebayNotForVariations(name) : null)
+  return { axisKey: canonicalVariantAxis(key), familyKey: key, label: name || humanise(own.field), channelName: name || humanise(own.field), target: name || null, included: true,
+    own: { ...own, custom: !listed }, ...(problem ? { unbound: { reason: problem } } : {}) }
+}
+
+/** Sheet pop-up P3 — a channel-only axis on Shopify, Etsy or another named-axes channel. */
+function namedOwnAxis(key: string, own: OwnAxisSource, typedName: string | null, channel: string, input: ResolveVariationInput): VariationThemeAxis {
+  const name = (typedName ?? '').trim()
+  const policy = ownNamesFor(channel, input.limits)
+  const problem = !policy.allowed ? policy.reason
+    : channel === 'ETSY' && own.from !== 'shared' ? VT_COPY.etsyOwnFromAttribute
+      /* A4 — Shopify has no option list of its own: an own option is a typed name over a Shared attribute's values. */
+      : channel === 'SHOPIFY' && own.from !== 'shared' ? VT_COPY.shopifyOwnFromAttribute
+        : ownNameProblem(name, channel, input.vocabulary.axisNoun, policy.maxLength)
+  return { axisKey: canonicalVariantAxis(key), familyKey: key, label: name || humanise(own.field), channelName: name || humanise(own.field), target: name || null, included: true,
+    own: { ...own, custom: true }, ...(problem ? { unbound: { reason: problem } } : {}) }
 }
 
 /** The shell every channel projection fills in, so no branch invents a field. */
@@ -537,6 +655,8 @@ function channelShell(input: ResolveVariationInput): VariationThemeCell {
     /* Filled by each channel branch once it knows what it delivers — `applyAddableAxes` at the end of
        each resolver, so no branch can forget it and no branch computes its own list. */
     addableAxes: [],
+    ownCandidates: [],
+    ownNames: ownNamesFor(channel, input.limits, channel === 'EBAY' ? input.schema.ebay?.nonVariationAspects : undefined),
     write: blockedReason ? null : {
       endpoint: 'projection',
       expectedVersion: input.listing?.version ?? 0,
@@ -555,7 +675,8 @@ function channelShell(input: ResolveVariationInput): VariationThemeCell {
 function resolveAmazon(input: ResolveVariationInput): VariationThemeCell {
   const cell = channelShell(input)
   const wanted = familyAxisList(input.family)
-  const explicitMapping = effectiveVariationMapping(input)
+  // Sheet pop-up P3 — Amazon takes no channel-only axis (its themes decide); a stored one is never read as a segment.
+  const explicitMapping = effectiveVariationMapping(input)?.filter(a => !isOwnAxisKey(a.axisKey)) ?? null
   const wantedKeys = explicitMapping ? explicitMapping.map(a => canonicalThemeSegment(a.target ?? a.axisKey)) : wanted.map(a => a.axisKey)
   const amazon = input.schema.amazon ?? null
   const facts: ThemeSchemaFacts = amazon?.facts ?? { properties: {}, themes: [], deprecated: [] }
@@ -688,6 +809,8 @@ function resolveEbay(input: ResolveVariationInput): VariationThemeCell {
     : rule ? rule.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).filter(a => a.included !== false)
       : wanted.map(a => ({ axisKey: a.familyKey, target: null }))
   cell.axes = entries.map(entry => {
+    const own = parseOwnAxisKey(entry.axisKey)
+    if (own) return ebayOwnAxis(entry.axisKey, own, entry.target ?? null, ebay, unavailable ? unavailableReason : null, input)
     const axisKey = canonicalVariantAxis(entry.axisKey)
     const family = wanted.find(a => a.axisKey === axisKey)
     const explicit = entry.target ?? (set.from === 'coordinate' && typeof storedNames[family?.familyKey ?? ''] === 'string' ? String(storedNames[family!.familyKey]) : null)
@@ -700,6 +823,8 @@ function resolveEbay(input: ResolveVariationInput): VariationThemeCell {
   const kind: VariationSourceKind = set.from === 'coordinate' ? 'override' : rule ? 'rule' : wanted.length || set.names.length ? 'derived' : 'none'
   cell.source = { kind, ruleLabel: kind === 'rule' ? input.rule!.label : null, category: kind === 'rule' ? input.rule!.category : null,
     label: kind === 'override' ? VT_COPY.override : kind === 'rule' ? VT_COPY.rule(input.rule!.label) : kind === 'derived' ? (set.from === 'product' ? 'Inherited from the shared variation theme' : VT_COPY.derived) : VT_COPY.setAxes }
+  // P3 A2 — a category eBay could not be read for cannot check a typed name (219451): own names wait, with the reason.
+  if (unavailable) cell.ownNames = { allowed: false, maxLength: cell.ownNames.maxLength, reason: unavailableReason }
   cell.candidates = { kind: 'aspects', items: eligible.map(a => ({ code: a.name, label: a.name, coversAll: false, drops: [], adds: [], deprecated: false, required: !!a.required })),
     limit: input.limits.axes, schemaFetchedAt: null, state: unavailable ? 'unavailable' : eligible.length ? 'ok' : 'no-theme', ...(unavailable ? { unavailableReason } : {}) }
   applyLimitAndCollisions(cell, input)
@@ -715,6 +840,8 @@ function resolveNamedAxes(input: ResolveVariationInput): VariationThemeCell {
   const etsy = input.schema.etsy
   const entries = mapping ?? wanted.map(a => ({ axisKey: a.familyKey, target: channel === 'ETSY' ? etsy?.properties.find(p => canonicalVariantAxis(p.axisKey) === a.axisKey)?.code ?? null : a.label }))
   cell.axes = entries.map(entry => {
+    const own = parseOwnAxisKey(entry.axisKey)
+    if (own) return namedOwnAxis(entry.axisKey, own, entry.target ?? null, channel, input)
     const axisKey = canonicalVariantAxis(entry.axisKey)
     const family = wanted.find(a => a.axisKey === axisKey)
     const property = channel === 'ETSY' ? etsy?.properties.find(p => p.code === entry.target) : null
@@ -752,9 +879,60 @@ function applyLimitAndCollisions(cell: VariationThemeCell, input: ResolveVariati
     }
   }
   cell.addableAxes = addableAxesFor(cell, input.family)
+  cell.ownCandidates = ownCandidatesFor(cell, input)
   cell.dropped = cell.axes.filter((a) => !a.included).map((a) => a.axisKey)
   cell.collisions = collisionsFor(cell, input)
   cell.valueGaps = valueGapsFor(cell, input)
+  const summary = valueSummaryFor(cell, input)
+  if (summary) cell.valueSummary = summary
+}
+
+/** How many INCLUDED variants carry a value under `key`, and of how many. `null` = variants not read. */
+function fillOf(key: string, input: ResolveVariationInput): { filled: number | null; of: number | null } {
+  const variants = input.family.variants
+  if (!variants) return { filled: null, of: null }
+  const included = variants.filter(v => v.included)
+  return { filled: included.filter(v => variationAxisValue(v.axisValues, key).trim()).length, of: included.length }
+}
+
+/**
+ * Sheet pop-up P3 — eBay's variation-enabled aspects that no delivered axis uses yet, as channel-only candidates
+ * (`own:channel:<column>`). An aspect a family axis already maps to, or one an own axis already reads, is not
+ * offered twice. Other channels offer none here: their own axes take a typed name (`ownNames`).
+ */
+export function ownCandidatesFor(cell: Pick<VariationThemeCell, 'axes'>, input: ResolveVariationInput): VariationThemeCell['ownCandidates'] {
+  if (String(input.coordinate.channel ?? '').toUpperCase() !== 'EBAY') return []
+  const ebay = input.schema.ebay ?? null
+  if (!ebay || ebay.unavailableReason) return []
+  const delivered = cell.axes.filter(a => a.included)
+  const usedNames = new Set(delivered.map(a => (a.target ?? a.channelName).toLocaleLowerCase()))
+  const usedFields = new Set(delivered.flatMap(a => a.own?.from === 'channel' ? [canonicalVariantAxis(a.own.field)] : []))
+  return ebay.aspects
+    .filter(a => a.variantEligible && a.columnKey && !usedFields.has(canonicalVariantAxis(a.columnKey)) && !usedNames.has(a.name.toLocaleLowerCase()))
+    .map(a => {
+      const axisKey = ownAxisKey({ from: 'channel', field: a.columnKey! })
+      return { axisKey, name: a.name, label: a.englishName ?? a.name, ...fillOf(axisKey, input) }
+    })
+}
+
+/** Sheet pop-up P3 — the pop-up's value chips: per delivered axis, the distinct values INCLUDED variants carry. */
+export function valueSummaryFor(cell: Pick<VariationThemeCell, 'axes'>, input: ResolveVariationInput): VariationThemeCell['valueSummary'] | null {
+  const variants = input.family.variants
+  if (!variants) return null
+  const included = variants.filter(v => v.included)
+  const out: NonNullable<VariationThemeCell['valueSummary']> = {}
+  for (const axis of cell.axes.filter(a => a.included)) {
+    const values: string[] = []
+    let filled = 0
+    for (const variant of included) {
+      const value = variationAxisValue(variant.axisValues, axis.familyKey).trim()
+      if (!value) continue
+      filled += 1
+      if (!values.includes(value)) values.push(value)
+    }
+    out[axis.familyKey] = { values, filled, of: included.length }
+  }
+  return out
 }
 
 /**
@@ -879,9 +1057,11 @@ export function variationReadinessItems(cell: VariationThemeCell | null, coordin
       out.push({
         kind: 'attribute-unbound',
         coordinate: coordinateLabel,
-        message: `${axis.segment ?? axis.label} on ${coordinateLabel} binds to no attribute of this product type.`,
+        // Sheet pop-up P3 — a channel-only axis carries its own reason (219451 name, not a variation aspect, …) and is an
+        // ERROR everywhere: there is no family value to fall back to, so sending it would send the refused name itself.
+        message: axis.own ? `${axis.channelName} on ${coordinateLabel}: ${axis.unbound!.reason}` : `${axis.segment ?? axis.label} on ${coordinateLabel} binds to no attribute of this product type.`,
         subjects: [axis.axisKey],
-        severity: coordinateLabel.toUpperCase().startsWith('AMAZON') ? 'error' : 'warning',
+        severity: axis.own || coordinateLabel.toUpperCase().startsWith('AMAZON') ? 'error' : 'warning',
       })
     }
   }

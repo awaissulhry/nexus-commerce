@@ -32,8 +32,13 @@ export interface MediaChipFieldProps {
   /** The chosen values, in order, already resolved to choices. */
   items: readonly MediaChipItem[]
   onChange: (values: string[]) => void
-  query: string
-  onQueryChange: (query: string) => void
+  /** The search line's text. Unused when `searchable` is false. */
+  query?: string
+  onQueryChange?: (query: string) => void
+  /** Show the search line after the chips. Default true; false = an ordering-only chip row (variation values). */
+  searchable?: boolean
+  /** Chips carry × and Backspace removes. Default true; false when the values are not the field's to drop. */
+  removable?: boolean
   placeholder?: string
   /** Chips can be dragged and moved with Alt + ← / →. Default true. */
   reorderable?: boolean
@@ -51,8 +56,8 @@ export interface MediaChipFieldProps {
 
 export function MediaChipField(props: MediaChipFieldProps) {
   const {
-    label, items, onChange, query, onQueryChange, placeholder = 'Search', reorderable = true, onClear, disabled = false, inputRef, onInputKeyDown,
-    controls, activeDescendant, className,
+    label, items, onChange, query = '', onQueryChange, searchable = true, removable = true, placeholder = 'Search', reorderable = true, onClear, disabled = false,
+    inputRef, onInputKeyDown, controls, activeDescendant, className,
   } = props
   const values = items.map(i => i.value)
   const chipRefs = useRef(new Map<string, HTMLLIElement | null>())
@@ -94,7 +99,7 @@ export function MediaChipField(props: MediaChipFieldProps) {
     if (event.altKey && (event.key === 'ArrowRight' || event.key === 'ArrowDown')) { event.preventDefault(); if (reorderable) move(index, index + 1); return }
     if (event.key === 'ArrowLeft') { event.preventDefault(); focusChip(values[Math.max(0, index - 1)]); return }
     if (event.key === 'ArrowRight') { event.preventDefault(); focusChip(values[index + 1]); return }
-    if (event.key === 'Backspace' || event.key === 'Delete') {
+    if ((event.key === 'Backspace' || event.key === 'Delete') && removable) {
       event.preventDefault()
       if (!disabled) remove(value, values[index + 1] ?? values[index - 1])
     }
@@ -102,33 +107,35 @@ export function MediaChipField(props: MediaChipFieldProps) {
 
   const inputKeys = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     const atStart = event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0
-    if (!query && event.key === 'Backspace' && values.length && !disabled) { event.preventDefault(); remove(values[values.length - 1]); return }
+    if (!query && event.key === 'Backspace' && values.length && !disabled && removable) { event.preventDefault(); remove(values[values.length - 1]); return }
     if (!query && atStart && event.key === 'ArrowLeft' && values.length) { event.preventDefault(); focusChip(values[values.length - 1]); return }
     onInputKeyDown?.(event)
   }
 
   return (
-    <div className={['nds-mchips', disabled ? 'disabled' : '', className].filter(Boolean).join(' ')}
+    <div className={['nds-mchips', disabled ? 'disabled' : '', searchable ? '' : 'static', className].filter(Boolean).join(' ')}
       onMouseDown={event => { if (event.target === event.currentTarget) { event.preventDefault(); ownInput.current?.focus() } }}>
       <ul ref={sort.listRef as unknown as Ref<HTMLUListElement>} className={`nds-mchips-list${sort.drag ? ' dragging' : ''}`} aria-label={label} data-nds-reorder-list>
         {items.map((item, index) => (
-          <li key={item.value} ref={el => { chipRefs.current.set(item.value, el) }} data-nds-reorder-item tabIndex={0} {...sort.itemProps(index)}
+          /* A static chip row (nothing to remove or move) is read as a list, not tabbed through chip by chip (P3 A2, measured:
+             eight value chips were eight Tab stops between a row's × and the next row). */
+          <li key={item.value} ref={el => { chipRefs.current.set(item.value, el) }} data-nds-reorder-item tabIndex={removable || reorderable ? 0 : -1} {...sort.itemProps(index)}
             className={['nds-mchip', item.unknown ? 'unknown' : ''].filter(Boolean).join(' ')}
             aria-label={`${item.label}${item.unknown ? ' (not found)' : ''}, ${index + 1} of ${items.length}${reorderable ? '; Alt and arrow keys move it' : ''}`}
             title={item.unknown ? 'Not found — it may have been deleted. It is kept until you remove it.' : item.detail ?? item.label}
             onKeyDown={event => chipKeys(event, index)}>
-            <TokenChip disabled={disabled} onRemove={() => remove(item.value)} removeLabel={`Remove ${item.label}`}>
+            <TokenChip disabled={disabled} onRemove={removable ? () => remove(item.value) : undefined} removeLabel={removable ? `Remove ${item.label}` : undefined}>
               <MediaMark choice={item} size="chip" />
               <span className="nds-mchip-label">{item.label}</span>
             </TokenChip>
           </li>
         ))}
-        <li className="nds-mchips-input">
+        {searchable && <li className="nds-mchips-input">
           <Input size="sm" ref={setInput} value={query} placeholder={placeholder} disabled={disabled} fieldClassName="nds-mchips-field"
             aria-label={placeholder} role={controls ? 'combobox' : undefined} aria-expanded={controls ? true : undefined}
             aria-controls={controls} aria-activedescendant={activeDescendant}
-            onChange={event => onQueryChange(event.target.value)} onKeyDown={inputKeys} />
-        </li>
+            onChange={event => onQueryChange?.(event.target.value)} onKeyDown={inputKeys} />
+        </li>}
       </ul>
       {onClear && items.length > 0 && (
         <Button className="nds-mchips-clear" size="xs" variant="link" disabled={disabled}

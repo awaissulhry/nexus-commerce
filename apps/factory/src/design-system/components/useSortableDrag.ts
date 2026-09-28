@@ -151,6 +151,9 @@ export function useSortableDrag({ layout = 'list', axis = 'y', disabled = false,
           step: listStep(rects, index, axis), scroller, scrollStart: scroller?.scrollTop ?? 0, active: false,
         }
         suppressClick.current = false
+        /* A sortable inside a sortable (value chips inside an axis row): the innermost item the press landed on owns the
+           drag; the row around it must not start one too. */
+        event.stopPropagation()
       },
       onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
         const s = session.current

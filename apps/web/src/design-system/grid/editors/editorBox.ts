@@ -91,7 +91,7 @@ export const EDITOR_CAPS = {
    * under a two-line chip field. A SEPARATE kind for the reason `axes` is one: widening `list` or `axes` would move editors
    * that were sized on their own content.
    */
-  media: { width: 480, height: 520, preferred: 480, preferredHeight: 360 },
+  media: { width: 480, height: 520, preferred: 480, preferredHeight: 480 },
 } as const
 
 export type EditorKind = keyof typeof EDITOR_CAPS

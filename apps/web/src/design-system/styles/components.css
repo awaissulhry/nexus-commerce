@@ -3108,6 +3108,9 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-mchips { display: flex; align-items: flex-start; gap: var(--nds-space-6); padding: var(--nds-space-4); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface); cursor: text; }
 .nds-mchips:focus-within { outline: 2px solid var(--nds-primary); outline-offset: -1px; }
 .nds-mchips.disabled { background: var(--nds-surface-sunken); cursor: not-allowed; }
+/* An ordering-only chip row (no search line): no field box, no text cursor — the chips are the whole control. */
+.nds-mchips.static { padding: 0; border: 0; background: transparent; cursor: default; }
+.nds-mchips.static:focus-within { outline: none; }
 .nds-mchips-list { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); margin: 0; padding: 0; list-style: none; }
 .nds-mchip { max-width: 100%; border-radius: var(--nds-radius-sm); outline: none; }
 .nds-mchip[draggable='true'] { cursor: grab; }

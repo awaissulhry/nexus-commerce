@@ -59,6 +59,12 @@ export interface VariationThemeAxis {
   segment?: string
   /** Set when this axis binds to nothing on this coordinate. Rendered in warning tone. */
   unbound?: { reason: string } | null
+  /**
+   * Sheet pop-up P3 — a CHANNEL-ONLY axis (the family does not have it). `familyKey` is its raw key, `own:<from>:<field>`:
+   * `channel` = an aspect column of this coordinate, `shared` = a Shared per-variant attribute. `custom` = an eBay name
+   * outside the category's list (shown on the listing, not in eBay's search filters).
+   */
+  own?: { from: 'channel' | 'shared'; field: string; custom: boolean }
 }
 
 export interface VariationThemeCell {
@@ -128,6 +134,19 @@ export interface VariationThemeCell {
    */
   addableAxes?: Array<{ axisKey: string; familyKey: string; label: string }>
   /**
+   * Sheet pop-up P3 — the channel's own axes this coordinate could add from its own columns (eBay: the category's
+   * variation-enabled aspects no axis uses yet), with how many included variants already carry a value (`null` = not read).
+   */
+  ownCandidates?: Array<{ axisKey: string; name: string; label: string; filled: number | null; of: number | null }>
+  /**
+   * Sheet pop-up P3 — may an axis take a typed name here? `allowed: false` always carries the reason (Amazon: its themes
+   * only; eBay without a readable category). `refused` = names the channel lists but refuses for variations, each with the
+   * server's own sentence.
+   */
+  ownNames?: { allowed: boolean; maxLength: number | null; reason: string | null; refused?: Array<{ name: string; reason: string }> }
+  /** Sheet pop-up P3 — per delivered axis (`familyKey`): the distinct values the included variants carry here, and how many. */
+  valueSummary?: Record<string, { values: string[]; filled: number; of: number }>
+  /**
    * VT.2c — the coordinate's own names, SERVER-STATED, for the sentences that name it.
    *
    * The sheet cell carries its coordinate inside `write`, and every sentence read it from there. A
@@ -173,6 +192,12 @@ export interface VariationThemeCell {
    * cell object, so the baseline cannot reach a route.
    */
   baseline?: VariationThemeCell
+  /**
+   * Sheet pop-up rebuild P2 — a DRAFT only, never served: the value order the operator dragged, per axis attribute code, as
+   * dictionary option codes (`{ color: ['yellow', 'black'] }`). Only the axes that were re-ordered appear. The master
+   * commit sends it to `PUT …/studio/family-value-order`.
+   */
+  valueOrder?: Record<string, string[]>
 }
 
 /* ── pure decisions (node-testable: this module is imported, never rendered, by the suite) ──── */

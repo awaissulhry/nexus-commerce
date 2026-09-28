@@ -200,3 +200,52 @@ export async function setFamilyAxes(familyId: string, input: { expectedVersion: 
     return { version: input.expectedVersion + 1 }
   }, { isolationLevel: 'Serializable' })
 }
+
+/**
+ * Sheet pop-up rebuild P2 (docs/sheet-popup-editor/PLAN-2026-09-27.md §4.2) — THE writer of a family's VALUE ORDER: per axis
+ * attribute code, the dictionary option codes in the order the operator dragged them (`Product.variationValueOrder`, the per-family
+ * home VTR step 1 named; `media-plan.service.ts loadFamily` already reads it in this shape). Only the axes sent change; the others
+ * keep their order. A code the family does not vary by, or an option its attribute does not have, is refused — an order may not
+ * invent values. Compare-and-set on the family root, and the family's listings bump (a channel's own order is still its own), with
+ * the event, readiness and read cache of `setFamilyAxes`.
+ */
+export async function setFamilyValueOrder(familyId: string, input: { expectedVersion: number; order: Record<string, string[]> }) {
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) throw new FamilyVariationError('An observed family version is required.', 400)
+  const entries = input.order && typeof input.order === 'object' && !Array.isArray(input.order) ? Object.entries(input.order) : null
+  if (!entries || !entries.length || entries.length > 10) throw new FamilyVariationError('Send the order of 1 to 10 axes.', 400)
+  for (const [code, options] of entries) {
+    if (!Array.isArray(options) || options.length > 500 || options.some(o => typeof o !== 'string' || !o.trim()))
+      throw new FamilyVariationError(`Send ${code}'s values as up to 500 option codes.`, 400)
+    const repeated = options.find((o, i) => options.indexOf(o) !== i)
+    if (repeated) throw new FamilyVariationError(`${repeated} twice in ${code}. Each value has one place.`, 400)
+  }
+
+  return inDatabaseTransaction(prisma, async () => {
+    const root = await prisma.product.findFirst({ where: { id: familyId, deletedAt: null }, select: { id: true, parentId: true, version: true,
+      variationAxisCodes: true, variationValueOrder: true, children: { where: { deletedAt: null }, select: { id: true } } } })
+    if (!root) throw new FamilyVariationError('This family no longer exists.', 404)
+    if (root.parentId) throw new FamilyVariationError('Set the value order on the family parent.', 400)
+    if (root.version !== input.expectedVersion) throw new FamilyVariationError('This family changed. Reload and review the change again.', 409, { current: root.version })
+    const attributes = await dictionary()
+    for (const [code, options] of entries) {
+      if (!root.variationAxisCodes.includes(code)) throw new FamilyVariationError(`This family does not vary by ${code}.`, 400)
+      const attribute = attributes.find(a => a.code === code)
+      if (!attribute) throw new FamilyVariationError(`${code} is not an attribute of the dictionary.`, 400)
+      const unknown = options.find(o => !attribute.options.some(opt => opt.code === o && !opt.archivedAt))
+      if (unknown) throw new FamilyVariationError(`${unknown} is not a value of ${attribute.label}. Add it to the dictionary first.`, 400)
+    }
+    const previous = bag(root.variationValueOrder)
+    const next: Record<string, unknown> = { ...previous, ...Object.fromEntries(entries) }
+    if (JSON.stringify(next) === JSON.stringify(previous)) return { version: root.version }
+    const won = await prisma.product.updateMany({ where: { id: root.id, version: input.expectedVersion },
+      data: { variationValueOrder: next as Prisma.InputJsonValue, version: { increment: 1 } } })
+    if (won.count !== 1) throw new FamilyVariationError('This family changed. Reload and review the change again.', 409)
+    await prisma.channelListing.updateMany({ where: { productId: root.id }, data: { version: { increment: 1 } } })
+    await productEventService.emitTx(prisma as unknown as Prisma.TransactionClient, { aggregateId: root.id, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED',
+      data: { variationValueOrder: next, previousVariationValueOrder: previous }, metadata: { source: 'OPERATOR', writer: 'family-variations' } })
+    const ids = [root.id, ...root.children.map(c => c.id)]
+    await produceReadinessForProducts(ids)
+    await afterDatabaseCommit(`product-cache:${[...ids].sort().join(',')}`, () => productReadCacheService.refreshMany(ids))
+    return { version: input.expectedVersion + 1 }
+  }, { isolationLevel: 'Serializable' })
+}

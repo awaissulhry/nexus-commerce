@@ -12,7 +12,7 @@ import type { ColDef, ValueFormatterParams, ValueGetterParams, ValueParserParams
 import { asList, asMeasure, formatList, formatMeasure, listLabelOf, type CellShape } from '../renderers/shapeFormat'
 import { ListPanelEditor } from './ListPanelEditor'
 import { MeasureEditor } from './MeasureEditor'
-import { AxesPanelEditor } from './AxesPanelEditor'
+import { AxesPanelEditor, suppressAxesPanelKeys } from './AxesPanelEditor'
 import { VariationThemeValue, variationThemeText, variationThemeTooltip, variationThemeProvenanceMember, VARIATION_THEME_CHILD_REASON, type VariationThemeCell } from '../renderers/variationTheme'
 import { sameValue } from './writeGate'
 import { parseShape } from './shapeValue'
@@ -137,6 +137,8 @@ export function variationThemeColumnDef<T>(
     cellEditor: AxesPanelEditor as never,
     cellEditorParams: AXES_EDITOR_PARAMS,
     cellEditorPopup: true,
+    /* P3 A2 — Tab moves between the pop-up's controls; Enter and Esc stay AG's (`suppressAxesPanelKeys`). */
+    suppressKeyboardEvent: suppressAxesPanelKeys as ColDef<T>['suppressKeyboardEvent'],
     /**
      * 🔴 `cellEditorSelector` BEATS `cellEditor` in AG, so it has to be cleared or this column never
      * opens its own editor.
