@@ -73,7 +73,10 @@ async function business() {
         if (!APPLY) { console.log(`[image-facts] would set ${row.id}: ${JSON.stringify({ ...data, dhash256: data.dhash256 ? '…' : undefined, perceptualHash: data.perceptualHash ? '…' : undefined })}`); continue }
         // Only still-NULL fields: a concurrent upload or a second run never has a value overwritten.
         const guard = { id: row.id, ...(data.width !== undefined ? { width: null } : {}), ...(data.dhash256 !== undefined ? { dhash256: null } : {}) }
-        written += (await prisma.productImage.updateMany({ where: guard, data })).count
+        // Await first, then add: `written += await …` reads the total before the wait, and the 4 parallel downloads
+        // overwrite each other's additions (2026-09-28: 33 photos were written, the count said 9).
+        const { count } = await prisma.productImage.updateMany({ where: guard, data })
+        written += count
       } catch (error) { failures.push(`${row.id}: ${(error as Error).message}`) }
     }
   }))
