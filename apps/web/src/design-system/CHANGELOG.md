@@ -1,3 +1,7 @@
+## AliasMark — ★ the main listing, ①②③ its aliases — 2026-09-28
+
+**`AliasMark`** (new primitive, `primitives/AliasMark.tsx`) with **`aliasMarkGlyph(position)`** and **`aliasMarkName(position)`**: the mark that tells a product's listings on one account and market apart — ★ for the main listing (position 0), ①②③… for its aliases, `(21)` after ⑳. It reads "Main listing" / "Listing alias 1" to a screen reader. Show it only when that account and market hold more than one listing. Moved out of the Information sheet's channel band (`sheet/channel/AliasBandCell.tsx`, `provenance.ts`, the `.nds-alias-mark` rule in `channel-sheet.css`) so the Media page shows the same mark (images W2, `docs/images-studio-rebuild/NEXT-PLAN-2026-09-28.md`). Style: `.nds-alias-mark` in `styles/primitives.css`. Catalog: the primitives section. Mirrored in Factory: `primitives/AliasMark.tsx`, `primitives/index.ts`, `styles/primitives.css`.
+
 ## Catalog: no text inside synthetic images — 2026-09-27
 
 `catalog/MediaGalleryExample.tsx` — the synthetic example photos no longer draw a label: an SVG shown as an image cannot use the page's fonts, so its `font-family="sans-serif"` label fell back to the system font (Arial on Windows) on the `/design-system` page (Owner, 2026-09-27: no Arial anywhere). The pictures now differ by a bar count; the caption carries the label. `scripts/check-font-families.mjs` no longer excepts this file (web and Factory), so a font named there fails the guard again. Mirrored in Factory: `catalog/MediaGalleryExample.tsx`.

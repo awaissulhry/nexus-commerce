@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MediaPlan, MediaPlanStack } from './media-plan'
-import { amazonSlotsFor, channelNames, pickVersion, projectAmazon, rowGallery, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
+import { amazonSlotsFor, channelNames, duplicateListingChecks, pickVersion, projectAmazon, rowGallery, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
 
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
 const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
@@ -38,6 +38,26 @@ describe('eBay layout — the two sections and their order', () => {
     const de = projectEbay(stack, family, assets, ebayDE)
     expect(de.axisName).toBe('Farbe')
     expect(de.sets.map(s => s.value)).toEqual(['Schwarz', 'Gelb'])
+  })
+  it('an alias on the eBay Inventory API gets a blocking check: its SKUs are the main listing\'s (PLAN §11)', () => {
+    const code = (d: MediaDestination) => projectEbay(stack, family, assets, d).checks.filter(c => c.code === 'inventory-alias').map(c => c.severity)
+    expect(code({ ...ebayIT, api: 'INVENTORY', alias: true })).toEqual(['error'])
+    // It is the first check: no photo fix helps until the listing moves to Trading.
+    expect(projectEbay(stack, family, assets, { ...ebayIT, api: 'INVENTORY', alias: true }).checks[0].code).toBe('inventory-alias')
+    expect(code({ ...ebayIT, api: 'INVENTORY' })).toEqual([])
+    expect(code({ ...ebayIT, api: 'TRADING', alias: true })).toEqual([])
+  })
+  it('duplicate listings: same photos on one eBay account and market warn both; another account, another market or other photos do not', () => {
+    const a = projectEbay(stack, family, assets, ebayIT)
+    const other = projectEbay({ shared: plan({ ...shared.sets, common: ids('detail', 'cover') }, 'color') }, family, assets, ebayIT)
+    const entry = (key: string, extra: object = {}) => ({ key, channel: 'EBAY', marketplace: 'IT', accountId: 'acc', name: key, ...extra })
+    const checks = duplicateListingChecks([entry('main'), entry('alt1'), entry('alt2'), entry('de', { marketplace: 'DE' }), entry('acc2', { accountId: 'acc2' })],
+      { main: a, alt1: a, alt2: other, de: a, acc2: a })
+    expect([...checks.keys()]).toEqual(['main', 'alt1'])
+    expect(checks.get('main')![0]).toMatchObject({ severity: 'warning', code: 'duplicate-listing-photos', message: expect.stringMatching(/^Same photos as alt1 on this account and market/) })
+    // Two copies of one picture (another id, the same address) count as the same photo.
+    const copy = { ...a, gallery: a.gallery.map(id => id === 'cover' ? 'cover-copy' : id) }
+    expect([...duplicateListingChecks([entry('main'), entry('alt1')], { main: a, alt1: copy }, id => id.replace('-copy', '')).keys()]).toEqual(['main', 'alt1'])
   })
   it('keeps the cover in Nero when it is also Nero\'s main photo (the 2026-07-27 regression)', () => {
     expect(projectEbay(stack, family, assets, ebayIT).sets[0].items[0]).toBe('cover')

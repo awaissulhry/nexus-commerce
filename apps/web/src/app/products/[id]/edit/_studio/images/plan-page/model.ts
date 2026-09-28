@@ -1,5 +1,6 @@
 import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
-import { pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { aliasMarkGlyph } from '@/design-system/primitives'
+import { duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
 
 /**
  * Images rebuild P3b — the Media page's view of one family's photo plan (docs/images-studio-rebuild/PLAN.md §5).
@@ -27,6 +28,8 @@ export interface MediaDestinationRow {
   key: string; channel: MediaChannel; marketplace: string; markets: string[]; accountId: string; accountLabel: string | null
   accountActive: boolean; alias: { id: string; label: string; position: number } | null; languages: string[]; listed: number
   productIds: string[]; targetable: boolean; refusal: string | null; api?: 'TRADING' | 'INVENTORY'
+  /** ★ ①②③ position (DS AliasMark) when the account and market hold more than one listing of the family; else null. */
+  listingMark?: number | null
 }
 export interface MediaAxis { code: string; label: string; dictionary: boolean; values: Array<{ key: string; label: string }> }
 export interface MediaRead {
@@ -73,10 +76,24 @@ export function viewAddress(read: MediaRead, view: LayerView) {
   return { layer: 'LISTING' as const, channel: d.channel, marketplace: d.marketplace, accountId: d.accountId, aliasKey: d.alias?.id ?? '' }
 }
 
-export function destinationLabel(d: MediaDestinationRow) {
+/** "eBay IT · Test eBay" and the listing's name ("① Winter", "Main listing"; none for Amazon and Shopify). */
+export function destinationNameParts(d: MediaDestinationRow): { head: string; name: string | null } {
   const where = d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`
-  const alias = d.alias ? ` · ${d.alias.label}` : d.channel === 'EBAY' || d.channel === 'ETSY' ? ' · Main listing' : ''
-  return `${CHANNEL_LABEL[d.channel]}${where} · ${d.accountLabel ?? 'Unknown account'}${alias}`
+  return { head: `${CHANNEL_LABEL[d.channel]}${where} · ${d.accountLabel ?? 'Unknown account'}`,
+    name: d.alias ? d.alias.label : d.channel === 'EBAY' || d.channel === 'ETSY' ? 'Main listing' : null }
+}
+
+/** The listing alone ("★ Main listing", "① Winter"), for text about listings on one account and market. */
+export function listingName(d: MediaDestinationRow) {
+  const { head, name } = destinationNameParts(d)
+  return `${d.listingMark != null ? `${aliasMarkGlyph(d.listingMark)} ` : ''}${name ?? head}`
+}
+
+/** The destination as one line of text, with the listing's mark (★ ①②③) when its account and market hold several. */
+export function destinationLabel(d: MediaDestinationRow) {
+  const { head, name } = destinationNameParts(d)
+  const mark = d.listingMark != null ? `${aliasMarkGlyph(d.listingMark)} ` : ''
+  return name === null ? head : `${head} · ${mark}${name}`
 }
 
 // ── Sets ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -202,11 +219,18 @@ export function assetMap(read: MediaRead): Map<string, MediaAsset> {
     fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }] as const)))
 }
 
-/** Every targetable destination's layout, computed by the shared projection (what a publish would send). */
+/**
+ * Every targetable destination's layout, computed by the shared projection (what a publish would send), plus the
+ * warning for eBay listings on one account and market that would show the same photos (PLAN.md §4.5).
+ */
 export function computeLayouts(read: MediaRead): Record<string, ChannelMediaLayout> {
   const assets = assetMap(read)
-  return Object.fromEntries(read.destinations.filter(d => d.targetable).map(d => [d.key,
+  const targets = read.destinations.filter(d => d.targetable)
+  const layouts: Record<string, ChannelMediaLayout> = Object.fromEntries(targets.map(d => [d.key,
     projectMediaDestination({ stack: destinationStack(read, d), family: read.family, axes: read.family.axes, assets, target: d, mainLanguage: read.mainLanguage })]))
+  const duplicates = duplicateListingChecks(targets.map(d => ({ ...d, name: listingName(d) })), layouts, id => assets.get(id)?.url ?? id)
+  for (const [key, checks] of duplicates) layouts[key] = { ...layouts[key], checks: [...layouts[key].checks, ...checks] }
+  return layouts
 }
 
 export interface SetCell { ref: MediaSetRef; label: string; count: number; source: 'shared' | 'channel' | 'own' | 'none' }

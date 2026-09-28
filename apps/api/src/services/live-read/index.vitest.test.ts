@@ -38,6 +38,18 @@ describe('readLiveListing', () => {
     expect(s.inventory).toHaveBeenCalledWith(expect.objectContaining({ parentSku: 'FAM', expectedSkus: ['FAM-M'] }), expect.anything())
   })
 
+  it('an Inventory alias is not read: the Inventory read addresses the main listing\'s group and SKUs', async () => {
+    s.listings = [row('family'), row('m', { platformAttributes: { __offerIds: { EBAY_IT: 'offer' } } })]
+    const result = await readLiveListing('family', { ...ebay, aliasKey: 'alias-1' })
+    expect(s.inventory).not.toHaveBeenCalled()
+    expect(s.trading).not.toHaveBeenCalled()
+    expect(result.errors).toEqual([{ scope: 'item', reason: expect.stringMatching(/alias uses the eBay Inventory API/) }])
+    // A Trading alias is read as before.
+    resetLiveReadWindow()
+    s.listings = [row('family'), row('m')]
+    await readLiveListing('family', { ...ebay, aliasKey: 'alias-1' })
+    expect(s.trading).toHaveBeenCalledOnce()
+  })
   it('one read per destination per 30 s; the repeat is marked cached; after the window a new read', async () => {
     let t = 1_000
     const first = await readLiveListing('family', ebay, () => t)

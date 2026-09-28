@@ -24,14 +24,7 @@
   width: 100%;
 }
 
-/* ①②③ — the alias's ordinal mark. Tabular so bands line up as the list grows. */
-.nds-alias-mark {
-  flex: 0 0 auto;
-  font-size: var(--nds-font-size-base);
-  line-height: 1;
-  color: var(--nds-text-2);
-  font-variant-numeric: tabular-nums;
-}
+/* ①②③ — the alias's ordinal mark is the DS `AliasMark` (primitives.css). */
 
 /* #712 — the variant count beside the alias label. Same line, quieter than the label it follows:
    it is a reference number, not the thing an operator acts on. `font-weight: normal` rather than a

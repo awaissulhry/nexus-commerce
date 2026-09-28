@@ -253,9 +253,14 @@ export interface EbayInventoryPublication {
   ours: EbayInventoryOurs; live: ServerLiveRead<EbayInventoryRaw>
 }
 
+export const INVENTORY_ALIAS_REFUSAL = 'This listing alias uses the eBay Inventory API. Nexus sends Inventory listings by the family\'s SKUs, and those belong to the main listing, so it cannot send to this alias. Nothing was sent.'
+
 /** PE P3.4 — Nexus now (the same builder as Trading) and the live group, for the change-only review of an Inventory listing. */
 export async function prepareEbayInventoryPublication(facts: PublicationFacts): Promise<EbayInventoryPublication> {
   const { scope, parent } = facts
+  // Nexus addresses an Inventory listing by the family's parent SKU (its group) and SKUs — the main listing's. On an
+  // alias that would read and write the main listing, so an Inventory alias is refused before anything is read.
+  if (facts.destination.aliasKey) throw new Error(INVENTORY_ALIAS_REFUSAL)
   assertLiveEbay()
   const built = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined, inventory: true })
   if (!built.itemId) throw new Error('This eBay Inventory listing has no eBay item. Create it on eBay before publishing changes.')

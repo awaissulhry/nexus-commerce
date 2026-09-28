@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Send } from 'lucide-react'
 import type { MediaOp, MediaSetRef } from '@nexus/shared/media-plan'
 import { AMAZON_SLOTS, type AmazonMediaLayout, type ChannelMediaLayout, type EbayMediaLayout, type EtsyMediaLayout, type MediaAsset, type ShopifyMediaLayout } from '@nexus/shared/media-plan-channels'
 
@@ -10,6 +11,7 @@ import { Button, SegmentedControl } from '@/design-system/primitives'
 
 import { CHANNEL_LABEL, checkCounts, copyFromOps, destinationLabel, followAllOps, type LayerView, type MediaDestinationRow, type MediaRead } from './model'
 import { AmazonZipDialog } from './AmazonZipDialog'
+import { DestinationName } from './DestinationsTable'
 import { PlanBoard } from './PlanBoard'
 import styles from './planPage.module.css'
 
@@ -22,11 +24,13 @@ export interface ChannelViewProps {
   edit(view: LayerView, ops: MediaOp[], label: string): void
   onAddRequest(view: LayerView, ref: MediaSetRef, label: string): void
   onOpen(assetId: string): void
+  /** Review & publish this destination only (the window offers "Check all destinations"). */
+  onPublish(): void
   onClose(): void
 }
 
 /** One destination: its sets on its own layer or its channel's, the buyer preview and the checks (PLAN.md §5.4). */
-export function ChannelView({ read, destination: d, layout, assets, languages, edit, onAddRequest, onOpen, onClose }: ChannelViewProps) {
+export function ChannelView({ read, destination: d, layout, assets, languages, edit, onAddRequest, onOpen, onPublish, onClose }: ChannelViewProps) {
   const [scope, setScope] = useState<'LISTING' | 'CHANNEL'>('LISTING')
   const [zip, setZip] = useState(false)
   const view: LayerView = scope === 'LISTING' ? { layer: 'LISTING', destination: d.key } : { layer: 'CHANNEL', channel: d.channel }
@@ -40,7 +44,7 @@ export function ChannelView({ read, destination: d, layout, assets, languages, e
   return <section className={styles.channelView} aria-label={`Photos for ${destinationLabel(d)}`}>
     <header className={styles.channelHead}>
       <Button size="sm" variant="ghost" onClick={onClose}>← All destinations</Button>
-      <h3 className={styles.sectionTitle}>{destinationLabel(d)}</h3>
+      <h3 className={styles.sectionTitle}><DestinationName d={d} /></h3>
       {d.channel === 'AMAZON' && <span className={styles.muted}>Applies to {d.markets.join(' ')} — Amazon keeps one photo set per ASIN.</span>}
       <span className={styles.spacer} />
       {d.channel === 'AMAZON' && <Button size="sm" variant="secondary" disabled={!layout || !d.markets.length} onClick={() => setZip(true)}>Export ZIP for Seller Central</Button>}
@@ -52,6 +56,7 @@ export function ChannelView({ read, destination: d, layout, assets, languages, e
       <Button size="sm" variant="secondary" disabled={!followAll.length} onClick={() => edit(view, followAll, `Follow ${scope === 'LISTING' ? `all ${channel} listings` : 'Shared'} for every set`)}>
         {scope === 'LISTING' ? 'Follow the channel for all sets' : 'Follow Shared for all sets'}
       </Button>
+      <Button size="sm" variant="secondary" disabled={!layout} onClick={onPublish}><Send size={14} aria-hidden />Review &amp; publish</Button>
     </header>
     <SegmentedControl ariaLabel="Which photos to edit" size="sm" value={scope} onChange={value => setScope(value as 'LISTING' | 'CHANNEL')}
       options={[{ value: 'LISTING', label: d.channel === 'AMAZON' || d.channel === 'SHOPIFY' ? 'This account only' : 'This listing only' }, { value: 'CHANNEL', label: `All ${channel} ${d.channel === 'AMAZON' || d.channel === 'SHOPIFY' ? 'accounts' : 'listings'}` }]} />

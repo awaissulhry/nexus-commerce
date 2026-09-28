@@ -4,9 +4,9 @@ import type { ChannelMediaLayout } from '@nexus/shared/media-plan-channels'
 
 import { Card, SourceIndicator } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
-import { Button, Tag } from '@/design-system/primitives'
+import { AliasMark, Button, Tag } from '@/design-system/primitives'
 
-import { checkCounts, destinationCells, destinationLabel, layoutSummary, type MediaDestinationRow, type MediaRead } from './model'
+import { checkCounts, destinationCells, destinationLabel, destinationNameParts, layoutSummary, type MediaDestinationRow, type MediaRead } from './model'
 import styles from './planPage.module.css'
 
 export interface DestinationsTableProps {
@@ -29,7 +29,7 @@ export const SOURCE = {
  *  receive, its checks (PLAN.md §5.1, §5.2). The same pieces render both, so the two layouts cannot say different things. */
 export function DestinationsTable({ read, destinations, layouts, selected, onOpen, cards = false }: DestinationsTableProps & { cards?: boolean }) {
   const where = (d: MediaDestinationRow) => d.channel === 'AMAZON' ? `${d.markets.join(' ')} · one photo set per ASIN` : d.api === 'INVENTORY' ? 'Inventory API' : d.api === 'TRADING' ? 'Trading API' : d.markets.join(' ')
-  const title = (d: MediaDestinationRow) => <Button size="xs" variant="link" onClick={() => onOpen(d.key)} aria-current={selected === d.key || undefined} disabled={!d.targetable}>{destinationLabel(d)}</Button>
+  const title = (d: MediaDestinationRow) => <Button size="xs" variant="link" onClick={() => onOpen(d.key)} aria-current={selected === d.key || undefined} disabled={!d.targetable}><DestinationName d={d} /></Button>
   const notes = (d: MediaDestinationRow) => <>
     {d.targetable && !d.accountActive && <Tag tone="warning">Account paused — reconnect it before publishing</Tag>}
     {d.refusal && <span className={styles.refusal}>{d.refusal}</span>}
@@ -76,4 +76,10 @@ export function DestinationsTable({ read, destinations, layouts, selected, onOpe
   return <DataGrid ariaLabel="Where the photos go" columns={columns} rows={destinations} rowKey={d => d.key}
     rowProps={d => ({ 'aria-selected': selected === d.key || undefined, className: selected === d.key ? 'sel' : undefined })}
     emptyState={<span className={styles.muted}>This product has no listing here yet.</span>} />
+}
+
+/** A destination's name with the DS AliasMark (★ ①②③) as a real mark, for titles; text contexts use `destinationLabel`. */
+export function DestinationName({ d }: { d: MediaDestinationRow }) {
+  const { head, name } = destinationNameParts(d)
+  return <>{head}{name !== null && <> · {d.listingMark != null && <><AliasMark position={d.listingMark} /> </>}{name}</>}</>
 }
