@@ -182,6 +182,14 @@ test('a new entry can be added from a field inside an entry, and lands in that f
   await expect(related.getByRole('option', { name: /Night reflective/ })).toHaveAttribute('aria-selected', 'true')
 })
 
+test('a copy of an entry says it is a new entry that only this product uses (B4)', async ({ page }) => {
+  await openByKeyboard(page, 'Icons with text')
+  await popup(page, 'Icons with text').getByRole('button', { name: 'Make a separate copy' }).first().click()
+  const copy = page.getByRole('dialog', { name: /^Copy / })
+  await expect(copy.getByText('Saves a new entry to Shopify now — only this product will use it. To delete an entry, use Shopify admin.')).toBeVisible()
+  await expect(copy.getByText('for every product that uses this entry')).toHaveCount(0)
+})
+
 test('a read-only field is shown with its reason and does not block the rest of the entry', async ({ page }) => {
   test.setTimeout(60_000)
   await page.getByRole('tab', { name: /Entry kinds/ }).click()
