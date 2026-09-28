@@ -176,7 +176,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     if (!selected || !field || !schema) return true
     if (locked || value === selected.baseline) { close(); return true }
     const current = schema.definitions.find(d => d.ownerType === field.owner && d.namespace === field.definition?.namespace && d.key === field.definition?.key)
-    const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'Shopify changed this field’s rules. Your value stays here; close and open the cell again to use the new rules.'
+    const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'Shopify changed this field’s rules. Your value stays here; reload the sheet to use the new rules.'
       : translated && value === null ? null : field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected.baseline)
     if (problem) { setError(`Not saved: ${problem}`); return false }
     const node = getApi()?.getRowNode(selected.row.rowId)
