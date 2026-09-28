@@ -69,3 +69,38 @@ complete whatever is left … AAA quality", and moved the Amazon ZIP from P5 int
   checked before and after), route `POST /products/:id/media/amazon-archive`.
 - In the Amazon channel view: **Export ZIP for Seller Central ▾** (per market: all slots, safety images, country
   photos) with a preview of the files and the exact Seller Central tool to use.
+- **Built differently (2026-09-28, the AAA review of P4d):**
+  - **No ASIN in `GET /media`.** Only this window needs them, so the preview reads each SKU's listing on the chosen
+    market and account itself (`externalListingId`, else `platformProductId`, as the Amazon workspace reads it).
+  - **Routes are GET, not POST:** `GET /products/:id/media/amazon-archive?accountId&market&kind` (the preview) and
+    `GET …/amazon-archive/file?…&digest=` (the ZIP). Both only read. The digest (SHA-256 of the file names and photo
+    addresses) binds the ZIP to the preview; the server makes the list again before and after the downloads.
+    Permission `products.view`.
+  - **Three kinds per market:** All photos (MAIN, PT01–PT08, SWCH), Safety images (PS01–PS06), Country photos.
+  - **"Left out" says the exact reason:** not listed on Amazon DE; its Amazon DE listing has no ASIN yet; its listing
+    holds "X", which is not an ASIN.
+  - **The plan's checks are shown, for this ZIP on this market.** Errors stop the download, as they stop Publish: a SKU
+    without MAIN, a photo below 500 px, more than 6 safety images, a deleted photo, two SKUs on one ASIN with different
+    photos, more than 1,000 files. Warnings are shown: photos that do not fit in 9 slots, below 1,000 px (no zoom), a
+    photo in another language. A SKU that is not on this market does not stop its ZIP.
+  - **Languages, said in the window.** The API sends one version of each photo to every market of the account: the
+    language of the account's first market (most listings; a tie goes to the first market code, A–Z). All photos holds
+    that version; Country photos holds the market's own language only (a market with two languages: its first).
+  - **Seller Central's names**, checked 2026-09-28 in Amazon staff posts on the seller forums (the help pages need a
+    login): the bulk upload is **Catalog → Upload images**; photos for one country use the **Country-Specific Upload** in
+    Image Manager (choose the country; an active listing there is needed; Amazon does not promise to show them instead
+    of the global photos). "Image Manager → Country-Specific Upload" in PLAN §7.1 was right for country photos only.
+    Not confirmed by an Amazon text: PS01–PS06 and SWCH as file names in the bulk upload (the older safety export
+    already writes PS names).
+  - **The older "Export PS images"** (the studio's Amazon tool) stays for families not on the plan: their safety images
+    live in that tool. A family on the plan never shows that tool, and its route now refuses such a family (409) and
+    names the new place, because that store is not the family's photos. Both use one engine (`jpeg-archive.ts`). The
+    previous edit page's ZIP API (§7.1 "A") has no screen and goes in P6.
+  - **Limits (Nexus's own; Amazon takes 5 GB per upload):** 1,000 files; 100 MB (a photo counts once per file it
+    fills); 90 s to make the ZIP. The deadline now also stops a download in progress, so the answer starts before
+    Vercel's proxy stops waiting (120 s for the first byte, Vercel docs "proxied request timeout"); after that the file
+    streams as long as it needs. The browser waits 130 s for the answer; a proxy's 502/504 page becomes a sentence. The
+    window states the limits before the download.
+  - **Open risk:** All photos repeats a photo in every ASIN's file, so a large family can pass 100 MB. The window then
+    says so and saves nothing. If that happens in production, the next step is to stream the ZIP (memory then holds
+    each photo once).
