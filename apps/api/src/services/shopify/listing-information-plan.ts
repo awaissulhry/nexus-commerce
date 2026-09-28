@@ -66,7 +66,12 @@ export async function listingInformationTranslations(gql: ShopifyGraphql, input:
       const state = informationContentState(listing, spec, locale)
       if (state.state !== 'stored' || spec.channelStore?.kind !== 'platformAttributes' || spec.channelStore.path[0] !== '_shopifyInformationLocales') continue
       const incoming = state.value
-      if (field.owner === 'PRODUCT' && listing.productId !== input.familyId) throw new WorkspaceScopeError('A product translation is stored on another row.', 422)
+      // A child row's own product text is not the Shopify product's (listingInformationDraft skips it the same way):
+      // "Add child" gives every child its own name. Refuse only a translation pinned on the child's listing — it would be lost.
+      if (field.owner === 'PRODUCT' && listing.productId !== input.familyId) {
+        if (object(object(object(listing.platformAttributes)._shopifyInformationLocales)[locale])[fieldId] !== undefined) throw new WorkspaceScopeError('A product translation is stored on another row.', 422)
+        continue
+      }
       const ownerId = field.owner === 'PRODUCT' ? input.productId : input.variantIds[listing.productId]
       const row = rows.find(r => r.id === ownerId), source = row?.translations?.[fieldId], value = raw(incoming)
       if (!source) { if (value === null) continue; throw new WorkspaceScopeError(`${field.label}: Shopify does not expose a translatable source yet. Synchronize its primary-language value first.`, 422) }

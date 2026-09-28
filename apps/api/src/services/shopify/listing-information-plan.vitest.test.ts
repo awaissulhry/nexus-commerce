@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { shopifyProductSpec } from '../pim/channel-specs/store.js'
 import { channelValuePatch } from '../pim/channel-value-mutation.js'
-import { validateListingInformationOverrides } from './listing-information-plan.js'
+import { listingInformationTranslations, validateListingInformationOverrides } from './listing-information-plan.js'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+const read = vi.hoisted(() => ({ rows: [] as unknown[] }))
+vi.mock('./information-gateway.js', () => ({ readInformation: async () => ({ rows: read.rows }) }))
 const schema: ShopifyStoreSchema = { definitions: [{ id: 'definition-1', namespace: 'custom', key: 'copy', ownerType: 'PRODUCT', name: 'Copy', type: 'single_line_text_field', description: null, access: { admin: 'PUBLIC_READ_WRITE', storefront: null }, validations: [] }], metaobjectDefinitions: [], types: [{ name: 'single_line_text_field', category: 'TEXT' }], locales: [{ locale: 'en', primary: true, published: true }, { locale: 'it', primary: false, published: true }], native: { scopes: ['write_products', 'write_translations'], enums: {}, inputs: { variant: ['price'] } }, revision: '1' }
 const listing = { id: 'listing', channel: 'SHOPIFY', marketplace: 'GLOBAL', languages: ['en', 'it'], product: { id: 'family', translations: [] }, productId: 'family', channelConnectionId: 'store-a', platformAttributes: {} }
 describe('Channel sheet schema, storage and publication validation', () => {
@@ -46,5 +48,22 @@ describe('Channel sheet schema, storage and publication validation', () => {
     expect(() => validateListingInformationOverrides([changed], 'store-a', schema)).toThrow('one line')
     const denied = shopifyProductSpec({ ...schema, native: { ...schema.native!, scopes: ['write_products'] } }, 'store-a', 'it')
     expect(denied.fields.find(f => f.shopifyField?.definition)?.readOnlyReason).toContain('write_translations')
+  })
+  /* Found on a real development store (D2, 2026-09-28): "Add child" gives each child its own name, so with a second language every
+     child row resolved the Shopify PRODUCT title as stored and the step threw — after Shopify had created the product. */
+  describe('translations of a new family', () => {
+    const PRODUCT = 'gid://shopify/Product/1', family = { id: 'family', name: 'Giacca prova', translations: [] }
+    const row = (productId: string, product: Record<string, unknown>, platformAttributes: Record<string, unknown> = {}) => ({ ...listing, id: `listing-${productId}`, languages: ['en'], productId, product, platformAttributes })
+    const rows = [row('family', family), row('child', { id: 'child', parentId: 'family', name: 'Giacca prova', parent: family, translations: [] })]
+    const input = (listings: ReturnType<typeof row>[]) => ({ accountId: 'store-a', familyId: 'family', productId: PRODUCT, variantIds: { child: 'gid://shopify/ProductVariant/2' }, listings })
+    read.rows = [{ id: PRODUCT, productId: PRODUCT, kind: 'PRODUCT', title: 'Test jacket', handle: 'test-jacket', image: null, values: {}, fields: [], media: [], translations: { title: { key: 'title', digest: 'source', locale: 'it', value: null, sourceValue: 'Test jacket', outdated: false } } }]
+    it('sends the family row\'s product title and skips the child rows\' own names', async () => {
+      const draft = await listingInformationTranslations(async () => ({}) as never, input(rows), schema)
+      expect(draft.nativeEdits).toEqual([expect.objectContaining({ ownerId: PRODUCT, field: 'translation', nextValue: 'Giacca prova' })])
+    })
+    it('still refuses a product translation pinned on a child\'s listing, which would be lost', async () => {
+      const pinned = row('child', rows[1].product, { _shopifyInformationLocales: { it: { title: 'Solo figlio' } } })
+      await expect(listingInformationTranslations(async () => ({}) as never, input([rows[0], pinned]), schema)).rejects.toThrow('A product translation is stored on another row.')
+    })
   })
 })
