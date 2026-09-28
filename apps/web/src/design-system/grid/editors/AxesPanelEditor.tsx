@@ -98,6 +98,8 @@ export const AXES_EDITOR_COPY = {
    */
   atLimit: (channel: string, limit: number, plural: string) => `${channel} allows up to ${limit} ${plural} per listing.`,
   everyAxisMapped: (noun: string) => `Every shared axis is already ${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}. Add an axis on the shared product first.`,
+  /** The Shared product's own `+ Add axis` with nothing to offer: the axes come from the family's per-variant attributes. */
+  noSharedCandidates: 'No per-variant attribute is left to become an axis. Choose the product family in ⋯ → Classification…, or add a per-variant attribute to it.',
   targetAria: (channel: string, noun: string, axis: string) => `The ${channel} ${noun} for ${axis}`,
   targetLockedAria: (channel: string, noun: string, axis: string, target: string, reason: string) =>
     `${axis} is the ${channel} ${noun} ${target}, locked: ${reason}`,
@@ -294,6 +296,55 @@ export function axesReorder(cell: VariationThemeCell, order: string[]): AxesEdit
   const state = axesOrderState(cell)
   if (!state.writable) return { ok: false, refused: state.reason ?? 'The order cannot be changed here.' }
   return { ok: true, next: { ...cell, axes: reorderAxes(cell.axes, order) } }
+}
+
+/* ── "+ Add": ONE order for the list and the add ─────────────────────────────────────────────────────────────────────── */
+
+/**
+ * 🔴 Which list "+ Add" reads — the ONE order the offered list and the add both follow. The Shared case comes before a
+ * channel's `addableAxes`: the server sends a Shared cell `addableAxes: []` ("empty, never absent") and an empty array is
+ * truthy, so testing it first offered nothing (fixed in the list) and then, in the add, found nothing to add (found by
+ * Lane B on a development store, 2026-09-28 — a click on "Color" added no axis). Two copies of one decision drifted; now
+ * there is one.
+ */
+export function axesAddSource(draft: VariationThemeCell, master: boolean, amazon: boolean): 'theme' | 'shared' | 'family' | 'aspects' {
+  if (amazon) return 'theme'
+  if (master) return 'shared'
+  if (draft.addableAxes) return 'family'
+  return 'aspects'
+}
+
+/** The draft after "+ Add" picks `code`, or null when the code is not on the list this cell offers. Pure. */
+export function axesAddEdit(draft: VariationThemeCell, code: string, master: boolean, amazon: boolean): VariationThemeCell | null {
+  switch (axesAddSource(draft, master, amazon)) {
+    case 'theme': {
+      /* Amazon: the THEME decides the rows. Picking one re-projects the axes from that theme's own drops — the rows are
+         informational, exactly as §3.5 says. */
+      const item = draft.candidates?.items.find((i) => i.code === code)
+      if (!item) return null
+      return {
+        ...draft,
+        theme: { code: item.code, label: item.label, deprecated: item.deprecated },
+        axes: draft.axes.map((a) => ({ ...a, included: !item.drops.includes(a.axisKey) })),
+        dropped: item.drops,
+      }
+    }
+    case 'shared': {
+      const c = (draft.masterCandidates ?? []).find((m) => m.axisKey === code)
+      if (!c) return null
+      return { ...draft, axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.key, label: c.label, channelName: c.label, target: c.key, included: true }] }
+    }
+    case 'family': {
+      const c = (draft.addableAxes ?? []).find((m) => m.axisKey === code)
+      if (!c) return null
+      return { ...draft, axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.familyKey, label: c.label, channelName: c.label, target: null, included: true }] }
+    }
+    case 'aspects': {
+      const aspect = draft.candidates?.items.find((i) => i.code === code)
+      if (!aspect) return null
+      return { ...draft, axes: [...draft.axes, { axisKey: aspect.code, familyKey: aspect.code, label: aspect.label, channelName: aspect.label, target: aspect.code, included: true }] }
+    }
+  }
 }
 
 /* ── P3 A2: Tab inside the pop-up ─────────────────────────────────────────────────────────── */
@@ -602,15 +653,17 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
      * every family axis in `mapping`. So a panel that offered the three eBay aspects here would offer
      * three bogus axes where the dock correctly offered none.
      */
-    if (draft.addableAxes) {
-      return draft.addableAxes
-        .filter((c) => !chosen.has(c.axisKey))
-        .map((c) => ({ code: c.axisKey, label: c.label, meta: `not a ${draft.vocabulary.axisNoun} yet`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
-    }
-    if (master) {
+    /* 🔴 The ONE order (`axesAddSource`): the Shared product before a channel's `addableAxes` (see there). */
+    const source = axesAddSource(draft, master, amazon)
+    if (source === 'shared') {
       return (draft.masterCandidates ?? [])
         .filter((c) => !chosen.has(c.axisKey))
         .map((c) => ({ code: c.axisKey, label: c.label, meta: `attribute · ${c.valueCount} values`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
+    }
+    if (source === 'family') {
+      return (draft.addableAxes ?? [])
+        .filter((c) => !chosen.has(c.axisKey))
+        .map((c) => ({ code: c.axisKey, label: c.label, meta: `not a ${draft.vocabulary.axisNoun} yet`, group: 'coversAll' as ThemeGroup, drops: [] as string[] }))
     }
     return (draft.candidates?.items ?? [])
       .filter((i) => !draft.axes.some((a) => a.target === i.code))
@@ -627,45 +680,10 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
 
   const add = useCallback(
     (code: string) => {
-      if (amazon) {
-        /* Amazon: the THEME decides the rows. Picking one re-projects the axes from that theme's own
-           drops — the rows are informational, exactly as §3.5 says. */
-        const item = draft.candidates?.items.find((i) => i.code === code)
-        if (!item) return
-        report({
-          ...draft,
-          theme: { code: item.code, label: item.label, deprecated: item.deprecated },
-          axes: draft.axes.map((a) => ({ ...a, included: !item.drops.includes(a.axisKey) })),
-          dropped: item.drops,
-        })
-        return
-      }
-      if (draft.addableAxes) {
-        const c = draft.addableAxes.find((m) => m.axisKey === code)
-        if (!c) return
-        report({
-          ...draft,
-          axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.familyKey, label: c.label, channelName: c.label, target: null, included: true }],
-        })
-        return
-      }
-      if (master) {
-        const c = (draft.masterCandidates ?? []).find((m) => m.axisKey === code)
-        if (!c) return
-        report({
-          ...draft,
-          axes: [...draft.axes, { axisKey: c.axisKey, familyKey: c.key, label: c.label, channelName: c.label, target: c.key, included: true }],
-        })
-        return
-      }
-      const aspect = draft.candidates?.items.find((i) => i.code === code)
-      if (!aspect) return
-      report({
-        ...draft,
-        axes: [...draft.axes, { axisKey: aspect.code, familyKey: aspect.code, label: aspect.label, channelName: aspect.label, target: aspect.code, included: true }],
-      })
+      const next = axesAddEdit(draft, code, master, amazon)
+      if (next) report(next)
     },
-    [amazon, master, host, draft, report],
+    [amazon, master, draft, report],
   )
 
   /**
@@ -718,7 +736,9 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
   const addHeldReason = atLimit
     ? AXES_EDITOR_COPY.atLimit(channelWord, limit as number, draft.vocabulary.axisNounPlural)
     : candidates.length === 0
-      ? AXES_EDITOR_COPY.everyAxisMapped(draft.vocabulary.axisNoun)
+      /* On the Shared product itself "add an axis on the shared product first" pointed back at this cell (found by Lane B
+         building a family from a new product, 2026-09-28): here the way forward is the family's per-variant attributes. */
+      ? (master ? AXES_EDITOR_COPY.noSharedCandidates : AXES_EDITOR_COPY.everyAxisMapped(draft.vocabulary.axisNoun))
       : null
 
   /** Every axis mutation goes through the gate, so a refusal can never report (and so never write). */
