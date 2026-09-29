@@ -10,6 +10,9 @@
  * business comes ONLY from that token: a request that names one (header or query) is refused, not
  * ignored. The person's own permissions, the token's scopes and the one door (call-tool.ts) decide
  * the rest. Everything answers 404 unless NEXUS_MCP_ENABLED=1. HTTP service only.
+ *
+ * MCP.11 — each connection and each business has a count per minute (services/mcp/mcp-rate.ts);
+ * over it, 429 with Retry-After.
  */
 
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
@@ -23,6 +26,7 @@ import {
   mcpAllowedOriginHosts,
   protectedResourceMetadata,
 } from '../services/mcp/mcp-auth.js'
+import { takeMcpRequest } from '../services/mcp/mcp-rate.js'
 import { createNexusMcpHandler } from '../services/mcp/mcp-server.js'
 
 /** Set by Node for the connection it writes; never copied from the SDK's answer. */
@@ -100,6 +104,14 @@ const mcpRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(status).header('WWW-Authenticate', challenge).send(body)
       }
       const { principal, authInfo } = auth.caller
+
+      // MCP.11 — per connection and per business, before anything reaches a tool.
+      const rate = await takeMcpRequest({ workspaceId: principal.workspace.workspaceId, grantId: principal.oauthGrantId })
+      if (!rate.ok) {
+        const who = rate.limitedBy === 'connection' ? 'this Claude connection' : 'this business'
+        reply.header('Retry-After', String(rate.retryAfterSec))
+        return jsonRpcError(reply, 429, -32000, `Too many requests from ${who} (at most ${rate.limit} a minute). Try again in ${rate.retryAfterSec} s.`)
+      }
 
       // Stops the SDK's work if Claude goes away before the answer is written.
       const aborted = new AbortController()

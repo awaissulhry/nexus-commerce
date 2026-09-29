@@ -37,6 +37,7 @@ import { logger } from '../utils/logger.js'
 import { registerRateRedis } from '../services/gateway/rate.js'
 import { registerToolRateRedis } from '../services/agents/tool-rate.js'
 import { registerStepUpRedis } from './auth/step-up.js'
+import { registerMcpRateRedis } from '../services/mcp/mcp-rate.js'
 
 // ── Lazy Redis client (the only thing that stays lazy) ────────────────────
 let _redis: Redis | null = null
@@ -96,6 +97,8 @@ function getRedisConnection(): Redis {
     registerToolRateRedis(() => _redis)
     // MCP.5 — and the step-up 2FA guards (one use per code, a limit on wrong codes).
     registerStepUpRedis(() => _redis)
+    // MCP.11 — and the /mcp limits per Claude connection and per business.
+    registerMcpRateRedis(() => _redis)
   }
   return _redis
 }

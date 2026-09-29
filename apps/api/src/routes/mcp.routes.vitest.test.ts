@@ -35,6 +35,7 @@ import { consent, exchangeCode, revokeGrant } from '../services/oauth/oauth-serv
 import { inputJsonSchema } from '../services/agents/tool-loop.service.js'
 import { listTools } from '../services/agents/tool-registry.js'
 import { __toolRateTest } from '../services/agents/tool-rate.js'
+import { __mcpRateTest } from '../services/mcp/mcp-rate.js'
 import mcpRoutes from './mcp.routes.js'
 
 const A = LEGACY_WORKSPACE_ID
@@ -54,13 +55,13 @@ const clients: Record<string, string> = {}
 const ids = { productA: '', productB: '', approvalB: '' }
 
 /** Tokens per connection; each is a separate grant (one per person, business and app). */
-const tokens: Record<'full' | 'readOnly' | 'reader' | 'bare' | 'revoked', { access: string; grantId: string }> = {} as never
+const tokens: Record<'full' | 'readOnly' | 'reader' | 'bare' | 'bravo' | 'revoked', { access: string; grantId: string }> = {} as never
 
 const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
 const challengeOf = (value: string) => createHash('sha256').update(value).digest('base64url')
 
 /** Approve in the browser and swap the code, as Claude would. */
-async function connect(userId: string, app: string, scopes: string[]) {
+async function connect(userId: string, app: string, scopes: string[], workspaceId = A) {
   const pkce = generateToken(32)
   const { redirectTo } = await consent({
     userId,
@@ -75,7 +76,7 @@ async function connect(userId: string, app: string, scopes: string[]) {
       resource: `${API}/mcp`,
     },
     decision: 'approve',
-    workspaceId: A,
+    workspaceId,
     scopes,
     code: generateSync({ secret }),
   })
@@ -87,7 +88,7 @@ async function connect(userId: string, app: string, scopes: string[]) {
     client_id: clients[app],
     redirect_uri: CALLBACK,
   })
-  const grant = await database.client.oAuthGrant.findFirst({ where: { userId, client: { clientId: clients[app] } } })
+  const grant = await database.client.oAuthGrant.findFirst({ where: { userId, workspaceId, client: { clientId: clients[app] } } })
   return { access: issued.access_token, grantId: grant!.id }
 }
 
@@ -115,6 +116,7 @@ async function withClaude<T>(token: string, work: (client: Client) => Promise<T>
 type CallResult = { isError?: boolean; content: Array<{ type: string; text?: string }> }
 const textOf = (result: unknown) => (result as CallResult).content.map((block) => block.text ?? '').join('')
 const jsonOf = (result: unknown) => JSON.parse(textOf(result))
+const rpcMessage = async (response: Response) => ((await response.json()) as { error: { message: string } }).error.message
 
 /** A raw JSON-RPC POST, for the answers the SDK client turns into exceptions. */
 function post(body: unknown, init: { token?: string; headers?: Record<string, string>; query?: string } = {}) {
@@ -206,6 +208,7 @@ beforeAll(async () => {
   tokens.readOnly = await connect(operatorId, 'Claude Code', ['nexus.read'])
   tokens.reader = await connect(readerId, 'Claude', ['nexus.read', 'nexus.write'])
   tokens.bare = await connect(bare.id, 'Claude', ['nexus.read', 'nexus.write'])
+  tokens.bravo = await connect(operatorId, 'Claude', ['nexus.read', 'nexus.write'], B)
   tokens.revoked = await connect(operatorId, 'Claude Desktop', ['nexus.read', 'nexus.write'])
   await revokeGrant(tokens.revoked.grantId, 'test')
 
@@ -223,6 +226,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   __toolRateTest.reset()
+  __mcpRateTest.reset()
 })
 
 afterAll(async () => {
@@ -501,5 +505,59 @@ describe('MCP.7 — approval-status', () => {
       jsonOf(await client.callTool({ name: 'approval-status', arguments: { approvalId: queued.approvalId } })),
     )
     expect(seen).toMatchObject({ status: 'pending', preview: null, previewHidden: expect.stringContaining('set-price') })
+  })
+})
+
+describe('MCP.11 — a count per connection and per business', () => {
+  /** A fixed window: pin the clock mid-minute so the count cannot roll over during a test. */
+  async function atMidMinute(limits: { perGrant: number; perBusiness: number }, work: () => Promise<void>) {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Math.floor(Date.now() / 60_000) * 60_000 + 30_000)
+    vi.stubEnv('NEXUS_MCP_RATE_PER_GRANT', String(limits.perGrant))
+    vi.stubEnv('NEXUS_MCP_RATE_PER_BUSINESS', String(limits.perBusiness))
+    try {
+      await work()
+    } finally {
+      vi.useRealTimers()
+      vi.stubEnv('NEXUS_MCP_RATE_PER_GRANT', '')
+      vi.stubEnv('NEXUS_MCP_RATE_PER_BUSINESS', '')
+    }
+  }
+
+  it('a connection over its count gets 429 with Retry-After, before anything reaches a tool', async () => {
+    await atMidMinute({ perGrant: 2, perBusiness: 1000 }, async () => {
+      expect((await post(listRequest, { token: tokens.full.access })).status).toBe(200)
+      expect((await post(listRequest, { token: tokens.full.access })).status).toBe(200)
+      const runs = (await runsOf(tokens.full.grantId)).length
+      const over = await post(callRequest('product-search', {}), { token: tokens.full.access })
+      expect(over.status).toBe(429)
+      expect(over.headers.get('retry-after')).toBe('30')
+      expect(await rpcMessage(over)).toContain('this Claude connection (at most 2 a minute)')
+      expect(await runsOf(tokens.full.grantId)).toHaveLength(runs)
+      // Another connection of the same business still works.
+      expect((await post(listRequest, { token: tokens.readOnly.access })).status).toBe(200)
+    })
+  })
+
+  it('a business over its count gets 429 on every connection; another business does not', async () => {
+    await atMidMinute({ perGrant: 1000, perBusiness: 3 }, async () => {
+      expect((await post(listRequest, { token: tokens.full.access })).status).toBe(200)
+      expect((await post(listRequest, { token: tokens.readOnly.access })).status).toBe(200)
+      expect((await post(listRequest, { token: tokens.reader.access })).status).toBe(200)
+      for (const token of [tokens.full.access, tokens.readOnly.access]) {
+        const over = await post(listRequest, { token })
+        expect(over.status).toBe(429)
+        expect(await rpcMessage(over)).toContain('this business (at most 3 a minute)')
+      }
+      // The same person, connected to their other business.
+      expect((await post(listRequest, { token: tokens.bravo.access })).status).toBe(200)
+    })
+  })
+
+  it('a refused token spends no count', async () => {
+    await atMidMinute({ perGrant: 1, perBusiness: 1 }, async () => {
+      expect((await post(listRequest, { token: 'nxm_at_unknown' })).status).toBe(401)
+      expect((await post(listRequest, { token: tokens.full.access })).status).toBe(200)
+    })
   })
 })
