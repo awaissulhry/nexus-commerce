@@ -11,13 +11,14 @@ import prisma from '../../../db.js'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
-import { aiDraft } from './draft.tools.js'
+import { AI_DRAFT_SURFACES, aiDraft } from './draft.tools.js'
 
 const DAY = 86_400_000
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 const productAnalytics: AgentTool = {
   name: 'product-analytics',
+  title: 'Product sales',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id'), days: z.coerce.number().int().min(1).max(365).optional().describe('window in days (default 30)') }),
   requires: [F.analyticsView],
   restrictedFields: { revenue: FIELDS.financialsRevenueView },
@@ -63,6 +64,7 @@ const productAnalytics: AgentTool = {
 
 const channelStockDrift: AgentTool = {
   name: 'channel-stock-drift',
+  title: 'Channel stock drift',
   input: z.object({
     productId: z.string().min(1).optional().describe('omit for all products'),
     limit: z.coerce.number().int().min(1).max(100).optional().describe('max rows (default 20)'),
@@ -99,6 +101,7 @@ const channelStockDrift: AgentTool = {
 
 const replenishmentForecast: AgentTool = {
   name: 'replenishment-forecast',
+  title: 'Replenishment forecast',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.replenishmentView],
   category: 'fulfillment',
@@ -137,6 +140,7 @@ const replenishmentForecast: AgentTool = {
 
 const insightsMetric: AgentTool = {
   name: 'insights-metric',
+  title: 'Sales metrics',
   input: z.object({ days: z.coerce.number().int().min(1).max(365).optional().describe('window in days (default 30)') }),
   requires: [F.insightsView],
   restrictedFields: { revenueByCurrency: FIELDS.financialsRevenueView },
@@ -184,6 +188,7 @@ const insightsMetric: AgentTool = {
 
 const detectAnomalies: AgentTool = {
   name: 'detect-anomalies',
+  title: 'Triggered alerts',
   input: z.object({ limit: z.coerce.number().int().min(1).max(100).optional().describe('max events (default 20)') }),
   requires: [F.insightsView],
   category: 'insights',
@@ -225,8 +230,10 @@ const detectAnomalies: AgentTool = {
 
 const draftAltText: AgentTool = {
   name: 'draft-alt-text',
+  title: 'Draft image alt text',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.productsView],
+  surfaces: AI_DRAFT_SURFACES,
   category: 'products',
   riskTier: 'low',
   readOnly: true,

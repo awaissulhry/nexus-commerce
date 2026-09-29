@@ -16,6 +16,7 @@ const execute = vi.fn()
 const TOOLS: Record<string, AgentTool> = {
   'read-sales': {
     name: 'read-sales',
+    title: 'Test tool',
     category: 'insights',
     description: 'test tool',
     riskTier: 'low',
@@ -27,6 +28,7 @@ const TOOLS: Record<string, AgentTool> = {
   },
   'change-price': {
     name: 'change-price',
+    title: 'Test tool',
     category: 'pricing',
     description: 'test tool',
     riskTier: 'high',
@@ -39,6 +41,7 @@ const TOOLS: Record<string, AgentTool> = {
   },
   'strict-args': {
     name: 'strict-args',
+    title: 'Test tool',
     category: 'pricing',
     description: 'test tool',
     riskTier: 'high',
@@ -48,8 +51,21 @@ const TOOLS: Record<string, AgentTool> = {
     handler,
     execute,
   },
+  'draft-copy': {
+    name: 'draft-copy',
+    title: 'Draft copy',
+    category: 'products',
+    description: 'test tool',
+    riskTier: 'low',
+    readOnly: true,
+    surfaces: ['app'],
+    requires: ['products.view'],
+    input: z.object({}).loose(),
+    handler,
+  },
   'preview-only': {
     name: 'preview-only',
+    title: 'Test tool',
     category: 'advertising',
     description: 'test tool',
     riskTier: 'high',
@@ -170,7 +186,7 @@ describe('MCP.1 — the business comes from the principal', () => {
 
   it('passes the person’s id to the tool, never a label', async () => {
     await callTool(person(['ai.run', 'insights.view']), 'read-sales', {})
-    expect(handler).toHaveBeenCalledWith({}, { userId: 'u1' })
+    expect(handler).toHaveBeenCalledWith({}, { userId: 'u1', storedOutput: expect.any(Function) })
   })
 })
 
@@ -236,7 +252,7 @@ describe('MCP.3 — every call is parsed with the tool’s own schema', () => {
 
   it('hands the tool only what its schema defines, with numbers as numbers', async () => {
     await callTool(pricer(), 'strict-args', { productId: 'p1', price: '19.90', smuggled: 'x' })
-    expect(handler).toHaveBeenCalledWith({ productId: 'p1', price: 19.9 }, { userId: 'u1' })
+    expect(handler).toHaveBeenCalledWith({ productId: 'p1', price: 19.9 }, { userId: 'u1', storedOutput: expect.any(Function) })
   })
 
   it('parses stored arguments again before execute', async () => {
@@ -274,5 +290,56 @@ describe('MCP.1 — execute', () => {
       executeTool(person(['ai.run']), 'change-price', { price: 1 }),
     ).rejects.toMatchObject({ code: 'forbidden' })
     expect(execute).not.toHaveBeenCalled()
+  })
+})
+
+describe('MCP.7 — each door is offered its own tools', () => {
+  const viaClaude = (permissions: string[]): UserPrincipal => ({ ...person(permissions), via: 'claude', oauthGrantId: 'g1' })
+
+  it('an app-only tool is offered in the app, and not to Claude', () => {
+    expect(toolsFor(person(['ai.run', 'products.view'])).map((t) => t.name)).toEqual(['draft-copy'])
+    expect(toolsFor(viaClaude(['ai.run', 'products.view']))).toEqual([])
+    expect(toolsFor(systemPrincipal('cron')).map((t) => t.name)).toContain('draft-copy')
+  })
+
+  it('Claude cannot call it by name either, and it never runs', async () => {
+    await expect(callTool(viaClaude(['ai.run', 'products.view']), 'draft-copy', {})).rejects.toMatchObject({
+      code: 'unknown_tool',
+      statusCode: 404,
+    })
+    // Not even its permission is named: over this door the tool does not exist.
+    await expect(callTool(viaClaude([]), 'draft-copy', {})).rejects.toMatchObject({ code: 'unknown_tool' })
+    expect(handler).not.toHaveBeenCalled()
+    await callTool(person(['ai.run', 'products.view']), 'draft-copy', {})
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('approving is not a door: what a person may approve ignores surfaces', () => {
+    expect(approvableToolNames(person(['ai.run', 'products.view']))).toEqual(['draft-copy'])
+  })
+})
+
+describe('MCP.7 — another tool’s stored output, as the caller may see it', () => {
+  beforeEach(() => {
+    handler.mockImplementation(async (_args, ctx) => ({
+      ok: true,
+      data: { seen: ctx.storedOutput('change-price', { price: 1, costPrice: 30 }) },
+    }))
+  })
+
+  it('money-filtered for a person who may use the tool that stored it', async () => {
+    const out = await callTool(person(['ai.run', 'insights.view', 'products.price.edit']), 'read-sales', {})
+    expect(out.visible.data).toEqual({ seen: { price: 1 } })
+  })
+
+  it('nothing for a person who may not', async () => {
+    const out = await callTool(person(['ai.run', 'insights.view']), 'read-sales', {})
+    expect(out.visible.data).toEqual({ seen: null })
+  })
+
+  it('nothing for a tool the registry no longer knows, unless the caller is the system', async () => {
+    handler.mockImplementation(async (_args, ctx) => ({ ok: true, data: { seen: ctx.storedOutput('gone', { a: 1 }) } }))
+    expect((await callTool(person(['ai.run', 'insights.view']), 'read-sales', {})).visible.data).toEqual({ seen: null })
+    expect((await callTool(systemPrincipal('cron'), 'read-sales', {})).visible.data).toEqual({ seen: { a: 1 } })
   })
 })

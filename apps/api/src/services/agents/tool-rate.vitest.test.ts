@@ -14,6 +14,7 @@ const handler = vi.fn()
 const TOOLS: Record<string, AgentTool> = {
   'read-stock': {
     name: 'read-stock',
+    title: 'Test tool',
     category: 'fulfillment',
     description: 'test tool',
     riskTier: 'low',

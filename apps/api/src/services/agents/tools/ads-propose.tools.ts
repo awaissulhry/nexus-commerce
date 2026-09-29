@@ -92,6 +92,7 @@ async function protectedTermDenial(
 
 const createNegativeKeyword: AgentTool = {
   name: 'create-negative-keyword',
+  title: 'Propose a negative keyword',
   input: z.object({
     externalCampaignId: z.string().min(1).describe('Amazon campaign id'),
     keywordText: z.string().trim().min(1).describe('the search term to block'),
@@ -160,6 +161,7 @@ const createNegativeKeyword: AgentTool = {
 
 const graduateKeyword: AgentTool = {
   name: 'graduate-keyword',
+  title: 'Propose an exact keyword',
   input: z.object({
     query: z.string().trim().min(1).describe('the search term to promote'),
     sourceExternalCampaignId: z.string().min(1).describe('Amazon campaign id it converted in'),
@@ -235,6 +237,7 @@ const graduateKeyword: AgentTool = {
 
 const setTargetBid: AgentTool = {
   name: 'set-target-bid',
+  title: 'Propose a bid change',
   input: z.object({
     targetId: z.string().min(1).describe('Nexus ad target id'),
     proposedBidCents: z.coerce.number().describe('new bid in cents, at least the floor'),

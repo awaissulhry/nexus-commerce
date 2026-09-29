@@ -105,6 +105,12 @@ export const ENTRIES: Entry[] = [
   // registration and revocation endpoints with no session; the consent routes guard themselves
   // (session, 2FA, CSRF) like /api/auth/*, and name their business explicitly.
   P(PUBLIC, (_m, p) => p.startsWith('/api/oauth/')),
+  // MCP.7 — the MCP endpoint and its RFC 9728 document (routes/mcp.routes.ts). Claude sends a
+  // Bearer token, never a session: the route verifies it and takes the business from it alone.
+  P(PUBLIC, (_m, p) =>
+    p === '/mcp' ||
+    p === '/.well-known/oauth-protected-resource' ||
+    p.startsWith('/.well-known/oauth-protected-resource/')),
   // Owner-gated auth admin (also guarded in S1 by requireOwner):
   P(F.usersManage, (_m, p) => p === '/api/auth/logout-all'),
   RW(F.invitationsManage, F.invitationsManage, pfx('/api/auth/invitations')),
