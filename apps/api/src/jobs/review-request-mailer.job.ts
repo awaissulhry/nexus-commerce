@@ -204,7 +204,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             // Can't divert without an email. Fall back to direct Solicitations
             // path below (don't continue — let normal flow handle).
           } else {
-            const baseUrl = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+            const baseUrl = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
             const result = await sendSentimentCheckEmail({
               to: order.customerEmail,
               customerName: order.customerName,
