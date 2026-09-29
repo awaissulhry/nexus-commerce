@@ -49,4 +49,9 @@ describe('next start keeps a proxied API call open as long as the API needs (web
     const config = require('../../../next.config.js') as { experimental?: { proxyTimeout?: number } }
     expect(config.experimental?.proxyTimeout).toBeGreaterThan(90_000)
   })
+  it('lets a proxied upload through whole up to the largest one the app sends (a 500 MB Content Hub ZIP)', () => {
+    const config = require('../../../next.config.js') as { experimental?: { proxyClientMaxBodySize?: string } }
+    const [, size, unit] = /^(\d+)(mb|gb)$/i.exec(config.experimental?.proxyClientMaxBodySize ?? '') ?? []
+    expect(Number(size) * (unit?.toLowerCase() === 'gb' ? 1024 : 1)).toBeGreaterThanOrEqual(500)
+  })
 })

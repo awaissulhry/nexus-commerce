@@ -67,6 +67,10 @@ const nextConfig = {
     // after this many ms with no bytes — 30 000 by default. The Amazon ZIP may wait 90 s for its first byte
     // (media-plan-archive.service.ts), so 5 minutes. Live streams ping every ≤ 25 s and stay open.
     proxyTimeout: 300_000,
+    // `next start` also cuts a proxied request body at this size (10 MB by default): the rest never reaches the API and
+    // the upload hangs until proxyTimeout (measured 2026-09-29). 512 MB covers the largest upload the app sends (a 500 MB
+    // Content Hub ZIP); Next keeps an extra copy while it streams (≈ +330 MB of memory for 500 MB).
+    proxyClientMaxBodySize: '512mb',
     // ── Turbopack dev cache — bounded by construction (2026-08-27) ─────────────────────────
     //
     // `turbopackFileSystemCacheForDev` defaults to TRUE in Next 16 and NOTHING prunes what it
