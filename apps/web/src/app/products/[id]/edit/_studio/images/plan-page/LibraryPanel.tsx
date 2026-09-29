@@ -1,16 +1,16 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { MoreHorizontal, PanelLeftClose, Search, Upload } from 'lucide-react'
 
 import { MEDIA_BOARD_EXTERNAL_TYPE, MediaCard, Menu, Listbox, type MenuItemDef } from '@/design-system/components'
-import { Button, Input, Tag } from '@/design-system/primitives'
+import { Button, Input, Tag, ToolbarButton } from '@/design-system/primitives'
 
 import { assetProblems, filterLibrary, languageName, versionsOf, type LibraryAsset, type LibraryFilter, type MediaRead } from './model'
+import type { AddTarget } from './PhotoGrid'
 import styles from './planPage.module.css'
 
-/** Where "Add to" can put photos: a set of the edited layer, or one value's swatch. */
-export interface AddTarget { id: string; label: string; group: 'Sets' | 'Swatches'; one?: boolean }
+export type { AddTarget }
 
 export interface LibraryPanelProps {
   read: MediaRead
@@ -22,6 +22,10 @@ export interface LibraryPanelProps {
   onAdd(target: AddTarget, ids: string[]): void
   onOpen(asset: LibraryAsset): void
   onManage(): void
+  /** "Upload photos" (the U key opens the same window). */
+  onUpload(): void
+  /** Folds the library away (beside the grid only; the drawer has its own close). */
+  onCollapse?(): void
   /** Drag in progress: live refresh waits until it ends. */
   onDragging(on: boolean): void
   /** Photos cannot be dragged out of a drawer onto the page; there the Add button is the way. */
@@ -38,8 +42,11 @@ const FILTERS: Array<{ value: LibraryFilter; label: string }> = [
   { value: 'lookalikes', label: 'Looks like another photo' },
 ]
 
-/** The family's photos (parent and children), searchable, with where each one is used (PLAN.md §5.1). */
-export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPending, onAdd, onOpen, onManage, onDragging, draggable, onSkip, onLookalike }: LibraryPanelProps) {
+/**
+ * The family's photos (parent and children), searchable, as small tiles to tick or drag into a slot (PLAN.md §5.1;
+ * redesign 2026-09-29: one line of facts per tile — where a photo is used, its size and versions are in its window).
+ */
+export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPending, onAdd, onOpen, onManage, onUpload, onCollapse, onDragging, draggable, onSkip, onLookalike }: LibraryPanelProps) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<LibraryFilter>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -62,7 +69,11 @@ export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPendi
   return <section className={styles.library} aria-label="Photo library">
     <header className={styles.libraryHead}>
       <h3 className={styles.sectionTitle}>Library · {read.library.length}</h3>
-      <Button size="xs" variant="secondary" onClick={onManage}>Upload and edit…</Button>
+      <span className={styles.spacer} />
+      <Button size="xs" variant="secondary" onClick={onUpload} title="Upload photos (U)"><Upload size={12} aria-hidden />Upload</Button>
+      <Menu label={<MoreHorizontal size={14} aria-hidden />} align="right" triggerProps={{ className: 'nds-btn xs', 'aria-label': 'More library actions', title: 'More library actions' }}
+        items={[{ id: 'manage', label: 'Edit library… (crop, delete, videos)', onSelect: onManage }]} />
+      {onCollapse && <ToolbarButton icon={<PanelLeftClose size={16} />} label="Hide the library" onClick={onCollapse} />}
     </header>
     {onSkip && read.library.length > 0 && <span className={styles.skip}><Button size="xs" variant="link" onClick={onSkip}>Skip to the photo plan</Button></span>}
     <div className={styles.libraryTools}>
@@ -96,23 +107,20 @@ export function LibraryPanel({ read, usage, targets, pendingTarget, onClearPendi
           }}
           onDragEnd={() => onDragging(false)}>
           <MediaCard compact src={asset.mediaType === 'VIDEO' ? null : asset.url} mediaType={asset.mediaType} label={asset.label}
-            marker={uses.length ? 'In use' : undefined}
             selected={isSelected} onSelectedChange={on => setSelected(current => { const next = new Set(current); if (on) next.add(asset.id); else next.delete(asset.id); return next })}
             onPreview={() => onOpen(asset)}
             detail={<span className={styles.facts}>
-              {asset.width && asset.height ? <span>{asset.width}×{asset.height}</span> : null}
+              {uses.length ? <span className={styles.use} title={uses.join(' · ')}>{uses[0]}{uses.length > 1 ? ` +${uses.length - 1}` : ''}</span> : <span className={styles.use}>Not used</span>}
               {asset.languageTag !== 'zxx' && <Tag tone="info">{versions.length > 1 ? versions.map(v => v.languageTag.toUpperCase()).join(' · ') : languageName(asset.languageTag)}</Tag>}
-              {problems.map(p => <Tag key={p} tone="warning">{p}</Tag>)}
-              {uses.slice(0, 2).map(u => <span key={u} className={styles.use}>{u}</span>)}
-              {uses.length > 2 && <span className={styles.use}>+{uses.length - 2} more</span>}
+              {problems.slice(0, 1).map(p => <Tag key={p} tone="warning">{p}</Tag>)}
               {onLookalike && asset.lookalikes?.slice(0, 1).map(other => {
                 const name = read.library.find(x => x.id === other.id)?.label ?? 'another photo'
-                return <Button key={other.id} size="xs" variant="link" onClick={() => onLookalike(asset.id, other.id, other.kind ?? 'same')}>
-                  {other.kind === 'versions' ? `Similar to ${name} — language versions?` : `Looks like ${name}`}</Button>
+                return <Button key={other.id} size="xs" variant="link" onClick={() => onLookalike(asset.id, other.id, other.kind ?? 'same')}
+                  title={other.kind === 'versions' ? `Similar to ${name} — language versions?` : `Looks like ${name}`}>{other.kind === 'versions' ? 'Versions?' : 'Look-alike'}</Button>
               })}
             </span>} />
         </li>
       })}
-    </ul> : <p className={styles.muted}>{read.library.length ? 'No photo matches.' : 'No photos yet. Use "Upload and edit…" to add some.'}</p>}
+    </ul> : <p className={styles.muted}>{read.library.length ? 'No photo matches.' : 'No photos yet. Use "Upload" to add some.'}</p>}
   </section>
 }

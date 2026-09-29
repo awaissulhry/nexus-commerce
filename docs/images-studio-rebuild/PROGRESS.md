@@ -3,6 +3,8 @@
 Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studio` · plan [PLAN.md](PLAN.md)
 
 ## Summary
+- **Media page REDESIGN — PR 1 (UI) built 2026-09-29, branch `feat/media-redesign` (Owner: "simple and fast to use"; the
+  element list and layout were approved in chat the same day, record below). PR 2 = aliases, next.**
 - **P0 measure — done (2026-09-27).** Production counted read-only: [MEASURE.md](MEASURE.md).
 - **P1 data spine — LIVE (2026-09-27).** PR #86 merged (squash `f1d8b1b7a`) after CI was green. Deployed: worker
   12:03, scheduler 12:00, API 12:29 UTC. Verified in production (read-only): migration `20260927i_media_plan`
@@ -415,3 +417,40 @@ names (the publishers already use each market's own names).
 - A destination counts the variants listed on it; the variation projection's "excluded" flag is added in P2.
 - eBay API path (Trading vs Inventory) is not yet known to the read; P2 fills it (it decides the URL-length check).
 - Read timing on real data is not measured yet (needs a local copy of a real family); done at the start of P3.
+
+## Media page redesign — PR 1, the UI (2026-09-29)
+The Owner approved a keep / merge / remove list of every element and a new layout, then added: manage photos per
+MARKET with the studio's scope selector, as on the Information page, and Amazon ZIP files per market. Decisions: one
+Publish = the studio header's button (on this page it reads "Publish photos"); the grid is DS `MediaBoard` with a new
+opt-in `slots` mode (the Owner chose the DS change: a raw-primitives ratchet refuses hand-made buttons in a new file).
+- **The scope selector chooses what the page edits.** Editing: Shared product → the Shared photos. A channel · market
+  · account (· listing) → that destination's own layer (`scopeDestinationKey`): eBay per market and listing, Amazon,
+  Shopify and Etsy per account. A market with no listing says so. No page tabs, no "← All destinations", no destination
+  table, no second copy of the sets under a destination, no "This account only / All listings" switch, no "Show as"
+  (a market shows its own language versions: eBay DE the German size chart, Amazon DE its German versions).
+- **One photo grid** (`PhotoGrid.tsx` on `MediaBoard slots`): rows = Common, each value, Safety (Shared and Amazon;
+  own slots PS01–PS06), per-SKU sets (fold, Shared); columns MAIN, PT01–PT08 (eBay MAIN, 2, 3…); empty slots up to the
+  channel's limit; the first empty slot is "Add photos to <set>, <slot>" and opens the library on "Adding to …";
+  swatches below, one SWCH slot per value. No ★ badges. A row a destination owns reads "Own for eBay DE" / "Own for
+  ① Winter" / "Own for Amazon" / "Own for all eBay listings" with **Reset to shared**; any change on a destination
+  makes the row its own (as before). Destination ⋯: Reset all to shared, Copy photos from ▸.
+- **Side panel** (`SidePanel.tsx`): a destination's buyer preview (Amazon as one short strip per SKU group) and
+  checks; on the Shared product, every destination with Ready / N to fix and its own sets, one click to open it
+  (one URL write: scope, market, account, listing).
+- **Library** folds away (remembered per browser); small tiles, one line of facts; Upload + ⋯ Edit library… in its
+  head. Narrow page: a drawer, as before; the side panel goes under the grid.
+- **Readable names** (`readableNames`): a photo named by a storage code or a bare slot code ("vija9w5xgwhyw…",
+  "81Kp1xYzA7L._AC_…", "PT02") shows where it sits — "Nero MAIN", "Common PT01", "Safety PS01 · DE"; unused ones
+  "Unused photo 1". Nothing is renamed on the server.
+- **Amazon:** "Export ZIP per marketplace" in the Amazon view; the window opens on the scope's market.
+- **Also fixed:** the page's file-drop outline stayed on when a drag ended elsewhere.
+- **Checked on the local stack** (API :4004, web :3004, the P3b throwaway PG): Shared, eBay IT (★ and ① Winter via
+  the listing picker), eBay DE, Amazon DE; drop from the library into an empty slot (scripted drag events — a real
+  mouse drag cannot be driven from the browser tool); Reset to shared; Delete + ⌘Z; a change on eBay DE made layer
+  `LISTING:EBAY:DE:…` while eBay IT kept Shared; Publish photos opens on the page's destination with "Check all 5";
+  the ZIP opens on DE; light and dark; 1512, 1000 and 390 px (no page side-scroll; the grid scrolls inside itself).
+- **Test data added to the throwaway DB:** the two test connections set to `managedBy='oauth'` (the scope selector
+  lists only oauth/env accounts), and TEST-JACKET's main eBay IT listings copied to eBay DE (ids `mediade…`).
+- **Tests:** model 16 (slot names, grid shape, scope key, owner marks, readable names); studio + DS suites 4201 pass;
+  web and Factory typecheck clean; static gates 59/59.
+
