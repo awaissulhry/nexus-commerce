@@ -3,8 +3,9 @@
 Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studio` · plan [PLAN.md](PLAN.md)
 
 ## Summary
-- **Media page REDESIGN — PR 1 (UI) built 2026-09-29, branch `feat/media-redesign` (Owner: "simple and fast to use"; the
-  element list and layout were approved in chat the same day, record below). PR 2 = aliases, next.**
+- **Media page REDESIGN 2026-09-29 (Owner: "simple and fast to use"; the element list and layout were approved in chat
+  the same day, records below).** PR 1 UI = #153 (`feat/media-redesign`); PR 2 aliases = branch
+  `feat/media-redesign-aliases`, stacked on PR 1.
 - **P0 measure — done (2026-09-27).** Production counted read-only: [MEASURE.md](MEASURE.md).
 - **P1 data spine — LIVE (2026-09-27).** PR #86 merged (squash `f1d8b1b7a`) after CI was green. Deployed: worker
   12:03, scheduler 12:00, API 12:29 UTC. Verified in production (read-only): migration `20260927i_media_plan`
@@ -453,4 +454,22 @@ opt-in `slots` mode (the Owner chose the DS change: a raw-primitives ratchet ref
   lists only oauth/env accounts), and TEST-JACKET's main eBay IT listings copied to eBay DE (ids `mediade…`).
 - **Tests:** model 16 (slot names, grid shape, scope key, owner marks, readable names); studio + DS suites 4201 pass;
   web and Factory typecheck clean; static gates 59/59.
+
+## Media page redesign — PR 2, aliases (2026-09-29)
+The Owner: "it does not support multiple aliases, which are multiple listings on a single channel … for the gale jacket
+on eBay, at least 3 to 4 listings we manage from the same page". No API change was needed: each alias is already its
+own destination with its own layer.
+- **Listing chips** (`ListingChips.tsx`, DS `FilterChip` + `AliasMark`): on an eBay account and market with several
+  listings, one chip per listing — ★ Main listing, ① ② ③ … — saying "own photos" or "shared" and its checks
+  ("12 to fix", "1 warning"). One click shows that listing (the scope selector's `listing`, as on the Information page).
+  Replaces PR 1's plain listing picker. Nothing when the market holds one listing; Amazon has none (its aliases share
+  the ASIN — the Amazon line now says every Amazon listing of the account shows these photos).
+- **Publish photos** from an eBay account and market with aliases offers every listing there (one line and one
+  revision each), with "Check all N destinations" beside it (`destinationsToCheck` takes several keys).
+- **Copy photos from ▸** lists the account and market's other listings first, then the channel, then the rest.
+- **Checked on the local stack:** TEST-JACKET eBay IT — ★ Main listing (shared, 12 to fix), ① Winter (own photos,
+  6 to fix), ② Outlet (Inventory), ③ Outlet 2; the Winter chip opens Winter's own rows; Publish photos lists the
+  4 listings; Copy from lists ★ ② ③ first; 390 px: the chips wrap, no page side-scroll.
+- **Tests:** publish model (several keys, empty list = all); studio + DS suites 4201 pass; web typecheck clean; static
+  gates 59/59.
 

@@ -22,8 +22,9 @@ const STATE = { ready: 'Ready', same: 'No change', blocked: 'Fix first', unsuppo
 export interface PublishPhotosDialogProps {
   read: MediaRead
   open: boolean
-  /** Opened from one destination's view: check and offer that destination only, with "Check all destinations". */
-  only?: string | null
+  /** Opened on one destination (or every listing of one eBay account and market): check and offer those only, with
+   *  "Check all destinations". */
+  only?: string | readonly string[] | null
   onClose(): void
 }
 
@@ -37,7 +38,7 @@ export function PublishPhotosDialog({ read, open, only = null, onClose }: Publis
   const [lines, setLines] = useState<Line[]>([])
   const [phase, setPhase] = useState<Phase>('checking')
   // Which destinations this window checks: the one it was opened from, until "Check all destinations".
-  const [scope, setScope] = useState<string | null>(only)
+  const [scope, setScope] = useState<string | readonly string[] | null>(only)
   const round = useRef(0)
   const base = `/api/products/${encodeURIComponent(read.rootId)}/studio-publication`
   const update = (key: string, change: Partial<Line>) => setLines(list => list.map(l => l.d.key === key ? { ...l, ...change } : l))
@@ -58,7 +59,7 @@ export function PublishPhotosDialog({ read, open, only = null, onClose }: Publis
     return check.kind === 'checking' ? { kind: 'blocked', reason: 'Amazon is taking long to check these photos. Check again in a minute.' } : check
   }
 
-  const check = async (onlyKey: string | null = scope) => {
+  const check = async (onlyKey: string | readonly string[] | null = scope) => {
     const token = ++round.current
     const chosen = destinationsToCheck(read.destinations, onlyKey)
     const initial: Line[] = chosen.map(d => { const reason = unsupportedReason(d); return { d, check: reason ? { kind: 'unsupported', reason } : { kind: 'checking' }, ticked: false } })
@@ -73,7 +74,8 @@ export function PublishPhotosDialog({ read, open, only = null, onClose }: Publis
     setPhase('ready')
   }
   // A new opening checks again (a review is only good for a few minutes): the destination it was opened from, else all.
-  useEffect(() => { if (open) setScope(only); if (open && canPublish) void check(only); return () => { round.current++ } }, [open, canPublish, only]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onlyKey = typeof only === 'string' || !only ? only : only.join('|')
+  useEffect(() => { if (open) setScope(only); if (open && canPublish) void check(only); return () => { round.current++ } }, [open, canPublish, onlyKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const checkAll = () => { setScope(null); void check(null) }
 
   const sendOne = async (send: EbaySend | AmazonSend): Promise<PhotoOutcome> => {
