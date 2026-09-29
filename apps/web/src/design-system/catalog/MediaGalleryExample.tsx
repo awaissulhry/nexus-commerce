@@ -85,6 +85,11 @@ function MediaBoardExample() {
     <MediaBoard label="Example photo sets" onMove={move}
       onRemove={(row, id) => setRows(current => ({ ...current, [row]: current[row].filter(x => x !== id) }))}
       rows={Object.entries(rows).map(([id, items]) => ({ id, label: labels[id], detail: `${items.length} photos`, items: items.map(item => ({ id: item, label: item, src: image(item) })) }))} />
+    <h4>MediaBoard slots</h4>
+    <p>The same board as a grid: rows are sets, columns are slots (MAIN, PT01…). Empty slots take drops; the first one asks to add photos. A row can name its own slots.</p>
+    <MediaBoard label="Example photo grid" onMove={move} slots={['MAIN', 'PT01', 'PT02', 'PT03']} onAddRequest={() => undefined}
+      onRemove={(row, id) => setRows(current => ({ ...current, [row]: current[row].filter(x => x !== id) }))}
+      rows={Object.entries(rows).map(([id, items]) => ({ id, label: labels[id], detail: `${items.length} photos`, capacity: 6, items: items.map(item => ({ id: item, label: item, src: image(item) })) }))} />
     <h4>MediaCard compact</h4>
     <div style={{ width: 132 }}>
       <MediaCard compact src={image('Library photo')} label="library-photo-with-a-long-name.jpg" marker="In use" selected={compactSelected} onSelectedChange={setCompactSelected} onPreview={() => undefined} detail="1200×1200" />

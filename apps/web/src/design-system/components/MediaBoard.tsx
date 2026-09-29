@@ -1,7 +1,7 @@
 'use client'
 
 import { useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode, type Ref } from 'react'
-import { ImageOff, MoreHorizontal, Star } from 'lucide-react'
+import { ImageOff, MoreHorizontal, Plus, Star } from 'lucide-react'
 import { Menu, type MenuItemDef } from './Menu'
 import { cdnFit } from '../lib/cdn-image'
 import { MediaTypeIcon, mediaImageUrl } from './MediaPreview'
@@ -24,6 +24,12 @@ import { previewIndex } from '../lib/sortable'
  * has to be better"): the pointer drag shows the result while it happens — the tile lifts and follows the pointer, the
  * other tiles slide into their neighbours' slots, Esc cancels, the panel scrolls near its edges, touch works
  * (`useSortableDrag`, layout `grid`). Off by default: the Media page's several rows keep their drag between rows.
+ *
+ * `slots` (the Media page's photo grid, 2026-09-29; Owner: "rows = sets, columns = slots (MAIN, PT01…)"): the rows line
+ * up under ONE header of slot names and each position is a fixed slot. A row shows its empty slots up to its `capacity`
+ * as places to drop on; the first one is a button that asks to add photos there (`onAddRequest`). No ★ badge: the
+ * MAIN column says which photo is the main one. A row may name its own slots (Amazon safety images: PS01…). The board
+ * scrolls sideways as one, the set names staying in view. Off by default.
  */
 
 export const MEDIA_BOARD_EXTERNAL_TYPE = 'application/x-nexus-media-ids'
@@ -54,6 +60,10 @@ export interface MediaBoardRow {
   /** A row that takes no drops or edits (another tool owns it). Default true. */
   editable?: boolean
   emptyLabel?: string
+  /** Slots mode: this row's own slot names (default: the board's `slots`). */
+  slots?: readonly string[]
+  /** Slots mode: the most photos the row takes (default: as many as it has slot names). */
+  capacity?: number
 }
 
 export interface MediaBoardMove { itemId: string; from: string; to: string; index: number; copy: boolean }
@@ -75,12 +85,16 @@ export interface MediaBoardProps {
   disabled?: boolean
   /** A ONE-row board drags live (lift, follow, slide). Ignored when the board has several rows. */
   liveDrag?: boolean
+  /** Slots mode: the column names (MAIN, PT01…). See the component's comment. */
+  slots?: readonly string[]
+  /** Slots mode: the first empty slot of an editable row asks to add photos there. */
+  onAddRequest?(rowId: string): void
 }
 
 interface Moving { itemId: string; from: string; fromIndex: number; to: string; index: number }
 interface DropAt { row: string; index: number }
 
-export function MediaBoard({ label, rows, onMove, onDropExternal, externalType = MEDIA_BOARD_EXTERNAL_TYPE, onRemove, onOpen, itemMenu, allowCopy = true, firstLabel = 'Main photo', disabled = false, liveDrag = false }: MediaBoardProps) {
+export function MediaBoard({ label, rows, onMove, onDropExternal, externalType = MEDIA_BOARD_EXTERNAL_TYPE, onRemove, onOpen, itemMenu, allowCopy = true, firstLabel = 'Main photo', disabled = false, liveDrag = false, slots, onAddRequest }: MediaBoardProps) {
   const board = useRef<HTMLDivElement>(null)
   const dragging = useRef<{ itemId: string; from: string; fromIndex: number } | null>(null)
   const focusAfter = useRef<{ row: string; itemId: string } | null>(null)
@@ -98,6 +112,14 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
 
   const rowOf = (id: string) => rows.find(r => r.id === id)
   const editable = (row: MediaBoardRow | undefined) => !!row && !disabled && row.editable !== false
+  // Slots mode: every position is a named slot; empty ones show up to the row's capacity (at least the named ones).
+  const slotted = !!slots && !live
+  const slotNames = (row: MediaBoardRow) => row.slots ?? slots ?? []
+  const slotName = (row: MediaBoardRow, index: number) => slotNames(row)[index] ?? String(index + 1)
+  const emptySlots = (row: MediaBoardRow) => !slotted ? 0
+    : Math.max(0, Math.min(row.capacity ?? slotNames(row).length, Math.max(slotNames(row).length, row.items.length + 1)) - row.items.length)
+  const columns = slotted ? Math.max(slots!.length, ...rows.map(r => r.items.length + emptySlots(r))) : 0
+  const position = (row: MediaBoardRow, index: number) => slotted ? slotName(row, index) : index === 0 ? firstLabel.toLowerCase() : `position ${index + 1} of ${row.items.length}`
   const focusable = rows.filter(r => r.items.length)
   // The focus survives reorders and removals: it stays on a real tile, or on the first tile when its row emptied.
   const current = focus && rowOf(focus.row)?.items.length ? { row: focus.row, index: Math.min(focus.index, rowOf(focus.row)!.items.length - 1) }
@@ -251,8 +273,12 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
     ]
   }
 
-  return <div ref={board} className="nds-media-board" role="group" aria-label={label}
+  return <div ref={board} className={`nds-media-board${slotted ? ' slots' : ''}`} role="group" aria-label={label}
     onDragLeave={event => { if (!board.current?.contains(event.relatedTarget as Node | null)) setDropAt(null) }}>
+    {slotted && <div className="nds-media-board-columns" aria-hidden>
+      <span className="nds-media-board-columns-head" />
+      <span className="nds-media-board-columns-list">{Array.from({ length: columns }, (_, i) => <span key={i}>{slots![i] ?? i + 1}</span>)}</span>
+    </div>}
     {rows.map(row => {
       const target = dropAt?.row === row.id ? dropAt.index : null
       return <section key={row.id} className="nds-media-board-row" data-board-row={row.id} data-editable={editable(row) || undefined}
@@ -276,7 +302,7 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
               onDragOver={event => overTile(event, row, index)}>
               <div className={`nds-media-board-tile${item.tone ? ` is-${item.tone}` : ''}`}>
                 <button type="button" className="nds-media-board-thumb" tabIndex={isFocus ? 0 : -1} draggable={editable(row) && !live} data-nds-sort-handle={live ? '' : undefined}
-                  aria-label={`${item.label}, ${index === 0 ? firstLabel.toLowerCase() : `position ${index + 1} of ${row.items.length}`} in ${row.label}`}
+                  aria-label={`${item.label}, ${position(row, index)} in ${row.label}`}
                   aria-keyshortcuts={editable(row) ? 'Space M Delete' : undefined}
                   onFocus={() => { if (!isFocus) setFocus({ row: row.id, index }) }}
                   onBlur={event => { if (moving && !board.current?.contains(event.relatedTarget as Node | null)) { setMoving(null); setDropAt(null) } }}
@@ -291,7 +317,8 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
                   }}
                   onDragEnd={() => { dragging.current = null; setDropAt(null) }}>
                   <Tile item={item} />
-                  <span className="nds-media-board-pos" aria-hidden>{shown === 0 ? <Star size={12} fill="currentColor" /> : shown + 1}</span>
+                  {/* Slots mode: the header names the slot; a row with its own names (PS01…) shows them on the tile. */}
+                  {(!slotted || row.slots) && <span className="nds-media-board-pos" aria-hidden>{slotted ? slotName(row, shown) : shown === 0 ? <Star size={12} fill="currentColor" /> : shown + 1}</span>}
                 </button>
                 <span className="nds-media-board-caption" title={item.label}>{item.label}</span>
                 {item.badges != null && <span className="nds-media-board-badges">{item.badges}</span>}
@@ -300,7 +327,16 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
               </div>
             </li>
           })}
-          {!row.items.length && <li className="nds-media-board-empty">{row.emptyLabel ?? (editable(row) ? 'No photos — drop photos here' : 'No photos')}</li>}
+          {!slotted && !row.items.length && <li className="nds-media-board-empty">{row.emptyLabel ?? (editable(row) ? 'No photos — drop photos here' : 'No photos')}</li>}
+          {Array.from({ length: emptySlots(row) }, (_, i) => {
+            const index = row.items.length + i
+            const next = i === 0 && editable(row)
+            return <li key={`slot:${index}`} className={`nds-media-board-slot${next ? ' is-next' : ''}`}>
+              {row.slots && <span className="nds-media-board-slot-name" aria-hidden>{slotName(row, index)}</span>}
+              {next && onAddRequest && <button type="button" className="nds-media-board-add" onClick={() => onAddRequest(row.id)}
+                aria-label={`Add photos to ${row.label}, ${slotName(row, index)}`} title={`Add photos to ${row.label}`}><Plus size={16} aria-hidden /></button>}
+            </li>
+          })}
         </ol>
       </section>
     })}

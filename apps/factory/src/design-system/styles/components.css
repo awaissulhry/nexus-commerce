@@ -3295,6 +3295,29 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   .nds-media-board-list.dragging > li[data-sort-state='lifted'] .nds-media-board-thumb { transform: none; }
 }
 @container (max-width: 560px) { .nds-media-board-row { grid-template-columns: minmax(0, 1fr); } .nds-media-board-head { flex-direction: row; flex-wrap: wrap; align-items: center; } }
+/* MediaBoard `slots` (the Media page's photo grid, 2026-09-29): one header of slot names over every row, fixed slots,
+   and the board scrolls sideways as one with the set names kept in view. Stays a two-column grid on a phone. */
+.nds-media-board.slots { --nds-media-board-tile: 76px; overflow-x: auto; overscroll-behavior-x: contain; }
+.nds-media-board.slots .nds-media-board-row, .nds-media-board-columns { grid-template-columns: 136px max-content; width: max-content; min-width: 100%; }
+.nds-media-board-columns { display: grid; gap: var(--nds-space-10); padding: 0 var(--nds-space-10); border: 1px solid transparent; color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); font-variant-numeric: tabular-nums; }
+.nds-media-board-columns-head { position: sticky; inset-inline-start: 0; }
+.nds-media-board-columns-list { display: flex; gap: var(--nds-space-8); }
+.nds-media-board-columns-list > span { width: var(--nds-media-board-tile); text-align: center; }
+.nds-media-board.slots .nds-media-board-head { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--nds-surface); }
+.nds-media-board.slots .nds-media-board-list { flex-wrap: nowrap; gap: var(--nds-space-8); min-height: var(--nds-media-board-tile); }
+.nds-media-board.slots .nds-media-board-list > li { width: var(--nds-media-board-tile); }
+.nds-media-board.slots .nds-media-board-thumb { width: var(--nds-media-board-tile); height: var(--nds-media-board-tile); }
+.nds-media-board.slots .nds-media-board-list > li:first-child .nds-media-board-pos { border-color: var(--nds-border); background: var(--nds-surface-raised); color: var(--nds-text); }
+.nds-media-board.slots .nds-media-board-list > li[data-drop-before]::before { inset-inline-start: calc(-1 * var(--nds-space-6)); }
+.nds-media-board-slot { position: relative; display: grid; place-items: center; height: var(--nds-media-board-tile); border: 1px dashed var(--nds-border-subtle); border-radius: var(--nds-radius-md); color: var(--nds-text-muted); font-size: var(--nds-font-size-xs); }
+.nds-media-board-slot.is-next { border-color: var(--nds-border-strong); }
+.nds-media-board-slot-name { position: absolute; top: var(--nds-space-4); inset-inline-start: var(--nds-space-6); font-variant-numeric: tabular-nums; }
+.nds-media-board-add { display: grid; place-items: center; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; color: var(--nds-text-2); cursor: pointer; }
+.nds-media-board-add:hover { background: var(--nds-surface-sunken); color: var(--nds-text); }
+.nds-media-board-add:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.nds-media-board.slots .nds-media-board-row[data-drop-end]:has(.nds-media-board-slot) .nds-media-board-list::after { content: none; }
+.nds-media-board.slots .nds-media-board-row[data-drop-end] .nds-media-board-slot:first-of-type { border-style: solid; border-color: var(--nds-primary); background: var(--nds-primary-soft); }
+@container (max-width: 560px) { .nds-media-board.slots .nds-media-board-row, .nds-media-board.slots .nds-media-board-columns { grid-template-columns: 96px max-content; } .nds-media-board.slots .nds-media-board-head { flex-direction: column; align-items: flex-start; } }
 /* MediaCard compact — a dense tile for long lists such as a photo library (images rebuild P3b, 2026-09-27). */
 .nds-media-card.compact .nds-media-card-head { gap: var(--nds-space-4); padding: var(--nds-space-4) var(--nds-space-6); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-medium); }
 .nds-media-card-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

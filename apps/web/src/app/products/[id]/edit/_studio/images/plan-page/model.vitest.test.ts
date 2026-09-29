@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
-  applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, guessLanguage, photoPlacements, photoSource, sharedPlacements, versionLanguages, followAllOps, libraryUsage, setRows, showAsOptions,
+  applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, guessLanguage, photoPlacements, photoSource, sharedPlacements, versionLanguages, followAllOps, libraryUsage, setRows, gridShape, isCodeName, ownerLabel, readableNames, scopeDestinationKey, siblingListings, slotLabel,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
 
@@ -101,13 +101,12 @@ describe('Media page model', () => {
     // An unknown or untargetable destination is left out; nothing chosen = nothing to compare.
     expect(compareDestinations(r, ['nope'])).toEqual([])
   })
-  it('"Show as" shows each market its language version, and says when it falls back', () => {
+  it('a market sees its language version of each photo, and the grid says when it falls back', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])
     const assets = assetMap(r)
     expect(shownVersion(r, assets, 'chart-it', ['de'])).toEqual({ id: 'chart-de', exact: true, language: 'de' })
     expect(shownVersion(r, assets, 'chart-it', ['fr'])).toMatchObject({ exact: false })
     expect(shownVersion(r, assets, 'chart-it', null)).toEqual({ id: 'chart-it', exact: true, language: 'it' })
-    expect(showAsOptions(r).map(o => o.label)).toEqual(['eBay IT · IT', 'Amazon (all markets) · IT'])
   })
 
   it('names a listing with its mark (★ ①②③) only when its account and market hold more than one listing', () => {
@@ -152,5 +151,45 @@ describe('Media page model', () => {
     const cover = r.library.find(a => a.id === 'cover')!, spare = r.library.find(a => a.id === 'spare')!, n1 = r.library.find(a => a.id === 'n1')!
     expect(sharedPlacements(r, cover, spare)).toEqual(['Shared: Common', 'eBay IT · Test eBay · Winter: Common'])
     expect(sharedPlacements(r, cover, n1)).toEqual([])
+  })
+})
+
+describe('Media page redesign (2026-09-29): the grid, the scope and readable names', () => {
+  it('names the slots of each set: MAIN and PT01…PT08, then numbers; safety PS01…', () => {
+    expect([0, 1, 8, 9].map(i => slotLabel('value', i))).toEqual(['MAIN', 'PT01', 'PT08', '10'])
+    expect(slotLabel('safety', 0)).toBe('PS01')
+    expect(gridShape('EBAY').columns.slice(0, 3)).toEqual(['MAIN', '2', '3'])
+    expect([gridShape('EBAY').capacity('common'), gridShape('EBAY').capacity('value'), gridShape('AMAZON').capacity('value'), gridShape(null).capacity('safety')]).toEqual([24, 12, 9, 6])
+    expect(gridShape(null).slots('safety')?.[5]).toBe('PS06')
+  })
+  it('finds the destination the scope selector points at: eBay per market and listing, Amazon per account', () => {
+    expect(scopeDestinationKey({ channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey: 'winter' })).toBe(WINTER)
+    expect(scopeDestinationKey({ channel: 'EBAY', marketplace: 'DE', accountId: 'acc', aliasKey: null })).toBe('LISTING:EBAY:DE:acc:')
+    expect(scopeDestinationKey({ channel: 'AMAZON', marketplace: 'DE', accountId: 'amz', aliasKey: 'x' })).toBe(AMAZON)
+    expect(scopeDestinationKey(null)).toBeNull()
+  })
+  it('marks a row that is not Shared with its owner, naming the listing when the market holds several', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }])
+    r.destinations[1].listingMark = 1
+    expect(siblingListings(r, r.destinations[1]).map(d => d.key)).toEqual([EBAY, WINTER])
+    expect(ownerLabel(r, { source: 'LISTING' }, r.destinations[1])).toBe('Own for ① Winter')
+    expect(ownerLabel(r, { source: 'LISTING' }, r.destinations[2])).toBe('Own for Amazon')
+    expect(ownerLabel(r, { source: 'CHANNEL' }, r.destinations[0])).toBe('Own for all eBay listings')
+    expect(ownerLabel(r, { source: 'SHARED' }, r.destinations[0])).toBeNull()
+  })
+  it('gives storage-code photos a readable name from where they sit; real names stay', () => {
+    expect(['vija9w5xgwhywk2ld7hq.jpg', 'PT02', 'MAIN', '81Kp1xYzA7L._AC_SL1500_.jpg', '71AbC+dEfGL.jpg'].map(isCodeName)).toEqual([true, true, true, true, true])
+    expect(['Size chart IT', 'CE user information sheet', 'common-1', 'abcdefghijklmnopq'].map(isCodeName)).toEqual([false, false, false, false])
+    const r = read([{ key: 'SHARED', plan: plan({ common: ids('c0de0000000000001', 'chart-it'), values: { 'color:black': ids('n1') } }, 'color') },
+      { key: WINTER, plan: plan({ values: { 'color:black': ids('w1nter00000000001') } }) }])
+    r.library = [...r.library, asset('c0de0000000000001'), asset('w1nter00000000001'), asset('l0st0000000000001'), asset('l0st0000000000002'),
+      asset('de0000000000000001', { languageTag: 'de', versionGroupId: 'v' }), asset('it0000000000000001', { languageTag: 'it', versionGroupId: 'v' })]
+    r.layers[0].plan.sets.safety = ids('it0000000000000001')
+    const names = readableNames(r)
+    expect(names.get('c0de0000000000001')).toBe('Common MAIN')
+    expect(names.get('chart-it')).toBe('chart-it')
+    expect(names.get('w1nter00000000001')).toBe('Nero MAIN')
+    expect([names.get('l0st0000000000001'), names.get('l0st0000000000002')]).toEqual(['Unused photo 1', 'Unused photo 2'])
+    expect([names.get('de0000000000000001'), names.get('it0000000000000001')]).toEqual(['Safety PS01 · DE', 'Safety PS01 · IT'])
   })
 })

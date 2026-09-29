@@ -6,7 +6,7 @@ import type { MediaAsset } from '@nexus/shared/media-plan-channels'
 import { Modal, SourceIndicator, Thumbnail } from '@/design-system/components'
 import { Button, FilterChip, Tag } from '@/design-system/primitives'
 
-import { SOURCE } from './DestinationsTable'
+import { SOURCE } from './destinationName'
 import { compareDestinations, destinationLabel, shownVersion, type CompareCell, type MediaDestinationRow, type MediaRead } from './model'
 import styles from './planPage.module.css'
 

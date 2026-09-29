@@ -18,6 +18,8 @@ export interface AmazonZipDialogProps {
   destination: MediaDestinationRow
   assets: Map<string, MediaAsset>
   open: boolean
+  /** The market the scope selector points at: the window opens on it (Owner, 2026-09-29: ZIP files by market). */
+  initialMarket?: string | null
   onClose(): void
 }
 
@@ -28,8 +30,9 @@ type Check = { state: 'checking' } | { state: 'ready'; preview: ArchivePreview }
  * country photos). The window shows every file the ZIP will hold (ASIN.SLOT.jpg) and the SKUs left out, with the reason;
  * the download is bound to that list, so the ZIP holds exactly what was shown. Nothing is sent to Amazon.
  */
-export function AmazonZipDialog({ read, destination: d, assets, open, onClose }: AmazonZipDialogProps) {
-  const [market, setMarket] = useState(d.markets[0] ?? '')
+export function AmazonZipDialog({ read, destination: d, assets, open, initialMarket = null, onClose }: AmazonZipDialogProps) {
+  const start = initialMarket && d.markets.includes(initialMarket) ? initialMarket : d.markets[0] ?? ''
+  const [market, setMarket] = useState(start)
   const [kind, setKind] = useState<AmazonArchiveKind>('slots')
   const [check, setCheck] = useState<Check>({ state: 'checking' })
   const [again, setAgain] = useState(0)
@@ -43,7 +46,7 @@ export function AmazonZipDialog({ read, destination: d, assets, open, onClose }:
   useEffect(() => { if (failure || saved) outcome.current?.scrollIntoView({ block: 'nearest' }) }, [failure, saved])
 
   // Each opening starts clean: the answer to an earlier download belongs to that earlier list.
-  useEffect(() => { if (open) { setFailure(''); setSaved(null) } }, [open])
+  useEffect(() => { if (open) { setFailure(''); setSaved(null); setMarket(start) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   // A new read of the page (someone edited the photos) or another choice checks the list again.
   useEffect(() => {
     if (!open || !market) return

@@ -1,7 +1,7 @@
 import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
 import { parseMediaFileName } from '@nexus/shared/media-plan-files'
 import { aliasMarkGlyph } from '@/design-system/primitives'
-import { duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { AMAZON_SAFETY_SLOTS, AMAZON_SLOTS, MEDIA_LIMITS, duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
 
 /**
  * Images rebuild P3b — the Media page's view of one family's photo plan (docs/images-studio-rebuild/PLAN.md §5).
@@ -446,21 +446,108 @@ export function followAllOps(read: MediaRead, view: LayerView): MediaOp[] {
   ]
 }
 
-/** "Show as": the version of each placed photo a market's languages see (D6), or the placed one. */
+/** The version of each placed photo a market's languages see (D6), or the placed one (`languages: null`). */
 export function shownVersion(read: MediaRead, assets: Map<string, MediaAsset>, id: string, languages: readonly string[] | null) {
   if (!languages) return { id, exact: true, language: read.library.find(a => a.id === id)?.languageTag ?? 'zxx' }
   const picked = pickVersion(id, assets, languages, read.mainLanguage)
   return picked ? { id: picked.assetId, exact: picked.exact, language: picked.language } : { id, exact: true, language: 'zxx' }
 }
 
-/** The markets "Show as" offers: one per channel and market with its languages, best-listed first. */
-export function showAsOptions(read: MediaRead) {
-  const seen = new Map<string, { value: string; label: string; languages: string[] }>()
-  for (const d of read.destinations) {
-    const value = `${d.channel}:${d.marketplace}`
-    if (seen.has(value)) continue
-    const label = d.marketplace === 'GLOBAL' ? `${CHANNEL_LABEL[d.channel]} (all markets)` : `${CHANNEL_LABEL[d.channel]} ${d.marketplace}`
-    seen.set(value, { value, label: `${label} · ${d.languages.filter(l => l !== 'mul').map(l => l.toUpperCase()).join('/') || read.mainLanguage.toUpperCase()}`, languages: d.languages })
+// ── The photo grid (2026-09-29 redesign) ───────────────────────────────────────────────────────────────────────
+
+/** Amazon's slot names; the grid's columns everywhere but eBay, whose listing has no named slots. */
+export const GRID_SLOTS = [...AMAZON_SLOTS]
+// eBay's photos have no slot names: MAIN, then numbers. Nine show at first, as on Amazon; more appear as photos are added.
+const EBAY_SLOTS = ['MAIN', ...Array.from({ length: 8 }, (_, i) => String(i + 2))]
+
+/** The slot a position of a set gets its name from: MAIN, PT01…PT08, then 10, 11…; safety PS01–PS06. */
+export function slotLabel(kind: SetRow['kind'], index: number): string {
+  if (kind === 'safety') return AMAZON_SAFETY_SLOTS[index] ?? String(index + 1)
+  return GRID_SLOTS[index] ?? String(index + 1)
+}
+
+/** The grid's columns and each row's size for one channel (null = Shared): how many photos the channel takes. */
+export function gridShape(channel: MediaChannel | null) {
+  const columns = channel === 'EBAY' ? EBAY_SLOTS : GRID_SLOTS
+  const capacity = (kind: SetRow['kind']) => kind === 'safety' ? MEDIA_LIMITS.AMAZON.safety
+    : channel === 'AMAZON' ? AMAZON_SLOTS.length
+    : channel === 'EBAY' ? (kind === 'common' ? MEDIA_LIMITS.EBAY.gallery : MEDIA_LIMITS.EBAY.perValue)
+    : channel === 'ETSY' ? MEDIA_LIMITS.ETSY.images
+    : MEDIA_LIMITS.EBAY.gallery
+  const slots = (kind: SetRow['kind']) => kind === 'safety' ? [...AMAZON_SAFETY_SLOTS] : undefined
+  return { columns, capacity, slots }
+}
+
+/**
+ * The destination the studio's scope selector points at (channel, market, account, listing), or null on the Shared
+ * product. Amazon, Shopify and Etsy keep one photo set per account for every market; eBay one per market and listing.
+ */
+export function scopeDestinationKey(scope: { channel: string; marketplace: string; accountId: string; aliasKey: string | null } | null): string | null {
+  if (!scope) return null
+  const global = scope.channel === 'AMAZON' || scope.channel === 'SHOPIFY' || scope.channel === 'ETSY'
+  return `LISTING:${scope.channel}:${global ? 'GLOBAL' : scope.marketplace}:${scope.accountId}:${scope.channel === 'AMAZON' ? '' : scope.aliasKey ?? ''}`
+}
+
+/** The listings one destination shares its account and market with (its aliases), main listing first. */
+export function siblingListings(read: MediaRead, d: MediaDestinationRow): MediaDestinationRow[] {
+  return read.destinations.filter(x => x.channel === d.channel && x.marketplace === d.marketplace && x.accountId === d.accountId)
+    .sort((a, b) => (a.alias?.position ?? 0) - (b.alias?.position ?? 0))
+}
+
+/** Who owns a row's photos when it is not Shared, in words for the row's mark ("Own for eBay IT", "Own for ① Winter"). */
+export function ownerLabel(read: MediaRead, row: Pick<SetRow, 'source'>, d: MediaDestinationRow): string | null {
+  if (row.source === 'CHANNEL') return `Own for all ${CHANNEL_LABEL[d.channel]} listings`
+  if (row.source !== 'LISTING') return null
+  if (d.alias || siblingListings(read, d).length > 1) return `Own for ${listingName(d)}`
+  return `Own for ${CHANNEL_LABEL[d.channel]}${d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`}`
+}
+
+/** Storage codes and bare slot codes say nothing to a person ("vija9w5xgwhyw…", "PT02"). */
+export function isCodeName(label: string): boolean {
+  // "vija9w5xgwhywk2ld7hq.jpg" (a storage id), "81Kp1xYzA7L._AC_SL1500_.jpg" (an Amazon image id), "PT02" (a slot).
+  const base = label.replace(/\.[a-z0-9]{2,4}$/i, '').replace(/\._[A-Z0-9_,]+_$/, '').trim()
+  return /^(MAIN|PT\d{2}|PS\d{2}|SWCH)$/i.test(base)
+    || (/^[a-z0-9]{16,}$/.test(base) && /\d/.test(base) && /[a-z]/.test(base))
+    || (/^[0-9A-Za-z+%-]{9,13}L$/.test(base) && /\d/.test(base) && /[A-Z]/.test(base.slice(0, -1)))
+}
+
+/**
+ * Readable names for photos named by a storage code (Owner, 2026-09-29: "random file names instead of readable ones"):
+ * where the photo sits — Shared first, then any other layer — as "Nero MAIN", "Common PT01", "Safety PS01",
+ * "Giallo swatch"; a language version adds its language ("Size chart PT02 · DE"); a photo in no set is "Unused photo 1".
+ * A real name stays. Nothing is renamed on the server.
+ */
+export function readableNames(read: MediaRead): Map<string, string> {
+  const card = cardOf(read)
+  const place = new Map<string, string>()
+  const note = (id: string, where: string) => { const c = card(id); if (!place.has(c)) place.set(c, where) }
+  for (const row of setRows(read, { layer: 'SHARED' }, { skus: true })) row.items.forEach((id, i) => note(id, `${row.kind === 'safety' ? 'Safety' : row.label} ${slotLabel(row.kind, i)}`))
+  for (const s of swatchRows(read, { layer: 'SHARED' })) if (s.assetId) note(s.assetId, `${s.label} swatch`)
+  for (const layer of read.layers) {
+    if (layer.layer === 'SHARED') continue
+    const sets = layer.plan.sets
+    sets.common?.forEach((item, i) => note(item.assetId, `Common ${slotLabel('common', i)}`))
+    for (const [key, items] of Object.entries(sets.values ?? {})) items.forEach((item, i) => note(item.assetId, `${valueLabel(read, key)} ${slotLabel('value', i)}`))
+    sets.safety?.forEach((item, i) => note(item.assetId, `Safety ${slotLabel('safety', i)}`))
   }
-  return [...seen.values()]
+  const names = new Map<string, string>()
+  const taken = new Map<string, number>()
+  let unused = 0
+  for (const a of read.library) {
+    if (!isCodeName(a.label)) { names.set(a.id, a.label); continue }
+    const group = a.versionGroupId ? read.library.filter(x => x.versionGroupId === a.versionGroupId) : [a]
+    const where = place.get(a.id) ?? group.map(m => place.get(m.id)).find(Boolean)
+    const language = group.length > 1 && a.languageTag !== 'zxx' && a.languageTag !== 'mul' ? ` · ${a.languageTag.toUpperCase()}` : ''
+    const name = where ? `${where}${language}` : `Unused photo ${++unused}`
+    const n = (taken.get(name) ?? 0) + 1
+    taken.set(name, n)
+    names.set(a.id, n > 1 ? `${name} (${n})` : name)
+  }
+  return names
+}
+
+/** The read with readable photo names: every part of the page (tiles, library, windows, messages) shows them. */
+export function withReadableNames(read: MediaRead): MediaRead {
+  const names = readableNames(read)
+  return { ...read, library: read.library.map(a => ({ ...a, label: names.get(a.id) ?? a.label })) }
 }
