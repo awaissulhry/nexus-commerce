@@ -54,6 +54,10 @@
       "types": "./dist/shopify-information.d.ts",
       "default": "./dist/shopify-information.js"
     },
+    "./shopify-colour-products": {
+      "types": "./dist/shopify-colour-products.d.ts",
+      "default": "./dist/shopify-colour-products.js"
+    },
     "./shopify-linked-products": {
       "types": "./dist/shopify-linked-products.d.ts",
       "default": "./dist/shopify-linked-products.js"
