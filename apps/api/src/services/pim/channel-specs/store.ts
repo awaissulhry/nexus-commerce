@@ -71,7 +71,10 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     // `list.min` / `list.max` bound a list. They were enforced on write (`validateShopifyField`) but not offered.
     const rules = shopifyDefinitionRules(info.definition?.validations)
     const categoryReason = info.definition ? categoryFieldReason(info.definition, categoryIds) : undefined
-    const constrainedTo = info.definition?.constraints?.key === 'category' ? info.definition.constraints.values.length : 0
+    const categoryLimit = info.definition?.constraints?.key === 'category' ? info.definition.constraints : null
+    // A partial category list (Shopify lists thousands) has no honest count.
+    const categoryNote = !categoryLimit ? '' : categoryLimit.complete === false ? ' Applies only to some Shopify categories.'
+      : ` Applies only to ${categoryLimit.values.length} Shopify ${categoryLimit.values.length === 1 ? 'category' : 'categories'}.`
     const entry = field(key, info.label, 'content', {
       attribute: info.id, kind: rules.choices ? 'select' : kind, group, shopifyField: info,
       shape: info.cardinality, cardinality: { min: rules.listMin ?? 0, max: info.cardinality === 'list' ? rules.listMax ?? null : 1 },
@@ -79,7 +82,7 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
       variantEligible: info.owner === 'PRODUCTVARIANT',
       channelStore: info.definition ? pa('metafields', info.owner, info.definition.namespace, info.definition.key, info.type)
         : pa(...info.id.split('.')),
-      helpText: info.definition ? `${info.owner === 'PRODUCT' ? 'Product' : 'Variant'} · ${info.source}. ${info.definition.description ?? ''}${constrainedTo ? ` Applies only to ${constrainedTo} Shopify ${constrainedTo === 1 ? 'category' : 'categories'}.` : ''}`.replace(/\s+/g, ' ').trim()
+      helpText: info.definition ? `${info.owner === 'PRODUCT' ? 'Product' : 'Variant'} · ${info.source}. ${info.definition.description ?? ''}${categoryNote}`.replace(/\s+/g, ' ').trim()
         : [info.channelLabel !== info.label ? `Shopify: ${info.channelLabel}.` : '', info.reason].filter(Boolean).join(' ') || undefined,
       // Media and stock require a published Shopify resource; their native workspace
       // owns exact file and stocking-location identities after publication.

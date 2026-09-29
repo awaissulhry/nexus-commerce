@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'graphql'
-import { emptyShopifyLinkedDraft, fieldAddress, shopifyLinkedDraftSchema, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
+import { emptyShopifyLinkedDraft, fieldAddress, shopifyDefinitionApplicability, shopifyLinkedDraftSchema, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 
 const fixture = vi.hoisted(() => {
   const data = { audits: [] as any[], listings: [] as any[], gql: null as any, failSave: false }
@@ -483,14 +483,38 @@ describe('review, conflicts and resumable synchronization', () => {
 })
 
 describe('Conditional Shopify definitions', () => {
-  it('paginates category subtypes before advertising a complete definition', async () => {
-    const original = fixture.data.gql
+  // A category field can list ~11,000 categories (Color). One page is kept; the categories the caller names are asked
+  // about one by one. Writes still ask Shopify fresh (the last test below).
+  const partialList = { key: 'category', values: { nodes: [{ value: 'aa-8' }], pageInfo: { hasNextPage: true, endCursor: 'category-page-2' } } }
+  it('keeps one page of a long category list, marks it partial, and answers the requested categories exactly', async () => {
+    const original = fixture.data.gql, asked: string[] = []
     fixture.data.gql = async (query: string, variables: any) => {
-      const result = query.includes('NexusLinkedDefinitionConstraints') ? { node: { constraints: { values: connection([{ value: 'aa-8-1' }]) } } } : await original(query, variables)
-      if (query.includes('NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes[0].constraints = { key: 'category', values: { nodes: [{ value: 'aa-8' }], pageInfo: { hasNextPage: true, endCursor: 'category-page-2' } } }
+      if (query.includes('NexusApplicableDefinitions')) { asked.push(variables.category); return { metafieldDefinitions: connection(variables.category.endsWith('/aa-8-1') ? [{ id: def.id }] : []) } }
+      const result = await original(query, variables)
+      if (query.includes('NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes[0].constraints = partialList
       return result
     }
-    expect((await readLinkedStoreSchema(gql)).definitions[0].constraints).toEqual({ key: 'category', values: ['aa-8', 'aa-8-1'] })
+    const definition = (await readLinkedStoreSchema(gql, { categories: ['gid://shopify/TaxonomyCategory/aa-8-1', 'aa-9'] })).definitions[0]
+    expect(definition.constraints).toEqual({ key: 'category', values: ['aa-8', 'aa-8-1'], complete: false, checked: ['aa-8-1', 'aa-9'] })
+    expect(asked).toEqual(['gid://shopify/TaxonomyCategory/aa-8-1', 'gid://shopify/TaxonomyCategory/aa-9'])
+    // Listed, or asked and applies: editable. Asked and does not apply: refused. Never asked: left to Shopify's check before a write.
+    expect(shopifyDefinitionApplicability(definition, 'gid://shopify/TaxonomyCategory/aa-8')).toBeNull()
+    expect(shopifyDefinitionApplicability(definition, 'aa-8-1')).toBeNull()
+    expect(shopifyDefinitionApplicability(definition, 'aa-9')).toContain('does not apply')
+    expect(shopifyDefinitionApplicability(definition, 'aa-10')).toBeNull()
+  })
+  it('a complete category list needs no category reads and stays exact', async () => {
+    const original = fixture.data.gql, asked: string[] = []
+    fixture.data.gql = async (query: string, variables: any) => {
+      if (query.includes('NexusApplicableDefinitions')) { asked.push(variables.category); return { metafieldDefinitions: connection([]) } }
+      const result = await original(query, variables)
+      if (query.includes('NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes[0].constraints = { key: 'category', values: connection([{ value: 'aa-8' }]) }
+      return result
+    }
+    const definition = (await readLinkedStoreSchema(gql, { categories: ['aa-9'] })).definitions[0]
+    expect(definition.constraints).toEqual({ key: 'category', values: ['aa-8'] })
+    expect(asked).toEqual([])
+    expect(shopifyDefinitionApplicability(definition, 'aa-9')).toContain('does not apply')
   })
   it('rejects an inapplicable category before accepting any Shopify write plan', async () => {
     const original = fixture.data.gql
@@ -505,23 +529,24 @@ describe('Conditional Shopify definitions', () => {
     await expect(buildLinkedPlan(gql, draft)).rejects.toThrow('does not apply')
     expect(calls.some(c => ['NexusLinkedSet','NexusLinkedClear'].includes(c.name))).toBe(false)
   })
-  it('caches complete subtype pages per store and invalidates them explicitly', async () => {
+  it('caches category answers per store for reads and invalidates them explicitly', async () => {
     const original = fixture.data.gql
-    let store = 'A', pages = 0
+    let store = 'A', reads = 0
     fixture.data.gql = async (query: string, variables: any) => {
-      if (query.includes('NexusLinkedDefinitionConstraints')) { pages++; return { node: { constraints: { values: connection([{ value: store === 'A' ? 'aa-8-1' : 'aa-8-2' }]) } } } }
+      if (query.includes('NexusApplicableDefinitions')) { reads++; return { metafieldDefinitions: connection(store === 'A' ? [{ id: def.id }] : []) } }
       const result = await original(query, variables)
       if (query.includes('NexusLinkedSettings')) result.shop = { id: store }
-      if (query.includes('NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes[0].constraints = { key: 'category', values: { nodes: [{ value: 'aa-8' }], pageInfo: { hasNextPage: true, endCursor: 'next' } } }
+      if (query.includes('NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes[0].constraints = partialList
       return result
     }
-    await readLinkedStoreSchema(gql); await readLinkedStoreSchema(gql)
-    expect(pages).toBe(1)
+    const categories = ['aa-8-1']
+    await readLinkedStoreSchema(gql, { categories }); await readLinkedStoreSchema(gql, { categories })
+    expect(reads).toBe(1)
     store = 'B'
-    expect((await readLinkedStoreSchema(gql)).definitions[0].constraints?.values).toEqual(['aa-8', 'aa-8-2'])
-    expect(pages).toBe(2)
-    invalidateShopifyDefinitionConstraints(); await readLinkedStoreSchema(gql)
-    expect(pages).toBe(3)
+    expect((await readLinkedStoreSchema(gql, { categories })).definitions[0].constraints?.values).toEqual(['aa-8'])
+    expect(reads).toBe(2)
+    invalidateShopifyDefinitionConstraints(); await readLinkedStoreSchema(gql, { categories })
+    expect(reads).toBe(3)
   })
   it('checks fresh applicability before mutation even when cached subtypes permit the category', async () => {
     const original = fixture.data.gql
