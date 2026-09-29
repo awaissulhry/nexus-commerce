@@ -258,7 +258,7 @@ export const ENTRIES: Entry[] = [
   P(PUBLIC, pfx('/api/internal/bidding')),
 
   // Shopify publication controls must precede the broad advertising /automation matcher.
-  P(F.productsPublish, (m, p) => m !== 'GET' && /^\/api\/products\/[^/]+\/shopify-linked\/(synchronize|advance|entry|automation|automation-check)$/.test(p)),
+  P(F.productsPublish, (m, p) => m !== 'GET' && /^\/api\/products\/[^/]+\/shopify-linked\/(synchronize|advance|entry|enable-field|automation|automation-check)$/.test(p)),
 
   // PR.1 Presence W0: specific rules precede every channel/product prefix.
   P(F.productsDelete, (m, p) => m === 'POST' && (p === '/api/amazon/flat-file/remove' || p === '/api/products/bulk-hard-delete')),

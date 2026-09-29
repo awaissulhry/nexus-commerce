@@ -4922,6 +4922,8 @@ model UserProfile {
   roleAssignments    UserRole[]
   resetTokens        PasswordResetToken[]
   invitationsSent    Invitation[]         @relation("invitedBy")
+  /// MCP.4 — apps (Claude) this person connected, one per business and app.
+  oauthGrants        OAuthGrant[]
 }
 
 // Phase H — consent log (GDPR Art. 7). Append-only; each row pins a
@@ -13382,6 +13384,13 @@ model AgentRun {
   /// back-link) resolves through the RUN, so no other model has to learn what
   /// an assignment is.
   assignmentId       String?
+  /// MCP.4 — the front door a person's request came through: 'app' (the assistant in Nexus) or
+  /// 'claude' (the MCP endpoint). Null = an autonomous or fleet run. Like assignmentId, every
+  /// reader resolves it through the RUN: an approval shows "requested via Claude" from here.
+  via                String?
+  /// MCP.4 — the Claude connection (OAuthGrant.id) behind a 'claude' run. No foreign key: the
+  /// record must outlive a revoked or deleted connection.
+  oauthGrantId       String?
 
   createdAt DateTime        @default(now())
   endedAt   DateTime?
@@ -13393,6 +13402,7 @@ model AgentRun {
   @@index([createdAt])
   @@index([orchestrationId])
   @@index([assignmentId])
+  @@index([oauthGrantId, createdAt])
   @@index([workspaceId])
 }
 
@@ -19394,6 +19404,8 @@ model Workspace {
   accounts                 ChannelConnection[]
   settings                 AccountSettings?
   invitations              WorkspaceInvitation[]
+  /// MCP.4 — apps (Claude) a person connected to this business.
+  oauthGrants              OAuthGrant[]
   audit                    WorkspaceAudit[]
 
   @@unique([createdByUserId, creationKey])
@@ -20152,6 +20164,100 @@ model SellerReferenceLabel {
 
   @@unique([workspaceId, channel, connectionId, marketplace, productType, fieldKey], name: "channel_connectionId_marketplace_productType_fieldKey", map: "SellerReferenceLabel_channel_connection_market_type_field_uq")
   @@index([workspaceId])
+}
+
+// ── MCP.4 — connecting Claude to Nexus (OAuth 2.1 for the MCP endpoint) ──────────────────────
+// Global, like UserSession and OAuthSession: the token endpoint and /mcp look these up before any
+// business is known, so no row-level policy can scope them. Every query names its business (a
+// grant's workspaceId) itself. Secrets are stored as sha256 only; the raw code or token never
+// touches the database.
+
+/// An app that may ask a person to connect it: Claude on the web, Desktop, mobile or Code.
+model OAuthClient {
+  id           String       @id @default(cuid())
+  /// What the app sends as client_id: an id we issued (dynamic registration) or, for a Client ID
+  /// Metadata Document, the HTTPS URL of that document.
+  clientId     String       @unique
+  /// 'dcr' | 'cimd'
+  registration String
+  clientName   String
+  redirectUris String[]
+  /// The registration request or the fetched metadata document, as received.
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  lastUsedAt   DateTime?
+  disabledAt   DateTime?
+  grants       OAuthGrant[]
+}
+
+/// A person's permission for one app to act in one business. One per person, business and app:
+/// a new consent replaces the old one. Revoked in Team & Access or by the person.
+model OAuthGrant {
+  id           String                   @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId       String
+  user         UserProfile              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId     String
+  client       OAuthClient              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// 'nexus.read' | 'nexus.write' — a ceiling on the person's own permissions, never a grant.
+  scopes       String[]
+  createdAt    DateTime                 @default(now())
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  /// The user id of whoever revoked it: the person, an admin, or null for the system.
+  revokedBy    String?
+  /// 'person' | 'admin' | 'refresh_reuse' | 'replaced' | 'membership_ended'
+  revokeReason String?
+  codes        OAuthAuthorizationCode[]
+  tokens       OAuthToken[]
+
+  @@unique([workspaceId, userId, clientId])
+  @@index([userId])
+  @@index([workspaceId, revokedAt])
+}
+
+/// A one-time authorization code, redeemed once with its PKCE verifier within a minute.
+model OAuthAuthorizationCode {
+  id            String     @id @default(cuid())
+  codeHash      String     @unique
+  grantId       String
+  grant         OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  redirectUri   String
+  /// S256 PKCE challenge.
+  codeChallenge String
+  /// The MCP URL the token will be for (RFC 8707 resource).
+  resource      String
+  scopes        String[]
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime   @default(now())
+
+  @@index([grantId])
+  @@index([expiresAt])
+}
+
+/// An access or refresh token. A refresh token is exchanged once; presenting it again revokes the
+/// whole grant, because only a stolen copy would be used twice.
+model OAuthToken {
+  id        String     @id @default(cuid())
+  tokenHash String     @unique
+  /// 'access' | 'refresh'
+  kind      String
+  grantId   String
+  grant     OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  /// The refresh token this one was issued from: the rotation chain.
+  parentId  String?
+  resource  String
+  scopes    String[]
+  expiresAt DateTime
+  /// A refresh token: when it was exchanged.
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime   @default(now())
+
+  @@index([grantId, kind])
+  @@index([expiresAt])
 }
 
 /// Shopify colour products (docs/studies/shopify-linked-variations-PLAN.md §3.4). On a store that shows each value of a

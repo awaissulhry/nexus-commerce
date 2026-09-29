@@ -54,6 +54,8 @@ const core: Core[] = [
   ['seo.description', 'SEO description', 'SEO', P, 'multi_line_text_field'],
   ['handle', 'URL handle', 'SEO', P, 'handle'],
 ]
+/** The reason a category field Shopify offers is read-only until someone switches it on (see `standardTemplateId`). */
+export const SHOPIFY_FIELD_NOT_SWITCHED_ON = 'Shopify offers this category field, but it is not switched on in this store yet. Open the cell to switch it on.'
 /** Owner + namespace + key remains stable across definition renames and recreation. */
 export const informationMetafieldId = (owner: string, namespace: string, key: string) => `metafield:${owner}:${namespace}.${key}`
 
@@ -85,6 +87,18 @@ export function informationRegistry(schema: ShopifyStoreSchema | null): Informat
       source: `${def.namespace}.${def.key}`, type: def.type, width: 240, definition: def, ...(def.type === 'money' && schema?.currency ? { currency: schema.currency } : {}),
       editor: def.readOnlyReason || shopifyTypeReason(def.type) ? 'unavailable' : 'typed', reason: def.readOnlyReason ?? shopifyTypeReason(def.type) ?? undefined,
       cardinality: def.type.startsWith('list.') ? 'list' : 'scalar', sortable: false, filterable: false, permission: 'products.edit', discovery: 'definition',
+    })
+  }
+  // Category fields Shopify offers for the store's categories but the store has not switched on (bulk-editor parity). A
+  // switched-on definition of the same owner, namespace and key wins; the column id is the same, so it simply comes alive.
+  for (const template of schema?.templates ?? []) {
+    if ((template.ownerType !== P && template.ownerType !== V) || template.namespace === 'nexus' || shopifyTypeReason(template.type)) continue
+    const id = informationMetafieldId(template.ownerType, template.namespace, template.key)
+    if (fields.has(id)) continue
+    fields.set(id, {
+      id, label: template.name, group: 'Category Metafields', owner: template.ownerType, source: `${template.namespace}.${template.key}`, type: template.type, width: 240,
+      definition: template, editor: 'unavailable', reason: SHOPIFY_FIELD_NOT_SWITCHED_ON,
+      cardinality: template.type.startsWith('list.') ? 'list' : 'scalar', sortable: false, filterable: false, permission: 'products.edit', discovery: 'definition',
     })
   }
   return [...result, ...[...fields.values()].sort((a, b) => informationGroups.indexOf(a.group) - informationGroups.indexOf(b.group) || a.label.localeCompare(b.label) || a.id.localeCompare(b.id))].map(field => {

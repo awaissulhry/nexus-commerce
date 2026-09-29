@@ -16,13 +16,14 @@ import { configureLinkedAutomation, runLinkedAutomation } from '../../services/s
 import { suggestSharedContent } from '../../services/shopify/linked-shared-content.service.js'
 import { readInformation } from '../../services/shopify/information-gateway.js'
 import { ensureShopifySchemaSubscriptions } from '../../services/shopify/schema-sync.service.js'
+import { enableShopifyCategoryField } from '../../services/shopify/category-fields.service.js'
 import { SHOPIFY_WEBHOOKS_OFF_CODE, SHOPIFY_WEBHOOKS_OFF_MESSAGE, shopifyOrderIngestEnabled } from '../../services/shopify/order-ingest-switch.js'
 
 const querySchema = z.object({ accountId: z.string().min(1), listingId: z.string().min(1).optional(), market: z.literal('GLOBAL').default('GLOBAL'),
   locale: z.string().min(2).max(35).optional(), refreshConstraints: z.literal('1').optional(),
   ownerId: z.string().optional(), id: z.string().optional(), type: z.string().optional(), query: z.string().max(200).optional(), cursor: z.string().max(2000).optional(), metaobjectType: z.string().optional(), fileTypes: z.string().max(100).optional(), attribute: z.string().max(100).optional(), categories: z.string().max(1000).optional() }).strict()
 export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
-  const routes = [['GET', ''], ['PUT', ''], ['POST', '/cells'], ['GET', '/schema'], ['POST', '/schema-subscriptions'], ['POST', '/webhook-subscriptions'], ['GET', '/information'], ['GET', '/owner'], ['GET', '/references'], ['POST', '/reference-names'],
+  const routes = [['GET', ''], ['PUT', ''], ['POST', '/cells'], ['POST', '/enable-field'], ['GET', '/schema'], ['POST', '/schema-subscriptions'], ['POST', '/webhook-subscriptions'], ['GET', '/information'], ['GET', '/owner'], ['GET', '/references'], ['POST', '/reference-names'],
     ['POST', '/discover'], ['POST', '/suggest-sharing'], ['POST', '/automation'], ['POST', '/automation-check'], ['POST', '/products'], ['POST', '/read-links'], ['POST', '/field-values'], ['POST', '/import'], ['POST', '/preview'], ['POST', '/rebase'], ['POST', '/synchronize'], ['POST', '/advance'], ['GET', '/entry'], ['POST', '/entry']] as const
   for (const [method, suffix] of routes) app.route<{ Params: { productId: string }; Querystring: ContentScope; Body: unknown }>({
     method, url: `/products/:productId/shopify-linked${suffix}`, bodyLimit: 10 * 1024 * 1024,
@@ -64,6 +65,7 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
           return await saveShopifySheetCells(id, query, input, request.authUser?.id ?? null)
         }
         if (suffix === '/schema-subscriptions') return await ensureShopifySchemaSubscriptions(destination.accountId)
+        if (suffix === '/enable-field') return await enableShopifyCategoryField(id, query, request.body)
         // P2.4 — the OTHER twelve. `schema-subscriptions` registers three metafield
         // topics; nothing registered the product, order, lifecycle or privacy topics,
         // so Shopify had never been told to send anything the main receivers listen for.

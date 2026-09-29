@@ -22,7 +22,7 @@ vi.mock('../../db.js', () => ({ default: fixture.db }))
 vi.mock('../connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_: string, account: string) => { if (!['A', 'B'].includes(account)) throw new Error('Account unavailable'); return account } }))
 vi.mock('./admin-client.js', () => ({ shopifyAdmin: async (account: string) => ({ graphql: (q: string, v: any) => fixture.data.gql(q, v, account) }), assertShopifyResult: (payload: any) => { if (!payload || payload.userErrors?.length) throw new Error(payload?.userErrors?.[0]?.message ?? 'Missing result'); return payload } }))
 import { applyLinkedBatch, beginLinkedSync, advanceLinkedSync, buildLinkedPlan, getLinkedWorkspace, importLinkedFamily, LINKED_KEY, previewLinkedWorkspace, rebaseLinkedWorkspace, saveLinkedWorkspace } from './linked-products.service'
-import { collectShopifyPages, invalidateShopifyDefinitionConstraints, readLinkedFields, readLinkedProducts, readLinkedStoreSchema, resolveLinkedReferences } from './linked-products-gateway'
+import { collectShopifyPages, enableStandardShopifyDefinition, invalidateShopifyDefinitionConstraints, readLinkedFields, readLinkedProducts, readLinkedStoreSchema, resolveLinkedReferences } from './linked-products-gateway'
 import { synchronizeContent } from './content-sync.service'
 import { discoverLinkedFamily } from './linked-discovery.service'
 import { configureLinkedAutomation, runLinkedAutomation } from './linked-automation.service'
@@ -43,6 +43,7 @@ beforeEach(() => {
     parse(query); const name = query.match(/(?:query|mutation)\s+(\w+)/)![1]; calls.push({ name, variables, account })
     if (name === 'NexusLinkedDefinitions') return { metafieldDefinitions: connection(variables.ownerType === 'PRODUCT' ? [{ ...def, name: schemaChanged ? 'Changed definition' : def.name }] : []) }
     if (name === 'NexusLinkedEntryDefinitions') return { metaobjectDefinitions: connection([]) }
+    if (name === 'NexusCategoryTemplates') return { standardMetafieldDefinitionTemplates: connection([]) }
     if (name === 'NexusLinkedSettings') return { shopLocales: [{ locale: 'fr', primary: true, published: true }], metafieldDefinitionTypes: [{ name: 'list.product_reference', category: 'REFERENCE' }] }
     if (name === 'NexusLinkedProducts') return { nodes: variables.ids.map((id: string) => ({ id, title: `Product ${id.split('/').at(-1)}`, handle: `p-${id.split('/').at(-1)}` })) }
     if (name === 'NexusLinkedOwner') return { node: { id: variables.id, title: 'Product 1', metafields: connection([...fields.values()].filter(f => f.ownerId === variables.id)) } }
@@ -479,6 +480,54 @@ describe('review, conflicts and resumable synchronization', () => {
     lookup(gid(2)).compareDigest = 'new'
     await expect(applyLinkedBatch(gql, changes)).rejects.toThrow('Shopify changed')
     expect(lookup(gid(1)).value).not.toBe('[]')
+  })
+})
+
+describe('Shopify category fields the store has not switched on', () => {
+  const template = (key: string, ownerTypes = ['PRODUCT']) => ({ id: `gid://shopify/StandardMetafieldDefinitionTemplate/${key}`, name: key, description: null, namespace: 'shopify', key, ownerTypes, type: { name: 'list.metaobject_reference' } })
+  it('lists the fields each requested category offers, once per field, skipping any the store has switched on', async () => {
+    const original = fixture.data.gql, asked: string[] = []
+    fixture.data.gql = async (query: string, variables: any) => {
+      if (query.includes('NexusCategoryTemplates')) {
+        asked.push(variables.category)
+        return { standardMetafieldDefinitionTemplates: connection(variables.category.endsWith('/aa-1') ? [template('age-group'), template('fabric')] : variables.category.endsWith('/aa-1-10-2') ? [template('age-group'), template('neckline')] : []) }
+      }
+      const result = await original(query, variables)
+      if (query.includes('NexusLinkedSettings')) result.shop = { id: 'store-a' }
+      if (query.includes('NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes.push({ ...def, id: 'gid://shopify/MetafieldDefinition/9', namespace: 'shopify', key: 'fabric', constraints: null })
+      return result
+    }
+    const read = await readLinkedStoreSchema(gql, { categories: ['gid://shopify/TaxonomyCategory/aa-1', 'aa-1-10-2', 'el-1'] })
+    expect(asked).toHaveLength(3)
+    expect(read.templates?.map(t => [t.key, t.standardTemplateId, t.constraints])).toEqual([
+      ['age-group', 'gid://shopify/StandardMetafieldDefinitionTemplate/age-group', { key: 'category', values: ['aa-1', 'aa-1-10-2'], complete: false, checked: ['aa-1', 'aa-1-10-2', 'el-1'] }],
+      ['neckline', 'gid://shopify/StandardMetafieldDefinitionTemplate/neckline', { key: 'category', values: ['aa-1-10-2'], complete: false, checked: ['aa-1', 'aa-1-10-2', 'el-1'] }]])
+    // Cached per store and category; no categories, no template reads and no `templates` at all.
+    await readLinkedStoreSchema(gql, { categories: ['aa-1'] })
+    expect(asked).toHaveLength(3)
+    expect((await readLinkedStoreSchema(gql)).templates).toBeUndefined()
+  })
+  it('switches one on idempotently, and trusts only the read-back', async () => {
+    const original = fixture.data.gql
+    let enabled = false, mutations = 0, answer: 'ok' | 'error-but-on' | 'refused' = 'ok'
+    fixture.data.gql = async (query: string, variables: any) => {
+      if (query.includes('NexusStandardDefinition')) return { metafieldDefinitions: connection(enabled ? [{ ...def, id: 'gid://shopify/MetafieldDefinition/77', namespace: 'shopify', key: variables.key, constraints: { key: 'category', values: { nodes: [{ value: 'aa-1' }], pageInfo: { hasNextPage: true, endCursor: 'x' } } } }] : []) }
+      if (query.includes('NexusEnableStandardDefinition')) {
+        mutations++
+        if (answer !== 'refused') enabled = true
+        return { standardMetafieldDefinitionEnable: { createdDefinition: answer === 'ok' ? { id: 'gid://shopify/MetafieldDefinition/77' } : null, userErrors: answer === 'ok' ? [] : [{ field: ['key'], message: answer === 'refused' ? 'Definition limit reached.' : 'Already enabled.', code: 'X' }] } }
+      }
+      return original(query, variables)
+    }
+    const target = { ownerType: 'PRODUCT' as const, namespace: 'shopify', key: 'age-group' }
+    expect(await enableStandardShopifyDefinition(gql, target)).toMatchObject({ id: 'gid://shopify/MetafieldDefinition/77', type: 'list.product_reference', constraints: { key: 'category', values: ['aa-1'], complete: false } })
+    expect(mutations).toBe(1)
+    await enableStandardShopifyDefinition(gql, target) // already on: read, no mutation
+    expect(mutations).toBe(1)
+    enabled = false; answer = 'error-but-on'
+    await expect(enableStandardShopifyDefinition(gql, target)).resolves.toMatchObject({ id: 'gid://shopify/MetafieldDefinition/77' })
+    enabled = false; answer = 'refused'
+    await expect(enableStandardShopifyDefinition(gql, target)).rejects.toThrow('Shopify did not switch on this field. Definition limit reached.')
   })
 })
 

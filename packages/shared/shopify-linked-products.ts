@@ -107,6 +107,12 @@ export interface ShopifyFieldDefinition {
    * one by one (`checked`) that the definition applies to. Absent `complete` = the whole list (older stored copies).
    */
   constraints?: { key: string | null; values: string[]; complete?: boolean; checked?: string[] } | null
+  /**
+   * Set on a Shopify standard category field that the store's categories offer but the store has not switched on yet
+   * (Shopify's bulk editor lists it all the same). It holds no value until switched on: its values are entries of a kind
+   * Shopify creates at that moment. The id is the template's.
+   */
+  standardTemplateId?: string
 }
 /** A taxonomy category as Shopify lists it inside a constraint (`aa-1`), whatever form it arrives in. */
 export const shopifyCategoryCode = (category: string) => category.replace('gid://shopify/TaxonomyCategory/', '')
@@ -136,6 +142,8 @@ export interface ShopifyStoreSchema {
   publications?: { id: string; name: string; supportsFuturePublishing: boolean }[];
   currency?: string;
   types: { name: string; category: string }[]; locales: { locale: string; primary: boolean; published: boolean }[]; revision: string
+  /** Standard category fields offered for the store's categories in use and not switched on yet (`standardTemplateId`). */
+  templates?: ShopifyFieldDefinition[]
 }
 export interface ShopifyFieldOwner {
   id: string; title: string; productId: string; ownerType: 'PRODUCT' | 'PRODUCTVARIANT'

@@ -6036,6 +6036,8 @@ CREATE TABLE "AgentRun" (
     "workflowKey" TEXT,
     "workflowRevisionId" TEXT,
     "assignmentId" TEXT,
+    "via" TEXT,
+    "oauthGrantId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "endedAt" TIMESTAMP(3),
 
@@ -9602,6 +9604,70 @@ CREATE TABLE "SellerReferenceLabel" (
 );
 
 -- CreateTable
+CREATE TABLE "OAuthClient" (
+    "id" TEXT NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "registration" TEXT NOT NULL,
+    "clientName" TEXT NOT NULL,
+    "redirectUris" TEXT[],
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastUsedAt" TIMESTAMP(3),
+    "disabledAt" TIMESTAMP(3),
+
+    CONSTRAINT "OAuthClient_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "OAuthGrant" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "scopes" TEXT[],
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastUsedAt" TIMESTAMP(3),
+    "revokedAt" TIMESTAMP(3),
+    "revokedBy" TEXT,
+    "revokeReason" TEXT,
+
+    CONSTRAINT "OAuthGrant_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "OAuthAuthorizationCode" (
+    "id" TEXT NOT NULL,
+    "codeHash" TEXT NOT NULL,
+    "grantId" TEXT NOT NULL,
+    "redirectUri" TEXT NOT NULL,
+    "codeChallenge" TEXT NOT NULL,
+    "resource" TEXT NOT NULL,
+    "scopes" TEXT[],
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "usedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "OAuthAuthorizationCode_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "OAuthToken" (
+    "id" TEXT NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "grantId" TEXT NOT NULL,
+    "parentId" TEXT,
+    "resource" TEXT NOT NULL,
+    "scopes" TEXT[],
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "usedAt" TIMESTAMP(3),
+    "revokedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "OAuthToken_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ShopifyColourProduct" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -12891,6 +12957,9 @@ CREATE INDEX "AgentRun_orchestrationId_idx" ON "AgentRun"("orchestrationId");
 CREATE INDEX "AgentRun_assignmentId_idx" ON "AgentRun"("assignmentId");
 
 -- CreateIndex
+CREATE INDEX "AgentRun_oauthGrantId_createdAt_idx" ON "AgentRun"("oauthGrantId", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "AgentRun_workspaceId_idx" ON "AgentRun"("workspaceId");
 
 -- CreateIndex
@@ -14625,6 +14694,36 @@ CREATE INDEX "SellerReferenceLabel_workspaceId_idx" ON "SellerReferenceLabel"("w
 CREATE UNIQUE INDEX "SellerReferenceLabel_channel_connection_market_type_field_uq" ON "SellerReferenceLabel"("workspaceId", "channel", "connectionId", "marketplace", "productType", "fieldKey");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "OAuthClient_clientId_key" ON "OAuthClient"("clientId");
+
+-- CreateIndex
+CREATE INDEX "OAuthGrant_userId_idx" ON "OAuthGrant"("userId");
+
+-- CreateIndex
+CREATE INDEX "OAuthGrant_workspaceId_revokedAt_idx" ON "OAuthGrant"("workspaceId", "revokedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OAuthGrant_workspaceId_userId_clientId_key" ON "OAuthGrant"("workspaceId", "userId", "clientId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OAuthAuthorizationCode_codeHash_key" ON "OAuthAuthorizationCode"("codeHash");
+
+-- CreateIndex
+CREATE INDEX "OAuthAuthorizationCode_grantId_idx" ON "OAuthAuthorizationCode"("grantId");
+
+-- CreateIndex
+CREATE INDEX "OAuthAuthorizationCode_expiresAt_idx" ON "OAuthAuthorizationCode"("expiresAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OAuthToken_tokenHash_key" ON "OAuthToken"("tokenHash");
+
+-- CreateIndex
+CREATE INDEX "OAuthToken_grantId_kind_idx" ON "OAuthToken"("grantId", "kind");
+
+-- CreateIndex
+CREATE INDEX "OAuthToken_expiresAt_idx" ON "OAuthToken"("expiresAt");
+
+-- CreateIndex
 CREATE INDEX "ShopifyColourProduct_workspaceId_idx" ON "ShopifyColourProduct"("workspaceId");
 
 -- CreateIndex
@@ -15661,6 +15760,21 @@ ALTER TABLE "ReadinessIndex" ADD CONSTRAINT "ReadinessIndex_productId_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "ChannelDrift" ADD CONSTRAINT "ChannelDrift_channelListingId_fkey" FOREIGN KEY ("channelListingId") REFERENCES "ChannelListing"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OAuthGrant" ADD CONSTRAINT "OAuthGrant_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OAuthGrant" ADD CONSTRAINT "OAuthGrant_userId_fkey" FOREIGN KEY ("userId") REFERENCES "UserProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OAuthGrant" ADD CONSTRAINT "OAuthGrant_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "OAuthClient"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OAuthAuthorizationCode" ADD CONSTRAINT "OAuthAuthorizationCode_grantId_fkey" FOREIGN KEY ("grantId") REFERENCES "OAuthGrant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OAuthToken" ADD CONSTRAINT "OAuthToken_grantId_fkey" FOREIGN KEY ("grantId") REFERENCES "OAuthGrant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ShopifyColourProduct" ADD CONSTRAINT "ShopifyColourProduct_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;

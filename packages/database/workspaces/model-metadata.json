@@ -1971,6 +1971,12 @@
           "kind": "object",
           "type": "Invitation",
           "relationFromFields": []
+        },
+        {
+          "name": "oauthGrants",
+          "kind": "object",
+          "type": "OAuthGrant",
+          "relationFromFields": []
         }
       ]
     },
@@ -6720,6 +6726,12 @@
           "relationFromFields": []
         },
         {
+          "name": "oauthGrants",
+          "kind": "object",
+          "type": "OAuthGrant",
+          "relationFromFields": []
+        },
+        {
           "name": "audit",
           "kind": "object",
           "type": "WorkspaceAudit",
@@ -7262,6 +7274,89 @@
     {
       "name": "SellerReferenceLabel",
       "fields": []
+    },
+    {
+      "name": "OAuthClient",
+      "fields": [
+        {
+          "name": "grants",
+          "kind": "object",
+          "type": "OAuthGrant",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "OAuthGrant",
+      "fields": [
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "client",
+          "kind": "object",
+          "type": "OAuthClient",
+          "relationFromFields": [
+            "clientId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "codes",
+          "kind": "object",
+          "type": "OAuthAuthorizationCode",
+          "relationFromFields": []
+        },
+        {
+          "name": "tokens",
+          "kind": "object",
+          "type": "OAuthToken",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "OAuthAuthorizationCode",
+      "fields": [
+        {
+          "name": "grant",
+          "kind": "object",
+          "type": "OAuthGrant",
+          "relationFromFields": [
+            "grantId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "OAuthToken",
+      "fields": [
+        {
+          "name": "grant",
+          "kind": "object",
+          "type": "OAuthGrant",
+          "relationFromFields": [
+            "grantId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
     },
     {
       "name": "ShopifyColourProduct",

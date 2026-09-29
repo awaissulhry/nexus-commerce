@@ -15,6 +15,8 @@ import { EntryEditor } from './EntryEditor'
 import { ShopifyNativeEditor } from './ShopifyNativeEditor'
 import { InformationTagsEditor } from './InformationTagsEditor'
 import { informationValueLabel } from './informationEditing'
+import { linkedEndpoint, linkedRequest } from './api'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import styles from './information.module.css'
 
 export const shopifyRawValue = (value: unknown): string | null => value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
@@ -144,6 +146,8 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   /* Bumped after an entry is saved: the pop-up's pick list is read again, so a new entry shows at once (B2). */
   const [referenceVersion, setReferenceVersion] = useState(0)
   const [selected, setSelected] = useState<Selected | null>(null), [value, setValue] = useState<string | null>(null), [error, setError] = useState('')
+  /* A category field the store has not switched on (`standardTemplateId`): switching it on is its only action. */
+  const [switchOn, setSwitchOn] = useState<'idle' | 'busy' | 'done'>('idle')
   const dirty = useRef(false); dirty.current = !!entry || !!selected && value !== selected.baseline
   useEffect(() => scope.registerScopeChangeGuard(() => !dirty.current), [scope.registerScopeChangeGuard])
   useEffect(() => {
@@ -157,7 +161,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
       return
     }
     const baseline = shopifyRawValue(row.values[column.key]?.value)
-    setSelected({ row, column, anchor, baseline, session }); setValue(baseline); setError('')
+    setSelected({ row, column, anchor, baseline, session }); setValue(baseline); setError(''); setSwitchOn('idle')
   }, [getApi, canEdit, canAdjustInventory])
   /* AG ended the edit by itself (the row re-rendered, the grid scrolled it away): drop the panel, write nothing. */
   const closed: Closed = useCallback(session => { setSelected(current => current?.session === session ? null : current); setEntry(null) }, [])
@@ -186,13 +190,34 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
     close(true)
     return true
   }
-  const reason = permissionReason || field?.reason || (selected ? selected.row.values[selected.column.key]?.writeBlockedReason : null)
+  const template = field?.definition?.standardTemplateId ? field.definition : null
+  /* Switching on writes to the Shopify store at once; Shopify creates the field and its value list. The server checks the
+     field belongs to this family's category, then tells every open sheet (`shopify.schema.changed`) to reload it. */
+  const switchOnField = async () => {
+    if (!template || !field) return
+    setSwitchOn('busy'); setError('')
+    try {
+      await linkedRequest(linkedEndpoint(path, '/enable-field'), 'POST', { ownerType: field.owner, namespace: template.namespace, key: template.key })
+      setSwitchOn('done')
+      /* The server announces it too, but this tab must not depend on the event stream (off against a local API): re-read the
+         store's fields now, which reloads the sheet with the field switched on. Other tabs hear it through the channel. */
+      if (scope.accountId) emitInvalidation({ type: 'shopify.schema.changed', id: scope.accountId })
+    }
+    catch (e) { setError(e instanceof Error ? e.message : 'Shopify did not switch on this field.'); setSwitchOn('idle') }
+  }
+  /* A field not switched on explains itself in its own banner below; the generic read-only note would repeat it. */
+  const reason = permissionReason || (template ? null : field?.reason || (selected ? selected.row.values[selected.column.key]?.writeBlockedReason : null))
   return { open, closed, element: selected && field && schema ? <><CellPanel anchor={selected.anchor} label={`${field.label}: ${selected.row.sku}`} onSave={save} onCancel={() => close()}
-    footer={<><span className="nds-editor-keyhint">{EDITOR_KEY_HINT_PANEL}</span><span className={styles.hint}>Saves in Nexus · Publish to send it to Shopify</span></>}>
+    footer={<><span className="nds-editor-keyhint">{EDITOR_KEY_HINT_PANEL}</span><span className={styles.hint}>{template ? 'Switching on changes the Shopify store at once' : 'Saves in Nexus · Publish to send it to Shopify'}</span></>}>
     <div className={styles.stack}>
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
       {error && <Banner tone="danger">{error}</Banner>}{reason && <Banner tone="neutral">{reason}</Banner>}
-      {field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} referenceVersion={referenceVersion} onChange={next => { setValue(next); setError('') }}
+      {template ? <Banner tone={switchOn === 'done' ? 'success' : 'info'} title={switchOn === 'done' ? `${field.label} is switched on in Shopify` : `${field.label} is not switched on in this Shopify store`}
+          action={switchOn === 'done' ? undefined : <Button size="sm" variant="primary" disabled={!canPublish || switchOn === 'busy'} onClick={() => void switchOnField()}>{switchOn === 'busy' ? 'Switching on…' : 'Switch on in Shopify'}</Button>}>
+          {switchOn === 'done' ? 'The sheet reloads this field. Open the cell again to choose its values.'
+            : `Shopify offers it for this product’s category. Switch it on to add it to the store; you choose values after that.${canPublish ? '' : ' Your Nexus role needs publish permission to switch it on.'}`}
+        </Banner>
+        : field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} referenceVersion={referenceVersion} onChange={next => { setValue(next); setError('') }}
         onOpenEntry={id => setEntry({ id })} onCopyEntry={!locked && canPublish ? id => setEntry({ id, copy: true }) : undefined}
         onCreateEntry={!locked && canPublish ? type => setEntry({ id: null, type }) : undefined} />
         : field.id === 'tags' ? <InformationTagsEditor original={selected.baseline} disabled={locked} onChange={setValue} />

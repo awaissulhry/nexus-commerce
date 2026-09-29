@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { informationGroups, informationRegistry, mediaMoves, mediaOrderEditSchema, moveMedia, nativeFieldError, nativeValuesEqual } from './shopify-information.js'
+import { informationGroups, informationRegistry, SHOPIFY_FIELD_NOT_SWITCHED_ON, mediaMoves, mediaOrderEditSchema, moveMedia, nativeFieldError, nativeValuesEqual } from './shopify-information.js'
 import { emptyShopifyLinkedDraft, linkedDraftSignature, shopifyLinkedDraftSchema, type ShopifyStoreSchema } from './shopify-linked-products.js'
 const productId = 'gid://shopify/Product/1', variantId = 'gid://shopify/ProductVariant/11'
 const schema: ShopifyStoreSchema = { definitions: [], metaobjectDefinitions: [], types: [], locales: [], revision: '1' }
@@ -34,6 +34,16 @@ describe('Shopify Information field identities', () => {
     const def = (namespace: string, key: string, type: string) => ({ id: `${namespace}.${key}`, namespace, key, name: key, ownerType: 'PRODUCT', type, description: null, validations: [], access: { admin: null, storefront: null } })
     const fields = informationRegistry({ ...schema, definitions: [def('nexus', 'family_id', 'id'), def('nexus', 'resolved', 'json'), { ...def('nexus', 'resolved', 'json'), ownerType: 'PRODUCTVARIANT' }, def('custom', 'family_id', 'single_line_text_field')] })
     expect(fields.filter(f => f.definition).map(f => f.id)).toEqual(['metafield:PRODUCT:custom.family_id'])
+  })
+  it('offers a category field the store has not switched on, read-only, under the id it keeps once switched on', () => {
+    const template = { id: 'template-age', namespace: 'shopify', key: 'age-group', name: 'Age group', ownerType: 'PRODUCT', type: 'list.metaobject_reference', description: null, validations: [],
+      access: { admin: null, storefront: null }, standardTemplateId: 'template-age', constraints: { key: 'category', values: ['aa-1'], complete: false } }
+    const offered = informationRegistry({ ...schema, templates: [template, { ...template, id: 't2', key: 'odd', type: 'not_a_shopify_type', standardTemplateId: 't2' }, { ...template, id: 't3', namespace: 'nexus', standardTemplateId: 't3' }] })
+    expect(offered.filter(f => f.definition).map(f => [f.id, f.group, f.editor, f.reason])).toEqual([['metafield:PRODUCT:shopify.age-group', 'Category Metafields', 'unavailable', SHOPIFY_FIELD_NOT_SWITCHED_ON]])
+    const enabled = { ...template, id: 'definition-age', standardTemplateId: undefined, access: { admin: 'PUBLIC_READ_WRITE', storefront: 'PUBLIC_READ' } }
+    const on = informationRegistry({ ...schema, definitions: [enabled], templates: [template] }).filter(f => f.definition)
+    expect(on).toHaveLength(1)
+    expect(on[0]).toMatchObject({ id: 'metafield:PRODUCT:shopify.age-group', editor: 'typed', reason: undefined, definition: { id: 'definition-age' } })
   })
   it('keeps Shopify category metafields in their own group using store identifiers', () => {
     const def = { id: 'care', namespace: 'shopify', key: 'care', name: 'Care', ownerType: 'PRODUCT', type: 'single_line_text_field', description: null, validations: [], access: { admin: null, storefront: null } }

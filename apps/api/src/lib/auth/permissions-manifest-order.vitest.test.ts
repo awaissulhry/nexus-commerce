@@ -74,7 +74,7 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('GET', root)).toBe('products.view')
     expect(permissionForRoute('PUT', root)).toBe('products.edit')
     for (const suffix of ['reference-names', 'products', 'read-links', 'field-values', 'import', 'discover', 'suggest-sharing', 'preview']) expect(permissionForRoute('POST', `${root}/${suffix}`)).toBe('products.view')
-    for (const suffix of ['synchronize', 'advance', 'entry', 'automation', 'automation-check']) expect(permissionForRoute('POST', `${root}/${suffix}`)).toBe('products.publish')
+    for (const suffix of ['synchronize', 'advance', 'entry', 'enable-field', 'automation', 'automation-check']) expect(permissionForRoute('POST', `${root}/${suffix}`)).toBe('products.publish')
     expect(permissionForRoute('GET', `${root}/entry`)).toBe('products.view')
     expect(permissionForRoute('POST', `${root}/rebase`)).toBe('products.edit')
     const colour = '/api/products/p1/shopify-colour-products'
