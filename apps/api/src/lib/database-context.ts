@@ -1,7 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
-type Context = { client: Prisma.TransactionClient; isolationLevel: Prisma.TransactionIsolationLevel; effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>> }
+type Context = {
+  client: Prisma.TransactionClient; isolationLevel: Prisma.TransactionIsolationLevel
+  effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>>
+  /** Items collected under one after-commit key (`afterDatabaseCommitBatch`), so N writers pay ONE effect. */
+  batches: Map<string, Set<unknown>>
+}
 const context = new AsyncLocalStorage<Context>()
 
 /** Formula operations reuse the ordinary writers inside one outer transaction. */
@@ -30,7 +35,7 @@ export async function inDatabaseReadTransaction<T>(client: PrismaClient, work: (
   if (context.getStore()) return work()
   return client.$transaction(async tx => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`
-    return context.run({ client: tx, isolationLevel: 'RepeatableRead', effects: new Map(), producers: new Map() }, work)
+    return context.run({ client: tx, isolationLevel: 'RepeatableRead', effects: new Map(), producers: new Map(), batches: new Map() }, work)
   }, { isolationLevel: 'RepeatableRead', maxWait: 5_000, timeout: 20_000 })
 }
 
@@ -51,6 +56,24 @@ export async function afterDatabaseCommit(key: string, effect: () => Promise<unk
   const active = context.getStore()
   if (active) { active.effects.set(key, effect); return }
   await effect()
+}
+
+/**
+ * Like `afterDatabaseCommit`, but every call with the same `key` in one transaction adds its `items` to ONE effect that
+ * runs once after commit with all of them.
+ *
+ * A bulk save runs the ordinary row writer once per row inside one transaction. Each row asked for its own read-cache
+ * refresh, so 250 rows started 250 Serializable refreshes at once after commit — every one of them rewriting the same
+ * parent's cache row. Collected here they are one refresh of 250 products.
+ */
+export async function afterDatabaseCommitBatch<T>(key: string, items: readonly T[], run: (items: T[]) => Promise<unknown>) {
+  const active = context.getStore()
+  if (!active) { await run([...items]); return }
+  const bag = (active.batches.get(key) ?? new Set<unknown>()) as Set<T>
+  for (const item of items) bag.add(item)
+  active.batches.set(key, bag)
+  // Read the bag when the effect RUNS: a savepoint rollback replaces it with the copy taken before the row.
+  active.effects.set(key, () => run([...((active.batches.get(key) ?? []) as Set<T>)]))
 }
 
 /** PSIE — is a before-commit producer with this key already registered in the active transaction? */
@@ -80,6 +103,49 @@ export async function beforeDatabaseCommit(key: string, producer: () => Promise<
  * failed a save that a retry would have completed (measured in readiness-pending-race.vitest.test.ts).
  */
 export function retryableConflict(error: unknown): boolean {
+  return causesOf(error).some(isRaceFailure)
+}
+
+/**
+ * An error and the errors it wraps (`cause`), outermost first.
+ *
+ * 🔴 A conflict must be recognised when it is WRAPPED. `applyProductBulkEdits` turns every unexpected error into
+ * `ProductBulkError(500)`; before it kept the original as `cause`, a deadlock inside a save reached the retry loop as a
+ * plain 500 and was never retried (measured 2026-09-29: a 250-row fill, 61 answers of 500).
+ */
+function causesOf(error: unknown): unknown[] {
+  const chain: unknown[] = []
+  for (let e = error; e && chain.length < 5 && !chain.includes(e); e = (e as { cause?: unknown }).cause) chain.push(e)
+  return chain
+}
+
+/**
+ * PostgreSQL refused a statement because an EARLIER statement of the same transaction already failed (SQLSTATE 25P02,
+ * Prisma P2039 "current transaction is aborted").
+ *
+ * It says nothing about what failed first — and that first failure is often a lost race: the sheet read runs queries in
+ * parallel on the transaction's one connection (`Promise.all`), so when one loses a serialization check its siblings
+ * answer 25P02, and whichever settles first is the error the caller sees. Measured 2026-09-29: 56 of 250 saves failed
+ * with 25P02 and none was retried. The transaction is dead either way, so running it again is the only recovery; a
+ * failure that is not a race fails again the same way and surfaces after the last attempt.
+ */
+export function abortedByEarlierStatement(error: unknown): boolean {
+  type Cause = { originalCode?: string; code?: string }
+  return causesOf(error).some(item => {
+    const e = item as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: Cause } }; message?: string } | null
+    if (!e) return false
+    const cause = e.meta?.driverAdapterError?.cause
+    if (e.meta?.code === '25P02' || cause?.originalCode === '25P02' || cause?.code === '25P02') return true
+    return /Code: `25P02`|code: "25P02"|current transaction is aborted/.test(e.message ?? '')
+  })
+}
+
+/** The whole transaction must run again from the start: it lost a race, or a hidden failure already killed it. */
+export function transactionMustRestart(error: unknown): boolean {
+  return retryableConflict(error) || abortedByEarlierStatement(error)
+}
+
+function isRaceFailure(error: unknown): boolean {
   type Cause = { originalCode?: string; code?: string; kind?: string }
   const e = error as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: Cause } }; message?: string } | null
   if (!e) return false
@@ -92,19 +158,20 @@ export function retryableConflict(error: unknown): boolean {
   return /code: "(40001|40P01)"|Code: `(40001|40P01)`/.test(e.message ?? '')
 }
 
-export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel: Prisma.TransactionIsolationLevel }): Promise<T> {
+export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeoutMs?: number }): Promise<T> {
   const existing = context.getStore()
   if (existing) {
-    if (options && options.isolationLevel !== existing.isolationLevel) throw new Error('The requested transaction isolation does not match the current transaction.')
+    if (options?.isolationLevel && options.isolationLevel !== existing.isolationLevel) throw new Error('The requested transaction isolation does not match the current transaction.')
     return work()
   }
   const isolationLevel = options?.isolationLevel ?? 'Serializable'
   for (let attempt = 0; ; attempt++) {
     const effects = new Map<string, () => Promise<unknown>>()
     const producers = new Map<string, () => Promise<unknown>>()
+    const batches = new Map<string, Set<unknown>>()
     let result: T
     try {
-      result = await client.$transaction(tx => context.run({ client: tx, isolationLevel, effects, producers }, async () => {
+      result = await client.$transaction(tx => context.run({ client: tx, isolationLevel, effects, producers, batches }, async () => {
         const value = await work()
         while (producers.size) {
           const pending = [...producers.values()]; producers.clear()
@@ -112,15 +179,54 @@ export async function inDatabaseTransaction<T>(client: PrismaClient, work: () =>
         }
         return value
       }), {
-        isolationLevel, maxWait: 10_000, timeout: 60_000,
+        isolationLevel, maxWait: 10_000, timeout: options?.timeoutMs ?? 60_000,
       })
     } catch (error) {
-      if (attempt < 2 && retryableConflict(error)) continue
+      if (attempt < 2 && transactionMustRestart(error)) continue
       throw error
     }
     // Derived refreshes run only after commit. A refresh cannot turn a committed write into a refusal.
     const outcomes = await Promise.allSettled([...effects.values()].map(effect => effect()))
     for (const outcome of outcomes) if (outcome.status === 'rejected') console.warn('[formula] post-commit refresh failed', outcome.reason)
     return result
+  }
+}
+
+const restoreInPlace = <K, V>(target: Map<K, V>, snapshot: Map<K, V>) => { target.clear(); for (const [key, value] of snapshot) target.set(key, value) }
+
+/**
+ * Run `work` inside a SAVEPOINT of the active transaction: if it fails, only its own statements are undone and the
+ * transaction carries on — a bulk save keeps every row that saved and reports the one that did not.
+ *
+ * The savepoint is Prisma's own nested transaction (Prisma 7: `$transaction` on a transaction client issues SAVEPOINT /
+ * RELEASE / ROLLBACK TO SAVEPOINT). Raw savepoint SQL is refused by the business-profile guard (`workspace-sql.ts`),
+ * and `work` keeps querying through the SAME guarded transaction client: its statements run on the transaction's one
+ * connection, so they belong to the savepoint (measured 2026-09-29 on a real server: the refused unit's write was
+ * undone, the unit before it kept, the transaction committed).
+ *
+ * Its after-commit effects, before-commit producers and batched items are undone with it, so a row that rolled back
+ * never publishes an event, refreshes a cache or rebuilds readiness for a write that is not there.
+ *
+ * A failure that kills the whole transaction (`transactionMustRestart`: a lost race, or 25P02) is NOT contained: a
+ * savepoint cannot bring a transaction back from a serialization failure, so it is rethrown and the whole transaction
+ * runs again.
+ */
+export async function inSavepoint<T>(work: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> {
+  const active = context.getStore()
+  if (!active) throw new Error('A savepoint requires the content transaction.')
+  const effects = new Map(active.effects)
+  const producers = new Map(active.producers)
+  const batches = new Map([...active.batches].map(([key, bag]) => [key, new Set(bag)]))
+  const client = active.client as unknown as { $transaction: (run: () => Promise<unknown>) => Promise<unknown> }
+  let value: T
+  try {
+    await client.$transaction(async () => { value = await work() })
+    return { ok: true, value: value! }
+  } catch (error) {
+    if (transactionMustRestart(error)) throw error
+    restoreInPlace(active.effects, effects)
+    restoreInPlace(active.producers, producers)
+    restoreInPlace(active.batches, batches)
+    return { ok: false, error }
   }
 }

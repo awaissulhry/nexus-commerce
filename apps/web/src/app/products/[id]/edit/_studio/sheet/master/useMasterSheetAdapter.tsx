@@ -6,6 +6,7 @@ import { channelLabel, languageLabel } from '../../scopes';
 import { productSheetRowKey, filterProductSheetRows } from '../productSheetRows';
 import { useSheetChips } from '../useSheetChips';
 import { useSheetSaveStatus } from '../useSheetSaveStatus';
+import { useSheetUndo } from '../useSheetUndo';
 import { useSheetGridBindings } from '../useSheetGridBindings';
 import { useProductSheetInteraction } from '../useProductSheetInteraction';
 import { useSheetGeometry } from '../useSheetGeometry';
@@ -227,7 +228,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         getGridApi()?.refreshCells({ force: true });
     }, [formulas.exprFor, formulas.errorFor, gridReady]);
     const rows = useMemo(() => sheet?.rows ?? [], [sheet]);
-    const { pending, refused, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
+    const { pending, refused, retryable, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
+    /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
+    const undo = useSheetUndo(writer, getGridApi);
     refusalReason.current = (key, row) => {
         if (key === PRODUCT_MEDIA_COLUMN)
             return null;
@@ -468,8 +471,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             });
             return;
         }
+        undo.record({ rowId: e.data.id, colId: colId!, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.id, colId!, e.newValue, { row: e.data });
-    }, [writer, formulas, onWriteStart, onWriteEnd, reload]);
+    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record]);
     const [importOpen, setImportOpen] = useState(false);
     const [transferIntent, setTransferIntent] = useState<'import' | 'export'>('import');
     const familyVerbs = useFamilyVerbs({
@@ -605,6 +609,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             refused: refused,
             showRefusedOnly: showRefusedOnly,
             onToggleRefused: () => setShowRefusedOnly((v) => !v),
+            retryable,
+            onRetry: () => { writer.retryFailed(); },
             lastSavedAt: lastSavedAt,
         }, footerBefore: <>
         {rowPress.problem && <div className="nds-grid-footstrip" role="alert"><span className="nds-cell-stock-out">{rowPress.problem}</span></div>}
@@ -640,12 +646,14 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             onGridReady: onGridReady,
             onGridPreDestroyed: onGridPreDestroyed,
             onCellValueChanged: onCellValueChanged,
+            // One operation (fill, paste, range delete) = one undo step and one save; ⌘Z is the sheet's own (`useSheetUndo`).
+            ...undo.gridProps,
             processDataFromClipboard: processDataFromClipboard,
             loading: loading,
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: onCellKeyDown,
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             onCellFocused: onCellFocused,
         },
         gridOverlay: null,

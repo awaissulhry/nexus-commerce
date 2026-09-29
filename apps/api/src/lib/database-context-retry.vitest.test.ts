@@ -3,7 +3,7 @@
  * conflict or deadlock) is rolled back by PostgreSQL and safe to retry; anything else must surface.
  */
 import { expect, it } from 'vitest'
-import { retryableConflict } from './database-context.js'
+import { abortedByEarlierStatement, retryableConflict, transactionMustRestart } from './database-context.js'
 
 it('retries a lost race however Prisma reports it', () => {
   expect(retryableConflict({ code: 'P2034' })).toBe(true)
@@ -26,4 +26,25 @@ it('does not retry anything else', () => {
   expect(retryableConflict({ code: 'P2025' })).toBe(false)
   expect(retryableConflict(new Error('Transaction already closed: A query cannot be executed on an expired transaction.'))).toBe(false)
   expect(retryableConflict({ message: 'new row violates row-level security policy for table "Product"' })).toBe(false)
+})
+
+it('retries a lost race that a writer WRAPPED (a 500 that keeps the race as its cause)', () => {
+  // `applyProductBulkEdits` answers every unexpected failure as ProductBulkError(500) and keeps the original as `cause`.
+  const wrapped = Object.assign(new Error('Bulk update failed'), { cause: { code: 'P2034' } })
+  expect(retryableConflict(wrapped)).toBe(true)
+  expect(transactionMustRestart(wrapped)).toBe(true)
+  expect(retryableConflict(Object.assign(new Error('Bulk update failed'), { cause: { code: 'P2002' } }))).toBe(false)
+})
+
+it('restarts a transaction that an EARLIER statement already aborted (25P02), however Prisma reports it', () => {
+  // Measured 2026-09-29: sibling queries of a lost race answer 25P02 and one of them is what the caller sees.
+  const p2039 = { code: 'P2039', message: 'Invalid `prisma.productMediaPlan.findMany()` invocation:\n\nDatabase error. Code: `25P02`. Message: `current transaction is aborted, commands ignored until end of transaction block`' }
+  expect(abortedByEarlierStatement(p2039)).toBe(true)
+  expect(abortedByEarlierStatement({ code: 'P2010', meta: { driverAdapterError: { cause: { originalCode: '25P02' } } } })).toBe(true)
+  expect(abortedByEarlierStatement(Object.assign(new Error('Bulk update failed'), { cause: p2039 }))).toBe(true)
+  expect(transactionMustRestart(p2039)).toBe(true)
+  // It is not a race by itself: `retryableConflict` keeps its narrow meaning.
+  expect(retryableConflict(p2039)).toBe(false)
+  expect(abortedByEarlierStatement({ code: 'P2002' })).toBe(false)
+  expect(abortedByEarlierStatement({ message: 'new row violates row-level security policy for table "Product"' })).toBe(false)
 })

@@ -505,6 +505,35 @@ export interface SheetWriterOptions<T> {
    * component reaching for one is how `reference_ds_toast_two_providers` happens.
    */
   onRefused?: (refusals: ReadonlyArray<{ rowId: string; colId: string; reason?: string }>) => void
+  /**
+   * BATCH MODE (opt-in) — send every row of one OPERATION (a fill, a paste, an undo) as ONE call.
+   *
+   * 🔴 Why: per-row `commit` sends a 250-row fill as 250 requests at once. Measured 2026-09-29 on the product sheet
+   * (eBay · IT, "Description theme"): each of those requests rebuilt the whole family on the server in its own
+   * transaction; 26 of 250 rows were confirmed, and 15 were saved while the sheet said they had failed.
+   *
+   * With `commitBatch` the writer keeps its per-row queues, versions and marks, but it sends ALL queued rows in one
+   * call and keeps ONE call in flight for the whole sheet: cells edited while a save is on the wire wait for the next
+   * call, which carries the versions the first one returned — so nothing is sent twice, out of order, or with a
+   * version the server has already moved past. The answer names each row's own `SheetWriteResult`, painted exactly as
+   * the per-row path paints it. A row missing from the answer is `unknown`, never `saved`.
+   *
+   * A rejected promise is an unknown outcome for every row in it (the connection dropped), never a refusal.
+   */
+  commitBatch?: (requests: SheetWriteRequest<T>[]) => Promise<Map<string, SheetWriteResult>>
+  /**
+   * Batch mode's reconcile: ONE read for every row whose save got no answer, instead of one read per row. `null` =
+   * the read itself did not answer; a row absent from the map is still unresolved.
+   */
+  readBackBatch?: (requests: SheetWriteRequest<T>[]) => Promise<Map<string, ReadBackSnapshot<T>> | null>
+}
+
+/** What a read-back says about one row: its current values (and, when known, version and row, and per-cell verdicts). */
+export interface ReadBackSnapshot<T> {
+  values: Record<string, unknown>
+  version?: number
+  row?: T
+  matches?: Record<string, boolean | null>
 }
 
 interface RowQueue {
@@ -515,6 +544,10 @@ interface RowQueue {
 }
 
 export const DEFAULT_SHEET_FLUSH_MS = 40
+/** Batch mode: extra patience per row in one call before its cells read "still waiting". */
+const BATCH_PATIENCE_PER_ROW_MS = 100
+/** The longest an operation fence may hold edits before it opens itself (batch mode). */
+export const FENCE_MAX_MS = 2_000
 
 /**
  * Did the write land? Compares what the operator typed against what the row now holds.
@@ -554,6 +587,16 @@ export class SheetWriter<T> {
   private listeners = new Set<() => void>()
   private destroyed = false
   private generation = 0
+  /** rowId → cells in the row's CURRENT flight, so `pending` counts cells, not rows. */
+  private readonly inFlightCells = new Map<string, number>()
+  /** rowId → colId → the edit the server REFUSED, kept so `retryFailed()` can send it again. */
+  private readonly failed = new Map<string, Map<string, SheetWriteCell>>()
+  /* Batch mode (`commitBatch`): one sheet-wide timer, one call in flight, an operation fence. */
+  private batchTimer: ReturnType<typeof setTimeout> | null = null
+  private batchInFlight = false
+  private operationDepth = 0
+  private fenceTimer: ReturnType<typeof setTimeout> | null = null
+  private reconcilingBatch = false
 
   constructor(options: SheetWriterOptions<T>) {
     this.opts = options as SheetWriter<T>['opts']
@@ -597,6 +640,8 @@ export class SheetWriter<T> {
     // reset following a set is a reset and not a set carrying a stale null.
     q.cells.set(colId, { value, intent: opts.intent ?? 'set' })
     this.queues.set(rowId, q)
+    // A new edit replaces the refused one: `retryFailed` must never resend a value that is no longer on screen.
+    this.forgetFailed(rowId, colId)
     this.opts.tracker.set(rowId, colId, 'saving')
     this.repaint(rowId, [colId])
     this.emit()
@@ -613,6 +658,7 @@ export class SheetWriter<T> {
      * reconcile loop of its own.
      */
     if (this.unreachableRows.has(rowId)) return
+    if (this.opts.commitBatch) { this.scheduleBatch(); return }
     if (q.timer) clearTimeout(q.timer)
     q.timer = setTimeout(() => {
       q.timer = null
@@ -620,9 +666,65 @@ export class SheetWriter<T> {
     }, this.flushMs)
   }
 
+  /** Batch mode: one sheet-wide window. Inside an operation fence nothing is sent until the fence closes. */
+  private scheduleBatch(): void {
+    if (this.destroyed) return
+    if (this.operationDepth > 0) { this.holdForFence(); return }
+    if (this.batchTimer) clearTimeout(this.batchTimer)
+    this.batchTimer = setTimeout(() => {
+      this.batchTimer = null
+      void this.flushBatch()
+    }, this.flushMs)
+  }
+
+  /**
+   * Batch mode — an OPERATION starts (the grid's fill, paste, undo, redo or range delete begins). Every cell it
+   * changes is held until `endOperation()`, then sent as one call. Fences nest; a writer without `commitBatch` ignores
+   * them, because its per-row window already groups a row's cells.
+   */
+  beginOperation(): void {
+    if (!this.opts.commitBatch) return
+    this.operationDepth++
+    if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
+  }
+
+  /**
+   * 🔴 A fence that never closes would hold every edit forever — saving on screen, nothing sent. The grid's end events
+   * are not a promise this writer can rely on, so an edit is held at most FENCE_MAX_MS; then the fence opens itself.
+   *
+   * Counted from the first HELD EDIT, never from `beginOperation()`: a fill fences from the moment the drag starts,
+   * and the cells only change when the button is released. Measured 2026-09-29 (a 500-row drag, ~6 s): a timer started
+   * at the drag's start expired mid-drag, and the operation left as two requests (493 + 6).
+   */
+  private holdForFence(): void {
+    if (this.fenceTimer) return
+    this.fenceTimer = setTimeout(() => {
+      this.fenceTimer = null
+      if (this.operationDepth === 0) return
+      this.operationDepth = 0
+      void this.flushBatch()
+    }, FENCE_MAX_MS)
+  }
+
+  /** The operation ended: send what it changed now, as one call (or after the call already in flight). */
+  endOperation(): void {
+    if (!this.opts.commitBatch || this.operationDepth === 0) return
+    this.operationDepth--
+    if (this.operationDepth === 0) {
+      if (this.fenceTimer) { clearTimeout(this.fenceTimer); this.fenceTimer = null }
+      void this.flushBatch()
+    }
+  }
+
   /** Send every queued cell now, and resolve when the sheet is quiet. Used by tests and by Publish. */
   async flush(): Promise<void> {
-    for (const [rowId, q] of this.queues) {
+    if (this.opts.commitBatch) {
+      this.operationDepth = 0
+      if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
+      if (this.fenceTimer) { clearTimeout(this.fenceTimer); this.fenceTimer = null }
+      void this.flushBatch()
+    }
+    else for (const [rowId, q] of this.queues) {
       if (q.timer) {
         clearTimeout(q.timer)
         q.timer = null
@@ -647,6 +749,7 @@ export class SheetWriter<T> {
     const batch: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
     q.cells.clear()
     q.inFlight = true
+    this.inFlightCells.set(rowId, batch.length)
     this.emit()
 
     let result: SheetWriteResult
@@ -710,6 +813,14 @@ export class SheetWriter<T> {
     }
 
     if (generation !== this.generation) return
+    this.settle(rowId, q, batch, result, rejected)
+  }
+
+  /**
+   * Paint one row's answer — the SAME code for the per-row path and for each row of a batch, so the two cannot drift.
+   */
+  private settle(rowId: string, q: RowQueue, batch: SheetWriteCell[], result: SheetWriteResult, rejected: boolean,
+    refusalSink?: Array<{ rowId: string; colId: string; reason?: string }>): void {
     if (typeof result.version === 'number') this.versions.set(rowId, result.version)
     if (result.conflict) this.opts.onConflict?.(rowId, result.version)
 
@@ -731,12 +842,19 @@ export class SheetWriter<T> {
       // The cell the operator has already re-edited (`q.cells.has(colId)`) keeps no mark, so it gets
       // no announcement either: the refusal is about a value that is no longer on screen.
       if (state === 'refused' && !q.cells.has(colId)) refused.push({ rowId, colId, reason })
+      // Kept for `retryFailed()`: only a REFUSED value can be retried as is; `unknown` is the reconcile's to answer.
+      if (!q.cells.has(colId)) {
+        if (state === 'refused') this.rememberFailed(rowId, batch.find((b) => b.colId === colId)!)
+        else if (state === 'saved') this.forgetFailed(rowId, colId)
+      }
       settledCols.push(colId)
     }
     q.inFlight = false
+    this.inFlightCells.delete(rowId)
     this.repaint(rowId, settledCols)
     this.emit()
-    if (refused.length) this.opts.onRefused?.(refused)
+    // A batch collects every row's refusals and announces them ONCE (a 250-row paste is one event, not 250 toasts).
+    if (refused.length) { if (refusalSink) refusalSink.push(...refused); else this.opts.onRefused?.(refused) }
     this.opts.onSettled?.({ rowId, ok: result.ok, savedAt: new Date().toISOString() })
     // The writer cannot read the row back itself — it does not own the read. It asks, quietly,
     // and keeps asking until something answers.
@@ -762,6 +880,108 @@ export class SheetWriter<T> {
   }
 
   /**
+   * Batch mode — send EVERY queued row as one call (`commitBatch`), one call at a time for the whole sheet.
+   *
+   * A row already in flight is skipped (its new cells wait for the next call, with the version this one returns); an
+   * unreachable row is held for its reconcile, exactly as `schedule` holds it.
+   */
+  private async flushBatch(): Promise<void> {
+    if (this.batchInFlight || this.destroyed || this.operationDepth > 0 || !this.opts.commitBatch) return
+    const generation = this.generation
+    const requests: SheetWriteRequest<T>[] = []
+    const batches = new Map<string, SheetWriteCell[]>()
+    for (const [rowId, q] of this.queues) {
+      if (q.inFlight || q.cells.size === 0 || this.unreachableRows.has(rowId)) continue
+      if (q.timer) { clearTimeout(q.timer); q.timer = null }
+      const batch: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
+      q.cells.clear()
+      q.inFlight = true
+      this.inFlightCells.set(rowId, batch.length)
+      batches.set(rowId, batch)
+      requests.push({ rowId, row: this.rows.get(rowId) ?? null, cells: batch, expectedVersion: this.versions.get(rowId) })
+    }
+    if (requests.length === 0) return
+    this.batchInFlight = true
+    this.emit()
+
+    // The same patience rule as the per-row path: a slow answer is still the answer; the mark only says we wait.
+    // Scaled by the rows in the call: a 500-row save takes ~32 s on a dev database (measured 2026-09-29), and
+    // "still waiting" at 30 s would be a false alarm about a save that is simply large.
+    const patience = setTimeout(() => {
+      for (const request of requests) {
+        for (const { colId } of request.cells) this.opts.tracker.set(request.rowId, colId, 'waiting', 'Still waiting — the server has not answered. This change is not confirmed.')
+        this.repaint(request.rowId, request.cells.map((c) => c.colId))
+      }
+      this.emit()
+    }, COMMIT_TIMEOUT_MS + requests.length * BATCH_PATIENCE_PER_ROW_MS)
+    let results: Map<string, SheetWriteResult>
+    let rejected = false
+    try {
+      results = await this.opts.commitBatch(requests)
+    } catch (err) {
+      rejected = true
+      const reason = err instanceof Error ? err.message : String(err)
+      results = new Map(requests.map((r) => [r.rowId, { ok: false, reason }]))
+    } finally {
+      clearTimeout(patience)
+      this.batchInFlight = false
+    }
+    if (generation !== this.generation) return
+    // Row by row, in order: every other row stays in flight until its own turn, so `pending` reaches 0 — and a
+    // host's "saved, now re-read" hook fires — once, after the LAST row, not 250 times.
+    const refused: Array<{ rowId: string; colId: string; reason?: string }> = []
+    for (const request of requests) {
+      const q = this.queues.get(request.rowId)
+      if (!q) continue
+      const result = results.get(request.rowId) ?? { ok: false, unreachable: true, reason: 'The save answered without this row. Checking whether it saved…' }
+      this.settle(request.rowId, q, batches.get(request.rowId)!, result, rejected, refused)
+    }
+    if (refused.length) this.opts.onRefused?.(refused)
+    // Cells edited while this call was on the wire go now, as the next call.
+    if ([...this.queues.entries()].some(([id, q]) => !q.inFlight && q.cells.size > 0 && !this.unreachableRows.has(id))) this.scheduleBatch()
+  }
+
+  /** Cells the server REFUSED and that were not edited since — what the sheet offers to retry. */
+  get failedCount(): number {
+    let n = 0
+    for (const cells of this.failed.values()) n += cells.size
+    return n
+  }
+
+  /**
+   * Send the refused cells again (all, or those of `rowIds`), as one new operation. Each goes back through `set()`,
+   * so it is queued, painted `saving` and sent with the row's CURRENT version — a 409 taught the writer that version.
+   */
+  retryFailed(rowIds?: Iterable<string>): number {
+    const only = rowIds ? new Set(rowIds) : null
+    const retry: Array<{ rowId: string; cell: SheetWriteCell }> = []
+    for (const [rowId, cells] of this.failed) {
+      if (only && !only.has(rowId)) continue
+      for (const cell of cells.values()) retry.push({ rowId, cell })
+    }
+    this.beginOperation()
+    try {
+      for (const { rowId, cell } of retry) this.set(rowId, cell.colId, cell.value, { intent: cell.intent })
+    } finally {
+      this.endOperation()
+    }
+    return retry.length
+  }
+
+  private rememberFailed(rowId: string, cell: SheetWriteCell): void {
+    const cells = this.failed.get(rowId) ?? new Map<string, SheetWriteCell>()
+    cells.set(cell.colId, cell)
+    this.failed.set(rowId, cells)
+  }
+
+  private forgetFailed(rowId: string, colId: string): void {
+    const cells = this.failed.get(rowId)
+    if (!cells) return
+    cells.delete(colId)
+    if (cells.size === 0) this.failed.delete(rowId)
+  }
+
+  /**
    * Repaint exactly the cells that changed state.
    *
    * Deliberately NOT a whole-grid refresh: a paste settles 20 batches, and refreshing every row 20
@@ -777,7 +997,7 @@ export class SheetWriter<T> {
   /** Cells queued or in flight — what the status strip calls "unsaved". */
   get pending(): number {
     let n = 0
-    for (const q of this.queues.values()) n += q.cells.size + (q.inFlight ? 1 : 0)
+    for (const [rowId, q] of this.queues) n += q.cells.size + (q.inFlight ? this.inFlightCells.get(rowId) ?? 1 : 0)
     return n
   }
 
@@ -796,12 +1016,13 @@ export class SheetWriter<T> {
    * a closed port neither speeds it up nor tells us anything new.
    */
   private async reconcile(rowId: string, typed: Record<string, SheetWriteCell>): Promise<void> {
-    if (!this.opts.readRow && !this.opts.readBack) return
+    if (!this.opts.readRow && !this.opts.readBack && !this.opts.readBackBatch) return
     const generation = this.generation
     // Merge: a second batch swallowed by the same outage joins the set this loop will resolve,
     // rather than starting a rival loop that resolves half of it.
     this.unreachableRows.set(rowId, { ...this.unreachableRows.get(rowId), ...typed })
     this.emit()
+    if (this.opts.readBackBatch) { void this.reconcileBatch(); return }
     if (this.reconciling.has(rowId)) return
     this.reconciling.add(rowId)
     let waitMs = 2000
@@ -836,6 +1057,8 @@ export class SheetWriter<T> {
             landed ? 'saved' : 'refused',
             landed ? undefined : 'The stored value differs from this edit. Review it before trying again.',
           )
+          if (landed) this.forgetFailed(rowId, colId)
+          else this.rememberFailed(rowId, cell)
         }
         if (unresolved) { waitMs = Math.min(waitMs * 2, 30_000); continue }
         this.unreachableRows.delete(rowId)
@@ -856,6 +1079,71 @@ export class SheetWriter<T> {
       waitMs = Math.min(waitMs * 2, 30_000)
     }
     this.reconciling.delete(rowId)
+  }
+
+  /**
+   * Batch mode's reconcile: ONE loop and ONE read for every unreachable row (`readBackBatch`), with the per-row
+   * verdicts `reconcile` gives. A 250-row operation whose answer was lost is one read every 2 s, 4 s, 8 s… — not 250.
+   */
+  private async reconcileBatch(): Promise<void> {
+    if (this.reconcilingBatch) return
+    this.reconcilingBatch = true
+    const generation = this.generation
+    let waitMs = 2000
+    try {
+      while (!this.destroyed && this.unreachableRows.size > 0) {
+        await new Promise((r) => setTimeout(r, waitMs))
+        if (this.destroyed || generation !== this.generation) return
+        const requests = [...this.unreachableRows].map(([rowId, cells]) => ({ rowId, row: this.rows.get(rowId) ?? null, cells: Object.values(cells), expectedVersion: this.versions.get(rowId) }))
+        if (requests.length === 0) return
+        const reads = await this.opts.readBackBatch!(requests).catch(() => null)
+        if (this.destroyed || generation !== this.generation) return
+        let pending = false
+        for (const request of requests) {
+          const snapshot = reads?.get(request.rowId)
+          const outstanding = this.unreachableRows.get(request.rowId)
+          if (!outstanding) continue
+          if (!snapshot) {
+            pending = true
+            for (const colId of Object.keys(outstanding)) {
+              if (!this.queues.get(request.rowId)?.cells.has(colId)) this.opts.tracker.set(request.rowId, colId, 'unknown', 'Connection lost — checking whether this saved…')
+            }
+            this.repaint(request.rowId, Object.keys(outstanding))
+            continue
+          }
+          if (!this.resolveRead(request.rowId, outstanding, snapshot)) pending = true
+        }
+        this.emit()
+        // A row that went unreachable while this read was on the wire is read on the next turn, soon.
+        waitMs = pending ? Math.min(waitMs * 2, 30_000) : 2000
+      }
+    } finally {
+      if (generation === this.generation) this.reconcilingBatch = false
+    }
+  }
+
+  /** Apply one row's read to its unresolved cells. True when the row is resolved (and released for new saves). */
+  private resolveRead(rowId: string, outstanding: Record<string, SheetWriteCell>, snapshot: ReadBackSnapshot<T>): boolean {
+    this.seed([{ id: rowId, version: snapshot.version, ...(snapshot.row !== undefined ? { row: snapshot.row } : {}) }])
+    let unresolved = false
+    let ok = true
+    for (const [colId, cell] of Object.entries(outstanding)) {
+      const known = Object.prototype.hasOwnProperty.call(snapshot.values, colId)
+      const landed = snapshot.matches && Object.prototype.hasOwnProperty.call(snapshot.matches, colId) ? snapshot.matches[colId] : known ? sheetValuesMatch(snapshot.values[colId], cell.value) : null
+      if (landed === null) { unresolved = true; continue }
+      ok = ok && landed
+      if (this.queues.get(rowId)?.cells.has(colId)) continue
+      this.opts.tracker.set(rowId, colId, landed ? 'saved' : 'refused', landed ? undefined : 'The stored value differs from this edit. Review it before trying again.')
+      if (landed) this.forgetFailed(rowId, colId)
+      else this.rememberFailed(rowId, cell)
+    }
+    if (unresolved) return false
+    this.unreachableRows.delete(rowId)
+    this.repaint(rowId, Object.keys(outstanding))
+    this.opts.onReconciled?.({ rowId, ok, savedAt: new Date().toISOString() })
+    // Anything typed during the outage was queued, not lost. Send it now that we can.
+    if (this.queues.get(rowId)?.cells.size) this.schedule(rowId)
+    return true
   }
 
   /**
@@ -937,7 +1225,14 @@ export class SheetWriter<T> {
   discard(): void {
     this.generation++
     for (const q of this.queues.values()) if (q.timer) clearTimeout(q.timer)
+    if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
+    if (this.fenceTimer) { clearTimeout(this.fenceTimer); this.fenceTimer = null }
+    this.batchInFlight = false
+    this.operationDepth = 0
+    this.reconcilingBatch = false
     this.queues.clear()
+    this.inFlightCells.clear()
+    this.failed.clear()
     // A reconcile loop in flight is about writes that are being thrown away; its verdict would
     // land on cells that no longer hold what it is reasoning about.
     this.unreachableRows.clear()
@@ -951,6 +1246,15 @@ export class SheetWriter<T> {
     if (this.destroyed) return
     this.destroyed = true
     this.generation++
+    if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
+    if (this.fenceTimer) { clearTimeout(this.fenceTimer); this.fenceTimer = null }
+    if (this.opts.commitBatch) {
+      // Batch mode: everything still queued leaves as ONE call, fire-and-forget, for the reason below.
+      const requests = [...this.queues].filter(([, q]) => q.cells.size > 0).map(([rowId, q]) => ({ rowId, row: this.rows.get(rowId) ?? null,
+        cells: [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent })), expectedVersion: this.versions.get(rowId) }))
+      if (requests.length) void Promise.resolve(this.opts.commitBatch(requests)).catch(() => { /* no surface left to report on */ })
+      for (const q of this.queues.values()) { if (q.timer) clearTimeout(q.timer); q.cells.clear() }
+    }
     for (const [rowId, q] of this.queues) {
       if (q.timer) clearTimeout(q.timer)
       if (q.cells.size === 0) continue

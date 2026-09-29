@@ -23,6 +23,7 @@ import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studi
 import { adaptLegacySheet, type LegacySheetPage } from './adaptLegacy'
 import { recoverSheetRow } from '../sheetRecovery'
 import { commitMasterRow } from './masterWrite'
+import { runBulkOperation, type BulkSend } from '../bulkOperation'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
 
 export interface UseMasterSheetOptions {
@@ -103,9 +104,11 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const commit = useCallback(
     // The refs are read HERE, at call time, so the write always sees the current sheet and options
     // rather than the ones that existed when this callback was built.
-    async (req: SheetWriteRequest<StudioRow>): Promise<SheetWriteResult> => {
+    // `bulkSend` present = this row is one unit of a sheet operation, sent with every other row it changed as ONE
+    // bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else about the row's save is the same.
+    async (req: SheetWriteRequest<StudioRow>, bulkSend?: BulkSend): Promise<SheetWriteResult> => {
       let completed: Parameters<NonNullable<UseMasterSheetOptions['onWriteEnd']>> | undefined
-      const result = await commitMasterRow(req, { sheet: sheetRef.current, opts: {
+      const result = await commitMasterRow(req, { sheet: sheetRef.current, bulkSend, opts: {
         onWriteStart: (id, rowId) => optsRef.current.onWriteStart?.(id, rowId),
         onWriteEnd: (...args) => { completed = args },
       }, locale, market, onVariationThemeSaved: () => optsRef.current.onVariationThemeSaved?.() })
@@ -123,6 +126,18 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       new SheetWriter<StudioRow>({
         tracker,
         commit,
+        // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29 on the channel
+        // scope: one request per row made 224 of 250 rows fail or go unconfirmed; this scope sent the same shape).
+        commitBatch: (requests) => runBulkOperation(requests, commit),
+        // ONE read for every row a lost answer left unknown, for the reason `readBack` below reads quietly.
+        readBackBatch: async (requests) => {
+          const url = `${getBackendUrl()}/api/products/${productIdRef.current}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
+          const res = await fetch(url, { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30_000) }).catch(() => null)
+          if (!res?.ok) return null
+          const page = await res.json().catch(() => null)
+          const reads = await Promise.all(requests.map((request) => recoverSheetRow(page, request, { channel: 'MASTER', market, locale })))
+          return new Map(requests.flatMap((request, i) => (reads[i] ? [[request.rowId, reads[i]!] as const] : [])))
+        },
         getApi: () => apiRef.current,
         /* 🔴 A QUIET read — never `reload()`. `reload()` begins `setLoading(true)`, which drops the
            grid's rows and takes the `unknown` mark with them; measured against a real outage, the

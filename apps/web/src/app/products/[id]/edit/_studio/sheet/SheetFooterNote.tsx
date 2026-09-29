@@ -46,6 +46,9 @@ export interface SheetFooterNoteProps {
   onToggleRefused: () => void
   lastSavedAt: string | null | undefined
   layoutRecovery?: { retry: () => Promise<unknown> } | null
+  /** Refused cells whose edit can be sent again as it is (`SheetWriter.failedCount`), and the action that sends them. */
+  retryable?: number
+  onRetry?: () => void
 }
 
 function SavedLayoutNote({ retry }: { retry: () => Promise<unknown> }) {
@@ -65,7 +68,7 @@ function SavedLayoutNote({ retry }: { retry: () => Promise<unknown> }) {
   )
 }
 
-export function SheetFooterNote({ offline, refused, showRefusedOnly, onToggleRefused, lastSavedAt, layoutRecovery }: SheetFooterNoteProps) {
+export function SheetFooterNote({ offline, refused, showRefusedOnly, onToggleRefused, lastSavedAt, layoutRecovery, retryable = 0, onRetry }: SheetFooterNoteProps) {
   const hint = useSheetShortcutHint(lastSavedAt)
   const discovery = useStudioDiscovery()
   if (offline) {
@@ -78,8 +81,16 @@ export function SheetFooterNote({ offline, refused, showRefusedOnly, onToggleRef
   if (refused > 0) {
     /* `onShow` is REAL on both scopes: it narrows the sheet to the rows a write was refused on. A
        handler that did nothing would compile and would be the hover-only bug wearing a button. */
+    /* Retry sends exactly the refused edits again, as ONE save, with each row's current version. Every other cell of
+       the operation already saved; nothing is re-sent for it. */
     return (
-      <GridSheetNote kind="refusal" count={refused} noun="cell" lead={showRefusedOnly ? 'showing only the affected rows' : undefined} onShow={onToggleRefused} />
+      <span className="nds-grid-sheet-noteslot is-urgent">
+        <GridSheetNote kind="refusal" count={refused} noun="cell" lead={showRefusedOnly ? 'showing only the affected rows' : undefined} onShow={onToggleRefused} />
+        {/* The count is the note's ("2 cells blocked"); the short label is what fits beside it at phone width. */}
+        {retryable > 0 && onRetry && (
+          <Button inline variant="link" onClick={onRetry} aria-label={`Retry ${retryable} failed ${retryable === 1 ? 'cell' : 'cells'}`} title={`Send the ${retryable} refused ${retryable === 1 ? 'edit' : 'edits'} again`}>Retry</Button>
+        )}
+      </span>
     )
   }
   if (discovery?.note) return <span className="nds-grid-sheet-noteslot">
