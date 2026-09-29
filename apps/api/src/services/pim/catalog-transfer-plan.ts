@@ -455,7 +455,18 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           }
           if (row.field === 'productRole' || row.field === '__productRole') { error(row, 'Product role is calculated from Parent SKU and parent status; it cannot be imported as an attribute'); continue }
           const col = byKey.get(row.field === 'title' ? 'name' : row.field)
-          if (!col) { error(row, 'This attribute is not declared by the selected family'); continue }
+          if (!col) {
+            // A shared copy sends INHERIT for a variation that stores no value of its own. When this business
+            // has no column for the key either (a family can link an attribute and keep it off the master
+            // sheet; the parent then has a saved-attribute column from its own value, the variation none),
+            // and this record stores nothing under it, inheriting changes nothing: the variation keeps reading
+            // its parent's value. (Production 2026-09-29: GALE-JACKET's 20 variations, all refused.) A record
+            // that does store something there, and an operator's workbook, are still refused by name.
+            const key = row.field === 'title' ? 'name' : row.field
+            const storesNothing = !Object.prototype.hasOwnProperty.call(jsonRecord(working.categoryAttributes), key) && (working[key] === undefined || working[key] === null)
+            if (options?.sharedCopy && row.action === 'INHERIT' && !row.locale && storesNothing) { target.cells.push(cell(row, { state: 'inherited', value: null }, null, 'inherited')); continue }
+            error(row, 'This attribute is not declared by the selected family'); continue
+          }
           const old = masterTransferState(working, col, row.locale)
           if (preserve(row, old.state === 'stored')) continue
           // R-LX-8 — an INHERITED language value now travels WITH its text (see

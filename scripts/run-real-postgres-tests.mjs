@@ -32,6 +32,9 @@
  *     that sells NOWHERE YET: the column model reads Marketplace and ChannelListing, so only a real server
  *     can show that the reference market belongs to the SHARING business and that the receiving profile,
  *     which has no Marketplace row, must not be refused by the strict check.
+ *   · `assortment/copy-inherited-attribute.vitest.test.ts` (AE.3, 2026-09-29) — a Link copy whose variations
+ *     inherit an attribute the receiving family keeps off the master sheet: only the REAL column model shows
+ *     that such a variation has no column there, and that its inherited row must link, not be refused.
  *   · `category-tree-concurrency.vitest.test.ts` (2026-09-26) — concurrent category moves, creates, membership
  *     replacements and Categories workspace commands serialize on the business's category-tree lock.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
@@ -108,6 +111,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'order cancellation gives back what the order took at ingest, never shipped units (eBay, Amazon FBM/FBA, Shopify; markers, races, re-run, owner notice)', file: 'src/services/order-cancellation/order-cancellation-postgres.vitest.test.ts', expect: 17 },
   { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 16 },
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
+  { name: 'Link copy: variations inherit an attribute with no column in the receiving business (AE.3)', file: 'src/services/assortment/copy-inherited-attribute.vitest.test.ts', expect: 3 },
   { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account, alias and Amazon market checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 20 },
   { name: 'product media pop-up save (Lane C: one save bound by expect; two pop-ups on one set or one list, one wins; a gallery save is announced)', file: 'src/services/images/media-popup-save.vitest.test.ts', expect: 4 },
   { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 11 },

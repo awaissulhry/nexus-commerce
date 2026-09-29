@@ -45,11 +45,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Which services this push changes. A hand run (workflow_dispatch) ships all of them; so does a push whose
-  # previous commit cannot be read.
+  # Which services changed since the last release that fully succeeded. Not since the previous commit: a newer push
+  # cancels a run still waiting in the `deploy-api` group, and a failed run may not have shipped everything — their
+  # changes must ride with this run (2026-09-29: #164's API change was in a cancelled run). A hand run
+  # (workflow_dispatch) ships everything; so does a push when that release cannot be found or read.
   changes:
     name: What changed
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
       api: ${{ steps.diff.outputs.api }}
       web: ${{ steps.diff.outputs.web }}
@@ -58,13 +63,15 @@ jobs:
       - id: diff
         env:
           EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           api=true web=true
-          if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] &&
-             git fetch --no-tags --depth=1 origin "$BEFORE" 2>/dev/null; then
-            files=$(git diff --name-only "$BEFORE" "$GITHUB_SHA")
+          base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-api.yml/runs?branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null) || base=''
+          if [ "$EVENT" = push ] && [ -n "$base" ] && git fetch --no-tags --depth=1 origin "$base" 2>/dev/null; then
+            files=$(git diff --name-only "$base" "$GITHUB_SHA")
+            echo "Changed since $base, the last successful release:"
             printf '%s\n' "$files"
             shared='package(-lock)?\.json$|patches/|\.github/workflows/(deploy-api|ci)\.yml$'
             grep -qE "^(apps/api/|packages/(database|shared|events)/|$shared)" <<< "$files" && api=true || api=false
