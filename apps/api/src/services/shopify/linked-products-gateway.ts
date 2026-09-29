@@ -8,7 +8,9 @@ import { WorkspaceCache } from '../../lib/workspace-cache.js'
  *  definition changes (the definition webhooks, a switch-on). Writes never use it: they ask Shopify again. */
 const applicableByCategory = new WorkspaceCache<string, { expires: number; ids: Promise<Set<string>> }>()
 const APPLICABLE_CACHE_MS = 24 * 60 * 60 * 1000
-export function invalidateShopifyDefinitionConstraints() { applicableByCategory.clear() }
+/** Per store and category: the standard category-field templates Shopify offers there (a day; cleared with the above). */
+const templatesByCategory = new WorkspaceCache<string, { expires: number; templates: Promise<CategoryTemplate[]> }>()
+export function invalidateShopifyDefinitionConstraints() { applicableByCategory.clear(); templatesByCategory.clear() }
 /** The most categories one schema read asks about; the rest are left to Shopify's check before a write. */
 export const SHOPIFY_SCHEMA_CATEGORY_LIMIT = 100
 
@@ -68,6 +70,39 @@ function cachedApplicableDefinitions(gql: ShopifyGraphql, shopId: string | undef
   return ids
 }
 
+interface CategoryTemplate { id: string; name: string; description: string | null; namespace: string; key: string; ownerTypes: string[]; type: { name: string } }
+/** The standard category fields Shopify offers for one exact category (a sub-category has its own list). `fresh` skips the cache. */
+export async function readCategoryTemplates(gql: ShopifyGraphql, category: string, options: { shopId?: string; fresh?: boolean } = {}): Promise<CategoryTemplate[]> {
+  const read = () => collectShopifyPages<CategoryTemplate>(async after => (await gql(`query NexusCategoryTemplates($category:String!,$after:String) {
+    standardMetafieldDefinitionTemplates(first:100,after:$after,constraintStatus:CONSTRAINED_ONLY,constraintSubtype:{key:"category",value:$category}) { nodes { id name description namespace key ownerTypes type { name } } ${pageInfo} }
+  }`, { category, after })).standardMetafieldDefinitionTemplates)
+  if (options.fresh || !options.shopId) return read()
+  const key = `${options.shopId}:${category}`, cached = templatesByCategory.get(key)
+  if (cached && cached.expires > Date.now()) return cached.templates
+  const templates = read()
+  if (templatesByCategory.size >= 5000) templatesByCategory.delete(templatesByCategory.keys().next().value!)
+  templatesByCategory.set(key, { expires: Date.now() + APPLICABLE_CACHE_MS, templates })
+  templates.catch(() => { if (templatesByCategory.get(key)?.templates === templates) templatesByCategory.delete(key) })
+  return templates
+}
+
+/**
+ * Switch on one standard category field (idempotent). Shopify creates the definition and the entry kind its values use.
+ * The definition is read back; it is the only proof, whatever the mutation answered (an "already on" error included).
+ */
+export async function enableStandardShopifyDefinition(gql: ShopifyGraphql, target: { ownerType: 'PRODUCT' | 'PRODUCTVARIANT'; namespace: string; key: string }): Promise<ShopifyFieldDefinition> {
+  const read = async () => (await gql(`query NexusStandardDefinition($ownerType:MetafieldOwnerType!,$namespace:String!,$key:String!) { metafieldDefinitions(ownerType:$ownerType,namespace:$namespace,key:$key,first:1) { nodes { ${definitionSelection} } } }`, target)).metafieldDefinitions.nodes[0] ?? null
+  let row = await read()
+  if (!row) {
+    const result = (await gql(`mutation NexusEnableStandardDefinition($ownerType:MetafieldOwnerType!,$namespace:String!,$key:String!) { standardMetafieldDefinitionEnable(ownerType:$ownerType,namespace:$namespace,key:$key) { createdDefinition { id } userErrors { field message code } } }`, target)).standardMetafieldDefinitionEnable
+    row = await read()
+    if (!row) throw new WorkspaceScopeError(`Shopify did not switch on this field. ${(result?.userErrors ?? []).map((e: { message: string }) => e.message).join(' ')}`.trim(), 422)
+  }
+  invalidateShopifyDefinitionConstraints()
+  const page = row.constraints?.values as Page<{ value: string }> | undefined
+  return fieldDefinition({ ...row, constraints: row.constraints ? { key: row.constraints.key, values: (page?.nodes ?? []).map(v => v.value).sort(), ...(page?.pageInfo?.hasNextPage ? { complete: false } : {}) } : row.constraints })
+}
+
 /**
  * The store's field list. `categories`: the Shopify categories the caller needs exact category-field answers for (the
  * store's categories in use). A category-limited definition keeps only the first page of its category list: Color alone
@@ -115,6 +150,25 @@ export async function readLinkedStoreSchema(gql: ShopifyGraphql, options: { cate
       definition.constraints = { ...definition.constraints!, values: [...new Set([...definition.constraints!.values, ...applies])].sort(), checked: categories }
     }
   }
+  // The category fields Shopify offers for those categories that the store has not switched on (bulk-editor parity).
+  const templates: ShopifyFieldDefinition[] = []
+  if (categories.length) {
+    const offered = new Map<string, { template: CategoryTemplate; ownerType: string; codes: string[] }>()
+    for (let i = 0; i < categories.length; i += 8) {
+      const batch = categories.slice(i, i + 8)
+      const lists = await Promise.all(batch.map(code => readCategoryTemplates(gql, `gid://shopify/TaxonomyCategory/${code}`, { shopId: settings.shop?.id })))
+      lists.forEach((list, j) => { for (const template of list) for (const ownerType of template.ownerTypes.filter(o => o === 'PRODUCT' || o === 'PRODUCTVARIANT')) {
+        const address = `${ownerType}:${template.namespace}.${template.key}`
+        if (definitions.some(d => d.ownerType === ownerType && d.namespace === template.namespace && d.key === template.key)) continue
+        const known = offered.get(address) ?? { template, ownerType, codes: [] }
+        known.codes.push(batch[j]); offered.set(address, known)
+      } })
+    }
+    for (const { template, ownerType, codes } of offered.values()) templates.push({ id: template.id, name: template.name, description: template.description, namespace: template.namespace, key: template.key,
+      ownerType, type: template.type.name, validations: [], access: { admin: null, storefront: null }, readOnlyReason: null, standardTemplateId: template.id,
+      constraints: { key: 'category', values: [...new Set(codes)].sort(), complete: false, checked: categories } })
+    templates.sort((a, b) => `${a.ownerType}:${a.namespace}.${a.key}`.localeCompare(`${b.ownerType}:${b.namespace}.${b.key}`))
+  }
   const entries = await entriesRead
   const metaobjectDefinitions = entries.map(raw => ({ id: raw.id, name: raw.name, type: raw.type, description: raw.description, access: raw.access, publishable: raw.capabilities?.publishable?.enabled ?? false,
     fields: raw.fieldDefinitions.map((f: any) => fieldDefinition({ ...f, id: `${raw.id}/${f.key}`, namespace: raw.type, ownerType: 'METAOBJECT', access: raw.access })) }))
@@ -130,7 +184,7 @@ export async function readLinkedStoreSchema(gql: ShopifyGraphql, options: { cate
   } : undefined
   const publications = native?.scopes.some(s => ['read_publications', 'write_publications'].includes(s))
     ? await collectShopifyPages<any>(async after => (await gql(`query NexusInformationStorePublications($after:String) { publications(first:100,after:$after) { nodes { id name supportsFuturePublishing } ${pageInfo} } }`, { after })).publications) : undefined
-  const data = { ...(publications ? { publications } : {}), definitions, metaobjectDefinitions, types: settings.metafieldDefinitionTypes, locales: settings.shopLocales, ...(native ? { native, currency: settings.shop?.currencyCode } : {}) }
+  const data = { ...(publications ? { publications } : {}), definitions, ...(templates.length ? { templates } : {}), metaobjectDefinitions, types: settings.metafieldDefinitionTypes, locales: settings.shopLocales, ...(native ? { native, currency: settings.shop?.currencyCode } : {}) }
   return { ...data, revision: linkedDigest(data) }
 }
 
