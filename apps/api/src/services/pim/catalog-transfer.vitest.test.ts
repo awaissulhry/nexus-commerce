@@ -438,3 +438,74 @@ describe('AE.3 — transferContracts declares the extra bag as saved fields', ()
     expect(input.savedFields?.find(f => f.id === 'attr_armorType')?.shape).toBe('scalar')
   })
 })
+
+/**
+ * A Link copy of "Gale Jacket" (production 2026-09-29): Motovento already held the 21 SKUs, and all 20
+ * variations were refused with
+ *
+ *     Row 0 · supplier_declared_dg_hz_regulation: This attribute is not declared by the selected family
+ *
+ * In Xavia Racing only the parent stores the attribute; each variation INHERITS it, so the copy sends the
+ * variation an INHERIT row. Motovento's family does not put the attribute on the master sheet, so its only
+ * column there is the saved-attribute one, derived from the product's OWN bag: the parent has one (it holds
+ * `["not_applicable"]`), a variation that holds nothing has none. The copy's declare pass (bd6458726)
+ * declares only SET values, so the variation's INHERIT row met no column and was refused. But that variation
+ * stores nothing under the key, so inheriting it changes nothing: it keeps reading its parent's value.
+ */
+describe('AE.3 — a copy where a variation inherits an attribute its business has no column for', () => {
+  const DG = 'supplier_declared_dg_hz_regulation'
+  // Mirrors the real `transferContracts.master` for an attribute the family does NOT put on the master
+  // sheet: its only column is the saved-attribute one, from the product's own bag and the copy's extra
+  // bag, list or scalar from the values (as `savedAttributeFields`, which skips a null or empty value).
+  const savedOnly: TransferContracts = {
+    ...contracts,
+    master: async (_familyId, target, extraSaved) => {
+      const bag = { ...(target?.categoryAttributes as Record<string, unknown> | undefined), ...extraSaved }
+      return [...nativeCols, ...Object.entries(bag)
+        .filter(([key, value]) => value !== null && value !== '' && !nativeCols.some(c => c.key === key))
+        .map(([key, value]) => col(key, { storage: 'categoryAttributes', shape: Array.isArray(value) ? 'list' : 'scalar' }))]
+    },
+  }
+  const PARENT = 'GALE-JACKET', VARIATION = 'GALE-JACKET-BLACK-MEN-M'
+  // The owner's export, as `catalogRows` writes it: the parent's own value, the variation's INHERIT (value null).
+  const parentSet = row({ sku: PARENT, field: DG, value: 'not_applicable' })
+  const variationInherits = row({ sku: VARIATION, field: DG, action: 'INHERIT', value: null })
+  // Link: both SKUs already exist in the receiving business, the parent with a list, the variation with nothing.
+  const linked = (variationBag: Record<string, unknown> = {}) => context({ listings: new Map(), products: new Map([
+    [PARENT, product({ id: 'gp', sku: PARENT, isParent: true, categoryAttributes: { [DG]: ['not_applicable'] } })],
+    [VARIATION, product({ id: 'gv', sku: VARIATION, parentId: 'gp', categoryAttributes: variationBag })],
+  ]) })
+  const plan = (rows: TransferRow[], ctx: TransferContext, sharedCopy?: boolean) =>
+    buildTransferPlan(rows, 'upsert', ctx, savedOnly, undefined, sharedCopy ? { sharedCopy: true } : undefined)
+  const targetOf = (result: Awaited<ReturnType<typeof plan>>, sku: string) => result.targets.find(t => t.identity.sku === sku)
+
+  it('refuses the inherited row by name for an ordinary import', async () => {
+    const result = await plan([parentSet, variationInherits], linked())
+    expect(result.issues.filter(i => i.sku === VARIATION).map(i => i.message)).toEqual(['This attribute is not declared by the selected family'])
+  })
+
+  it('links the variation on a shared copy: nothing is stored on it, it keeps inheriting', async () => {
+    const result = await plan([parentSet, variationInherits], linked(), true)
+    expect(result.issues).toEqual([])
+    const variation = targetOf(result, VARIATION)!
+    expect(variation.cells).toMatchObject([{ field: DG, beforeState: 'inherited', afterState: 'inherited', verdict: 'unchanged' }])
+    expect(variation.patch).toEqual({})
+    // The parent's scalar meets its list: wrapped, and the same value, so nothing changes there either.
+    expect(targetOf(result, PARENT)!.cells).toMatchObject([{ field: DG, verdict: 'unchanged' }])
+  })
+
+  it('does the same on a first copy, where the variation is created', async () => {
+    const result = await plan([
+      row({ sku: PARENT, field: 'family', value: 'jackets' }), row({ sku: PARENT, field: 'name', value: 'Gale Jacket' }), parentSet,
+      row({ sku: VARIATION, field: 'parentSku', value: PARENT }), row({ sku: VARIATION, field: 'name', value: 'Gale Jacket M' }), variationInherits,
+    ], context({ products: new Map(), listings: new Map() }), true)
+    expect(result.issues).toEqual([])
+    expect(targetOf(result, PARENT)!.patch.categoryAttributes).toEqual({ [DG]: 'not_applicable' })
+    expect(targetOf(result, VARIATION)!.patch.categoryAttributes).toBeUndefined()
+  })
+
+  it('still refuses it when the variation stores something under the key that has no column (a cleared value)', async () => {
+    const result = await plan([parentSet, variationInherits], linked({ [DG]: null }), true)
+    expect(result.issues.map(i => [i.sku, i.message])).toEqual([[VARIATION, 'This attribute is not declared by the selected family']])
+  })
+})
