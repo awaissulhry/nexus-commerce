@@ -91,6 +91,14 @@ jobs:
       image_web: ${{ steps.mode.outputs.web }}
     steps:
       - uses: actions/checkout@v4
+      # Before `diff`: GitHub keeps the outputs a job wrote before it failed (actions/runner#2598). With `diff` first, a
+      # typo in the variable failed this job after web=true was written, and deploy-web could still ship (review of
+      # PR 2, 2026-09-30). deploy-web also requires this job to succeed.
+      - id: mode
+        name: Which services deploy by image (RAILWAY_IMAGE_SERVICES)
+        env:
+          RAILWAY_IMAGE_SERVICES: ${{ vars.RAILWAY_IMAGE_SERVICES }}
+        run: scripts/ci/image-services.sh >> "$GITHUB_OUTPUT"
       - id: diff
         env:
           EVENT: ${{ github.event_name }}
@@ -120,11 +128,6 @@ jobs:
           fi
           echo "api=$api web=$web"
           { echo "api=$api"; echo "web=$web"; } >> "$GITHUB_OUTPUT"
-      - id: mode
-        name: Which services deploy by image (RAILWAY_IMAGE_SERVICES)
-        env:
-          RAILWAY_IMAGE_SERVICES: ${{ vars.RAILWAY_IMAGE_SERVICES }}
-        run: scripts/ci/image-services.sh >> "$GITHUB_OUTPUT"
 
   # The whole CI (ci.yml) on the exact commit being released. Before 2026-09-26 main deployed without
   # waiting for any check. docs/ci-plan.md §2.4.
@@ -308,12 +311,13 @@ jobs:
 
   # The web ships after the API serves the same commit (its pages may call new API routes), or alone when only the web
   # changed. When the API changed too, a failed or skipped API deploy (eBay check included) holds the web back.
+  # needs.changes.result too: a failed `changes` job still hands over the outputs it wrote (actions/runner#2598).
   # `railway up` returns when the build ends; Railway then waits for /login to answer before it switches traffic, so
   # the railway-up path waits for the deployment itself to report SUCCESS. The image path does that in its script.
   deploy-web:
     needs: [changes, verify, images, deploy]
     if: >-
-      !cancelled() && needs.changes.outputs.web == 'true' &&
+      !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.web == 'true' &&
       needs.verify.result == 'success' && needs.images.result == 'success' &&
       (needs.changes.outputs.api != 'true' || needs.deploy.result == 'success')
     name: Ship the web to Railway
