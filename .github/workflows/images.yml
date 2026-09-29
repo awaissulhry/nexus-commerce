@@ -27,7 +27,6 @@ on:
       - 'package-lock.json'
       - 'patches/**'
       - 'turbo.json'
-      - '.dockerignore'
       - 'docs/fixtures/vt1/fixtures.ts'
       - 'scripts/ci/check-image-secrets.sh'
       - '.github/workflows/images.yml'
@@ -38,7 +37,8 @@ on:
       - 'apps/web/next.config.js'
       - 'apps/web/scripts/start.mjs'
       - 'package-lock.json'
-      - '.dockerignore'
+      - 'apps/api/Dockerfile.dockerignore'
+      - 'apps/web/Dockerfile.dockerignore'
       - 'scripts/ci/check-image-secrets.sh'
       - '.github/workflows/images.yml'
   workflow_call:
