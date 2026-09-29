@@ -101,6 +101,10 @@ export const ENTRIES: Entry[] = [
     p === '/api/auth/password/reset' ||
     p === '/api/auth/invitations/accept' ||
     p === '/api/auth/invitations/accept/preview'),
+  // MCP.5 — OAuth for connecting Claude (routes/oauth.routes.ts). Claude calls the token,
+  // registration and revocation endpoints with no session; the consent routes guard themselves
+  // (session, 2FA, CSRF) like /api/auth/*, and name their business explicitly.
+  P(PUBLIC, (_m, p) => p.startsWith('/api/oauth/')),
   // Owner-gated auth admin (also guarded in S1 by requireOwner):
   P(F.usersManage, (_m, p) => p === '/api/auth/logout-all'),
   RW(F.invitationsManage, F.invitationsManage, pfx('/api/auth/invitations')),
