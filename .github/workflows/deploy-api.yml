@@ -252,8 +252,11 @@ jobs:
           echo "✗ Railway did not serve web deployment $DEPLOYMENT_ID within 12 minutes"
           exit 1
 
+  # always(): without it a skipped API deploy (a web-only push) skips this job too, though deploy-web succeeded
+  # (run 36557837250, 2026-09-29).
   smoke-web:
     needs: deploy-web
+    if: always() && needs.deploy-web.result == 'success'
     name: Web production smoke
     uses: ./.github/workflows/prod-smoke.yml
     with:
