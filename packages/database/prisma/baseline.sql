@@ -9601,6 +9601,28 @@ CREATE TABLE "SellerReferenceLabel" (
     CONSTRAINT "SellerReferenceLabel_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "ShopifyColourProduct" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "familyId" TEXT NOT NULL,
+    "channelConnectionId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL DEFAULT 'GLOBAL',
+    "aliasKey" TEXT NOT NULL DEFAULT '',
+    "splitAxis" TEXT NOT NULL,
+    "valueKey" TEXT NOT NULL,
+    "colourName" TEXT,
+    "shopifyProductId" TEXT,
+    "state" TEXT NOT NULL DEFAULT 'NOT_FOUND',
+    "proposal" JSONB,
+    "remoteStatus" TEXT,
+    "checkedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ShopifyColourProduct_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -14602,6 +14624,18 @@ CREATE INDEX "SellerReferenceLabel_workspaceId_idx" ON "SellerReferenceLabel"("w
 -- CreateIndex
 CREATE UNIQUE INDEX "SellerReferenceLabel_channel_connection_market_type_field_uq" ON "SellerReferenceLabel"("workspaceId", "channel", "connectionId", "marketplace", "productType", "fieldKey");
 
+-- CreateIndex
+CREATE INDEX "ShopifyColourProduct_workspaceId_idx" ON "ShopifyColourProduct"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ShopifyColourProduct_familyId_idx" ON "ShopifyColourProduct"("familyId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopifyColourProduct_workspaceId_channelConnectionId_market_key" ON "ShopifyColourProduct"("workspaceId", "channelConnectionId", "marketplace", "aliasKey", "familyId", "valueKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopifyColourProduct_workspaceId_channelConnectionId_shopif_key" ON "ShopifyColourProduct"("workspaceId", "channelConnectionId", "shopifyProductId");
+
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -15627,4 +15661,10 @@ ALTER TABLE "ReadinessIndex" ADD CONSTRAINT "ReadinessIndex_productId_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "ChannelDrift" ADD CONSTRAINT "ChannelDrift_channelListingId_fkey" FOREIGN KEY ("channelListingId") REFERENCES "ChannelListing"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopifyColourProduct" ADD CONSTRAINT "ShopifyColourProduct_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopifyColourProduct" ADD CONSTRAINT "ShopifyColourProduct_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

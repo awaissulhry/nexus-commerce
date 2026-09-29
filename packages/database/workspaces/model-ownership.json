@@ -458,6 +458,7 @@
     "ChannelMappingSet",
     "ChannelMappingField",
     "ChannelMappingUse",
-    "ProductMediaPlan"
+    "ProductMediaPlan",
+    "ShopifyColourProduct"
   ]
 }
