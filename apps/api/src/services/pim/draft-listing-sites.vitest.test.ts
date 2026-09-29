@@ -95,6 +95,22 @@ describe('add child → copy from a sibling', () => {
     // The sibling's live listing is exactly as it was.
     expect((await rowsOf(ids.copyA, { id: live.id }))[0]).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false, externalListingId: 'ASIN-A', version: 1 })
   })
+
+  it('never copies the sibling\'s own channel ids or checkpoints: the new variant cannot claim its Shopify variant or eBay offers', async () => {
+    const identity = { shopifyProductId: '9001', variantId: '9002', inventoryItemId: '9003', inventoryLocationId: 'gid://shopify/Location/9004', nexusFamilyId: ids.copy,
+      __offerIds: { EBAY_IT: 'offer-1' }, __lastPublishedAxes: { EBAY_IT: ['Colour'] }, _nexusContentPublish: { productId: 'gid://shopify/Product/9001' }, _nexusSheetMediaSync: { version: 1 } }
+    const content = { descriptionThemeId: 'theme-1', _productMediaLocales: { it: ['photo-1'] } }
+    const shopify = await listing({ productId: ids.copyB, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: accounts.shopify,
+      listingStatus: 'ACTIVE', isPublished: true, externalListingId: '9001', title: 'Jacket', platformAttributes: { ...identity, ...content, attributes: { material: 'Mesh', color: 'Nero' } } })
+
+    await scoped(() => prisma.$transaction(tx => copySiblingListings(tx, { sourceProductId: ids.copyB, productId: ids.copyC, groups: new Set(['content', 'attributes', 'pricing']) })))
+    const [copy] = await rowsOf(ids.copyC, { channel: 'SHOPIFY' })
+    expect(copy).toMatchObject({ ...DRAFT, channelConnectionId: accounts.shopify, title: 'Jacket' })
+    // Content keys come across; the sibling's axis value does not; none of its ids or checkpoints do.
+    expect(copy.platformAttributes).toEqual({ ...content, attributes: { material: 'Mesh' } })
+    // The sibling keeps all of them.
+    expect((await rowsOf(ids.copyB, { id: shopify.id }))[0].platformAttributes).toMatchObject(identity)
+  })
 })
 
 describe('Shopify first save', () => {
