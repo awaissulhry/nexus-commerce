@@ -40,6 +40,8 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/categories/schema/download': 'schema-download',
   // "Fill other eBay sites" — one Assign press, one run of rules downloads and category reviews.
   '/api/pim/category-workspace/EBAY/site-assignments': 'ebay-site-assign',
+  // One sheet operation (fill, paste, undo): a resend after a lost connection replays its stored answer, never re-applies.
+  '/api/products/bulk-save': 'products-bulk-save',
 }
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')

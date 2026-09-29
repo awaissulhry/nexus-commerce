@@ -140,7 +140,8 @@ export const GridSheetStatus = memo(function GridSheetStatus({ rows, selected = 
       </span>
       {(pending > 0 || saving) && (
         <span className="nds-grid-sheet-status-pending">
-          {saving ? 'Saving…' : `${pending} unsaved ${pending === 1 ? 'cell' : 'cells'}`}
+          {/* A fill or a paste saves many cells in one go: say how many are on the wire, not just that something is. */}
+          {saving ? (pending > 1 ? `Saving ${pending.toLocaleString('en-GB')} cells…` : 'Saving…') : `${pending} unsaved ${pending === 1 ? 'cell' : 'cells'}`}
         </span>
       )}
       {/* 🔴 The hover-only refusal string is GONE (§6.2 rule 1, DS.2's filing). It read

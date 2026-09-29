@@ -9,7 +9,7 @@ import type { SheetChannel } from '../pim/sheet-columns.service.js'
 import type { FastifyBaseLogger } from 'fastify'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
-import { activeDatabaseTransaction, afterDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
@@ -197,8 +197,10 @@ export interface ProductBulkContext {
 }
 
 export class ProductBulkError extends Error {
-  constructor(readonly statusCode: number, readonly details: Record<string, unknown>) {
+  /** `cause` keeps the original failure, so a lost race wrapped as a 500 is still retried (`retryableConflict`). */
+  constructor(readonly statusCode: number, readonly details: Record<string, unknown>, cause?: unknown) {
     super(typeof details.error === 'string' ? details.error : 'Product edit failed')
+    if (cause !== undefined) (this as { cause?: unknown }).cause = cause
   }
 }
 
@@ -1883,7 +1885,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (validated.length === 0 && errors.length === 0 && noOpKeys.size > 0) {
     // A door's no-op on a draft this request started still started it (e.g. clearing an empty price).
     const draftProductIds = [...new Set(createdListings.map(row => row.productId))]
-    if (draftProductIds.length) await afterDatabaseCommit(`product-cache:${draftProductIds.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(draftProductIds))
+    if (draftProductIds.length) await afterDatabaseCommitBatch('product-cache:bulk-edit', draftProductIds, ids => productReadCacheService.refreshMany(ids))
     return {
       success: true,
       updated: 0,
@@ -2962,7 +2964,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // Before this, a loop rebuilt every family inside the transaction: 15+ families crossed the 60 s limit and the whole
     // edit was lost.
     const readiness = await produceReadinessForProducts(cacheRefreshIds, readinessScope)
-    await afterDatabaseCommit(`product-cache:${cacheRefreshIds.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(cacheRefreshIds)).catch(err => {
+    // One refresh per TRANSACTION, not per call: a bulk save runs this writer once per row in one transaction, and 250
+    // separate refreshes each rewrote the same parent's cache row after commit (`afterDatabaseCommitBatch`).
+    await afterDatabaseCommitBatch('product-cache:bulk-edit', cacheRefreshIds, ids => productReadCacheService.refreshMany(ids)).catch(err => {
       context.logger.warn({ err, productIds: cacheRefreshIds }, '[products/bulk] cache refresh failed')
     })
 
@@ -3122,7 +3126,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     throw new ProductBulkError(500, {
       error: 'Bulk update failed',
       message: error?.message ?? String(error),
-    })
+    }, error)
   }
 
 }

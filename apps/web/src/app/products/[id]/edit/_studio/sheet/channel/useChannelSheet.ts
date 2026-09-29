@@ -24,6 +24,7 @@ import { commitLanguageGroups } from '../languageWrites'
 import { commitVariationTheme } from '../master/masterWrite'
 import { columnLanguages } from '../languages'
 import { getBackendUrl } from '@/lib/backend-url'
+import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
@@ -339,6 +340,11 @@ export interface ChannelWriteCoord {
   familyRows?: () => Iterable<ChannelSheetRow>
   /** A save started listings on this coordinate (`adopted`: the rows that now hold one). */
   onListingsCreated?: (created: CreatedListing[], adopted: ChannelSheetRow[]) => void
+  /**
+   * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
+   * operation's single `POST /api/products/bulk-save` (`runBulkOperation`). Everything else here is the same.
+   */
+  bulkSend?: BulkSend
 }
 
 function reportCreated(req: SheetWriteRequest<ChannelSheetRow>, coord: ChannelWriteCoord, created: CreatedListing[]): void {
@@ -443,21 +449,15 @@ async function commitChannelLanguage(
   const casVersion = touchesChannel ? row.listing ? row.listing.version : NO_LISTING_VERSION : req.expectedVersion
 
   try {
-    const send = (expectedVersion: number | undefined) => fetch(`${getBackendUrl()}/api/products/bulk`, {
-      method: 'PATCH',
-        signal: AbortSignal.timeout(30_000),
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        changes: changes.map((c) => c.change),
-        // `aliasKey`, not `aliasId` — and never omitted. The server treats an absent key as `''`
-        // only as a courtesy; naming it is what makes the override merge land on THIS alias's
-        // listing rather than the primary (§14's ON CONFLICT names the five-column key).
-        marketplaceContexts: [
-          { channel: coord.channel, marketplace: coord.marketplace, ...(coord.accountId ? { accountId: coord.accountId } : {}), ...(coord.locale ? { locale: coord.locale } : {}), aliasKey: wireAliasKey(row.aliasId) },
-        ],
-        ...(expectedVersion !== undefined ? { expectedVersion } : {}),
-      }),
+    const send = (expectedVersion: number | undefined) => (coord.bulkSend ?? directBulkSend)({
+      changes: changes.map((c) => c.change),
+      // `aliasKey`, not `aliasId` — and never omitted. The server treats an absent key as `''`
+      // only as a courtesy; naming it is what makes the override merge land on THIS alias's
+      // listing rather than the primary (§14's ON CONFLICT names the five-column key).
+      marketplaceContexts: [
+        { channel: coord.channel, marketplace: coord.marketplace, ...(coord.accountId ? { accountId: coord.accountId } : {}), ...(coord.locale ? { locale: coord.locale } : {}), aliasKey: wireAliasKey(row.aliasId) },
+      ],
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
     })
     let res = await send(casVersion)
     let body = await res.json().catch(() => null)
@@ -474,7 +474,8 @@ async function commitChannelLanguage(
       res = await send(body.currentVersion)
       body = await res.json().catch(() => null)
     }
-    if (res.status >= 500 || res.ok && (!body || typeof body.updated !== 'number' && !Array.isArray(body.errors))) {
+    // A 5xx is "no answer" — unless the bulk save states nothing of it was stored (rolled back): that is a refusal.
+    if (res.status >= 500 && !nothingSaved(body) || res.ok && (!body || typeof body.updated !== 'number' && !Array.isArray(body.errors))) {
       return { ok: false, unreachable: true, reason: 'Save confirmation was unavailable. Checking the stored values.' }
     }
     // The drafts this save started: adopted into the saved row and its whole family BEFORE the version write-back

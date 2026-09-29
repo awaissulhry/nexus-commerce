@@ -34,3 +34,18 @@ describe('saved layout recovery in the sheet status footer', () => {
     expect(html).toContain('Show the keyboard shortcuts')
   })
 })
+
+describe('retrying the refused cells of a save', () => {
+  it('offers the retry beside the refusal, counting only the edits it will send again', () => {
+    const onRetry = vi.fn()
+    const html = render({ refused: 3, retryable: 2, onRetry })
+    expect(html).toContain('3 cells blocked')
+    expect(html).toContain('aria-label="Retry 2 failed cells"')
+    expect(html).toContain('>Retry</button>')
+  })
+
+  it('offers no retry when nothing refused can be sent again as it is', () => {
+    expect(render({ refused: 3, retryable: 0, onRetry: vi.fn() })).not.toContain('Retry')
+    expect(render({ refused: 0, retryable: 0, onRetry: vi.fn(), layoutRecovery: null })).not.toContain('>Retry</button>')
+  })
+})

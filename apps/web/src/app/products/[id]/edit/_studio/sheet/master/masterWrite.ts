@@ -20,6 +20,7 @@
  */
 import { commitLanguageGroups } from '../languageWrites'
 import { getBackendUrl } from '@/lib/backend-url'
+import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -54,6 +55,11 @@ import type { UseMasterSheetOptions } from './useMasterSheet'
 export interface MasterCommitContext {
   /** The sheet as of THIS call — supplies `columns`, i.e. where each cell writes. */
   sheet: StudioSheet | null
+  /**
+   * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
+   * operation's single `POST /api/products/bulk-save` (`runBulkOperation`). Everything else here is the same.
+   */
+  bulkSend?: BulkSend
   /** Only the write callbacks; this function has no business with the rest of the options. */
   opts: Pick<UseMasterSheetOptions, 'onWriteStart' | 'onWriteEnd'>
   locale: string
@@ -82,7 +88,6 @@ async function commitMasterLanguage(
   req: SheetWriteRequest<StudioRow>,
   ctx: MasterCommitContext,
 ): Promise<SheetWriteResult> {
-  const backend = getBackendUrl()
   const columns = ctx.sheet?.columns ?? []
   const byKey = new Map(columns.map((c) => [c.key, c]))
   const cells: Record<string, { ok: boolean; reason?: string; unreachable?: boolean }> = {}
@@ -125,58 +130,53 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
 
   try {
     if (bulk.length > 0) {
-      const res = await fetch(`${backend}/api/products/bulk`, {
-        method: 'PATCH',
-        signal: AbortSignal.timeout(30_000),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          changes: bulk.map((c) => ({
-            id: req.rowId,
-            contentAddress: req.row?.values?.[c.colId]?.contentAddress,
-            contentVersion: req.row?.values?.[c.colId]?.contentVersion,
-            // The server told us the field name; never re-derive it from the column key.
-            field: byKey.get(c.colId)?.writeField ?? c.colId,
-            // 🔴 On the MASTER scope a `reset` really is "store nothing here", because the layer
-            // above is the parent and `resolveAttributes` falls through to it the moment this row
-            // holds no value of its own. That is a fact about THIS scope, not about resets: a
-            // channel scope resets by clearing `*Override` and restoring `followMaster*`, which
-            // is a different route entirely (PES.3 owns that `commit`). The intent is honoured
-            // here rather than in the writer precisely so the two can differ.
-            value: c.intent === 'reset' ? null : c.value === '' ? null : c.value,
-            ...(c.intent === 'reset' ? { intent: 'reset' } : {}),
-          })),
-          /* 🔴 THE MARKETPLACE CONTEXT. Without it every `attr_*` write on the master scope was
-             REFUSED — the Owner's "I'm unable to write a lot of attributes still, such as color".
-             `products.routes.ts:1403` validates each `attr_*` change with
-             `getFieldDefinition(field, { marketplace: primaryContext?.marketplace ?? null })`, and
-             this body carried no contexts at all, so every master attribute arrived with
-             `marketplace: null` and came back 400 "Unknown or read-only category attribute".
-             SC.1 measured it across the whole schema: **master DE/de 60 of 60 `attr_*` columns
-             refused, Amazon·DE 57 accepted** — the difference being that the channel writer sends
-             its contexts and this one did not.
+      const res = await (ctx.bulkSend ?? directBulkSend)({
+        changes: bulk.map((c) => ({
+          id: req.rowId,
+          contentAddress: req.row?.values?.[c.colId]?.contentAddress,
+          contentVersion: req.row?.values?.[c.colId]?.contentVersion,
+          // The server told us the field name; never re-derive it from the column key.
+          field: byKey.get(c.colId)?.writeField ?? c.colId,
+          // 🔴 On the MASTER scope a `reset` really is "store nothing here", because the layer
+          // above is the parent and `resolveAttributes` falls through to it the moment this row
+          // holds no value of its own. That is a fact about THIS scope, not about resets: a
+          // channel scope resets by clearing `*Override` and restoring `followMaster*`, which
+          // is a different route entirely (PES.3 owns that `commit`). The intent is honoured
+          // here rather than in the writer precisely so the two can differ.
+          value: c.intent === 'reset' ? null : c.value === '' ? null : c.value,
+          ...(c.intent === 'reset' ? { intent: 'reset' } : {}),
+        })),
+        /* 🔴 THE MARKETPLACE CONTEXT. Without it every `attr_*` write on the master scope was
+           REFUSED — the Owner's "I'm unable to write a lot of attributes still, such as color".
+           `products.routes.ts:1403` validates each `attr_*` change with
+           `getFieldDefinition(field, { marketplace: primaryContext?.marketplace ?? null })`, and
+           this body carried no contexts at all, so every master attribute arrived with
+           `marketplace: null` and came back 400 "Unknown or read-only category attribute".
+           SC.1 measured it across the whole schema: **master DE/de 60 of 60 `attr_*` columns
+           refused, Amazon·DE 57 accepted** — the difference being that the channel writer sends
+           its contexts and this one did not.
 
-             The marketplace comes from the coordinate the sheet was READ with — see
-             `MasterCommitContext.market` for why NOT from `sheet.scope`, which the server returns
-             as `null` on this endpoint. A write is validated against the schema that declared the
-             column, or the two are answering different questions. */
-          ...(ctx.market
-            ? { marketplaceContexts: [{ marketplace: ctx.market, locale: ctx.locale }] }
-            : {}),
-          // Omitted when unknown — the endpoint treats absent as "no concurrency guard", which is
-          // honest, where a guessed number would refuse a write the operator is entitled to make.
-          //
-          // ⚠ NOT covered by a test, and it cannot be: `expectedVersion: req.expectedVersion` with
-          // an undefined value is an EQUIVALENT MUTANT, because `JSON.stringify` drops undefined
-          // properties — both forms put identical bytes on the wire. The spread stays because it
-          // states the intent at the call site, but do not read the green suite as evidence that
-          // this line is load-bearing; it becomes so only if the body stops going through
-          // `JSON.stringify`.
-          ...(req.expectedVersion !== undefined ? { expectedVersion: req.expectedVersion } : {}),
-        }),
+           The marketplace comes from the coordinate the sheet was READ with — see
+           `MasterCommitContext.market` for why NOT from `sheet.scope`, which the server returns
+           as `null` on this endpoint. A write is validated against the schema that declared the
+           column, or the two are answering different questions. */
+        ...(ctx.market
+          ? { marketplaceContexts: [{ marketplace: ctx.market, locale: ctx.locale }] }
+          : {}),
+        // Omitted when unknown — the endpoint treats absent as "no concurrency guard", which is
+        // honest, where a guessed number would refuse a write the operator is entitled to make.
+        //
+        // ⚠ NOT covered by a test, and it cannot be: `expectedVersion: req.expectedVersion` with
+        // an undefined value is an EQUIVALENT MUTANT, because `JSON.stringify` drops undefined
+        // properties — both forms put identical bytes on the wire. The spread stays because it
+        // states the intent at the call site, but do not read the green suite as evidence that
+        // this line is load-bearing; it becomes so only if the body stops going through
+        // `JSON.stringify`.
+        ...(req.expectedVersion !== undefined ? { expectedVersion: req.expectedVersion } : {}),
       })
       const body = await res.json().catch(() => null)
-      if (res.status >= 500 || res.ok && (!body || typeof body.updated !== 'number' && !Array.isArray(body.errors))) throw new Error('Save confirmation was unavailable. Checking the stored values.')
+      // A 5xx is "no answer" — unless the bulk save states nothing of it was stored (rolled back): that is a refusal.
+      if (res.status >= 500 && !nothingSaved(body) || res.ok && (!body || typeof body.updated !== 'number' && !Array.isArray(body.errors))) throw new Error('Save confirmation was unavailable. Checking the stored values.')
 
       if (res.status === 409) {
         conflict = true

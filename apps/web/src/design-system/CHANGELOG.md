@@ -1,3 +1,7 @@
+## Sheet writer batch mode: one operation, one save — 2026-09-29
+
+Sheet bulk autosave (`fix/sheet-bulk-autosave`). **`SheetWriter`** gains an opt-in batch mode: **`commitBatch`** sends every queued row of one operation (a fill, a paste, an undo) as ONE call and keeps one call in flight for the whole sheet (edits made meanwhile go next, with the versions the first call returned); **`readBackBatch`** resolves every unknown row with ONE read; **`beginOperation` / `endOperation`** fence an operation (a fence holds an edit at most `FENCE_MAX_MS`, counted from the first held edit); **`failedCount` / `retryFailed()`** resend exactly the refused cells. Without `commitBatch` a writer is unchanged (one call per row). `pending` now counts cells in flight, not rows. **`GridSheetStatus`** says "Saving N cells…" while a multi-cell save is on the wire. `grid.css`: a note slot's action keeps its size, and **`.nds-grid-sheet-noteslot.is-urgent`** (a refusal with its Retry) never shrinks, so the footer stays readable at phone width.
+
 ## MediaBoard: a row's mark wraps — 2026-09-29
 
 Media page, Amazon photos per market. A row's `source` (its mark and its button: "Own for all Amazon markets", "Reset all

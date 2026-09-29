@@ -15,6 +15,8 @@ import { formulaCandidates, formulaColumnId } from '../formulaColumns';
 import { columnLanguages } from '../languages';
 import { ShopifySheetReview } from '../../shopify/ShopifySheetReview';
 import { recoverSheetRow } from '../sheetRecovery';
+import { runBulkOperation, type BulkSend } from '../bulkOperation';
+import { useSheetUndo } from '../useSheetUndo';
 import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
 import { withShopifyColumns } from '../../shopify/unlinkedInformationColumns';
@@ -269,26 +271,47 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }>());
     const writerRef = useRef<SheetWriter<ChannelSheetRow> | null>(null);
     if (writerRef.current === null) {
+        /* ONE row's save, with its reporter bookkeeping. `bulkSend` present = this row is one unit of a sheet operation
+           (`runBulkOperation`), which leaves as ONE `POST /api/products/bulk-save` with every other row it changed. */
+        const commitOne = async (req: SheetWriteRequest<ChannelSheetRow>, bulkSend?: BulkSend) => {
+            const { writeId, subject } = channelWriteIdentity(req.rowId, ++writeSeq.current, { channel, marketplace, accountId, locale, instanceId: writeInstanceId });
+            reporterRef.current.pending(writeId, subject);
+            /* VT.2 — the COLUMN's kind, so a `variationTheme` cell can leave by its own route.
+               🔴 `dataRef.current`, NOT `data`: this `commit` closure is created once and lives
+               for the writer's lifetime, so a captured `data` is whatever it was at mount —
+               `undefined` on the first render, which made `kindOf` answer undefined for every
+               column and silently disabled the split. Witnessed: a theme pick on Amazon·IT
+               reported `set` in the editor's own footer and issued no projection request at all.
+               The same ref discipline the formula candidates two hooks above already follow. */
+            const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
+                familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend });
+            if (result.unreachable)
+                unsettledWrites.current.set(req.rowId, { writeId, subject });
+            else
+                reporterRef.current.resolved(writeId, result.ok, result.reason, subject);
+            return result;
+        };
+        /* The scope's read, ONCE, for every row a lost answer left unknown (`readBackBatch`) or for one row (`readBack`). */
+        const readScope = async (requests: SheetWriteRequest<ChannelSheetRow>[]) => {
+            const recoveryLanguages = columnLanguages(requests.flatMap(request => request.cells.map(cell => cell.colId)));
+            const response = await fetch(channelScopeUrl({ productId, channel, marketplace, accountId, locale, locales: recoveryLanguages.length ? [...new Set([...(locale ? [locale] : []), ...recoveryLanguages])] : null }), { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30000) });
+            if (!response.ok)
+                return null;
+            const page = await response.json();
+            return Promise.all(requests.map(request => recoverSheetRow(page, request, { channel, market: marketplace, accountId, locale })));
+        };
         writerRef.current = new SheetWriter<ChannelSheetRow>({
             tracker,
             getApi: getGridApi,
-            commit: async (req: SheetWriteRequest<ChannelSheetRow>) => {
-                const { writeId, subject } = channelWriteIdentity(req.rowId, ++writeSeq.current, { channel, marketplace, accountId, locale, instanceId: writeInstanceId });
-                reporterRef.current.pending(writeId, subject);
-                /* VT.2 — the COLUMN's kind, so a `variationTheme` cell can leave by its own route.
-                   🔴 `dataRef.current`, NOT `data`: this `commit` closure is created once and lives
-                   for the writer's lifetime, so a captured `data` is whatever it was at mount —
-                   `undefined` on the first render, which made `kindOf` answer undefined for every
-                   column and silently disabled the split. Witnessed: a theme pick on Amazon·IT
-                   reported `set` in the editor's own footer and issued no projection request at all.
-                   The same ref discipline the formula candidates two hooks above already follow. */
-                const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
-                    familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created) });
-                if (result.unreachable)
-                    unsettledWrites.current.set(req.rowId, { writeId, subject });
-                else
-                    reporterRef.current.resolved(writeId, result.ok, result.reason, subject);
-                return result;
+            commit: (req: SheetWriteRequest<ChannelSheetRow>) => commitOne(req),
+            // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29: one request per
+            // row made 224 of 250 rows fail or go unconfirmed).
+            commitBatch: (requests) => runBulkOperation(requests, commitOne),
+            readBackBatch: async (requests) => {
+                const reads = await readScope(requests);
+                if (!reads)
+                    return null;
+                return new Map(requests.flatMap((request, i) => reads[i] ? [[request.rowId, reads[i]!] as const] : []));
             },
             onConflict: () => { },
             /* R-VT-15 — the same announcement the master scope makes, from the same shared
@@ -298,13 +321,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                Before this the channel scope's refusals — including the axis and content-address ones
                this programme measured — appeared only as a red cell mark. */
             onRefused: announceRefusals,
-            readBack: async (request) => {
-                const recoveryLanguages = columnLanguages(request.cells.map(cell => cell.colId));
-                const response = await fetch(channelScopeUrl({ productId, channel, marketplace, accountId, locale, locales: recoveryLanguages.length ? [...new Set([...(locale ? [locale] : []), ...recoveryLanguages])] : null }), { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30000) });
-                if (!response.ok)
-                    return null;
-                return recoverSheetRow(await response.json(), request, { channel, market: marketplace, accountId, locale });
-            },
+            readBack: async (request) => (await readScope([request]))?.[0] ?? null,
             onReconciled: ({ rowId, ok, savedAt }) => {
                 const { writeId, subject } = channelWriteIdentity(rowId, ++writeSeq.current, { channel, marketplace, accountId, locale, instanceId: writeInstanceId });
                 const held = unsettledWrites.current.get(rowId);
@@ -333,7 +350,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }
     const writer = writerRef.current;
     useSheetPublicationGuard(writer, tracker, getGridApi);
-    const { pending, refused, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
+    const { pending, refused, retryable, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
+    /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
+    const undo = useSheetUndo(writer, getGridApi);
     useEffect(() => {
         writer.arm();
         return () => writer.destroy();
@@ -493,8 +512,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             });
             return;
         }
+        undo.record({ rowId: e.data.rowId, colId, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.rowId, colId, e.newValue, { row: e.data, intent: 'set' });
-    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId]);
+    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record]);
     /* The band stops before the progress column (2026-09-26): the listing row keeps its own progress cell there, as
        master's parent row does. */
     const bandSpan = useMemo(() => bandColSpan<ChannelSheetRow>({ isBand: (d) => d?.rowKind === 'parent', stopBefore: isProgressColumn }), []);
@@ -960,6 +980,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             showRefusedOnly: showRefusedOnly,
             onToggleRefused: () => setShowRefusedOnly((v) => !v),
             lastSavedAt: lastSavedAt,
+            retryable,
+            onRetry: () => { writer.retryFailed(); },
         }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the shared master record — every channel sees those edits
             </span>)}</>,
@@ -980,11 +1002,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             onGridPreDestroyed: onGridPreDestroyed,
             initialState: sheetColumns.initialState,
             onCellValueChanged: onCellValueChanged,
+            // One operation (fill, paste, range delete) = one undo step and one save; ⌘Z is the sheet's own (`useSheetUndo`).
+            ...undo.gridProps,
             rowSelection: rowSelection,
             onSelectionChanged: onSelectionChanged,
             onCellFocused: onCellFocused,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: onCellKeyDown,
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             getContextMenuItems: contextMenu,
             columnDialog: columnDialog,
         },

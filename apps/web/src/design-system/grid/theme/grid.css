@@ -1251,6 +1251,12 @@
    band collapsed when the slot emptied and the whole grid grew by a line. */
 .nds-grid-sheet-note { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; min-height: 18px; }
 .nds-grid-sheet-noteslot { display: inline-flex; align-items: center; gap: 8px; min-height: 18px; min-width: 0; }
+/* The slot's action (Retry…) keeps its size; the note beside it is the one that shortens with an ellipsis. Without
+   this, at phone width the action's unbreakable label was drawn over the note (measured 2026-09-29, 390 px). */
+.nds-grid-sheet-noteslot > .nds-btn { flex: 0 0 auto; }
+/* A slot the operator must act on (a refusal with its Retry) never shrinks: the strip's other, longer notes give way
+   first. Measured at 390 px: the strip is 322 px, and a shrinking slot left 43 px for a 78 px action. */
+.nds-grid-sheet-noteslot.is-urgent { flex: 0 0 auto; }
 /* The permanent way back to the shortcuts. Same type scale as the note it restores. */
 /* 🔴 This control is the DS Button (#684) — `variant="quiet" size="xs"`. What is left here is ONLY
    the 18px square, which no Button size offers (`.nds-btn.icon.xs` is 23px), and the SELECTOR WEIGHT

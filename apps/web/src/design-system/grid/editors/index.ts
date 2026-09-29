@@ -41,7 +41,7 @@ export { longTextEditor, sheetClassRules, selectValidation, lengthValidation, le
 // PES.2 — the ONE decision about whether a grid change should be written (rulings #53, #63).
 export { writeGate, NON_EDIT_SOURCES, type WriteGateInput, type WriteGateVerdict } from './writeGate'
 // PES.2 — the sheet's ONE write path: per-row version, per-row batching, per-cell outcomes.
-export { SheetWriter, DEFAULT_SHEET_FLUSH_MS, type SheetWriteCell, type SheetWriteRequest, type SheetWriteResult, type SheetWriterOptions } from './sheetWriter'
+export { SheetWriter, DEFAULT_SHEET_FLUSH_MS, type ReadBackSnapshot, type SheetWriteCell, type SheetWriteRequest, type SheetWriteResult, type SheetWriterOptions } from './sheetWriter'
 export { variationThemeChange, variationThemeWrite, type VariationThemeChange, type VariationThemeChangeKind, type VariationThemeWrite, type VariationThemeWriteFacts } from './sheetWriter'
 
 // PES.2 — D16 formula editing (#730). The RULES are pure and tested; the editor is wiring over them.
