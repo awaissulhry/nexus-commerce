@@ -281,12 +281,14 @@ jobs:
   # The worker and scheduler ship the same commit once the API serves it, side by side and each
   # with its own time limit. In one job, three sequential builds overran its 25 minutes
   # (2026-09-26): the job was cancelled while the scheduler's build was still running.
+  # 40 minutes: railway-deploy-image.sh can take about 36 when every Railway request hangs to its limit, and it should
+  # still print its own "✗ …" line before GitHub ends the job (review of PR 2, 2026-09-30).
   # No status function: when the API deploy is skipped or fails, these must not ship.
   deploy-background:
     needs: [changes, deploy]
     name: Ship ${{ matrix.role }} to Railway
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
