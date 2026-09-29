@@ -11,14 +11,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { planColourProducts, type ColourPlanFamily } from '@nexus/shared/shopify-colour-products'
 
 const state = vi.hoisted(() => ({ db: null as any, destination: null as any, family: null as any, colours: [] as string[], store: new Map<string, any>(),
-  definitions: {} as Record<string, string | null>, calls: [] as Array<{ name: string; variables: any }>, mode: 'live', afterRead: null as null | (() => void), refuseSet: 0, afterSet: {} as Record<number, () => void> }))
+  definitions: {} as Record<string, string | null>, calls: [] as Array<{ name: string; variables: any }>, mode: 'live', afterRead: null as null | (() => void), refuseSet: 0, afterSet: {} as Record<number, () => void>,
+  validations: {} as Record<string, Array<{ name: string; value: string }>>, accounts: [] as string[], beforeLinkRead: {} as Record<number, () => void> }))
 vi.mock('@nexus/database', async importOriginal => {
   const { formulaDatabase } = await import('../../../test-support/formula-database.js')
   state.db = await formulaDatabase()
   return { ...await importOriginal<any>(), default: state.db.client, prisma: state.db.client }
 })
 vi.mock('../content-workspace.service.js', async importOriginal => ({ ...await importOriginal<any>(), contentDestination: async () => state.destination }))
-vi.mock('../admin-client.js', async importOriginal => ({ ...await importOriginal<any>(), shopifyAdmin: async () => ({ graphql: async (query: string, variables: any) => shopify(query, variables) }) }))
+vi.mock('../admin-client.js', async importOriginal => ({ ...await importOriginal<any>(), shopifyAdmin: async (account: string) => { state.accounts.push(account); return { graphql: async (query: string, variables: any) => shopify(query, variables) } } }))
 vi.mock('../../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => state.mode, acquireShopifyPublishToken: async () => ({ ok: true }) }))
 vi.mock('./family.js', () => ({ loadColourPlan: async (_rootId: string, options: any = {}) => {
   const family: ColourPlanFamily = { ...state.family, variants: state.family.variants.filter((v: any) => state.colours.includes(v.values.color)), valueOrder: { ...state.family.valueOrder, color: state.colours } }
@@ -31,6 +32,8 @@ const digest = (value: string) => `d:${value}`
 const fieldOf = (id: string, address: string) => state.store.get(id)?.fields[address] ?? null
 const valueOf = (id: string, address: string) => fieldOf(id, address)?.value ?? null
 const put = (id: string, address: string, value: string, type = address === LIST ? 'list.product_reference' : 'single_line_text_field') => { state.store.get(id).fields[address] = { value, type, compareDigest: digest(value) } }
+/** A product deleted in Shopify: gone, and (as Shopify does, T12) removed from every list that named it. */
+const remove = (id: string) => { state.store.delete(id); for (const p of state.store.values()) { const f = p.fields[LIST]; if (f && f.value.includes(id)) p.fields[LIST] = { ...f, value: JSON.stringify(JSON.parse(f.value).filter((x: string) => x !== id)), compareDigest: digest(`${f.value}-${id}`) } } }
 const mutations = () => state.calls.filter(c => c.name === 'NexusLinkedSet' || c.name === 'NexusLinkedClear')
 const setInputs = () => state.calls.filter(c => c.name === 'NexusLinkedSet').map(c => c.variables.metafields.map((f: any) => `${f.ownerId.split('/').pop()}:${f.key}`))
 
@@ -40,7 +43,8 @@ function shopify(query: string, variables: any) {
   state.calls.push({ name, variables: structuredClone(variables) })
   const field = (id: string, ns: string, key: string) => fieldOf(id, `${ns}.${key}`)
   if (name === 'NexusColourLinkRead') {
-    const definition = (address: string) => ({ nodes: state.definitions[address] ? [{ id: `def-${address}`, name: address === VALUE ? 'Variation value' : 'Variation products', type: { name: state.definitions[address] } }] : [] })
+    state.beforeLinkRead[state.calls.filter(c => c.name === name).length]?.()
+    const definition = (address: string) => ({ nodes: state.definitions[address] ? [{ id: `def-${address}`, name: address === VALUE ? 'Variation value' : 'Variation products', type: { name: state.definitions[address] }, validations: state.validations[address] ?? [] }] : [] })
     const result = { nodes: variables.ids.map((id: string) => state.store.has(id) ? { id, title: state.store.get(id).title, value: field(id, variables.vns, variables.vkey), list: field(id, variables.lns, variables.lkey) } : null),
       valueDefinition: definition(`${variables.vns}.${variables.vkey}`), listDefinition: definition(`${variables.lns}.${variables.lkey}`) }
     const hook = state.afterRead; state.afterRead = null; hook?.()
@@ -78,7 +82,7 @@ function shopify(query: string, variables: any) {
 import prisma from '../../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 import { linkColourProducts } from './link.service.js'
-import { DEFAULT_COLOUR_PRODUCT_SETTINGS } from './settings.js'
+import { colourGrouping, DEFAULT_COLOUR_PRODUCT_SETTINGS } from './settings.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -113,7 +117,7 @@ beforeAll(async () => {
   }
 }, 60_000)
 beforeEach(async () => {
-  Object.assign(state, { store: new Map(), calls: [], mode: 'live', afterRead: null, refuseSet: 0, afterSet: {}, definitions: { [VALUE]: 'single_line_text_field', [LIST]: 'list.product_reference' } })
+  Object.assign(state, { store: new Map(), calls: [], mode: 'live', afterRead: null, refuseSet: 0, afterSet: {}, validations: {}, accounts: [], beforeLinkRead: {}, definitions: { [VALUE]: 'single_line_text_field', [LIST]: 'list.product_reference' } })
   state.destination = { familyId: ids.fam, accountId: ids.account, marketplace: 'GLOBAL', aliasKey: '' }
   await scoped(async () => { await prisma.shopifyColourProduct.deleteMany({}); await prisma.channelListing.deleteMany({ where: { channel: 'SHOPIFY' } }) })
   await settings({})
@@ -133,9 +137,8 @@ describe('Link — the colour names and the colour lists, written and read back'
       [gid(1), LIST, list(C1, C2, C3), null], [gid(2), LIST, list(C1, C2, C3), null], [gid(3), LIST, list(C1, C2, C3), null],
     ])
     expect(view.link).toMatchObject({ grouped: true, members: 3, written: 6, cleared: 0, warnings: [] })
-    const rows = await rowsOf()
-    expect(rows.every(r => r.linkVerifiedAt?.toISOString() === view.link.verifiedAt)).toBe(true)
-    expect(view.colourProducts.every((r: any) => r.linkVerifiedAt === view.link.verifiedAt)).toBe(true)
+    expect((await rowsOf()).map(r => r.linkVerifiedAt?.toISOString())).toEqual(Array(3).fill(view.link.verifiedAt))
+    expect(view.colourProducts.map((r: any) => r.linkVerifiedAt)).toEqual(Array(3).fill(view.link.verifiedAt))
   })
 
   it('a second run with nothing changed writes nothing; a live group that is already right (GALE) is only read', async () => {
@@ -146,7 +149,7 @@ describe('Link — the colour names and the colour lists, written and read back'
     expect(mutations()).toEqual([])
     expect(state.calls.map(c => c.name)).toEqual(['NexusColourLinkRead'])
     expect(again.link).toMatchObject({ written: 0, cleared: 0 })
-    expect((await rowsOf()).every(r => r.linkVerifiedAt?.toISOString() === again.link.verifiedAt)).toBe(true)
+    expect((await rowsOf()).map(r => r.linkVerifiedAt?.toISOString())).toEqual(Array(3).fill(again.link.verifiedAt))
   })
 
   it('a live list in another order: only the lists are rewritten, over what Shopify held (Nexus owns them)', async () => {
@@ -213,6 +216,7 @@ describe('Link — one colour, many colours', () => {
     expect((await link()).link).toMatchObject({ grouped: false, members: 1, cleared: 1 })
     const [one, two] = await rowsOf()
     expect([one.linkVerifiedAt !== null, two.linkVerifiedAt]).toEqual([true, null])
+    expect([valueOf(gid(1), LIST), valueOf(gid(1), VALUE)]).toEqual([null, 'Black'])
   })
 
   it('13 colours: 25 fields then 1 (never 26 in a call), names before lists; the whole group is verified at the end', async () => {
@@ -229,21 +233,23 @@ describe('Link — one colour, many colours', () => {
   it('the second call refused after the first wrote: no "Linked ✓", the message says how far it got, and a rerun writes only the rest', async () => {
     const thirteen = COLOURS.slice(0, 13)
     await family(thirteen)
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: {}, data: { linkVerifiedAt: new Date('2026-09-01T00:00:00Z') } }))
     state.refuseSet = 2
     await expect(link()).rejects.toThrow(/^Shopify did not save Variation products on "LV jacket 13" \(Colore 13\): Refused for the test\. The first 25 of 26 fields are written\. Run the link again: it writes only what is still missing\.$/)
-    expect((await rowsOf()).every(r => r.linkVerifiedAt === null)).toBe(true)
+    expect((await rowsOf()).map(r => r.linkVerifiedAt)).toEqual(Array(13).fill(null))
     state.calls = []
     await link()
     expect(setInputs()).toEqual([['13:variation_products']])
-    expect((await rowsOf()).every(r => r.linkVerifiedAt !== null)).toBe(true)
+    expect((await rowsOf()).filter(r => r.linkVerifiedAt !== null)).toHaveLength(13)
   })
 
   it('another writer changes a colour of the first call while the second runs: the final read of the whole group refuses "Linked ✓"', async () => {
     const thirteen = COLOURS.slice(0, 13)
     await family(thirteen)
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: {}, data: { linkVerifiedAt: new Date('2026-09-01T00:00:00Z') } }))
     state.afterSet[2] = () => put(gid(1), LIST, list(C1))
     await expect(link()).rejects.toThrow('Shopify read back other colour fields for "Colore 1". Run the link again.')
-    expect((await rowsOf()).every(r => r.linkVerifiedAt === null)).toBe(true)
+    expect((await rowsOf()).map(r => r.linkVerifiedAt)).toEqual(Array(13).fill(null))
   })
 
   it('more than 50 colours: linked, with a warning that the theme shows 50 (scenario 25)', async () => {
@@ -266,6 +272,7 @@ describe('Link refuses, and names why', () => {
     await scoped(() => prisma.channelListing.create({ data: { productId: ids.fam, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: ids.account, aliasKey: '',
       platformAttributes: { _nexusLinkedProducts: { version: 1, members: [], relationship: { namespace: 'custom', key: 'variation_products', includeSelf: true }, baselineLinks: [], edits: [] } } } as never }))
     await expect(link()).rejects.toThrow('This family has links in Product family. Remove them there first; then colour products link it. Nothing was changed.')
+    expect(state.calls).toEqual([])
     // An empty Product family record (the live GALE has one) does not count as links.
     await scoped(() => prisma.channelListing.updateMany({ where: { productId: ids.fam }, data: { platformAttributes: { _nexusLinkedProducts: { version: 1, members: [], relationship: null, baselineLinks: [], edits: [] } } } }))
     state.calls = []
@@ -289,11 +296,11 @@ describe('Link refuses, and names why', () => {
   it('a colour product deleted in Shopify: named, nothing written; a "Linked ✓" from before is withdrawn', async () => {
     await family([C1, C2, C3])
     await link()
-    state.store.delete(gid(2))
+    remove(gid(2))
     state.calls = []
     await expect(link()).rejects.toThrow('The Shopify product of "Colore 2" no longer exists. Nothing was changed.')
     expect(mutations()).toEqual([])
-    expect((await rowsOf()).every(r => r.linkVerifiedAt === null)).toBe(true)
+    expect((await rowsOf()).map(r => r.linkVerifiedAt)).toEqual([null, null, null])
   })
 
   it('a field changed in Shopify between the read and the write: refused before any write; the next run repairs it', async () => {
@@ -331,6 +338,7 @@ describe('Link — per store and alias, and only its own two fields', () => {
     expect(state.calls.every(c => !JSON.stringify(c.variables).includes(gid(3)))).toBe(true)
     const others = await scoped(() => prisma.shopifyColourProduct.findMany({ where: { valueKey: C3 } }))
     expect(others.map(r => r.linkVerifiedAt?.toISOString())).toEqual([at.toISOString(), at.toISOString()])
+    expect(state.accounts).toEqual([ids.account])
   })
 
   it('the store\'s own grouping fields are used, and nothing but them is ever written', async () => {
@@ -340,5 +348,144 @@ describe('Link — per store and alias, and only its own two fields', () => {
     await link()
     expect(mutations().flatMap(c => c.variables.metafields.map((f: any) => `${f.namespace}.${f.key}`))).toEqual(['theme.colour', 'theme.colour', 'theme.colours', 'theme.colours'])
     expect(state.calls.every(c => ['NexusColourLinkRead', 'NexusLinkedFieldValues', 'NexusLinkedSet'].includes(c.name))).toBe(true)
+  })
+})
+
+describe('Link — review additions', () => {
+  it('a list due for deletion that changes in Shopify after the read is not deleted (the delete has no compare-and-set; the pre-read guards it)', async () => {
+    await family([C1])
+    put(gid(1), LIST, list(C1, C2))
+    state.afterRead = () => put(gid(1), LIST, list(C1, C3))
+    await expect(link()).rejects.toMatchObject({ statusCode: 409, message: expect.stringMatching(/^"LV jacket 1" \(Colore 1\): Shopify changed this field\. .* Run the link again: it writes only what is still missing\.$/) })
+    expect(state.calls.some(c => c.name === 'NexusLinkedClear')).toBe(false)
+    expect(valueOf(gid(1), LIST)).toBe(list(C1, C3))
+    await link()
+    expect(valueOf(gid(1), LIST)).toBeNull()
+  })
+
+  it('two colours drop to one while the other is still confirmed: it stays listed (U2 a), so nothing is deleted', async () => {
+    await family([C1, C2])
+    await link()
+    state.colours = [C1]
+    state.calls = []
+    const view = await link()
+    expect(view.link).toMatchObject({ grouped: true, members: 2, written: 0, cleared: 0 })
+    expect(mutations()).toEqual([])
+    expect([valueOf(gid(1), LIST), valueOf(gid(2), LIST), valueOf(gid(2), VALUE)]).toEqual([list(C1, C2), list(C1, C2), 'Yellow'])
+    expect((await rowsOf()).map(r => r.linkVerifiedAt?.toISOString())).toEqual([view.link.verifiedAt, view.link.verifiedAt])
+  })
+
+  it('a live group of two gets a third colour: one call; new fields guarded "must not exist", live lists by the digest just read; live names untouched', async () => {
+    await family([C1, C2, C3])
+    for (const k of [C1, C2]) { put(gid(N(k)), VALUE, N(k) === 1 ? 'Black' : 'Yellow'); put(gid(N(k)), LIST, list(C1, C2)) }
+    const view = await link()
+    expect(mutations()).toHaveLength(1)
+    expect(mutations()[0].variables.metafields.map((f: any) => [f.ownerId, `${f.namespace}.${f.key}`, f.compareDigest])).toEqual([
+      [gid(3), VALUE, null], [gid(1), LIST, digest(list(C1, C2))], [gid(2), LIST, digest(list(C1, C2))], [gid(3), LIST, null]])
+    expect([1, 2, 3].map(n => valueOf(gid(n), LIST))).toEqual(Array(3).fill(list(C1, C2, C3)))
+    expect(view.link).toMatchObject({ members: 3, written: 4, cleared: 0 })
+  })
+
+  it('a live list naming a product outside the group: our lists are rewritten without it, and it is never read or written', async () => {
+    await family([C1, C2])
+    state.store.set(gid(99), { title: 'Foreign jacket', fields: {} })
+    const foreign = JSON.stringify([gid(1), gid(99), gid(2)])
+    for (const n of [1, 2, 99]) put(gid(n), LIST, foreign)
+    await link()
+    expect([valueOf(gid(1), LIST), valueOf(gid(2), LIST)]).toEqual([list(C1, C2), list(C1, C2)])
+    expect(valueOf(gid(99), LIST)).toBe(foreign)
+    expect(mutations().flatMap(c => c.variables.metafields.map((f: any) => f.ownerId))).not.toContain(gid(99))
+    expect(state.calls.find(c => c.name === 'NexusColourLinkRead')!.variables.ids).toEqual([gid(1), gid(2)])
+  })
+
+  it('13 colours: a field of the second call changed after the first call wrote: 409 before that call, says how far it got; the next run repairs only it', async () => {
+    const thirteen = COLOURS.slice(0, 13)
+    await family(thirteen)
+    state.afterSet[1] = () => put(gid(13), LIST, list(thirteen[12]))
+    await expect(link()).rejects.toMatchObject({ statusCode: 409,
+      message: '"LV jacket 13" (Colore 13): Shopify changed this field. Review the latest values before retrying. The first 25 of 26 fields are written. Run the link again: it writes only what is still missing.' })
+    expect(state.calls.filter(c => c.name === 'NexusLinkedSet')).toHaveLength(1)
+    state.afterSet = {}
+    state.calls = []
+    await link()
+    expect(setInputs()).toEqual([['13:variation_products']])
+    expect(valueOf(gid(13), LIST)).toBe(list(...thirteen))
+  })
+
+  it('a member deleted during the writes: no "Nothing was changed", no "Linked ✓"; the next run names it before any write', async () => {
+    const thirteen = COLOURS.slice(0, 13)
+    await family(thirteen)
+    state.afterSet[2] = () => remove(gid(5))
+    const error = await link().catch((e: Error) => e)
+    expect(error.message).toMatch(/Run the link again/)
+    expect(error.message).not.toMatch(/Nothing was changed/)
+    expect(mutations()).toHaveLength(2)
+    expect((await rowsOf()).filter(r => r.linkVerifiedAt !== null)).toEqual([])
+    state.afterSet = {}
+    state.calls = []
+    await expect(link()).rejects.toThrow('The Shopify product of "Colore 5" no longer exists. Nothing was changed.')
+    expect(mutations()).toEqual([])
+  })
+
+  it('the final read-back of the whole group, when a member is gone by then, ends with "Run the link again", not "Nothing was changed"', async () => {
+    await family([C1, C2])
+    state.beforeLinkRead[2] = () => remove(gid(2))
+    await expect(link()).rejects.toMatchObject({ statusCode: 409, message: 'The Shopify product of "Colore 2" no longer exists. Run the link again.' })
+    expect(mutations()).toHaveLength(1)
+  })
+
+  it('"writes off on the server" keeps an earlier "Linked ✓" (nothing is read); the store switch off withdraws it; neither calls Shopify', async () => {
+    await family([C1, C2])
+    await link()
+    state.calls = []
+    state.mode = 'dry-run'
+    await expect(link()).rejects.toThrow('Shopify writes are switched off on this server. Nothing was changed.')
+    expect((await rowsOf()).map(r => r.linkVerifiedAt !== null)).toEqual([true, true])
+    state.mode = 'live'
+    await settings({ enabled: false })
+    await expect(link()).rejects.toThrow('Switch on colour products for this Shopify store first. Nothing was changed.')
+    expect(state.calls).toEqual([])
+    expect((await rowsOf()).map(r => r.linkVerifiedAt)).toEqual([null, null])
+  })
+
+  it('a colour the family no longer has keeps its Shopify name, so a new name equal to it is refused before any write', async () => {
+    await family([C1, C2, C3])
+    await link()
+    state.colours = [C1, C2]
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: C2 }, data: { colourName: 'grey' } }))
+    state.calls = []
+    await expect(link()).rejects.toThrow('"Colore 2", "Grey" would all be called "grey" on Shopify. Give each colour its own name. Nothing was changed.')
+    expect(mutations()).toEqual([])
+  })
+
+  it('a colour name the Shopify field\'s rules refuse (here: at most 5 characters) is refused before any write, with the field\'s name', async () => {
+    state.validations[VALUE] = [{ name: 'max', value: '5' }]
+    await family([C1, C2], ['Black', 'Yellow'])
+    await expect(link()).rejects.toThrow(/^"LV jacket 2" \(Colore 2\): Variation value — .+ Nothing was changed\.$/)
+    expect(mutations()).toEqual([])
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: C2 }, data: { colourName: 'Gold' } }))
+    await link()
+    expect([valueOf(gid(1), VALUE), valueOf(gid(2), VALUE)]).toEqual(['Black', 'Gold'])
+  })
+})
+
+describe('colourGrouping — who owns the grouping fields (the guard\'s database side)', () => {
+  const here = () => ({ familyId: ids.fam, accountId: ids.account, marketplace: 'GLOBAL', aliasKey: '' })
+  const grouping = (ownerIds: string[] = [], destination = here()) => scoped(() => colourGrouping(destination, ownerIds))
+  it('null without a confirmed colour; the family and its products once one is confirmed; null with the store switch off', async () => {
+    await family([C1, C2], ['Black', 'Yellow'], 'PROPOSED')
+    expect(await grouping([gid(1)])).toBeNull()
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: C1 }, data: { state: 'LINKED', shopifyProductId: gid(1) } }))
+    expect(await grouping()).toEqual({ fields: [{ namespace: 'custom', key: 'variation_value' }, { namespace: 'custom', key: 'variation_products' }], family: true, products: [gid(1)] })
+    await settings({ enabled: false })
+    expect(await grouping()).toBeNull()
+  })
+  it('another family, alias or store: only the colour products named, never the family; a product that is not one gives null', async () => {
+    await family([C1, C2])
+    const other = { ...here(), familyId: 'another-family' }
+    expect(await grouping([gid(40)], other)).toBeNull()
+    expect(await grouping([gid(2), gid(40)], other)).toMatchObject({ family: false, products: [gid(2)] })
+    expect(await grouping([], { ...here(), aliasKey: 'outlet' })).toBeNull()
+    expect(await grouping([gid(1)], { ...here(), accountId: ids.other })).toBeNull()
   })
 })

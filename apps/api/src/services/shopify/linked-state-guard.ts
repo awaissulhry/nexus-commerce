@@ -1,3 +1,5 @@
+import { definitionAddress, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
+
 /** Only the reviewed Shopify workspace may write its intent, authority and checkpoints. */
 export const isManagedShopifyAttribute = (key: string) => ['_nexusLinkedProducts', '_nexusLinkedProductsOperation', '_nexusLinkedAutomation', '_nexusSheetMediaSync'].includes(key)
 
@@ -10,16 +12,21 @@ export function shopifyInformationPublicationIssue(attributes: unknown): string 
   return null
 }
 
-type FieldAddress = { namespace: string; key: string }
+type Address = { namespace: string; key: string }
 /**
- * Colour products (PR 4) own the two grouping fields of the family they manage (`fields`, from `colourManagedFields`):
- * no Product family link, and no edit, shared rule or change on either field, may write them there. Null: allowed.
+ * Colour products (PR 4) own the two grouping fields (`grouping`, from `colourGrouping`): of the family they manage, and
+ * of every confirmed colour product of the store. No Product family link, edit, shared rule or change may write them
+ * there. Null: allowed.
  */
-export function colourGroupingIssue(fields: readonly FieldAddress[] | null, draft: { relationship?: unknown; edits?: readonly FieldAddress[]; sharedFields?: readonly FieldAddress[] } | null | undefined, changes: readonly FieldAddress[] = []): string | null {
-  if (!fields) return null
-  if (draft?.relationship) return 'Colour products link this family on Shopify. Remove its links in Product family first.'
-  const owned = (a: FieldAddress) => fields.some(f => f.namespace === a.namespace && f.key === a.key)
-  if ([...changes, ...(draft?.edits ?? []), ...(draft?.sharedFields ?? [])].some(owned))
-    return `Colour products write ${fields.map(f => `${f.namespace}.${f.key}`).join(' and ')} for this family. Remove those edits here; Nexus keeps both fields correct.`
+export function colourGroupingIssue(grouping: { fields: readonly Address[]; family: boolean; products: readonly string[] } | null,
+  draft: Pick<ShopifyLinkedDraft, 'relationship' | 'members' | 'edits' | 'sharedFields'>, changes: ReadonlyArray<Address & { ownerId: string }> = []): string | null {
+  if (!grouping) return null
+  const owned = new Set(grouping.fields.map(definitionAddress)), colourProduct = new Set(grouping.products)
+  if (grouping.family && draft.relationship) return 'Colour products link this family on Shopify. Remove its links in Product family first.'
+  if (draft.relationship && owned.has(definitionAddress(draft.relationship)) && draft.members.some(m => colourProduct.has(m.id)))
+    return 'Some of these products are colour products of another family, and colour products write their colour list. Remove them from this Product family.'
+  const written = (a: Address & { ownerId: string }) => owned.has(definitionAddress(a)) && (grouping.family || colourProduct.has(a.ownerId))
+  if ([...changes, ...draft.edits].some(written) || (grouping.family && (draft.sharedFields ?? []).some(f => owned.has(definitionAddress(f)))))
+    return `Colour products write ${grouping.fields.map(definitionAddress).join(' and ')} on these products. Remove those edits here; Nexus keeps both fields correct.`
   return null
 }
