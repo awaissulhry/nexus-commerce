@@ -92,6 +92,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'create-negative-keyword': () => ({ externalCampaignId: 'none', keywordText: 'free', matchType: 'NEGATIVE_EXACT' }),
   'graduate-keyword': () => ({ query: 'jacket', sourceExternalCampaignId: 'none', destExternalCampaignId: 'none' }),
   'set-target-bid': () => ({ targetId: 'none', proposedBidCents: 55 }),
+  'listing-issues': (ids) => ({ productId: ids.productId }),
+  'channel-price-stock': (ids) => ({ productId: ids.productId }),
+  'out-of-sync-listings': (ids) => ({ productId: ids.productId }),
 }
 
 async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> {
@@ -133,7 +136,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
         purchaseDate: new Date(),
       },
     })
-    await db.channelListing.create({
+    const listing = await db.channelListing.create({
       data: {
         productId: product.id,
         channelMarket: 'EBAY_IT',
@@ -143,6 +146,32 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
         title: `${mark} listing`,
         price: '21.50',
         quantity: 5,
+        listingStatus: 'ACTIVE',
+        externalListingId: `${mark}-ITEM-1`,
+      },
+    })
+    // MCP.9 — what the cross-channel tools read: an open channel issue and a read-back that found a difference.
+    await db.listingIssue.create({
+      data: {
+        listingId: listing.id,
+        code: 'CODE-1',
+        severity: 'ERROR',
+        message: `${mark} brand is required`,
+        attributeNames: ['brand'],
+        categories: [],
+        fingerprint: 'CODE-1::brand',
+      },
+    })
+    const checkedAt = new Date().toISOString()
+    await db.channelDrift.create({
+      data: {
+        channelListingId: listing.id,
+        channel: 'EBAY',
+        marketplace: 'IT',
+        driftCount: 1,
+        driftedFields: [{ field: 'quantity', ours: 5, theirs: 4, source: 'ebay-trading-getitem', checkedAt }],
+        lastCheckedAt: new Date(checkedAt),
+        checkedBySource: { 'ebay-trading-getitem': { at: checkedAt, outcome: 'compared', differing: 1 } },
       },
     })
     await db.channelStockEvent.create({
