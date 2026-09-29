@@ -26,6 +26,7 @@ import {
   executeTool,
   missingPermissions,
   permissionMessage,
+  runOrigin,
   ToolAccessError,
   type ToolCall,
   type ToolPrincipal,
@@ -136,6 +137,7 @@ export async function requestApproval(
       ok: true,
       input: { tool: name, args } as Prisma.InputJsonValue,
       userId: principal.userId,
+      ...runOrigin(principal),
       endedAt: new Date(),
     },
   })

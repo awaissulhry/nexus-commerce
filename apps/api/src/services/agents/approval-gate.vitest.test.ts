@@ -53,7 +53,7 @@ vi.mock('../../db.js', () => ({
 }))
 
 import prisma from '../../db.js'
-import { decideApproval, runOrQueueTool } from './approval-gate.service.js'
+import { decideApproval, requestApproval, runOrQueueTool } from './approval-gate.service.js'
 import { systemPrincipal, type UserPrincipal } from './call-tool.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { __toolRateTest } from './tool-rate.js'
@@ -127,6 +127,24 @@ describe('MCP.1 — who may approve', () => {
     const out = await decideApproval('a1', 'approve', systemPrincipal('Awais'))
     expect(out.ok).toBe(true)
     expect(execute).toHaveBeenCalledWith({ price: 12 }, { userId: 'Awais' })
+  })
+})
+
+describe('MCP.4 — a request records its front door', () => {
+  it('an in-app request is recorded as via the app', async () => {
+    db.agentRun.create.mockResolvedValue({ id: 'run9' } as never)
+    await requestApproval('change-price', { price: 12 }, PRICE_PERSON)
+    expect(db.agentRun.create.mock.calls[0]![0]!.data).toMatchObject({
+      userId: 'u1',
+      via: 'app',
+      oauthGrantId: null,
+    })
+  })
+
+  it('a Claude request is recorded with its connection', async () => {
+    db.agentRun.create.mockResolvedValue({ id: 'run9' } as never)
+    await requestApproval('change-price', { price: 12 }, { ...PRICE_PERSON, via: 'claude', oauthGrantId: 'grant1' })
+    expect(db.agentRun.create.mock.calls[0]![0]!.data).toMatchObject({ via: 'claude', oauthGrantId: 'grant1' })
   })
 })
 

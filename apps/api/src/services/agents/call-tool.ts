@@ -45,6 +45,13 @@ export interface UserPrincipal {
   /** The verified business. Absent only while business profiles are off. */
   workspace?: WorkspaceContext
   via: ToolVia
+  /** MCP.4 — the Claude connection (OAuthGrant.id) a 'claude' call came through. */
+  oauthGrantId?: string
+}
+
+/** What an AgentRun records about the person's front door (AgentRun.via / oauthGrantId). */
+export function runOrigin(principal: UserPrincipal): { via: ToolVia; oauthGrantId: string | null } {
+  return { via: principal.via, oauthGrantId: principal.oauthGrantId ?? null }
 }
 
 export interface SystemPrincipal {
