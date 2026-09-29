@@ -117,7 +117,9 @@ export async function runToolForClaude(
         return refused(KILL_SWITCH_TEXT)
       }
       try {
-        const outcome = await runOrQueueTool(tool.name, args, principal, run.id)
+        // D1 = A: a change from Claude always waits for a person, even when the tool's policy
+        // needs no approval (forceAsk only ever tightens the gate).
+        const outcome = await runOrQueueTool(tool.name, args, principal, run.id, { forceAsk: !tool.readOnly })
         await finish(ending(outcome))
         return answer(outcome, principal)
       } catch (error) {

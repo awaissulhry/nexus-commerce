@@ -38,6 +38,15 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     }
   })
 
+  it('a change needs a person by its own code: no policy can let it run unasked', () => {
+    // tool-policy.service.ts can loosen approval only for a change tool without one of these.
+    const loose = listTools()
+      .filter((tool) => !tool.readOnly && tool.execute)
+      .filter((tool) => !tool.alwaysAsk && tool.riskTier !== 'high' && !tool.requiresApprovalDefault)
+      .map((tool) => tool.name)
+    expect(loose).toEqual([])
+  })
+
   it('open world exactly where a marketplace or a buyer is reached', () => {
     const open = listTools().filter((tool) => toolAnnotations(tool).openWorldHint).map((tool) => tool.name).sort()
     expect(open).toEqual(OPEN_WORLD)
