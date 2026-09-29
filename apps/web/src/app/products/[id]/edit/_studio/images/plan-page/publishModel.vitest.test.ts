@@ -31,6 +31,9 @@ describe('Review & publish photos', () => {
     const all = [{ key: 'amazon' }, { key: 'ebay-main' }, { key: 'ebay-alias' }]
     expect(destinationsToCheck(all, 'ebay-alias')).toEqual([{ key: 'ebay-alias' }])
     expect(destinationsToCheck(all, null)).toEqual(all)
+    // An eBay account and market with aliases: every listing the page shows, in the destinations' order.
+    expect(destinationsToCheck(all, ['ebay-alias', 'ebay-main'])).toEqual([{ key: 'ebay-main' }, { key: 'ebay-alias' }])
+    expect(destinationsToCheck(all, [])).toEqual(all)
   })
   it('Amazon: counts the SKUs and slots that change, blocks on any item problem, and reads the receipts', () => {
     const run: AmazonRunLike = { id: 'run-1', status: 'REVIEW', revision: 'r1', receipts: [],
