@@ -92,11 +92,17 @@ describe('resolveActor — AP.1', () => {
 })
 
 describe('decideFleetApproval — AP.1', () => {
-  const actor = { label: 'Awais', userId: 'u1' }
+  const actor = {
+  kind: 'user' as const,
+  label: 'Awais',
+  userId: 'u1',
+  permissions: { isOwner: true, permissions: new Set<string>() },
+  via: 'app' as const,
+}
 
   it('passes the real person through to the gate, not a hardcoded string', async () => {
     await decideFleetApproval({ id: 'a1', decision: 'reject', reason: 'too broad', actor })
-    expect(gate).toHaveBeenCalledWith('a1', 'reject', 'Awais', 'too broad')
+    expect(gate).toHaveBeenCalledWith('a1', 'reject', actor, 'too broad')
   })
 
   it('writes an audit row naming who, what and why', async () => {
@@ -146,16 +152,23 @@ describe('decideFleetApproval — AP.1', () => {
 })
 
 describe('rejectAllForCharter — AP.1', () => {
+  const owner = {
+  kind: 'user' as const,
+  label: 'Awais',
+  userId: 'u1',
+  permissions: { isOwner: true, permissions: new Set<string>() },
+  via: 'app' as const,
+}
   it('attributes and audits every row it rejects', async () => {
     db.agentApproval.findMany.mockResolvedValue([{ id: 'a1' }, { id: 'a2' }] as never)
     const out = await rejectAllForCharter({
       charterKey: 'amazon-negative-miner',
       reason: 'all too broad',
-      actor: { label: 'Awais', userId: 'u1' },
+      actor: owner,
     })
     expect(out).toEqual({ ok: true, rejected: 2, of: 2 })
     expect(audit).toHaveBeenCalledTimes(2)
-    expect(gate).toHaveBeenNthCalledWith(1, 'a1', 'reject', 'Awais', 'all too broad')
+    expect(gate).toHaveBeenNthCalledWith(1, 'a1', 'reject', owner, 'all too broad')
   })
 
   it('reports honestly when some rows could not be rejected', async () => {
@@ -165,7 +178,7 @@ describe('rejectAllForCharter — AP.1', () => {
     const out = await rejectAllForCharter({
       charterKey: 'k',
       reason: 'r',
-      actor: { label: 'Awais', userId: 'u1' },
+      actor: owner,
     })
     expect(out).toEqual({ ok: true, rejected: 1, of: 2 })
   })

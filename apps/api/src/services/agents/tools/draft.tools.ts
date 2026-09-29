@@ -5,6 +5,7 @@
  */
 
 import prisma from '../../../db.js'
+import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import {
   getProviderForFeature,
@@ -61,6 +62,7 @@ async function loadProduct(id: string) {
 
 const draftListingContent: AgentTool = {
   name: 'draft-listing-content',
+  requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -89,6 +91,7 @@ const draftListingContent: AgentTool = {
 
 const draftSeo: AgentTool = {
   name: 'draft-seo',
+  requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -110,6 +113,7 @@ const draftSeo: AgentTool = {
 
 const translateContent: AgentTool = {
   name: 'translate-content',
+  requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -134,6 +138,7 @@ const translateContent: AgentTool = {
 
 const draftCustomerMessage: AgentTool = {
   name: 'draft-customer-message',
+  requires: [F.ordersView],
   category: 'comms',
   riskTier: 'low',
   readOnly: true,

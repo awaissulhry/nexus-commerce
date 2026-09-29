@@ -13,9 +13,8 @@
  */
 
 import { priceFor } from '../ai/rate-cards.js'
-import { listTools } from './tool-registry.js'
 import { runOrQueueTool } from './approval-gate.service.js'
-import type { ToolContext } from './tool-types.js'
+import { toolsFor, type ToolPrincipal } from './call-tool.js'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const VERSION = '2023-06-01'
@@ -125,8 +124,10 @@ const SCHEMAS: Record<
   },
 }
 
-function anthropicTools() {
-  return listTools().map((t) => ({
+// MCP.1 — only the tools this person may call. The model cannot ask for one
+// it was never offered, and a hallucinated name is refused by the gate anyway.
+function anthropicTools(principal: ToolPrincipal) {
+  return toolsFor(principal).map((t) => ({
     name: t.name,
     description: t.description,
     input_schema: {
@@ -177,7 +178,14 @@ async function callClaude(
     },
     // No temperature/thinking — keeps the call valid across the whole
     // Claude lineup (Opus 4.8 rejects sampling params).
-    body: JSON.stringify({ model, max_tokens: 2048, system, messages, tools }),
+    // A person cleared for no tool gets a plain answer, not an empty `tools` list.
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      system,
+      messages,
+      ...(Array.isArray(tools) && tools.length > 0 ? { tools } : {}),
+    }),
   })
   if (!res.ok) {
     throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`)
@@ -191,10 +199,10 @@ async function callClaude(
 async function execTool(
   name: string,
   input: Record<string, unknown>,
-  ctx: ToolContext,
+  principal: ToolPrincipal,
   agentRunId: string,
 ): Promise<unknown> {
-  const out = await runOrQueueTool(name, input, ctx, agentRunId)
+  const out = await runOrQueueTool(name, input, principal, agentRunId)
   if (out.mode === 'queued')
     return {
       queued: true,
@@ -216,12 +224,12 @@ export async function runToolLoop(opts: {
   model: string
   system: string
   messages: LoopMessage[]
-  ctx: ToolContext
+  principal: ToolPrincipal
   agentRunId: string
   maxSteps?: number
 }): Promise<LoopResult> {
   const maxSteps = opts.maxSteps ?? 8
-  const tools = anthropicTools()
+  const tools = anthropicTools(opts.principal)
   const messages: LoopMessage[] = [...opts.messages]
   const steps: LoopStep[] = []
   let inTok = 0
@@ -254,7 +262,7 @@ export async function runToolLoop(opts: {
           const result = await execTool(
             block.name,
             block.input ?? {},
-            opts.ctx,
+            opts.principal,
             opts.agentRunId,
           )
           steps.push({

@@ -18,9 +18,9 @@ import {
 } from '../ai/model-resolver.service.js'
 import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { logUsage } from '../ai/usage-logger.service.js'
-import { getTool } from './tool-registry.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { runToolLoop } from './tool-loop.service.js'
+import { callTool, ToolAccessError, type UserPrincipal } from './call-tool.js'
 
 const FEATURE = 'products-copilot'
 
@@ -87,7 +87,7 @@ interface RunAgentInput {
   input: string
   entityType?: string | null
   entityId?: string | null
-  userId?: string | null
+  principal: UserPrincipal
 }
 
 interface Step {
@@ -118,7 +118,7 @@ export async function runAgent(inp: RunAgentInput): Promise<RunAgentOutput> {
       entityType: inp.entityType ?? null,
       entityId: inp.entityId ?? null,
       input: { input: inp.input } as Prisma.InputJsonValue,
-      userId: inp.userId ?? null,
+      userId: inp.principal.userId,
     },
   })
 
@@ -131,23 +131,19 @@ export async function runAgent(inp: RunAgentInput): Promise<RunAgentOutput> {
     // Product entity; Phase 2 lets the model choose tools itself.
     let toolData: unknown = null
     if (inp.entityType === 'Product' && inp.entityId) {
-      const tool = getTool('product-snapshot')
-      if (tool) {
-        const t0 = Date.now()
-        const res = await tool.handler(
-          { productId: inp.entityId },
-          { userId: inp.userId },
-        )
-        steps.push({
-          type: 'tool',
-          name: tool.name,
-          args: { productId: inp.entityId },
-          result: res,
-          ms: Date.now() - t0,
-        })
-        if (!res.ok) throw new Error(res.error ?? 'tool failed')
-        toolData = res.data
-      }
+      const t0 = Date.now()
+      const { tool, visible: res } = await callTool(inp.principal, 'product-snapshot', {
+        productId: inp.entityId,
+      })
+      steps.push({
+        type: 'tool',
+        name: tool.name,
+        args: { productId: inp.entityId },
+        result: res,
+        ms: Date.now() - t0,
+      })
+      if (!res.ok) throw new Error(res.error ?? 'tool failed')
+      toolData = res.data
     }
 
     // Step 2 — model via AI-2 routing (provider-pinning + per-feature).
@@ -258,9 +254,9 @@ export interface InvokeResult {
  * (the approval gate + real execution land in Phase 3).
  */
 export async function invokeTool(
+  principal: UserPrincipal,
   name: string,
   args: Record<string, unknown>,
-  ctx: { userId?: string | null } = {},
 ): Promise<InvokeResult> {
   if (isAiKillSwitchOn())
     return { tool: name, ok: false, error: 'AI is temporarily disabled.' }
@@ -268,9 +264,13 @@ export async function invokeTool(
   if (!policy) return { tool: name, ok: false, error: `unknown tool: ${name}` }
   if (!policy.enabled)
     return { tool: name, ok: false, error: `tool ${name} is disabled` }
-  const tool = getTool(name)
-  if (!tool) return { tool: name, ok: false, error: `unknown tool: ${name}` }
-  const res = await tool.handler(args, ctx)
+  let res
+  try {
+    res = (await callTool(principal, name, args)).visible
+  } catch (err) {
+    if (err instanceof ToolAccessError) return { tool: name, ok: false, error: err.message }
+    throw err
+  }
   return {
     tool: name,
     ok: res.ok,
@@ -291,7 +291,7 @@ export interface ChatInput {
     entityType?: string
     entityId?: string
   }
-  userId?: string | null
+  principal: UserPrincipal
 }
 
 export interface ChatOutput {
@@ -327,7 +327,7 @@ export async function runChat(inp: ChatInput): Promise<ChatOutput> {
         messages: inp.messages,
         pageContext: pc ?? null,
       } as Prisma.InputJsonValue,
-      userId: inp.userId ?? null,
+      userId: inp.principal.userId,
     },
   })
 
@@ -402,7 +402,7 @@ export async function runChat(inp: ChatInput): Promise<ChatOutput> {
       model,
       system,
       messages: inp.messages.map((m) => ({ role: m.role, content: m.content })),
-      ctx: { userId: inp.userId },
+      principal: inp.principal,
       agentRunId: run.id,
     })
     const toolsUsed = loop.steps

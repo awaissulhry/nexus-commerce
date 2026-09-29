@@ -41,6 +41,12 @@ import {
 } from '../services/agent-fleet/approval-inbox.service.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
+import type { ToolResult } from '../services/agents/tool-types.js'
+import {
+  callTool,
+  requestPrincipal,
+  ToolAccessError,
+} from '../services/agents/call-tool.js'
 import {
   isAgentScheduleEnabled,
   listAutonomousAgents,
@@ -492,10 +498,17 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // THE validation. Whatever the tool refuses, we refuse, in its words.
-      const fresh = await tool.handler(editedArgs, { userId: null }).catch((err: unknown) => ({
-        ok: false as const,
-        error: `could not be checked: ${String(err)}`,
-      }))
+      // MCP.1 — run as the editor: a proposal you could not have made
+      // yourself is not one you may rewrite.
+      let fresh: ToolResult
+      try {
+        fresh = (await callTool(await requestPrincipal(request), original.toolName, editedArgs)).raw
+      } catch (err) {
+        if (err instanceof ToolAccessError) {
+          return reply.code(err.statusCode).send({ error: err.message })
+        }
+        fresh = { ok: false, error: `could not be checked: ${String(err)}` }
+      }
       if (!fresh.ok) {
         return reply.code(400).send({ error: fresh.error ?? 'that change is not allowed' })
       }

@@ -28,6 +28,15 @@
 import prisma from '../../db.js'
 import { decideApproval, EXPIRY_HOURS } from '../agents/approval-gate.service.js'
 import { getTool } from '../agents/tool-registry.js'
+import {
+  actorLabel,
+  approvableToolNames,
+  callTool,
+  missingPermissions,
+  permissionMessage,
+  systemPrincipal,
+  type ToolPrincipal,
+} from '../agents/call-tool.js'
 import { recordControlChange } from './control-audit.service.js'
 import { mintExemplarFromDecision } from './exemplar.service.js'
 import { logger } from '../../utils/logger.js'
@@ -64,16 +73,10 @@ export function resolveActor(authUser?: {
   email?: string
   displayName?: string
 }): InboxActor {
-  if (!authUser?.id) {
-    // Honest fallback. Never claim a person took a decision we cannot
-    // attribute — "operator" written unconditionally is what produced 18
-    // unattributable rows.
-    return { label: 'unattributed', userId: null }
-  }
-  return {
-    label: authUser.displayName?.trim() || authUser.email || authUser.id,
-    userId: authUser.id,
-  }
+  // Honest fallback. Never claim a person took a decision we cannot
+  // attribute — "operator" written unconditionally is what produced 18
+  // unattributable rows.
+  return { label: actorLabel(authUser), userId: authUser?.id ?? null }
 }
 
 /* ── reading ───────────────────────────────────────────────────────────── */
@@ -168,13 +171,15 @@ export async function decideFleetApproval(input: {
   id: string
   decision: 'approve' | 'reject'
   reason?: string
-  actor: InboxActor
+  /** A person approves only what their permissions cover (scheduleApproval). */
+  actor: ToolPrincipal
 }): Promise<{
   ok: boolean
   status?: string
   result?: unknown
   error?: string
   executeAfter?: string
+  code?: 'forbidden'
 }> {
   // AP.4 — an approve parks for the undo window instead of firing. The
   // decision is recorded immediately (attributable, durable); only the
@@ -203,7 +208,7 @@ export async function decideFleetApproval(input: {
   const out = await decideApproval(
     input.id,
     input.decision,
-    input.actor.label,
+    input.actor,
     input.reason || undefined,
   )
   if (!out.ok) return out
@@ -262,15 +267,28 @@ export const UNDO_WINDOW_MS = 20_000
  */
 export async function scheduleApproval(input: {
   id: string
-  actor: InboxActor
+  actor: ToolPrincipal
   /** S9.5 — the operator's own words. Previously not passed at all, so an
       approve note reached the audit trail and never the row. */
   note?: string
-}): Promise<{ ok: boolean; status?: string; executeAfter?: string; error?: string }> {
+}): Promise<{
+  ok: boolean
+  status?: string
+  executeAfter?: string
+  error?: string
+  code?: 'forbidden'
+}> {
   const executeAfter = new Date(Date.now() + UNDO_WINDOW_MS)
+  // MCP.1 — a person may approve only the tools their permissions cover. The
+  // check is part of the claim itself, so it costs no extra query.
+  const approvable = approvableToolNames(input.actor)
   // Atomic pending→scheduled claim: two tabs cannot both schedule the same row.
   const claim = await prisma.agentApproval.updateMany({
-    where: { id: input.id, status: 'pending' },
+    where: {
+      id: input.id,
+      status: 'pending',
+      ...(approvable ? { toolName: { in: approvable } } : {}),
+    },
     data: {
       status: 'scheduled',
       decidedBy: input.actor.label,
@@ -285,9 +303,21 @@ export async function scheduleApproval(input: {
   if (claim.count === 0) {
     const cur = await prisma.agentApproval.findUnique({
       where: { id: input.id },
-      select: { status: true },
+      select: { status: true, toolName: true },
     })
-    return { ok: false, error: cur ? `already ${cur.status}` : 'approval not found' }
+    if (!cur) return { ok: false, error: 'approval not found' }
+    if (cur.status === 'pending' && approvable && !approvable.includes(cur.toolName)) {
+      const tool = getTool(cur.toolName)
+      const missing = tool ? missingPermissions(input.actor, tool) : []
+      return {
+        ok: false,
+        code: 'forbidden',
+        error: missing.length
+          ? permissionMessage(cur.toolName, missing)
+          : `${cur.toolName} is not a tool this workspace knows`,
+      }
+    }
+    return { ok: false, error: `already ${cur.status}` }
   }
   return { ok: true, status: 'scheduled', executeAfter: executeAfter.toISOString() }
 }
@@ -394,8 +424,10 @@ export async function commitScheduledApproval(
   })
   if (release.count === 0) return { ok: false, error: 'already taken' }
 
-  const actorLabel = ap.decidedBy ?? 'unattributed'
-  const out = await decideApproval(id, 'approve', actorLabel)
+  // The person's permissions were checked when they approved (scheduleApproval);
+  // the sweep runs that decision under their name.
+  const decidedBy = ap.decidedBy ?? 'unattributed'
+  const out = await decideApproval(id, 'approve', systemPrincipal(decidedBy))
   if (!out.ok) {
     /*
      * S9.4 — a failed execution left the row lying about itself.
@@ -420,7 +452,7 @@ export async function commitScheduledApproval(
       action: 'execution_failed',
       to: { approvalId: id, status: out.status ?? 'pending' },
       note: out.error ?? 'execution failed',
-      actor: actorLabel,
+      actor: decidedBy,
     }).catch((err) => logger.error('[naf-ap] failure audit failed', { id, error: String(err) }))
 
     await prisma.agentApproval.updateMany({
@@ -454,7 +486,7 @@ export async function commitScheduledApproval(
     charterKey: await charterKeyOf(id),
     action: 'approve_action',
     to: { approvalId: id, status: out.status ?? null },
-    actor: actorLabel,
+    actor: decidedBy,
   }).catch((err) => logger.error('[naf-ap] control audit failed', { id, error: String(err) }))
 
   return out
@@ -566,7 +598,13 @@ export async function checkStaleness(approvalId: string): Promise<StalenessVerdi
 
   let fresh: Awaited<ReturnType<NonNullable<typeof tool.handler>>>
   try {
-    fresh = await tool.handler((ap.args ?? {}) as Record<string, unknown>, { userId: null })
+    fresh = (
+      await callTool(
+        systemPrincipal('approval-recheck'),
+        ap.toolName,
+        (ap.args ?? {}) as Record<string, unknown>,
+      )
+    ).raw
   } catch (err) {
     // A re-check that cannot run is not permission to proceed.
     return { stale: true, why: `it could not be re-checked: ${String(err)}` }
@@ -1008,7 +1046,7 @@ export async function bulkDecide(input: {
   ids: string[]
   decision: 'approve' | 'reject'
   reason?: string
-  actor: InboxActor
+  actor: ToolPrincipal
 }): Promise<{ ok: boolean; done: number; of: number; failed: string[]; error?: string }> {
   // NAF.AQ.6 — the homogeneity rule is enforced HERE, not only in the
   // confirmation. A preview a client can choose not to read is a suggestion;
@@ -1043,7 +1081,7 @@ export async function bulkDecide(input: {
 export async function rejectAllForCharter(input: {
   charterKey: string
   reason: string
-  actor: InboxActor
+  actor: ToolPrincipal
 }): Promise<{ ok: true; rejected: number; of: number }> {
   const runs = await prisma.agentRun.findMany({
     where: { agentKey: input.charterKey },

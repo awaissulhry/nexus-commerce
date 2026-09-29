@@ -4,6 +4,7 @@
  */
 
 import prisma from '../../../db.js'
+import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 
 const ci = (q: string) => ({ contains: q, mode: 'insensitive' as const })
@@ -23,6 +24,7 @@ function orderStatus(o: {
 
 const productSnapshot: AgentTool = {
   name: 'product-snapshot',
+  requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -77,6 +79,7 @@ const productSnapshot: AgentTool = {
 
 const productSearch: AgentTool = {
   name: 'product-search',
+  requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -108,6 +111,7 @@ const productSearch: AgentTool = {
 
 const orderSearch: AgentTool = {
   name: 'order-search',
+  requires: [F.ordersView],
   category: 'orders',
   riskTier: 'low',
   readOnly: true,
@@ -149,6 +153,7 @@ const orderSearch: AgentTool = {
 
 const orderDetail: AgentTool = {
   name: 'order-detail',
+  requires: [F.ordersView],
   category: 'orders',
   riskTier: 'low',
   readOnly: true,
@@ -184,6 +189,7 @@ const orderDetail: AgentTool = {
 
 const stockLevels: AgentTool = {
   name: 'stock-levels',
+  requires: [F.inventoryView],
   category: 'fulfillment',
   riskTier: 'low',
   readOnly: true,
@@ -219,6 +225,7 @@ const stockLevels: AgentTool = {
 
 const priceStatus: AgentTool = {
   name: 'price-status',
+  requires: [F.pricingView],
   category: 'pricing',
   riskTier: 'low',
   readOnly: true,
@@ -255,6 +262,7 @@ const priceStatus: AgentTool = {
 
 const listingHealth: AgentTool = {
   name: 'listing-health',
+  requires: [F.listingsView],
   category: 'listings',
   riskTier: 'low',
   readOnly: true,

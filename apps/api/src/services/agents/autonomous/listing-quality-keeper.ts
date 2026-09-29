@@ -18,6 +18,7 @@
 import prisma from '../../../db.js'
 import { aiDraft } from '../tools/draft.tools.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
+import { systemPrincipal } from '../call-tool.js'
 import { logger } from '../../../utils/logger.js'
 import type { AutonomousAgent, AutonomousAgentResult } from '../autonomous-agent.service.js'
 
@@ -201,7 +202,7 @@ export const listingQualityKeeper: AutonomousAgent = {
         const out = await runOrQueueTool(
           'apply-content',
           applyArgs,
-          { userId: null },
+          systemPrincipal('listing-quality-keeper'),
           runId,
         )
         if (out.mode === 'queued' && out.approvalId) {

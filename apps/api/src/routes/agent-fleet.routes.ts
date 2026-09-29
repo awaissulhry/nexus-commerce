@@ -26,6 +26,7 @@ import {
   undoScheduledApproval,
   type InboxView,
 } from '../services/agent-fleet/approval-inbox.service.js'
+import { requestPrincipal } from '../services/agents/call-tool.js'
 import { isAutoPromotionAllowed } from '../services/agent-fleet/promotion.service.js'
 import {
   bustCharterCache,
@@ -424,13 +425,14 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'a one-line reason is required to reject' })
     }
     // NAF.AP.1 — the signed-in user, not the literal string 'operator'.
+    // MCP.1 — with their permissions: they approve only what they could do.
     const out = await decideFleetApproval({
       id: request.params.id,
       decision,
       reason: reason || undefined,
-      actor: resolveActor(request.authUser),
+      actor: await requestPrincipal(request),
     })
-    if (!out.ok) return reply.code(409).send(out)
+    if (!out.ok) return reply.code(out.code === 'forbidden' ? 403 : 409).send(out)
     return out
   })
 
@@ -497,7 +499,7 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
         ids,
         decision,
         reason: reason || undefined,
-        actor: resolveActor(request.authUser),
+        actor: await requestPrincipal(request),
       })
     },
   )
@@ -513,7 +515,7 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
       return rejectAllForCharter({
         charterKey,
         reason,
-        actor: resolveActor(request.authUser),
+        actor: await requestPrincipal(request),
       })
     },
   )

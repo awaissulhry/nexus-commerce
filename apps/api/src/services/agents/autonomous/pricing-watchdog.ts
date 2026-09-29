@@ -20,6 +20,7 @@
 
 import prisma from '../../../db.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
+import { systemPrincipal } from '../call-tool.js'
 import { logger } from '../../../utils/logger.js'
 import type {
   AutonomousAgent,
@@ -155,7 +156,7 @@ export const pricingWatchdog: AutonomousAgent = {
         const out = await runOrQueueTool(
           'set-price',
           { productId: p.id, price: anomaly.proposed },
-          { userId: null },
+          systemPrincipal('pricing-watchdog'),
           runId,
         )
         if (out.mode === 'queued' && out.approvalId) {

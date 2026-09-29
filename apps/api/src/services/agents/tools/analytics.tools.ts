@@ -8,6 +8,7 @@
  */
 
 import prisma from '../../../db.js'
+import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import { aiDraft } from './draft.tools.js'
 
@@ -16,6 +17,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 
 const productAnalytics: AgentTool = {
   name: 'product-analytics',
+  requires: [F.analyticsView],
+  restrictedFields: { revenue: FIELDS.financialsRevenueView },
   category: 'insights',
   riskTier: 'low',
   readOnly: true,
@@ -58,6 +61,7 @@ const productAnalytics: AgentTool = {
 
 const channelStockDrift: AgentTool = {
   name: 'channel-stock-drift',
+  requires: [F.inventoryView],
   category: 'fulfillment',
   riskTier: 'low',
   readOnly: true,
@@ -89,6 +93,7 @@ const channelStockDrift: AgentTool = {
 
 const replenishmentForecast: AgentTool = {
   name: 'replenishment-forecast',
+  requires: [F.replenishmentView],
   category: 'fulfillment',
   riskTier: 'low',
   readOnly: true,
@@ -125,6 +130,8 @@ const replenishmentForecast: AgentTool = {
 
 const insightsMetric: AgentTool = {
   name: 'insights-metric',
+  requires: [F.insightsView],
+  restrictedFields: { revenueByCurrency: FIELDS.financialsRevenueView },
   category: 'insights',
   riskTier: 'low',
   readOnly: true,
@@ -169,6 +176,7 @@ const insightsMetric: AgentTool = {
 
 const detectAnomalies: AgentTool = {
   name: 'detect-anomalies',
+  requires: [F.insightsView],
   category: 'insights',
   riskTier: 'low',
   readOnly: true,
@@ -208,6 +216,7 @@ const detectAnomalies: AgentTool = {
 
 const draftAltText: AgentTool = {
   name: 'draft-alt-text',
+  requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
   readOnly: true,
