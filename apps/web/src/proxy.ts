@@ -24,10 +24,14 @@ export function proxy(request: NextRequest) {
     return response
   }
   if (isIdentityPath(path) || path.startsWith('/design')) return NextResponse.next({ request: { headers: incoming } })
+  // Same site = the address the browser used. Behind Railway's edge, `next start` builds request.url from its own
+  // listening address (https://localhost:3000), so only the Host header names the browser's site (2026-09-29: every
+  // link without a profile went to the picker on Railway). Vercel's request.url is already the browser's address.
+  const browserHost = request.headers.get('x-forwarded-host')?.split(',')[0].trim() || host
   let referringId: string | null = null
   try {
     const referer = new URL(request.headers.get('referer') ?? '')
-    if (referer.origin === visibleUrl.origin) referringId = workspaceFromPath(referer.pathname)
+    if (referer.origin === visibleUrl.origin || referer.host === browserHost) referringId = workspaceFromPath(referer.pathname)
   } catch { /* A bookmark has no referrer and starts at the profile picker. */ }
   if (referringId && request.method === 'POST' && request.headers.has('next-action')) {
     incoming.set('x-nexus-page-workspace', referringId)
