@@ -59,7 +59,6 @@
     "@prisma/generator-helper": "7.10.0",
     "@types/pg": "^8.20.0",
     "dotenv": "^17.4.2",
-    "next": "16.3.5",
     "pg": "^8.20.0",
     "prisma": "7.10.0"
   },

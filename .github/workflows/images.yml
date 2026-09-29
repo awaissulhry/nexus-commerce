@@ -1,0 +1,151 @@
+# The API and web Docker images — docs/ci-fast-deploys/PLAN-2026-09-29.md (PR 1).
+#
+# ghcr.io/<owner>/nexus-api:<commit sha> serves the Railway services @nexus/api, nexus-worker and nexus-scheduler (they
+# differ only by start command); ghcr.io/<owner>/nexus-web:<commit sha> serves nexus-web. The images are public, so each
+# one passes scripts/ci/check-image-secrets.sh before it is pushed.
+#
+#   push to main       build, check and push. Nothing deploys these images yet: deploy-api.yml still builds on Railway.
+#   pull request       build and check only, when the build itself changed. Never pushes.
+#   workflow_dispatch  build and check; push when asked.
+#
+# The web's build-time values (NEXT_PUBLIC_*, and NEXUS_API_PROXY_TARGET, which Next freezes into the standalone
+# server's /backend rewrite) are read from the nexus-web service on Railway, the one place production values live.
+# A pull request builds with local values instead.
+
+name: Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'packages/database/**'
+      - 'packages/shared/**'
+      - 'packages/events/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'patches/**'
+      - 'turbo.json'
+      - '.dockerignore'
+      - 'docs/fixtures/vt1/fixtures.ts'
+      - 'scripts/ci/check-image-secrets.sh'
+      - '.github/workflows/images.yml'
+  pull_request:
+    paths:
+      - 'apps/api/Dockerfile'
+      - 'apps/web/Dockerfile'
+      - 'apps/web/next.config.js'
+      - 'apps/web/scripts/start.mjs'
+      - 'package-lock.json'
+      - '.dockerignore'
+      - 'scripts/ci/check-image-secrets.sh'
+      - '.github/workflows/images.yml'
+  workflow_call:
+    inputs:
+      push:
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      push:
+        description: Push the images to GHCR
+        type: boolean
+        default: false
+
+# One run per commit on main (every release gets its images); a newer push to a pull request cancels the older run.
+concurrency:
+  group: images-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: ${{ matrix.image }} image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, web]
+    env:
+      PUSH: ${{ github.event_name == 'push' || inputs.push == true }}
+      IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-${{ matrix.image }}:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build arguments
+        id: args
+        env:
+          IMAGE_NAME: ${{ matrix.image }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/build-args"
+          if [ "$IMAGE_NAME" = api ]; then
+            echo "RELEASE_SHA=$GITHUB_SHA" > "$out"
+          elif [ "$PUSH" != true ]; then
+            # Local values, as CI's smoke build uses: a check build must never point at production.
+            printf '%s\n' NEXT_PUBLIC_API_URL=http://localhost:8080 NEXT_PUBLIC_WORKSPACES_ENABLED=1 \
+              NEXUS_API_PROXY_TARGET=http://127.0.0.1:8080 > "$out"
+          else
+            test -n "$WEB_SERVICE" || { echo "✗ set the RAILWAY_WEB_SERVICE secret"; exit 1; }
+            npm install -g @railway/cli@5.30.1
+            # The JSON holds EVERY variable of nexus-web, DATABASE_URL included: it goes straight into jq and only the
+            # names below come out. Never print it.
+            names='NEXT_PUBLIC_API_URL NEXT_PUBLIC_WORKSPACES_ENABLED NEXT_PUBLIC_AUTH_ENFORCE NEXT_PUBLIC_AG_GRID_LICENSE_KEY NEXUS_API_PROXY_TARGET'
+            vars=$(railway variables list --service "$WEB_SERVICE" --json) || { echo "✗ could not read nexus-web's variables from Railway"; exit 1; }
+            # A NEXT_PUBLIC_ variable the image does not take would silently go missing from the browser code.
+            unknown=$(jq -r 'keys[] | select(startswith("NEXT_PUBLIC_"))' <<< "$vars" | grep -vxF -f <(tr ' ' '\n' <<< "$names") || true)
+            test -z "$unknown" || { echo "✗ nexus-web has $unknown, which the web image does not take: add it to apps/web/Dockerfile and to this list"; exit 1; }
+            for name in $names; do
+              value=$(jq -r --arg n "$name" '.[$n] // empty' <<< "$vars")
+              if [ -n "$value" ]; then printf '%s=%s\n' "$name" "$value"; fi
+            done > "$out"
+            grep -q '^NEXT_PUBLIC_API_URL=' "$out" || { echo "✗ nexus-web has no NEXT_PUBLIC_API_URL"; exit 1; }
+          fi
+          echo "Build arguments: $(cut -d= -f1 "$out" | paste -sd' ' -)"
+          { echo 'list<<EOF'; cat "$out"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.image }}/Dockerfile
+          build-args: ${{ steps.args.outputs.list }}
+          tags: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          load: true
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max,ignore-error=true
+
+      - name: No secret in the image
+        run: scripts/ci/check-image-secrets.sh "$IMAGE"
+
+      - name: Size
+        run: |
+          bytes=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          echo "$IMAGE: $((bytes / 1048576)) MB unpacked"
+
+      - name: Log in to GHCR
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        if: env.PUSH == 'true'
+        run: docker push "$IMAGE"

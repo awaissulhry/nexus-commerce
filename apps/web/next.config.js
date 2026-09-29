@@ -6,10 +6,15 @@ const { tabRedirects, bareIndexRedirect } = require('./src/app/marketing/ads/rul
 const { backendRewrites, backendHeaders } = require('./src/lib/workspaces/backendRewrite.cjs');
 // MCP.5 — connecting Claude: the OAuth metadata rewrite and the consent page's headers.
 const { oauthRewrites, oauthHeaders } = require('./src/lib/oauth/oauthRoutes.cjs');
+const path = require('node:path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // The Docker image only (apps/web/Dockerfile sets NEXT_OUTPUT=standalone): a server.js with just the files it needs,
+  // traced from the repository root so the workspace packages come along. This freezes rewrites, headers and redirects
+  // at build time, so the image is built with the values they read. Unset in CI's smoke build and on Vercel: unchanged.
+  ...(process.env.NEXT_OUTPUT === 'standalone' ? { output: 'standalone', outputFileTracingRoot: path.join(__dirname, '../..') } : {}),
   // Repository instructions are maintained at the root; dev startup must not generate new ones.
   agentRules: false,
   // Preserve the profile URL and origin while middleware rewrites the page tree.
@@ -53,8 +58,8 @@ const nextConfig = {
   async headers() {
     return [...backendHeaders(process.env), ...oauthHeaders()]
   },
-  // CI smoke build only (docs/ci-plan.md §3): the `checks` job already type-checks the app, so the
-  // smoke job's build skips that step. Unset in prod and on Vercel, where next build still type-checks.
+  // CI's smoke build (docs/ci-plan.md §3) and the Docker image (apps/web/Dockerfile): the `checks` job already
+  // type-checks the app, so these builds skip that step. Unset on Vercel, where next build still type-checks.
   typescript: { ignoreBuildErrors: process.env.NEXUS_CI_SKIP_BUILD_TYPECHECK === '1' },
   // This prevents Turbopack from breaking the Prisma connection
   serverExternalPackages: ["@prisma/client", "pg", "@nexus/database"],

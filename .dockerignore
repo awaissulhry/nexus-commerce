@@ -1,0 +1,31 @@
+# Build context of apps/api/Dockerfile and apps/web/Dockerfile (docs/ci-fast-deploys/PLAN-2026-09-29.md).
+#
+# An allow-list: only what the two images are built from goes to the builder. Everything else stays out — docs/,
+# output/, outputs/, obsidian-vault/, apps/factory, services/ — and so does every .env: on a developer machine the root
+# .env holds production credentials, and the images are public.
+*
+!package.json
+!package-lock.json
+!turbo.json
+!patches/
+!apps/api/
+!apps/web/
+!packages/
+# The one file outside the workspaces that the web imports (the /design-system catalogue shows VT.1's fixtures).
+!docs/fixtures/vt1/fixtures.ts
+
+**/node_modules
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/.next
+**/.next-*
+**/dist
+**/.turbo
+**/coverage
+**/playwright-report
+**/test-results
+**/*.tsbuildinfo
+**/.DS_Store
+apps/api/.release-sha
