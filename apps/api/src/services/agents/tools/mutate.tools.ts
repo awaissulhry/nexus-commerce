@@ -28,6 +28,7 @@ import { masterPriceService } from '../../master-price.service.js'
 import { getAmazonPublishMode } from '../../amazon-publish-gate.service.js'
 import { isEmailSuppressed } from '../../reviews/email-suppression.service.js'
 import { sendEmail } from '../../email/transport.js'
+import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 
@@ -43,6 +44,10 @@ function publishModeFor(channel: string): string {
 
 const setPrice: AgentTool = {
   name: 'set-price',
+  input: z.object({
+    productId: z.string().min(1).describe('Nexus product id'),
+    price: z.coerce.number().min(0).describe('new master price, in the product currency'),
+  }),
   requires: [F.productsPriceEdit],
   category: 'pricing',
   riskTier: 'high',
@@ -112,6 +117,10 @@ const setPrice: AgentTool = {
 
 const publishListing: AgentTool = {
   name: 'publish-listing',
+  input: z.object({
+    productId: z.string().min(1).describe('Nexus product id'),
+    channel: z.string().min(1).describe('AMAZON, EBAY, SHOPIFY or ETSY'),
+  }),
   requires: [F.listingsPublish],
   category: 'listings',
   riskTier: 'high',
@@ -197,6 +206,10 @@ const publishListing: AgentTool = {
 
 const sendCustomerMessage: AgentTool = {
   name: 'send-customer-message',
+  input: z.object({
+    orderId: z.string().min(1).describe('Nexus order id'),
+    message: z.string().trim().min(1).describe('the message to send to the buyer'),
+  }),
   requires: [F.ordersEdit],
   category: 'comms',
   riskTier: 'high',
@@ -318,6 +331,12 @@ function escapeHtml(s: string): string {
 // (requiresApprovalDefault) so the loop is proven on a safe action.
 const applyContent: AgentTool = {
   name: 'apply-content',
+  input: z.object({
+    productId: z.string().min(1).describe('Nexus product id'),
+    title: z.string().optional().describe('new title'),
+    bulletPoints: z.array(z.string()).optional().describe('new bullet points'),
+    description: z.string().optional().describe('new description'),
+  }),
   requires: [F.productsEdit],
   category: 'products',
   riskTier: 'medium',

@@ -7,6 +7,7 @@
  * principal (crons, the fleet) is the one exception, and only for 1 and 3.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { AgentTool } from './tool-types.js'
 
 const handler = vi.fn()
@@ -21,6 +22,7 @@ const TOOLS: Record<string, AgentTool> = {
     readOnly: true,
     requires: ['insights.view'],
     restrictedFields: { revenue: 'financials.revenue.view' },
+    input: z.object({}).loose(),
     handler,
   },
   'change-price': {
@@ -31,6 +33,18 @@ const TOOLS: Record<string, AgentTool> = {
     readOnly: false,
     alwaysAsk: true,
     requires: ['products.price.edit'],
+    input: z.object({}).loose(),
+    handler,
+    execute,
+  },
+  'strict-args': {
+    name: 'strict-args',
+    category: 'pricing',
+    description: 'test tool',
+    riskTier: 'high',
+    readOnly: false,
+    requires: ['products.price.edit'],
+    input: z.object({ productId: z.string().min(1), price: z.coerce.number().min(0) }),
     handler,
     execute,
   },
@@ -41,6 +55,7 @@ const TOOLS: Record<string, AgentTool> = {
     riskTier: 'high',
     readOnly: false,
     requires: ['ads.bids.edit', 'financials.adspend.view'],
+    input: z.object({}).loose(),
     handler,
   },
 }
@@ -122,7 +137,7 @@ describe('MCP.1 — permission on every call', () => {
   })
 
   it('lists what a person may approve; null means no limit', () => {
-    expect(approvableToolNames(person(['ai.run', 'products.price.edit']))).toEqual(['change-price'])
+    expect(approvableToolNames(person(['ai.run', 'products.price.edit']))).toEqual(['change-price', 'strict-args'])
     expect(approvableToolNames(systemPrincipal('sweep'))).toBeNull()
   })
 })
@@ -206,6 +221,35 @@ describe('MCP.1 — money a person may not see never comes back', () => {
   it('a system principal gets the raw result', async () => {
     const out = await callTool(systemPrincipal('cron'), 'read-sales', {})
     expect(out.visible).toBe(out.raw)
+  })
+})
+
+describe('MCP.3 — every call is parsed with the tool’s own schema', () => {
+  const pricer = () => person(['ai.run', 'products.price.edit'])
+
+  it('refuses a malformed call with 400, naming every problem, before the tool runs', async () => {
+    const call = callTool(pricer(), 'strict-args', { price: 'lots' })
+    await expect(call).rejects.toMatchObject({ code: 'invalid_arguments', statusCode: 400 })
+    await expect(call).rejects.toThrow(/productId: .*; price: /)
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('hands the tool only what its schema defines, with numbers as numbers', async () => {
+    await callTool(pricer(), 'strict-args', { productId: 'p1', price: '19.90', smuggled: 'x' })
+    expect(handler).toHaveBeenCalledWith({ productId: 'p1', price: 19.9 }, { userId: 'u1' })
+  })
+
+  it('parses stored arguments again before execute', async () => {
+    await expect(executeTool(pricer(), 'strict-args', { productId: 'p1', price: -1 })).rejects.toMatchObject({
+      code: 'invalid_arguments',
+    })
+    expect(execute).not.toHaveBeenCalled()
+    await executeTool(pricer(), 'strict-args', { productId: 'p1', price: '5' })
+    expect(execute).toHaveBeenCalledWith({ productId: 'p1', price: 5 }, { userId: 'u1' })
+  })
+
+  it('checks permission before arguments: a stranger learns nothing about the schema', async () => {
+    await expect(callTool(person(['ai.run']), 'strict-args', {})).rejects.toMatchObject({ code: 'forbidden' })
   })
 })
 

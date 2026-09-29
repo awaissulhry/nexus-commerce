@@ -3,6 +3,7 @@
  * import cycle between the registry and the per-domain tool files).
  */
 
+import type { z } from 'zod'
 import type { FEATURES, FIELDS } from '@nexus/shared/permissions'
 
 export type RiskTier = 'low' | 'medium' | 'high'
@@ -39,6 +40,13 @@ export interface AgentTool {
    * every call; there is no default, so a tool without it does not compile.
    */
   requires: readonly [ToolPermission, ...ToolPermission[]]
+  /**
+   * MCP.3 — the tool's arguments, in one place. call-tool.ts parses every
+   * call with it (unknown keys dropped, numbers coerced, a bad call refused
+   * before the tool runs); the assistant's tool list and the MCP endpoint
+   * both describe the tool from it.
+   */
+  input: z.ZodObject
   /**
    * MCP.1 — money keys in this tool's output that the shared registry
    * (lib/auth/financial-fields.ts) does not name, each with the field

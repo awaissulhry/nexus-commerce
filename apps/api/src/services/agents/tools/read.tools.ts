@@ -4,6 +4,7 @@
  */
 
 import prisma from '../../../db.js'
+import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 
@@ -24,6 +25,7 @@ function orderStatus(o: {
 
 const productSnapshot: AgentTool = {
   name: 'product-snapshot',
+  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
@@ -79,6 +81,10 @@ const productSnapshot: AgentTool = {
 
 const productSearch: AgentTool = {
   name: 'product-search',
+  input: z.object({
+    query: z.string().optional().describe('name, SKU or brand fragment'),
+    limit: z.coerce.number().int().min(1).max(50).optional().describe('max products (default 10)'),
+  }),
   requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
@@ -111,6 +117,12 @@ const productSearch: AgentTool = {
 
 const orderSearch: AgentTool = {
   name: 'order-search',
+  input: z.object({
+    marketplace: z.string().optional().describe('marketplace code, e.g. IT'),
+    buyer: z.string().optional().describe('buyer name or email fragment'),
+    status: z.string().optional().describe('order status, e.g. shipped'),
+    limit: z.coerce.number().int().min(1).max(100).optional().describe('max orders (default 20)'),
+  }),
   requires: [F.ordersView],
   category: 'orders',
   riskTier: 'low',
@@ -153,6 +165,7 @@ const orderSearch: AgentTool = {
 
 const orderDetail: AgentTool = {
   name: 'order-detail',
+  input: z.object({ orderId: z.string().min(1).describe('Nexus order id') }),
   requires: [F.ordersView],
   category: 'orders',
   riskTier: 'low',
@@ -189,6 +202,7 @@ const orderDetail: AgentTool = {
 
 const stockLevels: AgentTool = {
   name: 'stock-levels',
+  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.inventoryView],
   category: 'fulfillment',
   riskTier: 'low',
@@ -225,6 +239,7 @@ const stockLevels: AgentTool = {
 
 const priceStatus: AgentTool = {
   name: 'price-status',
+  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.pricingView],
   category: 'pricing',
   riskTier: 'low',
@@ -262,6 +277,7 @@ const priceStatus: AgentTool = {
 
 const listingHealth: AgentTool = {
   name: 'listing-health',
+  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.listingsView],
   category: 'listings',
   riskTier: 'low',

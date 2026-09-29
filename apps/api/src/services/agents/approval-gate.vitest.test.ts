@@ -8,6 +8,7 @@
  * preview stays whole while the caller gets a filtered one.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { AgentTool } from './tool-types.js'
 
 const handler = vi.fn()
@@ -22,6 +23,7 @@ const TOOLS: Record<string, AgentTool> = {
     readOnly: false,
     alwaysAsk: true,
     requires: ['products.price.edit'],
+    input: z.object({}).loose(),
     handler,
     execute,
   },
@@ -156,6 +158,13 @@ describe('MCP.1 — queueing', () => {
     expect(over).toMatchObject({ ok: false, mode: 'error' })
     expect(over.error).toContain('limited to 1 call per hour')
     expect(db.agentApproval.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('MCP.3 — stores the arguments as asked, while the tool sees the parsed ones', async () => {
+    await runOrQueueTool('change-price', { price: 12, note: 'kept on the request' }, PRICE_PERSON, 'run1')
+    expect(db.agentApproval.create.mock.calls[0]![0]!.data).toMatchObject({
+      args: { price: 12, note: 'kept on the request' },
+    })
   })
 
   it('a person without the permission cannot even queue it', async () => {

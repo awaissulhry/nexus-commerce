@@ -5,6 +5,7 @@
  */
 
 import prisma from '../../../db.js'
+import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import {
@@ -62,6 +63,7 @@ async function loadProduct(id: string) {
 
 const draftListingContent: AgentTool = {
   name: 'draft-listing-content',
+  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
@@ -91,6 +93,7 @@ const draftListingContent: AgentTool = {
 
 const draftSeo: AgentTool = {
   name: 'draft-seo',
+  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
@@ -113,6 +116,10 @@ const draftSeo: AgentTool = {
 
 const translateContent: AgentTool = {
   name: 'translate-content',
+  input: z.object({
+    productId: z.string().min(1).describe('Nexus product id'),
+    target: z.string().trim().min(1).describe('target market language, e.g. de'),
+  }),
   requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
@@ -138,6 +145,10 @@ const translateContent: AgentTool = {
 
 const draftCustomerMessage: AgentTool = {
   name: 'draft-customer-message',
+  input: z.object({
+    intent: z.string().trim().min(1).describe('what the message should say'),
+    orderId: z.string().min(1).optional().describe('the order it is about'),
+  }),
   requires: [F.ordersView],
   category: 'comms',
   riskTier: 'low',

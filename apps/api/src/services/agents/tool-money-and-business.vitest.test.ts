@@ -89,7 +89,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'publish-listing': (ids) => ({ productId: ids.productId, channel: 'EBAY' }),
   'send-customer-message': (ids) => ({ orderId: ids.orderId, message: 'Your parcel ships today.' }),
   'apply-content': (ids) => ({ productId: ids.productId, title: 'A better title' }),
-  'create-negative-keyword': () => ({ externalCampaignId: 'none', keywordText: 'free', matchType: 'EXACT' }),
+  'create-negative-keyword': () => ({ externalCampaignId: 'none', keywordText: 'free', matchType: 'NEGATIVE_EXACT' }),
   'graduate-keyword': () => ({ query: 'jacket', sourceExternalCampaignId: 'none', destExternalCampaignId: 'none' }),
   'set-target-bid': () => ({ targetId: 'none', proposedBidCents: 55 }),
 }

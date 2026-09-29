@@ -14,6 +14,7 @@
 import prisma from '../../../db.js'
 import { pinDenial } from '../../advertising/ads-authority-pins.js'
 import { normaliseTerm } from '../../advertising/ads-write-gate.js'
+import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 
@@ -91,6 +92,14 @@ async function protectedTermDenial(
 
 const createNegativeKeyword: AgentTool = {
   name: 'create-negative-keyword',
+  input: z.object({
+    externalCampaignId: z.string().min(1).describe('Amazon campaign id'),
+    keywordText: z.string().trim().min(1).describe('the search term to block'),
+    matchType: z.enum(['NEGATIVE_EXACT', 'NEGATIVE_PHRASE']).optional().describe('default NEGATIVE_EXACT'),
+    scope: z.enum(['AD_GROUP', 'CAMPAIGN']).optional().describe('default AD_GROUP'),
+    externalAdGroupId: z.string().optional().describe('Amazon ad group id, for AD_GROUP scope'),
+    marketplace: z.string().optional().describe('marketplace code, e.g. IT'),
+  }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
@@ -151,6 +160,13 @@ const createNegativeKeyword: AgentTool = {
 
 const graduateKeyword: AgentTool = {
   name: 'graduate-keyword',
+  input: z.object({
+    query: z.string().trim().min(1).describe('the search term to promote'),
+    sourceExternalCampaignId: z.string().min(1).describe('Amazon campaign id it converted in'),
+    sourceExternalAdGroupId: z.string().optional().describe('Amazon ad group id it converted in'),
+    destExternalCampaignId: z.string().min(1).optional().describe('campaign to add it to (default: the source)'),
+    bidCents: z.coerce.number().positive().optional().describe('starting bid in cents (default: its cost per click)'),
+  }),
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
@@ -219,6 +235,10 @@ const graduateKeyword: AgentTool = {
 
 const setTargetBid: AgentTool = {
   name: 'set-target-bid',
+  input: z.object({
+    targetId: z.string().min(1).describe('Nexus ad target id'),
+    proposedBidCents: z.coerce.number().describe('new bid in cents, at least the floor'),
+  }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
