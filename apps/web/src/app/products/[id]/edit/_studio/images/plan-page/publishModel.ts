@@ -88,7 +88,10 @@ export function amazonOutcome(run: AmazonRunLike): PhotoOutcome {
   return { tone: 'info', text: `Sending to Amazon… ${count('ACCEPTED')} of ${run.receipts.length} accepted so far.`, final: false }
 }
 
-/** Which destinations the window checks: the one it was opened from (a channel view), else every destination. */
-export function destinationsToCheck<T extends { key: string }>(destinations: readonly T[], only: string | null): T[] {
-  return only ? destinations.filter(d => d.key === only) : [...destinations]
+/** Which destinations the window checks: the ones the page shows (one destination, or every listing of one eBay
+ *  account and market — aliases, 2026-09-29), else every destination. */
+export function destinationsToCheck<T extends { key: string }>(destinations: readonly T[], only: string | readonly string[] | null): T[] {
+  if (!only || (Array.isArray(only) && !only.length)) return [...destinations]
+  const keys = new Set<string>(typeof only === 'string' ? [only] : only)
+  return destinations.filter(d => keys.has(d.key))
 }

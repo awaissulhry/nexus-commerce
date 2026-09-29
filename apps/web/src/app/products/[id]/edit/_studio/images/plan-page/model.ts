@@ -507,7 +507,8 @@ export function isCodeName(label: string): boolean {
   // "vija9w5xgwhywk2ld7hq.jpg" (a storage id), "81Kp1xYzA7L._AC_SL1500_.jpg" (an Amazon image id), "PT02" (a slot).
   const base = label.replace(/\.[a-z0-9]{2,4}$/i, '').replace(/\._[A-Z0-9_,]+_$/, '').trim()
   return /^(MAIN|PT\d{2}|PS\d{2}|SWCH)$/i.test(base)
-    || (/^[a-z0-9]{16,}$/.test(base) && /\d/.test(base) && /[a-z]/.test(base))
+    // Storage ids are 20 lowercase characters, sometimes letters only ("jicgmxqvlozatatxmfwr", production 2026-09-29).
+    || (/^[a-z0-9]{16,}$/.test(base) && /[a-z]/.test(base) && (/\d/.test(base) || base.length >= 20))
     || (/^[0-9A-Za-z+%-]{9,13}L$/.test(base) && /\d/.test(base) && /[A-Z]/.test(base.slice(0, -1)))
 }
 

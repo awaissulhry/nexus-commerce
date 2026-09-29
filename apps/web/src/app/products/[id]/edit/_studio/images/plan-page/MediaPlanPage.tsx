@@ -15,6 +15,7 @@ import { LibraryPanel } from './LibraryPanel'
 import { LibraryManager } from './LibraryManager'
 import { PhotoGrid, type AddTarget } from './PhotoGrid'
 import { SidePanel } from './SidePanel'
+import { ListingChips } from './ListingChips'
 import { DestinationName } from './destinationName'
 import { CompareDialog } from './CompareDialog'
 import { UploadDialog } from './UploadDialog'
@@ -87,8 +88,9 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
   // P4b — the upload dialog, with the files dropped on the page (if any).
   const [uploading, setUploading] = useState<File[] | null>(null)
   const [dropping, setDropping] = useState(false)
-  // Publish photos: false = closed, 'all' = every destination, else the destination the page shows.
-  const [publishing, setPublishing] = useState<false | 'all' | string>(false)
+  // Publish photos: false = closed, 'all' = every destination, else what the page shows (one destination, or every
+  // listing of one eBay account and market).
+  const [publishing, setPublishing] = useState<false | 'all' | string | string[]>(false)
   // W4a — two library photos that look the same ("Same photo?").
   const [lookalike, setLookalike] = useState<{ a: string; b: string; kind?: 'same' | 'versions' } | null>(null)
 
@@ -106,10 +108,13 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
   const marketLanguages = d ? marketplaces.find(m => m.channel === d.channel && m.code === market)?.languages ?? [] : []
   const languages = d ? (marketLanguages.length ? marketLanguages : d.languages) : null
 
-  // The one Publish button: the studio header's, while this page is open.
-  const publishKey = d?.key ?? null
+  // The one Publish button: the studio header's, while this page is open. On an eBay account and market with aliases it
+  // offers every listing there, the one shown and its aliases (each is its own line and its own revision).
+  const siblings = d && d.channel !== 'AMAZON' ? siblingListings(read, d) : []
+  const publishKeys = d ? (siblings.length > 1 ? siblings.filter(x => x.targetable).map(x => x.key) : [d.key]) : null
+  const publishKey = publishKeys?.join('|') ?? null
   useEffect(() => {
-    setPhotoPublish({ open: () => setPublishing(publishKey ?? 'all') })
+    setPhotoPublish({ open: () => setPublishing(publishKey ? publishKey.split('|') : 'all') })
     return () => setPhotoPublish(null)
   }, [publishKey])
 
@@ -250,8 +255,9 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
 
   if (managing) return <div ref={box} className={styles.page}><LibraryManager productId={read.productId} onClose={() => { setManaging(false); void plan.reload(true) }} /></div>
 
-  const siblings = d && d.channel !== 'AMAZON' ? siblingListings(read, d) : []
-  const others = d ? read.destinations.filter(x => x.key !== d.key && x.targetable).sort((a, b) => Number(b.channel === d.channel) - Number(a.channel === d.channel)) : []
+  // "Copy photos from": this account and market's other listings first (its aliases), then the channel, then the rest.
+  const closeness = (x: MediaDestinationRow) => !d ? 0 : siblings.some(y => y.key === x.key) ? 2 : x.channel === d.channel ? 1 : 0
+  const others = d ? read.destinations.filter(x => x.key !== d.key && x.targetable).sort((a, b) => closeness(b) - closeness(a)) : []
   const followAll = d ? followAllOps(read, view) : []
   const destinationMenu: MenuItemDef[] = d ? [
     { id: 'reset-all', label: 'Reset all to shared', disabled: !followAll.length, onSelect: () => edit(view, followAll, `Reset all to shared: ${destinationLabel(d)}`) },
@@ -295,19 +301,17 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
         <header className={styles.gridHead}>
           {d ? <>
             <h3 id="media-grid-title" className={styles.sectionTitle}><DestinationName d={d} /></h3>
-            {siblings.length > 1 && <Listbox size="sm" width="auto" ariaLabel="Listing" value={d.key}
-              options={siblings.map(x => ({ value: x.key, label: listingName(x) }))}
-              onChange={key => setListing(siblings.find(x => x.key === key)?.alias?.id)} />}
             <span className={styles.spacer} />
             {d.channel === 'AMAZON' && <Button size="sm" variant="secondary" disabled={!layouts[d.key] || !d.markets.length} onClick={() => setZip(true)}>Export ZIP per marketplace</Button>}
             {destinationMenu.length > 0 && <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" items={destinationMenu}
               triggerProps={{ className: 'nds-btn sm', 'aria-label': `More actions for ${destinationLabel(d)}`, title: 'More actions' }} />}
           </> : <h3 id="media-grid-title" className={styles.sectionTitle}>{channelScope ? `${CHANNEL_LABEL[scope as MediaChannel] ?? scope}${market ? ` ${market}` : ''}` : 'Shared photos'}</h3>}
         </header>
+        {d && <ListingChips read={read} destination={d} layouts={layouts} onPick={x => setListing(x.alias?.id)} />}
         {(!channelScope || d) && <p className={styles.muted}>{!channelScope
           ? 'Every channel shows these photos unless a row is changed for it. To change a channel\'s or a market\'s photos, choose it in Editing above. Nothing is sent until you publish.'
           : d?.channel === 'AMAZON'
-            ? `Amazon keeps one photo set per ASIN for ${d.markets.join(' ')}.${marketLanguage && market ? ` ${market} shows its ${languageLabel(marketLanguage)} versions, and its ZIP holds them.` : ''} Rows without a mark show the Shared photos; a change here makes the row Amazon's own.`
+            ? `Amazon keeps one photo set per ASIN for ${d.markets.join(' ')}, so every Amazon listing of this account shows these photos.${marketLanguage && market ? ` ${market} shows its ${languageLabel(marketLanguage)} versions, and its ZIP holds them.` : ''} Rows without a mark show the Shared photos; a change here makes the row Amazon's own.`
             : d ? `Rows without a mark show the Shared photos. A change here gives ${d.alias || siblings.length > 1 ? listingName(d) : `${CHANNEL_LABEL[d.channel]}${d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`}`} its own photos for that row.` : ''}</p>}
 
         {channelScope && !d ? <ScopeState status={studioDestination.status} message={studioDestination.status === 'error' ? studioDestination.message : null}
@@ -328,7 +332,7 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
     <Drawer open={!beside && drawerOpen} onClose={() => { setDrawerOpen(false); setPending(null) }} title="Photo library" width="min(520px, 100vw)">
       {library}
     </Drawer>
-    <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} onReview={() => setPublishing(publishKey ?? 'all')} />
+    <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} onReview={() => setPublishing(publishKeys ?? 'all')} />
     <PublishPhotosDialog read={read} open={publishing !== false} only={publishing === 'all' || publishing === false ? null : publishing} onClose={() => setPublishing(false)} />
     <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)}
       onOpenDestination={key => { const x = read.destinations.find(y => y.key === key); if (x) openDestination(x) }} />
