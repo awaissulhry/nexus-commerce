@@ -204,6 +204,8 @@ export const ENTRIES: Entry[] = [
   // ── S2 coverage: AI / agents ───────────────────────────────────
   P(F.aiUsageView, pfx('/api/ai/usage')),
   RW(F.aiView, F.aiRun, pfx('/api/ai/')),
+  // A tool's policy (on/off, approval, hourly limit) is a security setting, not an AI action.
+  P(F.settingsSecurityManage, (m, p) => m.toUpperCase() === 'PUT' && p === '/api/agent/tools/:name'),
   RW(F.aiView, F.aiRun, pfx('/api/agent/')),
   RW(F.adminView, F.jobsManage, pfx('/api/cockpit/')),
 
