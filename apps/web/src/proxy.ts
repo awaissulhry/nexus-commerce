@@ -44,5 +44,6 @@ export function proxy(request: NextRequest) {
 }
 
 // `backend/` is left out: those API calls are a Vercel external rewrite (next.config.js) and must not start a function
-// here first — the paused-site incident of 2026-09-27 (src/lib/workspaces/backendRewrite.cjs).
-export const config = { matcher: ['/((?!backend/|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|css|js|woff2?)$).*)'] }
+// here first — the paused-site incident of 2026-09-27 (src/lib/workspaces/backendRewrite.cjs). `.well-known/` too: its
+// OAuth metadata is a rewrite to the API (src/lib/oauth/oauthRoutes.cjs), never a page that needs a profile.
+export const config = { matcher: ['/((?!backend/|\\.well-known/|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|css|js|woff2?)$).*)'] }
