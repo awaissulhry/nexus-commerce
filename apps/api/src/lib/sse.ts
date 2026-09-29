@@ -14,7 +14,9 @@ export function sseResponseHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    // no-transform: the web's `next start` gzips proxied answers unless told not to, and a gzipped stream holds every
+    // event back until the stream ends (measured 2026-09-29).
+    'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     // Proxies must not buffer the stream (Cloudflare honours this;
     // Railway's Envoy passes it through).

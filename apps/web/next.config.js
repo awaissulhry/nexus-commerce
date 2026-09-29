@@ -63,6 +63,10 @@ const nextConfig = {
       dynamic: 180,
       static: 300,
     },
+    // `next start` proxies the `/backend/api/*` rewrite itself (on Vercel the edge did it) and cuts a proxied request
+    // after this many ms with no bytes — 30 000 by default. The Amazon ZIP may wait 90 s for its first byte
+    // (media-plan-archive.service.ts), so 5 minutes. Live streams ping every ≤ 25 s and stay open.
+    proxyTimeout: 300_000,
     // ── Turbopack dev cache — bounded by construction (2026-08-27) ─────────────────────────
     //
     // `turbopackFileSystemCacheForDev` defaults to TRUE in Next 16 and NOTHING prunes what it

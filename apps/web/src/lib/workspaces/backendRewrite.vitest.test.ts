@@ -43,3 +43,10 @@ describe('nothing puts a Vercel function back in front of the API', () => {
     expect(proxy).toMatch(/matcher: \['\/\(\(\?!backend\//)
   })
 })
+
+describe('next start keeps a proxied API call open as long as the API needs (web on Railway, 2026-09-29)', () => {
+  it('waits longer than the Amazon ZIP may take before its first byte (90 s; Next cuts at 30 s by default)', () => {
+    const config = require('../../../next.config.js') as { experimental?: { proxyTimeout?: number } }
+    expect(config.experimental?.proxyTimeout).toBeGreaterThan(90_000)
+  })
+})
