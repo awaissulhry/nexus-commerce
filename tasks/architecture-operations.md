@@ -42,7 +42,8 @@ platform administrators or the release service cannot see both secret values.
 ## Process cutover
 
 Create the worker and scheduler services (`nexus-worker`, `nexus-scheduler`, created
-2026-09-26) with no source: only the deploy workflow deploys them, with `railway up`.
+2026-09-26) with no source: only the deploy workflow deploys them, with `railway up` or
+from the API image (see "Image deploys and rollback").
 Railway no longer lets a new service read a config file (Config as Code is deprecated),
 so their settings live in Railway: the API's build command; start `npm run start:worker`
 or `npm run start:scheduler`; health check `/health/ready`, 90 s; restart on failure;
@@ -84,7 +85,8 @@ event streams first, so browsers reconnect to another replica.
 ## Release behavior
 
 The GitHub deployment workflow calls CI for its own checkout and depends on success.
-Both push and manual dispatch follow this dependency. Railway then builds, executes
+Both push and manual dispatch follow this dependency. Railway then builds (or pulls the
+commit's image, see below), executes
 `npm run db:migrate:deploy` as pre-deploy, starts the API, and waits for the readiness
 endpoint and expected build SHA. Ordinary restart/replica scale-up does not migrate.
 
@@ -104,10 +106,74 @@ fields must be tolerated; new required request fields require an overlap period.
 An application rollback does not undo migrations. Keep an old artifact that tolerates
 the expanded schema, and use the appropriate credential for its connection behavior.
 Never revert the new runtime back to an owner login just to pass its health check.
+The images of every release are those artifacts (next section).
 
 Event consumers accept only supported type/version/payload contracts. Invalid durable
 messages remain pending and are reported; that is retry retention, not a dead-letter
 archive. Consumers must be idempotent and tolerate reordering even within a subject.
+
+## Image deploys and rollback
+
+Every Deploy API run builds two images of its commit, beside CI: `ghcr.io/<owner>/nexus-api:<sha>`
+(API, worker and scheduler) and `ghcr.io/<owner>/nexus-web:<sha>`. The GitHub repository variable
+`RAILWAY_IMAGE_SERVICES` lists the services that deploy from them: a comma list of `api`, `worker`,
+`scheduler` and `web`. Railway then builds nothing. Every other service keeps `railway up`.
+Empty means none. An unknown name fails the run.
+
+### Move a service to image deploys
+
+The Owner sets the variable (GitHub → Settings → Secrets and variables → Actions → Variables).
+One service per deploy, in this order. Check each deploy's logs and timings before the next step.
+
+1. `web`
+2. `web,worker`
+3. `web,worker,scheduler`
+4. `web,worker,scheduler,api`
+
+The next deploy that ships the service points it at its image (`railway service source connect
+--image`); Settings → Source then shows the image. To switch it at once, run Deploy API by hand: a
+hand run ships every service. If Railway refuses the project token, connect the image once in Settings
+→ Source → Connect Image, then run Deploy API by hand.
+
+Check first that the service's start command works in the image:
+
+- web: `node apps/web/scripts/start.mjs`, or none (the image starts it). The web image has no root
+  `package.json`, so a root `npm run …` start command fails.
+- worker, scheduler: `npm run start:worker` and `npm run start:scheduler` work. `node
+  apps/api/dist/background.js worker` (or `scheduler`) also stops with exit 0 instead of 1.
+- API: start `node apps/api/dist/index.js`, pre-deploy `npm run db:migrate:deploy`, health check
+  `/api/health/ready`. These stay.
+
+Railway ignores the build command, watch paths and `RAILPACK_`/`NIXPACKS_` node versions for an image
+source. A failed image deployment never takes traffic: the previous build keeps serving.
+To move a service back, remove its name. Not yet tried: `railway up` on a service whose source is an
+image. If Railway refuses it, disconnect the image in Settings → Source first.
+
+### Roll back
+
+    gh workflow run rollback.yml -f sha=<commit>
+
+The commit must be on main (a full SHA or a prefix of 7 or more characters), and Deploy API must have
+built its images. The workflow runs in GitHub, not on this machine. It:
+
+- checks that both images of that commit exist;
+- moves only the services in `RAILWAY_IMAGE_SERVICES`, and names the others in its summary;
+- moves the API first (Railway SUCCESS, then readiness shows that commit), then the worker, scheduler
+  and web side by side, then runs the web's production smoke.
+
+**Migrations do not roll back.** The old code runs on today's schema. Roll back only when every
+migration since that commit is additive. The run's summary lists the migrations added since then.
+
+The next Deploy API run ships every service again, so no service stays on the old commit once main
+moves on. To put main back without a new commit, run Deploy API by hand.
+
+A rollback waits in the same queue as deploys (`deploy-api`). GitHub keeps one waiting run per queue: a
+push that lands while the rollback waits cancels it, and a rollback cancels a deploy that is still
+waiting. Run the cancelled one again.
+
+Railway's own Rollback button on an older deployment also works for image deploys, one service at a
+time. The deploy workflow cannot see such a rollback: after it, run Deploy API by hand once main is
+fixed, or a later push leaves the services it does not change on the old build.
 
 ## Remaining rollout evidence
 
