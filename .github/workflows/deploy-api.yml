@@ -1,11 +1,21 @@
-# Deploy the API to Railway from GitHub Actions.
+# Deploy to Railway from GitHub Actions: the API first, then the worker, scheduler and web.
 #
 # Railway's native GitHub integration is unreliable on this project
 # (it stops auto-deploying after rebases or after the worker crashes
-# on a Redis hiccup). This workflow takes over: every push to main
-# builds and ships the new container via Railway CLI. The container
-# applies migrations in Railway's pre-deploy release step after building,
-# and Railway waits for /api/health/ready before switching traffic.
+# on a Redis hiccup). This workflow takes over. Every push to main that
+# touches a shipped path runs the whole CI on that exact commit (`verify`),
+# builds both Docker images beside it (`images`, images.yml) and asks eBay
+# about the consent scopes (`ebay`). Only then does anything ship. The API
+# applies migrations in Railway's pre-deploy step, and Railway waits for
+# /api/health/ready before switching traffic.
+#
+# A service ships one of two ways (docs/ci-fast-deploys/PLAN-2026-09-29.md §2, §7):
+#   by image    — the repository variable RAILWAY_IMAGE_SERVICES names it (a comma list of api, worker, scheduler,
+#                 web). Railway runs ghcr.io/<owner>/nexus-api:<sha> (api, worker, scheduler) or nexus-web:<sha> and
+#                 builds nothing (scripts/ci/railway-deploy-image.sh). The Owner moves one service at a time.
+#   railway up  — every other service: Railway builds the uploaded source (scripts/ci/railway-up.sh), as before.
+# An empty variable ships everything with `railway up`. To go back to an earlier commit: rollback.yml
+# (runbook in tasks/architecture-operations.md).
 #
 # Required secrets (set under repo Settings → Secrets and variables
 # → Actions):
@@ -26,6 +36,8 @@ name: Deploy API
 on:
   push:
     branches: [main]
+    # What the services and their images are built from, and the pipeline that ships them (images.yml no longer runs
+    # on its own push: it runs here, once per release).
     paths:
       - 'apps/api/**'
       - 'packages/database/**'
@@ -35,20 +47,35 @@ on:
       - 'package-lock.json'
       - 'patches/**'
       - 'apps/web/**'
+      - 'turbo.json'
+      - '.dockerignore'
+      - 'docs/fixtures/vt1/fixtures.ts'
+      - 'scripts/ci/check-image-secrets.sh'
+      - 'scripts/ci/image-services.sh'
+      - 'scripts/ci/railway-deploy-image.sh'
+      - 'scripts/ci/railway-up.sh'
       - '.github/workflows/deploy-api.yml'
       - '.github/workflows/ci.yml'
+      - '.github/workflows/images.yml'
       - '.github/workflows/prod-smoke.yml'
   workflow_dispatch:
 
+# rollback.yml shares this group, so a rollback and a release never run at once. GitHub keeps ONE pending run per
+# group: a newer run cancels the one still waiting, whichever workflow it belongs to.
 concurrency:
   group: deploy-api
   cancel-in-progress: false
 
+# Every `if:` below that must look past a skipped or failed job uses !cancelled(), never always(): always() would still
+# start a deploy after someone cancelled the run.
 jobs:
   # Which services changed since the last release that fully succeeded. Not since the previous commit: a newer push
   # cancels a run still waiting in the `deploy-api` group, and a failed run may not have shipped everything — their
   # changes must ride with this run (2026-09-29: #164's API change was in a cancelled run). A hand run
-  # (workflow_dispatch) ships everything; so does a push when that release cannot be found or read.
+  # (workflow_dispatch) ships everything; so does a push when that release cannot be found or read, and a push after a
+  # rollback (rollback.yml): a service this push does not change would otherwise stay on the rolled-back commit.
+  # Code of one service ships that service; what builds or ships the services (dependencies, the images, the
+  # workflows and scripts/ci) ships both, so a pipeline change is proven end to end by its own release.
   changes:
     name: What changed
     runs-on: ubuntu-latest
@@ -58,6 +85,10 @@ jobs:
     outputs:
       api: ${{ steps.diff.outputs.api }}
       web: ${{ steps.diff.outputs.web }}
+      image_api: ${{ steps.mode.outputs.api }}
+      image_worker: ${{ steps.mode.outputs.worker }}
+      image_scheduler: ${{ steps.mode.outputs.scheduler }}
+      image_web: ${{ steps.mode.outputs.web }}
     steps:
       - uses: actions/checkout@v4
       - id: diff
@@ -67,18 +98,33 @@ jobs:
         run: |
           set -euo pipefail
           api=true web=true
-          base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-api.yml/runs?branch=main&status=success&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null) || base=''
+          release=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-api.yml/runs?branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0] // empty | "\(.head_sha) \(.created_at)"' 2>/dev/null) || release=''
+          base=${release%% *} released_at=${release#* }
+          # The newest rollback, whatever its result: one that failed half-way may still have moved a service.
+          rollback=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rollback.yml/runs?per_page=1" \
+            --jq '.workflow_runs[0] // empty | "\(.id) \(.created_at)"' 2>/dev/null) || rollback=unreadable
           if [ "$EVENT" = push ] && [ -n "$base" ] && git fetch --no-tags --depth=1 origin "$base" 2>/dev/null; then
-            files=$(git diff --name-only "$base" "$GITHUB_SHA")
-            echo "Changed since $base, the last successful release:"
-            printf '%s\n' "$files"
-            shared='package(-lock)?\.json$|patches/|\.github/workflows/(deploy-api|ci)\.yml$'
-            grep -qE "^(apps/api/|packages/(database|shared|events)/|$shared)" <<< "$files" && api=true || api=false
-            grep -qE "^(apps/web/|packages/(database|shared)/|\.github/workflows/prod-smoke\.yml$|$shared)" <<< "$files" && web=true || web=false
+            if [ "$rollback" = unreadable ]; then
+              echo "The rollback runs could not be read: shipping everything."
+            elif [ -n "$rollback" ] && [[ "${rollback#* }" > "$released_at" ]]; then
+              echo "Rollback run ${rollback%% *} (${rollback#* }) came after the last successful release ($released_at): shipping everything."
+            else
+              files=$(git diff --name-only "$base" "$GITHUB_SHA")
+              echo "Changed since $base, the last successful release:"
+              printf '%s\n' "$files"
+              shared='package(-lock)?\.json$|patches/|turbo\.json$|\.dockerignore$|scripts/ci/(check-image-secrets|image-services|railway-deploy-image|railway-up)\.sh$|\.github/workflows/(deploy-api|ci|images)\.yml$'
+              grep -qE "^(apps/api/|packages/(database|shared|events)/|$shared)" <<< "$files" && api=true || api=false
+              grep -qE "^(apps/web/|packages/(database|shared)/|docs/fixtures/vt1/fixtures\.ts$|\.github/workflows/prod-smoke\.yml$|$shared)" <<< "$files" && web=true || web=false
+            fi
           fi
           echo "api=$api web=$web"
           { echo "api=$api"; echo "web=$web"; } >> "$GITHUB_OUTPUT"
+      - id: mode
+        name: Which services deploy by image (RAILWAY_IMAGE_SERVICES)
+        env:
+          RAILWAY_IMAGE_SERVICES: ${{ vars.RAILWAY_IMAGE_SERVICES }}
+        run: scripts/ci/image-services.sh >> "$GITHUB_OUTPUT"
 
   # The whole CI (ci.yml) on the exact commit being released. Before 2026-09-26 main deployed without
   # waiting for any check. docs/ci-plan.md §2.4.
@@ -87,14 +133,61 @@ jobs:
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
-  deploy:
-    needs: [changes, verify]
+  # Both images of this commit, built and pushed beside `verify` (images.yml). Every release builds both, even for a
+  # service that still ships with `railway up`, so every released commit can be rolled back to.
+  images:
+    name: Images
+    uses: ./.github/workflows/images.yml
+    with:
+      push: true
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
+  # 2026-09-16 — eBay refuses the WHOLE Connect request when one scope is outside the
+  # production app's keyset, and names none of them. Two were, so no eBay account could be
+  # connected. This asks eBay before shipping: exit 1 names the refused scopes, exit 2 means
+  # it could not measure (missing values, wrong app ID, eBay unreachable). Both stop the
+  # deploy. The app ID and RuName are read from Railway, the one place production values
+  # live — never copy them into GitHub. Runs beside `verify` since 2026-09-30 (it was a step of the API deploy).
+  ebay:
+    needs: changes
     if: needs.changes.outputs.api == 'true'
-    name: Build + ship to Railway
+    name: eBay accepts every consent scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Install Railway CLI (pinned)
+        run: npm install -g @railway/cli@5.30.1
+      - name: Check eBay accepts every consent scope
+        working-directory: apps/api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          set -euo pipefail
+          # The JSON holds EVERY Railway variable, secrets included: it goes straight into jq and
+          # only the two public eBay identifiers come out. Never print it.
+          pick='[.EBAY_CLIENT_ID // "", .EBAY_RUNAME // ""] | @tsv'
+          if [ -n "$RAILWAY_SERVICE" ]; then
+            ebay=$(railway variables list --service "$RAILWAY_SERVICE" --json | jq -r "$pick") || { echo "❌ could not read the eBay app values from Railway"; exit 2; }
+          else
+            ebay=$(railway variables list --json | jq -r "$pick") || { echo "❌ could not read the eBay app values from Railway"; exit 2; }
+          fi
+          EBAY_CLIENT_ID=$(cut -f1 <<< "$ebay") EBAY_RUNAME=$(cut -f2 <<< "$ebay") npx tsx scripts/check-ebay-consent-scopes.mts
+
+  # No npm ci here: nothing below runs the code. `railway up` uploads the checkout minus .gitignore (there is no
+  # .railwayignore), and the setup action's builds leave `git status` clean (measured 2026-09-30), so the upload is the
+  # same without them.
+  deploy:
+    needs: [changes, verify, images, ebay]
+    if: needs.changes.outputs.api == 'true'
+    name: Ship the API to Railway
     runs-on: ubuntu-latest
     timeout-minutes: 40  # railway up (~11 min measured) + up to 12 min for pre-deploy and healthcheck
-    env:
-      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
 
     steps:
       - name: Checkout
@@ -112,38 +205,15 @@ jobs:
             exit 1
           }
 
-      - uses: ./.github/actions/setup
-
       - name: Install Railway CLI (pinned)
         run: npm install -g @railway/cli@5.30.1
 
-      - name: Check eBay accepts every consent scope
-        # 2026-09-16 — eBay refuses the WHOLE Connect request when one scope is outside the
-        # production app's keyset, and names none of them. Two were, so no eBay account could be
-        # connected. This asks eBay before shipping: exit 1 names the refused scopes, exit 2 means
-        # it could not measure (missing values, wrong app ID, eBay unreachable). Both stop the
-        # deploy. The app ID and RuName are read from Railway, the one place production values
-        # live — never copy them into GitHub.
-        working-directory: apps/api
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
-        run: |
-          set -euo pipefail
-          # The JSON holds EVERY Railway variable, secrets included: it goes straight into jq and
-          # only the two public eBay identifiers come out. Never print it.
-          pick='[.EBAY_CLIENT_ID // "", .EBAY_RUNAME // ""] | @tsv'
-          if [ -n "$RAILWAY_SERVICE" ]; then
-            ebay=$(railway variables list --service "$RAILWAY_SERVICE" --json | jq -r "$pick") || { echo "❌ could not read the eBay app values from Railway"; exit 2; }
-          else
-            ebay=$(railway variables list --json | jq -r "$pick") || { echo "❌ could not read the eBay app values from Railway"; exit 2; }
-          fi
-          EBAY_CLIENT_ID=$(cut -f1 <<< "$ebay") EBAY_RUNAME=$(cut -f2 <<< "$ebay") npx tsx scripts/check-ebay-consent-scopes.mts
-
       # No API build or test here: `verify` ran the whole CI on this exact commit (the whole API suite
-      # includes the catalog CSV limits), and Railway builds from source before the container starts.
+      # includes the catalog CSV limits), and Railway builds from source (or runs this commit's image)
+      # before the container starts.
 
       - name: Trigger Railway deploy
+        if: needs.changes.outputs.image_api != 'true'
         id: up
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -154,16 +224,28 @@ jobs:
           # Retried only when Railway's builder cannot download its own tools (scripts/ci/railway-up.sh).
           scripts/ci/railway-up.sh --service "${{ secrets.RAILWAY_SERVICE }}" --ci --message "GitHub ${{ github.sha }}"
 
+      - name: Deploy this commit's API image
+        if: needs.changes.outputs.image_api == 'true'
+        id: image
+        # Returns at SUCCESS: Railway ran the pre-deploy migration and passed its health check. The image carries the
+        # commit in apps/api/.release-sha, so the readiness check below still identifies this exact build.
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-api:${{ github.sha }}
+        run: scripts/ci/railway-deploy-image.sh --service "$API_SERVICE" --image "$IMAGE"
+
       - name: Smoke-test the new container
         # `railway up` returns when the BUILD ends. Railway then runs the pre-deploy migration and waits for
         # its own healthcheck (up to 300 s) before it switches traffic: measured 2026-09-26, run 36265845583,
         # 6 minutes from the end of the build to SUCCESS, while a 3-minute window had already failed the
         # run and skipped the worker and scheduler. So: up to 12 minutes, failing at once if Railway
-        # reports this deployment FAILED or CRASHED.
+        # reports this deployment FAILED or CRASHED. After an image deploy Railway already reports SUCCESS,
+        # and this passes on its first read.
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
-          DEPLOYMENT_ID: ${{ steps.up.outputs.deployment_id }}
+          DEPLOYMENT_ID: ${{ steps.up.outputs.deployment_id || steps.image.outputs.deployment_id }}
         run: |
           set -euo pipefail
           expected="${GITHUB_SHA:0:8}"
@@ -188,8 +270,9 @@ jobs:
   # The worker and scheduler ship the same commit once the API serves it, side by side and each
   # with its own time limit. In one job, three sequential builds overran its 25 minutes
   # (2026-09-26): the job was cancelled while the scheduler's build was still running.
+  # No status function: when the API deploy is skipped or fails, these must not ship.
   deploy-background:
-    needs: deploy
+    needs: [changes, deploy]
     name: Ship ${{ matrix.role }} to Railway
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -205,20 +288,35 @@ jobs:
         run: npm install -g @railway/cli@5.30.1
 
       - name: Deploy ${{ matrix.role }} from the same release
+        if: >-
+          !(matrix.role == 'worker' && needs.changes.outputs.image_worker == 'true' ||
+          matrix.role == 'scheduler' && needs.changes.outputs.image_scheduler == 'true')
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
         run: scripts/ci/railway-up.sh --service "$SERVICE" --ci --message "${{ matrix.role }} GitHub ${{ github.sha }}"
 
+      - name: Deploy ${{ matrix.role }} from the same API image
+        if: >-
+          matrix.role == 'worker' && needs.changes.outputs.image_worker == 'true' ||
+          matrix.role == 'scheduler' && needs.changes.outputs.image_scheduler == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-api:${{ github.sha }}
+        run: scripts/ci/railway-deploy-image.sh --service "$SERVICE" --image "$IMAGE"
+
   # The web ships after the API serves the same commit (its pages may call new API routes), or alone when only the web
-  # changed. `railway up` returns when the build ends; Railway then waits for /login to answer before it switches
-  # traffic, so this waits for the deployment itself to report SUCCESS.
+  # changed. When the API changed too, a failed or skipped API deploy (eBay check included) holds the web back.
+  # `railway up` returns when the build ends; Railway then waits for /login to answer before it switches traffic, so
+  # the railway-up path waits for the deployment itself to report SUCCESS. The image path does that in its script.
   deploy-web:
-    needs: [changes, verify, deploy]
+    needs: [changes, verify, images, deploy]
     if: >-
-      always() && needs.verify.result == 'success' && needs.changes.outputs.web == 'true' &&
-      (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
-    name: Build + ship the web to Railway
+      !cancelled() && needs.changes.outputs.web == 'true' &&
+      needs.verify.result == 'success' && needs.images.result == 'success' &&
+      (needs.changes.outputs.api != 'true' || needs.deploy.result == 'success')
+    name: Ship the web to Railway
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -234,12 +332,14 @@ jobs:
         run: npm install -g @railway/cli@5.30.1
 
       - name: Trigger Railway deploy
+        if: needs.changes.outputs.image_web != 'true'
         id: up
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: scripts/ci/railway-up.sh --service "${{ secrets.RAILWAY_WEB_SERVICE }}" --ci --message "web GitHub ${{ github.sha }}"
 
       - name: Wait until Railway serves the new web build
+        if: needs.changes.outputs.image_web != 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
@@ -259,11 +359,19 @@ jobs:
           echo "✗ Railway did not serve web deployment $DEPLOYMENT_ID within 12 minutes"
           exit 1
 
-  # always(): without it a skipped API deploy (a web-only push) skips this job too, though deploy-web succeeded
-  # (run 36557837250, 2026-09-29).
+      - name: Deploy this commit's web image
+        if: needs.changes.outputs.image_web == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-web:${{ github.sha }}
+        run: scripts/ci/railway-deploy-image.sh --service "$WEB_SERVICE" --image "$IMAGE"
+
+  # A status function: without one a skipped API deploy (a web-only push) skips this job too, though deploy-web
+  # succeeded (run 36557837250, 2026-09-29).
   smoke-web:
     needs: deploy-web
-    if: always() && needs.deploy-web.result == 'success'
+    if: ${{ !cancelled() && needs.deploy-web.result == 'success' }}
     name: Web production smoke
     uses: ./.github/workflows/prod-smoke.yml
     with:

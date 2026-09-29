@@ -4,7 +4,9 @@
 # differ only by start command); ghcr.io/<owner>/nexus-web:<commit sha> serves nexus-web. The images are public, so each
 # one passes scripts/ci/check-image-secrets.sh before it is pushed.
 #
-#   push to main       build, check and push. Nothing deploys these images yet: deploy-api.yml still builds on Railway.
+#   deploy-api.yml     (workflow_call, push: true) build, check and push, beside `verify`, for every release on main.
+#                      Services named in RAILWAY_IMAGE_SERVICES deploy these images; rollback.yml redeploys older ones.
+#                      There is no push trigger of its own: every release would build twice.
 #   pull request       build and check only, when the build itself changed. Never pushes.
 #   workflow_dispatch  build and check; push when asked.
 #
@@ -15,22 +17,6 @@
 name: Images
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/api/**'
-      - 'apps/web/**'
-      - 'packages/database/**'
-      - 'packages/shared/**'
-      - 'packages/events/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'patches/**'
-      - 'turbo.json'
-      - '.dockerignore'
-      - 'docs/fixtures/vt1/fixtures.ts'
-      - 'scripts/ci/check-image-secrets.sh'
-      - '.github/workflows/images.yml'
   pull_request:
     paths:
       - 'apps/api/Dockerfile'
@@ -53,7 +39,8 @@ on:
         type: boolean
         default: false
 
-# One run per commit on main (every release gets its images); a newer push to a pull request cancels the older run.
+# One run per release commit, never cancelled (every release keeps its images); a newer push to a pull request cancels
+# the older run.
 concurrency:
   group: images-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -74,7 +61,7 @@ jobs:
       matrix:
         image: [api, web]
     env:
-      PUSH: ${{ github.event_name == 'push' || inputs.push == true }}
+      PUSH: ${{ inputs.push == true }}
       IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-${{ matrix.image }}:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
