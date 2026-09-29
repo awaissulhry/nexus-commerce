@@ -3,11 +3,11 @@
 # Railway's native GitHub integration is unreliable on this project
 # (it stops auto-deploying after rebases or after the worker crashes
 # on a Redis hiccup). This workflow takes over. Every push to main that
-# touches a shipped path runs the whole CI on that exact commit (`verify`),
-# builds both Docker images beside it (`images`, images.yml) and asks eBay
-# about the consent scopes (`ebay`). Only then does anything ship. The API
-# applies migrations in Railway's pre-deploy step, and Railway waits for
-# /api/health/ready before switching traffic.
+# touches a shipped path runs the whole CI on that exact commit (`verify`)
+# and builds both Docker images beside it (`images`, images.yml). When the
+# API ships, it also asks eBay about the consent scopes (`ebay`). Only then
+# does anything ship. The API applies migrations in Railway's pre-deploy
+# step, and Railway waits for /api/health/ready before switching traffic.
 #
 # A service ships one of two ways (docs/ci-fast-deploys/PLAN-2026-09-29.md §2, §7):
 #   by image    — the repository variable RAILWAY_IMAGE_SERVICES names it (a comma list of api, worker, scheduler,
