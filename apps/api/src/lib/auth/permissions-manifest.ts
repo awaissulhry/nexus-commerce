@@ -105,6 +105,12 @@ export const ENTRIES: Entry[] = [
   // registration and revocation endpoints with no session; the consent routes guard themselves
   // (session, 2FA, CSRF) like /api/auth/*, and name their business explicitly.
   P(PUBLIC, (_m, p) => p.startsWith('/api/oauth/')),
+  // MCP.7 — the MCP endpoint and its RFC 9728 document (routes/mcp.routes.ts). Claude sends a
+  // Bearer token, never a session: the route verifies it and takes the business from it alone.
+  P(PUBLIC, (_m, p) =>
+    p === '/mcp' ||
+    p === '/.well-known/oauth-protected-resource' ||
+    p.startsWith('/.well-known/oauth-protected-resource/')),
   // Owner-gated auth admin (also guarded in S1 by requireOwner):
   P(F.usersManage, (_m, p) => p === '/api/auth/logout-all'),
   RW(F.invitationsManage, F.invitationsManage, pfx('/api/auth/invitations')),
@@ -120,6 +126,8 @@ export const ENTRIES: Entry[] = [
   P(F.auditView, pfx('/api/audit-log')),
   P(F.auditView, (_m, p) => p === '/api/events'),
   P(F.sessionsManage, pfx('/api/team/sessions')),
+  // MCP.6 — a business's Claude connections (routes/oauth-grants.routes.ts): whoever manages its sessions.
+  P(F.sessionsManage, (_m, p) => p === '/api/connected-apps' || p.startsWith('/api/connected-apps/')),
 
   // ── Settings / connections ──────────────────────────────────────
   RW(F.settingsApikeysManage, F.settingsApikeysManage, pfx('/api/settings/api-keys')),
@@ -127,6 +135,9 @@ export const ENTRIES: Entry[] = [
   RW(F.settingsPrivacyManage, F.settingsPrivacyManage, pfx('/api/settings/privacy')),
   RW(F.settingsSecurityManage, F.settingsSecurityManage, pfx('/api/settings/2fa')),
   RW(F.settingsSecurityManage, F.settingsSecurityManage, pfx('/api/settings/sessions')),
+  // MCP.6 — a person's own Claude connections, in every business: self-service like /api/auth/2fa.
+  // An identity route (personalSettingsRoute); the service reads and revokes the signed-in person's only.
+  P(PG.dashboard, (_m, p) => p === '/api/settings/connected-apps' || p.startsWith('/api/settings/connected-apps/')),
   RW(F.settingsView, F.settingsSecurityManage, pfx('/api/settings/login-history')),
   RW(F.settingsView, F.settingsNotificationsEdit, pfx('/api/settings/notifications')),
   RW(F.settingsView, F.settingsWorkspaceEdit, pfx('/api/settings/profile')),
@@ -199,6 +210,8 @@ export const ENTRIES: Entry[] = [
   // ── S2 coverage: AI / agents ───────────────────────────────────
   P(F.aiUsageView, pfx('/api/ai/usage')),
   RW(F.aiView, F.aiRun, pfx('/api/ai/')),
+  // A tool's policy (on/off, approval, hourly limit) is a security setting, not an AI action.
+  P(F.settingsSecurityManage, (m, p) => m.toUpperCase() === 'PUT' && p === '/api/agent/tools/:name'),
   RW(F.aiView, F.aiRun, pfx('/api/agent/')),
   RW(F.adminView, F.jobsManage, pfx('/api/cockpit/')),
 

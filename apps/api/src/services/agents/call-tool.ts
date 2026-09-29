@@ -16,6 +16,9 @@
  * A system principal (crons, the fleet, the re-check of an approval a person
  * already decided) skips 1 and 3. It is built in-process only, never from a
  * request.
+ *
+ * MCP.7 — a person is offered, and may call, only the tools of their door's
+ * surface (`AgentTool.surfaces`): the AI drafts are not offered to Claude.
  */
 
 import type { FastifyRequest } from 'fastify'
@@ -31,10 +34,20 @@ import {
 } from '../../lib/workspace-context.js'
 import { getTool, listTools } from './tool-registry.js'
 import { takeToolCall } from './tool-rate.js'
-import type { AgentTool, ToolResult } from './tool-types.js'
+import type { AgentTool, ToolResult, ToolSurface } from './tool-types.js'
 
 /** Which front door a person came through — recorded, never trusted for access. */
 export type ToolVia = 'app' | 'claude'
+
+/** MCP.7 — the surface a person's front door offers tools on. */
+export function surfaceOf(via: ToolVia): ToolSurface {
+  return via === 'claude' ? 'mcp' : 'app'
+}
+
+/** MCP.7 — is the tool offered on this surface? A tool without `surfaces` is offered on all. */
+export function offeredOn(tool: Pick<AgentTool, 'surfaces'>, surface: ToolSurface): boolean {
+  return !tool.surfaces || tool.surfaces.includes(surface)
+}
 
 export interface UserPrincipal {
   kind: 'user'
@@ -140,15 +153,27 @@ export function missingPermissions(
   return missing
 }
 
-/** The tools this principal may call — the only ones a model is offered. */
+/**
+ * The tools this principal may call — the only ones a model is offered. MCP.7: for a person,
+ * only those offered on the surface of their front door.
+ */
 export function toolsFor(principal: ToolPrincipal): AgentTool[] {
-  return listTools().filter((tool) => missingPermissions(principal, tool).length === 0)
+  return listTools().filter(
+    (tool) =>
+      missingPermissions(principal, tool).length === 0 &&
+      (principal.kind === 'system' || offeredOn(tool, surfaceOf(principal.via))),
+  )
 }
 
-/** Names of the tools this principal may approve; null when there is no limit. */
+/**
+ * Names of the tools this principal may approve; null when there is no limit. Permissions
+ * only: a person approves in Nexus whatever came in through any door.
+ */
 export function approvableToolNames(principal: ToolPrincipal): string[] | null {
   if (principal.kind === 'system' || principal.permissions.isOwner) return null
-  return toolsFor(principal).map((tool) => tool.name)
+  return listTools()
+    .filter((tool) => missingPermissions(principal, tool).length === 0)
+    .map((tool) => tool.name)
 }
 
 export function permissionMessage(toolName: string, missing: readonly string[]): string {
@@ -218,6 +243,17 @@ async function withinHourlyLimit(name: string, limit: number | null | undefined)
   )
 }
 
+/**
+ * MCP.7 — output another tool stored (an approval's preview), as this principal may see it:
+ * nothing when they may not use that tool, and its money filter when they may.
+ */
+function storedOutputFor(principal: ToolPrincipal, toolName: string, value: unknown): unknown | null {
+  const stored = getTool(toolName)
+  if (!stored) return principal.kind === 'system' ? value : null
+  if (missingPermissions(principal, stored).length > 0) return null
+  return visibleTo(principal, stored, value)
+}
+
 /** The dry run: a tool's `handler`. It never changes anything. */
 export async function callTool(
   principal: ToolPrincipal,
@@ -225,11 +261,19 @@ export async function callTool(
   args: Record<string, unknown>,
   options: CallOptions = {},
 ): Promise<ToolCall> {
+  // MCP.7 — a tool not offered on this door does not exist for it (the drafts, over MCP).
+  const listed = getTool(name)
+  if (listed && principal.kind === 'user' && !offeredOn(listed, surfaceOf(principal.via))) {
+    throw new ToolAccessError('unknown_tool', `unknown tool: ${name}`, 404)
+  }
   const tool = allowedTool(principal, name)
   const input = parsedArgs(tool, args)
   const raw = await asPrincipal(principal, async () => {
     await withinHourlyLimit(name, options.hourlyLimit)
-    return tool.handler(input, { userId: principal.kind === 'user' ? principal.userId : null })
+    return tool.handler(input, {
+      userId: principal.kind === 'user' ? principal.userId : null,
+      storedOutput: (toolName, value) => storedOutputFor(principal, toolName, value),
+    })
   })
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }

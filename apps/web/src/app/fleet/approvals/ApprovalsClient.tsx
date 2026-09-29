@@ -192,6 +192,11 @@ const OUTSIDE_ORIGINS: Record<string, Origin> = {
     name: 'someone using the copilot',
     what: `a person rather than a worker, ${NO_HISTORY}`,
   },
+  // MCP.7 — a change a person asked for in Claude, over their Nexus connection (AgentRun.via 'claude').
+  claude: {
+    name: 'someone using Claude',
+    what: `a person who asked for it in Claude, over their Nexus connection, ${NO_HISTORY}`,
+  },
   'pricing-watchdog': {
     name: 'the price watchdog',
     what: `a scheduled check that watches your prices and runs outside the fleet, ${NO_HISTORY}`,

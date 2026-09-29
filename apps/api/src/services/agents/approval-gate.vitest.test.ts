@@ -17,6 +17,7 @@ const execute = vi.fn()
 const TOOLS: Record<string, AgentTool> = {
   'change-price': {
     name: 'change-price',
+    title: 'Test tool',
     category: 'pricing',
     description: 'test tool',
     riskTier: 'high',
