@@ -15,6 +15,8 @@ const opsBodySchema = z.object({
     marketplace: z.string().max(16).optional(),
     accountId: z.string().max(256).optional(),
     aliasKey: z.string().max(256).optional(),
+    // An Amazon market's own photos (`marketplace` = the market), not the account's "All Amazon markets".
+    marketOnly: z.boolean().optional(),
   }).strict(),
   ops: z.array(mediaOpSchema).min(1).max(50),
 }).strict()

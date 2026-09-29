@@ -7,7 +7,7 @@ import type { MediaAsset } from '@nexus/shared/media-plan-channels'
 import { MediaBoard, type MediaBoardItem, type MediaBoardMove, type MediaBoardRow } from '@/design-system/components'
 import { Button, Tag } from '@/design-system/primitives'
 
-import { assetProblems, gridShape, ownerLabel, setRows, shownVersion, swatchRows, type LayerView, type MediaDestinationRow, type MediaRead, type SetRow } from './model'
+import { assetProblems, gridShape, ownerLabel, rowReset, setRows, shownVersion, swatchRows, type LayerView, type MediaDestinationRow, type MediaRead, type SetRow } from './model'
 import styles from './planPage.module.css'
 
 /** Where "Add" puts photos: a set of the edited layer, or one value's swatch (one photo). */
@@ -15,7 +15,7 @@ export interface AddTarget { id: string; label: string; group: 'Sets' | 'Swatche
 
 export interface PhotoGridProps {
   read: MediaRead
-  /** Shared, or the destination the scope selector points at (its own layer). */
+  /** Shared, or the destination the scope selector points at (its own layer; on Amazon, maybe one market's own). */
   view: LayerView
   destination: MediaDestinationRow | null
   assets: Map<string, MediaAsset>
@@ -30,10 +30,12 @@ export interface PhotoGridProps {
 /**
  * The Media page's one photo grid (redesign 2026-09-29): rows = sets (Common, each value, Safety, per-SKU sets), columns
  * = slots (MAIN, PT01…), the swatches below. On a destination it shows what that destination gets: Shared unless a row
- * is its own, marked on the row with "Reset to shared". A change on a destination makes the row its own.
+ * is its own, marked on the row with "Reset to shared". A change on a destination makes the row its own — on "Only DE"
+ * (Amazon), Amazon DE's own.
  */
 export function PhotoGrid({ read, view, destination: d, assets, languages, showSkus, edit, onAddRequest, onOpen }: PhotoGridProps) {
   const channel = d?.channel ?? null
+  const market = view.layer === 'LISTING' ? view.market ?? null : null
   const shape = gridShape(channel)
   const rows = useMemo(() => setRows(read, view, { skus: showSkus }).filter(r => r.kind !== 'safety' || channel === null || channel === 'AMAZON'), [read, view, showSkus, channel])
   const common = rows.find(r => r.ref === 'common')
@@ -57,17 +59,16 @@ export function PhotoGrid({ read, view, destination: d, assets, languages, showS
     }
   }
 
-  /** A row that is not Shared: its owner, and the way back. Nothing on a row that shows Shared. */
+  /** A row that is not Shared: its owner, and the way back (the owning layer drops its copy). Nothing on a Shared row. */
   const mark = (row: SetRow) => {
     if (!d) return row.source === null && row.kind !== 'common' ? <span className={styles.muted}>No photos yet</span> : null
-    const owner = ownerLabel(read, row, d)
-    if (!owner) return null
-    const reset = () => row.source === 'CHANNEL'
-      ? edit({ layer: 'CHANNEL', channel: d.channel }, [{ op: 'follow', set: row.ref }], `Reset to shared: ${row.label}`)
-      : run([{ op: 'follow', set: row.ref }], `Reset to shared: ${row.label}`)
+    const owner = ownerLabel(read, row, d, market)
+    const reset = rowReset(read, view, row, d)
+    if (!owner || !reset) return null
     return <>
       <Tag tone="info">{owner}</Tag>
-      <Button size="xs" variant="ghost" onClick={reset} aria-label={`${row.label}: reset to shared`}>Reset to shared</Button>
+      <Button size="xs" variant="ghost" onClick={() => edit(reset.view, [{ op: 'follow', set: row.ref }], `${reset.text}: ${row.label}`)}
+        aria-label={`${row.label}: ${reset.text.toLowerCase()}`}>{reset.text}</Button>
     </>
   }
 
@@ -94,7 +95,7 @@ export function PhotoGrid({ read, view, destination: d, assets, languages, showS
   const valueOf = (rowId: string) => rowId.slice('swatch:'.length)
   const swatchBoard: MediaBoardRow[] = swatches.map(s => ({
     id: `swatch:${s.value}`, label: `${s.label} swatch`, capacity: 1,
-    detail: d && s.source === 'LISTING' ? ownerLabel(read, { source: 'LISTING' }, d) ?? undefined : undefined,
+    detail: d && (s.source === 'LISTING' || s.source === 'MARKET') ? ownerLabel(read, { source: s.source }, d, market) ?? undefined : undefined,
     items: s.assetId ? [item(null, s.assetId)] : [],
   }))
 

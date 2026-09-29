@@ -120,13 +120,26 @@ describe('Amazon ZIPs for Seller Central (P4d)', () => {
     expect(safety.filename).toMatch(/^amazon-IT-safety-[a-f0-9]{10}\.zip$/)
   })
 
-  it('a country ZIP holds only the photos with a version in the market\'s language', async () => {
+  it('a country ZIP holds every photo the market shows (its own rows, its language); none when it shows what the API sends', async () => {
     const de = await preview('DE', 'country')
-    expect(de).toMatchObject({ language: 'de', issues: [] })
-    expect(de.files.map(f => `${f.name}=${f.photo}`)).toEqual(['B0FXPARNT1.PT01.jpg=chart-de', 'B0FXNEROM1.PT02.jpg=chart-de'])
-    // Italian is the version the API already sends, so Italy has no country photos.
-    expect((await preview('IT', 'country')).files).toEqual([])
+    expect(de).toMatchObject({ language: 'de', issues: [], ownPhotos: false, sameAsApi: false })
+    expect(de.files.map(f => `${f.name}=${f.photo}`)).toEqual(['B0FXPARNT1.MAIN.jpg=cover', 'B0FXPARNT1.PT01.jpg=chart-de',
+      'B0FXNEROM1.MAIN.jpg=n1', 'B0FXNEROM1.PT01.jpg=cover', 'B0FXNEROM1.PT02.jpg=chart-de'])
+    // Italy shows what the API sends (Italian, no rows of its own): no country ZIP, and the answer says why.
+    expect(await preview('IT', 'country')).toMatchObject({ files: [], sameAsApi: true, ownPhotos: false })
     await expect(download('IT', 'country', (await preview('IT', 'country')).digest)).rejects.toMatchObject({ statusCode: 422, message: 'This ZIP has no photos, so none was made.' })
+    // Only IT: its own Nero photos. The IT country ZIP now holds IT's full set; All photos and DE keep the account's.
+    const onlyIt = { layer: 'LISTING' as const, channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon, marketOnly: true }
+    const own = await scoped(() => applyMediaPlanOps(ids.root, { address: onlyIt, ops: [{ op: 'replace', set: 'value:color:black', assetIds: [img.g1] }] }, null))
+    try {
+      const it = await preview('IT', 'country')
+      expect(it).toMatchObject({ ownPhotos: true, sameAsApi: false, issues: [] })
+      expect(it.files.filter(f => f.slot === 'MAIN').map(f => `${f.asin}=${f.photo}`)).toEqual(['B0FXPARNT1=cover', 'B0FXNEROL1=g1', 'B0FXNEROM1=g1'])
+      expect((await preview('IT', 'slots')).files.filter(f => f.slot === 'MAIN').map(f => `${f.asin}=${f.photo}`)).toEqual(['B0FXPARNT1=cover', 'B0FXNEROL1=n1', 'B0FXNEROM1=n1'])
+      expect((await preview('DE', 'country')).files.map(f => f.photo)).toEqual(de.files.map(f => f.photo))
+    } finally {
+      await scoped(() => applyMediaPlanOps(ids.root, { address: onlyIt, ops: own.undo }, null))
+    }
   })
 
   it('a market with no content language is refused with a sentence, not a server fault', async () => {

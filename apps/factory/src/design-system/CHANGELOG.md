@@ -1,3 +1,7 @@
+## MediaBoard: a row's mark wraps — 2026-09-29
+
+Mirrored from web. `.nds-media-board-source` keeps to the row head's width; a Tag or Button directly inside it may break its words.
+
 ## Live photo drag: MediaBoard `liveDrag`, `useSortableDrag` layout `grid` — 2026-09-28
 
 Mirrored from web. `gridDropIndex` / `gridShift` in `lib/sortable.ts`, `layout: 'grid'` in `useSortableDrag`, opt-in `liveDrag` on `MediaBoard` (one-row boards; off by default) and its `.nds-media-board-list.live` / `.dragging` rules.

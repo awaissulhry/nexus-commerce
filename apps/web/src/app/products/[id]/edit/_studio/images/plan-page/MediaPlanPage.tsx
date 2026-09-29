@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { MoreHorizontal, PanelLeftOpen, Redo2, Undo2 } from 'lucide-react'
 import type { MediaOp } from '@nexus/shared/media-plan'
+import type { AmazonArchiveKind } from '@nexus/shared/media-plan-archive'
 
 import { Banner, Drawer, Field, Listbox, MediaPreview, Menu, Modal, useToast, type MenuItemDef } from '@/design-system/components'
-import { Button, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { usePathname, useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 
 import { MASTER_SCOPE } from '../../types'
@@ -25,8 +26,8 @@ import { AmazonZipDialog } from './AmazonZipDialog'
 import { setPhotoPublish } from './photoPublish'
 import { joinVersions, leaveVersions, markDistinct, markSame, separate, undoSame, undoVersions, type SamePhotoUndo, type VersionsUndo } from './lookalikeApi'
 import {
-  CHANNEL_LABEL, assetMap, cardOf, computeLayouts, copyFromOps, destinationLabel, followAllOps, libraryUsage, listingName, ownedSkuSets, scopeDestinationKey, setRows,
-  siblingListings, swatchRows, viewAxis, viewStack, withReadableNames, languageName, versionLanguages, versionsOf,
+  CHANNEL_LABEL, amazonMarketLayout, amazonOwnMarkets, assetMap, cardOf, computeLayouts, copyFromOps, destinationLabel, destinationNameParts, followAllOps, libraryUsage, listingName,
+  ownedSkuSets, scopeDestinationKey, setRows, siblingListings, swatchRows, viewAxis, viewStack, withReadableNames, languageName, versionLanguages, versionsOf,
   type LayerView, type LibraryAsset, type MediaChannel, type MediaDestinationRow, type MediaRead,
 } from './model'
 import { apiSend } from '../api'
@@ -67,6 +68,9 @@ function writeLibraryPref(on: boolean) {
  * (rows = sets, columns = slots) shows it; a row a destination changed is marked there with "Reset to shared". The
  * library folds away on the left; the side panel shows the destination's buyer preview and checks, or every destination
  * on the Shared product. The header's Publish opens "Publish photos" for what the page shows.
+ *
+ * Amazon (2026-09-29, the Owner's option 3): "All Amazon markets" edits the account's photos, the one set its API sends;
+ * "Only DE" edits Amazon DE's own photos, below them — they reach Amazon only through the DE ZIP.
  */
 export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: MediaPlanState }) {
   const { scope, market, destination: studioDestination, marketplaces, setListing } = useStudioScope()
@@ -84,7 +88,10 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
   const [managing, setManaging] = useState(false)
   const [viewing, setViewing] = useState<string | null>(null)
   const [comparing, setComparing] = useState(false)
-  const [zip, setZip] = useState(false)
+  // The ZIP window: closed, or open on a market and a kind ("Only DE" opens on the DE ZIP).
+  const [zip, setZip] = useState<{ market: string | null; kind: AmazonArchiveKind } | null>(null)
+  // Amazon: the switch "All Amazon markets | Only <market>" (default All; kept while the page is open).
+  const [amazonOnly, setAmazonOnly] = useState(false)
   // P4b — the upload dialog, with the files dropped on the page (if any).
   const [uploading, setUploading] = useState<File[] | null>(null)
   const [dropping, setDropping] = useState(false)
@@ -103,10 +110,16 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
   const channelScope = scope !== MASTER_SCOPE
   const scopeKey = channelScope && studioDestination.status === 'ready' ? scopeDestinationKey(studioDestination.data) : null
   const d = scopeKey ? read.destinations.find(x => x.key === scopeKey) ?? null : null
-  const view: LayerView = d ? { layer: 'LISTING', destination: d.key } : shared
-  // A market sees its own language versions (eBay IT the Italian size chart, Amazon DE the German one in its ZIP).
+  // "Only DE": an Amazon market the account lists the product on; the page then edits that market's own layer.
+  const amazonMarket = d?.channel === 'AMAZON' && market && d.markets.includes(market) ? market : null
+  const onlyMarket = amazonOnly ? amazonMarket : null
+  const view: LayerView = d ? { layer: 'LISTING', destination: d.key, ...(onlyMarket ? { market: onlyMarket } : {}) } : shared
+  // A market sees its own language versions (eBay IT the Italian size chart, Amazon DE the German one in its ZIP). All
+  // Amazon markets shows the versions Publish photos sends to every market (the account's first market's language).
   const marketLanguages = d ? marketplaces.find(m => m.channel === d.channel && m.code === market)?.languages ?? [] : []
-  const languages = d ? (marketLanguages.length ? marketLanguages : d.languages) : null
+  const languages = d ? (marketLanguages.length && (d.channel !== 'AMAZON' || onlyMarket) ? marketLanguages : d.languages) : null
+  const ownMarkets = d ? amazonOwnMarkets(read, d) : []
+  const marketView = d && onlyMarket ? { code: onlyMarket, layout: amazonMarketLayout(read, d, onlyMarket, languages ?? d.languages) } : null
 
   // The one Publish button: the studio header's, while this page is open. On an eBay account and market with aliases it
   // offers every listing there, the one shown and its aliases (each is its own line and its own revision).
@@ -259,15 +272,19 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
   const closeness = (x: MediaDestinationRow) => !d ? 0 : siblings.some(y => y.key === x.key) ? 2 : x.channel === d.channel ? 1 : 0
   const others = d ? read.destinations.filter(x => x.key !== d.key && x.targetable).sort((a, b) => closeness(b) - closeness(a)) : []
   const followAll = d ? followAllOps(read, view) : []
+  // What the page edits, in words: "Amazon DE · Test Amazon" on "Only DE", else the destination.
+  const editing = d ? onlyMarket ? `Amazon ${onlyMarket} · ${d.accountLabel ?? 'Unknown account'}` : destinationLabel(d) : 'Shared photos'
+  const resetAll = onlyMarket ? 'Reset all to All Amazon markets' : 'Reset all to shared'
   const destinationMenu: MenuItemDef[] = d ? [
-    { id: 'reset-all', label: 'Reset all to shared', disabled: !followAll.length, onSelect: () => edit(view, followAll, `Reset all to shared: ${destinationLabel(d)}`) },
+    { id: 'reset-all', label: resetAll, disabled: !followAll.length, onSelect: () => edit(view, followAll, `${resetAll}: ${editing}`) },
     ...(others.length ? [{ id: 'copy-heading', heading: true, label: 'Copy photos from' }, ...others.map(o => ({ id: `copy:${o.key}`, label: destinationLabel(o), onSelect: () => {
-      const ops = copyFromOps(read, o, d)
+      const ops = copyFromOps(read, o, { layer: 'LISTING', destination: d.key, ...(onlyMarket ? { market: onlyMarket } : {}) })
       if (ops.length) edit(view, ops, `Copy photos from ${destinationLabel(o)}`)
-      else toast(`${destinationLabel(d)} already shows the photos of ${destinationLabel(o)}.`, 'info')
+      else toast(`${editing} already shows the photos of ${destinationLabel(o)}.`, 'info')
     } }))] : []),
   ] : []
   const marketLanguage = marketLanguages[0] ?? d?.languages.find(l => l !== 'mul') ?? null
+  const apiLanguage = d?.languages.find(l => l !== 'mul') ?? null
 
   // Focusable (not a Tab stop): a click on the page keeps its shortcuts (U, ⌘Z) and lets PageDown scroll it.
   return <div ref={box} className={styles.page} tabIndex={-1} onKeyDown={onKeyDown} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} data-dropping={dropping || undefined}>
@@ -300,9 +317,13 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
       <section className={styles.main} aria-labelledby="media-grid-title">
         <header className={styles.gridHead}>
           {d ? <>
-            <h3 id="media-grid-title" className={styles.sectionTitle}><DestinationName d={d} /></h3>
+            <h3 id="media-grid-title" className={styles.sectionTitle}>{d.channel === 'AMAZON' ? destinationNameParts(d).head : <DestinationName d={d} />}</h3>
+            {amazonMarket && <SegmentedControl ariaLabel="Which Amazon photos to edit" size="sm" wrap value={onlyMarket ? 'market' : 'all'}
+              onChange={value => setAmazonOnly(value === 'market')}
+              options={[{ value: 'all', label: 'All Amazon markets' }, { value: 'market', label: `Only ${amazonMarket}` }]} />}
             <span className={styles.spacer} />
-            {d.channel === 'AMAZON' && <Button size="sm" variant="secondary" disabled={!layouts[d.key] || !d.markets.length} onClick={() => setZip(true)}>Export ZIP per marketplace</Button>}
+            {d.channel === 'AMAZON' && <Button size="sm" variant="secondary" disabled={!layouts[d.key] || !d.markets.length}
+              onClick={() => setZip({ market, kind: onlyMarket ? 'country' : 'slots' })}>Export ZIP per marketplace</Button>}
             {destinationMenu.length > 0 && <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" items={destinationMenu}
               triggerProps={{ className: 'nds-btn sm', 'aria-label': `More actions for ${destinationLabel(d)}`, title: 'More actions' }} />}
           </> : <h3 id="media-grid-title" className={styles.sectionTitle}>{channelScope ? `${CHANNEL_LABEL[scope as MediaChannel] ?? scope}${market ? ` ${market}` : ''}` : 'Shared photos'}</h3>}
@@ -310,9 +331,15 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
         {d && <ListingChips read={read} destination={d} layouts={layouts} onPick={x => setListing(x.alias?.id)} />}
         {(!channelScope || d) && <p className={styles.muted}>{!channelScope
           ? 'Every channel shows these photos unless a row is changed for it. To change a channel\'s or a market\'s photos, choose it in Editing above. Nothing is sent until you publish.'
+          : d?.channel === 'AMAZON' && onlyMarket
+            ? `What Amazon ${onlyMarket} shows${marketLanguage ? `, in its ${languageLabel(marketLanguage)} versions` : ''}. Rows without a mark show the All Amazon markets photos. A change here is for Amazon ${onlyMarket} only: it reaches Amazon only through the ${onlyMarket} ZIP. Safety images are one set for all markets.`
           : d?.channel === 'AMAZON'
-            ? `Amazon keeps one photo set per ASIN for ${d.markets.join(' ')}, so every Amazon listing of this account shows these photos.${marketLanguage && market ? ` ${market} shows its ${languageLabel(marketLanguage)} versions, and its ZIP holds them.` : ''} Rows without a mark show the Shared photos; a change here makes the row Amazon's own.`
+            ? `What Publish photos sends to ${d.markets.join(' and ')}${apiLanguage ? `, in the ${languageLabel(apiLanguage)} versions` : ''}: Amazon keeps one photo set per ASIN. Rows without a mark show the Shared photos.${amazonMarket ? ` To change Amazon ${amazonMarket} alone, choose Only ${amazonMarket}.` : ''}`
             : d ? `Rows without a mark show the Shared photos. A change here gives ${d.alias || siblings.length > 1 ? listingName(d) : `${CHANNEL_LABEL[d.channel]}${d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`}`} its own photos for that row.` : ''}</p>}
+        {ownMarkets.map(m => <Banner key={m} tone="info" title={`Amazon ${m} has own photos`}
+          action={<Button size="sm" variant="secondary" onClick={() => setZip({ market: m, kind: 'country' })}>Export the {m} ZIP</Button>}>
+          They reach Amazon only through the {m} ZIP (Seller Central → Image Manager → Country-Specific Upload). Publish photos sends the All Amazon markets photos.
+        </Banner>)}
 
         {channelScope && !d ? <ScopeState status={studioDestination.status} message={studioDestination.status === 'error' ? studioDestination.message : null}
           retry={studioDestination.status === 'error' ? studioDestination.retry : undefined} channel={scope} market={market} />
@@ -326,7 +353,7 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
           {showSkus && <span className={styles.muted}>Amazon and Shopify use a SKU's own photos; eBay shows photos per {axis.info?.label ?? 'value'}.</span>}
         </span> : <span className={styles.muted}>This product has no options — one gallery for every channel.</span>)}
       </section>
-      <SidePanel read={read} destination={d} layouts={layouts} assets={assets} onOpenDestination={openDestination} />
+      <SidePanel read={read} destination={d} layouts={layouts} market={marketView} assets={assets} onOpenDestination={openDestination} />
     </div>
 
     <Drawer open={!beside && drawerOpen} onClose={() => { setDrawerOpen(false); setPending(null) }} title="Photo library" width="min(520px, 100vw)">
@@ -337,7 +364,8 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
     <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)}
       onOpenDestination={key => { const x = read.destinations.find(y => y.key === key); if (x) openDestination(x) }} />
     <SamePhotoDialog read={read} pair={lookalike} onClose={() => setLookalike(null)} onSame={markSamePhoto} onVersions={makeVersions} onDistinct={markNotSame} />
-    {d?.channel === 'AMAZON' && <AmazonZipDialog key={d.key} read={read} destination={d} assets={assets} open={zip} initialMarket={market} onClose={() => setZip(false)} />}
+    {d?.channel === 'AMAZON' && <AmazonZipDialog key={d.key} read={read} destination={d} assets={assets} open={!!zip} initialMarket={zip?.market ?? market} initialKind={zip?.kind}
+      onClose={() => setZip(null)} />}
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}
       {viewingAsset && <p className={styles.muted}>{viewingAsset.width && viewingAsset.height ? `${viewingAsset.width} × ${viewingAsset.height} px · ` : ''}{usage.get(viewingAsset.id)?.join(' · ') || 'Not in any set'}</p>}

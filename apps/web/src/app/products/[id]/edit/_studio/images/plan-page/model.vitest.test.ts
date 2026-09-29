@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
+  amazonMarketKey, amazonMarketLayout, amazonOwnMarkets, rowReset, viewKey, viewStack,
   applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, guessLanguage, photoPlacements, photoSource, sharedPlacements, versionLanguages, followAllOps, libraryUsage, setRows, gridShape, isCodeName, ownerLabel, readableNames, scopeDestinationKey, siblingListings, slotLabel,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
@@ -66,12 +67,12 @@ describe('Media page model', () => {
   it('"Copy photos from" makes the target show the same photos with the fewest changes; "Follow all" drops every own set', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }, { key: WINTER, plan: plan({ common: ids('spare'), values: { 'color:black': ids('n1') } }) }])
     const [primary, winter] = r.destinations
-    const ops = copyFromOps(r, primary, winter)
+    const ops = copyFromOps(r, primary, { layer: 'LISTING', destination: winter.key })
     // Both sets Winter owns go back to following, which shows the primary listing's photos (it follows Shared).
     expect(ops).toEqual([{ op: 'follow', set: 'common' }, { op: 'follow', set: 'value:color:black' }])
     const after = applyMediaOps({ shared: SHARED, listing: r.layers[1].plan }, 'LISTING', ops)
     expect(after).toEqual({ version: 1, sets: {} })
-    expect(copyFromOps(r, winter, primary)).toEqual([{ op: 'replace', set: 'common', assetIds: ['spare'] }, { op: 'replace', set: 'value:color:black', assetIds: ['n1'] }])
+    expect(copyFromOps(r, winter, { layer: 'LISTING', destination: primary.key })).toEqual([{ op: 'replace', set: 'common', assetIds: ['spare'] }, { op: 'replace', set: 'value:color:black', assetIds: ['n1'] }])
     expect(followAllOps(r, { layer: 'LISTING', destination: WINTER })).toEqual([{ op: 'follow', set: 'common' }, { op: 'follow', set: 'value:color:black' }])
     expect(followAllOps(r, { layer: 'SHARED' })).toEqual([])
   })
@@ -113,7 +114,7 @@ describe('Media page model', () => {
     expect(destinationLabel(dest(EBAY, { listingMark: 0 }))).toBe('eBay IT · Test eBay · ★ Main listing')
     expect(destinationLabel(dest(WINTER, { alias: { id: 'winter', label: 'Winter', position: 1 }, listingMark: 1 }))).toBe('eBay IT · Test eBay · ① Winter')
     expect(destinationLabel(dest(EBAY, { listingMark: null }))).toBe('eBay IT · Test eBay · Main listing')
-    expect(destinationLabel(dest(AMAZON, { channel: 'AMAZON', marketplace: 'GLOBAL', accountLabel: 'Test Amazon', listingMark: null }))).toBe('Amazon · Test Amazon')
+    expect(destinationLabel(dest(AMAZON, { channel: 'AMAZON', marketplace: 'GLOBAL', accountLabel: 'Test Amazon', listingMark: null }))).toBe('Amazon · Test Amazon · All markets')
   })
   it('warns both eBay listings on one account and market that would show the same photos, and stops when they differ', () => {
     const same = read([{ key: 'SHARED', plan: SHARED }])
@@ -173,7 +174,8 @@ describe('Media page redesign (2026-09-29): the grid, the scope and readable nam
     r.destinations[1].listingMark = 1
     expect(siblingListings(r, r.destinations[1]).map(d => d.key)).toEqual([EBAY, WINTER])
     expect(ownerLabel(r, { source: 'LISTING' }, r.destinations[1])).toBe('Own for ① Winter')
-    expect(ownerLabel(r, { source: 'LISTING' }, r.destinations[2])).toBe('Own for Amazon')
+    expect(ownerLabel(r, { source: 'LISTING' }, r.destinations[2])).toBe('Own for all Amazon markets')
+    expect(ownerLabel(r, { source: 'MARKET' }, r.destinations[2], 'DE')).toBe('Own for Amazon DE')
     expect(ownerLabel(r, { source: 'CHANNEL' }, r.destinations[0])).toBe('Own for all eBay listings')
     expect(ownerLabel(r, { source: 'SHARED' }, r.destinations[0])).toBeNull()
   })
@@ -191,5 +193,49 @@ describe('Media page redesign (2026-09-29): the grid, the scope and readable nam
     expect(names.get('w1nter00000000001')).toBe('Nero MAIN')
     expect([names.get('l0st0000000000001'), names.get('l0st0000000000002')]).toEqual(['Unused photo 1', 'Unused photo 2'])
     expect([names.get('de0000000000000001'), names.get('it0000000000000001')]).toEqual(['Safety PS01 · DE', 'Safety PS01 · IT'])
+  })
+})
+
+describe('Amazon photos per market (2026-09-29, option 3): All Amazon markets, or Only DE', () => {
+  const DE = 'LISTING:AMAZON:DE:amz:'
+  const only = { layer: 'LISTING' as const, destination: AMAZON, market: 'DE' }
+  it('Only DE edits its own layer below the account\'s; All Amazon markets and IT never see it', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }, { key: AMAZON, plan: plan({ values: { 'color:yellow': ids('spare') } }) }])
+    expect(amazonMarketKey(AMAZON, 'DE')).toBe(DE)
+    expect(viewKey(only)).toBe(DE)
+    expect(viewAddress(r, only)).toEqual({ layer: 'LISTING', channel: 'AMAZON', marketplace: 'DE', accountId: 'amz', aliasKey: '', marketOnly: true })
+    const edited = applyLocal(r, only, [{ op: 'insert', set: 'common', assetIds: ['g1'], index: 0 }])
+    expect(edited.layers.find(l => l.key === DE)).toMatchObject({ layer: 'LISTING', channel: 'AMAZON', marketplace: 'DE', accountId: 'amz', aliasKey: '', plan: { sets: { common: ids('g1', 'cover', 'chart-it') } } })
+    // The bug the Owner found: a change made for one market showed on the other. All markets (and so IT) keep theirs.
+    expect(setRows(edited, { layer: 'LISTING', destination: AMAZON }).find(x => x.ref === 'common')).toMatchObject({ items: ['cover', 'chart-it'], source: 'SHARED' })
+    const rows = setRows(edited, only)
+    expect(rows.map(x => `${x.label}:${x.source}`)).toEqual(['Common:MARKET', 'Giallo:LISTING', 'Nero:SHARED'])
+    expect(amazonOwnMarkets(edited, edited.destinations[2])).toEqual(['DE'])
+    expect(amazonOwnMarkets(edited, edited.destinations[0])).toEqual([])
+    expect(photoPlacements(edited, ['g1'])).toEqual(['Shared: Giallo', 'Amazon DE · Test eBay: Common'])
+    // Safety images are one set for every market: no Safety row on Only DE, and an edit there is refused.
+    expect(() => applyLocal(r, only, [{ op: 'insert', set: 'safety', assetIds: ['g1'] }])).toThrow(/one set for every Amazon market/)
+    expect(viewStack(edited, only).market).toEqual(edited.layers.find(l => l.key === DE)!.plan)
+  })
+  it('marks and resets rows by their owner: Amazon DE\'s go back to All Amazon markets, the account\'s to Shared', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }, { key: AMAZON, plan: plan({ values: { 'color:yellow': ids('spare') } }) },
+      { key: DE, plan: plan({ common: ids('g1'), values: { 'color:yellow': ids('n1') } }) }])
+    const amazon = r.destinations[2]
+    const rows = setRows(r, only)
+    const common = rows.find(x => x.ref === 'common')!, giallo = rows.find(x => x.label === 'Giallo')!
+    expect(rowReset(r, only, common, amazon)).toEqual({ view: only, text: 'Reset to shared' })
+    expect(rowReset(r, only, giallo, amazon)).toEqual({ view: only, text: 'Reset to all Amazon markets' })
+    expect(rowReset(r, only, { ref: 'value:color:yellow', source: 'LISTING' }, amazon)).toEqual({ view: { layer: 'LISTING', destination: AMAZON }, text: 'Reset all markets to shared' })
+    expect(rowReset(r, { layer: 'LISTING', destination: AMAZON }, { ref: 'value:color:yellow', source: 'LISTING' }, amazon)).toEqual({ view: { layer: 'LISTING', destination: AMAZON }, text: 'Reset to shared' })
+    expect(followAllOps(r, only)).toEqual([{ op: 'follow', set: 'common' }, { op: 'follow', set: 'value:color:yellow' }])
+    // "Copy photos from" the eBay listing: DE's own Common matches it once it follows, so it follows again.
+    expect(copyFromOps(r, r.destinations[0], only)).toEqual([{ op: 'follow', set: 'common' }, { op: 'replace', set: 'value:color:yellow', assetIds: ['g1'] }])
+  })
+  it('the side panel\'s preview of Only DE is what its ZIP holds: its own rows and its German versions', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }, { key: DE, plan: plan({ values: { 'color:black': ids('n1') } }) }])
+    const de = amazonMarketLayout(r, r.destinations[2], 'DE', ['de']) as { items: Array<{ sku: string; slots: Record<string, string> }> }
+    expect(de.items.map(i => `${i.sku}:${Object.values(i.slots).join('+')}`)).toEqual(['T-NERO:n1+cover+chart-de', 'T-GIALLO:g1+cover+chart-de'])
+    const all = computeLayouts(r)[AMAZON] as typeof de
+    expect(all.items.map(i => `${i.sku}:${Object.values(i.slots).join('+')}`)).toEqual(['T-NERO:cover+n1+chart-it', 'T-GIALLO:g1+cover+chart-it'])
   })
 })

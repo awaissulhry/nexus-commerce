@@ -1,4 +1,4 @@
-import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
+import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef, type MediaSource } from '@nexus/shared/media-plan'
 import { parseMediaFileName } from '@nexus/shared/media-plan-files'
 import { aliasMarkGlyph } from '@/design-system/primitives'
 import { AMAZON_SAFETY_SLOTS, AMAZON_SLOTS, MEDIA_LIMITS, duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
@@ -45,8 +45,10 @@ export interface MediaRead {
   meta?: { tookMs: number }
 }
 
-/** Which layer the page edits: Shared, one channel's layer, or one destination's own layer. */
-export type LayerView = { layer: 'SHARED' } | { layer: 'CHANNEL'; channel: MediaChannel } | { layer: 'LISTING'; destination: string }
+/** Which layer the page edits: Shared, one channel's layer, or one destination's own layer — on Amazon, optionally one
+ *  market's own layer below the account's (`market`: "Only DE", 2026-09-29). */
+export type LayerView = { layer: 'SHARED' } | { layer: 'CHANNEL'; channel: MediaChannel } | ListingView
+export type ListingView = { layer: 'LISTING'; destination: string; market?: string }
 
 export const CHANNEL_LABEL: Record<MediaChannel, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy' }
 
@@ -59,18 +61,28 @@ export function destinationStack(read: MediaRead, d: Pick<MediaDestinationRow, '
   return { shared: layerByKey(read, 'SHARED'), channel: layerByKey(read, `CHANNEL:${d.channel}`), listing: layerByKey(read, d.key) }
 }
 
+/**
+ * An Amazon market's own layer (`LISTING:AMAZON:DE:<account>:`), below the account's "All Amazon markets"
+ * (`LISTING:AMAZON:GLOBAL:<account>:`). Amazon's API keeps one photo set per ASIN, so its photos reach Amazon only
+ * through that market's ZIP (Seller Central → Image Manager → Country-Specific Upload).
+ */
+export function amazonMarketKey(accountKey: string, market: string) {
+  return accountKey.replace(/^LISTING:AMAZON:GLOBAL:/, `LISTING:AMAZON:${market}:`)
+}
+
 /** The stack a layer view edits: its own layer and the layers above it. */
 export function viewStack(read: MediaRead, view: LayerView): MediaPlanStack {
   if (view.layer === 'SHARED') return { shared: layerByKey(read, 'SHARED') }
   if (view.layer === 'CHANNEL') return { shared: layerByKey(read, 'SHARED'), channel: layerByKey(read, `CHANNEL:${view.channel}`) }
   const d = read.destinations.find(x => x.key === view.destination)
-  return d ? destinationStack(read, d) : { shared: layerByKey(read, 'SHARED') }
+  if (!d) return { shared: layerByKey(read, 'SHARED') }
+  return view.market ? { ...destinationStack(read, d), market: layerByKey(read, amazonMarketKey(d.key, view.market)) } : destinationStack(read, d)
 }
 
 export function viewKey(view: LayerView): string {
   if (view.layer === 'SHARED') return 'SHARED'
   if (view.layer === 'CHANNEL') return `CHANNEL:${view.channel}`
-  return view.destination
+  return view.market ? amazonMarketKey(view.destination, view.market) : view.destination
 }
 
 /** The address `POST /media/ops` expects for a view. */
@@ -79,14 +91,23 @@ export function viewAddress(read: MediaRead, view: LayerView) {
   if (view.layer === 'CHANNEL') return { layer: 'CHANNEL' as const, channel: view.channel }
   const d = read.destinations.find(x => x.key === view.destination)
   if (!d) throw new Error('This destination is not on the page any more. Reload the page.')
+  if (view.market) return { layer: 'LISTING' as const, channel: d.channel, marketplace: view.market, accountId: d.accountId, aliasKey: '', marketOnly: true }
   return { layer: 'LISTING' as const, channel: d.channel, marketplace: d.marketplace, accountId: d.accountId, aliasKey: d.alias?.id ?? '' }
 }
 
-/** "eBay IT · Test eBay" and the listing's name ("① Winter", "Main listing"; none for Amazon and Shopify). */
+/** The Amazon markets of an account with photos of their own, in the account's market order. */
+export function amazonOwnMarkets(read: MediaRead, d: Pick<MediaDestinationRow, 'channel' | 'key' | 'markets'>): string[] {
+  if (d.channel !== 'AMAZON') return []
+  const own = read.layers.filter(l => l.key !== d.key && amazonMarketKey(d.key, l.marketplace) === l.key).map(l => l.marketplace)
+  return [...d.markets.filter(m => own.includes(m)), ...own.filter(m => !d.markets.includes(m)).sort()]
+}
+
+/** "eBay IT · Test eBay" and the listing's name ("① Winter", "Main listing"; Amazon "All markets" — a market may have
+ *  photos of its own; none for Shopify). */
 export function destinationNameParts(d: MediaDestinationRow): { head: string; name: string | null } {
   const where = d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`
   return { head: `${CHANNEL_LABEL[d.channel]}${where} · ${d.accountLabel ?? 'Unknown account'}`,
-    name: d.alias ? d.alias.label : d.channel === 'EBAY' || d.channel === 'ETSY' ? 'Main listing' : null }
+    name: d.alias ? d.alias.label : d.channel === 'EBAY' || d.channel === 'ETSY' ? 'Main listing' : d.channel === 'AMAZON' ? 'All markets' : null }
 }
 
 /** The listing alone ("★ Main listing", "① Winter"), for text about listings on one account and market. */
@@ -109,8 +130,8 @@ export interface SetRow {
   label: string
   kind: 'common' | 'value' | 'sku' | 'safety'
   items: string[]
-  /** The layer whose copy the view shows; `null` = nobody set it yet. */
-  source: MediaLayer | null
+  /** The layer whose copy the view shows (`MARKET`: an Amazon market's own); `null` = nobody set it yet. */
+  source: MediaSource | null
   /** Variants that use the set (value and SKU sets). */
   skus: string[]
 }
@@ -127,7 +148,8 @@ export function viewAxis(read: MediaRead, stack: MediaPlanStack) {
 
 export function valueLabel(read: MediaRead, key: string) { return read.family.valueLabels[key] ?? key.split(':').slice(1).join(':').replace(/^text:/, '') }
 
-/** The rows of the photo plan as one view sees them: Common, one per value of the axis, safety, then per-SKU sets. */
+/** The rows of the photo plan as one view sees them: Common, one per value of the axis, safety, then per-SKU sets. An
+ *  Amazon market's view has no Safety row: safety images are one set for every market (the API's, or the Safety ZIP's). */
 export function setRows(read: MediaRead, view: LayerView, options: { skus?: boolean } = {}): SetRow[] {
   const stack = viewStack(read, view)
   const { axis, values } = viewAxis(read, stack)
@@ -135,7 +157,7 @@ export function setRows(read: MediaRead, view: LayerView, options: { skus?: bool
   const row = (ref: MediaSetRef, label: string, kind: SetRow['kind'], skus: string[] = []): SetRow => ({ ref, label, kind, skus, ...resolveSet(stack, ref) })
   const rows: SetRow[] = [row('common', 'Common', 'common', variants.map(v => v.sku))]
   if (axis) for (const key of values) rows.push(row(`value:${key}`, valueLabel(read, key), 'value', variants.filter(v => v.values[axis] === key).map(v => v.sku)))
-  rows.push(row('safety', 'Safety (Amazon PS01–PS06)', 'safety'))
+  if (!(view.layer === 'LISTING' && view.market)) rows.push(row('safety', 'Safety (Amazon PS01–PS06)', 'safety'))
   if (options.skus) for (const v of variants) rows.push(row(`sku:${v.productId}`, `SKU ${v.sku}`, 'sku', [v.sku]))
   return rows
 }
@@ -206,8 +228,10 @@ export function photoPlacements(read: MediaRead, ids: readonly string[]): string
   const out: string[] = []
   for (const layer of read.layers) {
     const destination = read.destinations.find(d => d.key === layer.key)
+    // An Amazon market's own layer: "Amazon DE · Test Amazon".
+    const account = !destination ? read.destinations.find(d => d.channel === 'AMAZON' && amazonMarketKey(d.key, layer.marketplace) === layer.key) : undefined
     const where = layer.layer === 'SHARED' ? 'Shared' : layer.layer === 'CHANNEL' ? `All ${CHANNEL_LABEL[layer.channel as MediaChannel] ?? layer.channel} listings`
-      : destination ? destinationLabel(destination) : 'One listing'
+      : destination ? destinationLabel(destination) : account ? `Amazon ${layer.marketplace} · ${account.accountLabel ?? 'Unknown account'}` : 'One listing'
     const sets = layer.plan.sets
     if (hit(sets.common)) out.push(`${where}: Common`)
     for (const [key, items] of Object.entries(sets.values ?? {})) if (hit(items)) out.push(`${where}: ${value(key)}`)
@@ -396,7 +420,9 @@ export function sameGroupOf(read: MediaRead) {
 /** Apply ops to one layer locally (the page moves at once; the server's answer then replaces it). Throws the same
  *  refusal the server would. */
 export function applyLocal(read: MediaRead, view: LayerView, ops: readonly MediaOp[]): MediaRead {
-  const layer: MediaLayer = view.layer
+  const layer: MediaSource = view.layer === 'LISTING' && view.market ? 'MARKET' : view.layer
+  if (layer === 'MARKET' && ops.some(op => op.op === 'move' ? op.from === 'safety' || op.to === 'safety' : 'set' in op && op.set === 'safety'))
+    throw new Error('Safety images are one set for every Amazon market. Change them under All Amazon markets.')
   const next = applyMediaOps(viewStack(read, view), layer, ops, sameGroupOf(read))
   return withLayer(read, view, next, null)
 }
@@ -415,17 +441,20 @@ export function withLayer(read: MediaRead, view: LayerView, plan: MediaPlan | nu
   return { ...read, layers: [...rest, row] }
 }
 
-/** "Copy photos from" another destination: this destination's layer gets exactly the other one's resolved sets. */
-export function copyFromOps(read: MediaRead, from: MediaDestinationRow, to: MediaDestinationRow): MediaOp[] {
+/** "Copy photos from" another destination: the page's layer (a destination's, or an Amazon market's) gets exactly the
+ *  other one's resolved sets. */
+export function copyFromOps(read: MediaRead, from: MediaDestinationRow, to: ListingView): MediaOp[] {
   const source = destinationStack(read, from)
-  const target = destinationStack(read, to)
+  const target = viewStack(read, to)
+  const own = to.market ? 'market' : 'listing'
   const refs = new Set<MediaSetRef>([...knownSetRefs(source), ...knownSetRefs(target)])
   const ops: MediaOp[] = []
   for (const ref of refs) {
     const s = resolveSet(source, ref), t = resolveSet(target, ref)
     if (JSON.stringify(s.items) === JSON.stringify(t.items)) continue
-    // Same channel and the source only follows: following again gives the target the very same photos, and keeps following.
-    if (from.channel === to.channel && s.source !== 'LISTING' && t.source === 'LISTING') ops.push({ op: 'follow', set: ref })
+    // Following again gives the target the very same photos: drop its own copy, so it keeps following.
+    const above = resolveSet({ ...target, [own]: null }, ref)
+    if (t.source === (to.market ? 'MARKET' : 'LISTING') && JSON.stringify(above.items) === JSON.stringify(s.items)) ops.push({ op: 'follow', set: ref })
     else ops.push({ op: 'replace', set: ref, assetIds: s.items })
   }
   const axis = resolveAxis(source, read.family.defaultAxis).axis
@@ -494,12 +523,34 @@ export function siblingListings(read: MediaRead, d: MediaDestinationRow): MediaD
     .sort((a, b) => (a.alias?.position ?? 0) - (b.alias?.position ?? 0))
 }
 
-/** Who owns a row's photos when it is not Shared, in words for the row's mark ("Own for eBay IT", "Own for ① Winter"). */
-export function ownerLabel(read: MediaRead, row: Pick<SetRow, 'source'>, d: MediaDestinationRow): string | null {
+/** Who owns a row's photos when it is not Shared, in words for the row's mark ("Own for eBay IT", "Own for ① Winter",
+ *  "Own for all Amazon markets", "Own for Amazon DE" — `market`: the Amazon market the page shows alone). */
+export function ownerLabel(read: MediaRead, row: Pick<SetRow, 'source'>, d: MediaDestinationRow, market: string | null = null): string | null {
   if (row.source === 'CHANNEL') return `Own for all ${CHANNEL_LABEL[d.channel]} listings`
+  if (row.source === 'MARKET') return `Own for ${CHANNEL_LABEL[d.channel]} ${market ?? ''}`.trim()
   if (row.source !== 'LISTING') return null
+  if (d.channel === 'AMAZON') return 'Own for all Amazon markets'
   if (d.alias || siblingListings(read, d).length > 1) return `Own for ${listingName(d)}`
   return `Own for ${CHANNEL_LABEL[d.channel]}${d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`}`
+}
+
+/**
+ * A marked row's way back: the layer that owns the row drops its copy. An Amazon market's row goes back to what All
+ * Amazon markets shows for it — its own photos there ("Reset to all Amazon markets"), or the Shared ones.
+ */
+export function rowReset(read: MediaRead, view: LayerView, row: Pick<SetRow, 'ref' | 'source'>, d: MediaDestinationRow): { view: LayerView; text: string } | null {
+  if (row.source === 'CHANNEL') return { view: { layer: 'CHANNEL', channel: d.channel }, text: 'Reset to shared' }
+  // On "Only DE" a row All Amazon markets owns is reset for every market: the words say so.
+  if (row.source === 'LISTING') return { view: { layer: 'LISTING', destination: d.key }, text: view.layer === 'LISTING' && view.market ? 'Reset all markets to shared' : 'Reset to shared' }
+  if (row.source !== 'MARKET') return null
+  const above = resolveSet(destinationStack(read, d), row.ref).source
+  return { view, text: above === 'LISTING' || above === 'CHANNEL' ? 'Reset to all Amazon markets' : 'Reset to shared' }
+}
+
+/** One Amazon market as its buyers see it once its ZIP is uploaded ("Only DE"): the side panel's preview and checks. */
+export function amazonMarketLayout(read: MediaRead, d: MediaDestinationRow, market: string, languages: string[]): ChannelMediaLayout {
+  return projectMediaDestination({ stack: viewStack(read, { layer: 'LISTING', destination: d.key, market }), family: read.family, axes: read.family.axes, assets: assetMap(read),
+    target: { ...d, marketplace: market, languages }, mainLanguage: read.mainLanguage })
 }
 
 /** Storage codes and bare slot codes say nothing to a person ("vija9w5xgwhyw…", "PT02"). */

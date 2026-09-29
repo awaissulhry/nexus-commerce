@@ -11,6 +11,10 @@ import { z } from 'zod'
  * the layer; "Follow again" deletes the key. Everything here is pure, so the API, the Media page and the Information
  * column resolve and edit a plan with the same code.
  *
+ * Amazon keeps its Listing layer per account ("All Amazon markets", the one set its API sends). An Amazon market may add
+ * its own layer below it (`LISTING:AMAZON:DE:<account>:`, stored as a Listing row): the stack's `market`, whose photos
+ * reach Amazon only through that market's Seller Central ZIP (2026-09-29).
+ *
  * A value set is keyed `<attribute code>:<option code>` from the variation theme's dictionary (`color:black`), never by
  * display text, so a rename keeps its photos and each market can name the value its own way at publish. A value the
  * dictionary does not know keys as `<attribute code>:text:<folded text>` until it is mapped.
@@ -83,11 +87,14 @@ function withSet(plan: MediaPlan, ref: MediaSetRef, items: MediaItem[] | undefin
 
 // ── Resolution ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The plans that apply to one destination, top to bottom. `channel` and `listing` are absent on the Shared view. */
-export interface MediaPlanStack { shared: MediaPlan | null; channel?: MediaPlan | null; listing?: MediaPlan | null }
-export interface ResolvedMediaSet { items: string[]; source: MediaLayer | null }
+/** The plans that apply to one destination, top to bottom. `channel` and `listing` are absent on the Shared view;
+ *  `market` is an Amazon market's own layer, below its account's (only when the page edits one market). */
+export interface MediaPlanStack { shared: MediaPlan | null; channel?: MediaPlan | null; listing?: MediaPlan | null; market?: MediaPlan | null }
+/** Where a resolved set comes from: a layer, or `MARKET` — an Amazon market's own layer (stored as a Listing row). */
+export type MediaSource = MediaLayer | 'MARKET'
+export interface ResolvedMediaSet { items: string[]; source: MediaSource | null }
 
-const STACK_ORDER: Array<[keyof MediaPlanStack, MediaLayer]> = [['listing', 'LISTING'], ['channel', 'CHANNEL'], ['shared', 'SHARED']]
+const STACK_ORDER: Array<[keyof MediaPlanStack, MediaSource]> = [['market', 'MARKET'], ['listing', 'LISTING'], ['channel', 'CHANNEL'], ['shared', 'SHARED']]
 
 /** One set as a destination sees it: the lowest layer that owns it wins; `source: null` = no layer set it. */
 export function resolveSet(stack: MediaPlanStack, ref: MediaSetRef): ResolvedMediaSet {
@@ -98,7 +105,7 @@ export function resolveSet(stack: MediaPlanStack, ref: MediaSetRef): ResolvedMed
   return { items: [], source: null }
 }
 
-export function resolveAxis(stack: MediaPlanStack, fallback: string | null): { axis: string | null; source: MediaLayer | null } {
+export function resolveAxis(stack: MediaPlanStack, fallback: string | null): { axis: string | null; source: MediaSource | null } {
   for (const [key, layer] of STACK_ORDER) {
     const axis = stack[key]?.axis
     if (axis !== undefined) return { axis, source: layer }
@@ -106,7 +113,7 @@ export function resolveAxis(stack: MediaPlanStack, fallback: string | null): { a
   return { axis: fallback, source: null }
 }
 
-export function resolveSwatch(stack: MediaPlanStack, key: string): { assetId: string | null; source: MediaLayer | null } {
+export function resolveSwatch(stack: MediaPlanStack, key: string): { assetId: string | null; source: MediaSource | null } {
   for (const [name, layer] of STACK_ORDER) {
     const swatches = stack[name]?.sets.swatches
     if (swatches && key in swatches) return { assetId: swatches[key]?.assetId ?? null, source: layer }
@@ -117,7 +124,7 @@ export function resolveSwatch(stack: MediaPlanStack, key: string): { assetId: st
 /** Every set key any layer mentions — so a set that only a lower layer owns is still shown. */
 export function knownSetRefs(stack: MediaPlanStack): MediaSetRef[] {
   const refs = new Set<MediaSetRef>(['common', 'safety'])
-  for (const plan of [stack.shared, stack.channel, stack.listing]) {
+  for (const plan of [stack.shared, stack.channel, stack.listing, stack.market]) {
     for (const key of Object.keys(plan?.sets.values ?? {})) refs.add(`value:${key}`)
     for (const key of Object.keys(plan?.sets.skus ?? {})) refs.add(`sku:${key}`)
   }
@@ -165,9 +172,9 @@ export class MediaPlanEditError extends Error {}
  * the layer (the edit is what makes it "own") — the layers above never change. Returns the new layer plan.
  * `sameGroup(a, b)` says two assets are language versions of one photo: they count as one photo in a set.
  */
-export function applyMediaOps(stack: MediaPlanStack, layer: MediaLayer, ops: readonly MediaOp[],
+export function applyMediaOps(stack: MediaPlanStack, layer: MediaSource, ops: readonly MediaOp[],
   sameGroup: (a: string, b: string) => boolean = (a, b) => a === b): MediaPlan {
-  const key: keyof MediaPlanStack = layer === 'SHARED' ? 'shared' : layer === 'CHANNEL' ? 'channel' : 'listing'
+  const key: keyof MediaPlanStack = layer === 'SHARED' ? 'shared' : layer === 'CHANNEL' ? 'channel' : layer === 'MARKET' ? 'market' : 'listing'
   if (layer !== 'SHARED' && stack.shared === undefined) throw new MediaPlanEditError('The shared plan is missing.')
   let plan: MediaPlan = stack[key] ? structuredClone(stack[key]!) : emptyMediaPlan()
   const view = (): MediaPlanStack => ({ ...stack, [key]: plan })
@@ -259,7 +266,7 @@ export function applyMediaOps(stack: MediaPlanStack, layer: MediaLayer, ops: rea
  * now (`expect`), so an undo is refused when someone changed that set in between. On Shared "not owned" and an empty
  * set look the same, so a set new on Shared is undone to empty — except a per-SKU set, which is dropped again.
  */
-export function inverseMediaOps(layer: MediaLayer, before: MediaPlan | null, after: MediaPlan | null): MediaOp[] {
+export function inverseMediaOps(layer: MediaSource, before: MediaPlan | null, after: MediaPlan | null): MediaOp[] {
   const was = before ?? emptyMediaPlan(), now = after ?? emptyMediaPlan()
   const ops: MediaOp[] = []
   const refs = new Set<MediaSetRef>(['common', 'safety'])

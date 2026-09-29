@@ -23,6 +23,23 @@ describe('media plan layers', () => {
     expect(resolveSwatch({ shared: stack.shared }, 'color:black')).toEqual({ assetId: 's1', source: 'SHARED' })
     expect(knownSetRefs(stack)).toContain('sku:child9')
   })
+  it('an Amazon market layer sits below its account layer: it wins only for what it owns, and edits touch it alone', () => {
+    const account = plan({ values: { 'color:black': ids('a1') }, swatches: { 'color:black': { assetId: 's1' } } })
+    const market = plan({ common: ids('de-cover') })
+    const stack: MediaPlanStack = { shared, channel: null, listing: account, market }
+    expect(resolveSet(stack, 'common')).toEqual({ items: ['de-cover'], source: 'MARKET' })
+    expect(resolveSet(stack, NERO)).toEqual({ items: ['a1'], source: 'LISTING' })
+    expect(resolveSet(stack, GIALLO)).toEqual({ items: ['g1'], source: 'SHARED' })
+    expect(resolveSwatch(stack, 'color:black')).toEqual({ assetId: 's1', source: 'LISTING' })
+    expect(knownSetRefs({ shared: emptyMediaPlan(), market: plan({ skus: { child9: [] } }) })).toContain('sku:child9')
+    const next = applyMediaOps(stack, 'MARKET', [{ op: 'insert', set: NERO, assetIds: ['de-nero'], index: 0 }])
+    expect(next.sets).toEqual({ common: ids('de-cover'), values: { 'color:black': ids('de-nero', 'a1') } })
+    expect(stack.listing).toBe(account)
+    // "Reset to shared" on the market drops its copy: the account's photos show again.
+    const back = applyMediaOps({ ...stack, market: next }, 'MARKET', [{ op: 'follow', set: NERO }])
+    expect(resolveSet({ ...stack, market: back }, NERO)).toEqual({ items: ['a1'], source: 'LISTING' })
+    expect(inverseMediaOps('MARKET', market, next)).toEqual([{ op: 'follow', set: NERO, expect: ['de-nero', 'a1'] }])
+  })
   it('keys layers the way the table stores them', () => {
     expect(mediaLayerKey({ layer: 'SHARED' })).toBe('SHARED')
     expect(mediaLayerKey({ layer: 'CHANNEL', channel: 'EBAY' })).toBe('CHANNEL:EBAY')

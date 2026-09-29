@@ -6,7 +6,8 @@ import sharp from 'sharp'
 const fixture = vi.hoisted(() => {
   const state = { products: [] as any[], listings: [] as any[], aliases: [] as any[], assets: [] as any[], runs: [] as any[], seq: 0,
     // Images rebuild P2e — whether the family is on the media plan, its plan revision, and the Amazon layout the plan gives.
-    plan: { on: false, revision: 1, layout: null as any } }
+    // `market`: an Amazon market's own layout (2026-09-29), which the mock offers to every caller; `calls`: what was asked.
+    plan: { on: false, revision: 1, layout: null as any, market: null as any, calls: [] as any[] } }
   const match = (row: any, where: any): boolean => Object.entries(where ?? {}).every(([key, value]: [string, any]) => {
     if (key === 'OR') return value.some((v: any) => match(row, v))
     if (key === 'AND') return value.every((v: any) => match(row, v))
@@ -92,8 +93,8 @@ vi.mock('../../db.js', () => ({ default: fixture.db }))
 // Images rebuild P2b — these families are not on the media plan (its own guard is tested in media-plan-switch.vitest.test.ts).
 vi.mock('../../services/images/media-plan-switch.js', async original => ({ ...await original<object>(), isOnMediaPlan: async () => fixture.state.plan.on,
   mediaPlanProducts: async () => new Set(), mediaPlanRevision: async () => fixture.state.plan.on ? `SHARED:@${fixture.state.plan.revision}` : null }))
-vi.mock('../../services/images/media-plan.service.js', () => ({ mediaLayoutFor: async () => fixture.state.plan.on
-  ? { layout: fixture.state.plan.layout, url: (id: string) => `https://cdn.example/${id}.jpg` } : null }))
+vi.mock('../../services/images/media-plan.service.js', () => ({ mediaLayoutFor: async (input: unknown) => { fixture.state.plan.calls.push(input); return fixture.state.plan.on
+  ? { layout: fixture.state.plan.layout, marketLayout: fixture.state.plan.market, url: (id: string) => `https://cdn.example/${id}.jpg` } : null } }))
 vi.mock('../../services/connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_channel: string, id: string) => { if (!['account-a', 'account-b'].includes(id)) throw new Error('Invalid account'); return id } }))
 vi.mock('../../services/images/amazon-media-client.js', async original => ({ ...await original<object>(), amazonMediaClient: fixture.client }))
 vi.mock('../../services/pim/catalog-source-fetch.js', () => ({ fetchCatalogSource: fixture.download }))
@@ -124,7 +125,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   // P0.1 — these model production: Amazon publish mode `live`.
   vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
-  fixture.state.seq = 0; fixture.state.runs = []; fixture.state.plan = { on: false, revision: 1, layout: null }
+  fixture.state.seq = 0; fixture.state.runs = []; fixture.state.plan = { on: false, revision: 1, layout: null, market: null, calls: [] }
   fixture.state.products = [
     { id: 'p', sku: 'BOTTLE', name: 'Studio bottle', parentId: null, isParent: true, deletedAt: null, productType: 'BOTTLE', variantAttributes: {} },
     ...['blue', 'red'].map(id => ({ id, sku: `BOTTLE-${id.toUpperCase()}`, name: `Bottle · ${id}`, parentId: 'p', isParent: false, deletedAt: null, productType: 'BOTTLE', variantAttributes: { color: id, capacity: '500 ml' } })),
@@ -440,7 +441,7 @@ describe('Amazon Media immutable review and publication', () => {
 describe('a family on the media plan (images rebuild P2e)', () => {
   const layout = (checks: any[] = []) => ({ channel: 'AMAZON', revisions: [], parent: { productId: 'p', sku: 'Parent', slots: { MAIN: 'photo' }, cut: [] }, safety: [], checks,
     items: [{ productId: 'blue', sku: 'BOTTLE-BLUE', slots: { MAIN: 'photo', PT01: 'detail' }, cut: [] }, { productId: 'red', sku: 'BOTTLE-RED', slots: { MAIN: 'chart-it' }, cut: [] }] })
-  beforeEach(() => { fixture.state.plan = { on: true, revision: 1, layout: layout() } })
+  beforeEach(() => { fixture.state.plan = { on: true, revision: 1, layout: layout(), market: null, calls: [] } })
   it('reviews each SKU against the plan\'s Amazon slots, not the older market draft', async () => {
     const d = await destination(); const w = await readAmazonMedia(d)
     const run = await createAmazonMediaReview(d, w.revision, ['it-blue', 'it-red'], 'editor')
@@ -449,6 +450,19 @@ describe('a family on the media plan (images rebuild P2e)', () => {
     expect(reviewed.items.map(i => [i.sku, i.desired, i.issues])).toEqual([
       ['BOTTLE-BLUE', { MAIN: 'https://cdn.example/photo.jpg', PT01: 'https://cdn.example/detail.jpg' }, []],
       ['BOTTLE-RED', { MAIN: 'https://cdn.example/chart-it.jpg' }, []]])
+  })
+  it('sends All Amazon markets only: an Amazon market\'s own photos (its Seller Central ZIP\'s) are never asked for nor sent', async () => {
+    // Amazon DE's own photos (a row DE changed on the Media page) would give every SKU another MAIN.
+    fixture.state.plan.market = { ...layout(), parent: { productId: 'p', sku: 'Parent', slots: { MAIN: 'chart-de' }, cut: [] },
+      items: ['blue', 'red'].map(id => ({ productId: id, sku: `BOTTLE-${id.toUpperCase()}`, slots: { MAIN: 'chart-de' }, cut: [] })) }
+    const d = await destination('DE'); const w = await readAmazonMedia(d)
+    const run = await createAmazonMediaReview(d, w.revision, ['de-blue', 'de-red'], 'editor')
+    await processAmazonMediaRun(run.id)
+    expect((await readAmazonMediaRun(d, run.id)).items.map(i => [i.sku, i.desired])).toEqual([
+      ['BOTTLE-BLUE', { MAIN: 'https://cdn.example/photo.jpg', PT01: 'https://cdn.example/detail.jpg' }],
+      ['BOTTLE-RED', { MAIN: 'https://cdn.example/chart-it.jpg' }]])
+    expect(fixture.state.plan.calls.length).toBeGreaterThan(0)
+    expect(fixture.state.plan.calls.every((input: any) => input.channel === 'AMAZON' && !('amazonMarket' in input))).toBe(true)
   })
   it('refuses to start a review while the plan has a blocking problem, with the reason', async () => {
     fixture.state.plan.layout = layout([{ severity: 'error', code: 'no-main', message: 'BOTTLE-RED has no MAIN photo.' }])

@@ -9,8 +9,8 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 
 import { publicationRequest } from '../../publication/request'
 import { requestAmazonRun, requestAmazonWorkspace } from '../amazon/transport'
-import { destinationLabel, type MediaDestinationRow, type MediaRead } from './model'
-import { amazonCheck, amazonOutcome, destinationsToCheck, ebayCheck, ebayOutcome, unsupportedReason, type AmazonSend, type EbaySend, type PhotoCheck, type PhotoOutcome } from './publishModel'
+import { amazonOwnMarkets, destinationLabel, type MediaDestinationRow, type MediaRead } from './model'
+import { amazonCheck, amazonOutcome, amazonSendNote, destinationsToCheck, ebayCheck, ebayOutcome, unsupportedReason, type AmazonSend, type EbaySend, type PhotoCheck, type PhotoOutcome } from './publishModel'
 import styles from './planPage.module.css'
 
 interface Line { d: MediaDestinationRow; check: PhotoCheck; ticked: boolean; sending?: boolean; outcome?: PhotoOutcome }
@@ -134,6 +134,7 @@ export function PublishPhotosDialog({ read, open, only = null, onClose }: Publis
             {!line.outcome && line.check.kind === 'ready' && line.check.note && <span className={styles.muted}>{line.check.note}</span>}
             {!line.outcome && line.check.kind === 'ready' && line.d.channel === 'EBAY' && <span className={styles.muted}>
               Sending is one revision of this listing. eBay allows 250 revisions of a listing per calendar day.</span>}
+            {line.d.channel === 'AMAZON' && <span className={styles.muted}>{amazonSendNote(line.d.markets, amazonOwnMarkets(read, line.d))}</span>}
           </span>
         </li>)}
       </ul>

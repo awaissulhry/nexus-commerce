@@ -171,6 +171,40 @@ describe('media plan edits', () => {
       ops: [{ op: 'own', set: 'common' }] }, null))
     expect(saved.key).toBe(`LISTING:AMAZON:GLOBAL:${ids.amazon}:`)
   })
+  it('an Amazon market can own photos below the account\'s (marketOnly); publishers and the sheet keep the account\'s', async () => {
+    const accountKey = `LISTING:AMAZON:GLOBAL:${ids.amazon}:`, deKey = `LISTING:AMAZON:DE:${ids.amazon}:`
+    const address = { layer: 'LISTING' as const, channel: 'AMAZON', marketplace: 'de', accountId: ids.amazon, marketOnly: true }
+    const own = await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'insert', set: 'common', assetIds: [img.g1], index: 0 }] }, null))
+    // DE's copy starts from what DE showed: the account's own Common (the test above), with g1 first.
+    expect(own).toMatchObject({ key: deKey, revision: 1, plan: { sets: { common: [{ assetId: img.g1 }, { assetId: img.cover }, { assetId: img['chart-it'] }] } } })
+    expect(state.events).toEqual([expect.objectContaining({ layer: deKey })])
+    const read = await scoped(() => readMediaWorkspace(ids.root))
+    expect(read.destinations.filter(d => d.channel === 'AMAZON').map(d => d.key)).toEqual([accountKey])
+    expect(read.layers.find(l => l.key === deKey)).toMatchObject({ layer: 'LISTING', channel: 'AMAZON', marketplace: 'DE', accountId: ids.amazon, aliasKey: '' })
+    // A publisher gets the account's layout (All Amazon markets), whatever market it names; only the ZIP asks for DE's.
+    const api = await scoped(() => mediaLayoutFor({ productId: ids.root, channel: 'AMAZON', marketplace: 'DE', accountId: ids.amazon }))
+    expect(api!.layout).toEqual(read.layouts[accountKey])
+    expect((api!.layout as any).parent.slots).toEqual({ MAIN: img.cover, PT01: img['chart-it'] })
+    expect(api!.marketLayout).toBeNull()
+    const de = await scoped(() => mediaLayoutFor({ productId: ids.root, channel: 'AMAZON', marketplace: 'DE', accountId: ids.amazon, amazonMarket: { market: 'DE', languages: ['de'] } }))
+    expect(de!.layout).toEqual(api!.layout)
+    expect((de!.marketLayout as any).parent.slots).toEqual({ MAIN: img.g1, PT01: img.cover, PT02: img['chart-de'] })
+    expect(de!.marketLayout!.revisions).toContain(`${deKey}@1`)
+    // The Information sheet on Amazon DE shows (and edits) the account's photos, as before.
+    const sheet = (await scoped(() => sheetMediaPlan(ids.root)))!
+    expect(sheet.row(ids.root, { channel: 'AMAZON', marketplace: 'DE', accountId: ids.amazon, aliasKey: '' }, 'de').items.map(i => i.id)).toEqual([img.cover, img['chart-it']])
+    // Safety images are one set for every market; a market with no listing, and "one market" off Amazon, are refused.
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'own', set: 'safety' }] }, null))).rejects.toMatchObject({ statusCode: 422 })
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'move', from: 'common', to: 'safety', assetId: img.g1, index: 0 }] }, null))).rejects.toMatchObject({ statusCode: 422 })
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address: { ...address, marketplace: 'FR' }, ops: [{ op: 'own', set: 'common' }] }, null))).rejects.toMatchObject({ statusCode: 404 })
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address: { ...address, marketplace: 'GLOBAL' }, ops: [{ op: 'own', set: 'common' }] }, null))).rejects.toMatchObject({ statusCode: 400 })
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, marketOnly: true }, ops: [{ op: 'own', set: 'common' }] }, null)))
+      .rejects.toMatchObject({ statusCode: 400 })
+    // Reset to shared (the edit's Undo here): the DE row goes, DE follows the account again.
+    const back = await scoped(() => applyMediaPlanOps(ids.root, { address, ops: own.undo }, null))
+    expect(back).toMatchObject({ key: deKey, plan: null })
+    expect(await scoped(() => prisma.productMediaPlan.count({ where: { marketplace: 'DE' } }))).toBe(0)
+  })
   it('refuses a photo from another product, a repeat inside a set, a foreign alias and a wrong-channel account', async () => {
     const other = await scoped(async () => (await prisma.productImage.create({ data: { productId: (await prisma.product.create({ data: { sku: 'OTHER', name: 'Other', basePrice: 1 } as never })).id, url: 'https://cdn.example/o.jpg', type: 'ALT' } as never })).id)
     const shared = (ops: any[]) => scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'SHARED' }, ops }, null))

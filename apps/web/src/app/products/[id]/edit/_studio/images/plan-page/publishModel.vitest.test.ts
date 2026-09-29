@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StudioPublishChange, StudioPublishReview } from '@nexus/shared/studio-publication'
 
-import { amazonCheck, amazonOutcome, destinationsToCheck, ebayCheck, ebayOutcome, unsupportedReason, type AmazonRunLike } from './publishModel'
+import { amazonCheck, amazonOutcome, amazonSendNote, destinationsToCheck, ebayCheck, ebayOutcome, unsupportedReason, type AmazonRunLike } from './publishModel'
 
 const change = (field: string, status: StudioPublishChange['status'], selectable = true, reason = ''): StudioPublishChange => ({
   id: JSON.stringify(['parent', field]), productId: 'parent', sku: 'GALE', field, label: field, current: { state: 'value', value: 'ours' },
@@ -50,5 +50,14 @@ describe('Review & publish photos', () => {
     expect(unsupportedReason({ channel: 'EBAY', targetable: true, refusal: null, accountActive: true })).toBeNull()
     expect(ebayOutcome({ id: 'x', status: 'FAILED', message: 'Failed', results: [{ sku: 'GALE', status: 'FAILED', message: 'eBay: invalid picture URL' }] }))
       .toEqual({ tone: 'danger', text: 'eBay: invalid picture URL', final: true })
+  })
+})
+
+describe('Amazon: Publish photos sends All Amazon markets (2026-09-29, option 3)', () => {
+  it('says what is sent, and names a market whose own photos go only by its ZIP', () => {
+    expect(amazonSendNote(['IT', 'DE'], [])).toBe('Sends the All Amazon markets photos. Amazon keeps one photo set per ASIN for IT, DE.')
+    expect(amazonSendNote(['IT', 'DE'], ['DE'])).toBe('Sends the All Amazon markets photos. Amazon keeps one photo set per ASIN for IT, DE. Amazon DE has own photos. '
+      + 'They are not sent here: they reach Amazon only through its ZIP (Seller Central → Image Manager → Country-Specific Upload).')
+    expect(amazonSendNote(['IT', 'DE', 'FR'], ['DE', 'FR'])).toMatch(/Amazon DE, Amazon FR have own photos\. .* through each market’s ZIP/)
   })
 })

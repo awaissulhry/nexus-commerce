@@ -88,6 +88,18 @@ export function amazonOutcome(run: AmazonRunLike): PhotoOutcome {
   return { tone: 'info', text: `Sending to Amazon… ${count('ACCEPTED')} of ${run.receipts.length} accepted so far.`, final: false }
 }
 
+/**
+ * What an Amazon line sends (2026-09-29, the Owner's option 3): the All Amazon markets photos — Amazon keeps one photo
+ * set per ASIN for every market. A market with photos of its own is named: those go only by its Seller Central ZIP.
+ */
+export function amazonSendNote(markets: readonly string[], ownMarkets: readonly string[]): string {
+  const all = `Sends the All Amazon markets photos. Amazon keeps one photo set per ASIN for ${markets.join(', ') || 'every market'}.`
+  if (!ownMarkets.length) return all
+  const names = ownMarkets.map(m => `Amazon ${m}`).join(', ')
+  return `${all} ${names} ${ownMarkets.length === 1 ? 'has' : 'have'} own photos. They are not sent here: they reach Amazon only through `
+    + `${ownMarkets.length === 1 ? 'its' : 'each market’s'} ZIP (Seller Central → Image Manager → Country-Specific Upload).`
+}
+
 /** Which destinations the window checks: the ones the page shows (one destination, or every listing of one eBay
  *  account and market — aliases, 2026-09-29), else every destination. */
 export function destinationsToCheck<T extends { key: string }>(destinations: readonly T[], only: string | readonly string[] | null): T[] {

@@ -1,5 +1,5 @@
 import prisma from '../../db.js'
-import { applyMediaOps, collapseVersionsInPlan, emptyMediaPlan, inverseMediaOps, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, planAssetIds, replaceAssetInPlan, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
+import { applyMediaOps, collapseVersionsInPlan, emptyMediaPlan, inverseMediaOps, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, planAssetIds, replaceAssetInPlan, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
 import { channelNames, projectMediaDestination, rowGallery, type MediaAsset, type MediaFamily } from '@nexus/shared/media-plan-channels'
 import { storedVariationValues } from '../pim/stored-variation-projection.js'
 import { optionForValue, type DictionaryAttribute } from '../pim/family-variations-core.js'
@@ -25,6 +25,13 @@ export const MEDIA_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const
 type MediaChannel = typeof MEDIA_CHANNELS[number]
 /** Channels whose photos belong to the whole account, not to one market (PLAN.md §4.3). */
 const GLOBAL_CHANNELS = new Set<MediaChannel>(['AMAZON', 'SHOPIFY'])
+/**
+ * An Amazon market's own photos (2026-09-29, the Owner's option 3): a layer below the account's ("All Amazon markets"),
+ * stored as a Listing row with the market's code. Amazon's API keeps one photo set per ASIN for every market, so these
+ * reach Amazon only through that market's Seller Central ZIP; the publishers never read them.
+ */
+const amazonMarketKey = (accountId: string, market: string) => mediaLayerKey({ layer: 'LISTING', channel: 'AMAZON', marketplace: market, accountId, aliasKey: '' })
+const touchesSet = (op: MediaOp, ref: MediaSetRef) => op.op === 'move' ? op.from === ref || op.to === ref : 'set' in op && op.set === ref
 
 const fold = (text: string) => text.trim().toLowerCase().replace(/[\s_-]+/g, '')
 const slug = (text: string) => text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/^(?=[^a-z])/, 'a_').slice(0, 64) || 'axis'
@@ -186,12 +193,18 @@ async function loadMediaContext(rootId: string) {
 }
 type MediaContext = Awaited<ReturnType<typeof loadMediaContext>>
 
-function projectDestination(ctx: MediaContext, d: Destination, overrides: MediaLayoutOverrides = {}) {
-  const stack: MediaPlanStack = { shared: ctx.byKey.get('SHARED')?.plan ?? null, channel: ctx.byKey.get(`CHANNEL:${d.channel}`)?.plan ?? null, listing: ctx.byKey.get(d.key)?.plan ?? null }
-  const layout = projectMediaDestination({ stack, family: ctx.family, axes: ctx.axes, assets: ctx.assets, target: d, mainLanguage: ctx.mainLanguage,
+/** One Amazon market as its buyers see it: its own layer below the account's, and its languages (the ZIP's view). */
+export interface AmazonMarketView { market: string; languages: string[] }
+
+function projectDestination(ctx: MediaContext, d: Destination, overrides: MediaLayoutOverrides = {}, marketView?: AmazonMarketView) {
+  const marketLayer = marketView ? ctx.byKey.get(amazonMarketKey(d.accountId, marketView.market)) : undefined
+  const stack: MediaPlanStack = { shared: ctx.byKey.get('SHARED')?.plan ?? null, channel: ctx.byKey.get(`CHANNEL:${d.channel}`)?.plan ?? null, listing: ctx.byKey.get(d.key)?.plan ?? null,
+    ...(marketView ? { market: marketLayer?.plan ?? null } : {}) }
+  const target = marketView ? { ...d, marketplace: marketView.market, languages: marketView.languages } : d
+  const layout = projectMediaDestination({ stack, family: ctx.family, axes: ctx.axes, assets: ctx.assets, target, mainLanguage: ctx.mainLanguage,
     valueNames: overrides.valueNames, axisName: overrides.axisName, includedIds: overrides.includedIds })
   // Revisions of the layers this destination reads — a publisher binds its review to them.
-  const revisions = [ctx.byKey.get('SHARED'), ctx.byKey.get(`CHANNEL:${d.channel}`), ctx.byKey.get(d.key)].map(l => l ? `${l.key}@${l.revision}` : null).filter(Boolean)
+  const revisions = [ctx.byKey.get('SHARED'), ctx.byKey.get(`CHANNEL:${d.channel}`), ctx.byKey.get(d.key), marketLayer].map(l => l ? `${l.key}@${l.revision}` : null).filter(Boolean)
   return { channel: d.channel, revisions, ...layout }
 }
 
@@ -220,7 +233,8 @@ export async function sheetMediaPlan(rootId: string) {
   const plans = new Map(rows.map(r => [mediaLayerKey({ layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey }), readPlan(r.plan)]))
   const assets = new Map<string, MediaAsset>(library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType, fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
   const byId = new Map(library.map(a => [a.id, a]))
-  /** The layers a sheet reads: Shared on the master sheet; on a channel sheet, that listing's destination. */
+  /** The layers a sheet reads: Shared on the master sheet; on a channel sheet, that listing's destination (on Amazon the
+   *  account's photos, the ones its API sends to every market — an Amazon market's own layer is not read here). */
   const stackFor = (coordinate: { channel: string; marketplace: string; accountId: string; aliasKey: string } | null): MediaPlanStack => {
     if (!coordinate) return { shared: plans.get('SHARED') ?? null }
     const channel = coordinate.channel as MediaChannel
@@ -254,8 +268,11 @@ export async function isMediaSwitched(productId: string): Promise<boolean> {
  * The layout one destination must receive, for a publisher — or `null` when the family is not switched (the publisher
  * keeps today's behaviour). Computed by the same loader and projection as the page, so both agree on language versions,
  * listed variants and order; the publisher supplies the channel's own names and the variants its review includes.
+ * Amazon: `layout` is always the account's, what its API sends to every market. Only the ZIP asks for one market's view
+ * as well (`amazonMarket` → `marketLayout`: that market's own layer and languages); a publisher never does.
  */
-export async function mediaLayoutFor(input: { productId: string; channel: MediaChannel; marketplace: string; accountId: string; aliasKey?: string; channelValues?: MediaChannelValues } & MediaLayoutOverrides) {
+export async function mediaLayoutFor(input: { productId: string; channel: MediaChannel; marketplace: string; accountId: string; aliasKey?: string; channelValues?: MediaChannelValues
+  amazonMarket?: AmazonMarketView } & MediaLayoutOverrides) {
   const rootId = await familyRoot(input.productId)
   if (!(await isOnMediaPlan(rootId))) return null
   const ctx = await loadMediaContext(rootId)
@@ -274,36 +291,46 @@ export async function mediaLayoutFor(input: { productId: string; channel: MediaC
     names.axisName = named.axisName
   }
   const layout = projectDestination(ctx, d, { ...input, ...names })
+  const marketLayout = input.channel === 'AMAZON' && input.amazonMarket ? projectDestination(ctx, d, { ...input, ...names }, input.amazonMarket) : null
   const url = (id: string) => {
     const asset = ctx.assets.get(id)
     if (!asset) throw new WorkspaceScopeError('A photo in the plan was deleted from the library. Review the Media page.', 409)
     return asset.url
   }
-  return { rootId, destination: d, layout, url, assets: ctx.assets, mainLanguage: ctx.mainLanguage }
+  return { rootId, destination: d, layout, marketLayout, url, assets: ctx.assets, mainLanguage: ctx.mainLanguage }
 }
 
-export interface MediaLayerAddress { layer: MediaLayer; channel?: string; marketplace?: string; accountId?: string; aliasKey?: string }
+/** `marketOnly`: an Amazon market's own layer (`marketplace` = the market) instead of the account's, which every Amazon
+ *  address without it names — so an older page or the Information sheet, which send the scope's market, still edit it. */
+export interface MediaLayerAddress { layer: MediaLayer; channel?: string; marketplace?: string; accountId?: string; aliasKey?: string; marketOnly?: boolean }
 
 /** The layer an edit targets, checked against the family and the business's accounts. */
 async function checkedAddress(rootId: string, address: MediaLayerAddress) {
-  if (address.layer === 'SHARED') return { layer: 'SHARED' as const, channel: '', marketplace: '', accountId: '', aliasKey: '' }
+  if (address.layer === 'SHARED') return { layer: 'SHARED' as const, channel: '', marketplace: '', accountId: '', aliasKey: '', amazonMarket: false }
   const channel = String(address.channel ?? '').toUpperCase()
   if (!(MEDIA_CHANNELS as readonly string[]).includes(channel)) throw new WorkspaceScopeError('Choose Amazon, eBay, Shopify or Etsy.', 400)
-  if (address.layer === 'CHANNEL') return { layer: 'CHANNEL' as const, channel, marketplace: '', accountId: '', aliasKey: '' }
-  const marketplace = GLOBAL_CHANNELS.has(channel as MediaChannel) || channel === 'ETSY' ? 'GLOBAL' : String(address.marketplace ?? '').toUpperCase()
-  if (!marketplace) throw new WorkspaceScopeError('Choose the market of this listing.', 400)
+  if (address.layer === 'CHANNEL') return { layer: 'CHANNEL' as const, channel, marketplace: '', accountId: '', aliasKey: '', amazonMarket: false }
+  const amazonMarket = channel === 'AMAZON' && address.marketOnly === true
+  if (address.marketOnly && !amazonMarket) throw new WorkspaceScopeError('Only Amazon keeps photos for one market apart from its other markets.', 400)
+  const marketplace = !amazonMarket && (GLOBAL_CHANNELS.has(channel as MediaChannel) || channel === 'ETSY') ? 'GLOBAL' : String(address.marketplace ?? '').toUpperCase()
+  if (!marketplace || (amazonMarket && marketplace === 'GLOBAL')) throw new WorkspaceScopeError('Choose the market of this listing.', 400)
   if (!address.accountId) throw new WorkspaceScopeError('Choose the account of this listing.', 400)
   const accountId = await resolveChannelConnectionId(channel, address.accountId).catch(error => {
     if (error instanceof NoConnectionError) throw new WorkspaceScopeError(error.message, 404)
     throw error
   }) ?? ''
   const aliasKey = channel === 'AMAZON' ? '' : address.aliasKey ?? ''
+  if (amazonMarket) {
+    const family = [rootId, ...(await prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true } })).map(c => c.id)]
+    const listed = await prisma.channelListing.findFirst({ where: { productId: { in: family }, channel: 'AMAZON', channelConnectionId: accountId, marketplace }, select: { id: true } })
+    if (!listed) throw new WorkspaceScopeError(`This Amazon account has no listing of this product on ${marketplace}.`, 404)
+  }
   if (aliasKey) {
     const alias = await prisma.productListingAlias.findFirst({ where: { id: aliasKey, productId: rootId, channel, channelConnectionId: accountId, status: 'ACTIVE',
       ...(marketplace === 'GLOBAL' ? {} : { marketplace }) }, select: { id: true } })
     if (!alias) throw new WorkspaceScopeError('This listing alias is unavailable for this product and account.')
   }
-  return { layer: 'LISTING' as const, channel, marketplace, accountId, aliasKey }
+  return { layer: 'LISTING' as const, channel, marketplace, accountId, aliasKey, amazonMarket }
 }
 
 /**
@@ -364,6 +391,9 @@ export async function updateMediaLibrary(productId: string, input: {
 export async function applyMediaPlanOps(productId: string, input: { address: MediaLayerAddress; ops: MediaOp[] }, actorId: string | null) {
   const rootId = await familyRoot(productId)
   const address = await checkedAddress(rootId, input.address)
+  // Safety images reach Amazon by its API or the Safety ZIP, both the account's: a market cannot have its own.
+  if (address.amazonMarket && input.ops.some(op => touchesSet(op, 'safety')))
+    throw new WorkspaceScopeError('Safety images are one set for every Amazon market. Change them under All Amazon markets.', 422)
   const ids = [rootId, ...(await prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true } })).map(c => c.id)]
   const library = await prisma.productImage.findMany({ where: { productId: { in: ids } }, select: { id: true, productId: true, url: true, contentHash: true, versionGroupId: true } })
   const known = new Set(library.map(a => a.id))
@@ -376,17 +406,22 @@ export async function applyMediaPlanOps(productId: string, input: { address: Med
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await prisma.$transaction(async tx => {
       const rows = await tx.productMediaPlan.findMany({ where: { productId: rootId, OR: [{ layer: 'SHARED' }, ...(address.layer !== 'SHARED' ? [{ layer: 'CHANNEL', channel: address.channel }] : []),
-        ...(address.layer === 'LISTING' ? [{ ...layerWhere(rootId, 'LISTING', address.channel, address.marketplace, address.accountId, address.aliasKey) }] : [])] } })
+        ...(address.layer === 'LISTING' ? [{ ...layerWhere(rootId, 'LISTING', address.channel, address.marketplace, address.accountId, address.aliasKey) }] : []),
+        // An Amazon market's layer sits below the account's: the account's photos are what it follows.
+        ...(address.amazonMarket ? [{ ...layerWhere(rootId, 'LISTING', address.channel, 'GLOBAL', address.accountId, '') }] : [])] } })
       const find = (layer: MediaLayer, channel = '', marketplace = '', account = '', alias = '') => rows.find(r => r.layer === layer && r.channel === channel && r.marketplace === marketplace && r.channelConnectionId === account && r.aliasKey === alias)
       const sharedRow = find('SHARED'), channelRow = address.layer === 'SHARED' ? undefined : find('CHANNEL', address.channel)
+      const accountRow = address.amazonMarket ? find('LISTING', address.channel, 'GLOBAL', address.accountId, '') : undefined
       const target = address.layer === 'SHARED' ? sharedRow : address.layer === 'CHANNEL' ? channelRow : find('LISTING', address.channel, address.marketplace, address.accountId, address.aliasKey)
+      const own = address.layer === 'LISTING' && target ? readPlan(target.plan) : null
       const stack: MediaPlanStack = { shared: sharedRow ? readPlan(sharedRow.plan) : null, channel: channelRow ? readPlan(channelRow.plan) : null,
-        listing: address.layer === 'LISTING' && target ? readPlan(target.plan) : null }
-      const next = applyMediaOps(stack, address.layer, input.ops, sameGroup)
+        ...(address.amazonMarket ? { listing: accountRow ? readPlan(accountRow.plan) : null, market: own } : { listing: own }) }
+      const edited = address.amazonMarket ? 'MARKET' as const : address.layer
+      const next = applyMediaOps(stack, edited, input.ops, sameGroup)
       const empty = address.layer !== 'SHARED' && JSON.stringify(next) === JSON.stringify(emptyMediaPlan())
       // Undo: the ops that put this layer back, each bound to what the layer holds after this edit.
-      const before = address.layer === 'SHARED' ? stack.shared : address.layer === 'CHANNEL' ? stack.channel : stack.listing
-      const undo = inverseMediaOps(address.layer, before ?? null, empty ? null : next)
+      const before = address.layer === 'SHARED' ? stack.shared : address.layer === 'CHANNEL' ? stack.channel : own
+      const undo = inverseMediaOps(edited, before ?? null, empty ? null : next)
       if (target) {
         if (empty) { const gone = await tx.productMediaPlan.deleteMany({ where: { id: target.id, revision: target.revision } }); return gone.count ? { plan: null, revision: 0, undo } : null }
         const saved = await tx.productMediaPlan.updateMany({ where: { id: target.id, revision: target.revision }, data: { plan: next, revision: { increment: 1 }, updatedById: actorId } })
