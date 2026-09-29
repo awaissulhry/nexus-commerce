@@ -2,7 +2,8 @@
  * MX.1 — a new variant's listings, copied from a sibling ("Add child → copy from"), moved out of catalog.routes.ts.
  *
  * Copies content / attributes / pricing (per copy group) and strips every variation-specific SP-API field (color,
- * size, ASIN, offers, …), so the new variant starts with shared content but its own identifiers.
+ * size, ASIN, offers, …) and the sibling's own channel ids and checkpoints (Shopify variant, eBay offers), so the new
+ * variant starts with shared content but its own identifiers.
  *
  * Step 7 — every copy is an inert Nexus draft decided by the one draft rule: a copy of a primary listing comes from
  * `ensureDraftListings` on the sibling's coordinate (a sibling saved without an account resolves to the channel's
@@ -16,6 +17,8 @@ import type { Prisma } from '@prisma/client'
 import { DraftListingError, draftListingFields, ensureDraftListings } from './draft-listing.service.js'
 import { validateAliasWriteTargets } from './listing-alias.service.js'
 import { AmbiguousConnectionError } from '../connection-resolver.service.js'
+import { isManagedShopifyAttribute } from '../shopify/linked-state-guard.js'
+import { PUBLISH_KEY } from '../shopify/content-workspace.service.js'
 
 export type CopyGroup = 'content' | 'attributes' | 'pricing'
 
@@ -31,6 +34,18 @@ const AXIS_ATTRS = new Set([
   'parentage_level', 'child_parent_sku_relationship',
   'purchasable_offer', 'fulfillment_availability', 'skip_offer',
 ])
+
+/**
+ * Keys that name the SIBLING's own channel object or its publish state. Copied, they would make the new variant claim
+ * the sibling's Shopify variant (price and stock pushes would target it), its eBay offers, or its checkpoints. The new
+ * variant starts without them; the channel's own sync writes its ids.
+ */
+const LISTING_IDENTITY_KEYS = new Set([
+  'shopifyProductId', 'variantId', 'inventoryItemId', 'inventoryLocationId', 'nexusFamilyId', // Shopify native mapping (content-sync)
+  '__offerIds', '__lastPublishedAxes', // eBay Inventory offers and the axes last published
+  PUBLISH_KEY,
+])
+const isListingIdentityKey = (key: string) => LISTING_IDENTITY_KEYS.has(key) || isManagedShopifyAttribute(key)
 
 /** Copy the sibling's listings onto `productId` as drafts. Returns the coordinates that were skipped. */
 export async function copySiblingListings(tx: Prisma.TransactionClient, input: { sourceProductId: string; productId: string; groups: Set<string> }): Promise<SkippedListingCopy[]> {
@@ -58,8 +73,9 @@ export async function copySiblingListings(tx: Prisma.TransactionClient, input: {
       skipped.push({ channel: sib.channel, marketplace: sib.marketplace, reason: error.message })
       continue
     }
-    const platAttrs = sib.platformAttributes as Record<string, any> | null
-    const sibAttrs = (platAttrs?.attributes ?? {}) as Record<string, any>
+    const stored = sib.platformAttributes && typeof sib.platformAttributes === 'object' && !Array.isArray(sib.platformAttributes) ? sib.platformAttributes as Record<string, any> : {}
+    const platAttrs = Object.fromEntries(Object.entries(stored).filter(([key]) => !isListingIdentityKey(key)))
+    const sibAttrs = (platAttrs.attributes ?? {}) as Record<string, any>
     const cleanedAttrs: Record<string, any> = {}
     if (groups.has('attributes')) {
       for (const [k, v] of Object.entries(sibAttrs)) {
