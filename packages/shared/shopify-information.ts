@@ -76,6 +76,9 @@ export function informationRegistry(schema: ShopifyStoreSchema | null): Informat
   const fields = new Map<string, InformationField>()
   for (const def of schema?.definitions ?? []) {
     if (def.ownerType !== P && def.ownerType !== V) continue
+    // Nexus's own fields (`nexus.family_id`, the product's identity; `nexus.resolved`, its content manifest) are
+    // written only by the publisher. An operator edit would detach a Shopify product from its family.
+    if (def.namespace === 'nexus') continue
     const id = informationMetafieldId(def.ownerType, def.namespace, def.key)
     fields.set(id, {
       id, label: def.name, group: def.namespace === 'shopify' ? 'Category Metafields' : 'Metafields', owner: def.ownerType,

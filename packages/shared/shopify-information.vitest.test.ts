@@ -30,6 +30,11 @@ describe('Shopify Information field identities', () => {
     expect(informationRegistry(schema).filter(f => f.definition)).toEqual([])
     expect(informationRegistry({ ...schema, definitions: [{ ...def, key: 'store_b' }] }).some(f => f.id === first[0].id)).toBe(false)
   })
+  it('never offers Nexus\'s own identity and manifest fields as columns; a custom field of the same key still shows', () => {
+    const def = (namespace: string, key: string, type: string) => ({ id: `${namespace}.${key}`, namespace, key, name: key, ownerType: 'PRODUCT', type, description: null, validations: [], access: { admin: null, storefront: null } })
+    const fields = informationRegistry({ ...schema, definitions: [def('nexus', 'family_id', 'id'), def('nexus', 'resolved', 'json'), { ...def('nexus', 'resolved', 'json'), ownerType: 'PRODUCTVARIANT' }, def('custom', 'family_id', 'single_line_text_field')] })
+    expect(fields.filter(f => f.definition).map(f => f.id)).toEqual(['metafield:PRODUCT:custom.family_id'])
+  })
   it('keeps Shopify category metafields in their own group using store identifiers', () => {
     const def = { id: 'care', namespace: 'shopify', key: 'care', name: 'Care', ownerType: 'PRODUCT', type: 'single_line_text_field', description: null, validations: [], access: { admin: null, storefront: null } }
     expect(informationRegistry({ ...schema, definitions: [def] }).find(f => f.definition)?.group).toBe('Category Metafields')
