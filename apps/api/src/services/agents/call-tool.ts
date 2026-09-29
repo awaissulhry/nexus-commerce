@@ -30,6 +30,7 @@ import {
   type WorkspaceContext,
 } from '../../lib/workspace-context.js'
 import { getTool, listTools } from './tool-registry.js'
+import { takeToolCall } from './tool-rate.js'
 import type { AgentTool, ToolResult } from './tool-types.js'
 
 /** Which front door a person came through — recorded, never trusted for access. */
@@ -59,7 +60,12 @@ export const TOOL_BASE_PERMISSION = FEATURES.aiRun
 
 export class ToolAccessError extends Error {
   constructor(
-    readonly code: 'unknown_tool' | 'forbidden' | 'workspace_required' | 'workspace_mismatch',
+    readonly code:
+      | 'unknown_tool'
+      | 'forbidden'
+      | 'workspace_required'
+      | 'workspace_mismatch'
+      | 'rate_limited',
     message: string,
     readonly statusCode: number,
   ) {
@@ -172,16 +178,40 @@ export function visibleTo<T>(principal: ToolPrincipal, tool: Pick<AgentTool, 're
   return financialPayloadCopy(value, principal.permissions, tool.restrictedFields)
 }
 
+export interface CallOptions {
+  /**
+   * The operator's hourly limit for this tool (AgentTool.rateLimitPerHour).
+   * Only a request to USE the tool passes it; a re-check of an approval
+   * already taken does not. Counted after the permission and business checks,
+   * so a refused call never spends the budget.
+   */
+  hourlyLimit?: number | null
+}
+
+async function withinHourlyLimit(name: string, limit: number | null | undefined): Promise<void> {
+  if (limit == null) return
+  const verdict = await takeToolCall(name, limit)
+  if (verdict.ok) return
+  const minutes = Math.max(1, Math.ceil(verdict.retryAfterSec / 60))
+  throw new ToolAccessError(
+    'rate_limited',
+    `${name} is limited to ${limit} call${limit === 1 ? '' : 's'} per hour in this business. Try again in ${minutes} min.`,
+    429,
+  )
+}
+
 /** The dry run: a tool's `handler`. It never changes anything. */
 export async function callTool(
   principal: ToolPrincipal,
   name: string,
   args: Record<string, unknown>,
+  options: CallOptions = {},
 ): Promise<ToolCall> {
   const tool = allowedTool(principal, name)
-  const raw = await asPrincipal(principal, () =>
-    tool.handler(args, { userId: principal.kind === 'user' ? principal.userId : null }),
-  )
+  const raw = await asPrincipal(principal, async () => {
+    await withinHourlyLimit(name, options.hourlyLimit)
+    return tool.handler(args, { userId: principal.kind === 'user' ? principal.userId : null })
+  })
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }
 

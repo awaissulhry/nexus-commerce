@@ -77,7 +77,7 @@ export async function runOrQueueTool(
   // their business. Read/draft + no-approval tools stop here.
   let call: ToolCall
   try {
-    call = await callTool(principal, name, args)
+    call = await callTool(principal, name, args, { hourlyLimit: policy.rateLimitPerHour })
   } catch (err) {
     if (err instanceof ToolAccessError) return { ok: false, mode: 'error', error: err.message }
     throw err

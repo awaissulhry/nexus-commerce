@@ -170,8 +170,14 @@ export async function setToolPolicy(
       }
     data.requiresApproval = patch.requiresApproval
   }
-  if (patch.rateLimitPerHour !== undefined)
-    data.rateLimitPerHour = patch.rateLimitPerHour
+  if (patch.rateLimitPerHour !== undefined) {
+    // MCP.2 — enforced now (tool-rate.ts), so it must be a count: null for
+    // no limit, or a whole number of calls per hour.
+    const limit = patch.rateLimitPerHour
+    if (limit !== null && !(Number.isInteger(limit) && limit >= 0))
+      return { ok: false, error: 'rateLimitPerHour must be null or a whole number of 0 or more' }
+    data.rateLimitPerHour = limit
+  }
   if (patch.dailyBudgetUSD !== undefined)
     data.dailyBudgetUSD = patch.dailyBudgetUSD
   if (patch.updatedBy !== undefined) data.updatedBy = patch.updatedBy
