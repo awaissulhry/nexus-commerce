@@ -20,7 +20,7 @@ import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { logUsage } from '../ai/usage-logger.service.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { runToolLoop } from './tool-loop.service.js'
-import { callTool, ToolAccessError, type UserPrincipal } from './call-tool.js'
+import { callTool, runOrigin, ToolAccessError, type UserPrincipal } from './call-tool.js'
 
 const FEATURE = 'products-copilot'
 
@@ -119,6 +119,7 @@ export async function runAgent(inp: RunAgentInput): Promise<RunAgentOutput> {
       entityId: inp.entityId ?? null,
       input: { input: inp.input } as Prisma.InputJsonValue,
       userId: inp.principal.userId,
+      ...runOrigin(inp.principal),
     },
   })
 
@@ -328,6 +329,7 @@ export async function runChat(inp: ChatInput): Promise<ChatOutput> {
         pageContext: pc ?? null,
       } as Prisma.InputJsonValue,
       userId: inp.principal.userId,
+      ...runOrigin(inp.principal),
     },
   })
 
