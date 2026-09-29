@@ -1,0 +1,222 @@
+# Roll production back to the images of an earlier commit — docs/ci-fast-deploys/PLAN-2026-09-29.md §5.
+#
+#   gh workflow run rollback.yml -f sha=<commit>
+#
+# The commit must be on main and must have both images (ghcr.io/<owner>/nexus-api:<sha> and nexus-web:<sha>): Deploy
+# API builds them for every release. Only the services named in the repository variable RAILWAY_IMAGE_SERVICES move;
+# the job summary names the ones left alone. Order, as in a release: the API (Railway SUCCESS, then readiness reports
+# that commit), then the worker, scheduler and web side by side, then the web's production smoke.
+#
+# Migrations do NOT roll back: the old code runs on today's schema. That is safe only when every migration since that
+# commit is additive. The next Deploy API run ships every service again (its `changes` job sees this run), so nothing
+# stays on the old commit once main moves on. Runbook: tasks/architecture-operations.md.
+#
+# Shares the `deploy-api` concurrency group: a rollback waits for a running release and a release for a running
+# rollback. GitHub keeps one PENDING run per group, so a push that lands while this run waits cancels it (and this run
+# cancels a release still waiting). Run it again after that release.
+
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit on main to go back to (full SHA, or a prefix of at least 7 characters)
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the commit and its images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+      api: ${{ steps.mode.outputs.api }}
+      web: ${{ steps.mode.outputs.web }}
+      background: ${{ steps.mode.outputs.background }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      # The images are tagged with the full SHA, so a short one is resolved here, in the full history. A prefix that
+      # names two commits fails. Only a commit on main: nothing else went through a release's checks.
+      - name: Which commit
+        id: commit
+        env:
+          INPUT: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main || { echo "✗ run this from main (gh workflow run rollback.yml -f sha=…)"; exit 1; }
+          input=$(tr '[:upper:]' '[:lower:]' <<< "$INPUT")
+          [[ "$input" =~ ^[0-9a-f]{7,40}$ ]] || { echo "✗ \"$INPUT\" is not a commit SHA (7 to 40 hex characters)"; exit 1; }
+          sha=$(git rev-parse --verify --quiet "$input^{commit}") || { echo "✗ no single commit starts with $input"; exit 1; }
+          git merge-base --is-ancestor "$sha" origin/main || { echo "✗ $sha is not on main"; exit 1; }
+          echo "Rolling back to $sha: $(git log -1 --format='%s (%cs)' "$sha")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # packages: read, so this also works while a package is private.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Both images exist
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -uo pipefail
+          missing=0
+          for name in nexus-api nexus-web; do
+            image="ghcr.io/$OWNER/$name:$SHA"
+            if docker manifest inspect "$image" > /dev/null; then echo "✓ $image"; else echo "✗ $image does not exist"; missing=1; fi
+          done
+          test "$missing" = 0 || { echo "✗ Deploy API built no images for this commit: pick one it released (its run has an Images job)"; exit 1; }
+
+      - name: Which services move (RAILWAY_IMAGE_SERVICES)
+        id: mode
+        env:
+          RAILWAY_IMAGE_SERVICES: ${{ vars.RAILWAY_IMAGE_SERVICES }}
+        run: |
+          set -euo pipefail
+          scripts/ci/image-services.sh > "$RUNNER_TEMP/mode"
+          cat "$RUNNER_TEMP/mode" >> "$GITHUB_OUTPUT"
+          # shellcheck source=/dev/null
+          . "$RUNNER_TEMP/mode"
+          background=$(jq -cn --arg w "$worker" --arg s "$scheduler" '[if $w == "true" then "worker" else empty end, if $s == "true" then "scheduler" else empty end]')
+          echo "background=$background" >> "$GITHUB_OUTPUT"
+          if [ "$api$worker$scheduler$web" = falsefalsefalsefalse ]; then
+            echo "✗ RAILWAY_IMAGE_SERVICES names no service, so nothing deploys by image and nothing can move here. Use Railway's Rollback button on a deployment."
+            exit 1
+          fi
+
+      - name: Summary
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+          API: ${{ steps.mode.outputs.api }}
+          WORKER: ${{ steps.mode.outputs.worker }}
+          SCHEDULER: ${{ steps.mode.outputs.scheduler }}
+          WEB: ${{ steps.mode.outputs.web }}
+        run: |
+          set -euo pipefail
+          moves='' stays=''
+          for pair in "api:$API" "worker:$WORKER" "scheduler:$SCHEDULER" "web:$WEB"; do
+            if [ "${pair#*:}" = true ]; then moves+=" ${pair%%:*}"; else stays+=" ${pair%%:*}"; fi
+          done
+          migrations=$(git diff --name-only --diff-filter=A "$SHA" origin/main -- packages/database/prisma/migrations |
+            cut -d/ -f5 | sort -u | sed 's/^/- /')
+          {
+            echo "## Rollback to \`${SHA:0:8}\`"
+            echo
+            git log -1 --format='%s (%cs)' "$SHA"
+            echo
+            echo "**Migrations do NOT roll back.** The old code runs on today's schema. That is safe only when every migration since this commit is additive."
+            echo
+            echo "Migrations added to main since this commit: ${migrations:+$'\n'}${migrations:-none}"
+            echo
+            echo "- Moves to \`${SHA:0:8}\`:${moves:- none}"
+            echo "- Left alone (not in RAILWAY_IMAGE_SERVICES, still on their current build):${stays:- none}"
+            echo
+            echo "The next Deploy API run ships every service again."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  api:
+    needs: check
+    if: needs.check.outputs.api == 'true'
+    name: Roll the API back
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI (pinned)
+        run: npm install -g @railway/cli@5.30.1
+      - name: Deploy the API image of that commit
+        id: image
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-api:${{ needs.check.outputs.sha }}
+        run: scripts/ci/railway-deploy-image.sh --service "$API_SERVICE" --image "$IMAGE"
+      # The image carries its commit in apps/api/.release-sha; readiness reports its first 8 characters.
+      - name: Readiness reports that commit
+        env:
+          SHA: ${{ needs.check.outputs.sha }}
+        run: |
+          set -euo pipefail
+          expected="${SHA:0:8}"
+          for _ in $(seq 1 24); do
+            body=$(curl --max-time 10 -fsS "https://nexusapi-production-b7bb.up.railway.app/api/health/ready") || body='{}'
+            if jq -e --arg build "$expected" '.status == "healthy" and .build == $build' <<< "$body" >/dev/null; then
+              echo "✓ Railway is serving $expected"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "✗ readiness did not report $expected within 2 minutes of Railway's SUCCESS"
+          exit 1
+
+  # After the API, as in a release. When the API is not in RAILWAY_IMAGE_SERVICES its job is skipped and these go
+  # first; when it failed they do not run. !cancelled(), not always(): a cancelled rollback must stop.
+  background:
+    needs: [check, api]
+    if: >-
+      !cancelled() && needs.check.result == 'success' && needs.check.outputs.background != '[]' &&
+      (needs.api.result == 'success' || needs.api.result == 'skipped')
+    name: Roll ${{ matrix.role }} back
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        role: ${{ fromJSON(needs.check.outputs.background) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI (pinned)
+        run: npm install -g @railway/cli@5.30.1
+      - name: Deploy the API image of that commit
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-api:${{ needs.check.outputs.sha }}
+        run: scripts/ci/railway-deploy-image.sh --service "$SERVICE" --image "$IMAGE"
+
+  web:
+    needs: [check, api]
+    if: >-
+      !cancelled() && needs.check.result == 'success' && needs.check.outputs.web == 'true' &&
+      (needs.api.result == 'success' || needs.api.result == 'skipped')
+    name: Roll the web back
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI (pinned)
+        run: npm install -g @railway/cli@5.30.1
+      - name: Deploy the web image of that commit
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-web:${{ needs.check.outputs.sha }}
+        run: scripts/ci/railway-deploy-image.sh --service "$WEB_SERVICE" --image "$IMAGE"
+
+  smoke-web:
+    needs: web
+    if: ${{ !cancelled() && needs.web.result == 'success' }}
+    name: Web production smoke
+    uses: ./.github/workflows/prod-smoke.yml
+    with:
+      url: ${{ vars.NEXUS_WEB_URL }}
