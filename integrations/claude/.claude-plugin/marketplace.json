@@ -1,0 +1,21 @@
+{
+  "name": "nexus-commerce",
+  "description": "Nexus Commerce for Claude: the Nexus connector and skills that use it.",
+  "owner": {
+    "name": "Nexus Commerce"
+  },
+  "plugins": [
+    {
+      "name": "nexus",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/awaissulhry/nexus-commerce.git",
+        "path": "integrations/claude/nexus",
+        "ref": "main"
+      },
+      "description": "Connects Claude to Nexus Commerce and adds three skills: a weekly channel health check, fixing listing issues, and a bulk reprice. Every change Claude asks for waits for a person's approval in Nexus.",
+      "category": "commerce",
+      "tags": ["nexus", "ecommerce", "listings", "pricing", "mcp"]
+    }
+  ]
+}

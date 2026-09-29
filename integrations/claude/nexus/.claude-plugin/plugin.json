@@ -1,0 +1,12 @@
+{
+  "name": "nexus",
+  "displayName": "Nexus Commerce",
+  "version": "0.1.0",
+  "description": "Connects Claude to Nexus Commerce (catalog, listings, stock, orders, prices) for one business, and adds three skills: a weekly channel health check, fixing listing issues, and a bulk reprice. Claude reads and can ask for changes; every change waits for a person's approval in Nexus.",
+  "author": {
+    "name": "Nexus Commerce"
+  },
+  "homepage": "https://github.com/awaissulhry/nexus-commerce/tree/main/integrations/claude",
+  "repository": "https://github.com/awaissulhry/nexus-commerce",
+  "keywords": ["nexus", "ecommerce", "amazon", "ebay", "shopify", "etsy", "listings", "mcp"]
+}
