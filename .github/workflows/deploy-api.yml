@@ -16,6 +16,10 @@
 # Optional secret:
 #   RAILWAY_SERVICE — Railway service ID for the API. Omit if the
 #                     project has exactly one service.
+#
+# The web app (apps/web) ships from here too, since 2026-09-29 (it left Vercel): job `deploy-web`, after the API
+# serves the same commit, then `smoke-web`. It needs the secret RAILWAY_WEB_SERVICE (the `nexus-web` service ID)
+# and the repository variable NEXUS_WEB_URL (its public address). The `changes` job ships only what changed.
 
 name: Deploy API
 
@@ -29,8 +33,11 @@ on:
       - 'packages/events/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'patches/**'
+      - 'apps/web/**'
       - '.github/workflows/deploy-api.yml'
       - '.github/workflows/ci.yml'
+      - '.github/workflows/prod-smoke.yml'
   workflow_dispatch:
 
 concurrency:
@@ -38,6 +45,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Which services this push changes. A hand run (workflow_dispatch) ships all of them; so does a push whose
+  # previous commit cannot be read.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.diff.outputs.api }}
+      web: ${{ steps.diff.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          api=true web=true
+          if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] &&
+             git fetch --no-tags --depth=1 origin "$BEFORE" 2>/dev/null; then
+            files=$(git diff --name-only "$BEFORE" "$GITHUB_SHA")
+            printf '%s\n' "$files"
+            shared='package(-lock)?\.json$|patches/|\.github/workflows/(deploy-api|ci)\.yml$'
+            grep -qE "^(apps/api/|packages/(database|shared|events)/|$shared)" <<< "$files" && api=true || api=false
+            grep -qE "^(apps/web/|packages/(database|shared)/|\.github/workflows/prod-smoke\.yml$|$shared)" <<< "$files" && web=true || web=false
+          fi
+          echo "api=$api web=$web"
+          { echo "api=$api"; echo "web=$web"; } >> "$GITHUB_OUTPUT"
+
   # The whole CI (ci.yml) on the exact commit being released. Before 2026-09-26 main deployed without
   # waiting for any check. docs/ci-plan.md §2.4.
   verify:
@@ -46,7 +81,8 @@ jobs:
     secrets: inherit
 
   deploy:
-    needs: verify
+    needs: [changes, verify]
+    if: needs.changes.outputs.api == 'true'
     name: Build + ship to Railway
     runs-on: ubuntu-latest
     timeout-minutes: 40  # railway up (~11 min measured) + up to 12 min for pre-deploy and healthcheck
@@ -166,3 +202,59 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
         run: scripts/ci/railway-up.sh --service "$SERVICE" --ci --message "${{ matrix.role }} GitHub ${{ github.sha }}"
+
+  # The web ships after the API serves the same commit (its pages may call new API routes), or alone when only the web
+  # changed. `railway up` returns when the build ends; Railway then waits for /login to answer before it switches
+  # traffic, so this waits for the deployment itself to report SUCCESS.
+  deploy-web:
+    needs: [changes, verify, deploy]
+    if: >-
+      always() && needs.verify.result == 'success' && needs.changes.outputs.web == 'true' &&
+      (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
+    name: Build + ship the web to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require the web service
+        env:
+          WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
+        run: test -n "$WEB_SERVICE" || { echo "Set the RAILWAY_WEB_SERVICE secret to the nexus-web service ID."; exit 1; }
+
+      - name: Install Railway CLI (pinned)
+        run: npm install -g @railway/cli@5.30.1
+
+      - name: Trigger Railway deploy
+        id: up
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: scripts/ci/railway-up.sh --service "${{ secrets.RAILWAY_WEB_SERVICE }}" --ci --message "web GitHub ${{ github.sha }}"
+
+      - name: Wait until Railway serves the new web build
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
+          DEPLOYMENT_ID: ${{ steps.up.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_ID" || { echo "✗ railway up printed no deployment id"; exit 1; }
+          for _ in $(seq 1 144); do
+            status=$(railway service status --service "$WEB_SERVICE" --json 2>/dev/null || echo '{}')
+            state=$(jq -r --arg id "$DEPLOYMENT_ID" 'if .deploymentId == $id then .status else "WAITING" end' <<< "$status")
+            case "$state" in
+              SUCCESS) echo "✓ Railway serves web deployment $DEPLOYMENT_ID"; exit 0 ;;
+              FAILED|CRASHED|REMOVED) echo "✗ Railway reports web deployment $DEPLOYMENT_ID as $state — the previous build keeps serving"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "✗ Railway did not serve web deployment $DEPLOYMENT_ID within 12 minutes"
+          exit 1
+
+  smoke-web:
+    needs: deploy-web
+    name: Web production smoke
+    uses: ./.github/workflows/prod-smoke.yml
+    with:
+      url: ${{ vars.NEXUS_WEB_URL }}

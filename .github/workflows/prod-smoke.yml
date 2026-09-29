@@ -1,17 +1,22 @@
 # Production smoke for the web app — docs/ci-plan.md §2.4 (Tier D).
 #
-# Runs when Vercel reports a successful PRODUCTION deployment, or by hand. Read-only: the sign-in page,
+# Runs after deploy-api.yml ships the web to Railway (job `smoke-web`), or by hand. Read-only: the sign-in page,
 # the web proxy's view of API health, and the page's own static assets. Nothing signs in or writes.
-# The API's own post-deploy checks live in deploy-api.yml.
+# The API's own post-deploy checks live in deploy-api.yml. Before 2026-09-29 it ran on Vercel's deployment_status.
 
 name: Production smoke
 
 on:
-  deployment_status:
+  workflow_call:
+    inputs:
+      url:
+        description: Production web URL
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       url:
-        description: Production deployment URL (https://….vercel.app)
+        description: Production web URL (https://….up.railway.app)
         required: true
 
 permissions:
@@ -20,15 +25,10 @@ permissions:
 jobs:
   web:
     name: Web production smoke (read-only)
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'Production')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.deployment.sha || github.sha }}
       - uses: ./.github/actions/setup
       - name: Playwright browser
         id: browsers
@@ -43,6 +43,6 @@ jobs:
       - name: '@prod checks'
         working-directory: apps/web
         env:
-          PROD_BASE_URL: ${{ github.event.deployment_status.environment_url || inputs.url }}
+          PROD_BASE_URL: ${{ inputs.url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npx playwright test -c smoke/prod.config.ts
