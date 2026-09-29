@@ -101,16 +101,29 @@ export interface ShopifyFieldDefinition {
   id: string; name: string; description: string | null; namespace: string; key: string; ownerType: string; type: string
   validations: { name: string; value: string }[]; access: { admin: string | null; storefront: string | null }
   required?: boolean; readOnlyReason?: string | null
-  constraints?: { key: string | null; values: string[] } | null
+  /**
+   * `values`: the categories the definition applies to. A category field can list thousands (Color: ~11,000), so Nexus
+   * reads one page; `complete: false` then marks `values` as that page plus the categories Nexus asked Shopify about
+   * one by one (`checked`) that the definition applies to. Absent `complete` = the whole list (older stored copies).
+   */
+  constraints?: { key: string | null; values: string[]; complete?: boolean; checked?: string[] } | null
 }
-/** Shopify currently constrains product definitions by exact taxonomy category subtype. */
+/** A taxonomy category as Shopify lists it inside a constraint (`aa-1`), whatever form it arrives in. */
+export const shopifyCategoryCode = (category: string) => category.replace('gid://shopify/TaxonomyCategory/', '')
+/**
+ * Shopify currently constrains product definitions by exact taxonomy category subtype. With a partial list, a category
+ * Nexus did not ask about is not refused here: Shopify's own check before every write decides it
+ * (`verifyFieldApplicability`).
+ */
 export function shopifyDefinitionApplicability(definition: ShopifyFieldDefinition, category: string | null | undefined): string | null {
   const constraints = definition.constraints
   if (!constraints?.key) return null
   if (constraints.key !== 'category') return `This definition uses a ${constraints.key} applicability rule that needs a Nexus adapter update. Its value is preserved.`
   if (!category) return 'Choose and synchronize a Shopify product category before editing this category-specific field.'
-  const code = category.replace('gid://shopify/TaxonomyCategory/', '')
-  return constraints.values.some(value => value.replace('gid://shopify/TaxonomyCategory/', '') === code) ? null : 'This field does not apply to the selected Shopify product category. Its existing value is preserved.'
+  const code = shopifyCategoryCode(category)
+  if (constraints.values.some(value => shopifyCategoryCode(value) === code)) return null
+  if (constraints.complete === false && !constraints.checked?.some(value => shopifyCategoryCode(value) === code)) return null
+  return 'This field does not apply to the selected Shopify product category. Its existing value is preserved.'
 }
 export interface ShopifyMetaobjectDefinition {
   id: string; name: string; type: string; description: string | null

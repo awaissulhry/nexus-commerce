@@ -87,9 +87,35 @@ async function storeSchema(accountId: string, value: ShopifyStoreSchema): Promis
   }
 }
 
+/** Tests with a mocked store keep the categories in memory too (see `memoryRows`). */
+const memoryCategories = new WorkspaceCache<string, string[]>()
+export function rememberShopifyStoreCategoriesInMemory(accountId: string, categories: string[]) { memoryCategories.set(accountId, categories) }
+
+/**
+ * The Shopify categories this store's Nexus products use: the Shopify category mappings and each listing's own category.
+ * The schema answers category-field questions exactly for these (`readLinkedStoreSchema`); any other category is left to
+ * Shopify's check before a write. A failed read never fails the schema read: it only makes the answers less exact.
+ */
+async function storeCategoriesInUse(accountId: string): Promise<string[]> {
+  if (rowsInMemory()) return memoryCategories.get(accountId) ?? []
+  try {
+    const { default: prisma } = await import('../../../db.js')
+    const [mappings, listings] = await Promise.all([
+      prisma.categoryChannelMapping.findMany({ where: { channel: 'SHOPIFY' }, select: { channelCategoryId: true }, distinct: ['channelCategoryId'] }),
+      prisma.$queryRaw<{ category: string }[]>`SELECT DISTINCT "platformAttributes"->>'category' AS category FROM "ChannelListing"
+        WHERE "channel" = 'SHOPIFY' AND "channelConnectionId" = ${accountId} AND jsonb_typeof("platformAttributes"->'category') = 'string'`,
+    ])
+    return [...new Set([...mappings.map(m => m.channelCategoryId), ...listings.map(l => l.category)].filter(Boolean))]
+  } catch (error) {
+    console.warn('[shopify-schema] the store\'s categories could not be read:', error instanceof Error ? error.message : error)
+    return []
+  }
+}
+
 function fetchSchema(accountId: string, entry: Entry): Promise<ShopifyStoreSchema> {
   const sequence = ++entry.sequence, generation = entry.generation
-  const pending = shopifyAdmin(accountId).then(({ graphql }) => readLinkedStoreSchema(graphql)).then(value => {
+  const categories = storeCategoriesInUse(accountId)
+  const pending = shopifyAdmin(accountId).then(async ({ graphql }) => readLinkedStoreSchema(graphql, { categories: await categories })).then(value => {
     // A slower, older read never replaces a newer answer.
     if (sequence > entry.applied) {
       entry.value = value; entry.applied = sequence

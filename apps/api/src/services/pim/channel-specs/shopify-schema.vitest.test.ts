@@ -3,7 +3,7 @@ import { withWorkspace } from '../../../lib/workspace-context.js'
 const mocks = vi.hoisted(() => ({ admin: vi.fn(), read: vi.fn(), invalidateConstraints: vi.fn() }))
 vi.mock('../../shopify/admin-client.js', () => ({ shopifyAdmin: mocks.admin }))
 vi.mock('../../shopify/linked-products-gateway.js', () => ({ readLinkedStoreSchema: mocks.read, invalidateShopifyDefinitionConstraints: mocks.invalidateConstraints }))
-import { forgetShopifyMappingSchemasInProcess, invalidateShopifyMappingSchema, readShopifyMappingSchema, loadShopifyProductSpec } from './shopify.js'
+import { forgetShopifyMappingSchemasInProcess, invalidateShopifyMappingSchema, readShopifyMappingSchema, loadShopifyProductSpec, rememberShopifyStoreCategoriesInMemory } from './shopify.js'
 import { withCachedSchemas } from '../cached-schema-context.js'
 const schema = (revision: string) => ({ revision, definitions: [], metaobjectDefinitions: [], types: [], locales: [] })
 const scoped = <T>(id: string, work: () => T) => withWorkspace({ workspaceId: id, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -47,9 +47,17 @@ describe('Shopify mapping schema lifecycle', () => {
     let fail!: (error: Error) => void
     mocks.read.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
     const next = readShopifyMappingSchema('a', true)
+    await vi.waitFor(() => expect(fail).toBeTypeOf('function')) // the new read has started
     expect((await withCachedSchemas(() => readShopifyMappingSchema('a'))).revision).toBe('a')
     fail(new Error('Shopify unavailable')); await expect(next).rejects.toThrow('Shopify unavailable')
     expect((await withCachedSchemas(() => readShopifyMappingSchema('a'))).revision).toBe('a')
+  })
+  it('asks for exact category-field answers on the store\'s categories in use', async () => {
+    rememberShopifyStoreCategoriesInMemory('a', ['gid://shopify/TaxonomyCategory/aa-1', 'gid://shopify/TaxonomyCategory/aa-1-10-2'])
+    await readShopifyMappingSchema('a', true)
+    expect(mocks.read).toHaveBeenLastCalledWith('a', { categories: ['gid://shopify/TaxonomyCategory/aa-1', 'gid://shopify/TaxonomyCategory/aa-1-10-2'] })
+    await readShopifyMappingSchema('b', true)
+    expect(mocks.read).toHaveBeenLastCalledWith('b', { categories: [] })
   })
   it('propagates errors and recovers instead of caching an empty catalogue', async () => {
     mocks.read.mockRejectedValueOnce(new Error('Shopify unavailable'))

@@ -1,11 +1,16 @@
 import type { ShopifyFieldDefinition, ShopifyFieldOwner, ShopifyFieldSnapshot, ShopifyLinkedMember, ShopifyReference, ShopifyReferencePage, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { shopifyGid, shopifyProductGid } from '@nexus/shared/shopify-linked-products'
+import { shopifyCategoryCode, shopifyGid, shopifyProductGid } from '@nexus/shared/shopify-linked-products'
 import { createHash } from 'node:crypto'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import type { ShopifyGraphql } from './admin-client.js'
 import { WorkspaceCache } from '../../lib/workspace-cache.js'
-const constraintPages = new WorkspaceCache<string, { fingerprint: string; expires: number; values: Promise<string[]> }>()
-export function invalidateShopifyDefinitionConstraints() { constraintPages.clear() }
+/** Per store and category: the category-limited definitions that apply there. A day old at most; cleared whenever a
+ *  definition changes (the definition webhooks, a switch-on). Writes never use it: they ask Shopify again. */
+const applicableByCategory = new WorkspaceCache<string, { expires: number; ids: Promise<Set<string>> }>()
+const APPLICABLE_CACHE_MS = 24 * 60 * 60 * 1000
+export function invalidateShopifyDefinitionConstraints() { applicableByCategory.clear() }
+/** The most categories one schema read asks about; the rest are left to Shopify's check before a write. */
+export const SHOPIFY_SCHEMA_CATEGORY_LIMIT = 100
 
 export const linkedDigest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const pageInfo = 'pageInfo { hasNextPage endCursor }'
@@ -51,7 +56,25 @@ function accessReason(namespace: string, access: { admin?: string | null } | nul
 function fieldDefinition(raw: any): ShopifyFieldDefinition {
   return { ...raw, type: raw.type.name, access: raw.access ?? { admin: null, storefront: null }, readOnlyReason: accessReason(raw.namespace, raw.access) }
 }
-export async function readLinkedStoreSchema(gql: ShopifyGraphql): Promise<ShopifyStoreSchema> {
+/** A category's applicable definitions, cached per store (`shopId`) — for display only; see `applicableByCategory`. */
+function cachedApplicableDefinitions(gql: ShopifyGraphql, shopId: string | undefined, category: string): Promise<Set<string>> {
+  if (!shopId) return readApplicableShopifyDefinitions(gql, category)
+  const key = `${shopId}:${category}`, cached = applicableByCategory.get(key)
+  if (cached && cached.expires > Date.now()) return cached.ids
+  const ids = readApplicableShopifyDefinitions(gql, category)
+  if (applicableByCategory.size >= 5000) applicableByCategory.delete(applicableByCategory.keys().next().value!)
+  applicableByCategory.set(key, { expires: Date.now() + APPLICABLE_CACHE_MS, ids })
+  ids.catch(() => { if (applicableByCategory.get(key)?.ids === ids) applicableByCategory.delete(key) })
+  return ids
+}
+
+/**
+ * The store's field list. `categories`: the Shopify categories the caller needs exact category-field answers for (the
+ * store's categories in use). A category-limited definition keeps only the first page of its category list: Color alone
+ * lists ~11,000, and paging them all made every fresh read slow. Instead, one read per requested category (cached a day)
+ * says which of those definitions apply there.
+ */
+export async function readLinkedStoreSchema(gql: ShopifyGraphql, options: { categories?: readonly string[] } = {}): Promise<ShopifyStoreSchema> {
   // Independent reads run together. In sequence a cold read measured 34 s on production (2026-09-24),
   // past the web proxy's ~30 s limit. The handler below only marks the promise handled; it is awaited later.
   const entriesRead = collectShopifyPages<any>(async after => (await gql(`query NexusLinkedEntryDefinitions($after:String) { metaobjectDefinitions(first:100,after:$after) { nodes { ${metaDefinitionSelection} } ${pageInfo} } }`, { after })).metaobjectDefinitions)
@@ -74,24 +97,24 @@ export async function readLinkedStoreSchema(gql: ShopifyGraphql): Promise<Shopif
     const rows = await collectShopifyPages<any>(async after => (await gql(`query NexusLinkedDefinitions($ownerType:MetafieldOwnerType!,$after:String) { metafieldDefinitions(ownerType:$ownerType,first:100,after:$after) { nodes { ${definitionSelection} } ${pageInfo} } }`, { ownerType, after })).metafieldDefinitions)
     for (const row of rows) {
       if (row.constraints) {
-        const initial = row.constraints.values
-        const cacheKey = settings.shop?.id ? `${settings.shop.id}:${row.id}` : null
-        const fingerprint = linkedDigest(row), cached = cacheKey ? constraintPages.get(cacheKey) : null
-        const values = cached && cached.fingerprint === fingerprint && cached.expires > Date.now() ? cached.values : collectShopifyPages<{ value: string }>(async after => {
-          if (!after) return initial
-          const data = await gql(`query NexusLinkedDefinitionConstraints($id:ID!,$after:String) { node(id:$id) { ... on MetafieldDefinition { constraints { values(first:250,after:$after) { nodes { value } ${pageInfo} } } } } }`, { id: row.id, after })
-          return data.node?.constraints?.values
-        }).then(values => values.map(v => v.value).sort())
-        if (cacheKey) {
-          if (constraintPages.size >= 1000) constraintPages.delete(constraintPages.keys().next().value!)
-          constraintPages.set(cacheKey, { fingerprint, expires: cached?.values === values ? cached.expires : Date.now() + 300_000, values })
-        }
-        try { row.constraints = { key: row.constraints.key, values: await values } }
-        catch (error) { if(cacheKey && constraintPages.get(cacheKey)?.values === values) constraintPages.delete(cacheKey); throw error }
+        const page = row.constraints.values as Page<{ value: string }> | null
+        row.constraints = { key: row.constraints.key, values: (page?.nodes ?? []).map(v => v.value).sort(), ...(page?.pageInfo?.hasNextPage ? { complete: false } : {}) }
       }
       definitions.push(fieldDefinition(row))
     }
   }))
+  // Exact answers for the requested categories, only where a list is partial. Product definitions only: Shopify limits
+  // product fields by category.
+  const partial = definitions.filter(d => d.ownerType === 'PRODUCT' && d.constraints?.key === 'category' && d.constraints.complete === false)
+  const categories = [...new Set((options.categories ?? []).map(shopifyCategoryCode).filter(Boolean))].sort().slice(0, SHOPIFY_SCHEMA_CATEGORY_LIMIT)
+  if (partial.length && categories.length) {
+    const answers: Set<string>[] = []
+    for (let i = 0; i < categories.length; i += 8) answers.push(...await Promise.all(categories.slice(i, i + 8).map(code => cachedApplicableDefinitions(gql, settings.shop?.id, `gid://shopify/TaxonomyCategory/${code}`))))
+    for (const definition of partial) {
+      const applies = categories.filter((_, i) => answers[i].has(definition.id))
+      definition.constraints = { ...definition.constraints!, values: [...new Set([...definition.constraints!.values, ...applies])].sort(), checked: categories }
+    }
+  }
   const entries = await entriesRead
   const metaobjectDefinitions = entries.map(raw => ({ id: raw.id, name: raw.name, type: raw.type, description: raw.description, access: raw.access, publishable: raw.capabilities?.publishable?.enabled ?? false,
     fields: raw.fieldDefinitions.map((f: any) => fieldDefinition({ ...f, id: `${raw.id}/${f.key}`, namespace: raw.type, ownerType: 'METAOBJECT', access: raw.access })) }))
