@@ -58,6 +58,7 @@ describe('commandConflict', () => {
     expect(keepsKey(409, { error: 'Wizard is already submitted.' })).toBe(false)
     expect(keepsKey(400, { error: 'productId required' })).toBe(false)
     expect(keepsKey(500, { error: 'boom' })).toBe(false)
+    expect(keepsKey(500, null)).toBe(true) // next start's proxy: plain-text 500, the API may have run it
   })
 
   it('tells the operator what happened and what the next press does', () => {
@@ -184,6 +185,16 @@ describe('sendCommand', () => {
     expect(sent.body).toBeNull()
     expect(sent.conflict).toBeNull()
     expect(slot.pending).toBe('k1') // the proxy answered; the API may still be running it
+  })
+
+  // 2026-09-29 — on Railway, `next start` proxies /backend itself and answers an API reset, outage or proxy timeout
+  // with a plain-text 500. Dropping the key there let a retry run the command twice.
+  it('keeps the key after the web proxy’s own plain-text 500', async () => {
+    stubFetch(new Response('Internal Server Error', { status: 500 }))
+    const slot = new CommandKey(counter())
+    const sent = await sendCommand(slot, 'http://api.test/api/x', init)
+    expect(sent.body).toBeNull()
+    expect(slot.pending).toBe('k1')
   })
 })
 

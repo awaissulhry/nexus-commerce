@@ -12,8 +12,10 @@
  *     has finished or is still running; this attempt did not run. Drop the key, so the next press is
  *     a new command with the operator's current values.
  *   - Any other non-2xx: the server released the key. Drop it.
- *   - No response (network error, abort) or a gateway 502/503/504: the command may have run, or may
- *     still be running, without the page seeing it. Keep the key, so a retry cannot run it twice.
+ *   - No response (network error, abort), a gateway 502/503/504, or a 500 with no JSON body (the web's
+ *     own proxy, `next start`, answers a failed attempt — API reset, down, timed out — with a plain-text
+ *     500; every API error is JSON): the command may have run, or may still be running, without the
+ *     page seeing it. Keep the key, so a retry cannot run it twice.
  *
  * Keys are random, never built from the request's content. A content key (`pim-attach:<parent>:<ids>`)
  * is identical for two deliberate commands, so a corrected retry inside the receipt window was
@@ -49,9 +51,14 @@ export function commandConflict(status: number, body: unknown): CommandConflict 
   return null
 }
 
+/** A 500 the API did not write: `next start`'s proxy failing (plain text, parsed as null). */
+function proxyFailure(status: number, body: unknown): boolean {
+  return status === 500 && (body === null || typeof body !== 'object')
+}
+
 /** Whether the key must survive this response, because a retry could otherwise run the command twice. */
 export function keepsKey(status: number, body: unknown): boolean {
-  return commandConflict(status, body) === 'running' || OUTCOME_UNKNOWN.has(status)
+  return commandConflict(status, body) === 'running' || OUTCOME_UNKNOWN.has(status) || proxyFailure(status, body)
 }
 
 /** What to tell the operator. `what` names the request: "attach request", "publish request". */
