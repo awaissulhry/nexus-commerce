@@ -95,6 +95,11 @@ export function viewAddress(read: MediaRead, view: LayerView) {
   return { layer: 'LISTING' as const, channel: d.channel, marketplace: d.marketplace, accountId: d.accountId, aliasKey: d.alias?.id ?? '' }
 }
 
+/** Names as one list in words: "DE", "DE and IT", "DE, ES, FR, IT and SE". */
+export function wordList(items: readonly string[]): string {
+  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
 /** The Amazon markets of an account with photos of their own, in the account's market order. */
 export function amazonOwnMarkets(read: MediaRead, d: Pick<MediaDestinationRow, 'channel' | 'key' | 'markets'>): string[] {
   if (d.channel !== 'AMAZON') return []
