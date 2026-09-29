@@ -109,14 +109,22 @@ jobs:
           release=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-api.yml/runs?branch=main&status=success&per_page=1" \
             --jq '.workflow_runs[0] // empty | "\(.head_sha) \(.created_at)"' 2>/dev/null) || release=''
           base=${release%% *} released_at=${release#* }
-          # The newest rollback, whatever its result: one that failed half-way may still have moved a service.
-          rollback=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rollback.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0] // empty | "\(.id) \(.created_at)"' 2>/dev/null) || rollback=unreadable
+          # A rollback came after that release when any attempt of it was queued after the release was created.
+          # - Rollback side: run_started_at, the queue time of the latest attempt. A re-run moves it; created_at stays
+          #   (run 36433436446: created 14:06:13, attempt 2 started 14:19:41).
+          # - Release side: created_at. A re-run of its failed jobs reuses the first attempt's `changes` outputs, so the
+          #   release decided what to ship when it was created.
+          # - Runs in the deploy-api group never overlap, so a rollback queued later ran after the release decided.
+          # - Every recent rollback, not the newest only: an older one can be re-run after a newer one.
+          # - Whatever its result: one that failed half-way may still have moved a service.
+          rollback=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rollback.yml/runs?per_page=100" \
+            --jq '[.workflow_runs[] | {id, at: (.run_started_at // .created_at)}] | max_by(.at) // empty | "\(.id) \(.at)"' \
+            2>/dev/null) || rollback=unreadable
           if [ "$EVENT" = push ] && [ -n "$base" ] && git fetch --no-tags --depth=1 origin "$base" 2>/dev/null; then
             if [ "$rollback" = unreadable ]; then
               echo "The rollback runs could not be read: shipping everything."
             elif [ -n "$rollback" ] && [[ "${rollback#* }" > "$released_at" ]]; then
-              echo "Rollback run ${rollback%% *} (${rollback#* }) came after the last successful release ($released_at): shipping everything."
+              echo "Rollback run ${rollback%% *} (attempt queued ${rollback#* }) came after the last successful release ($released_at): shipping everything."
             else
               files=$(git diff --name-only "$base" "$GITHUB_SHA")
               echo "Changed since $base, the last successful release:"
