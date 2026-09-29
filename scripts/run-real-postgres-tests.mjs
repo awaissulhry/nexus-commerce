@@ -185,7 +185,10 @@ try {
       DIRECT_URL: DEAD,
       REDIS_URL: 'redis://127.0.0.1:1',
     },
-    timeout: 600_000,
+    // 15 minutes. At 10 the CI step ran 9 m 41 s – 9 m 58 s on most runs of 2026-09-28 (database start included), so
+    // a slow runner timed out with no test failed: one PR check and one deploy that day. The job's own 20-minute limit
+    // still holds, and a real hang still ends the run.
+    timeout: 900_000,
     maxBuffer: 64 * 1024 * 1024,
   })
   const output = `${run.stdout ?? ''}${run.stderr ?? ''}`
