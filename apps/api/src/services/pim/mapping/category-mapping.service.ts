@@ -22,7 +22,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   4. any other category the product belongs to, by the same rules
  *   5. `Product.productType` for Amazon only — the legacy answer, kept so nothing that works today stops
  *      working, and REPORTED as `source: 'productType'` so the UI never implies a mapping
- *      exists when one does not
+ *      exists when one does not. A variation with none of its own takes its parent's (`fromParent`), as
+ *      steps 0–4 already do: Amazon keeps one product type per family
  *
  * Ancestor inheritance uses `CategoryClosure` (already maintained), so step 3 is one indexed
  * query, not a recursive walk.
@@ -82,6 +83,8 @@ export interface ResolvedCategory {
    * (`resolve-batch`), while this is a fact to show beside a category that still resolved.
    */
   otherMarketConflicts?: string[]
+  /** `productType` only: the variation has no product type of its own, so this is its parent's. */
+  fromParent?: boolean
 }
 
 const EMPTY: ResolvedCategory = {
@@ -149,7 +152,9 @@ export function categorySourceLabel(category: ResolvedCategory): string {
       case 'categoryWildcard': return `Mapped on ${on} for every market`
       case 'ancestorExact': return `Inherited from the mapping on ${on} for this market`
       case 'ancestorWildcard': return `Inherited from the mapping on ${on} for every market`
-      case 'productType': return "The product's own product type (no mapping for this market)"
+      case 'productType': return category.fromParent
+        ? "The parent product's product type (this variation has none of its own; no mapping for this market)"
+        : "The product's own product type (no mapping for this market)"
       case 'none': return category.conflicts?.length ? 'Conflicting shared categories. Choose a primary category.' : 'No category'
       // A new source fails the type check here until it has words of its own.
       default: { const unlabelled: never = category.source; return String(unlabelled) }
@@ -271,7 +276,11 @@ export async function resolveCategoriesForProducts(input: {
     where: { id: { in: productIds } }, select: { id: true, parentId: true, productType: true },
   })
   const membershipIds = [...new Set([...productIds, ...products.map(p => p.parentId).filter((id): id is string => !!id)])]
-  const [memberships, mappings, siblingTypes] = await Promise.all([
+  const amazon = channel.toUpperCase() === 'AMAZON'
+  // Step 5's parent fallback needs the type of a parent that was not asked for (a bulk save names only the edited rows).
+  const typeOf = new Map(products.map(p => [p.id, p.productType]))
+  const typelessParentIds = amazon ? [...new Set(products.filter(p => !p.productType && p.parentId && !typeOf.has(p.parentId)).map(p => p.parentId!))] : []
+  const [memberships, mappings, siblingTypes, typelessParents] = await Promise.all([
     prisma.productCategory.findMany({
       where: { productId: { in: membershipIds } },
       select: { productId: true, categoryId: true, isPrimary: true },
@@ -287,8 +296,10 @@ export async function resolveCategoriesForProducts(input: {
         reviewedAt: true,
       },
     }),
-    channel.toUpperCase() === 'AMAZON' ? amazonTypesInSiblingMarkets(membershipIds, marketplace, input.channelConnectionId) : Promise.resolve(new Map<string, Map<string, Set<string>>>()),
+    amazon ? amazonTypesInSiblingMarkets(membershipIds, marketplace, input.channelConnectionId) : Promise.resolve(new Map<string, Map<string, Set<string>>>()),
+    typelessParentIds.length ? prisma.product.findMany({ where: { id: { in: typelessParentIds } }, select: { id: true, productType: true } }) : Promise.resolve([]),
   ])
+  for (const parent of typelessParents) typeOf.set(parent.id, parent.productType)
 
   const mappedCategoryIds = new Set(mappings.map((m) => m.categoryId))
   const productCategoryIds = [...new Set(memberships.map((m) => m.categoryId))]
@@ -362,8 +373,11 @@ export async function resolveCategoriesForProducts(input: {
     if (resolved) {
       resolved.categoryName = resolved.categoryId ? (names.get(resolved.categoryId) ?? null) : null
       out[p.id] = resolved
-    } else if (channel.toUpperCase() === 'AMAZON' && p.productType) {
+    } else if (amazon && p.productType) {
       out[p.id] = { ...EMPTY, channelCategoryId: p.productType, source: 'productType' }
+    } else if (amazon && p.parentId && typeOf.get(p.parentId)) {
+      // Without it every column of the variation's type is "Not applicable" (REGAL DE, 2026-09-30: 16 rows, 2,816 cells).
+      out[p.id] = { ...EMPTY, channelCategoryId: typeOf.get(p.parentId)!, source: 'productType', fromParent: true }
     } else {
       out[p.id] = { ...EMPTY }
     }
