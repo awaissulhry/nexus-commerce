@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { IMPACT_LINKED_SHOWN_LIMIT, planColourProducts, SHOPIFY_LINKED_LIST_LIMIT, SHOPIFY_VARIANT_LIMIT, type ColourPlanFamily, type ColourPlanVariant } from './shopify-colour-products.js'
+import { IMPACT_LINKED_SHOWN_LIMIT, matchColourProducts, planColourProducts, SHOPIFY_LINKED_LIST_LIMIT, SHOPIFY_VARIANT_LIMIT, type ColourCandidate, type ColourPlanFamily, type ColourPlanVariant } from './shopify-colour-products.js'
 
 // A GALE-shaped family: 2 colours × 10 sizes. Children arrive in SKU order, which is NOT the size order.
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL']
@@ -148,5 +148,76 @@ describe('planColourProducts — one Shopify product per colour', () => {
     expect(codes(planColourProducts(family(IMPACT_LINKED_SHOWN_LIMIT), COLOUR_SPLIT))).toEqual([])
     expect(planColourProducts(family(IMPACT_LINKED_SHOWN_LIMIT + 1), COLOUR_SPLIT).issues).toEqual([expect.objectContaining({ severity: 'warning', code: 'more-than-shown' })])
     expect(planColourProducts(family(SHOPIFY_LINKED_LIST_LIMIT + 1), COLOUR_SPLIT).issues).toEqual([expect.objectContaining({ severity: 'error', code: 'too-many-products' })])
+  })
+})
+
+describe('matchColourProducts — Find: the Shopify product of each colour, the variant of each size', () => {
+  // The live GALE shape: two linked products, 9 sizes each (no XXS), Black with SKUs on 7 variants, Yellow with none.
+  const LIVE_SIZES = SIZES.filter(s => s !== 'XXS')
+  const shopify = (id: string, colourName: string, skuFor: (s: string) => string | null): ColourCandidate => ({ id, title: 'GALE jacket', handle: id, status: 'ACTIVE', colourName,
+    group: ['gid://shopify/Product/black', 'gid://shopify/Product/yellow'],
+    variants: LIVE_SIZES.map(s => ({ id: `${id}/${s}`, sku: skuFor(s), inventoryItemId: `${id}/inv/${s}`, options: [s] })) })
+  const black = shopify('gid://shopify/Product/black', 'Black', s => ['S', '3XL'].includes(s) ? null : `GALE-JACKET-BLACK-MEN-${s}`)
+  const yellow = shopify('gid://shopify/Product/yellow', 'Yellow', () => null)
+  const plan = planColourProducts(gale(), COLOUR_SPLIT)
+
+  it('GALE: Black by its SKUs, Yellow as the one colour and the one product left in the group; XXS missing; SKUs to write', () => {
+    const [nero, giallo] = matchColourProducts(plan, [black, yellow])
+    expect(nero).toMatchObject({ key: 'color:black', shopifyProductId: black.id, method: 'sku', shopifyColourName: 'Black', extra: [], issues: [] })
+    expect(nero.variants).toHaveLength(9)
+    expect(nero.variants.filter(v => v.by === 'options').map(v => v.sku)).toEqual(['GALE-JACKET-BLACK-MEN-S', 'GALE-JACKET-BLACK-MEN-3XL'])
+    expect(nero.skusToWrite).toEqual([{ shopifyVariantId: `${black.id}/S`, sku: 'GALE-JACKET-BLACK-MEN-S' }, { shopifyVariantId: `${black.id}/3XL`, sku: 'GALE-JACKET-BLACK-MEN-3XL' }])
+    expect(nero.missing).toEqual([{ productId: 'p-BLACK-XXS', sku: 'GALE-JACKET-BLACK-MEN-XXS', options: ['XXS'] }])
+    expect(giallo).toMatchObject({ key: 'color:yellow', shopifyProductId: yellow.id, method: 'group', shopifyColourName: 'Yellow', issues: [] })
+    expect(giallo.variants.every(v => v.by === 'options')).toBe(true)
+    expect(giallo.skusToWrite).toHaveLength(9)
+    expect(giallo.missing.map(m => m.sku)).toEqual(['GALE-JACKET-YELLOW-MEN-XXS'])
+    // Every matched variant carries its inventory item: stock sync needs it.
+    expect(nero.variants.find(v => v.sku === 'GALE-JACKET-BLACK-MEN-M')).toMatchObject({ shopifyVariantId: `${black.id}/M`, inventoryItemId: `${black.id}/inv/M`, by: 'sku' })
+  })
+
+  it('an existing link wins; the operator\'s colour name matches a product by its colour', () => {
+    const named = planColourProducts(gale(), { ...COLOUR_SPLIT, colourNames: { 'color:black': 'Black', 'color:yellow': 'Yellow' } })
+    const noSkus = { ...black, variants: black.variants.map(v => ({ ...v, sku: null })) }
+    expect(matchColourProducts(named, [noSkus, yellow]).map(m => [m.key, m.method, m.shopifyProductId])).toEqual([['color:black', 'name', black.id], ['color:yellow', 'name', yellow.id]])
+    expect(matchColourProducts(plan, [noSkus, yellow], { 'color:yellow': black.id }).map(m => [m.method, m.shopifyProductId])).toEqual([['group', yellow.id], ['linked', black.id]])
+  })
+
+  it('nothing to go on: no product, every size missing, no guess', () => {
+    const noSkus = { ...black, variants: black.variants.map(v => ({ ...v, sku: null })), colourName: 'Nero opaco' }
+    const matches = matchColourProducts(plan, [noSkus])
+    expect(matches.map(m => m.shopifyProductId)).toEqual([null, null])
+    expect(matches[0].missing).toHaveLength(10)
+  })
+
+  it('refuses a colour whose SKUs sit in two products, and a product two colours claim', () => {
+    const split = { ...yellow, id: 'gid://shopify/Product/other', variants: [{ id: 'o/1', sku: 'GALE-JACKET-BLACK-MEN-XL', inventoryItemId: null, options: ['XL'] }] }
+    expect(matchColourProducts(plan, [black, split])[0]).toMatchObject({ shopifyProductId: null, issues: [expect.objectContaining({ code: 'sku-spread' })] })
+    const both = { ...black, variants: [...black.variants, { id: 'b/y', sku: 'GALE-JACKET-YELLOW-MEN-M', inventoryItemId: null, options: ['Yellow M'] }] }
+    const claimed = matchColourProducts(plan, [both, yellow])
+    expect(claimed.map(m => [m.shopifyProductId, m.issues.map(i => i.code)])).toEqual([[null, ['product-claimed-twice']], [null, ['product-claimed-twice']]])
+  })
+
+  it('flags a Shopify SKU that differs from Nexus, or belongs to another colour; never counts it as a SKU to write', () => {
+    const differs = { ...black, variants: black.variants.map(v => v.options[0] === 'S' ? { ...v, sku: 'OLD-S' } : v) }
+    const [nero] = matchColourProducts(plan, [differs, yellow])
+    expect(nero.issues).toEqual([expect.objectContaining({ code: 'sku-differs', productIds: ['p-BLACK-S'] })])
+    expect(nero.skusToWrite.map(s => s.sku)).toEqual(['GALE-JACKET-BLACK-MEN-3XL'])
+    // A Black SKU inside the Yellow product: Black's SKUs are then in two products, and that is said first.
+    const mixed = { ...yellow, variants: yellow.variants.map(v => v.options[0] === 'L' ? { ...v, sku: 'GALE-JACKET-BLACK-MEN-XXS' } : v) }
+    expect(matchColourProducts(plan, [black, mixed])[0].issues.map(i => i.code)).toEqual(['sku-spread'])
+    // With both products already linked, the Yellow variant is said to carry another colour's SKU.
+    const giallo = matchColourProducts(plan, [black, mixed], { 'color:black': black.id, 'color:yellow': mixed.id })[1]
+    expect(giallo.issues).toEqual([expect.objectContaining({ code: 'sku-of-another-colour', productIds: ['p-YELLOW-L'] })])
+    expect(giallo.skusToWrite.map(s => s.sku)).not.toContain('GALE-JACKET-YELLOW-MEN-L')
+  })
+
+  it('a colour-only family: each product\'s one "Default Title" variant is its variant', () => {
+    const colourOnly = planColourProducts(gale({ axes: [{ code: 'color', label: 'Colore' }], variants: COLOURS.map(c => ({ productId: `p-${c.sku}`, sku: `CAP-${c.sku}`, values: { color: c.key } })) }), COLOUR_SPLIT)
+    const cap = (id: string, colourName: string): ColourCandidate => ({ id, title: 'Cap', handle: id, status: 'ACTIVE', colourName, group: [], variants: [{ id: `${id}/v`, sku: null, inventoryItemId: null, options: ['Default Title'] }] })
+    const [a, b] = matchColourProducts(planColourProducts(gale({ axes: [{ code: 'color', label: 'Colore' }], variants: COLOURS.map(c => ({ productId: `p-${c.sku}`, sku: `CAP-${c.sku}`, values: { color: c.key } })) }), { ...COLOUR_SPLIT, colourNames: { 'color:black': 'Black', 'color:yellow': 'Yellow' } }), [cap('c/1', 'Black'), cap('c/2', 'Yellow')])
+    expect(colourOnly.products.map(p => p.options)).toEqual([[], []])
+    expect([a.variants[0]?.shopifyVariantId, b.variants[0]?.shopifyVariantId]).toEqual(['c/1/v', 'c/2/v'])
+    expect(a.skusToWrite).toEqual([{ shopifyVariantId: 'c/1/v', sku: 'CAP-BLACK' }])
   })
 })

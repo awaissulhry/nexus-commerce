@@ -4,6 +4,8 @@
 const { tabRedirects, bareIndexRedirect } = require('./src/app/marketing/ads/rules-automation/_shared/rulesTabRoutes.cjs');
 // The browser's /backend API calls as a Vercel external rewrite — no function (see the module's header).
 const { backendRewrites, backendHeaders } = require('./src/lib/workspaces/backendRewrite.cjs');
+// MCP.5 — connecting Claude: the OAuth metadata rewrite and the consent page's headers.
+const { oauthRewrites, oauthHeaders } = require('./src/lib/oauth/oauthRoutes.cjs');
 const path = require('node:path');
 
 /** @type {import('next').NextConfig} */
@@ -45,12 +47,16 @@ const nextConfig = {
     const stub = process.env.NEXT_DEV_STUB_PROXY
     return {
       beforeFiles: backendRewrites(process.env),
-      afterFiles: stub ? [{ source: '/api/:path*', destination: `${stub}/api/:path*` }] : [],
+      // No page lives at /.well-known, so the OAuth metadata rewrite needs no precedence over one.
+      afterFiles: [
+        ...oauthRewrites(process.env),
+        ...(stub ? [{ source: '/api/:path*', destination: `${stub}/api/:path*` }] : []),
+      ],
       fallback: [],
     }
   },
   async headers() {
-    return backendHeaders(process.env)
+    return [...backendHeaders(process.env), ...oauthHeaders()]
   },
   // CI's smoke build (docs/ci-plan.md §3) and the Docker image (apps/web/Dockerfile): the `checks` job already
   // type-checks the app, so these builds skip that step. Unset on Vercel, where next build still type-checks.

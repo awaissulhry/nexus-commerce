@@ -67,6 +67,7 @@ const NO_CHROME_PREFIXES = [
   '/accept-invite',
   '/reset-password',
   '/forgot-password',
+  '/oauth',
 ]
 
 export default function AppShell({

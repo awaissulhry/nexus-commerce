@@ -447,6 +447,8 @@ model Product {
   /// Shared stock — this product (in a borrower business) sells from another business's pool.
   stockPoolLinks    StockPoolLink[]
   stockPoolTasks    StockPoolTask[]
+  /// Shopify colour products of this family (one per value of its split axis, per store).
+  shopifyColourProducts ShopifyColourProduct[]
 
   @@unique([workspaceId, sku], name: "workspace_sku", map: "Product_workspace_sku_key")
   @@index([gtin])
@@ -6930,6 +6932,7 @@ model ChannelConnection {
   // above, which cascades). Disconnecting loses attribution, not history.
   channelListings          ChannelListing[]
   listingAliases           ProductListingAlias[] // PES.5
+  shopifyColourProducts    ShopifyColourProduct[]
   sharedListingMemberships SharedListingMembership[]
   orders                   Order[]
   syncChannelPolicies      SyncChannelPolicy[]
@@ -20255,4 +20258,40 @@ model OAuthToken {
 
   @@index([grantId, kind])
   @@index([expiresAt])
+}
+
+/// Shopify colour products (docs/studies/shopify-linked-variations-PLAN.md §3.4). On a store that shows each value of a
+/// family's split axis (the colour) as its own Shopify product, one row per family, store, market, alias and value. The
+/// row id is that product's identity in Nexus: a renamed colour keeps its row, because `valueKey` names a dictionary
+/// option, not the value's text.
+model ShopifyColourProduct {
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  familyId            String
+  family              Product           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  channelConnectionId String
+  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  marketplace         String            @default("GLOBAL")
+  aliasKey            String            @default("")
+  /// The split axis (dictionary attribute code) and this product's value (`color:black`), as `planColourProducts` keys it.
+  splitAxis           String
+  valueKey            String
+  /// What Shopify shows as the colour (`custom.variation_value`), as the operator named it; null = the Nexus value.
+  colourName          String?
+  /// The Shopify product (GID) once it is found and confirmed, or created.
+  shopifyProductId    String?
+  /// NOT_FOUND (no Shopify product yet) | PROPOSED (Find matched one; not confirmed) | LINKED (confirmed or created).
+  state               String            @default("NOT_FOUND")
+  /// Find's proposal for the operator's review: the matched product, its variants per Nexus child, and what differs.
+  proposal            Json?
+  /// Shopify's product status when last read: ACTIVE | DRAFT | ARCHIVED | UNLISTED.
+  remoteStatus        String?
+  checkedAt           DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([workspaceId, channelConnectionId, marketplace, aliasKey, familyId, valueKey], name: "colour_product")
+  @@unique([workspaceId, channelConnectionId, shopifyProductId], name: "shopify_product")
+  @@index([workspaceId])
+  @@index([familyId])
 }

@@ -101,6 +101,10 @@ export const ENTRIES: Entry[] = [
     p === '/api/auth/password/reset' ||
     p === '/api/auth/invitations/accept' ||
     p === '/api/auth/invitations/accept/preview'),
+  // MCP.5 — OAuth for connecting Claude (routes/oauth.routes.ts). Claude calls the token,
+  // registration and revocation endpoints with no session; the consent routes guard themselves
+  // (session, 2FA, CSRF) like /api/auth/*, and name their business explicitly.
+  P(PUBLIC, (_m, p) => p.startsWith('/api/oauth/')),
   // Owner-gated auth admin (also guarded in S1 by requireOwner):
   P(F.usersManage, (_m, p) => p === '/api/auth/logout-all'),
   RW(F.invitationsManage, F.invitationsManage, pfx('/api/auth/invitations')),
@@ -476,6 +480,12 @@ export const ENTRIES: Entry[] = [
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked$/.test(p)),
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/(collections\/[^/]+\/)?synchronize$/.test(p)),
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/collections(?:\/[^/]+)?$/.test(p)),
+  // Shopify colour products (PR 3): reading the plan is a view; Find reads Shopify and stores proposals (an edit); the
+  // store switch changes how every family of the store publishes, and Confirm writes to Shopify (publish).
+  P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/shopify-colour-products\/settings$/.test(p)),
+  P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/confirm$/.test(p)),
+  P(F.productsEdit, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/find$/.test(p)),
+  P(F.productsView, (m, p) => m === 'GET' && /^\/api\/products\/[^/]+\/shopify-colour-products(?:\/settings)?$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/preview$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/import-source$/.test(p)),
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content$/.test(p)),

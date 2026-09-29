@@ -440,6 +440,12 @@
           "kind": "object",
           "type": "StockPoolTask",
           "relationFromFields": []
+        },
+        {
+          "name": "shopifyColourProducts",
+          "kind": "object",
+          "type": "ShopifyColourProduct",
+          "relationFromFields": []
         }
       ]
     },
@@ -2664,6 +2670,12 @@
           "name": "listingAliases",
           "kind": "object",
           "type": "ProductListingAlias",
+          "relationFromFields": []
+        },
+        {
+          "name": "shopifyColourProducts",
+          "kind": "object",
+          "type": "ShopifyColourProduct",
           "relationFromFields": []
         },
         {
@@ -7341,6 +7353,29 @@
           "type": "OAuthGrant",
           "relationFromFields": [
             "grantId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ShopifyColourProduct",
+      "fields": [
+        {
+          "name": "family",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "familyId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
           ],
           "relationOnDelete": "Cascade"
         }
