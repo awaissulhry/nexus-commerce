@@ -284,6 +284,7 @@ function afterSql(position: CursorPosition | null): Prisma.Sql {
 
 const listingIssues: AgentTool = {
   name: 'listing-issues',
+  title: 'Listing issues',
   input: z.object({
     ...listFilters,
     severity: z.preprocess(lower, z.enum(SEVERITIES)).optional().describe('only issues of this severity'),
@@ -473,6 +474,7 @@ function stockOf(productId: string, ledger: ProductLedger | undefined, pools: Ma
 
 const channelPriceStock: AgentTool = {
   name: 'channel-price-stock',
+  title: 'Channel price and stock',
   input: z.object(listFilters),
   requires: [F.listingsView, F.pricingView, F.inventoryView],
   category: 'listings',
@@ -686,6 +688,7 @@ export const SYNC_SCAN_BUDGET = 1000
 
 const outOfSyncListings: AgentTool = {
   name: 'out-of-sync-listings',
+  title: 'Out-of-sync listings',
   input: z.object({
     ...listFilters,
     reason: z.preprocess(lower, z.enum(OUT_OF_SYNC)).optional()
