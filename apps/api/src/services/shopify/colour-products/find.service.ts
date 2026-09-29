@@ -55,11 +55,11 @@ export async function readColourCandidates(gql: ShopifyGraphql, settings: Pick<C
   return out
 }
 
-type Destination = Awaited<ReturnType<typeof contentDestination>>
-const rowsWhere = (d: Destination) => ({ familyId: d.familyId, channelConnectionId: d.accountId, marketplace: d.marketplace, aliasKey: d.aliasKey ?? '' })
+export type Destination = Awaited<ReturnType<typeof contentDestination>>
+export const rowsWhere = (d: Destination) => ({ familyId: d.familyId, channelConnectionId: d.accountId, marketplace: d.marketplace, aliasKey: d.aliasKey ?? '' })
 
 /** What the sheet and the review show: the plan, the store switch and the rows. No Shopify call. */
-async function colourProductsView(destination: Destination, plan: ColourPlan, settings: Awaited<ReturnType<typeof readColourProductSettings>>) {
+export async function colourProductsView(destination: Destination, plan: ColourPlan, settings: Awaited<ReturnType<typeof readColourProductSettings>>) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination), orderBy: { createdAt: 'asc' } })
   return {
     familyId: destination.familyId, accountId: destination.accountId, settings,
@@ -70,7 +70,7 @@ async function colourProductsView(destination: Destination, plan: ColourPlan, se
   }
 }
 
-async function planFor(destination: Destination) {
+export async function planFor(destination: Destination) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination), select: { valueKey: true, colourName: true, state: true, shopifyProductId: true } })
   const colourNames = Object.fromEntries(rows.filter(r => r.colourName).map(r => [r.valueKey, r.colourName!]))
   const [settings, { plan }] = await Promise.all([readColourProductSettings(destination.accountId), loadColourPlan(destination.familyId, { colourNames })])
@@ -90,18 +90,35 @@ export async function findColourProducts(productId: string, scope: ContentScope,
   const { rows, settings, plan } = await planFor(destination)
   if (plan.mode !== 'colour-products' || !plan.splitAxis) return colourProductsView(destination, plan, settings)
   const { graphql } = await shopifyAdmin(destination.accountId)
-  const linked = Object.fromEntries(rows.filter(r => r.state === 'LINKED' && r.shopifyProductId).map(r => [r.valueKey, r.shopifyProductId!]))
-  const seed = [...new Set([...Object.values(linked), ...(input.sourceProductId ? [input.sourceProductId] : []),
-    ...await productsWithSkus(graphql, plan.products.flatMap(p => p.variants.map(v => v.sku)))])].slice(0, FIND_PRODUCT_LIMIT)
+  const linked = linkedProducts(rows)
+  const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...(input.sourceProductId ? [input.sourceProductId] : [])])
+  const matches = matchColourProducts(plan, candidates, linked)
+  const claimed = await claimedElsewhere(destination, matches.map(m => m.shopifyProductId).filter((id): id is string => !!id))
+  await saveProposals(destination, plan, matches, candidates, claimed)
+  return colourProductsView(destination, plan, settings)
+}
+
+/** Value key → Shopify product, for the colours already confirmed. */
+export const linkedProducts = (rows: ReadonlyArray<{ valueKey: string; state: string; shopifyProductId: string | null }>): Record<string, string> =>
+  Object.fromEntries(rows.filter(r => r.state === 'LINKED' && r.shopifyProductId).map(r => [r.valueKey, r.shopifyProductId!]))
+
+/**
+ * Every Shopify product one colour match weighs: the seeds (linked products, a product the operator names), the products
+ * holding the family's exact SKUs, and every member of their groups. Find and Confirm read the same set, so Confirm
+ * re-runs the match Find proposed.
+ */
+export async function gatherCandidates(graphql: ShopifyGraphql, settings: Pick<ColourProductSettings, 'valueField' | 'listField'>, plan: ColourPlan, seeds: readonly string[]): Promise<ColourCandidate[]> {
+  const seed = [...new Set([...seeds, ...await productsWithSkus(graphql, plan.products.flatMap(p => p.variants.map(v => v.sku)))])].slice(0, FIND_PRODUCT_LIMIT)
   let candidates = await readColourCandidates(graphql, settings, seed)
   const members = [...new Set(candidates.flatMap(c => c.group))].filter(id => !candidates.some(c => c.id === id)).slice(0, Math.max(0, FIND_PRODUCT_LIMIT - candidates.length))
   if (members.length) candidates = [...candidates, ...await readColourCandidates(graphql, settings, members)]
-  const matches = matchColourProducts(plan, candidates, linked)
-  // A Shopify product confirmed for another family can be this family's only after that link is removed.
-  const claimed = await prisma.shopifyColourProduct.findMany({ where: { channelConnectionId: destination.accountId, familyId: { not: destination.familyId }, shopifyProductId: { in: matches.map(m => m.shopifyProductId).filter((id): id is string => !!id) } },
+  return candidates
+}
+
+/** A Shopify product confirmed for another family can be this family's only after that link is removed. */
+export function claimedElsewhere(destination: Destination, shopifyProductIds: readonly string[]) {
+  return prisma.shopifyColourProduct.findMany({ where: { channelConnectionId: destination.accountId, familyId: { not: destination.familyId }, shopifyProductId: { in: [...shopifyProductIds] } },
     select: { shopifyProductId: true, family: { select: { sku: true } } } })
-  await saveProposals(destination, plan, matches, candidates, claimed)
-  return colourProductsView(destination, plan, settings)
 }
 
 async function saveProposals(destination: Destination, plan: ColourPlan, matches: ColourMatch[], candidates: ColourCandidate[], claimed: Array<{ shopifyProductId: string | null; family: { sku: string } }>) {

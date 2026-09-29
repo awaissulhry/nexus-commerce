@@ -81,6 +81,7 @@ describe('permission manifest ordering', () => {
     expect([permissionForRoute('GET', colour), permissionForRoute('GET', `${colour}/settings`)]).toEqual(['products.view', 'products.view'])
     expect(permissionForRoute('POST', `${colour}/find`)).toBe('products.edit')
     expect(permissionForRoute('PUT', `${colour}/settings`)).toBe('products.publish')
+    expect(permissionForRoute('POST', `${colour}/confirm`)).toBe('products.publish')
   })
   /**
    * How specific a rule is FOR THIS PATH: the length of the shortest prefix of
