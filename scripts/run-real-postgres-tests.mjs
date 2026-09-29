@@ -55,16 +55,30 @@
  *      report, so one suite's passes can never cover for another's skips. A suite that skipped measured
  *      nothing: that is a failure here, not a pass.
  *
+ * PARTS (CI, 2026-09-30)
+ *   In one CI job the suites took about 10.5 minutes (median of 15 runs, 2026-09-29): the longest step of every
+ *   deploy. `--part N/M` runs one of M parts, so M jobs run side by side. The split is the API shards' split
+ *   (scripts/ci/api-test-plan.mjs): longest suite first, each to the lightest part, by the times in
+ *   scripts/ci/real-postgres-durations.json.
+ *   The same commit gives the same split on every machine, so the M jobs together run every suite once.
+ *   Before any container starts, the split is checked. A suite in no part or in two, a suite listed twice,
+ *   a suite whose name or expected count changed, or an empty part is REFUSED. Each suite keeps its "expect".
+ *
  *   node scripts/run-real-postgres-tests.mjs                     # production-equivalent owner by default
  *   node scripts/run-real-postgres-tests.mjs --owner production   # as a non-superuser owner, production's rights
  *   node scripts/run-real-postgres-tests.mjs --required           # CI: missing Docker or image FAILS instead of skipping
+ *   node scripts/run-real-postgres-tests.mjs --part 1/2           # CI: one of two parts (see PARTS)
+ *   node scripts/run-real-postgres-tests.mjs --part 1/2 --list    # print that part's files and expected counts; no Docker
+ *   node scripts/run-real-postgres-tests.mjs --write-durations    # after a whole run: average its times into those --part uses
+ *   node scripts/run-real-postgres-tests.mjs --self-test          # the split check refuses planted faults (a static gate)
  *   node scripts/run-real-postgres-tests.mjs --suites '[{"name":"x","file":"src/…","expect":1}]'   # harness use
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { shards } from './ci/api-test-plan.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const API = `${ROOT}/apps/api`
@@ -129,6 +143,89 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'
+const DURATIONS = join(ROOT, 'scripts', 'ci', 'real-postgres-durations.json')
+
+/** Measured wall milliseconds per suite file; used only to balance --part. A suite with no entry counts as 1 s. */
+function measured() {
+  return existsSync(DURATIONS) ? JSON.parse(readFileSync(DURATIONS, 'utf8')).files ?? {} : {}
+}
+
+/** `count` parts of `suites`, balanced by `weights`; each part keeps the SUITES order. */
+function split(suites, count, weights) {
+  return shards(suites.map((suite) => suite.file), count, weights).map((bin) => suites.filter((suite) => bin.files.includes(suite.file)))
+}
+
+/** What is wrong with `parts` as a split of `suites`: every suite must be in exactly one part, unchanged. */
+function checkParts(suites, parts) {
+  const problems = []
+  const same = (a, b) => a.name === b.name && a.file === b.file && a.expect === b.expect
+  for (const [i, suite] of suites.entries()) {
+    if (suites.findIndex((other) => other.file === suite.file) < i) problems.push(`listed twice in SUITES: ${suite.file}`)
+  }
+  for (const [i, part] of parts.entries()) if (part.length === 0) problems.push(`part ${i + 1}/${parts.length} has no suites`)
+  for (const suite of suites) {
+    const where = parts.flatMap((part, i) => part.filter((s) => s.file === suite.file).map(() => i + 1))
+    if (where.length === 0) problems.push(`in no part: ${suite.file}`)
+    if (where.length > 1) problems.push(`in parts ${where.join(' and ')}: ${suite.file}`)
+  }
+  for (const suite of parts.flat()) {
+    const listed = suites.find((s) => s.file === suite.file)
+    if (!listed) problems.push(`in a part but not in SUITES: ${suite.file}`)
+    else if (!same(listed, suite)) problems.push(`name or expected count changed on the way: ${suite.file}`)
+  }
+  return problems
+}
+
+const expected = (suites) => suites.reduce((sum, suite) => sum + suite.expect, 0)
+
+// Proves the check refuses each kind of bad split, on the real list. A static gate (scripts/ci/run-static-gates.mjs).
+if (args.includes('--self-test')) {
+  const weights = measured()
+  const failures = []
+  for (const count of [1, 2, 3, 4]) {
+    const problems = checkParts(SUITES, split(SUITES, count, weights))
+    if (problems.length) failures.push(`the real split into ${count} was refused: ${problems.join('; ')}`)
+  }
+  if (JSON.stringify(split(SUITES, 2, weights)) !== JSON.stringify(split(SUITES, 2, weights))) failures.push('two splits of one list differ')
+  const [one, two] = split(SUITES, 2, weights)
+  const doubled = [...SUITES, SUITES[0]]
+  const planted = {
+    'a suite listed twice': [doubled, [one, two]],
+    'a suite in no part': [SUITES, [one, two.slice(1)]],
+    'a suite in both parts': [SUITES, [one, [...two, one[0]]]],
+    'a changed expected count': [SUITES, [[{ ...one[0], expect: one[0].expect + 1 }, ...one.slice(1)], two]],
+    'a suite not in SUITES': [SUITES, [[...one, { ...one[0], file: `${one[0].file}.planted` }], two]],
+    'an empty part': [SUITES.slice(0, 1), split(SUITES.slice(0, 1), 2, weights)],
+  }
+  for (const [fault, [suites, parts]] of Object.entries(planted)) if (checkParts(suites, parts).length === 0) failures.push(`not refused: ${fault}`)
+  if (failures.length) { console.error(`❌ real-PostgreSQL split self-test:\n${failures.map((f) => `  ${f}`).join('\n')}`); process.exit(1) }
+  console.log(`✓ real-PostgreSQL split self-test: splits into 1–4 parts hold all ${SUITES.length} suites once; ${Object.keys(planted).length} planted faults refused`)
+  process.exit(0)
+}
+
+// Which suites THIS run owns. Checked before Docker, so a bad split fails even where Docker is missing.
+const partArg = args.includes('--part') ? /^(\d+)\/(\d+)$/.exec(flag('--part') ?? '') : null
+const part = partArg ? { index: Number(partArg[1]), count: Number(partArg[2]) } : null
+if (args.includes('--part') && !(part && part.index >= 1 && part.index <= part.count)) {
+  console.error(`❌ --part must look like 1/2, got ${flag('--part') ?? 'nothing'}`)
+  process.exit(1)
+}
+if (args.includes('--write-durations') && (part || flag('--suites'))) {
+  console.error('❌ --write-durations needs a whole run of SUITES (no --part, no --suites): times from a part would change the split the other parts read')
+  process.exit(1)
+}
+const parts = split(SUITES, part?.count ?? 1, measured())
+const problems = checkParts(SUITES, parts)
+if (problems.length) {
+  console.error(`❌ real-PostgreSQL tests REFUSED — the split does not run every suite exactly once:\n${problems.map((p) => `  ${p}`).join('\n')}`)
+  process.exit(1)
+}
+const RUN = parts[(part?.index ?? 1) - 1]
+if (args.includes('--list')) {
+  for (const suite of RUN) console.log(`${suite.file}\t${suite.expect}`)
+  process.exit(0)
+}
+if (part) console.log(`real-PostgreSQL part ${part.index}/${part.count}: ${RUN.length} of ${SUITES.length} suites, ${expected(RUN)} of ${expected(SUITES)} expected passes`)
 
 const docker = (...cmd) => execFileSync('docker', cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 }).trim()
 
@@ -180,7 +277,7 @@ try {
   }
 
   const reportPath = join(reportDir, 'report.json')
-  const run = spawnSync('npx', ['vitest', 'run', ...SUITES.map((suite) => suite.file), '--no-file-parallelism', '--reporter=default', '--reporter=json', `--outputFile.json=${reportPath}`], {
+  const run = spawnSync('npx', ['vitest', 'run', ...RUN.map((suite) => suite.file), '--no-file-parallelism', '--reporter=default', '--reporter=json', `--outputFile.json=${reportPath}`], {
     cwd: API,
     encoding: 'utf8',
     env: {
@@ -200,22 +297,47 @@ try {
   let report = null
   try { report = JSON.parse(readFileSync(reportPath, 'utf8')) } catch { /* judged below as "no report" */ }
 
-  const verdicts = SUITES.map((suite) => {
+  // A suite's wall time: its tests plus the import and setup before them. The suites run one after another, so
+  // this is the time from the previous suite's end to its own; vitest's per-file time leaves out the import and
+  // setup, a third of the run measured 2026-09-30 (186 of 558 s). The time goes in the log and --write-durations.
+  const wall = new Map()
+  let previousEnd = report?.startTime ?? 0
+  for (const result of [...(report?.testResults ?? [])].sort((a, b) => a.startTime - b.startTime)) {
+    wall.set(resolve(result.name), Math.max(0, Math.round(result.endTime - previousEnd)))
+    previousEnd = result.endTime
+  }
+
+  const verdicts = RUN.map((suite) => {
     const file = report?.testResults?.find((result) => resolve(result.name) === resolve(API, suite.file))
     const statuses = file?.assertionResults?.map((test) => test.status) ?? []
     const count = (status) => statuses.filter((s) => s === status).length
     const passed = count('passed'), failed = count('failed'), skipped = statuses.length - passed - failed
     const ok = file?.status === 'passed' && passed === suite.expect && failed === 0 && skipped === 0
     const detail = file ? `${passed} passed, ${failed} failed, ${skipped} skipped; suite ${file.status}` : 'not in the report'
-    return { suite, ok, line: `${suite.name}: ${detail} (expected ${suite.expect} passed)` }
+    const ms = wall.get(resolve(API, suite.file)) ?? 0
+    return { suite, ok, ms, line: `${suite.name}: ${detail} (expected ${suite.expect} passed; ${(ms / 1000).toFixed(1)} s)` }
   })
 
   if (run.status === 0 && report && verdicts.every((v) => v.ok)) {
     for (const v of verdicts) console.log(`✓ ${v.line}`)
-    console.log(`✓ real-PostgreSQL tests passed (throwaway PostgreSQL, ${image})`)
+    console.log(`✓ real-PostgreSQL tests passed (throwaway PostgreSQL, ${image})${part ? ` — part ${part.index}/${part.count}, ${RUN.length} suites, ${expected(RUN)} passes` : ''}`)
+    if (args.includes('--write-durations')) {
+      // One run is not enough: local times move with the machine's load. On 2026-09-30 the same 55 suites took 558 s,
+      // then 331 s, and a split from one run was 58/42 by the other's times; from both averaged, 51/49 by either.
+      // So a refresh averages this run with the stored times, the stored ones scaled to this run's total. A suite new
+      // to the file takes this run's time.
+      const stored = measured()
+      const known = verdicts.filter((v) => stored[v.suite.file] > 0)
+      const scale = known.reduce((sum, v) => sum + v.ms, 0) / (known.reduce((sum, v) => sum + stored[v.suite.file], 0) || 1)
+      const time = (v) => (stored[v.suite.file] > 0 ? Math.round((v.ms + stored[v.suite.file] * scale) / 2) : v.ms)
+      const files = Object.fromEntries(verdicts.map((v) => [v.suite.file, time(v)]).sort(([a], [b]) => a.localeCompare(b)))
+      const note = 'Per-suite wall time (ms), import and setup included, averaged over whole real-PostgreSQL runs; only used to balance --part. Refresh with --write-durations.'
+      writeFileSync(DURATIONS, `${JSON.stringify({ '//': note, measuredAt: new Date().toISOString().slice(0, 10), files }, null, 2)}\n`)
+      console.log(`✓ wrote ${verdicts.length} suite times to ${relative(ROOT, DURATIONS)} (${known.length} averaged with the stored times)`)
+    }
     process.exit(0)
   }
-  console.error(`❌ real-PostgreSQL tests FAILED — vitest exit ${run.status}${report ? '' : '; no JSON report was written'}`)
+  console.error(`❌ real-PostgreSQL tests FAILED${part ? ` (part ${part.index}/${part.count})` : ''} — vitest exit ${run.status}${report ? '' : '; no JSON report was written'}`)
   for (const v of verdicts) console.error(`${v.ok ? '  ✓' : '  ✗'} ${v.line}`)
   preserveEvidence = true
   writeFileSync(join(reportDir, 'output.log'), output)
