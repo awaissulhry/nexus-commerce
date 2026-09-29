@@ -132,7 +132,16 @@ One service per deploy, in this order. Check each deploy's logs and timings befo
 
 The next deploy that ships the service points it at its image (`railway service source connect
 --image`); Settings → Source then shows the image. To switch it at once, run Deploy API by hand: a
-hand run ships every service.
+hand run ships every service. After the first switch of each service, read its deploy log. It ends
+with `✓ Railway runs ghcr.io/<owner>/nexus-…:<sha>` when Railway's record of the deployment names
+that image. A `::warning::` that the image is not confirmed means the record names none: check the
+deployment on Railway once, and report it. A deployment that runs another image fails the job.
+
+The web image carries the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values that `nexus-web` had
+when the image was built. Once the web deploys by image, a change to one of them on `nexus-web`
+reaches the web only with its next image: the next release that ships the web. A hand run of Deploy
+API rebuilds the image of the same commit under the same tag; that Railway then pulls the rebuilt
+image is not yet proven.
 
 Not yet proven: that the project token may change a service's source (plan §7). If the connect
 fails, nothing changed and the service keeps its build. Remove its name from the variable, so the
@@ -176,6 +185,10 @@ forward with a new commit. The worker, scheduler and web have no pre-deploy and 
 Their old code then runs on today's schema: do it only when every migration since that commit is
 additive. The run's summary lists the migrations added since then.
 
+Railway variables stay as they are now: the workflow changes only the image. One exception: the web
+image carries the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values of its own build, so rolling
+the web back past a change of those values brings the old ones back.
+
 The next Deploy API run ships every service again, so no service stays on the old commit once main
 moves on. To put main back without a new commit, run Deploy API by hand. Re-running the failed jobs
 of a Deploy API run that began before the rollback ships only what that run chose back then: the
@@ -186,10 +199,13 @@ push that lands while the rollback waits cancels it, and a rollback cancels a de
 waiting. Run the cancelled one again, as a new run or a re-run: the next deploy sees either.
 
 Railway's own Rollback button on an older deployment also works for image deploys, one service at a
-time. For the API the same limit applies: Railway's docs do not say that a rollback skips the
-pre-deploy command, so expect it to fail when main has a migration the old deployment lacks. The
-deploy workflow cannot see such a rollback: after it, run Deploy API by hand once main is fixed, or a
-later push leaves the services it does not change on the old build.
+time. The button also puts back that deployment's variables (Railway's docs: "Both the Docker image
+and custom variables are restored"). After a rotated secret or any changed variable, it brings the
+old value back: use rollback.yml, which changes only the image. For the API the same migration limit
+applies: Railway's docs do not say that a rollback skips the pre-deploy command, so expect it to
+fail when main has a migration the old deployment lacks. The deploy workflow cannot see such a
+rollback: after it, run Deploy API by hand once main is fixed, or a later push leaves the services
+it does not change on the old build.
 
 ## Remaining rollout evidence
 

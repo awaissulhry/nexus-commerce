@@ -12,7 +12,8 @@
 #
 # The web's build-time values (NEXT_PUBLIC_*, and NEXUS_API_PROXY_TARGET, which Next freezes into the standalone
 # server's /backend rewrite) are read from the nexus-web service on Railway, the one place production values live.
-# A pull request builds with local values instead.
+# They stay in the image: a later change on nexus-web reaches the web with its next image, and rolling the web back
+# (rollback.yml) brings back the values of that build. A pull request builds with local values instead.
 
 name: Images
 

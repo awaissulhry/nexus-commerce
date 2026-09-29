@@ -14,6 +14,11 @@
 # worker, scheduler and web have no pre-deploy and can go further back; their old code then runs on today's schema,
 # which is safe only when every migration since that commit is additive. The next Deploy API run ships every service
 # again (its `changes` job sees this run, and a re-run of it), so nothing stays on the old commit once main moves on.
+#
+# Only the image changes: Railway variables stay as they are now. Railway's own Rollback button also restores the old
+# deployment's variables, so after a rotated secret it brings the revoked value back (Railway docs, deployment
+# actions; review of PR 2, 2026-09-30). One exception: the web image carries the NEXT_PUBLIC_* and
+# NEXUS_API_PROXY_TARGET values of its own build (images.yml), so they go back with it.
 # Runbook: tasks/architecture-operations.md.
 #
 # Shares the `deploy-api` concurrency group: a rollback waits for a running release and a release for a running
@@ -125,7 +130,7 @@ jobs:
           api_skipped=false
           if [ "$SKIP_API" = true ] && [ "$api" = true ]; then api=false api_skipped=true; fi
           if [ "$api$worker$scheduler$web" = falsefalsefalsefalse ]; then
-            echo "✗ nothing to move: RAILWAY_IMAGE_SERVICES names no service (or only the API, and skip_api is set). Use Railway's Rollback button on a deployment."
+            echo "✗ nothing to move: RAILWAY_IMAGE_SERVICES names no service (or only the API, and skip_api is set). Railway's Rollback button on a deployment also puts back that deployment's variables: read tasks/architecture-operations.md first."
             exit 1
           fi
           if [ "$api" = true ]; then
@@ -187,6 +192,12 @@ jobs:
             echo "**Migrations do NOT roll back.** The API goes back only to a commit with the same migrations as main. The worker, scheduler and web can go further back: their old code then runs on today's schema, which is safe only when every migration since this commit is additive."
             echo
             echo "Migrations added to main since this commit: ${migrations:+$'\n'}${migrations:-none}"
+            echo
+            echo "**Railway variables stay as they are now:** only the image changes. (Railway's own Rollback button would also put back the old deployment's variables.)"
+            if [ "$WEB" = true ]; then
+              echo
+              echo "**The web image carries its own build's values:** \`NEXT_PUBLIC_*\` and \`NEXUS_API_PROXY_TARGET\` as nexus-web had them when \`${SHA:0:8}\` was built. If they changed since, the old ones come back with it."
+            fi
             echo
             echo "- To move to \`${SHA:0:8}\` (the API first, then the others side by side):${moves:- none}"
             echo "- Left alone, not in RAILWAY_IMAGE_SERVICES (still on their current build):${unlisted:- none}"
