@@ -14,127 +14,35 @@
 
 import { priceFor } from '../ai/rate-cards.js'
 import { runOrQueueTool } from './approval-gate.service.js'
+import { z } from 'zod'
 import { toolsFor, type ToolPrincipal } from './call-tool.js'
+import type { AgentTool } from './tool-types.js'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const VERSION = '2023-06-01'
 
-// Minimal JSON-schema args per tool so the model knows what to pass.
-const SCHEMAS: Record<
-  string,
-  { properties: Record<string, unknown>; required?: string[] }
-> = {
-  'product-snapshot': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'product-search': {
-    properties: {
-      query: { type: 'string', description: 'name / SKU / brand fragment' },
-      limit: { type: 'number' },
-    },
-  },
-  'order-search': {
-    properties: {
-      marketplace: { type: 'string' },
-      buyer: { type: 'string' },
-      status: { type: 'string' },
-      limit: { type: 'number' },
-    },
-  },
-  'order-detail': {
-    properties: { orderId: { type: 'string' } },
-    required: ['orderId'],
-  },
-  'stock-levels': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'price-status': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'listing-health': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'product-analytics': {
-    properties: {
-      productId: { type: 'string' },
-      days: { type: 'number', description: 'window in days (default 30)' },
-    },
-    required: ['productId'],
-  },
-  'channel-stock-drift': {
-    properties: {
-      productId: { type: 'string', description: 'optional — omit for all products' },
-      limit: { type: 'number' },
-    },
-  },
-  'replenishment-forecast': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'insights-metric': {
-    properties: {
-      days: { type: 'number', description: 'window in days (default 30)' },
-    },
-  },
-  'detect-anomalies': {
-    properties: { limit: { type: 'number' } },
-  },
-  'draft-alt-text': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'draft-listing-content': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'draft-seo': {
-    properties: { productId: { type: 'string' } },
-    required: ['productId'],
-  },
-  'translate-content': {
-    properties: {
-      productId: { type: 'string' },
-      target: { type: 'string', description: 'target market language' },
-    },
-    required: ['productId', 'target'],
-  },
-  'draft-customer-message': {
-    properties: { intent: { type: 'string' }, orderId: { type: 'string' } },
-    required: ['intent'],
-  },
-  'set-price': {
-    properties: {
-      productId: { type: 'string' },
-      price: { type: 'number' },
-      channel: { type: 'string' },
-    },
-    required: ['productId', 'price'],
-  },
-  'publish-listing': {
-    properties: { productId: { type: 'string' }, channel: { type: 'string' } },
-    required: ['productId', 'channel'],
-  },
-  'send-customer-message': {
-    properties: { orderId: { type: 'string' }, message: { type: 'string' } },
-    required: ['orderId', 'message'],
-  },
-}
-
 // MCP.1 — only the tools this person may call. The model cannot ask for one
 // it was never offered, and a hallucinated name is refused by the gate anyway.
-function anthropicTools(principal: ToolPrincipal) {
+// MCP.3 — each tool's input schema is generated from its own zod `input`,
+// the same schema call-tool.ts parses the call with. Built once per tool.
+const INPUT_SCHEMAS = new WeakMap<AgentTool, Record<string, unknown>>()
+
+export function inputJsonSchema(tool: AgentTool): Record<string, unknown> {
+  let schema = INPUT_SCHEMAS.get(tool)
+  if (!schema) {
+    // `input` io: what a caller may send (unknown keys are dropped, not refused).
+    const { $schema: _dialect, ...rest } = z.toJSONSchema(tool.input, { io: 'input' })
+    schema = rest
+    INPUT_SCHEMAS.set(tool, schema)
+  }
+  return schema
+}
+
+export function anthropicTools(principal: ToolPrincipal) {
   return toolsFor(principal).map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: {
-      type: 'object',
-      properties: SCHEMAS[t.name]?.properties ?? {},
-      required: SCHEMAS[t.name]?.required ?? [],
-    },
+    input_schema: inputJsonSchema(t),
   }))
 }
 

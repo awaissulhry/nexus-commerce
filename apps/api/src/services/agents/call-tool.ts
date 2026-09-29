@@ -65,7 +65,8 @@ export class ToolAccessError extends Error {
       | 'forbidden'
       | 'workspace_required'
       | 'workspace_mismatch'
-      | 'rate_limited',
+      | 'rate_limited'
+      | 'invalid_arguments',
     message: string,
     readonly statusCode: number,
   ) {
@@ -147,6 +148,16 @@ export function permissionMessage(toolName: string, missing: readonly string[]):
   return `${toolName} needs the ${missing.join(' and ')} permission${missing.length > 1 ? 's' : ''}.`
 }
 
+/** The arguments as the tool's schema reads them, or a 400 naming every problem. */
+function parsedArgs(tool: AgentTool, args: Record<string, unknown>): Record<string, unknown> {
+  const parsed = tool.input.safeParse(args ?? {})
+  if (parsed.success) return parsed.data as Record<string, unknown>
+  const problems = parsed.error.issues
+    .map((issue) => `${issue.path.join('.') || 'arguments'}: ${issue.message}`)
+    .join('; ')
+  throw new ToolAccessError('invalid_arguments', `${tool.name} was called wrongly — ${problems}`, 400)
+}
+
 function allowedTool(principal: ToolPrincipal, name: string): AgentTool {
   const tool = getTool(name)
   if (!tool) throw new ToolAccessError('unknown_tool', `unknown tool: ${name}`, 404)
@@ -208,9 +219,10 @@ export async function callTool(
   options: CallOptions = {},
 ): Promise<ToolCall> {
   const tool = allowedTool(principal, name)
+  const input = parsedArgs(tool, args)
   const raw = await asPrincipal(principal, async () => {
     await withinHourlyLimit(name, options.hourlyLimit)
-    return tool.handler(args, { userId: principal.kind === 'user' ? principal.userId : null })
+    return tool.handler(input, { userId: principal.kind === 'user' ? principal.userId : null })
   })
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }
@@ -228,8 +240,10 @@ export async function executeTool(
   const tool = allowedTool(principal, name)
   const execute = tool.execute
   if (!execute) throw new ToolAccessError('unknown_tool', `${name} is preview-only and cannot run`, 400)
+  // Stored arguments are parsed again: what runs is exactly what the schema allows today.
+  const input = parsedArgs(tool, args)
   const raw = await asPrincipal(principal, () =>
-    execute(args, { userId: principal.kind === 'user' ? principal.userId : principal.label }),
+    execute(input, { userId: principal.kind === 'user' ? principal.userId : principal.label }),
   )
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }

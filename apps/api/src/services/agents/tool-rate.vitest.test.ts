@@ -6,6 +6,7 @@
  * counted, and nor is a call the person was never allowed to make.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { AgentTool } from './tool-types.js'
 
 const handler = vi.fn()
@@ -18,6 +19,7 @@ const TOOLS: Record<string, AgentTool> = {
     riskTier: 'low',
     readOnly: true,
     requires: ['inventory.view'],
+    input: z.object({}).loose(),
     handler,
   },
 }

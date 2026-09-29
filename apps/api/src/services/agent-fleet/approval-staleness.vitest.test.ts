@@ -6,6 +6,7 @@
  * real. It must refuse rather than act — and refusing must hand the decision
  * back, not throw it away.
  */
+import { z } from 'zod'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../db.js', () => ({
@@ -49,12 +50,16 @@ const gate = vi.mocked(decideApproval)
 const tools = vi.mocked(getTool)
 const audit = vi.mocked(recordControlChange)
 
+/** MCP.3 — every tool parses its arguments; these fakes accept any. */
+const ANY_ARGS = z.object({}).loose()
+
 /** The stored preview the operator read when they approved. */
 const STORED = { action: 'set-target-bid', currentBidCents: 42, proposedBidCents: 25 }
 
 function toolReturning(preview: Record<string, unknown> | null, ok = true, error?: string) {
   return {
     name: 'set-target-bid',
+    input: ANY_ARGS,
     handler: vi.fn().mockResolvedValue(ok ? { ok: true, preview } : { ok: false, error }),
   } as never
 }
@@ -97,6 +102,7 @@ describe('AP.6 — checkStaleness', () => {
   it('treats a re-check that cannot run as stale, not as permission', async () => {
     tools.mockReturnValue({
       name: 'set-target-bid',
+      input: ANY_ARGS,
       handler: vi.fn().mockRejectedValue(new Error('db down')),
     } as never)
     const v = await checkStaleness('a1')

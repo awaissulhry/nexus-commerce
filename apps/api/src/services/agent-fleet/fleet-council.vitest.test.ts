@@ -5,6 +5,7 @@
  * a protected-term negation is blocked whatever the model said.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 
 vi.mock('../../db.js', () => ({
   default: {
@@ -22,6 +23,9 @@ vi.mock('../agents/approval-gate.service.js', () => ({
 vi.mock('../agents/tool-registry.js', () => ({ getTool: vi.fn() }))
 
 import prisma from '../../db.js'
+
+/** MCP.3 — every tool parses its arguments; these fakes accept any. */
+const ANY_ARGS = z.object({}).loose()
 import { runOrQueueTool } from '../agents/approval-gate.service.js'
 import { getTool } from '../agents/tool-registry.js'
 import { runFleetCouncilOnce } from './fleet-council.service.js'
@@ -77,6 +81,7 @@ beforeEach(() => {
   ] as never)
   db.adTarget.findMany.mockResolvedValue([] as never)
   toolLookup.mockReturnValue({
+    input: ANY_ARGS,
     handler: vi.fn(async () => ({ ok: true, preview: { fine: true } })),
   } as never)
   queueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'ap1' } as never)
@@ -104,6 +109,7 @@ describe('runFleetCouncilOnce', () => {
 
   it('SEEDED ADVERSARIAL: a protected-term negation is force-blocked over a passing critic', async () => {
     toolLookup.mockReturnValue({
+      input: ANY_ARGS,
       handler: vi.fn(async () => ({
         ok: false,
         error: '"giacca pelle" is whitelisted against negation (brand core term)',
