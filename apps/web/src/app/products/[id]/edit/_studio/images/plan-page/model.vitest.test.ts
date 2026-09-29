@@ -178,7 +178,7 @@ describe('Media page redesign (2026-09-29): the grid, the scope and readable nam
     expect(ownerLabel(r, { source: 'SHARED' }, r.destinations[0])).toBeNull()
   })
   it('gives storage-code photos a readable name from where they sit; real names stay', () => {
-    expect(['vija9w5xgwhywk2ld7hq.jpg', 'PT02', 'MAIN', '81Kp1xYzA7L._AC_SL1500_.jpg', '71AbC+dEfGL.jpg'].map(isCodeName)).toEqual([true, true, true, true, true])
+    expect(['vija9w5xgwhywk2ld7hq.jpg', 'jicgmxqvlozatatxmfwr.jpg', 'PT02', 'MAIN', '81Kp1xYzA7L._AC_SL1500_.jpg', '71AbC+dEfGL.jpg'].map(isCodeName)).toEqual([true, true, true, true, true, true])
     expect(['Size chart IT', 'CE user information sheet', 'common-1', 'abcdefghijklmnopq'].map(isCodeName)).toEqual([false, false, false, false])
     const r = read([{ key: 'SHARED', plan: plan({ common: ids('c0de0000000000001', 'chart-it'), values: { 'color:black': ids('n1') } }, 'color') },
       { key: WINTER, plan: plan({ values: { 'color:black': ids('w1nter00000000001') } }) }])
