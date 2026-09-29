@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 
 import {
-  amazonMarketKey, amazonMarketLayout, amazonOwnMarkets, rowReset, viewKey, viewStack,
+  amazonMarketKey, amazonMarketLayout, amazonOwnMarkets, rowReset, viewKey, viewStack, wordList,
   applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, guessLanguage, photoPlacements, photoSource, sharedPlacements, versionLanguages, followAllOps, libraryUsage, setRows, gridShape, isCodeName, ownerLabel, readableNames, scopeDestinationKey, siblingListings, slotLabel,
   shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
@@ -230,6 +230,12 @@ describe('Amazon photos per market (2026-09-29, option 3): All Amazon markets, o
     expect(followAllOps(r, only)).toEqual([{ op: 'follow', set: 'common' }, { op: 'follow', set: 'value:color:yellow' }])
     // "Copy photos from" the eBay listing: DE's own Common matches it once it follows, so it follows again.
     expect(copyFromOps(r, r.destinations[0], only)).toEqual([{ op: 'follow', set: 'common' }, { op: 'replace', set: 'value:color:yellow', assetIds: ['g1'] }])
+  })
+  it('names the markets as one list in words', () => {
+    expect(wordList([])).toBe('')
+    expect(wordList(['DE'])).toBe('DE')
+    expect(wordList(['DE', 'IT'])).toBe('DE and IT')
+    expect(wordList(['DE', 'ES', 'FR', 'IT', 'SE'])).toBe('DE, ES, FR, IT and SE')
   })
   it('the side panel\'s preview of Only DE is what its ZIP holds: its own rows and its German versions', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }, { key: DE, plan: plan({ values: { 'color:black': ids('n1') } }) }])

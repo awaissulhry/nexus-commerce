@@ -27,7 +27,7 @@ import { setPhotoPublish } from './photoPublish'
 import { joinVersions, leaveVersions, markDistinct, markSame, separate, undoSame, undoVersions, type SamePhotoUndo, type VersionsUndo } from './lookalikeApi'
 import {
   CHANNEL_LABEL, amazonMarketLayout, amazonOwnMarkets, assetMap, cardOf, computeLayouts, copyFromOps, destinationLabel, destinationNameParts, followAllOps, libraryUsage, listingName,
-  ownedSkuSets, scopeDestinationKey, setRows, siblingListings, swatchRows, viewAxis, viewStack, withReadableNames, languageName, versionLanguages, versionsOf,
+  ownedSkuSets, scopeDestinationKey, setRows, siblingListings, swatchRows, viewAxis, viewStack, withReadableNames, wordList, languageName, versionLanguages, versionsOf,
   type LayerView, type LibraryAsset, type MediaChannel, type MediaDestinationRow, type MediaRead,
 } from './model'
 import { apiSend } from '../api'
@@ -334,7 +334,7 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
           : d?.channel === 'AMAZON' && onlyMarket
             ? `What Amazon ${onlyMarket} shows${marketLanguage ? `, in its ${languageLabel(marketLanguage)} versions` : ''}. Rows without a mark show the All Amazon markets photos. A change here is for Amazon ${onlyMarket} only: it reaches Amazon only through the ${onlyMarket} ZIP. Safety images are one set for all markets.`
           : d?.channel === 'AMAZON'
-            ? `What Publish photos sends to ${d.markets.join(' and ')}${apiLanguage ? `, in the ${languageLabel(apiLanguage)} versions` : ''}: Amazon keeps one photo set per ASIN. Rows without a mark show the Shared photos.${amazonMarket ? ` To change Amazon ${amazonMarket} alone, choose Only ${amazonMarket}.` : ''}`
+            ? `What Publish photos sends to ${wordList(d.markets)}${apiLanguage ? `, in the ${languageLabel(apiLanguage)} versions` : ''}: Amazon keeps one photo set per ASIN. Rows without a mark show the Shared photos.${amazonMarket ? ` To change Amazon ${amazonMarket} alone, choose Only ${amazonMarket}.` : ''}`
             : d ? `Rows without a mark show the Shared photos. A change here gives ${d.alias || siblings.length > 1 ? listingName(d) : `${CHANNEL_LABEL[d.channel]}${d.marketplace === 'GLOBAL' ? '' : ` ${d.marketplace}`}`} its own photos for that row.` : ''}</p>}
         {ownMarkets.map(m => <Banner key={m} tone="info" title={`Amazon ${m} has own photos`}
           action={<Button size="sm" variant="secondary" onClick={() => setZip({ market: m, kind: 'country' })}>Export the {m} ZIP</Button>}>
