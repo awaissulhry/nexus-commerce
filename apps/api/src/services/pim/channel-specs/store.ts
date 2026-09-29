@@ -71,6 +71,9 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     // `list.min` / `list.max` bound a list. They were enforced on write (`validateShopifyField`) but not offered.
     const rules = shopifyDefinitionRules(info.definition?.validations)
     const categoryReason = info.definition ? categoryFieldReason(info.definition, categoryIds) : undefined
+    // A category field the store has not switched on shows only where it belongs: a family whose Shopify category offers
+    // it. Without known categories (export, mapping catalogue, publish plan) it is not a column at all.
+    if (info.definition?.standardTemplateId && (categoryIds === undefined || categoryReason)) return []
     const categoryLimit = info.definition?.constraints?.key === 'category' ? info.definition.constraints : null
     // A partial category list (Shopify lists thousands) has no honest count.
     const categoryNote = !categoryLimit ? '' : categoryLimit.complete === false ? ' Applies only to some Shopify categories.'
@@ -82,7 +85,8 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
       variantEligible: info.owner === 'PRODUCTVARIANT',
       channelStore: info.definition ? pa('metafields', info.owner, info.definition.namespace, info.definition.key, info.type)
         : pa(...info.id.split('.')),
-      helpText: info.definition ? `${info.owner === 'PRODUCT' ? 'Product' : 'Variant'} · ${info.source}. ${info.definition.description ?? ''}${categoryNote}`.replace(/\s+/g, ' ').trim()
+      helpText: info.definition?.standardTemplateId ? `Shopify category field · ${info.source}. ${info.definition.description ?? ''} Not switched on in this store yet.`.replace(/\s+/g, ' ').trim()
+        : info.definition ? `${info.owner === 'PRODUCT' ? 'Product' : 'Variant'} · ${info.source}. ${info.definition.description ?? ''}${categoryNote}`.replace(/\s+/g, ' ').trim()
         : [info.channelLabel !== info.label ? `Shopify: ${info.channelLabel}.` : '', info.reason].filter(Boolean).join(' ') || undefined,
       // Media and stock require a published Shopify resource; their native workspace
       // owns exact file and stocking-location identities after publication.
