@@ -477,8 +477,9 @@ export const ENTRIES: Entry[] = [
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/(collections\/[^/]+\/)?synchronize$/.test(p)),
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/collections(?:\/[^/]+)?$/.test(p)),
   // Shopify colour products (PR 3): reading the plan is a view; Find reads Shopify and stores proposals (an edit); the
-  // store switch changes how every family of the store publishes (publish).
+  // store switch changes how every family of the store publishes, and Confirm writes to Shopify (publish).
   P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/shopify-colour-products\/settings$/.test(p)),
+  P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/confirm$/.test(p)),
   P(F.productsEdit, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/find$/.test(p)),
   P(F.productsView, (m, p) => m === 'GET' && /^\/api\/products\/[^/]+\/shopify-colour-products(?:\/settings)?$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/preview$/.test(p)),
