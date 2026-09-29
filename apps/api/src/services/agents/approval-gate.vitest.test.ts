@@ -56,12 +56,16 @@ import { systemPrincipal, type UserPrincipal } from './call-tool.js'
 
 const db = vi.mocked(prisma, true)
 
+// A real request carries the business the workspace hook verified; production runs with profiles on.
+const BUSINESS = { workspaceId: 'ws_alpha_0001', actorUserId: 'u1', membershipId: 'm1', roleKeys: [] }
+
 function person(permissions: string[]): UserPrincipal {
   return {
     kind: 'user',
     userId: 'u1',
     label: 'Awais',
     permissions: { isOwner: false, permissions: new Set(permissions) },
+    workspace: BUSINESS,
     via: 'app',
   }
 }
