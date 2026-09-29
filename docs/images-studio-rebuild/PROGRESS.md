@@ -4,8 +4,8 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 
 ## Summary
 - **Media page REDESIGN 2026-09-29 (Owner: "simple and fast to use"; the element list and layout were approved in chat
-  the same day, records below).** PR 1 UI = #153 (`feat/media-redesign`); PR 2 aliases = branch
-  `feat/media-redesign-aliases`, stacked on PR 1.
+  the same day, records below).** PR 1 UI = #153, MERGED 2026-09-29 (`65bf6f45b`) on the Owner's word; PR 2 aliases =
+  #154 (`feat/media-redesign-aliases`).
 - **P0 measure — done (2026-09-27).** Production counted read-only: [MEASURE.md](MEASURE.md).
 - **P1 data spine — LIVE (2026-09-27).** PR #86 merged (squash `f1d8b1b7a`) after CI was green. Deployed: worker
   12:03, scheduler 12:00, API 12:29 UTC. Verified in production (read-only): migration `20260927i_media_plan`
