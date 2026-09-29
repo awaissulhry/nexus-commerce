@@ -6401,5 +6401,43 @@
         ]
       }
     ]
+  },
+  "ShopifyColourProduct": {
+    "scalar": {},
+    "compound": {
+      "colour_product": [
+        "channelConnectionId",
+        "marketplace",
+        "aliasKey",
+        "familyId",
+        "valueKey"
+      ],
+      "shopify_product": [
+        "channelConnectionId",
+        "shopifyProductId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "family",
+        "model": "Product",
+        "from": [
+          "familyId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }

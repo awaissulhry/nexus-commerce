@@ -476,6 +476,11 @@ export const ENTRIES: Entry[] = [
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked$/.test(p)),
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/(collections\/[^/]+\/)?synchronize$/.test(p)),
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/collections(?:\/[^/]+)?$/.test(p)),
+  // Shopify colour products (PR 3): reading the plan is a view; Find reads Shopify and stores proposals (an edit); the
+  // store switch changes how every family of the store publishes (publish).
+  P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/shopify-colour-products\/settings$/.test(p)),
+  P(F.productsEdit, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/find$/.test(p)),
+  P(F.productsView, (m, p) => m === 'GET' && /^\/api\/products\/[^/]+\/shopify-colour-products(?:\/settings)?$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/preview$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/import-source$/.test(p)),
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content$/.test(p)),

@@ -77,6 +77,10 @@ describe('permission manifest ordering', () => {
     for (const suffix of ['synchronize', 'advance', 'entry', 'enable-field', 'automation', 'automation-check']) expect(permissionForRoute('POST', `${root}/${suffix}`)).toBe('products.publish')
     expect(permissionForRoute('GET', `${root}/entry`)).toBe('products.view')
     expect(permissionForRoute('POST', `${root}/rebase`)).toBe('products.edit')
+    const colour = '/api/products/p1/shopify-colour-products'
+    expect([permissionForRoute('GET', colour), permissionForRoute('GET', `${colour}/settings`)]).toEqual(['products.view', 'products.view'])
+    expect(permissionForRoute('POST', `${colour}/find`)).toBe('products.edit')
+    expect(permissionForRoute('PUT', `${colour}/settings`)).toBe('products.publish')
   })
   /**
    * How specific a rule is FOR THIS PATH: the length of the shortest prefix of

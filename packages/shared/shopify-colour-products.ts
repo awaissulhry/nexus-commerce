@@ -171,3 +171,120 @@ export function planColourProducts(family: ColourPlanFamily, settings: ColourPla
 
   return { familyId: family.familyId, mode: split === null ? 'one-product' : 'colour-products', splitAxis: split, products, grouped: split !== null && products.length >= 2, issues }
 }
+
+// ── Find (PR 3): which Shopify product is each colour, and which variant each size ──────────────────────────────────
+
+/** A Shopify product as Find reads it. A variant's `options` are its option values in the product's option order. */
+export interface ColourCandidate {
+  id: string; title: string; handle: string; status: string
+  /** The colour the product shows today (the grouping value field), when set. */
+  colourName: string | null
+  /** The products its grouping list names (itself included, on a well-formed group). */
+  group: string[]
+  variants: Array<{ id: string; sku: string | null; inventoryItemId: string | null; options: string[] }>
+}
+export type ColourMatchMethod = 'linked' | 'sku' | 'name' | 'group'
+export interface ColourMatchVariant { productId: string; sku: string; shopifyVariantId: string; inventoryItemId: string | null; shopifySku: string | null; by: 'sku' | 'options' }
+export type ColourMatchIssueCode = 'sku-spread' | 'product-claimed-twice' | 'sku-of-another-colour' | 'sku-differs' | 'variant-ambiguous'
+export interface ColourMatchIssue { code: ColourMatchIssueCode; message: string; productIds: string[] }
+export interface ColourMatch {
+  key: string
+  shopifyProductId: string | null
+  method: ColourMatchMethod | null
+  /** The colour the Shopify product shows today: the operator's name starts from it. */
+  shopifyColourName: string | null
+  variants: ColourMatchVariant[]
+  /** Nexus variants the Shopify product does not have yet. Find never adds them. */
+  missing: Array<{ productId: string; sku: string; options: string[] }>
+  /** Shopify variants Nexus does not know. They stay exactly as they are: Nexus never deletes a variant. */
+  extra: Array<{ shopifyVariantId: string; sku: string | null; options: string[] }>
+  /** Matched Shopify variants that have no SKU: confirming writes the Nexus SKU there (stock sync compares SKUs). */
+  skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
+  issues: ColourMatchIssue[]
+}
+
+const skuKey = (sku: string | null | undefined) => (sku ?? '').trim().toLocaleUpperCase('en')
+const valuesKey = (values: readonly string[]) => JSON.stringify(values.map(fold).sort())
+/** Shopify names the only variant of a product without options "Default Title". */
+const DEFAULT_TITLE = 'Default Title'
+
+/**
+ * Pairs each colour product of the plan with at most one Shopify product, and each of its variants with at most one
+ * Shopify variant. Order of evidence: an existing link; the colour's SKUs (all in ONE product); the colour's name (the
+ * operator's, or the Nexus value) against the product's colour; and, when exactly one colour and one product of an
+ * already-matched group are left, each other. A proposal only: nothing is written, and every doubt is an issue.
+ */
+export function matchColourProducts(plan: ColourPlan, candidates: readonly ColourCandidate[], linked: Readonly<Record<string, string>> = {}): ColourMatch[] {
+  const byId = new Map(candidates.map(c => [c.id, c]))
+  const skuColour = new Map<string, string>()
+  for (const product of plan.products) for (const variant of product.variants) if (skuKey(variant.sku)) skuColour.set(skuKey(variant.sku), product.key)
+  const chosen = new Map<string, { id: string; method: ColourMatchMethod }>()
+  const early = new Map<string, ColourMatchIssue[]>()
+  const note = (key: string, issue: ColourMatchIssue) => early.set(key, [...early.get(key) ?? [], issue])
+  const taken = () => new Set([...chosen.values()].map(c => c.id))
+  const productIdsOf = (key: string) => plan.products.find(p => p.key === key)!.variants.map(v => v.productId)
+
+  for (const product of plan.products) {
+    const id = linked[product.key]
+    if (id && byId.has(id)) chosen.set(product.key, { id, method: 'linked' })
+  }
+  for (const product of plan.products.filter(p => !chosen.has(p.key))) {
+    const skus = new Set(product.variants.map(v => skuKey(v.sku)).filter(Boolean))
+    const hits = candidates.filter(c => c.variants.some(v => skus.has(skuKey(v.sku))))
+    if (hits.length === 1) chosen.set(product.key, { id: hits[0].id, method: 'sku' })
+    else if (hits.length > 1) note(product.key, { code: 'sku-spread', productIds: productIdsOf(product.key),
+      message: `The "${product.nexusValue}" SKUs are in ${hits.length} Shopify products (${hits.map(h => h.title).join(', ')}). Keep one colour's sizes in one product.` })
+  }
+  for (const product of plan.products.filter(p => !chosen.has(p.key) && !early.has(p.key))) {
+    const names = new Set([product.colourName, product.nexusValue].filter(Boolean).map(fold))
+    const hits = candidates.filter(c => c.colourName && names.has(fold(c.colourName)) && !taken().has(c.id))
+    if (hits.length === 1) chosen.set(product.key, { id: hits[0].id, method: 'name' })
+  }
+  const open = plan.products.filter(p => !chosen.has(p.key) && !early.has(p.key))
+  if (open.length === 1 && chosen.size) {
+    const members = new Set([...chosen.values()].flatMap(c => byId.get(c.id)!.group))
+    const left = candidates.filter(c => members.has(c.id) && !taken().has(c.id))
+    if (left.length === 1) chosen.set(open[0].key, { id: left[0].id, method: 'group' })
+  }
+  // One Shopify product can be one colour only: claimed by two, it is neither's.
+  const claims = new Map<string, string[]>()
+  for (const [key, c] of chosen) claims.set(c.id, [...claims.get(c.id) ?? [], key])
+  for (const [id, keys] of claims) if (keys.length > 1) for (const key of keys) {
+    chosen.delete(key)
+    note(key, { code: 'product-claimed-twice', productIds: productIdsOf(key), message: `"${byId.get(id)!.title}" matches ${keys.length} colours. Pick the colour it shows.` })
+  }
+
+  return plan.products.map(product => {
+    const pick = chosen.get(product.key), candidate = pick ? byId.get(pick.id)! : null
+    const issues = [...early.get(product.key) ?? []]
+    const variants: ColourMatchVariant[] = [], missing: ColourMatch['missing'] = [], skusToWrite: ColourMatch['skusToWrite'] = []
+    const used = new Set<string>()
+    for (const variant of product.variants) {
+      const values = variant.options.map(o => o.value)
+      if (!candidate) { missing.push({ productId: variant.productId, sku: variant.sku, options: values }); continue }
+      let by: ColourMatchVariant['by'] = 'sku'
+      let hits = candidate.variants.filter(sv => skuKey(sv.sku) && skuKey(sv.sku) === skuKey(variant.sku))
+      if (!hits.length) { by = 'options'; hits = candidate.variants.filter(sv => valuesKey(sv.options) === valuesKey(values.length ? values : [DEFAULT_TITLE])) }
+      hits = hits.filter(sv => !used.has(sv.id))
+      if (hits.length > 1) issues.push({ code: 'variant-ambiguous', productIds: [variant.productId], message: `${variant.sku} fits ${hits.length} Shopify variants of "${candidate.title}".` })
+      if (hits.length !== 1) { missing.push({ productId: variant.productId, sku: variant.sku, options: values }); continue }
+      const hit = hits[0]
+      used.add(hit.id)
+      if (by === 'options' && skuKey(hit.sku)) {
+        const owner = skuColour.get(skuKey(hit.sku))
+        issues.push(owner && owner !== product.key
+          ? { code: 'sku-of-another-colour', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}, a SKU of another colour in Nexus.` }
+          : { code: 'sku-differs', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}; Nexus has ${variant.sku}. Stock sync needs the same SKU. Change one of them.` })
+      } else if (by === 'options') skusToWrite.push({ shopifyVariantId: hit.id, sku: variant.sku })
+      variants.push({ productId: variant.productId, sku: variant.sku, shopifyVariantId: hit.id, inventoryItemId: hit.inventoryItemId, shopifySku: hit.sku, by })
+    }
+    const extra = candidate ? candidate.variants.filter(sv => !used.has(sv.id)).map(sv => ({ shopifyVariantId: sv.id, sku: sv.sku, options: sv.options })) : []
+    for (const sv of extra) {
+      const owner = skuColour.get(skuKey(sv.sku))
+      if (owner && owner !== product.key) issues.push({ code: 'sku-of-another-colour', productIds: productIdsOf(owner).filter(id => plan.products.find(p => p.key === owner)!.variants.some(v => v.productId === id && skuKey(v.sku) === skuKey(sv.sku))),
+        message: `"${candidate!.title}" holds SKU ${sv.sku}, which is another colour in Nexus.` })
+    }
+    return { key: product.key, shopifyProductId: candidate?.id ?? null, method: pick?.method ?? null, shopifyColourName: candidate?.colourName ?? null,
+      variants, missing, extra, skusToWrite, issues }
+  })
+}
