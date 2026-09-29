@@ -35,6 +35,7 @@ import { WorkspaceQueue as Queue } from './workspace-jobs.js'
 import Redis from 'ioredis'
 import { logger } from '../utils/logger.js'
 import { registerRateRedis } from '../services/gateway/rate.js'
+import { registerToolRateRedis } from '../services/agents/tool-rate.js'
 
 // ── Lazy Redis client (the only thing that stays lazy) ────────────────────
 let _redis: Redis | null = null
@@ -90,6 +91,8 @@ function getRedisConnection(): Redis {
         : new Redis({ host: target.host, port: target.port, ...target.options })
     // P1.2 — the channel gateway's rate buckets share this connection (used only while it is ready).
     registerRateRedis(() => _redis)
+    // MCP.2 — so do the agent tools' hourly limits.
+    registerToolRateRedis(() => _redis)
   }
   return _redis
 }

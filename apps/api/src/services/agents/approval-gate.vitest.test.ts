@@ -53,6 +53,8 @@ vi.mock('../../db.js', () => ({
 import prisma from '../../db.js'
 import { decideApproval, runOrQueueTool } from './approval-gate.service.js'
 import { systemPrincipal, type UserPrincipal } from './call-tool.js'
+import { resolveToolPolicy } from './tool-policy.service.js'
+import { __toolRateTest } from './tool-rate.js'
 
 const db = vi.mocked(prisma, true)
 
@@ -75,6 +77,7 @@ const VIEWER = person(['ai.run', 'products.view'])
 
 beforeEach(() => {
   vi.clearAllMocks()
+  __toolRateTest.reset()
   handler.mockResolvedValue({ ok: true, preview: { price: { from: 10, to: 12 }, costPrice: 7 } })
   execute.mockResolvedValue({ ok: true, data: { changed: true, costPrice: 7 } })
   db.agentApproval.findUnique.mockResolvedValue({
@@ -137,6 +140,22 @@ describe('MCP.1 — queueing', () => {
     expect(db.agentApproval.create.mock.calls[0]![0]!.data).toMatchObject({
       preview: { price: { from: 10, to: 12 }, costPrice: 7 },
     })
+  })
+
+  it('MCP.2 — the operator’s hourly limit refuses the request over it, and queues nothing', async () => {
+    vi.mocked(resolveToolPolicy).mockResolvedValue({
+      name: 'change-price',
+      riskTier: 'high',
+      enabled: true,
+      requiresApproval: true,
+      readOnly: false,
+      rateLimitPerHour: 1,
+    } as never)
+    expect((await runOrQueueTool('change-price', { price: 12 }, PRICE_PERSON, 'run1')).mode).toBe('queued')
+    const over = await runOrQueueTool('change-price', { price: 13 }, PRICE_PERSON, 'run1')
+    expect(over).toMatchObject({ ok: false, mode: 'error' })
+    expect(over.error).toContain('limited to 1 call per hour')
+    expect(db.agentApproval.create).toHaveBeenCalledTimes(1)
   })
 
   it('a person without the permission cannot even queue it', async () => {

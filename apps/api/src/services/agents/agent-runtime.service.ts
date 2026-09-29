@@ -266,7 +266,7 @@ export async function invokeTool(
     return { tool: name, ok: false, error: `tool ${name} is disabled` }
   let res
   try {
-    res = (await callTool(principal, name, args)).visible
+    res = (await callTool(principal, name, args, { hourlyLimit: policy.rateLimitPerHour })).visible
   } catch (err) {
     if (err instanceof ToolAccessError) return { tool: name, ok: false, error: err.message }
     throw err
