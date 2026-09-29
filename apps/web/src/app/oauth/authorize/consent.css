@@ -1,0 +1,2 @@
+/* MCP.5 — the consent page: one short form, so a narrow column that starts at the top. Layout only. */
+.oauth-consent { max-width: 640px; align-content: start; }

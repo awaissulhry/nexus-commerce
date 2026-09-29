@@ -20,6 +20,9 @@ export const PUBLIC_PREFIXES: readonly string[] = [
   '/track/',
   '/unsubscribed',
   '/settings/channels/ebay-callback',
+  // MCP.5 — connecting Claude: the page carries Claude's whole request in its query, and a guard that
+  // bounced a signed-out visitor to login would drop it. The page signs in with the full query itself.
+  '/oauth/',
 ]
 
 export function isPublicPath(path: string): boolean {
