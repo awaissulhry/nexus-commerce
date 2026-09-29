@@ -28,21 +28,24 @@ export interface AmazonArchiveRequest { accountId: string; market: string; kind:
 
 async function archivePlan(productId: string, input: AmazonArchiveRequest) {
   const market = input.market.trim().toUpperCase()
-  const media = await mediaLayoutFor({ productId, channel: 'AMAZON', marketplace: market, accountId: input.accountId })
+  // A market with no content language is an operator setting, not a server fault: say so instead of failing.
+  const languages = await marketLanguages('AMAZON', market).catch((error: { code?: string }) => { if (error?.code === 'market_languages_unconfigured') return [] as string[]; throw error })
+  const language = languages[0]
+  // `layout`: what the API sends to every market (All Amazon markets) — the bulk upload's photos and safety images.
+  // `marketLayout`: what the market shows, as the Media page shows it in "Only <market>" — the country ZIP's photos.
+  const media = await mediaLayoutFor({ productId, channel: 'AMAZON', marketplace: market, accountId: input.accountId, ...(input.kind === 'country' ? { amazonMarket: { market, languages } } : {}) })
   if (!media) throw new WorkspaceScopeError('This product does not use the photo plan yet. Start it on the Media page.', 409)
   if (!media.destination.markets.includes(market)) throw new WorkspaceScopeError(`This Amazon account has no listing of this product on ${market}.`, 404)
   if (media.layout.channel !== 'AMAZON') throw new WorkspaceScopeError('This destination is not an Amazon listing.', 409)
-  const layout = media.layout as unknown as AmazonMediaLayout
+  if (input.kind === 'country' && !language) throw new WorkspaceScopeError(`Amazon ${market} has no language set, so its country photos cannot be chosen. Set it in the marketplace settings.`, 422)
+  const api = media.layout as unknown as AmazonMediaLayout
+  const layout = input.kind === 'country' ? media.marketLayout as unknown as AmazonMediaLayout : api
   const productIds = [...(layout.parent ? [layout.parent.productId] : []), ...layout.items.map(i => i.productId)]
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: productIds }, channel: 'AMAZON', marketplace: market, channelConnectionId: media.destination.accountId },
     select: { productId: true, externalListingId: true, platformProductId: true } })
   // The ASIN as the Amazon workspace reads it; a listing without one is told apart from no listing at all.
   const listed = new Map(listings.map(l => [l.productId, { asin: l.externalListingId || l.platformProductId || null }]))
-  // A market with no content language is an operator setting, not a server fault: say so instead of failing.
-  const languages = await marketLanguages('AMAZON', market).catch((error: { code?: string }) => { if (error?.code === 'market_languages_unconfigured') return [] as string[]; throw error })
-  const language = languages[0]
-  if (input.kind === 'country' && !language) throw new WorkspaceScopeError(`Amazon ${market} has no language set, so its country photos cannot be chosen. Set it in the marketplace settings.`, 422)
-  const plan = planAmazonArchive({ kind: input.kind, market, layout, assets: media.assets, listingOf: id => listed.get(id) ?? null, language: input.kind === 'country' ? language : undefined })
+  const plan = planAmazonArchive({ kind: input.kind, market, layout, assets: media.assets, listingOf: id => listed.get(id) ?? null, ...(input.kind === 'country' ? { api } : {}) })
   const files = plan.files.map(f => {
     const photo = media.assets.get(f.assetId)?.label ?? 'Photo'
     return { ...f, url: media.url(f.assetId), label: `${photo} (${f.asin} ${f.slot})`, photo }
@@ -51,12 +54,15 @@ async function archivePlan(productId: string, input: AmazonArchiveRequest) {
   const kindName = input.kind === 'slots' ? 'photos' : input.kind
   // The API sends one version of each photo to every market of the account: its first market's language (PLAN.md §4.5).
   const apiLanguage = media.destination.languages.find(l => l !== 'mul') ?? media.mainLanguage
-  return { market, language: language ?? null, apiLanguage, apiMarket: media.destination.markets[0] ?? market, plan, files, digest, filename: `amazon-${market.replace(/[^A-Z0-9]/g, '')}-${kindName}-${digest.slice(0, 10)}.zip` }
+  // Whether the market has photos of its own (a row it changed), for the window's words.
+  const ownPhotos = (await prisma.productMediaPlan.count({ where: { productId: media.rootId, layer: 'LISTING', channel: 'AMAZON', marketplace: market, channelConnectionId: media.destination.accountId } })) > 0
+  return { market, language: language ?? null, apiLanguage, apiMarket: media.destination.markets[0] ?? market, ownPhotos, plan, files, digest,
+    filename: `amazon-${market.replace(/[^A-Z0-9]/g, '')}-${kindName}-${digest.slice(0, 10)}.zip` }
 }
 
 export async function amazonArchivePreview(productId: string, input: AmazonArchiveRequest) {
-  const { market, language, apiLanguage, apiMarket, plan, files, digest, filename } = await archivePlan(productId, input)
-  return { market, kind: input.kind, language, apiLanguage, apiMarket, digest, filename, issues: plan.issues, warnings: plan.warnings, skipped: plan.skipped,
+  const { market, language, apiLanguage, apiMarket, ownPhotos, plan, files, digest, filename } = await archivePlan(productId, input)
+  return { market, kind: input.kind, language, apiLanguage, apiMarket, ownPhotos, sameAsApi: plan.sameAsApi, digest, filename, issues: plan.issues, warnings: plan.warnings, skipped: plan.skipped,
     files: files.map(f => ({ name: f.name, asin: f.asin, slot: f.slot, skus: f.skus, assetId: f.assetId, photo: f.photo })) }
 }
 

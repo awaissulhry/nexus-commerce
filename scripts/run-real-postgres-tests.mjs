@@ -108,7 +108,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'order cancellation gives back what the order took at ingest, never shipped units (eBay, Amazon FBM/FBA, Shopify; markers, races, re-run, owner notice)', file: 'src/services/order-cancellation/order-cancellation-postgres.vitest.test.ts', expect: 17 },
   { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 16 },
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
-  { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account and alias checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 19 },
+  { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account, alias and Amazon market checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 20 },
   { name: 'product media pop-up save (Lane C: one save bound by expect; two pop-ups on one set or one list, one wins; a gallery save is announced)', file: 'src/services/images/media-popup-save.vitest.test.ts', expect: 4 },
   { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 11 },
   { name: 'draft listings race (product sheet create path step 2: two concurrent first saves create one set)', file: 'src/services/pim/draft-listing-postgres.vitest.test.ts', expect: 2 },

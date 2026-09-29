@@ -473,3 +473,44 @@ own destination with its own layer.
 - **Tests:** publish model (several keys, empty list = all); studio + DS suites 4201 pass; web typecheck clean; static
   gates 59/59.
 
+
+## Media page — Amazon photos per market (2026-09-29)
+The Owner's bug: on Amazon, a change made with market IT also showed on DE. Cause: Amazon photos were one layer per
+account (`LISTING:AMAZON:GLOBAL:<account>:`) for every market; the market only changed the language versions shown.
+The Owner approved option 3 (default "All Amazon markets"); built as one PR.
+- **Layers.** The account layer stays: it is "All Amazon markets", the only set Publish photos sends (Amazon's API
+  keeps one photo set per ASIN; SP-API issue #4920). Below it, a market may have its own layer
+  `LISTING:AMAZON:<MARKET>:<account>:` (a Listing row with the market's code — no migration). Resolution: Shared →
+  channel → account → market. Shared code: `MediaPlanStack.market`, source `MARKET` (`packages/shared/media-plan.ts`).
+- **API.** `POST /media/ops` takes `address.marketOnly: true` for a market layer; it checks the account lists the
+  product on that market (404 if not) and refuses Safety there (422: one set for every market). Without the flag an
+  Amazon address still means the account's layer, so the Information sheet's pop-up (it sends the scope's market) and
+  an older page keep editing All Amazon markets. `mediaLayoutFor` always returns the account's layout; only the ZIP asks
+  for `amazonMarket` → `marketLayout`. The Amazon publisher and the create path are unchanged.
+- **Page.** Amazon scope: a switch "All Amazon markets | Only DE" (default All). All shows what Publish sends, in the
+  API's language; Only DE edits Amazon DE's layer, shows its language versions, no Safety row. Marks: "Own for all
+  Amazon markets", "Own for Amazon DE"; Reset: "Reset to shared", "Reset to all Amazon markets" (a DE row whose account
+  owns it), "Reset all markets to shared" (an All-markets row seen from Only DE). A market with own photos gets a note
+  on the page ("Amazon DE has own photos. They reach Amazon only through the DE ZIP …" + "Export the DE ZIP"), in the
+  side panel's list, and on the Amazon line of Publish photos. Side panel on Only DE: DE's preview and checks.
+- **ZIP.** Kinds renamed as the switch: "All Amazon markets" (the API set, bulk upload), "Safety images", "Only DE"
+  (Country-Specific Upload). "Only DE" now holds DE's FULL set as the page shows it (All-markets photos + DE's own rows
+  + German versions) — it is empty, with the reason, when DE shows exactly what the API sends. Opens on "Only DE" from
+  Only DE or the note.
+- **Other readers checked.** Information sheet column/pop-up: reads and writes All Amazon markets (test). Compare:
+  destinations only (All markets). `photoPlacements`: names a market layer "Amazon DE · <account>". `readableNames`,
+  same-photo and versions merges: walk every layer row, market rows included. Upload "One listing": the Amazon line
+  reads "Amazon · <account> · All markets".
+- **DS.** `MediaBoard`: a row's mark and button wrap inside the row head (long listing or market names ran over the
+  photos). Mirrored in Factory; both changelogs.
+- **Checked on the local stack** (API :4004, web :3004, P3b throwaway PG): TEST-JACKET Amazon DE, Only DE, "Make main
+  photo" on Nero → row "Own for Amazon DE", layer `LISTING:AMAZON:DE:…` on the server; market IT: Nero unchanged (the
+  bug is gone), Only IT shows the Italian size chart; the DE ZIP lists Nero 3 as MAIN, the All-markets ZIP keeps
+  Small 400 px; Publish photos names DE's own photos; Reset to shared removed the DE layer; light and dark; 1512 and
+  390 px (no page side-scroll; the marks wrap). Test data left: a DE-only Common order on TEST-JACKET.
+- **Not done (optional, read-only):** live photos on amazon.it vs amazon.de — skipped: a dev-box tool cannot read the
+  production channel logins (KMS).
+- **Tests:** shared media plan 19, archive 7 (country = full set, same-as-API); API service 20 (+ market layer; real
+  PostgreSQL 17: 20/20, runner count 19 → 20), archive service, publisher route test (sends All markets only; a
+  deliberate break that sent the market layout was caught); web model 19, archive model, publish model; studio + DS
+  suites 4205 pass; typecheck api, web, shared, Factory clean; static gates 59/59.

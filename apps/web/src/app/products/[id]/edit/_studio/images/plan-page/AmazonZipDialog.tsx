@@ -9,7 +9,7 @@ import { Button, SegmentedControl, Select, Spinner } from '@/design-system/primi
 
 import { MediaRequestError } from '../ebay/transport'
 import { downloadArchive, requestArchivePreview, type DownloadProgress } from './archiveApi'
-import { ARCHIVE_KIND_LABEL, ARCHIVE_LIMITS, archiveKindHint, archiveSummary, busyLabel, filesByAsin, type ArchivePreview } from './archiveModel'
+import { ARCHIVE_LIMITS, archiveKindHint, archiveKindLabel, archiveSummary, busyLabel, filesByAsin, type ArchivePreview } from './archiveModel'
 import { destinationLabel, type MediaDestinationRow, type MediaRead } from './model'
 import styles from './planPage.module.css'
 
@@ -20,20 +20,23 @@ export interface AmazonZipDialogProps {
   open: boolean
   /** The market the scope selector points at: the window opens on it (Owner, 2026-09-29: ZIP files by market). */
   initialMarket?: string | null
+  /** What it opens on: All Amazon markets, or "Only <market>" when the page shows that market's own photos. */
+  initialKind?: AmazonArchiveKind
   onClose(): void
 }
 
 type Check = { state: 'checking' } | { state: 'ready'; preview: ArchivePreview } | { state: 'failed'; message: string }
 
 /**
- * Images rebuild P4d — "Export ZIP for Seller Central" (PLAN.md §7.1): one market, one kind (all photos, safety images,
- * country photos). The window shows every file the ZIP will hold (ASIN.SLOT.jpg) and the SKUs left out, with the reason;
- * the download is bound to that list, so the ZIP holds exactly what was shown. Nothing is sent to Amazon.
+ * Images rebuild P4d — "Export ZIP for Seller Central" (PLAN.md §7.1): one market, one kind (All Amazon markets, safety
+ * images, Only <market>: every photo that market shows). The window shows every file the ZIP will hold (ASIN.SLOT.jpg)
+ * and the SKUs left out, with the reason; the download is bound to that list, so the ZIP holds exactly what was shown.
+ * Nothing is sent to Amazon.
  */
-export function AmazonZipDialog({ read, destination: d, assets, open, initialMarket = null, onClose }: AmazonZipDialogProps) {
+export function AmazonZipDialog({ read, destination: d, assets, open, initialMarket = null, initialKind = 'slots', onClose }: AmazonZipDialogProps) {
   const start = initialMarket && d.markets.includes(initialMarket) ? initialMarket : d.markets[0] ?? ''
   const [market, setMarket] = useState(start)
-  const [kind, setKind] = useState<AmazonArchiveKind>('slots')
+  const [kind, setKind] = useState<AmazonArchiveKind>(initialKind)
   const [check, setCheck] = useState<Check>({ state: 'checking' })
   const [again, setAgain] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -46,7 +49,7 @@ export function AmazonZipDialog({ read, destination: d, assets, open, initialMar
   useEffect(() => { if (failure || saved) outcome.current?.scrollIntoView({ block: 'nearest' }) }, [failure, saved])
 
   // Each opening starts clean: the answer to an earlier download belongs to that earlier list.
-  useEffect(() => { if (open) { setFailure(''); setSaved(null); setMarket(start) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setFailure(''); setSaved(null); setMarket(start); setKind(initialKind) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   // A new read of the page (someone edited the photos) or another choice checks the list again.
   useEffect(() => {
     if (!open || !market) return
@@ -105,7 +108,7 @@ export function AmazonZipDialog({ read, destination: d, assets, open, initialMar
         </Field>
         <Field label="What to export">
           <SegmentedControl ariaLabel="What to export" size="sm" wrap disabled={busy} value={kind} onChange={value => choose({ kind: value as AmazonArchiveKind })}
-            options={AMAZON_ARCHIVE_KINDS.map(k => ({ value: k, label: ARCHIVE_KIND_LABEL[k] }))} />
+            options={AMAZON_ARCHIVE_KINDS.map(k => ({ value: k, label: archiveKindLabel(k, market) }))} />
         </Field>
       </div>
       <p className={styles.zipText}>{hint.holds}</p>

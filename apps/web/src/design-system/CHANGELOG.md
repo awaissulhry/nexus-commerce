@@ -1,3 +1,9 @@
+## MediaBoard: a row's mark wraps — 2026-09-29
+
+Media page, Amazon photos per market. A row's `source` (its mark and its button: "Own for all Amazon markets", "Reset all
+markets to shared", "Own for ② Outlet (Inventory)") now wraps inside the row head instead of running over the photos:
+`.nds-media-board-source` keeps to the head's width, and a Tag or Button directly inside it may break its words.
+
 ## Photo grid: MediaBoard `slots` — 2026-09-29
 
 Media page redesign (Owner: "one photo grid: rows = sets, columns = slots (MAIN, PT01…)"). **`MediaBoard`** takes an opt-in **`slots`** (the column names) and **`onAddRequest`**: the rows line up under ONE header of slot names, each position is a fixed slot, and a row shows its empty slots up to its **`capacity`** (row prop; default its slot count) as places to drop on — the first one is a button, "Add photos to <row>, <slot>", that calls `onAddRequest`. No ★ badge in this mode (the MAIN column says it); a row may name its own slots (**`slots`** row prop, e.g. PS01…PS06), which then show on its tiles. The board scrolls sideways as one, the set names sticky on the left; it stays a two-column grid on a phone (96 px names). Tiles 76 px. Keyboard, drag, Alt-copy and the ⋯ menu unchanged; screen readers hear the slot name ("Common 1, MAIN in Common"). Off by default, so the sheet's Product media pop-up is unchanged. Styles: `.nds-media-board.slots`, `.nds-media-board-columns*`, `.nds-media-board-slot`, `.nds-media-board-add`. Catalog: `MediaGalleryExample` ("MediaBoard slots"). Mirrored in Factory: `MediaBoard.tsx`, `catalog/MediaGalleryExample.tsx`, `styles/components.css`.

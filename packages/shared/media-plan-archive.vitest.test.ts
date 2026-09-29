@@ -36,12 +36,25 @@ describe('Amazon ZIPs for Seller Central (P4d)', () => {
     expect(plan({ market: 'DE', listingOf: id => id === 'gm' ? { asin: 'GIALLO-M-IT' } : listings[id] ?? null }).skipped)
       .toEqual(['GIALLO-M: its Amazon DE listing holds "GIALLO-M-IT", which is not an ASIN — left out.', 'ROSSO-M: not listed on Amazon DE — left out.'])
   })
-  it('safety images go PS01… on every ASIN; a country ZIP holds only the versions in that market\'s language', () => {
+  it('safety images go PS01… on every ASIN', () => {
     expect(plan({ kind: 'safety' }).files.map(f => f.name)).toEqual(['B0FXPARNT1.PS01.jpg', 'B0FXPARNT1.PS02.jpg', 'B0FXNERO01.PS01.jpg', 'B0FXNERO01.PS02.jpg'])
-    const de = plan({ kind: 'country', market: 'DE', language: 'de' })
-    expect(de.files.map(f => `${f.name}=${f.assetId}`)).toEqual(['B0FXPARNT1.PT01.jpg=chart-de', 'B0FXNERO01.PT01.jpg=chart-de'])
-    // The version the API already sends everywhere (Italian) is not a country photo for Italy.
-    expect(plan({ kind: 'country', language: 'it' }).files).toEqual([])
+  })
+  it('a country ZIP holds every photo the market shows, exactly as the page shows it — or nothing when that is what the API sends', () => {
+    // Amazon DE as the page shows it: its German size chart, and its own MAIN for Nero (a row DE changed).
+    const de: AmazonMediaLayout = { ...layout, parent: { ...layout.parent!, slots: { MAIN: 'main', PT01: 'chart-de' } },
+      items: layout.items.map(i => i.productId.startsWith('n') ? { ...i, slots: { MAIN: 'soft', PT01: 'chart-de', SWCH: 'swatch' } } : i) }
+    const country = plan({ kind: 'country', market: 'DE', layout: de, api: layout })
+    expect(country.sameAsApi).toBe(false)
+    expect(country.files.map(f => `${f.name}=${f.assetId}`)).toEqual(['B0FXPARNT1.MAIN.jpg=main', 'B0FXPARNT1.PT01.jpg=chart-de', 'B0FXNERO01.MAIN.jpg=soft',
+      'B0FXNERO01.PT01.jpg=chart-de', 'B0FXNERO01.SWCH.jpg=swatch'])
+    expect(country.warnings).toEqual(['soft is 800 px — buyers cannot zoom below 1000 px.'])
+    // Amazon IT shows what the API sends (Italian versions, no rows of its own): no country ZIP, and it says why.
+    const same = plan({ kind: 'country', layout, api: layout })
+    expect(same).toMatchObject({ files: [], sameAsApi: true, issues: [], warnings: [] })
+    // A copy of a photo stored on another SKU is the same picture.
+    const copies = new Map([...assets, ['main-copy', { ...asset('main-copy'), url: assets.get('main')!.url }]])
+    const copied = { ...layout, parent: { ...layout.parent!, slots: { MAIN: 'main-copy', PT01: 'chart-it' } } }
+    expect(plan({ kind: 'country', layout: copied, api: layout, assets: copies }).sameAsApi).toBe(true)
   })
   it('refuses two SKUs on one ASIN that would get different photos', () => {
     const clash = { ...layout, items: [layout.items[0], { ...layout.items[1], slots: { MAIN: 'main' } }] }

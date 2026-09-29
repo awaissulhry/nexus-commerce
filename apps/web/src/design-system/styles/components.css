@@ -3036,6 +3036,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-media-board-label { font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
 .nds-media-board-detail { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); font-variant-numeric: tabular-nums; }
 .nds-media-board-source, .nds-media-board-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); }
+/* A row's mark and its button wrap inside the row head (2026-09-29): a long listing or market name ("Own for ② Outlet
+   (Inventory)", "Reset all markets to shared") never runs over the photos. */
+.nds-media-board-source { max-width: 100%; }
+.nds-media-board-source > .nds-tag, .nds-media-board-source > .nds-btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .nds-media-board-list { display: flex; flex-wrap: wrap; align-content: flex-start; gap: var(--nds-space-10); min-width: 0; min-height: 96px; margin: 0; padding: 0; list-style: none; }
 .nds-media-board-list > li { position: relative; width: 96px; }
 .nds-media-board-tile { position: relative; display: flex; flex-direction: column; gap: var(--nds-space-2); }
