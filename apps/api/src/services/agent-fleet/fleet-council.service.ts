@@ -17,6 +17,7 @@ import { Prisma } from '@nexus/database'
 import prisma from '../../db.js'
 import { runApprovalMaintenance } from './approval-inbox.service.js'
 import { runOrQueueTool } from '../agents/approval-gate.service.js'
+import { systemPrincipal } from '../agents/call-tool.js'
 import { runFleet } from './orchestrator.js'
 import { runPreChecks } from './plan-critic.service.js'
 import { resolveItemGate } from './workflow-defs.js'
@@ -164,7 +165,7 @@ export async function runFleetCouncilOnce(): Promise<CouncilResult> {
       const outcome = await runOrQueueTool(
         item.tool,
         item.args as Record<string, unknown>,
-        { userId: null },
+        systemPrincipal('amazon-ads-director'),
         directorRun!.id,
         { forceAsk: gate === 'ask' },
       )

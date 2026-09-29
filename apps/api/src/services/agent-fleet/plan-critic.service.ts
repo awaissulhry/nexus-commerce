@@ -17,6 +17,7 @@
 import type { PlanItemT } from '@nexus/shared/agent-fleet'
 import prisma from '../../db.js'
 import { getTool } from '../agents/tool-registry.js'
+import { callTool, systemPrincipal } from '../agents/call-tool.js'
 import { computeGraphAdvisories } from './graph-critic-checks.js'
 import { foldPlanBlast } from './plan-blast.js'
 import type { BlastInput, BlastVerdict } from '../ads-core/blast-radius-guard.js'
@@ -103,7 +104,9 @@ export async function runPreChecks(plan: {
       })
       continue
     }
-    const res = await tool.handler(item.args as Record<string, unknown>, {})
+    const res = (
+      await callTool(systemPrincipal('plan-critic'), item.tool, item.args as Record<string, unknown>)
+    ).raw
     if (!res.ok) {
       const reason = res.error ?? 'tool dry-run denied'
       const check = /whitelisted|protected/i.test(reason)

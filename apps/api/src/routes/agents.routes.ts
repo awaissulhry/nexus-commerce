@@ -30,6 +30,7 @@ import {
   getAgentOverview,
   setAgentEnabled,
 } from '../services/agents/autonomous-agent.service.js'
+import { requestPrincipal } from '../services/agents/call-tool.js'
 
 const agentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -47,6 +48,7 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
       input,
       entityType: request.body?.entityType ?? null,
       entityId: request.body?.entityId ?? null,
+      principal: await requestPrincipal(request),
     })
     if (!out.ok) {
       return reply
@@ -76,6 +78,7 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
       agentKey: request.body?.agentKey,
       messages,
       pageContext: request.body?.pageContext,
+      principal: await requestPrincipal(request),
     })
     if (!out.ok)
       return reply
@@ -138,7 +141,8 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
   // Invoke a single tool directly (testing + the Phase 2 copilot loop).
   fastify.post<{ Params: { name: string }; Body: Record<string, unknown> }>(
     '/agent/tools/:name/invoke',
-    async (request) => invokeTool(request.params.name, request.body ?? {}, {}),
+    async (request) =>
+      invokeTool(await requestPrincipal(request), request.params.name, request.body ?? {}),
   )
 
   // Seed the editable AgentTool policy rows from the code registry.
@@ -158,7 +162,7 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/agent/actions/request', async (request, reply) => {
     const toolName = request.body?.toolName
     if (!toolName) return reply.code(400).send({ error: 'toolName is required' })
-    return requestApproval(toolName, request.body?.args ?? {}, {})
+    return requestApproval(toolName, request.body?.args ?? {}, await requestPrincipal(request))
   })
 
   fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
@@ -167,11 +171,12 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
       const r = await decideApproval(
         request.params.id,
         'approve',
-        null,
+        await requestPrincipal(request),
         request.body?.reason,
       )
       if (!r.ok && r.error === 'approval not found')
         return reply.code(404).send(r)
+      if (r.code === 'forbidden') return reply.code(403).send(r)
       return r
     },
   )
@@ -182,11 +187,12 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
       const r = await decideApproval(
         request.params.id,
         'reject',
-        null,
+        await requestPrincipal(request),
         request.body?.reason,
       )
       if (!r.ok && r.error === 'approval not found')
         return reply.code(404).send(r)
+      if (r.code === 'forbidden') return reply.code(403).send(r)
       return r
     },
   )

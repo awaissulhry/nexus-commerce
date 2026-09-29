@@ -14,6 +14,7 @@
 import prisma from '../../../db.js'
 import { pinDenial } from '../../advertising/ads-authority-pins.js'
 import { normaliseTerm } from '../../advertising/ads-write-gate.js'
+import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
@@ -90,6 +91,7 @@ async function protectedTermDenial(
 
 const createNegativeKeyword: AgentTool = {
   name: 'create-negative-keyword',
+  requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -149,6 +151,7 @@ const createNegativeKeyword: AgentTool = {
 
 const graduateKeyword: AgentTool = {
   name: 'graduate-keyword',
+  requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -216,6 +219,7 @@ const graduateKeyword: AgentTool = {
 
 const setTargetBid: AgentTool = {
   name: 'set-target-bid',
+  requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,

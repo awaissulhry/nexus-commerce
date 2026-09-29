@@ -11,13 +11,26 @@
  * executes exactly once via an atomic pending→executing claim), and fully
  * audited on AgentApproval + AgentRun. The execute() returns an undo
  * snapshot so applied changes are reversible.
+ *
+ * MCP.1 — every call names its principal. A person may run, queue or approve
+ * only what their permissions cover (call-tool.ts); the stored preview is the
+ * raw one, and what goes back to the caller is filtered for them.
  */
 
 import { Prisma } from '@nexus/database'
 import prisma from '../../db.js'
 import { getTool } from './tool-registry.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
-import type { ToolContext } from './tool-types.js'
+import {
+  callTool,
+  executeTool,
+  missingPermissions,
+  permissionMessage,
+  ToolAccessError,
+  type ToolCall,
+  type ToolPrincipal,
+  type UserPrincipal,
+} from './call-tool.js'
 
 /**
  * How long an unanswered approval lives. NAF.AQ.0 exports it: the fleet
@@ -44,7 +57,7 @@ export interface GateOutcome {
 export async function runOrQueueTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: ToolContext,
+  principal: ToolPrincipal,
   agentRunId: string,
   opts: {
     /** NAF.WF.4b — a workflow step's `ask` gate. Tighten-only by
@@ -54,40 +67,46 @@ export async function runOrQueueTool(
   } = {},
 ): Promise<GateOutcome> {
   const policy = await resolveToolPolicy(name)
-  const tool = getTool(name)
-  if (!policy || !tool)
-    return { ok: false, mode: 'error', error: `unknown tool: ${name}` }
+  if (!policy) return { ok: false, mode: 'error', error: `unknown tool: ${name}` }
   if (!policy.enabled)
     return { ok: false, mode: 'error', error: `tool ${name} is disabled` }
 
   const requiresApproval = policy.requiresApproval || opts.forceAsk === true
 
-  // Read/draft + no-approval tools run immediately.
+  // The dry run, as the principal: refused without the permission, run in
+  // their business. Read/draft + no-approval tools stop here.
+  let call: ToolCall
+  try {
+    call = await callTool(principal, name, args)
+  } catch (err) {
+    if (err instanceof ToolAccessError) return { ok: false, mode: 'error', error: err.message }
+    throw err
+  }
+  const { tool, raw, visible } = call
   if (!requiresApproval) {
-    const res = await tool.handler(args, ctx)
     return {
-      ok: res.ok,
+      ok: raw.ok,
       mode: 'executed',
-      data: res.data ?? res.preview,
-      error: res.error,
+      data: visible.data ?? visible.preview,
+      error: raw.error,
     }
   }
 
-  // Requires approval — build the dry-run preview.
-  const pv = await tool.handler(args, ctx)
-  if (!pv.ok) return { ok: false, mode: 'error', error: pv.error }
+  if (!raw.ok) return { ok: false, mode: 'error', error: raw.error }
   // A preview-only tool (no execute()) can never be queued — it just
   // returns its dry-run preview.
   if (!tool.execute) {
-    return { ok: true, mode: 'preview', preview: pv.preview ?? pv.data }
+    return { ok: true, mode: 'preview', preview: visible.preview ?? visible.data }
   }
+  // The row keeps the raw preview: whoever reads it is filtered for their own
+  // permissions then, and an approver cleared for money sees all of it.
   const ap = await prisma.agentApproval.create({
     data: {
       agentRunId,
       toolName: name,
       riskTier: policy.riskTier,
       args: args as Prisma.InputJsonValue,
-      preview: (pv.preview ?? pv.data) as Prisma.InputJsonValue,
+      preview: (raw.preview ?? raw.data) as Prisma.InputJsonValue,
       status: 'pending',
       expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
     },
@@ -96,7 +115,7 @@ export async function runOrQueueTool(
     ok: true,
     mode: 'queued',
     approvalId: ap.id,
-    preview: pv.preview ?? pv.data,
+    preview: visible.preview ?? visible.data,
   }
 }
 
@@ -107,7 +126,7 @@ export async function runOrQueueTool(
 export async function requestApproval(
   name: string,
   args: Record<string, unknown>,
-  ctx: ToolContext = {},
+  principal: UserPrincipal,
 ): Promise<GateOutcome> {
   const run = await prisma.agentRun.create({
     data: {
@@ -116,19 +135,31 @@ export async function requestApproval(
       status: 'done',
       ok: true,
       input: { tool: name, args } as Prisma.InputJsonValue,
-      userId: ctx.userId ?? null,
+      userId: principal.userId,
       endedAt: new Date(),
     },
   })
-  return runOrQueueTool(name, args, ctx, run.id)
+  return runOrQueueTool(name, args, principal, run.id)
 }
 
+/**
+ * Approve or reject one request. A person may approve only what they could
+ * have done themselves (the tool's `requires`), checked before the claim. A
+ * system decider is the sweep running a decision already taken and checked.
+ */
 export async function decideApproval(
   id: string,
   decision: 'approve' | 'reject',
-  decidedBy?: string | null,
+  decider: ToolPrincipal,
   reason?: string,
-): Promise<{ ok: boolean; status?: string; result?: unknown; error?: string }> {
+): Promise<{
+  ok: boolean
+  status?: string
+  result?: unknown
+  error?: string
+  /** Set when the decider lacks the tool's permission; a route answers 403. */
+  code?: 'forbidden'
+}> {
   const ap = await prisma.agentApproval.findUnique({ where: { id } })
   if (!ap) return { ok: false, error: 'approval not found' }
   if (ap.status !== 'pending') return { ok: false, error: `already ${ap.status}` }
@@ -138,7 +169,7 @@ export async function decideApproval(
       where: { id },
       data: {
         status: 'rejected',
-        decidedBy: decidedBy ?? null,
+        decidedBy: decider.label,
         decidedAt: new Date(),
         reason: reason ?? null,
       },
@@ -146,14 +177,19 @@ export async function decideApproval(
     return { ok: true, status: 'rejected' }
   }
 
+  const tool = getTool(ap.toolName)
+  const missing = tool ? missingPermissions(decider, tool) : []
+  if (missing.length > 0) {
+    return { ok: false, code: 'forbidden', error: permissionMessage(ap.toolName, missing) }
+  }
+
   // Approve — atomic pending→executing claim makes execution idempotent.
   const claim = await prisma.agentApproval.updateMany({
     where: { id, status: 'pending' },
-    data: { status: 'executing', decidedBy: decidedBy ?? null, decidedAt: new Date() },
+    data: { status: 'executing', decidedBy: decider.label, decidedAt: new Date() },
   })
   if (claim.count === 0) return { ok: false, error: 'already taken' }
 
-  const tool = getTool(ap.toolName)
   if (!tool?.execute) {
     await prisma.agentApproval.update({
       where: { id },
@@ -166,21 +202,23 @@ export async function decideApproval(
     }
   }
   try {
-    const res = await tool.execute(ap.args as Record<string, unknown>, {
-      userId: decidedBy,
-    })
+    const { raw, visible } = await executeTool(
+      decider,
+      ap.toolName,
+      ap.args as Record<string, unknown>,
+    )
     await prisma.agentApproval.update({
       where: { id },
       data: {
-        status: res.ok ? 'executed' : 'pending',
-        reason: res.ok ? null : `execution failed: ${res.error}`,
+        status: raw.ok ? 'executed' : 'pending',
+        reason: raw.ok ? null : `execution failed: ${raw.error}`,
       },
     })
     return {
-      ok: res.ok,
-      status: res.ok ? 'executed' : 'pending',
-      result: res.data,
-      error: res.error,
+      ok: raw.ok,
+      status: raw.ok ? 'executed' : 'pending',
+      result: visible.data,
+      error: raw.error,
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

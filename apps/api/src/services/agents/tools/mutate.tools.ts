@@ -28,6 +28,7 @@ import { masterPriceService } from '../../master-price.service.js'
 import { getAmazonPublishMode } from '../../amazon-publish-gate.service.js'
 import { isEmailSuppressed } from '../../reviews/email-suppression.service.js'
 import { sendEmail } from '../../email/transport.js'
+import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 
 const SUPPRESSION_CHANNEL = 'agent-customer-message'
@@ -42,6 +43,7 @@ function publishModeFor(channel: string): string {
 
 const setPrice: AgentTool = {
   name: 'set-price',
+  requires: [F.productsPriceEdit],
   category: 'pricing',
   riskTier: 'high',
   readOnly: false,
@@ -110,6 +112,7 @@ const setPrice: AgentTool = {
 
 const publishListing: AgentTool = {
   name: 'publish-listing',
+  requires: [F.listingsPublish],
   category: 'listings',
   riskTier: 'high',
   readOnly: false,
@@ -194,6 +197,7 @@ const publishListing: AgentTool = {
 
 const sendCustomerMessage: AgentTool = {
   name: 'send-customer-message',
+  requires: [F.ordersEdit],
   category: 'comms',
   riskTier: 'high',
   readOnly: false,
@@ -314,6 +318,7 @@ function escapeHtml(s: string): string {
 // (requiresApprovalDefault) so the loop is proven on a safe action.
 const applyContent: AgentTool = {
   name: 'apply-content',
+  requires: [F.productsEdit],
   category: 'products',
   riskTier: 'medium',
   readOnly: false,

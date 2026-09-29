@@ -187,7 +187,11 @@ describe('AP.6 — commit refuses a stale action', () => {
   it('runs normally when nothing moved', async () => {
     const out = await commitScheduledApproval('a1')
     expect(out.ok).toBe(true)
-    expect(gate).toHaveBeenCalledWith('a1', 'approve', 'Awais')
+    expect(gate).toHaveBeenCalledWith(
+      'a1',
+      'approve',
+      expect.objectContaining({ kind: 'system', label: 'Awais' }),
+    )
   })
 })
 

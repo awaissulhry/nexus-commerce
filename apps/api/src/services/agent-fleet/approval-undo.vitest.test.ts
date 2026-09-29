@@ -46,7 +46,13 @@ const db = vi.mocked(prisma, true)
 const gate = vi.mocked(decideApproval)
 const audit = vi.mocked(recordControlChange)
 const mint = vi.mocked(mintExemplarFromDecision)
-const actor = { label: 'Awais', userId: 'u1' }
+const actor = {
+  kind: 'user' as const,
+  label: 'Awais',
+  userId: 'u1',
+  permissions: { isOwner: true, permissions: new Set<string>() },
+  via: 'app' as const,
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -85,6 +91,41 @@ describe('AP.4 — approving parks instead of firing', () => {
     })
   })
 
+  it('MCP.1 — refuses a person who could not make the change, inside the claim itself', async () => {
+    const viewer = {
+      ...actor,
+      permissions: { isOwner: false, permissions: new Set(['ai.run', 'ads.view']) },
+    }
+    db.agentApproval.updateMany.mockResolvedValue({ count: 0 } as never)
+    db.agentApproval.findUnique.mockResolvedValue({
+      status: 'pending',
+      toolName: 'set-target-bid',
+    } as never)
+    const out = await scheduleApproval({ id: 'a1', actor: viewer })
+    expect(out).toMatchObject({ ok: false, code: 'forbidden' })
+    expect(out.error).toContain('ads.bids.edit')
+    const where = db.agentApproval.updateMany.mock.calls[0]![0]!.where as {
+      toolName: { in: string[] }
+    }
+    expect(where.toolName.in).not.toContain('set-target-bid')
+  })
+
+  it('MCP.1 — a person with the permission may park it', async () => {
+    const bidder = {
+      ...actor,
+      permissions: {
+        isOwner: false,
+        permissions: new Set(['ai.run', 'ads.bids.edit', 'financials.adspend.view']),
+      },
+    }
+    const out = await scheduleApproval({ id: 'a1', actor: bidder })
+    expect(out).toMatchObject({ ok: true, status: 'scheduled' })
+    const where = db.agentApproval.updateMany.mock.calls[0]![0]!.where as {
+      toolName: { in: string[] }
+    }
+    expect(where.toolName.in).toContain('set-target-bid')
+  })
+
   it('refuses to park something that is not pending', async () => {
     db.agentApproval.updateMany.mockResolvedValue({ count: 0 } as never)
     db.agentApproval.findUnique.mockResolvedValue({ status: 'executed' } as never)
@@ -104,7 +145,7 @@ describe('AP.4 — approving parks instead of firing', () => {
   it('a reject still fires straight through — there is nothing to take back', async () => {
     gate.mockResolvedValue({ ok: true, status: 'rejected' })
     await decideFleetApproval({ id: 'a1', decision: 'reject', reason: 'too broad', actor })
-    expect(gate).toHaveBeenCalledWith('a1', 'reject', 'Awais', 'too broad')
+    expect(gate).toHaveBeenCalledWith('a1', 'reject', actor, 'too broad')
   })
 })
 
@@ -163,7 +204,12 @@ describe('AP.4 — commit enforces the window server-side', () => {
     const out = await commitScheduledApproval('a1')
     expect(out.ok).toBe(true)
     // Attribution survives the delay — the sweep does not become the decider.
-    expect(gate).toHaveBeenCalledWith('a1', 'approve', 'Awais')
+    // The sweep runs the decision under the person who took it.
+    expect(gate).toHaveBeenCalledWith(
+      'a1',
+      'approve',
+      expect.objectContaining({ kind: 'system', label: 'Awais' }),
+    )
   })
 
   it('refuses anything that is not parked', async () => {
