@@ -105,7 +105,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     // The refs are read HERE, at call time, so the write always sees the current sheet and options
     // rather than the ones that existed when this callback was built.
     // `bulkSend` present = this row is one unit of a sheet operation, sent with every other row it changed as ONE
-    // `POST /api/products/bulk-save` (`runBulkOperation`). Everything else about the row's save is the same.
+    // bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else about the row's save is the same.
     async (req: SheetWriteRequest<StudioRow>, bulkSend?: BulkSend): Promise<SheetWriteResult> => {
       let completed: Parameters<NonNullable<UseMasterSheetOptions['onWriteEnd']>> | undefined
       const result = await commitMasterRow(req, { sheet: sheetRef.current, bulkSend, opts: {

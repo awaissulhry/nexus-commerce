@@ -272,7 +272,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const writerRef = useRef<SheetWriter<ChannelSheetRow> | null>(null);
     if (writerRef.current === null) {
         /* ONE row's save, with its reporter bookkeeping. `bulkSend` present = this row is one unit of a sheet operation
-           (`runBulkOperation`), which leaves as ONE `POST /api/products/bulk-save` with every other row it changed. */
+           (`runBulkOperation`, `bulkOperation.ts`), which leaves as ONE bulk-save request with every other row it changed. */
         const commitOne = async (req: SheetWriteRequest<ChannelSheetRow>, bulkSend?: BulkSend) => {
             const { writeId, subject } = channelWriteIdentity(req.rowId, ++writeSeq.current, { channel, marketplace, accountId, locale, instanceId: writeInstanceId });
             reporterRef.current.pending(writeId, subject);

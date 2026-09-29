@@ -57,7 +57,7 @@ export interface MasterCommitContext {
   sheet: StudioSheet | null
   /**
    * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
-   * operation's single `POST /api/products/bulk-save` (`runBulkOperation`). Everything else here is the same.
+   * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
    */
   bulkSend?: BulkSend
   /** Only the write callbacks; this function has no business with the rest of the options. */

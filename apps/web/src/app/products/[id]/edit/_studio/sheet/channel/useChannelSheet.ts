@@ -342,7 +342,7 @@ export interface ChannelWriteCoord {
   onListingsCreated?: (created: CreatedListing[], adopted: ChannelSheetRow[]) => void
   /**
    * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
-   * operation's single `POST /api/products/bulk-save` (`runBulkOperation`). Everything else here is the same.
+   * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
    */
   bulkSend?: BulkSend
 }

@@ -13,6 +13,7 @@
  * language, a retry at an adopted version) waits for the next round — normally there is exactly one.
  */
 import { getBackendUrl } from '@/lib/backend-url'
+import { CommandKey, sendCommand } from '@/lib/command-key'
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 /** The part of a fetch `Response` the row commits read — typed as `Response` types it, so their reading is unchanged. */
@@ -37,24 +38,29 @@ export const directBulkSend: BulkSend = (body) => fetch(`${getBackendUrl()}/api/
 
 export interface BulkSaveUnitWire extends Record<string, unknown> { key: string }
 
+const answer = (status: number, body: unknown): BulkAnswer => ({ status, ok: status >= 200 && status < 300, json: async () => body })
+
 /**
  * POST one operation. No client timeout on purpose: a 500-row save can take longer than one row's 30 s, and a slow
  * answer is still THE answer — the writer paints "still waiting" meanwhile instead of inventing a failure.
- * The Idempotency-Key makes a resend after a lost connection replay the stored answer, never apply twice.
+ * Through `sendCommand`, the one door for keyed commands: the operation's id is its Idempotency-Key, so a resend after
+ * a lost connection replays the stored answer and never applies twice.
  */
 export type BulkSavePost = (operationId: string, units: BulkSaveUnitWire[]) => Promise<BulkAnswer>
-export const postBulkSave: BulkSavePost = (operationId, units) => fetch(`${getBackendUrl()}/api/products/bulk-save`, {
-  method: 'POST',
-  credentials: 'include',
-  headers: { 'Content-Type': 'application/json', 'Idempotency-Key': operationId },
-  body: JSON.stringify({ operationId, units }),
-})
+export const postBulkSave: BulkSavePost = async (operationId, units) => {
+  const { response, body } = await sendCommand(new CommandKey(() => operationId), `${getBackendUrl()}/api/products/bulk-save`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operationId, units }),
+  })
+  return answer(response.status, body)
+}
 
 /** The server's bounds (`bulk-save.service.ts`); an operation beyond them is sent as consecutive requests. */
 const MAX_UNITS = 2_000
 const MAX_CHANGES = 10_000
 
-const answer = (status: number, body: unknown): BulkAnswer => ({ status, ok: status >= 200 && status < 300, json: async () => body })
 
 function chunk<W extends { unit: BulkSaveUnitWire }>(units: W[]): W[][] {
   const chunks: W[][] = []

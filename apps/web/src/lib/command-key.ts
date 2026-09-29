@@ -1,7 +1,7 @@
 /**
  * One Idempotency-Key per operator intent, for the commands the API keeps durable receipts for
  * (`apps/api/src/lib/command-idempotency.ts`): bulk replicate, PIM attach-to-parent and
- * promote-to-parent, and the listing-wizard submit.
+ * promote-to-parent, the listing-wizard submit, and the product sheet's bulk save (one fill, paste or undo).
  *
  * What the server does with a key, and what the web does with the key afterwards:
  *   - 2xx: the command ran, or its stored result was replayed. Done: drop the key, so the next
