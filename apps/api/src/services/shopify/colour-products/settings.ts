@@ -53,3 +53,16 @@ export async function saveColourProductSettings(accountId: string, body: unknown
   if (result.count !== 1) throw new WorkspaceScopeError('A concurrent store update interrupted this save. Reload before retrying.', 409)
   return readColourProductSettings(accountId)
 }
+
+/**
+ * The two grouping fields when colour products manage this family on this store and alias: the switch is on and at
+ * least one colour is confirmed. Then the link writer (link.service.ts) is their only writer. Null: they are not managed.
+ */
+export async function colourManagedFields(destination: { familyId: string; accountId: string; marketplace: string; aliasKey?: string | null }) {
+  // The rows first: most families have none, and then the store settings are not read at all.
+  const linked = await prisma.shopifyColourProduct.count({ where: { familyId: destination.familyId, channelConnectionId: destination.accountId, marketplace: destination.marketplace,
+    aliasKey: destination.aliasKey ?? '', state: 'LINKED' } })
+  if (!linked) return null
+  const settings = await readColourProductSettings(destination.accountId)
+  return settings.enabled ? [settings.valueField, settings.listField] : null
+}

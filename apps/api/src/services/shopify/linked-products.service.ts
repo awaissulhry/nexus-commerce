@@ -9,6 +9,8 @@ import { contentDestination, object, PUBLISH_KEY, type ContentScope } from './co
 import { shopifyAdmin, assertShopifyResult, type ShopifyGraphql } from './admin-client.js'
 import { linkedDigest, readApplicableShopifyDefinitions, readLinkedFields, readLinkedOwner, readLinkedProducts, readLinkedStoreSchema, resolveLinkedReferences } from './linked-products-gateway.js'
 import { WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
+import { colourGroupingIssue } from './linked-state-guard.js'
+import { colourManagedFields } from './colour-products/settings.js'
 
 import { resolveSharedContent } from './linked-shared-content.service.js'
 import { readInformation, readInformationNativeOwners, verifyInformationPlan, applyNativeEdit, advanceMediaOrder } from './information-gateway.js'
@@ -72,6 +74,8 @@ export async function saveLinkedWorkspace(productId: string, scope: ContentScope
   const input = object(body), parsed = shopifyLinkedDraftSchema.safeParse(input.draft)
   if (!parsed.success || typeof input.expectedRevision !== 'string') throw new WorkspaceScopeError(parsed.success ? 'The observed revision is required.' : parsed.error.issues.map(i => i.message).join(' '), 400)
   const destination = await contentDestination(productId, scope)
+  const grouping = colourGroupingIssue(await colourManagedFields(destination), parsed.data)
+  if (grouping) throw new WorkspaceScopeError(grouping, 409)
   const schema = await readShopifyMappingSchema(destination.accountId, true)
   for (const edit of parsed.data.nativeEdits ?? []) {
     const error = nativeSchemaError(schema, edit)
@@ -270,6 +274,9 @@ export async function beginLinkedSync(productId: string, scope: ContentScope, bo
   const { workspace, plan } = await previewLinkedWorkspace(productId, scope)
   if (input.expectedRevision !== workspace.revision || input.planRevision !== plan.revision) throw new WorkspaceScopeError('The draft or Shopify changed after review. Refresh the review.')
   if (!plan.changes.length && !plan.nativeEdits?.length && !plan.mediaEdits?.length && !plan.sheetGalleries?.length) return workspace
+  // Covers the Product family tab, the sheet cells and the family automation: all of them synchronize here.
+  const grouping = colourGroupingIssue(await colourManagedFields(destination), workspace.draft, plan.changes)
+  if (grouping) throw new WorkspaceScopeError(grouping, 409)
   if (origin === 'AUTOMATIC' && (plan.nativeEdits?.length || plan.mediaEdits?.length || plan.sheetGalleries?.length)) throw new WorkspaceScopeError('Synchronize Information changes manually before enabling family automation.', 422)
   const gallerySchema = plan.galleryRevision ? await readShopifyMappingSchema(destination.accountId) : null
   return linkedTransaction(async tx => {
