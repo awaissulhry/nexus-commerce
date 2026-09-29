@@ -17,8 +17,8 @@
  * - After a run, a test file that skipped ALL its tests must be on SKIP_ALLOWED. A test that skips
  *   because CI forgot an environment variable measured nothing, and that must be loud.
  *
- *   node scripts/ci/api-test-plan.mjs --shard 1/3          print shard 1's files, one per line
- *   node scripts/ci/api-test-plan.mjs --shard 1/3 --run -- --reporter=json …   run vitest on them
+ *   node scripts/ci/api-test-plan.mjs --shard 1/4          print shard 1's files, one per line (CI: 4 shards)
+ *   node scripts/ci/api-test-plan.mjs --shard 1/4 --run -- --reporter=json …   run vitest on them
  *     (the file list goes to vitest as an argument array, so no shell can mangle it)
  *   node scripts/ci/api-test-plan.mjs --summary            print the counts and the exclusions
  *   node scripts/ci/api-test-plan.mjs --check-skips a.json[,b.json]   judge vitest JSON reports

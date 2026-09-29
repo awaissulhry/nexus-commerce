@@ -269,13 +269,13 @@ A new `.github/workflows/ci.yml`. The jobs run in parallel.
 | Job | When | Does | Est. (4 vCPU) |
 |---|---|---|---|
 | `checks` | always | static gates, typecheck, web tests and small workspace tests (see below) | 3–4 min |
-| `api (1/3)`, `(2/3)`, `(3/3)` | **always, full suite, never affected-gated** | each shard runs its third of the whole API suite twice: profiles **OFF**, then profiles **ON** (see below) | ~4 min |
-| `postgres` | **always** | one `pgvector/pgvector:pg17` container, used by all the real-DB work (see below) | 4–5 min |
+| `api (1/4)` … `(4/4)` | **always, full suite, never affected-gated** | each shard runs its quarter of the whole API suite twice: profiles **OFF**, then profiles **ON** (see below). Three shards until 2026-09-30. | ~4 min |
+| `postgres (1/2)`, `(2/2)` | **always** | one `pgvector/pgvector:pg17` container per part (see below). The real-PG suites are split in two by measured time; the other real-DB steps run once, in part 1. One job until 2026-09-30. | 4–5 min |
 | `smoke (1/2)`, `(2/2)` | affected web or api | builds and starts the app, runs Playwright `@smoke` (see below) | 5–6 min |
 | `db-security` | always, needs `api` + `postgres` | aggregator with a fixed name, so a branch rule can require it | seconds |
 | `ci-ok` | always, needs all | fails on any failed or cancelled job. "Skipped" is allowed only for `smoke`. | seconds |
 
-Peak: 7 jobs per PR run. Critical path: `smoke`, about 6–7 min (estimate).
+Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: `smoke`, about 6–7 min (estimate).
 
 **`checks` job**
 - `scripts/ci/run-static-gates.mjs` runs, in parallel, and reports **all** failures, not the first:
@@ -314,6 +314,7 @@ Peak: 7 jobs per PR run. Critical path: `smoke`, about 6–7 min (estimate).
 - **Skip ratchet:** a skipped test file that is not on a short allowlist fails the job. This catches tests that skip because an env variable is missing.
 
 **`postgres` job — one container, all real-DB work**
+- Since 2026-09-30 two parts. `run-real-postgres-tests.mjs --part N/2` runs half of the real-PG suites, split by measured time; it refuses a split that loses or repeats a suite. Part 1 also runs every other step below, once.
 - The container runs with fsync, synchronous_commit and full_page_writes off, on tmpfs. It creates the `vector` and `pg_trgm` extensions, which only migrations create.
 - **Security:**
   - `runtime-role-postgres`

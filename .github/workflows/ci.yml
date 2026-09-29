@@ -2,9 +2,10 @@
 #
 # Target: under 10 minutes of wall time, with EVERY security check on every run:
 #   checks       static gates, typecheck of affected workspaces, the whole web suite, small workspaces
-#   api (1..3)   the WHOLE API suite in three shards, business profiles OFF then ON
-#   postgres     real PostgreSQL 17: runtime-role isolation, the 11 real-PG race suites, RBAC
-#                deny-by-default coverage, database package tests, the migration upgrade check
+#   api (1..4)   the WHOLE API suite in four shards, business profiles OFF then ON
+#   postgres (1..2)  real PostgreSQL 17: the real-PG race suites in two parts, split by measured time;
+#                runtime-role isolation, RBAC deny-by-default coverage, database package tests and the
+#                migration upgrade check run once, in part 1
 #   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
 #                database login, seeded disposable database, production hosts fenced off
 #   db-security  the profiles-ON ratchet over all API shards (fixed name, so a branch rule can require it)
@@ -72,14 +73,18 @@ jobs:
       - name: Factory, shared and events tests (affected)
         run: npx turbo run test --affected --filter=@nexus/factory --filter=@nexus/shared --filter=@nexus/events
 
+  # Four shards since 2026-09-30 (three before). In 15 runs of 2026-09-29 a shard took 6–11 min and the
+  # PostgreSQL job 7–12.6 min: verify was the long pole of every deploy (docs/ci-fast-deploys/PLAN-2026-09-29.md,
+  # D1). The split is the same file list, every file once (scripts/ci/api-test-plan.mjs). db-security counts
+  # one report per shard.
   api:
-    name: API tests (${{ matrix.shard }}/3, profiles OFF + ON)
+    name: API tests (${{ matrix.shard }}/4, profiles OFF + ON)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -109,7 +114,7 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379
           NEXUS_TEST_REDIS_URL: redis://127.0.0.1:6379
         run: |
-          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/3 --run -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
+          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/4 --run -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
           node scripts/ci/api-test-plan.mjs --check-skips "$RUNNER_TEMP/off.json"
 
       - name: Profiles ON (judged by the ratchet in db-security)
@@ -119,7 +124,7 @@ jobs:
           REDIS_URL: redis://127.0.0.1:1
         run: |
           set +e
-          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/3 --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
+          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/4 --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
           echo "profiles-ON pass exited $? — known failures are judged against profiles-on-baseline.ci.json"
           set -e
           test -s "$RUNNER_TEMP/on.json" || { echo "✗ no profiles-ON report — could not measure"; exit 1; }
@@ -131,10 +136,19 @@ jobs:
           path: ${{ runner.temp }}/on.json
           retention-days: 7
 
+  # Two parts since 2026-09-30 (one job before). In 15 runs of 2026-09-29 the real-PG suites alone took a median
+  # 10.5 min of this job's 12.4 min, and the job was verify's longest in 14 of them. Each part runs half of the suites,
+  # split by measured time (scripts/run-real-postgres-tests.mjs --part; it refuses a split that loses or repeats a
+  # suite). The steps that run once (RBAC, the migration upgrade check, the database package) stay on part 1.
+  # Part 2 uses the service container only for its image: the runner starts its own server and never pulls one.
   postgres:
-    name: PostgreSQL 17 — isolation, races, RBAC, migrations
+    name: PostgreSQL 17 — isolation, races, RBAC, migrations (${{ matrix.part }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -156,27 +170,32 @@ jobs:
           filter: blob:none
       - uses: ./.github/actions/setup
       - name: Base commit
+        if: matrix.part == 1
         run: node scripts/ci/base-commit.mjs >> "$GITHUB_ENV"
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
       - name: Durability off; image for the runtime-role test
+        if: matrix.part == 1
         run: |
           psql postgresql://postgres@127.0.0.1:5432/postgres -qc "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
           docker pull -q postgres:17-alpine
 
       - name: RBAC deny-by-default coverage
+        if: matrix.part == 1
         run: npx tsx apps/api/src/scripts/check-rbac-coverage.ts
 
       - name: Migrations — the PR's, applied as production applies them, equal a fresh database
+        if: matrix.part == 1
         run: node scripts/ci/check-migration-upgrade.mjs --server postgresql://postgres@127.0.0.1:5432
 
       - name: Database package — baseline, applied-but-missing and the other database scripts
+        if: matrix.part == 1
         run: npm run test --workspace=@nexus/database
 
-      - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins)
-        run: node scripts/run-real-postgres-tests.mjs --required
+      - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins), part ${{ matrix.part }} of 2
+        run: node scripts/run-real-postgres-tests.mjs --required --part ${{ matrix.part }}/2
 
   smoke:
     name: Smoke (${{ matrix.shard }}/2) — production build
@@ -286,9 +305,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: API shards and PostgreSQL job must have passed
+      # A matrix job's result is success only when every leg succeeded: all four API shards, both PostgreSQL parts.
+      - name: All API shards and both PostgreSQL parts must have passed
         run: |
-          echo "api: ${{ needs.api.result }} · postgres: ${{ needs.postgres.result }}"
+          echo "api (4 shards): ${{ needs.api.result }} · postgres (2 parts): ${{ needs.postgres.result }}"
           test "${{ needs.api.result }}" = success && test "${{ needs.postgres.result }}" = success
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -301,7 +321,7 @@ jobs:
       - name: Profiles-ON ratchet over every shard
         run: |
           reports=$(find "$RUNNER_TEMP/on" -name on.json | sort | paste -sd, -)
-          test "$(echo "$reports" | tr ',' '\n' | grep -c .)" = 3 || { echo "✗ expected 3 shard reports, got: $reports"; exit 1; }
+          test "$(echo "$reports" | tr ',' '\n' | grep -c .)" = 4 || { echo "✗ expected 4 shard reports, got: $reports"; exit 1; }
           node apps/api/scripts/profiles-on-ratchet.mjs --report="$reports" --baseline=apps/api/scripts/profiles-on-baseline.ci.json
 
   ci-ok:
