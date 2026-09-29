@@ -216,6 +216,7 @@ import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 // Phase S1 (auth core) — human authentication endpoints.
 import authRoutes from "./routes/auth.routes.js";
 import mfaRoutes from "./routes/mfa.routes.js";
+import oauthRoutes from './routes/oauth.routes.js';
 import teamRoutes from "./routes/team.routes.js";
 // Phase S2 (RBAC engine) — the one global permission gate (shadow/enforce).
 import { rbacHook } from "./lib/auth/rbac-hook.js";
@@ -540,6 +541,8 @@ registerCommandIdempotency(app);
 app.register(authRoutes);
 // Phase S5 — self-service TOTP 2FA (/api/auth/2fa/*).
 app.register(mfaRoutes);
+// MCP.5 — OAuth 2.1 for connecting Claude (/api/oauth/*). 404 unless NEXUS_MCP_ENABLED=1.
+app.register(oauthRoutes);
 app.register(workspaceInvitationsRoutes);
 // Phase S4 — Team & Access API (/api/team/*), gated by the RBAC manifest.
 app.register(teamRoutes);
