@@ -1,8 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { memoizeReads, type ReadMemo } from './transaction-read-memo.js'
 
 type Context = {
   client: Prisma.TransactionClient; isolationLevel: Prisma.TransactionIsolationLevel
+  /** `memoReads` transactions: repeated reads answered from memory (transaction-read-memo.ts). */
+  memo?: ReadMemo
   effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>>
   /** Items collected under one after-commit key (`afterDatabaseCommitBatch`), so N writers pay ONE effect. */
   batches: Map<string, Set<unknown>>
@@ -158,27 +161,36 @@ function isRaceFailure(error: unknown): boolean {
   return /code: "(40001|40P01)"|Code: `(40001|40P01)`/.test(e.message ?? '')
 }
 
-export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeoutMs?: number }): Promise<T> {
+/**
+ * `memoReads` (P2): repeated reads inside this transaction are answered from memory until this transaction writes
+ * (transaction-read-memo.ts). Only for a snapshot isolation level, where a repeated read returns the same rows.
+ */
+export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeoutMs?: number; memoReads?: boolean }): Promise<T> {
   const existing = context.getStore()
   if (existing) {
     if (options?.isolationLevel && options.isolationLevel !== existing.isolationLevel) throw new Error('The requested transaction isolation does not match the current transaction.')
     return work()
   }
   const isolationLevel = options?.isolationLevel ?? 'Serializable'
+  if (options?.memoReads && isolationLevel !== 'Serializable' && isolationLevel !== 'RepeatableRead') throw new Error('Remembered reads need a snapshot transaction (Serializable or Repeatable Read).')
   for (let attempt = 0; ; attempt++) {
     const effects = new Map<string, () => Promise<unknown>>()
     const producers = new Map<string, () => Promise<unknown>>()
     const batches = new Map<string, Set<unknown>>()
     let result: T
     try {
-      result = await client.$transaction(tx => context.run({ client: tx, isolationLevel, effects, producers, batches }, async () => {
+      result = await client.$transaction(tx => {
+        // A restarted attempt starts with nothing remembered: it reads a new snapshot.
+        const reads = options?.memoReads ? memoizeReads(tx) : null
+        return context.run({ client: reads?.client ?? tx, memo: reads?.memo, isolationLevel, effects, producers, batches }, async () => {
         const value = await work()
         while (producers.size) {
           const pending = [...producers.values()]; producers.clear()
           for (const produce of pending) await produce()
         }
         return value
-      }), {
+      })
+      }, {
         isolationLevel, maxWait: 10_000, timeout: options?.timeoutMs ?? 60_000,
       })
     } catch (error) {
@@ -224,6 +236,8 @@ export async function inSavepoint<T>(work: () => Promise<T>): Promise<{ ok: true
     return { ok: true, value: value! }
   } catch (error) {
     if (transactionMustRestart(error)) throw error
+    // The savepoint's writes are undone: a read remembered after them no longer describes the database.
+    active.memo?.clear()
     restoreInPlace(active.effects, effects)
     restoreInPlace(active.producers, producers)
     restoreInPlace(active.batches, batches)
