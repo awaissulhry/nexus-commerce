@@ -37,6 +37,9 @@
  *     that such a variation has no column there, and that its inherited row must link, not be refused.
  *   · `category-tree-concurrency.vitest.test.ts` (2026-09-26) — concurrent category moves, creates, membership
  *     replacements and Categories workspace commands serialize on the business's category-tree lock.
+ *   · `routes/mcp-cross-business-postgres.vitest.test.ts` (MCP.8, 2026-09-30) — Claude's connection for one business
+ *     never reaches another: the /mcp route, the Approvals and Connected apps routes and every tool, run as the
+ *     restricted runtime login, so row-level security holds exactly as it does in production.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -126,6 +129,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Amazon Ads drift closes on evidence, per profile (structural reconcile under row security)', file: 'src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts', expect: 1 },
   { name: '"New attribute" race (sheet pop-up A3: two creates of one name leave one attribute and one family link)', file: 'src/services/pim/own-axis-attribute-postgres.vitest.test.ts', expect: 1 },
   { name: 'Shopify sheet draft saves racing (Lane B: one winner per cell, nothing lost, a refused save is not in the draft)', file: 'src/services/shopify/channel-sheet-race-postgres.vitest.test.ts', expect: 2 },
+  { name: 'Claude for one business never reaches another (MCP.8: every tool with the other business\'s ids, header and query, membership, role, revocation, approvals, canary scan)', file: 'src/routes/mcp-cross-business-postgres.vitest.test.ts', expect: 16 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'
