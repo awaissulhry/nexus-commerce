@@ -12,8 +12,9 @@ import { channelLabel } from '@nexus/shared/channel-label'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
-import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
-import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
+import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
+import { shopifyValueFinding } from '../pim/mapping/validate-channel-value.js'
+import { editVerdict } from '../pim/value-verdict.js'
 import { writeChannelOverrideMerge } from '../pim/channel-value-write.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
 import { createReferenceResolver } from '../pim/reference-values.service.js'
@@ -1049,8 +1050,13 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         const raw = value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
         const store = storeFor(c.id, c.field.replace(/^attr_/, ''))
         const translation = store?.kind === 'platformAttributes' && store.path[0] === '_shopifyInformationLocales'
-        const error = field.reason ?? (field.definition && raw !== null ? shopifyDefinitionApplicability(field.definition, rowCategoryById.get(c.id)) : null) ?? (translation && raw === null ? null : field.definition ? validateShopifyField(field.definition, raw) : nativeFieldValueError(field.id as NativeEdit['field'], raw))
+        const error = field.reason ?? (field.definition && raw !== null ? shopifyDefinitionApplicability(field.definition, rowCategoryById.get(c.id)) : null)
         if (error) { errors.push({ id: c.id, field: c.field, error }); continue }
+        // Audit A26 — the verdict the import applies (`shopifyFinding`): only what the field's type cannot hold is refused;
+        // a value off the choices, over a limit, or a required field cleared is stored and answers a warning.
+        const found = translation && raw === null ? null : shopifyValueFinding(field, raw)
+        if (found && editVerdict(found) === 'refuse') { errors.push({ id: c.id, field: c.field, error: found.message }); continue }
+        if (found) warnFrom(c.id, c.field, [found])
         if (field.definition && field.currency && raw !== null && JSON.parse(raw).currency_code !== field.currency) { errors.push({ id: c.id, field: c.field, error: `Use this Shopify store’s ${field.currency} currency.` }); continue }
         // Metafield strings are Shopify's wire format, including JSON and explicit empty text.
         // Never run text trimming, Number coercion or slot flattening on them.

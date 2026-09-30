@@ -9,7 +9,7 @@ import { primaryConnectionIds } from '../../connection-resolver.service.js'
 import { isBlankValue, projectCellValue } from '../sheet-values.js'
 import { normalizeEbayListingValue } from '../ebay-listing-values.js'
 import { storedChannelState } from '../channel-value-mutation.js'
-import { isOffListError, validateChannelValue } from './validate-channel-value.js'
+import { isOffListError, requiredFinding, validateChannelValue } from './validate-channel-value.js'
 import { finding, type ValueFinding } from '../value-verdict.js'
 import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import { masterDefaultRule } from './master-default-rule.js'
@@ -172,9 +172,6 @@ function schemaIssueRule(message: string): ValueFinding['rule'] {
 }
 
 /** A requirement the channel's schema makes blocks; one only a mapping rule's flag claims is Nexus's own. */
-function requiredFinding(field: CatalogueField, message: string): ValueFinding {
-  return finding(field.prioritySource === 'ruleFlag' || field.prioritySource === 'unknown' ? 'nexus' : 'required', message)
-}
 
 export async function resolveBatch(input: {
   /** Explicit account for catalog transfers; absent preserves the Studio's primary account. */

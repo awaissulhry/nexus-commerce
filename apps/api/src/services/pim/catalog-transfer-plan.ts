@@ -9,10 +9,10 @@ import { getSheetColumns, type SheetColumn } from './sheet-columns.service.js'
 import { savedAttributeFields } from './family-sheet-schema.js'
 import { getFieldCatalogue, type CatalogueField } from './mapping/field-catalogue.service.js'
 import { withCachedSchemas } from './cached-schema-context.js'
-import { validateChannelValue } from './mapping/validate-channel-value.js'
+import { requiredFinding, validateChannelValue } from './mapping/validate-channel-value.js'
 import { contentWireValue } from './content-read.js'
 import { checkForStorage, coerceForShape } from './sheet-values.js'
-import { editVerdict } from './value-verdict.js'
+import { editVerdict, type ValueFinding } from './value-verdict.js'
 import { channelValuePatch, jsonRecord, storedChannelState, type ValueRecord } from './channel-value-mutation.js'
 import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
@@ -209,6 +209,21 @@ function heldSellerSkus(listing: ValueRecord | null, context: TransferContext): 
     ...[platform.sellerSku, platform.seller_sku, platform.sku, platform.item_sku, snapshot.item_sku].filter((v): v is string => typeof v === 'string' && !!v.trim())])]
 }
 /** Empty the way a channel sees it: nothing, blank text, an empty list, or a measure/record whose parts are all empty. */
+/**
+ * The verdict an import applies to one channel value (`value-verdict.ts`), the editor's: a value the field's type cannot
+ * hold is refused (`refused`, its sentences); every other finding is imported and named. Audit A28 — a CLEAR of a field
+ * the channel requires is stored empty with the editor's warning ("Field 'Marca' is required."); publish blocks it.
+ */
+export function channelImportVerdict(field: CatalogueField, action: TransferRow['action'], value: unknown): { value: unknown; refused: string | null; findings: ValueFinding[] } {
+  const checked = validateChannelValue(field, value, { write: true })
+  const findings = [...checked.findings]
+  if (action === 'CLEAR' && !field.sourceOwner && field.priority === 'required' && field.requiredInParent !== false && !findings.some(found => found.rule === 'required' || found.rule === 'nexus')) {
+    findings.push(requiredFinding(field, `Field '${field.label}' is required.`))
+  }
+  const refused = findings.filter(found => editVerdict(found) === 'refuse')
+  return { value: checked.value, refused: refused.length ? refused.map(found => found.message).join(' ') : null, findings }
+}
+
 export function isEmptyChannelValue(value: unknown): boolean {
   if (value === null || value === undefined) return true
   if (typeof value === 'string') return !value.trim()
@@ -713,9 +728,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             // P1 (`value-verdict.ts`) — the verdict every edit path uses: a value the field's type cannot hold is refused;
             // every other problem (off the channel's list, over a limit) is imported as written and named in the review.
             // Publish blocks what the channel itself would reject. (CFI-5's eBay-choices exception is now the rule.)
-            const checked = validateChannelValue(field, value)
-            const refused = checked.findings.filter(found => editVerdict(found) === 'refuse')
-            if (refused.length) { error(row, refused.map(found => found.message).join(' ')); continue }
+            const checked = channelImportVerdict(field, row.action, value)
+            if (checked.refused) { error(row, checked.refused); continue }
             for (const found of checked.findings) warnings.add(`${first.channel} ${first.marketplace}: ${row.sku} ${field.label}: ${found.message} Imported as written.`)
             value = checked.value
           }
