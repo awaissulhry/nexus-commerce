@@ -79,3 +79,28 @@ describe('readiness for the open coordinate', () => {
     expect(new Set(full.matrix.map(entry => entry.coordinateKey)).size).toBe(5)
   })
 })
+
+describe('readiness for the open channel scope (audit B02)', () => {
+  const coordinate = '["EBAY","IT","store-a",null]'
+
+  it('answers every chip of the market and the open coordinate\'s matrix only', async () => {
+    const full = await getProductReadiness({ productId: 'ready-b', market: 'IT', channel: 'EBAY', accountId: 'store-a', locale: 'it' })
+    const open = await getProductReadiness({ productId: 'ready-b', market: 'IT', channel: 'EBAY', accountId: 'store-a', locale: 'it', onlyScope: true })
+    // The chips the scope menu shows, each the family-wide answer's without the lists its matrix entry carries.
+    expect(open.scopes.map(scope => scope.id)).toEqual(['master', 'AMAZON', 'EBAY'])
+    expect(open.scopes).toEqual(full.scopes.map(({ missing: _missing, optionalMissing: _optional, ...chip }) => chip))
+    // The Errors tab and the Variants projection read the open coordinate's entries, in the server's order.
+    expect(open.matrix).toEqual(full.matrix.filter(entry => entry.coordinateKey === coordinate))
+    expect(open.computedAt).toBe(full.computedAt)
+    // 6 coordinates × 4 products × 60 optional fields in the family answer; one coordinate and five small chips here.
+    expect(JSON.stringify(open).length * 5).toBeLessThan(JSON.stringify(full).length)
+  })
+
+  it('keeps every language of the open coordinate, and refuses to guess a coordinate it was not given', async () => {
+    const amazon = await getProductReadiness({ productId: 'ready-a', market: 'IT', channel: 'AMAZON', accountId: 'account-AMAZON', locale: 'it', onlyScope: true })
+    expect(amazon.scopes.map(scope => scope.id)).toEqual(['master', 'AMAZON', 'EBAY'])
+    expect(amazon.matrix.map(entry => [entry.coordinateKey, entry.language])).toEqual([['["AMAZON","IT","account-AMAZON",null]', 'it'], ['["AMAZON","IT","account-AMAZON",null]', 'de']])
+    await expect(getProductReadiness({ productId: 'ready-a', market: 'IT', channel: 'EBAY', onlyScope: true })).rejects.toBeInstanceOf(ReadinessCoordinateRequiredError)
+    await expect(getProductReadiness({ productId: 'ready-a', market: 'IT', onlyScope: true })).rejects.toBeInstanceOf(ReadinessCoordinateRequiredError)
+  })
+})

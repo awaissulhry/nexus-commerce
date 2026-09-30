@@ -118,32 +118,18 @@ export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
 }
 
 /**
- * P2 (2026-09-30, I4-9) — merge a readiness read of ONE coordinate (`?only=coordinate`, asked after a save) into the
- * family-wide answer the scope menu shows. The chip taken is the saved channel's only (a Shared chip is never taken from
- * a coordinate read). Every matrix entry the answer carries replaces the entry with its key: each entry is a complete
- * verdict for its own coordinate and language, and a channel without markets answers for `GLOBAL` whatever market the
- * page shows (P2 review 8: Shopify's entry never updated).
+ * The readiness read. On a channel scope (audit B02) it asks for what that scope shows (`only=scope`): every scope's chip
+ * in the market and the open coordinate's matrix — tens of KB where the family's every coordinate was 11–13 MB on
+ * GALE eBay IT. The same read at load, on Reload, on "Refresh progress", after a save and on a live refresh, so an answer
+ * never mixes two reads (audit B01, B06). Shared reads the family: its sheet shows every coordinate's progress.
  */
-export function mergeCoordinateReadiness<T extends { byScope: Readonly<Record<string, ScopeReadiness>>; matrix: ReadinessMatrixEntry[] }>(
-  previous: T, json: unknown, coordinate: { channel: string; market: string; accountId?: string | null },
-): T {
-  const scopes = parseReadinessResponse(json)
-  const fresh = parseReadinessMatrix(json)
-  const replaced = new Set(fresh.map((entry) => `${entry.coordinateKey}\u0000${entry.language}`))
-  return {
-    ...previous,
-    byScope: scopes[coordinate.channel] ? { ...previous.byScope, [coordinate.channel]: scopes[coordinate.channel] } : previous.byScope,
-    matrix: fresh.length ? [...previous.matrix.filter((entry) => !replaced.has(`${entry.coordinateKey}\u0000${entry.language}`)), ...fresh] : previous.matrix,
-  }
-}
-
-/** The readiness read. `only: 'coordinate'` asks for the one channel coordinate a save moved (P2, I4-9). */
-export function readinessUrl(productId: string, q: { market: string; locale?: string | null; channel?: string; listingId?: string; accountId?: string; only?: 'coordinate' }): string {
+export function readinessUrl(productId: string, q: { market: string; locale?: string | null; channel?: string; listingId?: string; accountId?: string }): string {
   const params = new URLSearchParams({ market: q.market })
   if (q.locale) params.set('locale', q.locale)
   if (q.channel) params.set('channel', q.channel)
   if (q.listingId) params.set('listingId', q.listingId)
   if (q.accountId) params.set('accountId', q.accountId)
-  if (q.only) params.set('only', q.only)
+  // The server needs the coordinate named; without one the family answer is the only true one.
+  if (q.channel && (q.accountId || q.listingId)) params.set('only', 'scope')
   return `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/readiness?${params}`
 }

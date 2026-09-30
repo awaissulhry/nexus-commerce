@@ -17,7 +17,10 @@ function ReadinessValue({ entry, language }: { entry?: ReadinessMatrixEntry; lan
   </Pill>
 }
 
-/** One index response feeds both tables and the scope bar. No readiness is computed in the browser. */
+/**
+ * One index response feeds both tables and the scope bar. No readiness is computed in the browser. On a channel scope the
+ * response carries the open destination's entries only, every language (audit B02).
+ */
 export function ReadinessPanel() {
   const readiness = useScopeReadiness()
   const { locale } = useStudioScope()
@@ -35,7 +38,7 @@ export function ReadinessPanel() {
   ]
   const attention = entries.filter(entry => entry.state !== 'ready')
   return <div className={styles.panel}>
-    <Card header="Readiness by language" padded={false} description="Required content for each destination and language. — means readiness could not be scored.">
+    <Card header="Readiness by language" padded={false} description="Required content for this destination in each language. — means readiness could not be scored.">
       <DataGrid ariaLabel="Readiness matrix" keyboardScroll rows={[...grouped.values()]} rowKey={row => row.key} columns={columns} emptyState="Readiness has not been computed for this product." />
     </Card>
     <Card header="Needs attention" padded={false} description="Missing or invalid fields from the same readiness results.">
@@ -49,7 +52,7 @@ export function ReadinessPanel() {
             return <span key={key} title={[...new Set(fields.map(field => field.reason))].join(' · ')}>{index > 0 ? ', ' : ''}{fields[0].label}</span>
           })
           : entry.note ?? 'Requirements could not be checked.'}</div> },
-      ]} emptyState="Every computed destination and language is ready." />
+      ]} emptyState="Every computed language of this destination is ready." />
     </Card>
   </div>
 }

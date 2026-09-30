@@ -79,6 +79,13 @@ describe('the coordinate-only readiness read', () => {
     expect(mocks.readiness).toHaveBeenLastCalledWith(expect.objectContaining({ productId: 'p', channel: 'EBAY', accountId: 'account-1', onlyCoordinate: true }))
   })
 
+  it('asks for what the open channel scope shows with only=scope (audit B02)', async () => {
+    mocks.readiness.mockClear()
+    expect((await app.inject(`${url}&only=scope`)).statusCode).toBe(200)
+    expect(mocks.readiness).toHaveBeenLastCalledWith(expect.objectContaining({ productId: 'p', channel: 'EBAY', accountId: 'account-1', onlyScope: true }))
+    expect(mocks.readiness).toHaveBeenLastCalledWith(expect.not.objectContaining({ onlyCoordinate: true }))
+  })
+
   it('refuses an `only` it does not know instead of answering the whole family', async () => {
     mocks.readiness.mockClear()
     const result = await app.inject(`${url}&only=channel`)
