@@ -1,17 +1,20 @@
 import { asMeasure, unitSymbol, type CellShape } from '../renderers/shapeFormat'
 import { isFormulaDraft } from './formulaEditing'
-import { optionCode } from './scalarValue'
+import { optionCode, parseScalarValue } from './scalarValue'
 
 /** Decode displayed labels using this column's schema; preserve unparseable input for refusal. */
 export function parseShape(shape: CellShape | undefined, raw: unknown, col: {
-  options?: string[]; optionLabels?: Record<string, string>; unitOptions?: string[]
+  kind?: string; options?: string[]; optionLabels?: Record<string, string>; unitOptions?: string[]
 } = {}): unknown {
   if (raw == null || raw === '') return null
   if (typeof raw === 'string' && isFormulaDraft(raw)) return raw
   if (shape === 'list') {
     const items = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/\s*[|·]\s*|\r?\n/) : null
     if (!items || items.some(v => v !== null && typeof v === 'object')) return raw
-    return items.filter(v => v != null && String(v).trim() !== '').map(v => optionCode(col, String(v)))
+    return items.filter(v => v != null && String(v).trim() !== '').map(v => {
+      const decoded = optionCode(col, String(v))
+      return col.kind === 'number' ? parseScalarValue({ kind: 'number' }, decoded) : decoded
+    })
   }
   if (shape === 'measure') {
     // A typed editor already supplies the record. Do not turn an invalid member into null.

@@ -26,12 +26,14 @@ export interface ListPanelEditorParams {
   column: { getActualWidth(): number }
   stopEditing: (cancel?: boolean) => void
   onValueChange?: (value: unknown) => void
+  /** AG's column parser also handles paste and whole-column values. */
+  parseValue?: (value: unknown) => unknown
   eGridCell?: HTMLElement
   eventKey?: string | null
 }
 
 export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(function ListPanelEditor(props, _ref) {
-  const { options, maxItems, label, value, column, onValueChange } = props
+  const { options, maxItems, label, value, column, onValueChange, parseValue } = props
   const [items, setItems] = useState<string[]>(() => asList(value))
   /* 🔴 The free-text DRAFT is part of the value. AG's popup owns Enter and its native listener fires
      before React's, so on Enter AG commits whatever was last reported and the `TagInput`'s own Enter
@@ -50,16 +52,18 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
   const change = useCallback(
     (next: string[]) => {
       setItems(next)
-      onValueChange?.(reported(next, draft))
+      const value = reported(next, draft)
+      onValueChange?.(parseValue ? parseValue(value) : value)
     },
-    [onValueChange, draft],
+    [onValueChange, parseValue, draft],
   )
   const onDraft = useCallback(
     (text: string) => {
       setDraft(text)
-      onValueChange?.(reported(items, text))
+      const value = reported(items, text)
+      onValueChange?.(parseValue ? parseValue(value) : value)
     },
-    [onValueChange, items],
+    [onValueChange, parseValue, items],
   )
   const cellRect = props.eGridCell?.getBoundingClientRect()
   const box = editorBox({

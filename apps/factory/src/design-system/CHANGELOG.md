@@ -2,6 +2,10 @@
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.
 
+## Numeric list editors keep the declared value type — 2026-09-30
+
+**`ListPanelEditor`** uses the column parser for chips and pending text, as paste and whole-column edits do. Number lists send JSON numbers. Text IDs, invalid number text, and formula drafts keep their meaning. Mirrored in Factory.
+
 ## Replacement rows keep confirmed write versions — 2026-09-30
 
 **`SheetWriter`** accepts an optional `mergeRow(previous, incoming, knownVersion)` function on row seeds and edits. Product sheets use it to retain confirmed content and listing versions without replacing edited values. Ownership rules stay in the sheet. Mirrored in Factory.
