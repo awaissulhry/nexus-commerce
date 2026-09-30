@@ -727,16 +727,21 @@ export class AmazonSpApiClient {
    *
    * Reopen replays the verbatim purchasable_offer value array captured at
    * close time (op:replace — also correct when the attribute is absent).
+   *
+   * 'merge' — the pricing-engine push with NEXUS_AMAZON_OFFER_MERGE on
+   * (services/amazon/purchasable-offer.ts): one instance's selectors plus the
+   * sub-attributes it changes; Amazon keeps everything the value leaves out.
    */
   async patchPurchasableOffer(options: {
     sellerId: string
     sku: string
     marketplaceId: string
     productType: string
-    /** 'delete' closes the market's offer; 'replace' reopens it. */
-    op: 'delete' | 'replace'
-    /** Verbatim purchasable_offer value array (required for both ops:
-     *  delete uses it as the instance SELECTOR, replace as the new value). */
+    /** 'delete' closes the market's offer; 'replace' reopens it; 'merge' changes named sub-attributes of one instance. */
+    op: 'delete' | 'replace' | 'merge'
+    /** Verbatim purchasable_offer value array (required for every op:
+     *  delete uses it as the instance SELECTOR, replace as the new value,
+     *  merge as the selectors + the sub-attributes to change). */
     value: Array<Record<string, unknown>>
   }): Promise<{
     success: boolean
