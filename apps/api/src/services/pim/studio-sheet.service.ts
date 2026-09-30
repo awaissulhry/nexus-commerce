@@ -235,11 +235,14 @@ export interface StudioCategorySource {
   label: string
   fromMarkets?: string[]
   otherMarketConflicts?: string[]
+  /** The variation has no product type of its own; the row uses its parent's. */
+  fromParent?: true
 }
 function categorySourceOf(category: ResolvedCategory): StudioCategorySource {
   return { source: category.source, label: categorySourceLabel(category),
     ...(category.fromMarkets ? { fromMarkets: category.fromMarkets } : {}),
-    ...(category.otherMarketConflicts ? { otherMarketConflicts: category.otherMarketConflicts } : {}) }
+    ...(category.otherMarketConflicts ? { otherMarketConflicts: category.otherMarketConflicts } : {}),
+    ...(category.fromParent ? { fromParent: true as const } : {}) }
 }
 
 export interface StudioRow {

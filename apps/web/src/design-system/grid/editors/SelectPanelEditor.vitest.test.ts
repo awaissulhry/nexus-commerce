@@ -47,3 +47,41 @@ describe('the mounted select editor reports the declared value type before commi
     expect(onValueChange).toHaveBeenCalledWith(null)
   })
 })
+
+describe('Enter and Tab: the editor reports the choice and the grid commits and moves (P0, 2026-09-30)', () => {
+  const countries = [{ value: 'Cina', label: 'Cina' }, { value: 'Italia', label: 'Italia' }]
+  function mountSelect(value: unknown, extra: Record<string, unknown> = {}) {
+    vi.stubGlobal('window', { innerWidth: 1200 })
+    const onValueChange = vi.fn()
+    const stopEditing = vi.fn()
+    renderToStaticMarkup(React.createElement(SelectPanelEditor, {
+      value, options: countries, onValueChange, stopEditing, column: { getActualWidth: () => 150 }, ...extra,
+    } as any))
+    return { onValueChange, stopEditing }
+  }
+
+  it('reports a changed choice and leaves ending the edit to AG (which then moves)', () => {
+    const { onValueChange, stopEditing } = mountSelect('Italia')
+    panel.current.onKeyChoice('Cina')
+    expect(onValueChange).toHaveBeenCalledWith('Cina')
+    expect(stopEditing).not.toHaveBeenCalled()
+  })
+  it('reports nothing for the stored value or for no highlight, so AG ends the edit without a write', () => {
+    const { onValueChange } = mountSelect('Italia')
+    panel.current.onKeyChoice('Italia')
+    panel.current.onKeyChoice(null)
+    expect(onValueChange).not.toHaveBeenCalled()
+  })
+  it('shows a stored value the list does not hold, first and selected', () => {
+    mountSelect('Xavia Racing')
+    expect(panel.current.options[0]).toMatchObject({ value: 'Xavia Racing', trailing: 'current · not in the list' })
+    expect(panel.current.value).toBe('Xavia Racing')
+  })
+  it('starts the search with the key that opened the cell, and passes an open list through', () => {
+    mountSelect(null, { eventKey: 'C', allowCustom: true })
+    expect(panel.current.initialQuery).toBe('C')
+    expect(panel.current.allowCustom).toBe(true)
+    mountSelect(null, { eventKey: 'Enter' })
+    expect(panel.current.initialQuery).toBe('')
+  })
+})
