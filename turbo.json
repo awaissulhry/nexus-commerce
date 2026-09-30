@@ -7,6 +7,7 @@
       "env": ["NEXT_PUBLIC_*", "NEXT_DIST_DIR", "NODE_ENV"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
+    // @nexus/api and @nexus/web do not use this entry: their own entries below replace it. Change all three together.
     "typecheck": {
       "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
       "outputs": []
@@ -16,11 +17,19 @@
     // compiles presence.ts, registry.ts and tone.ts), to apps/api/src (@nexus/web compiles lib/listing-coordinate.ts),
     // to docs/fixtures (vt1/fixtures.ts) or to packages/database (its .d.ts files and the Prisma schema) left the hash
     // unchanged, and a cached pass replayed. That local cache is one directory shared by every worktree of a checkout.
-    // See ci.yml, "Typecheck both apps". Here, not in apps/*/turbo.json: a file there is an app file, and deploy-api.yml
-    // would ship the services for a CI change. Keep dependsOn and outputs the same as "typecheck" above.
+    // See ci.yml, "Typecheck both apps". Here, not in apps/*/turbo.json: a file there is an app file, and
+    // deploy-api.yml would ship the services for a CI change. These entries REPLACE "typecheck" for the two apps (turbo
+    // does not merge a root package#task with the generic task; tested 2026-09-30): every key is copied, so a change to
+    // "typecheck" (dependsOn, outputs, env, cache…) must be made in all three. apps/web/package.json: the API reaches
+    // web files through the @nexus/web package, so its package.json takes part in resolving them.
     "@nexus/api#typecheck": {
       "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/web/src/**", "$TURBO_ROOT$/packages/database/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/web/src/**",
+        "$TURBO_ROOT$/apps/web/package.json",
+        "$TURBO_ROOT$/packages/database/**"
+      ],
       "outputs": []
     },
     "@nexus/web#typecheck": {
