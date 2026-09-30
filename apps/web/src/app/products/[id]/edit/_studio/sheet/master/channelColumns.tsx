@@ -26,7 +26,7 @@ const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({
 import {
   classifyProvenance, provenanceClassRules, roundTripClassRules, type CellSaveTracker,
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
-  longTextEditor, selectEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, formulaCellEditorSelector, numericColumn,
+  longTextEditor, textLimitFor, selectEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, formulaCellEditorSelector, numericColumn,
   sheetValidationFor, composeSheetCellClassRules, shapeColumnDef, shapeEditorSpec, isShaped,
   suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef,
 } from '@/design-system/grid'
@@ -63,7 +63,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     width: col.width ?? 180,
     suppressKeyboardEvent: suppressFormulaKeys,
     ...(col.kind === 'longtext'
-      ? longTextEditor(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {})
+      ? longTextEditor()
       : col.kind === 'select'
         ? selectEditor((col.options ?? []).map((o) => ({ value: o, label: col.optionLabels?.[o] ?? o })))
         : col.kind === 'boolean'
@@ -94,7 +94,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
         ? {
             component: 'agLargeTextCellEditor',
             popup: true,
-            params: { ...(colForRow.maxLength ? { maxLength: Math.max(colForRow.maxLength, 200) } : {}) },
+            params: { maxLength: textLimitFor(colForRow.maxLength) },
           }
         : colForRow.kind === 'select'
           ? {

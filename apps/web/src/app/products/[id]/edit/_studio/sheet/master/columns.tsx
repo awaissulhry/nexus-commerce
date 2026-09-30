@@ -20,7 +20,7 @@ import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
 import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
 import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
-import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, textLimitFor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
 
@@ -506,7 +506,7 @@ export function buildMasterColumns(
         ...def,
         /* Uncapped when the server declares no cap — see the note above. The editor simply does
            not limit what can be typed; the server remains the authority on what it will accept. */
-        ...longTextEditor(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {}),
+        ...longTextEditor(),
         /* `=` opens the formula editor here too — `item_name` and `product_description` are long-text
            and are exactly the fields D16's worked example is about. The large-text box stays the
            editor for ordinary edits. */
@@ -518,7 +518,7 @@ export function buildMasterColumns(
                  and a constant 8×60 silently overrode the per-cell size `longTextEditor()` computes
                  — the same 488×158 the sizing rule exists to remove, back through a second door.
                  The size is the ColDef's; the selector only names the component. */
-              params: { ...(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {}) },
+              params: { maxLength: textLimitFor(col.maxLength) },
             })
           : {}),
         editable,

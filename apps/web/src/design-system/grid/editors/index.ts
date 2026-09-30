@@ -37,7 +37,7 @@ export { selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_
    formula editor on a closed list, anything else opens this one (#775). */
 export { SelectPanelEditor, type SelectPanelEditorParams } from './SelectPanelEditor'
 export { CellSaveTracker, roundTripClassRules, saveCell, SAVED_FADE_MS, type CellSaveState, type CellSaveEntry, type SaveOutcome } from './roundTrip'
-export { longTextEditor, sheetClassRules, selectValidation, lengthValidation, lengthCapOf, evaluateLengthCaps, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type LengthCaps, type LengthReading, type SheetValidation } from './sheet'
+export { longTextEditor, textLimitFor, NO_TEXT_LIMIT, sheetClassRules, selectValidation, lengthValidation, lengthCapOf, evaluateLengthCaps, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type LengthCaps, type LengthReading, type SheetValidation } from './sheet'
 // PES.2 — the ONE decision about whether a grid change should be written (rulings #53, #63).
 export { writeGate, NON_EDIT_SOURCES, type WriteGateInput, type WriteGateVerdict } from './writeGate'
 // PES.2 — the sheet's ONE write path: per-row version, per-row batching, per-cell outcomes.
