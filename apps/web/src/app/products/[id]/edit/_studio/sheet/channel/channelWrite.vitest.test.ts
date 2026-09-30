@@ -339,6 +339,15 @@ describe('account refusals and alias requests', () => {
     expect(result).toEqual({ ok: false, reason: 'Select the correct account' })
   })
 
+  it('A15: a 404 the writer names shows its own sentence; only a route-level 404 says the write path is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, json: async () => ({ error: 'Product not found' }) })))
+    const named = await commitChannelRow({ rowId: 'primary:p1', row: row(), cells: [{ colId: 'material', value: 'N', intent: 'set' }] } as never, coord)
+    expect(named).toEqual({ ok: false, reason: 'Product not found' })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, json: async () => ({ statusCode: 404, error: 'Not Found', message: 'Route PATCH:/api/products/bulk not found' }) })))
+    const missing = await commitChannelRow({ rowId: 'primary:p1', row: row(), cells: [{ colId: 'material', value: 'N', intent: 'set' }] } as never, coord)
+    expect(missing).toEqual({ ok: false, reason: 'The channel write path is not deployed yet (PES.5)' })
+  })
+
   it('includes the named account in both alias creation and rename', async () => {
     const seen = captureBody()
     await addListingAlias({ productId: 'p1', channel: 'EBAY', marketplace: 'IT', accountId: 'account-b' })

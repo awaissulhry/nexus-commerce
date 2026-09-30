@@ -178,3 +178,72 @@ it('keeps exhausted retryable conflicts as an operation-wide busy response', asy
     expect(await bad.row()).toEqual(bad.before)
   } finally { state.failProduct = ''; state.failure = null }
 })
+
+// ── A15/A16/A17 (audit 2026-09-30) — one error contract on every write path ─────────────────────────────────────────
+const SECRET = 'relation "Product" deadlock detail at 0x7f — internal'
+
+it('A15: resetting a shared language that stores nothing is a no-op on both paths, never a 404', async () => {
+  const f = await fixture('source')
+  const request: ProductBulkInput = { expectedVersion: f.before.version, marketplaceContexts: [{ marketplace: 'DE', locale: 'de' }] as never,
+    changes: [{ id: f.product.id, field: 'name', value: null, intent: 'reset', contentAddress: { tier: 'language', language: 'de' } }] }
+  const unit = await post(request)
+  expect(unit.status, JSON.stringify(unit)).toBe(200)
+  const single = await patch(request)
+  expect(single.statusCode, single.body).toBe(200)
+  expect((await f.row()).translations).toEqual([])
+})
+
+it('A16: a listing-scope refusal answers 409 by name in a batch, exactly as its PATCH does', async () => {
+  const f = await fixture('source')
+  const request: ProductBulkInput = { marketplaceContexts: [{ channel: 'EBAY', marketplace: 'DE', locale: 'de', accountId: account, aliasKey: 'alias-archived-elsewhere' }] as never,
+    changes: [{ id: f.product.id, field: 'ebay_quantity', value: 4, target: 'channel' }] }
+  const single = await patch(request)
+  expect(single.statusCode, single.body).toBe(409)
+  const unit = await post(request)
+  expect(unit.status, JSON.stringify(unit)).toBe(409)
+  expect(unit.body).toEqual(single.json())
+  expect(unit.body).toEqual({ code: 'LISTING_SCOPE_MISMATCH', error: expect.stringContaining('listing alias'), message: expect.stringContaining('listing alias') })
+})
+
+it('A16: an ambiguous account answers 409 AMBIGUOUS_CONNECTION in a batch, exactly as its PATCH does', async () => {
+  await scoped(async () => { for (const label of ['etsy-one', 'etsy-two']) await prisma.channelConnection.create({ data: { channelType: 'ETSY', accountLabel: label, isActive: true, externalAccountId: label } }) })
+  const f = await fixture('source')
+  const request: ProductBulkInput = { marketplaceContexts: [{ channel: 'ETSY', marketplace: 'DE', locale: 'de' }] as never,
+    changes: [{ id: f.product.id, field: 'attr_material', value: 'Leather', target: 'channel' }] }
+  const single = await patch(request)
+  expect(single.statusCode, single.body).toBe(409)
+  const unit = await post(request)
+  expect(unit.status, JSON.stringify(unit)).toBe(409)
+  expect(unit.body).toEqual(single.json())
+  expect(unit.body).toMatchObject({ code: 'AMBIGUOUS_CONNECTION', error: expect.stringContaining('Ambiguous ETSY connection') })
+  expect(await f.row()).toEqual(f.before)
+})
+
+it('A17: an unexpected failure answers PATCH 500 with a stable sentence and a request id, never the internal text', async () => {
+  const f = await fixture('source')
+  state.failProduct = f.product.id
+  state.failure = new Error(SECRET)
+  try {
+    const single = await patch(f.request())
+    expect(single.statusCode, single.body).toBe(500)
+    expect(single.body).not.toContain('deadlock detail')
+    expect(single.json()).toEqual({ error: 'This change could not be saved. Try again; if it keeps failing, reload the page.', requestId: expect.any(String) })
+    const unit = await post(f.request())
+    expect(JSON.stringify(unit)).not.toContain('deadlock detail')
+    expect(unit).toMatchObject({ status: 500, body: { nothingSaved: true } })
+    expect(await f.row()).toEqual(f.before)
+  } finally { state.failProduct = ''; state.failure = null }
+})
+
+it('A17: a race lost after every restart answers PATCH 503 retryable, as bulk-save does', async () => {
+  const f = await fixture('source')
+  state.failProduct = f.product.id
+  state.failure = Object.assign(new Error(`synthetic serialization conflict ${SECRET}`), { code: 'P2034' })
+  try {
+    const single = await patch(f.request())
+    expect(single.statusCode, single.body).toBe(503)
+    expect(single.headers['retry-after']).toBe('2')
+    expect(single.json()).toEqual({ error: 'The database was busy. Nothing of this change was saved. Try again.', retryable: true, nothingSaved: true })
+    expect(await f.row()).toEqual(f.before)
+  } finally { state.failProduct = ''; state.failure = null }
+})

@@ -2,7 +2,9 @@ import { variationBag } from '../services/pim/shared-variation-values.js'
 import { inDatabaseTransaction } from '../lib/database-context.js'
 import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { normalizeLanguage } from '../services/pim/content-language.js'
-import { applyProductBulkEdits, ProductBulkError, type ProductBulkInput } from '../services/products/bulk-edit.service.js'
+import { applyProductBulkEdits, type ProductBulkInput } from '../services/products/bulk-edit.service.js'
+import { writeRaceLost } from '../services/products/bulk-save.service.js'
+import { productWriteReply } from '../lib/product-bulk-error.js'
 import { runFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
@@ -858,8 +860,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         versionOf: 'product',
       })
     } catch (err: any) {
-      fastify.log.error({ err }, '[products/:id/restore] failed')
-      return reply.code(500).send({ error: err?.message ?? String(err) })
+      // A17 — the bulk writer's refusals (a stale version, a named scope refusal) keep their status and sentence, as on
+      // PATCH /products/bulk; anything else is logged and answered without its internal text.
+      const { status, body } = productWriteReply(err, writeRaceLost)
+      if (status >= 500) fastify.log.error({ err }, '[products/:id/restore] failed')
+      if (status === 503) reply.header('retry-after', '2')
+      return reply.code(status).send(status === 500 ? { ...body, requestId: request.id } : body)
     }
   })
 
@@ -1016,8 +1022,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         userId: (request as { authUser?: { id?: string } }).authUser?.id, ip: request.ip, logger: request.log,
       })
     } catch (error) {
-      if (error instanceof ProductBulkError) return reply.code(error.statusCode).send(error.details)
-      throw error
+      // A16/A17 — the answer a bulk-save unit gives for the same failure (`productWriteReply`): a named refusal keeps its
+      // status and sentence, a race lost after its restarts is 503, and no internal text is ever sent.
+      const { status, body } = productWriteReply(error, writeRaceLost)
+      if (status >= 500) request.log.error({ err: error }, '[products/bulk] write failed')
+      if (status === 503) reply.header('retry-after', '2')
+      return reply.code(status).send(status === 500 ? { ...body, requestId: request.id } : body)
     }
   }))
 

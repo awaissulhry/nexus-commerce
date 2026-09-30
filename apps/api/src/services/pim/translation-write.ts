@@ -31,6 +31,8 @@ export async function writeTranslation(input: TranslationWrite) {
     const where = { productId_language: workspaceKey({ productId: product.id, language }) }
     const prior = await prisma.productTranslation.findUnique({ where })
     if (input.expectedVersion !== undefined && input.expectedVersion !== product.version || input.expectedTranslationVersion !== undefined && input.expectedTranslationVersion !== (prior?.version ?? 0)) throw conflict(label)
+    // A15 — a reset of a language that stores nothing (another tab removed it) leaves exactly what was asked: no change.
+    if (!prior && !Object.keys(input.values).length && input.reset?.length && !input.remove) return { count: 0 }
     if (!prior && !Object.keys(input.values).length) throw new ProductBulkError(404, { error: `${label} has no ${language} translation to ${input.remove ? 'remove' : 'review'}.` })
     const attributes = { ...(prior?.attributes as Record<string, unknown> ?? {}) }
     const data: Record<string, any> = {}

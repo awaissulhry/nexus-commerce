@@ -20,8 +20,8 @@
  */
 import type { FastifyPluginAsync } from 'fastify'
 
-import { transactionMustRestart } from '../lib/database-context.js'
-import { applyProductBulkSave, BulkSaveError, parseBulkSaveInput } from '../services/products/bulk-save.service.js'
+import { applyProductBulkSave, BulkSaveError, parseBulkSaveInput, writeRaceLost } from '../services/products/bulk-save.service.js'
+import { WRITE_BUSY } from '../lib/product-bulk-error.js'
 
 const productsBulkSaveRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/products/bulk-save', {
@@ -46,12 +46,10 @@ const productsBulkSaveRoutes: FastifyPluginAsync = async (fastify) => {
       })
     } catch (error) {
       // Nothing of the operation is stored. Say whether sending it again can work: a lost race or a busy pool can.
-      const code = (error as { code?: string }).code
       request.log.error({ err: error, operationId: input.operationId, units: input.units.length }, '[products/bulk-save] operation failed')
-      if (transactionMustRestart(error) || code === 'P2028' || code === 'P2024') {
-        return reply.code(503).header('retry-after', '2').send({ error: 'The database was busy. Nothing of this change was saved. Try again.', retryable: true, nothingSaved: true })
-      }
-      return reply.code(500).send({ error: 'Nothing of this change was saved.', detail: error instanceof Error ? error.message : String(error), nothingSaved: true })
+      if (writeRaceLost(error)) return reply.code(503).header('retry-after', '2').send(WRITE_BUSY)
+      // A17 — the cause is in the log under this request id; it is never sent.
+      return reply.code(500).send({ error: 'Nothing of this change was saved. Try again; if it keeps failing, reload the page.', nothingSaved: true, requestId: request.id })
     }
     request.log.info({ operationId: result.operationId, units: result.units.length, saved: result.saved, failed: result.failed, elapsedMs: result.elapsedMs },
       '[products/bulk-save] operation saved')

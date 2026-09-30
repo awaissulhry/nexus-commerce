@@ -13,6 +13,7 @@ import { resolveWriteRouting } from './studio-sheet.service.js'
 import { checkForStorage, parseSlotField, withSlotValue } from './sheet-values.js'
 import { writeContent } from './content-write.js'
 import { DraftListingError, ensureDraftListings } from './draft-listing.service.js'
+import { ProductBulkError } from '../../lib/product-bulk-error.js'
 import type { SheetColumn } from './sheet-columns.service.js'
 import type { ProductBulkInput, ProductBulkContext } from '../products/bulk-edit.service.js'
 
@@ -130,7 +131,9 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
           for (const plan of group) plan.listingId = own.id
         } catch (error) {
           // No account, an inactive market: that row's own refusal, never a 500 (all-or-nothing callers fail whole).
-          if (!(error instanceof DraftListingError) || error.code === 'COORDINATE_TAKEN' || !perRow) throw error
+          if (!(error instanceof DraftListingError) || !perRow) throw error
+          // A16 — thrown after its insert: the whole save rolls back, and answers 409 by name as the facts path does.
+          if (error.code === 'COORDINATE_TAKEN') throw new ProductBulkError(409, { error: error.message, code: error.code })
           for (const plan of group) errors.push({ id: plan.edit.change.id, field: plan.edit.change.field, error: error.message })
           refused.add(group)
           continue

@@ -586,7 +586,9 @@ async function commitChannelLanguage(
       version = Math.max(version, row.version ?? version)
     }
 
-    if (res.status === 404 || res.status === 501) {
+    // A 404 the writer answers names what is missing (a product removed elsewhere); only a route-level 404 (Fastify's
+    // own body carries `statusCode`) means the write path itself is missing.
+    if ((res.status === 404 || res.status === 501) && !(typeof body?.error === 'string' && body?.statusCode === undefined)) {
       return { ok: false, reason: 'The channel write path is not deployed yet (PES.5)' }
     }
     if (res.status === 409) {

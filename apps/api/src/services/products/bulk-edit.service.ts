@@ -1,4 +1,4 @@
-import { ProductBulkError } from '../../lib/product-bulk-error.js'
+import { namedRefusal, ProductBulkError, WRITE_FAILED } from '../../lib/product-bulk-error.js'
 import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
@@ -1878,8 +1878,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         const refused = new Set(issues.errors.map(issue => `${issue.id}\u0000${issue.field}`))
         for (let i = validated.length - 1; i >= 0; i--) if (isChannelChange(validated[i]) && refused.has(`${validated[i].id}\u0000${validated[i].field}`)) validated.splice(i, 1)
       } catch (error) {
-        // The values were shape-checked above; the channel check runs again at publish. Stored, and said so.
-        for (const candidate of candidates) warnings.push({ id: candidate.id, field: candidate.field, warning: `The channel check is unavailable (${error instanceof Error ? error.message : String(error)}); the value is saved and checked again at publish.` })
+        if (transactionMustRestart(error)) throw error
+        // The values were shape-checked above; the channel check runs again at publish. Stored, and said so (A17: the
+        // cause is logged here, never put in the cell's tooltip).
+        context.logger.warn({ err: error }, '[products/bulk] channel check unavailable')
+        for (const candidate of candidates) warnings.push({ id: candidate.id, field: candidate.field, warning: 'The channel check is unavailable right now; the value is saved and checked again at publish.' })
       }
     }
   }
@@ -1943,7 +1946,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     } catch (error) {
       if (!(error instanceof DraftListingError)) throw error
       // Thrown after its insert: roll the whole save back rather than keep part of a family.
-      if (error.code === 'COORDINATE_TAKEN') throw new ProductBulkError(409, { error: error.message })
+      if (error.code === 'COORDINATE_TAKEN') throw new ProductBulkError(409, { error: error.message, code: error.code })
       for (const v of onCoordinate.filter(change => missing.includes(change.id))) {
         errors.push({ id: v.id, field: v.field, error: error.message })
         validated.splice(validated.indexOf(v), 1)
@@ -3304,7 +3307,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       versionOf: freshChannelVersion !== undefined ? 'channelListing' : expectedVersion !== undefined ? 'product' : undefined,
     }
   } catch (error: any) {
-    if (error instanceof ProductBulkError) throw error
+    if (error instanceof ProductBulkError || namedRefusal(error)) throw error
     context.logger.error({ err: error }, '[products/bulk] transaction failed')
     await prisma.bulkOperation
       .create({
@@ -3320,10 +3323,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       .catch(() => {
         /* don't mask the real error with an audit-log failure */
       })
-    throw new ProductBulkError(500, {
-      error: 'Bulk update failed',
-      message: error?.message ?? String(error),
-    }, error)
+    // A17 — the cause is logged above and kept as `cause` (a lost race is still retried); never sent to the client.
+    throw new ProductBulkError(500, { error: WRITE_FAILED }, error)
   }
 
 }

@@ -22,8 +22,9 @@
  * savepoint was rolled back — the single-row route's 500 could not promise that, so the client had to guess.
  */
 import prisma from '../../db.js'
-import { inDatabaseTransaction, inSavepoint } from '../../lib/database-context.js'
-import { applyProductBulkEdits, listingLevelOverwrites, ProductBulkError, type ListingLevelWrite, type ProductBulkContext, type ProductBulkInput } from './bulk-edit.service.js'
+import { inDatabaseTransaction, inSavepoint, transactionMustRestart } from '../../lib/database-context.js'
+import { productWriteReply } from '../../lib/product-bulk-error.js'
+import { applyProductBulkEdits, listingLevelOverwrites, type ListingLevelWrite, type ProductBulkContext, type ProductBulkInput } from './bulk-edit.service.js'
 
 /** A 500-row fill of 2 languages is 1,000 units; anything far beyond a sheet's page is not a sheet operation. */
 export const BULK_SAVE_MAX_UNITS = 2_000
@@ -93,6 +94,12 @@ export function parseBulkSaveInput(body: unknown): BulkSaveInput {
   return { operationId: typeof input.operationId === 'string' ? input.operationId : undefined, units: input.units as BulkSaveUnit[] }
 }
 
+/** A race lost after every restart, or a pool that stayed busy: sending the same change again can work (`WRITE_BUSY`). */
+export function writeRaceLost(error: unknown): boolean {
+  const codes = [error, (error as { cause?: unknown } | null)?.cause].map(e => (e as { code?: unknown } | null)?.code)
+  return transactionMustRestart(error) || codes.includes('P2028') || codes.includes('P2024')
+}
+
 /** The error a unit answers when the writer failed in a way it did not name (logged with the unit's key). */
 const UNEXPECTED = 'This row could not be saved. The other rows of this change were saved; try this row again.'
 
@@ -111,15 +118,15 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
         for (const write of written) levelWrites.push({ ...write, result: results[results.length - 1] })
         continue
       }
-      const error = outcome.error
-      if (error instanceof ProductBulkError && error.statusCode < 500) {
-        results.push({ key, status: error.statusCode, body: error.details })
+      // A16/A17 — the same answer its own PATCH gives (`productWriteReply`): a named refusal keeps its status and sentence.
+      const { status, body } = productWriteReply(outcome.error, writeRaceLost)
+      if (status < 500) {
+        results.push({ key, status, body })
         continue
       }
-      // Rolled back to its savepoint, so the client may say "not saved" (never "unknown"); the raw text stays in `detail`.
-      context.logger.error({ err: error, unit: key }, '[products/bulk-save] a unit failed unexpectedly and was rolled back')
-      const detail = error instanceof ProductBulkError ? String(error.details.message ?? error.message) : error instanceof Error ? error.message : String(error)
-      results.push({ key, status: 500, body: { error: UNEXPECTED, detail, nothingSaved: true } })
+      // Rolled back to its savepoint, so the client may say "not saved" (never "unknown"). The cause is logged, never sent.
+      context.logger.error({ err: outcome.error, unit: key }, '[products/bulk-save] a unit failed unexpectedly and was rolled back')
+      results.push({ key, status, body: { ...(status === 500 ? { error: UNEXPECTED } : body), nothingSaved: true } })
     }
     // A13 — one family, one listing value: a row whose value a later row of this operation replaced is told so.
     for (const warning of listingLevelOverwrites(levelWrites)) {
