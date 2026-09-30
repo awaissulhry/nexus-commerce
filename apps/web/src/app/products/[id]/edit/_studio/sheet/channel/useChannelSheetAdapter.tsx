@@ -638,6 +638,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const viewCtx = useMemo(() => ({
         variationAxes: data?.family?.variationAxes ?? [],
         locale: data?.scope.locale ?? locale ?? '',
+        scopeLabel: data?.scope.label,
         flaggedKeys: flaggedColumnKeys(rows),
         requiredKeys: [...new Set(rows.flatMap(row => Object.entries(row.values).filter(([, cell]) => cell.mapped?.requiredByRule).map(([key]) => key)))],
     }), [data, rows, locale]);
@@ -786,7 +787,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             setExportNote(e instanceof GridExportRefused ? e.message : 'Could not build the file.');
         }
     }, [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns]);
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
+        family: { productId, channel: channel.toUpperCase(), columns: () => dataRef.current?.columns ?? [] } });
     const getDataPath = useCallback((d: ChannelSheetRow) => dataPathFor(d), []);
     const getRowId = useCallback((p: {
         data: ChannelSheetRow;

@@ -54,7 +54,7 @@ import { linkForCoordinate, type FieldLinkGroupLike } from './resolve-channel-fi
 import type { ResolvedCell } from './mapping/resolve-batch.service.js'
 import type { ResolvedCategory } from './mapping/category-mapping.service.js'
 import { buildCoordinateValidators, evaluateRow, type FlatRow } from './readiness.service.js'
-import { columnApplies, columnRequiredByAny, columnRequiredHere, columnForCategory, productRoleOf } from '@nexus/shared/master-sheet'
+import { columnApplies, columnEditableOnRow, columnRequiredByAny, columnRequiredHere, columnForCategory, familyRowHoldsValue, productRoleOf } from '@nexus/shared/master-sheet'
 import { relationshipColumns, relationshipValues, RELATIONSHIP_GROUP } from './studio-relationships.js'
 import { storedChannelState } from './channel-value-mutation.js'
 import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
@@ -1245,6 +1245,10 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
   }
 
   const linkGroupLikes: FieldLinkGroupLike[] = linkGroups as unknown as FieldLinkGroupLike[]
+  /* P1 (report 2 I-11) — which per-variant columns the FAMILY row holds for its variations: the axis wording only for
+     real axes, and a family value (`familyRowHoldsValue`) editable on the family row of the Shared sheet. */
+  const variationAxisKeys = new Set((Array.isArray(root.variationAxes) ? root.variationAxes : []).map((a) => canonicalVariantAxis(String(a))))
+  const withAxis = <C extends { key: string; scope: string }>(col: C) => ({ ...col, axis: col.scope === 'per_variant' && variationAxisKeys.has(canonicalVariantAxis(col.key)) })
   const rows: StudioRow[] = []
   // A family on the photo plan: the "Product media" cell reads the plan (P3c), never the older gallery store.
   const mediaPlan = await sheetMediaPlan(rootId)
@@ -1344,7 +1348,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
               value: raw,
               source: fromColumn ? 'masterColumn' : hit.source,
               inheritedFrom: fromColumn ? null : hit.inheritedFrom,
-              inherited: !fromColumn && !isParent && col.scope === 'global' && isBlank(own) && hit.inheritedFrom !== null,
+              inherited: !fromColumn && !isParent && (col.scope === 'global' || familyRowHoldsValue(withAxis(col))) && isBlank(own) && hit.inheritedFrom !== null,
             }
           }
         }
@@ -1430,11 +1434,15 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         // The two live refusal rules, each with the sentence it owes an operator.
         // Order matters: the parent-row rule is the more specific one, so it
         // speaks first when both apply.
-        const blockedByAxis = isParent && col.scope === 'per_variant'
+        const axisColumn = col.scope === 'per_variant' ? withAxis(col) : col
+        // The family row holds this per-variant column's value for its variations (Shared sheet only: a channel's
+        // family-row cell writes that listing, which its variations do not read).
+        const familyHolds = !coordinate && isParent && familyRowHoldsValue(axisColumn)
+        const blockedByAxis = isParent && col.scope === 'per_variant' && !familyHolds
         const shopifyOwnerApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !product.parentId : !isParent)
         const shopifyApplicability = col.shopifyField?.definition ? shopifyDefinitionApplicability(col.shopifyField.definition, rowShape.productType) : null
         const immutableListingField = !!listingRow?.externalListingId && channelFacts?.editableOnExisting === false
-        const cellEditable = col.editable && !immutableListingField && shopifyOwnerApplies && !shopifyApplicability && columnApplies(col, rowShape)
+        const cellEditable = col.editable && !immutableListingField && shopifyOwnerApplies && !shopifyApplicability && (familyHolds ? columnEditableOnRow(axisColumn, rowShape) : columnApplies(col, rowShape))
         // The COLUMN's own refusal speaks first, because it applies on every row.
         // Measured while verifying this: `sku` is both per-variant scoped AND
         // read-only, and putting the axis rule first made the parent row say
@@ -1455,12 +1463,16 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           : immutableListingField ? 'The channel marks this field read-only on an existing listing.'
           : !shopifyOwnerApplies ? `This Shopify field belongs to ${col.shopifyField?.owner === 'PRODUCT' ? 'the product row' : 'a variant row'}.`
           : shopifyApplicability ? shopifyApplicability
-          : !columnApplies(col, rowShape) && !blockedByAxis
+          : !(familyHolds ? columnEditableOnRow(axisColumn, rowShape) : columnApplies(col, rowShape)) && !blockedByAxis
             ? 'Not applicable to this category.'
           : blockedByAxis
             ? IDENTITY_CODE_KEYS.has(col.key)
               ? 'Set on each variant — an identity code belongs to the individual product, not the family.'
-              : 'Set on each variant — this is a variation axis, so the family row has no single value.'
+              : axisColumn.axis
+              ? 'Set on each variant — this is a variation axis, so the family row has no single value.'
+              : coordinate && familyRowHoldsValue(axisColumn)
+              ? 'Set on each variant here. The family value every variation inherits is edited on the Shared product sheet.'
+              : `Set on each variant — ${col.label} is stored on each variation, and the family row holds no value they inherit.`
             : null
 
         // The mapping engine is keyed by the CHANNEL's field name (`bullet_point`, not the merged

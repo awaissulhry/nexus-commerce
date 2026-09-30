@@ -93,6 +93,8 @@ interface SheetPageState {
     search: string;
 }
 const NO_VARIATION_AXES: readonly string[] = [];
+/** What the Shared scope is called on screen (the scope chip, the progress column). */
+const SHARED_SCOPE_LABEL = 'Shared product';
 export function useMasterSheetAdapter({ productId, market, locale, variationAxes = NO_VARIATION_AXES as string[] }: MasterSheetProps): ProductSheetModel<StudioRow, SheetPageState, DrawerSheetRow> {
     const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastSavedAt, setLastSavedAt, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, clearSelection, rowSelection, selectedRows, setSelectedRows, announceRefusals } = useProductSheetInteraction<StudioRow>('master');
     const languageScope = useStudioScope();
@@ -300,6 +302,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const viewCtx = useMemo(() => ({
         variationAxes: sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes,
         locale,
+        scopeLabel: SHARED_SCOPE_LABEL,
         flaggedKeys: flaggedColumnKeys(sheet?.rows),
     }), [sheet, locale, variationAxes]);
     columnByKeyRef.current = useMemo(() => new Map(schemaColumns.map((c) => [c.key, c])), [schemaColumns]);
@@ -516,7 +519,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onDone: onFamilyChanged,
         onCollectVariation: setNewVariation,
     });
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
+        family: { productId, channel: null, columns: () => [...columnByKeyRef.current.values()] } });
     const [exportNote, setExportNote] = useState<string | null>(null);
     const onExport = useCallback((mode: SheetExportMode) => {
         const api = getGridApi();

@@ -536,6 +536,20 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * P1 (issue #15) — every attribute of the product's family and where it lives (Shared, a channel, archived), plus the
+   * channels the business has an account for. The sheet's Customise dialog lists the ones with no column in view.
+   */
+  fastify.get('/products/:id/studio/family-attributes', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const { familyAttributePlaces } = await import('../services/pim/family-attribute-places.service.js')
+      return await familyAttributePlaces(id)
+    } catch (err) {
+      return sendError(reply, err, request.log, { id })
+    }
+  })
+
   /** One family, one scope: rows + alias groups + per-cell provenance. */
   fastify.get('/products/:id/studio/sheet', async (request, reply) => {
     const { id } = request.params as { id: string }

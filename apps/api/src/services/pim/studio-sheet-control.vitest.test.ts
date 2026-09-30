@@ -76,3 +76,40 @@ describe('an old listing text is the listing’s own value (report 2 I-3)', () =
     expect(sheet.rows.find(row => row.id === 'child' && row.aliasId === 'outlet')!.values.name).toMatchObject({ source: 'channelSnapshot', layer: 'alias' })
   })
 })
+
+describe('the family row and per-variant columns (report 2 I-11)', () => {
+  const perVariant = (key: string, storage: string) => ({ key, writeField: `attr_${key}`, label: key === 'color' ? 'Colour' : key[0].toUpperCase() + key.slice(1),
+    group: 'Specifications', kind: 'text', storage, scope: 'per_variant', requiredBy: [], editable: true, defaultVisible: true })
+  beforeEach(() => {
+    getStudioColumns.mockResolvedValue({ columns: [perVariant('neckline', 'categoryAttributes'), perVariant('item_type_name', 'localizedContent'),
+      perVariant('color', 'categoryAttributes'), { ...perVariant('ean', 'column'), writeField: 'ean' }, { ...perVariant('fit_code', 'column'), writeField: 'fit_code' }], coordinates: [EBAY_IT] })
+    productFindMany.mockResolvedValue([
+      { id: PARENT, sku: 'REGAL', isParent: true, parentId: null, productType: 'OUTERWEAR', name: 'Master title', variationAxes: ['Colore'], variantAttributes: {},
+        categoryAttributes: { neckline: 'Collo alto' }, translations: [] },
+      { id: 'child', sku: 'REGAL-L', isParent: false, parentId: PARENT, productType: 'OUTERWEAR', name: 'Master title', variationAxes: [], variantAttributes: { Color: 'Nero' },
+        categoryAttributes: {}, translations: [] },
+    ])
+    channelListingFindMany.mockResolvedValue([])
+  })
+
+  it('lets the family row edit a per-variant value its variations inherit, and marks theirs inherited', async () => {
+    const sheet = await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)
+    const parent = sheet.rows.find(row => row.isParent)!, child = sheet.rows.find(row => !row.isParent)!
+    for (const key of ['neckline', 'item_type_name']) expect(parent.values[key], key).toMatchObject({ editable: true, writable: true, writeBlockedReason: null })
+    expect(child.values.neckline).toMatchObject({ value: 'Collo alto', inherited: true })
+  })
+
+  it('says "variation axis" only for a real axis, and the exact reason for the others', async () => {
+    const parent = (await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)).rows.find(row => row.isParent)!
+    expect(parent.values.color).toMatchObject({ editable: false, writeBlockedReason: 'Set on each variant — this is a variation axis, so the family row has no single value.' })
+    expect(parent.values.ean.writeBlockedReason).toBe('Set on each variant — an identity code belongs to the individual product, not the family.')
+    expect(parent.values.fit_code.writeBlockedReason).toBe('Set on each variant — Fit_code is stored on each variation, and the family row holds no value they inherit.')
+  })
+
+  it('keeps a channel’s family row locked, and sends the family value to the Shared sheet', async () => {
+    const parent = (await getStudioSheet({ productId: PARENT, scope: 'channel', channel: 'EBAY', market: 'IT', locale: 'it' })).rows.find(row => row.isParent)!
+    expect(parent.values.neckline).toMatchObject({ editable: false,
+      writeBlockedReason: 'Set on each variant here. The family value every variation inherits is edited on the Shared product sheet.' })
+    expect(parent.values.color.writeBlockedReason).toBe('Set on each variant — this is a variation axis, so the family row has no single value.')
+  })
+})

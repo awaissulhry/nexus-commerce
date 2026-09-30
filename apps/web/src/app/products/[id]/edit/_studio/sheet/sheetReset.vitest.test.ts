@@ -53,6 +53,11 @@ describe('masterResetOffer — a variation’s own value, or a row’s own trans
     expect(masterResetOffer(masterRow({ color: mcell() }), col('color', { scope: 'per_variant' }))).toBeNull()
     for (const key of ['basePrice', 'totalStock', 'status', 'lowStockThreshold']) expect(masterResetOffer(masterRow({ [key]: mcell() }), col(key))).toBeNull()
   })
+  it('offers a reset on a variation’s own value of a per-variant column the family row holds (P1, report 2 I-11)', () => {
+    const neckline = col('neckline', { scope: 'per_variant', storage: 'categoryAttributes', axis: false })
+    expect(masterResetOffer(masterRow({ neckline: mcell({ source: 'variant' }) }), neckline)?.intent).toBe('reset')
+    expect(masterResetOffer(masterRow({ color: mcell() }), col('color', { scope: 'per_variant', storage: 'categoryAttributes', axis: true }))).toBeNull()
+  })
   it('offers a reset on a row’s own translation, the family row too (the language shows its source again)', () => {
     expect(masterResetOffer(masterRow({ name: mcell({ tier: 'language' }) }, { isParent: true, parentId: null }), col('name'))?.intent).toBe('reset')
   })

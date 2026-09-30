@@ -20,3 +20,15 @@
   gap: var(--nds-space-12);
 }
 .ps-dialog-body p { margin: 0; }
+
+/* P1 — Customise: the family attributes with no column on this sheet. */
+.ps-family-elsewhere {
+  display: grid;
+  gap: var(--nds-space-6);
+}
+.ps-family-elsewhere-note,
+.ps-family-elsewhere-names {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
