@@ -1,4 +1,7 @@
 .business-profiles { max-width: 1100px; margin: 0 auto; padding: var(--nds-space-24); display: grid; gap: var(--nds-space-20); color: var(--nds-text); overflow: auto; max-height: 100dvh; }
+/* One column as wide as the page and never wider: an `auto` track grew to its widest unbreakable line (a member's
+   email), so at 390 px every card and its buttons ran 180 px past the right edge (Team & Access, 2026-09-30). */
+.business-profiles { grid-template-columns: minmax(0, 1fr); }
 .business-profiles-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-16); flex-wrap: wrap; }
 .business-profiles h1 { font-size: var(--nds-font-size-2xl); font-weight: var(--nds-font-weight-semibold); margin: 0 0 var(--nds-space-8); }
 .business-profiles p, .business-profile-form p { color: var(--nds-text-2); margin: 0; line-height: 1.6; }

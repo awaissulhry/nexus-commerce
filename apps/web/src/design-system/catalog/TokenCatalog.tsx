@@ -797,6 +797,9 @@ export function TokenCatalog() {
           <DSCard header="Card with header" headerAction={<Button size="sm">Action</Button>}>
             <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>Bordered surface with a header row and a padded body.</div>
           </DSCard>
+          <DSCard header="Card with a long sub-line" description="lx-editor-0a1b2c3d4e5f60718293a4b5@example.test · Operations Manager" headerAction={<Button size="sm">Manage access</Button>}>
+            <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>A long word in the head breaks at the card&apos;s edge; under 600 px the action moves under the text.</div>
+          </DSCard>
           <DSCard padded elevated>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Padded + elevated</div>
             <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>A plain padded card with the resting shadow.</div>
