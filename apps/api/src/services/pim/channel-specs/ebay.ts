@@ -80,7 +80,7 @@ const GROUP_FOR_LISTING_FIELD: Record<string, string> = {
   imageUrls: 'images', videoId: 'images',
   conditionId: 'offer', listingFormat: 'offer', listingDuration: 'offer',
   bestOffer: 'offer', bestOfferFloor: 'offer', bestOfferCeiling: 'offer', vatRate: 'offer',
-  dimensionUnit: 'shipping', handlingTime: 'shipping', itemLocationCountry: 'shipping', packageType: 'shipping', packageWeight: 'shipping',
+  dimensionUnit: 'shipping', handlingTime: 'shipping', itemLocationCountry: 'shipping', itemLocation: 'shipping', itemPostalCode: 'shipping', packageType: 'shipping', packageWeight: 'shipping',
   packageLength: 'shipping', packageWidth: 'shipping', packageHeight: 'shipping',
   paymentPolicyId: 'policies', returnPolicyId: 'policies', fulfillmentPolicyId: 'policies',
 }

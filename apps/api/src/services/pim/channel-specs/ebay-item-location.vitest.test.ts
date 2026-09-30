@@ -11,5 +11,7 @@ it('offers the item location city and postal code as listing columns, stored whe
   const field = (key: string) => spec.fields.find(f => f.key === key)
   expect(field('itemLocation')).toMatchObject({ englishLabel: 'Item location (city)', kind: 'text', channelStore: { kind: 'platformAttributes', path: ['itemLocation'] } })
   expect(field('itemPostalCode')).toMatchObject({ englishLabel: 'Item location postal code', kind: 'text', channelStore: { kind: 'platformAttributes', path: ['itemPostalCode'] } })
-  expect(field('itemLocationCountry')).toBeDefined()
+  // Beside the country, in Shipping — not a group of their own.
+  expect(field('itemLocation')?.group).toBe(field('itemLocationCountry')?.group)
+  expect(field('itemPostalCode')?.group).toBe(field('itemLocationCountry')?.group)
 })

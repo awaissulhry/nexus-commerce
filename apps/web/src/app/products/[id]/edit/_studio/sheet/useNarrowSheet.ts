@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import type { GridApi } from '@/design-system/grid'
 
 /**
  * Below this width the sheet pins no column. Pinned, the Product column was wider than a 390px phone, so no other cell
@@ -19,20 +20,14 @@ export function useNarrowSheet(): boolean {
   return narrow
 }
 
-type PinApi = {
-  isDestroyed(): boolean
-  getAllGridColumns(): Array<{ getColId(): string; getPinned(): 'left' | 'right' | null | undefined }> | null
-  setColumnsPinned(keys: string[], pinned: 'left' | null): void
-  addEventListener(type: 'displayedColumnsChanged', listener: () => void): void
-  removeEventListener(type: 'displayedColumnsChanged', listener: () => void): void
-}
 
 /**
  * Unpins the sheet's left-pinned columns on a narrow screen and pins the same ones back when it widens. Through the grid
  * API, and again whenever the grid rebuilds its columns: AG reads `pinned` from a definition only when it creates the
  * column, and the sheet re-creates its Product column after its data arrives, pinned again.
  */
-export function useUnpinOnNarrowSheet(getGridApi: () => PinApi | null | undefined, gridReady: boolean) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- both sheets' row types
+export function useUnpinOnNarrowSheet(getGridApi: () => GridApi<any> | null | undefined, gridReady: unknown) {
   const narrow = useNarrowSheet()
   const unpinned = useRef<string[]>([])
   useEffect(() => {
