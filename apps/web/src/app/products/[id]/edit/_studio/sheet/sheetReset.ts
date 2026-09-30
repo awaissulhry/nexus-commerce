@@ -194,6 +194,15 @@ export function deleteAsks(counts: { clearable: number; resettable: number }, hi
   return counts.resettable > 0 || (counts.clearable > 0 && hidesInherited)
 }
 
+/**
+ * B17 — an editor committed an EMPTY value over a value the cell showed (a list's "Clear" row, an emptied text): the
+ * same act as Delete, which asks first where a clear would hide an inherited value. Paste, fill, undo and the sheet's
+ * own writes are not an editor's clear.
+ */
+export function editorClears(e: { oldValue: unknown; newValue: unknown; source?: string }): boolean {
+  return e.source === 'edit' && !hasValue(e.newValue) && hasValue(e.oldValue)
+}
+
 /** Delete / Backspace on a cell that is not being edited — the key the sheet answers itself (AG would store a blank). */
 export function isClearKey(event: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'> | null | undefined, editing: boolean): boolean {
   return !!event && !editing && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === 'Delete' || event.key === 'Backspace')

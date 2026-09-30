@@ -16,8 +16,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useActionConfirm, type AgMenuItemDef, type ColDef, type ColGroupDef, type GetContextMenuItemsParams, type GridApi, type IRowNode, type SheetWriter } from '@/design-system/grid'
 import { ClearOrResetDialog, SetColumnDialog, type ClearChoiceRequest, type SetColumnRequest } from './SheetControlDialogs'
-import { clearChoiceCounts, deleteAsks, isClearKey, isMenuKey, resetChanges, resetTargets, selectedCells, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
-import type { SheetCellChange } from './sheetUndo'
+import { clearChoiceCounts, deleteAsks, editorClears, isClearKey, isMenuKey, resetChanges, resetTargets, selectedCells, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
+import { priorCellOf, type SheetCellChange } from './sheetUndo'
 import { runBounded } from '../formulaReadiness'
 
 /** Formula removals in flight at once during a reset (each is a server transaction). */
@@ -139,6 +139,31 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
     }), 'clear')
   }, [reset, writeValues])
 
+  /**
+   * Audit B17 — an editor's clear (a list's "Clear" row, a value emptied and committed) asks the SAME question as Delete
+   * where a clear would hide what the cell inherits: it stored a blank over "Pelle" from Master without a word, where
+   * Delete on the same cell asked first. The cell is put back as it was until the operator answers; Clear then clears
+   * it, Reset resets it, Cancel leaves it. `true` = taken over here (the host writes nothing).
+   */
+  const interceptClear = useCallback((e: { row: Row; colId: string; oldValue: unknown; newValue: unknown; source?: string }): boolean => {
+    const { rowIdOf, columnFacts, getGridApi } = live.current
+    if (!editorClears(e) || !columnFacts(e.colId)) return false
+    const api = getGridApi(), rowId = rowIdOf(e.row), node = api?.getRowNode(rowId)
+    const values = (e.row as { values?: Record<string, unknown> }).values
+    const prior = priorCellOf(values?.[e.colId])
+    if (!api || !node || !values || !prior) return false
+    ;(e.row as { values: Record<string, unknown> }).values = { ...values, [e.colId]: prior }
+    api.refreshCells({ rowNodes: [node], columns: [e.colId], force: true })
+    const cell = [{ rowId, colId: e.colId, row: e.row }]
+    if (!deleteAsks(clearChoiceCounts(cell, editable, offer), live.current.hidesInherited(e.row))) {
+      // Nothing to hide and nothing to reset: the clear goes ahead as typed.
+      writeValues([{ node, colId: e.colId, value: null }], 'clear')
+      return true
+    }
+    void clearOrReset(cell)
+    return true
+  }, [clearOrReset, writeValues])
+
   /** The rows a column verb acts on: every row shown (after filters), in order. */
   const shownRows = (api: GridApi<Row>) => {
     const nodes: IRowNode<Row>[] = []
@@ -233,5 +258,5 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
     {confirm.element}
   </>, [clearAsk, setAsk, applySetColumn, confirm.element])
 
-  return { cellMenuItems, columnMenuItems, onKeyDown, decorate, element, reset }
+  return { cellMenuItems, columnMenuItems, onKeyDown, decorate, element, reset, interceptClear }
 }

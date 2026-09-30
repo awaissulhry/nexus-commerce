@@ -470,6 +470,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const colId = e.colDef.colId;
         if (!writeGate({ colId, source: e.source, selfInflicted: false, oldValue: e.oldValue, newValue: e.newValue }).write)
             return;
+        /* B17 — an editor's Clear asks what Delete asks (Clear or Reset to inherited) where it would hide an inherited value. */
+        if (control.interceptClear({ row: e.data, colId: colId!, oldValue: e.oldValue, newValue: e.newValue, source: e.source }))
+            return;
         /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
            the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
         if (!formulas.knownFor(e.data.id, colId!)) {
@@ -516,7 +519,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         }
         undo.record({ rowId: e.data.id, colId: colId!, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.id, colId!, e.newValue, { row: e.data });
-    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record]);
+    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record, control.interceptClear]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;

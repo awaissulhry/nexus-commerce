@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  channelResetOffer, clearChoiceCounts, controlColumnFacts, deleteAsks, isClearKey, isMenuKey, masterResetOffer, resetTargets,
+  channelResetOffer, clearChoiceCounts, controlColumnFacts, deleteAsks, editorClears, isClearKey, isMenuKey, masterResetOffer, resetTargets,
   selectedCells, wireCellValue, withControlVerbs, type SelectionApi,
 } from './sheetReset'
 import type { ChannelSheetRow, StudioCellValue } from './channel/types'
@@ -140,5 +140,19 @@ describe('an emptied list leaves as a clear (report 1 I-10)', () => {
     expect(wireCellValue([])).toBeNull()
     expect(wireCellValue(['giacca'])).toEqual(['giacca'])
     expect(wireCellValue('')).toBe('')
+  })
+})
+
+/** Audit B17 — a list's "Clear" (any editor committing an empty value) is Delete's act, and asks Delete's question. */
+describe('editorClears', () => {
+  it('an editor committing an empty value over a value is a clear', () => {
+    expect(editorClears({ source: 'edit', oldValue: 'Pelle', newValue: null })).toBe(true)
+    expect(editorClears({ source: 'edit', oldValue: ['a'], newValue: [] })).toBe(true)
+    expect(editorClears({ source: 'edit', oldValue: 'Pelle', newValue: '' })).toBe(true)
+  })
+  it('a value typed, an empty cell left empty, or a write that is not an editor’s (paste, the sheet’s own Clear, undo) is not', () => {
+    expect(editorClears({ source: 'edit', oldValue: 'Pelle', newValue: 'Tela' })).toBe(false)
+    expect(editorClears({ source: 'edit', oldValue: null, newValue: null })).toBe(false)
+    for (const source of ['paste', 'clear', 'undo', 'rangeService']) expect(editorClears({ source, oldValue: 'Pelle', newValue: null })).toBe(false)
   })
 })

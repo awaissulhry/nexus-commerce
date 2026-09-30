@@ -538,6 +538,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         });
         if (gate === 'ignore' || gate === 'blocked')
             return;
+        /* B17 — an editor's Clear asks what Delete asks (Clear or Reset to inherited) where it would hide an inherited value. */
+        if (control.interceptClear({ row: e.data, colId, oldValue: e.oldValue, newValue: e.newValue, source: e.source }))
+            return;
         if (gate === 'acknowledge') {
             setPendingMasterWrite({
                 rowId: e.data.rowId,
@@ -597,7 +600,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }
         undo.record({ rowId: e.data.rowId, colId, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.rowId, colId, e.newValue, { row: e.data, intent: 'set' });
-    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record]);
+    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record, control.interceptClear]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;

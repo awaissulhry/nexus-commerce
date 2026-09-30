@@ -13,6 +13,10 @@ describe.each([['channel', read('channel', 'useChannelSheetAdapter.tsx')], ['mas
     expect(src).toContain('useSheetControl<')
     expect(src).toMatch(/control\.decorate\(buildSheetColumns\(/)
   })
+  it('B17 — an editor’s Clear goes through the Delete question before any write', () => {
+    expect(src).toMatch(/if \(control\.interceptClear\(\{ row: e\.data, colId[^\n]*\)\)\s*return;/)
+    expect(src.indexOf('control.interceptClear(')).toBeLessThan(src.indexOf('undo.record({'))
+  })
   it('puts the reset first in the cell menu and answers the keys before undo and the grid', () => {
     expect(src).toMatch(/control\.cellMenuItems|cellMenuRef\.current = control\.cellMenuItems/)
     expect(src).toContain('if (control.onKeyDown(event as never)) return;')
