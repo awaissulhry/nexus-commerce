@@ -16,8 +16,9 @@ import {
   BulkActionTemplateService,
   type ParameterDecl,
 } from '../services/bulk-action-template.service.js'
-import { BulkActionService } from '../services/bulk-action.service.js'
+import { BulkActionInputError, BulkActionService } from '../services/bulk-action.service.js'
 import prisma from '../db.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 
 const templateService = new BulkActionTemplateService(prisma)
 const bulkActionService = new BulkActionService(prisma)
@@ -32,6 +33,7 @@ interface CreateBody {
   parameters?: ParameterDecl[]
   category?: string | null
   userId?: string | null
+  /** Ignored: the template records the signed-in person (`bulkActorOf`). */
   createdBy?: string | null
 }
 
@@ -47,6 +49,7 @@ interface ApplyBody {
   targetProductIds?: string[]
   /** Job name override; defaults to the template name. */
   jobName?: string
+  /** Ignored: the job acts for the signed-in person (`bulkActorOf`), never for a name the caller sends. */
   createdBy?: string | null
 }
 
@@ -123,7 +126,7 @@ const bulkActionTemplateRoutes: FastifyPluginAsync = async (fastify) => {
           parameters: body.parameters ?? [],
           category: body.category ?? null,
           userId: body.userId ?? null,
-          createdBy: body.createdBy ?? null,
+          createdBy: bulkActorOf(request),
         })
         return reply.code(201).send({ success: true, template })
       } catch (e) {
@@ -233,14 +236,14 @@ const bulkActionTemplateRoutes: FastifyPluginAsync = async (fastify) => {
         actionPayload,
         filters: filters ?? undefined,
         targetProductIds: body.targetProductIds,
-        createdBy: body.createdBy ?? null,
+        createdBy: bulkActorOf(request),
       } as never)
       // Best-effort telemetry; never blocks the apply.
       void templateService.recordUsage(id)
       return reply.code(201).send({ success: true, job })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (msg.startsWith('Required parameter missing')) {
+      if (msg.startsWith('Required parameter missing') || e instanceof BulkActionInputError) {
         return reply.code(400).send({ success: false, error: msg })
       }
       if (msg.includes('must be ') || msg.includes('must be one of')) {
