@@ -94,9 +94,28 @@ test.describe('product sheet save snapshots', () => {
   })
 
   for (const width of [1680, 390]) for (const colorScheme of ['light', 'dark'] as const) {
-    test(`${colorScheme}, ${width}px: reload after a conflict accepts a recreated translation`, async ({ page }, info) => {
+    test(`${colorScheme}, ${width}px: reload after a conflict and cell copy accepts a recreated translation`, async ({ page }, info) => {
       if (!local(base) || !local(api) || ![fixture!.family, fixture!.child].every(id => id.startsWith('e2e_'))) throw new Error('Synthetic local fixture required')
-      await page.route('**/*', route => local(route.request().url()) ? route.continue() : route.abort())
+      let oldRead: string | null = null, replayRead = false, blockReads = false
+      await page.route('**/*', async route => {
+        const url = route.request().url()
+        if (!local(url)) return route.abort()
+        if (url.includes('/studio/sheet?')) {
+          if (replayRead && oldRead) {
+            replayRead = false
+            const witness = JSON.parse(oldRead)
+            witness.rows.find((row: { id: string }) => row.id === fixture!.child).sku = 'E2E-COPY-OLD-READ'
+            return route.fulfill({ status: 200, contentType: 'application/json', json: witness })
+          }
+          if (blockReads) return route.abort()
+          if (oldRead === null) {
+            const response = await route.fetch()
+            oldRead = await response.text()
+            return route.fulfill({ response, body: oldRead })
+          }
+        }
+        return route.continue()
+      })
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
       await page.emulateMedia({ colorScheme })
       await page.addInitScript(theme => { localStorage.setItem('nexus:theme', theme) }, colorScheme)
@@ -106,8 +125,19 @@ test.describe('product sheet save snapshots', () => {
       // Change only the synthetic translation outside this browser, as another writer would.
       const fresh = JSON.parse(execFileSync(process.execPath, [join(__dirname, 'fixtures/recreate-sheet-translation.mjs'), fixture!.child, external], { encoding: 'utf8' }))
       expect(fresh.contentVersion).toBe(1)
+      blockReads = true
       const conflict = await edit(page, 'brand', `Stale brand ${Date.now()}`)
       expect(conflict.body.units[0].status).toBe(409)
+      replayRead = true
+      await page.getByRole('button', { name: 'More', exact: true }).click()
+      await page.getByRole('menuitem', { name: /^Refresh progress/ }).click()
+      await expect.poll(() => replayRead).toBe(false)
+      await page.locator(`.ag-row[row-id="${fixture!.child}"] .ag-cell`).first().press('Home')
+      await expect(page.locator(`.ag-row[row-id="${fixture!.child}"]`)).toContainText('E2E-COPY-OLD-READ')
+      // The real value setter copies this old cell. Its version confirmation must survive that copy.
+      const copied = await edit(page, 'name', `Before fresh reload ${Date.now()}`)
+      expect(copied.body.units[0].status).toBe(409)
+      blockReads = false
       await page.getByRole('button', { name: 'More', exact: true }).click()
       await page.getByRole('menuitem', { name: /^Reload/ }).click()
       await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
