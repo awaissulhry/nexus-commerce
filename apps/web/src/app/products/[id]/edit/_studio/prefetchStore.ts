@@ -7,13 +7,25 @@
  * first read of its kind, and only when the URL is exactly the one the hook would have fetched: when the frame resolves a
  * different coordinate (the destination or the scope checks disagree with the URL), the prefetch is dropped and the hook
  * reads for itself. Nothing here ever serves a read twice, so a later refresh can never receive page-load data.
+ *
+ * Audit B03 — the URL names the product, scope, market, languages and account, but not WHO asked: the fetch patch adds
+ * the business from the page's path and the session cookie is the browser's. So a read is adopted only by the business
+ * it was started in, and never by another signed-in user (the session may still be loading when a read starts; a user
+ * known on both sides must match).
  */
+import { browserWorkspaceId } from '@/lib/workspaces/paths'
+import { browserUserId } from '@/lib/workspaces/browser-identity'
+
 
 /** A prefetch nobody adopted is dropped after this long: a page that has not asked for it by then will not. */
 export const PREFETCH_TTL_MS = 15_000
 
 type Kind = 'sheet' | 'destination'
-interface Entry { url: string; response: Promise<Response>; controller: AbortController; timer: ReturnType<typeof setTimeout>; adopted?: boolean }
+interface Owner { workspace: string | null; user: string | null }
+interface Entry { url: string; owner: Owner; response: Promise<Response>; controller: AbortController; timer: ReturnType<typeof setTimeout>; adopted?: boolean }
+
+const currentOwner = (): Owner => ({ workspace: browserWorkspaceId(), user: browserUserId() })
+const sameOwner = (a: Owner, b: Owner) => a.workspace === b.workspace && (a.user === null || b.user === null || a.user === b.user)
 
 const entries = new Map<Kind, Entry>()
 
@@ -36,14 +48,16 @@ function drop(kind: Kind, abort: boolean): void {
 export function startPrefetch(url: string, doFetch: typeof fetch = (...args) => fetch(...args)): void {
   const kind = prefetchKind(url)
   if (!kind) return
-  if (entries.get(kind)?.url === url) return
+  const owner = currentOwner()
+  const existing = entries.get(kind)
+  if (existing?.url === url && sameOwner(existing.owner, owner)) return
   drop(kind, true)
   const controller = new AbortController()
   // No credentials or headers here: the patched fetch (`install-fetch.ts`) adds them to every API read, this one included.
   const response = doFetch(url, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) })
   // A failure is the adopter's to handle (it reads for itself); never an unhandled rejection here.
   response.catch(() => {})
-  entries.set(kind, { url, response, controller, timer: setTimeout(() => drop(kind, true), PREFETCH_TTL_MS) })
+  entries.set(kind, { url, owner, response, controller, timer: setTimeout(() => drop(kind, true), PREFETCH_TTL_MS) })
 }
 
 /**
@@ -55,7 +69,7 @@ export function adoptPrefetch(url: string, signal?: AbortSignal): Promise<Respon
   const kind = prefetchKind(url)
   const entry = kind ? entries.get(kind) : undefined
   if (!kind || !entry) return null
-  if (entry.url !== url) { drop(kind, true); return null }
+  if (entry.url !== url || !sameOwner(entry.owner, currentOwner())) { drop(kind, true); return null }
   // Adopted: the read is wanted now, however long it takes (its own 30 s bound still holds). The expiry only forgets it
   // (a cancelled adopter that never comes back), it no longer aborts it (P2 review 5).
   if (!entry.adopted) {
