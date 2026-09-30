@@ -387,3 +387,12 @@ describe('commitMasterRow — a variation-theme save tells the host the family c
   })
 })
 
+
+describe('P1 — an emptied list is a clear (report 1 I-10)', () => {
+  it('sends null for [] (the route refused [] with "0 values — Search keywords needs at least 1")', async () => {
+    fetchMock.mockResolvedValue(json(200, { updated: 1, errors: [] }))
+    await commitMasterRow(req([{ colId: 'attr_colour', value: [], intent: 'set' }] as never), ctx())
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.changes[0]).toMatchObject({ value: null })
+  })
+})

@@ -54,6 +54,9 @@ import { flaggedColumnKeys, IDENTITY_COLUMN, orderColumnKeys, rankOfColumn, RESE
 import { useLanguageChips } from '../useLanguageChips';
 import { useSheetColumns } from '../useSheetColumns';
 import { exportGridCsv } from '@/design-system/grid/export/exportGrid';
+import { useSheetControl } from '../useSheetControl';
+import { controlColumnFacts, masterResetOffer } from '../sheetReset';
+import { useToast } from '@/design-system/components';
 import type { SheetExportMode } from '../sheetExport';
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
 /* A coordinate's progress column keeps ONE id whatever language is pressed (the trailing `:<language>` is dropped), so a
@@ -216,7 +219,13 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }), [famActions, rowPress.press]);
     const contextMenuRef = useRef(getContextMenuItems);
     contextMenuRef.current = getContextMenuItems;
-    const stableContextMenu = useCallback<typeof getContextMenuItems>((p) => contextMenuRef.current(p), []);
+    const cellMenuRef = useRef<(p: Parameters<typeof getContextMenuItems>[0]) => ReturnType<typeof getContextMenuItems>>(() => []);
+    /* The cell's own verbs first (P1: Reset to inherited — the master menu had none), then the family verbs and the clipboard. */
+    const stableContextMenu = useCallback<typeof getContextMenuItems>((p) => {
+        const own = cellMenuRef.current(p);
+        const rest = contextMenuRef.current(p);
+        return own.length ? [...own, 'separator', ...rest] : rest;
+    }, []);
     const onFamilyChanged = useCallback(() => { familyQuery.reload(); reload(); refreshReadinessSoon(); }, [familyQuery, reload, refreshReadinessSoon]);
     onFamilyChangedRef.current = onFamilyChanged;
     const [classificationOpen, setClassificationOpen] = useState(false);
@@ -235,6 +244,19 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const { pending, refused, retryable, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
+    const { toast } = useToast();
+    /* P1 — full control, the channel sheet's same hook: Reset to inherited (a variation's own value, a row's own
+       translation), on a selection and on a whole column; Set every row…; Delete asks Clear or Reset; Shift+F10. */
+    const control = useSheetControl<StudioRow>({
+        getGridApi, writer, operation: undo.operation,
+        rowIdOf: row => row.id, skuOf: row => row.sku,
+        offerOf: (row, colId) => { const column = columnByKeyRef.current.get(colId); return column ? masterResetOffer(row, column, !!formulas.exprFor(row.id, colId)) : null; },
+        columnFacts: colId => controlColumnFacts(columnByKeyRef.current.get(colId)),
+        hidesInherited: row => !!row.parentId,
+        removeFormula: (rowId, colId) => formulas.pinOver(rowId, colId),
+        say: message => toast(message, 'danger'),
+    });
+    cellMenuRef.current = control.cellMenuItems;
     refusalReason.current = (key, row) => {
         if (key === PRODUCT_MEDIA_COLUMN)
             return null;
@@ -334,7 +356,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             api.refreshCells({ force: true });
     }, [activeChip]);
     const visibleRows = useMemo(() => activeChip ? filterProductSheetRows(scopeRows, row => (activeChip.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, activeChip]);
-    const attributeColumns = useMemo(() => (sheet ? buildSheetColumns('master', { columns: withoutProgressColumns(schemaColumns).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring]);
+    const attributeColumns = useMemo(() => (sheet ? control.decorate(buildSheetColumns('master', { columns: withoutProgressColumns(schemaColumns).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef)) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring, control.decorate]);
     const identityColumns = useMemo<ColDef<StudioRow>[]>(() => [], []);
     /* Progress columns (2026-09-26) — what the card's actions call. Read through refs: the column set is built before
        the grid exists, and a card is opened long after either is current. */
@@ -626,7 +648,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         {rowPress.problem && <div className="nds-grid-footstrip" role="alert"><span className="nds-cell-stock-out">{rowPress.problem}</span></div>}
         {rowPress.confirmElement}
         {familyVerbs.dialogs}
-        {reloadConfirm.element}</>, footerExtra: <>{exportNote && <span className="nds-cell-muted">{exportNote}</span>}
+        {reloadConfirm.element}
+        {control.element}</>, footerExtra: <>{exportNote && <span className="nds-cell-muted">{exportNote}</span>}
     {sheet?.meta.source === 'legacy' && (<InfoTip tip="The studio sheet route is not deployed yet, so this is the catalogue read adapted to the same shape. Cell values and versions are real; the layer each value came from is INFERRED here rather than stated by the server.">
                 <Pill tone="neutral" size="sm">adapted read</Pill>
               </InfoTip>)}
@@ -663,7 +686,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             onCellFocused: onCellFocused,
         },
         gridOverlay: null,

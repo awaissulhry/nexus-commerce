@@ -25,6 +25,7 @@ import { commitVariationTheme } from '../master/masterWrite'
 import { columnLanguages } from '../languages'
 import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
+import { wireCellValue } from '../sheetReset'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
@@ -388,7 +389,7 @@ async function commitChannelLanguage(
         // Fall back to the column key only when the server sent no cell for it; a made-up
         // writeField would be a write aimed at nothing.
         field: intent === 'reset-list' ? wholeListWriteField(cell?.writeField ?? colId) ?? cell?.writeField ?? colId : cell?.writeField ?? colId,
-        value: isReset ? null : value,
+        value: isReset ? null : wireCellValue(value),
         /**
          * 🔴 THE ROW THE WRITE LANDS ON, from the server's own `writeTarget` (#697, hub-ruled).
          *
