@@ -118,7 +118,7 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
       results.push({ key, status: 500, body: { error: UNEXPECTED, detail, nothingSaved: true } })
     }
     return results
-  }, { timeoutMs: BULK_SAVE_TIMEOUT_MS })
+  }, { timeoutMs: BULK_SAVE_TIMEOUT_MS, memoReads: true })
   const failed = units.filter(unit => unit.status >= 400).length
   return { operationId: input.operationId ?? null, saved: units.length - failed, failed, elapsedMs: Date.now() - t0, units }
 }
