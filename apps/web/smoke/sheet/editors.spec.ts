@@ -21,7 +21,8 @@
  * Why this exists: the 2026-09-29 defects (Enter and Tab kept the old value, the chevron did nothing, the first typed key
  * was lost, an open list refused a typed value) all live between the key and the wire, where no test looked.
  */
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixture'
 import { DRIVERS, NETWORK_STUBS, PATHS, editorOf, labelledCodes, pickFor, type EditorId, type Path } from './drivers'
 import { focusCell, gridLabels, openSheet, readSheet, revealAllColumns, scopeOf, type ApiColumn, type ApiRow, type ScopeName, type SheetRead } from './grid'
 import { sheetSeed } from './seed'

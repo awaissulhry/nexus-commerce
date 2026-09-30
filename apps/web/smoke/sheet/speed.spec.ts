@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixture'
 import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { focusCell, openSheet, readSheet, revealAllColumns, scopeOf } from './grid'
 import { sheetSeed } from './seed'
@@ -143,7 +143,7 @@ test('@sheet speed · sheet read starts while session and destination answers ar
   await page.route(/\/api\/(auth\/me|products\/[^/]+\/studio\/destination)(\?|$)/, async route => {
     waiting.add(new URL(route.request().url()).pathname)
     await held
-    await route.continue()
+    await route.fallback()
   })
   const sheet = page.waitForRequest(request => request.url().includes('/studio/sheet?'), { timeout: 15_000 })
   try {

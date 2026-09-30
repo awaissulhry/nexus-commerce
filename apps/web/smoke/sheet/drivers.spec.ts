@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixture'
 import { arrowTo } from './drivers'
 
 // This is a test of the driver, independent of the app: a non-wrapping list opens on its stored value.
