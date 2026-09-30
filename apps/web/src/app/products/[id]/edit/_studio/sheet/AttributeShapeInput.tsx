@@ -1,8 +1,9 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Button, Input, Select, Textarea } from '@/design-system/primitives'
 import { OptionList } from '@/design-system/components'
 import { asList, asMeasure } from '@/design-system/grid/renderers/shapeFormat'
+import { textLimitFor } from '@/design-system/grid/editors/sheet'
 
 type ShapeColumn = { label: string; shape?: string; options?: string[]; optionLabels?: Record<string, string>; mode?: string; unitOptions?: string[]; cardinality?: { max: number | null }; maxLength?: number | null }
 
@@ -10,6 +11,7 @@ type ShapeColumn = { label: string; shape?: string; options?: string[]; optionLa
 export function AttributeShapeInput({ column, value, disabled, onChange }: { column: ShapeColumn; value: unknown; disabled?: boolean; onChange: (value: unknown) => void }) {
   const [items, setItems] = useState(() => asList(value))
   const [measure, setMeasure] = useState(() => asMeasure(value))
+  const idBase = useId()
   const stamp = JSON.stringify(value)
   useEffect(() => { setItems(asList(value)); setMeasure(asMeasure(value)) }, [stamp]) // eslint-disable-line react-hooks/exhaustive-deps
   if (column.shape === 'measure') {
@@ -35,10 +37,14 @@ export function AttributeShapeInput({ column, value, disabled, onChange }: { col
   </fieldset>
   return <fieldset disabled={disabled} className="nds-grid-confirm-block">
     <legend className="nds-vh">{column.label}</legend>
-    {items.map((item, index) => <div key={index} className="nds-addvar-field">
-      <label><span>Value {index + 1}</span><Textarea aria-label={`${column.label} value ${index + 1}`} rows={2} style={{ minHeight: 64 }} value={item} maxLength={column.maxLength ?? undefined} onChange={e => change(items.map((old, i) => i === index ? e.target.value : old))} /></label>
+    {/* Audit A32 — a value over the column's cap is MARKED (the counter and `aria-invalid`) and stored, never cut by the
+        browser: the sheet's list editor does the same, and the save warns with the channel's rule (`textLimitFor`). */}
+    {items.map((item, index) => { const cap = column.maxLength ?? null, over = cap !== null && item.length > cap, counterId = `${idBase}-value-${index + 1}-count`
+      return <div key={index} className="nds-addvar-field">
+      <label><span className="nds-slotlist-head"><span>Value {index + 1}</span><span id={counterId} className={`nds-slotlist-count${over ? ' over' : ''}`}>{cap !== null ? `${item.length} / ${cap}` : String(item.length)}</span></span>
+        <Textarea aria-label={`${column.label} value ${index + 1}`} aria-describedby={counterId} aria-invalid={over || undefined} rows={2} style={{ minHeight: 64 }} value={item} maxLength={textLimitFor(column.maxLength)} onChange={e => change(items.map((old, i) => i === index ? e.target.value : old))} /></label>
       <Button size="xs" variant="ghost" style={{ alignSelf: 'end', justifySelf: 'end' }} aria-label={`Remove ${column.label} value ${index + 1}`} onClick={() => change(items.filter((_, i) => i !== index))}>Remove</Button>
-    </div>)}
+    </div> })}
     <Button size="xs" variant="secondary" disabled={column.cardinality?.max != null && items.length >= column.cardinality.max} onClick={() => setItems([...items, ''])}>Add value</Button>
   </fieldset>
 }
