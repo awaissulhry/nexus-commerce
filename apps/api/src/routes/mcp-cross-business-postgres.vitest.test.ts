@@ -27,7 +27,7 @@
  *
  * A tool added tomorrow is covered on the day: the loop takes the tools from tools/list and builds each one's
  * arguments from its own input schema. A tool it cannot build, or whose arguments reach nothing even inside B,
- * fails by name until it gets an entry in B_VALUES or EXTRA.
+ * fails by name until it gets an entry in B_VALUES, B_FORMS or EXTRA.
  */
 import { randomBytes, randomUUID, createHash } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
@@ -110,6 +110,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
   // Not a real marketplace code: a value only this business's rows carry, so a market in an answer is traceable.
   const market = `Z${mark[0]}${RUN.slice(0, 6).toUpperCase()}`
   return inside(workspaceId, async () => {
+    // The market this business sells on, as a Marketplace row: the product writer checks a change against it.
+    await db.marketplace.create({
+      data: { channel: 'EBAY', code: market, name: `eBay ${market}`, region: 'EU', currency: 'EUR', language: 'it', languages: ['it'], marketplaceId: `TEST_EBAY_${market}` },
+    })
     const product = await db.product.create({
       data: {
         sku,
@@ -118,6 +122,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         description: `${canary}-DESCRIPTION`,
         bulletPoints: [`${canary}-BULLET`],
         keywords: [`${canary}-KEYWORD`],
+        categoryAttributes: { lining_note: `${canary}-LINING` },
         basePrice: '19.90',
         costPrice: '4.20',
         totalStock: 7,
@@ -253,7 +258,8 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
 
 /**
  * What an argument of this name means in business B. Ids first; then where B's rows are (channel, market, a
- * search), because a filter on them must not reach B either. A plural name gets a one-item list.
+ * search), because a filter on them must not reach B either. A plural name gets a one-item list: `skus` of
+ * `sku`, and a list named after a row (`orders`, `listings`) of that row's id.
  */
 const B_VALUES: Record<string, () => unknown> = {
   productId: () => seeded.b.productId,
@@ -276,9 +282,24 @@ const B_VALUES: Record<string, () => unknown> = {
   query: () => seeded.b.sku,
 }
 
-/** What a schema cannot say: without it the tool does nothing, even in B (apply-content needs a change to show). */
+/**
+ * An argument that names B's rows in more than one form. Each form is probed on its own: a product list takes
+ * Nexus ids or SKUs (the bulk tools resolve either), and neither may reach B from A.
+ */
+const B_FORMS: Record<string, () => Array<{ form: string; value: unknown }>> = {
+  products: () => [
+    { form: 'ids', value: [seeded.b.productId] },
+    { form: 'SKUs', value: [seeded.b.sku] },
+  ],
+}
+
+/**
+ * What a schema cannot say: without it the tool does nothing, even in B. apply-content needs a change to show;
+ * bulk-attribute-change may set only an attribute the product's family has or the product already holds.
+ */
 const EXTRA: Record<string, Record<string, unknown>> = {
   'apply-content': { title: 'MCP.8 probe title' },
+  'bulk-attribute-change': { attributes: { lining_note: 'MCP.8 probe' } },
 }
 
 /** An argument named like an id. One with no B_VALUES entry fails the build: the loop would probe nothing. */
@@ -302,9 +323,11 @@ function unwrap(node: ZodNode): ZodNode {
 }
 
 function bValue(name: string): unknown {
+  if (B_FORMS[name]) return B_FORMS[name]()[0].value
   if (B_VALUES[name]) return B_VALUES[name]()
-  if (name.endsWith('s') && B_VALUES[name.slice(0, -1)]) return [B_VALUES[name.slice(0, -1)]()]
-  return undefined
+  const one = name.endsWith('s') ? name.slice(0, -1) : ''
+  const entry = one ? (B_VALUES[one] ?? B_VALUES[`${one}Id`]) : undefined
+  return entry ? [entry()] : undefined
 }
 
 /** One argument: B's value by its name; otherwise left out when optional, else a plain valid value. */
@@ -356,23 +379,41 @@ function plainValue(node: ZodNode, path: string, gaps: string[]): unknown {
         const value = plainValue(option, path, [])
         if (value !== OMIT && option.safeParse(value).success) return value
       }
+      break
+    case 'record': {
+      const key = 'mcp8_probe'
+      if (!(def.keyType as ZodNode).safeParse(key).success) break
+      const value = plainValue(def.valueType, `${path}.${key}`, gaps)
+      return value === OMIT ? OMIT : { [key]: value }
+    }
   }
   gaps.push(`${path}: no plain value for a ${def.type} — give the tool an entry in EXTRA`)
   return OMIT
 }
 
-/** A tool's arguments aimed at business B, or why they cannot be built. */
-function probeArgs(tool: AgentTool): { args: Record<string, unknown> } | { gaps: string[] } {
+interface Probe {
+  label: string
+  args: Record<string, unknown>
+}
+
+/** A tool's arguments aimed at business B (one probe per form of a B_FORMS argument), or why they cannot be built. */
+function probeArgs(tool: AgentTool): { probes: Probe[] } | { gaps: string[] } {
   const gaps: string[] = []
   const input = tool.input as unknown as ZodNode
   const built = plainValue(input, tool.name, gaps)
   if (gaps.length) return { gaps }
   const args = { ...(built as Record<string, unknown>), ...EXTRA[tool.name] }
-  const parsed = input.safeParse(args)
-  if (!parsed.success) {
-    return { gaps: [`${tool.name}: its built arguments do not parse (${parsed.error!.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}) — give it an entry in EXTRA`] }
+  const probes: Probe[] = [{ label: tool.name, args }]
+  for (const key of Object.keys(args).filter((name) => B_FORMS[name])) {
+    for (const { form, value } of B_FORMS[key]().slice(1)) probes.push({ label: `${tool.name} (${key} as ${form})`, args: { ...args, [key]: value } })
   }
-  return { args }
+  for (const probe of probes) {
+    const parsed = input.safeParse(probe.args)
+    if (!parsed.success) {
+      return { gaps: [`${probe.label}: its built arguments do not parse (${parsed.error!.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}) — give it an entry in EXTRA`] }
+    }
+  }
+  return { probes }
 }
 
 /** Every string the caller itself sent: an answer may repeat those. */
@@ -646,7 +687,8 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
 
   describe("1 — every tool Claude is offered, handed business B's ids", () => {
     const offered: AgentTool[] = []
-    const probes = new Map<string, Record<string, unknown>>()
+    /** By label: a tool, or one form of it (a product list by ids, then by SKUs). */
+    const probes = new Map<string, { tool: AgentTool; args: Record<string, unknown> }>()
 
     it('the person in both businesses is offered every MCP tool, so the loop below covers the registry', async () => {
       const { tools } = await withClaude(tokens.a.access, 'A', (client) => client.listTools())
@@ -664,22 +706,29 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       for (const tool of offered) {
         const built = probeArgs(tool)
         if ('gaps' in built) gaps.push(...built.gaps)
-        else probes.set(tool.name, built.args)
+        else for (const probe of built.probes) probes.set(probe.label, { tool, args: probe.args })
       }
       expect(gaps).toEqual([])
       expect(Object.keys(EXTRA).filter((name) => !offered.some((tool) => tool.name === name))).toEqual([])
-      expect(probes.size).toBe(offered.length)
+      expect(offered.filter((tool) => ![...probes.values()].some((probe) => probe.tool === tool)).map((tool) => tool.name)).toEqual([])
     })
 
     it('the builder aims the shapes a new tool may use (lists of ids, lists of rows) at B, and names what it cannot', () => {
       const future = (input: z.ZodObject) => probeArgs({ name: 'future-tool', input } as unknown as AgentTool)
       const upper = (value: unknown) => (typeof value === 'string' ? value.toUpperCase() : value)
-      expect(future(z.object({ productIds: z.array(z.string().min(1)).min(1), price: z.coerce.number().positive(), note: z.string().optional() })))
-        .toEqual({ args: { productIds: [seeded.b.productId], price: 100 } })
+      expect(future(z.object({ productIds: z.array(z.string().min(1)).min(1), orders: z.array(z.string()).optional(), price: z.coerce.number().positive(), note: z.string().optional() })))
+        .toEqual({ probes: [{ label: 'future-tool', args: { productIds: [seeded.b.productId], orders: [seeded.b.orderId], price: 100 } }] })
       expect(future(z.object({
         items: z.array(z.object({ sku: z.string(), quantity: z.coerce.number().int().min(0).max(50) })).min(1),
         channel: z.preprocess(upper, z.enum(['AMAZON', 'EBAY'])).optional(),
-      }))).toEqual({ args: { items: [{ sku: seeded.b.sku, quantity: 50 }], channel: 'EBAY' } })
+      }))).toEqual({ probes: [{ label: 'future-tool', args: { items: [{ sku: seeded.b.sku, quantity: 50 }], channel: 'EBAY' } }] })
+      // A product list is probed by ids and again by SKUs; a record gets one plain entry.
+      expect(future(z.object({ products: z.array(z.string()).min(1), change: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), z.string()) }))).toEqual({
+        probes: [
+          { label: 'future-tool', args: { products: [seeded.b.productId], change: { mcp8_probe: 'mcp8 probe' } } },
+          { label: 'future-tool (products as SKUs)', args: { products: [seeded.b.sku], change: { mcp8_probe: 'mcp8 probe' } } },
+        ],
+      })
       expect(future(z.object({ warehouseId: z.string().optional() }))).toEqual({
         gaps: ['future-tool.warehouseId: an id with no business-B value — seed the row and name it in B_VALUES'],
       })
@@ -688,15 +737,15 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
     it("control: the same person, connected to B, reaches B's rows with exactly these arguments", async () => {
       const missed: string[] = []
       await withClaude(tokens.bOwn.access, 'B-control', async (client) => {
-        for (const [name, args] of probes) {
-          const result = await client.callTool({ name, arguments: args })
+        for (const [label, { tool, args }] of probes) {
+          const result = await client.callTool({ name: tool.name, arguments: args })
           const text = textOf(result)
           if (outcomeOf(result) === 'crashed' || traces(text, seeded.b, B_CANARY, args).length === 0) {
-            missed.push(`${name} ${JSON.stringify(args)} → ${text.slice(0, 160)}`)
+            missed.push(`${label} ${JSON.stringify(args)} → ${text.slice(0, 160)}`)
           }
         }
       })
-      // A tool here reads nothing even inside B: "not found" from A would prove nothing. Give it B_VALUES or EXTRA.
+      // A tool here reads nothing even inside B: "not found" from A would prove nothing. Give it B_VALUES, B_FORMS or EXTRA.
       expect(missed).toEqual([])
     })
 
@@ -709,24 +758,24 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
         (await rowsOf<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval" WHERE "workspaceId" = $1', [A]))[0].n
       const queuedBefore = await approvalsInA()
       const problems: string[] = []
-      let changes = 0
+      const changeTools = new Set<string>()
       await withClaude(tokens.a.access, 'A', async (client) => {
-        for (const [name, args] of probes) {
-          const result = await client.callTool({ name, arguments: args })
+        for (const [label, { tool, args }] of probes) {
+          const result = await client.callTool({ name: tool.name, arguments: args })
           const outcome = outcomeOf(result)
-          if (outcome === 'crashed') problems.push(`${name}: failed instead of answering`)
+          if (outcome === 'crashed') problems.push(`${label}: failed instead of answering`)
           const seen = traces(JSON.stringify(result), seeded.b, B_CANARY, args)
-          if (seen.length) problems.push(`${name}: ${seen.join(', ')}`)
+          if (seen.length) problems.push(`${label}: ${seen.join(', ')}`)
           // A change aimed at a row A does not have is refused by the tool itself, before anything waits for a person.
-          if (!offered.find((tool) => tool.name === name)!.readOnly) {
-            changes++
-            if (outcome !== 'refused' || !/not found/i.test(textOf(result))) problems.push(`${name}: ${outcome}, not "not found": ${textOf(result).slice(0, 120)}`)
+          if (!tool.readOnly) {
+            changeTools.add(tool.name)
+            if (outcome !== 'refused' || !/not found/i.test(textOf(result))) problems.push(`${label}: ${outcome}, not "not found": ${textOf(result).slice(0, 120)}`)
           }
         }
       })
       expect(problems).toEqual([])
-      expect(changes).toBe(offered.filter((tool) => !tool.readOnly).length)
-      expect(changes).toBeGreaterThan(0)
+      expect(changeTools.size).toBe(offered.filter((tool) => !tool.readOnly).length)
+      expect(changeTools.size).toBeGreaterThan(0)
       expect(await approvalsInA()).toBe(queuedBefore)
       expect(await digest(B)).toEqual(before)
     })
