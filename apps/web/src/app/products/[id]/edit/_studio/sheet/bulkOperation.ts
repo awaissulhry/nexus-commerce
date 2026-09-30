@@ -127,6 +127,9 @@ export async function runBulkOperation<T>(
 ): Promise<Map<string, SheetWriteResult>> {
   const post = options.post ?? postBulkSave
   const operationId = options.operationId ?? newOperationId()
+  // destroy() deliberately flushes still-queued intent once with an already-aborted signal.
+  // A later abort instead cancels all parts of an active operation that have not left yet.
+  const teardownFlush = options.retrySignal?.aborted === true
   const results = new Map<string, SheetWriteResult>()
   type Waiting = { rowId: string; unit: BulkSaveUnitWire; resolve: (a: BulkAnswer) => void; reject: (e: unknown) => void }
   const state = new Map(requests.map((r) => [r.rowId, { done: false, sends: 0 }]))
@@ -151,6 +154,10 @@ export async function runBulkOperation<T>(
     round++
     try {
       for (const [index, part] of chunk(batch).entries()) {
+        if (!teardownFlush && options.retrySignal?.aborted) {
+          for (const w of part) w.resolve(answer(400, { error: 'These edits were not sent because the sheet changed or closed.', nothingSaved: true }))
+          continue
+        }
         try {
           const { res, payload } = await postWithBusyRetry(post, `${operationId}:${round}:${index}`, part.map((w) => w.unit), options.retrySignal)
           if (res.ok && Array.isArray(payload?.units)) {

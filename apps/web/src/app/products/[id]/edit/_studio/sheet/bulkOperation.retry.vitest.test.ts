@@ -208,3 +208,70 @@ it('carries the real response Retry-After through the keyed request transport', 
     expect(JSON.parse(init.body as string).operationId).toBe('unchanged-key')
   } finally { vi.unstubAllGlobals() }
 })
+
+describe('cancellation across request chunks', () => {
+  const manyRows = () => Array.from({ length: 2001 }, (_, index) => ({ ...req, rowId: `row-${index}`, row: { id: `row-${index}` } }))
+
+  it.each(['discard', 'destroy'] as const)('%s cannot send a later unissued chunk after a confirmed busy rollback', async action => {
+    const posts: BulkSaveUnitWire[][] = []
+    const post = vi.fn(async (_id: string, units: BulkSaveUnitWire[]) => { posts.push(units); return reply(503, busy, '2') })
+    const tracker = new CellSaveTracker()
+    const writer: SheetWriter<Row> = new SheetWriter<Row>({ tracker, getApi: () => null, commit: async () => ({ ok: true }), flushMs: 5,
+      commitBatch: requests => runBulkOperation(requests, commit, { post, retrySignal: writer.retrySignal }) })
+    writer.seed(manyRows().map(request => ({ id: request.rowId, version: 7, row: request.row! })))
+    for (const request of manyRows()) writer.set(request.rowId, 'name', 'first')
+    await vi.advanceTimersByTimeAsync(10)
+    expect(posts.map(part => part.length)).toEqual([2000])
+    writer[action]()
+    await vi.runAllTimersAsync()
+    expect(posts.map(part => part.length)).toEqual([2000])
+    expect(writer.pending).toBe(0)
+    writer.destroy()
+  })
+
+  it('also cancels the unissued chunk split by the real 10000-change bound', async () => {
+    const controller = new AbortController()
+    const requests = ['first', 'later'].map(rowId => ({ ...req, rowId, row: { id: rowId },
+      cells: Array.from({ length: 5001 }, (_, index) => ({ colId: `field-${index}`, value: index, intent: 'set' as const })) }))
+    const post = vi.fn(async () => reply(503, busy, '2'))
+    const result = runBulkOperation(requests, commit, { post, retrySignal: controller.signal })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(post).toHaveBeenCalledTimes(1)
+    controller.abort()
+    await vi.runAllTimersAsync()
+    expect(post).toHaveBeenCalledTimes(1)
+    expect((await result).get('later')).toMatchObject({ ok: false, unreachable: false, reason: expect.stringContaining('not sent') })
+  })
+
+  it('keeps an authoritative success already in flight, while leaving its later chunk unsent', async () => {
+    const controller = new AbortController()
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const post = vi.fn(async (_id: string, units: BulkSaveUnitWire[]) => { await gate; return saved(units) })
+    const result = runBulkOperation(manyRows(), commit, { post, retrySignal: controller.signal })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(post).toHaveBeenCalledTimes(1)
+    controller.abort()
+    release()
+    await vi.runAllTimersAsync()
+    const rows = await result
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(rows.get('row-0')).toMatchObject({ ok: true, version: 8 })
+    expect(rows.get('row-2000')).toMatchObject({ ok: false, unreachable: false, reason: expect.stringContaining('not sent') })
+  })
+
+  it('preserves the deliberate destroy-time flush of queued edits, once per chunk without retries', async () => {
+    const parts: number[] = []
+    const post = vi.fn(async (_id: string, units: BulkSaveUnitWire[]) => { parts.push(units.length); return reply(503, busy, '2') })
+    const tracker = new CellSaveTracker()
+    const writer: SheetWriter<Row> = new SheetWriter<Row>({ tracker, getApi: () => null, commit: async () => ({ ok: true }), flushMs: 5,
+      commitBatch: requests => runBulkOperation(requests, commit, { post, retrySignal: writer.retrySignal }) })
+    writer.seed(manyRows().map(request => ({ id: request.rowId, version: 7, row: request.row! })))
+    for (const request of manyRows()) writer.set(request.rowId, 'name', 'last intent')
+    writer.destroy()
+    await vi.runAllTimersAsync()
+    expect(parts).toEqual([2000, 1])
+    expect(writer.pending).toBe(0)
+    writer.destroy()
+  })
+})
