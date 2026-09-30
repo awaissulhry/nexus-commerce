@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify'
-import { deleteSavedView, listSavedViewsWithAlerts, SavedViewError, savedViewOwner, writeSavedView, type SavedViewWriteInput } from '../services/saved-views/persistence.service.js'
+import { deleteSavedView, listSavedViewGroups, listSavedViewsWithAlerts, SavedViewError, savedViewOwner, writeSavedView, type SavedViewWriteInput } from '../services/saved-views/persistence.service.js'
 
 function fail(reply: FastifyReply, error: unknown) {
   return reply.code(error instanceof SavedViewError ? error.status : 500).send({ error: error instanceof Error ? error.message : String(error) })
@@ -9,8 +9,13 @@ function fail(reply: FastifyReply, error: unknown) {
 const savedViewPersistenceRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/saved-views', async (request, reply) => {
     try {
-      const { surface = 'products' } = request.query as { surface?: string }
-      return { items: await listSavedViewsWithAlerts(savedViewOwner(request), surface) }
+      const owner = savedViewOwner(request)
+      const { surface, surfaces } = request.query as { surface?: string; surfaces?: unknown }
+      if (surfaces !== undefined) {
+        if (surface !== undefined) throw new SavedViewError('Choose surface or surfaces, not both')
+        return { results: await listSavedViewGroups(owner, surfaces) }
+      }
+      return { items: await listSavedViewsWithAlerts(owner, surface ?? 'products') }
     } catch (error) { return fail(reply, error) }
   })
 

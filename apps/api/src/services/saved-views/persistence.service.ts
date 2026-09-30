@@ -350,3 +350,20 @@ export async function listSavedViewsWithAlerts(userId: string, surface: string) 
   }
   return views.map((view) => ({ ...view, alertSummary: summaries.get(view.id) ?? { active: 0, total: 0, firedRecently: 0 } }))
 }
+
+/** At most the sheet's named, current and legacy namespaces. Reads retain their own failure. */
+export async function listSavedViewGroups(userId: string, input: unknown) {
+  const values = Array.isArray(input) ? input : [input]
+  if (!values.length || values.length > 3 || values.some(value => typeof value !== 'string')) {
+    throw new SavedViewError('Read between one and three saved-view surfaces')
+  }
+  const surfaces = values.map(surfaceOf)
+  if (new Set(surfaces).size !== surfaces.length) throw new SavedViewError('Saved-view surfaces must be distinct')
+  return Promise.all(surfaces.map(async surface => {
+    try { return { surface, items: await listSavedViewsWithAlerts(userId, surface) } }
+    catch (error) {
+      return { surface, status: error instanceof SavedViewError ? error.status : 500,
+        error: error instanceof SavedViewError ? error.message : 'Saved views could not be read.' }
+    }
+  }))
+}

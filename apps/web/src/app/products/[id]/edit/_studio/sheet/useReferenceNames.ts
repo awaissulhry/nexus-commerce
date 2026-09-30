@@ -24,6 +24,11 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
     return (Array.isArray(value) ? value : [value]).filter(item => typeof item === 'string' || typeof item === 'number').map(String).filter(id => /^\d{1,30}$/.test(id))
   })))].sort().join(',')
   const keys = (sheet?.columns ?? []).map(column => column.key).sort().join(',')
+  // An empty cell has no catalog name to resolve; its editor still loads available choices.
+  const assignedNames = [...Object.keys(policyLists), 'descriptionThemeId'].filter(key => (sheet?.rows ?? []).some(row => {
+    const value = row.values[key]?.value
+    return value != null && value !== '' && !(key === 'descriptionThemeId' && value === 'none')
+  })).sort().join(',')
   const shopifyFields = (sheet?.columns ?? []).filter(column => column.shopifyField?.type.includes('_reference'))
   const shopifyIds = channel === 'SHOPIFY' ? [...new Set(shopifyFields.flatMap(column => (sheet?.rows ?? []).flatMap(row => {
     const raw = row.values[column.key]?.value
@@ -32,7 +37,7 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
   const shopifyReferenceKeys = shopifyFields.map(column => column.key).sort().join(',')
   // P2 (I4-4) — everything the lookups read, and nothing else: a read of the same sheet (new objects, same facts) or an
   // edit to a value that is not a reference asks for no name again.
-  const coordinate = JSON.stringify([channel, market, connectionId, categoryIds, productTypes, browseNodeIds, keys, shopifyIds, shopifyReferenceKeys, sheet?.family?.id, sheet?.scope.locale])
+  const coordinate = JSON.stringify([channel, market, connectionId, categoryIds, productTypes, browseNodeIds, keys, assignedNames, shopifyIds, shopifyReferenceKeys, sheet?.family?.id, sheet?.scope.locale])
   const [resolved, setResolved] = useState<{ coordinate: string; labels: ReferenceLabels } | null>(null)
   /* 2026-09-24 — pictures for Shopify references (files, video posters, products), from the same lookup as their
      names, so a file cell can show the image itself. Display only; never a value. */
@@ -42,6 +47,7 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
     if (!keys) return
     const abort = new AbortController()
     const present = new Set(keys.split(','))
+    const assigned = new Set(assignedNames.split(','))
     const apply = (labels: ReferenceLabels) => {
       if (!abort.signal.aborted) setResolved(previous => ({ coordinate, labels: mergeReferenceLabels(previous?.coordinate === coordinate ? previous.labels : {}, labels) }))
     }
@@ -77,13 +83,13 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
           const label = path.local ?? (market === 'UK' || market === 'GB' ? path.en : undefined)
           return label ? [[id, label]] : []
         })) })))
-      if (Object.keys(policyLists).some(key => present.has(key))) tasks.push(loadEbayPolicies(market, false, connectionId)
+      if (Object.keys(policyLists).some(key => present.has(key) && assigned.has(key))) tasks.push(loadEbayPolicies(market, false, connectionId)
         .then(body => apply(Object.fromEntries(Object.entries(policyLists).map(([key, list]) => [key, Object.fromEntries((body[list] ?? []).map(policy => [policy.id, policy.name]))])))))
     }
     if (channel === 'ETSY') for (const field of ['shipping_profile_id', 'shop_section_id', 'return_policy_id', 'readiness_state_id']) {
       if (present.has(field) && isReferenceField(field)) tasks.push(loadReferenceChoices(field, { connectionId, market }, { live: false }).then(choices => apply({ [field]: choices.labels })))
     }
-    if (present.has('descriptionThemeId')) tasks.push(loadReferenceChoices('descriptionThemeId', {}, { live: false })
+    if (present.has('descriptionThemeId') && assigned.has('descriptionThemeId')) tasks.push(loadReferenceChoices('descriptionThemeId', {}, { live: false })
       .then(choices => apply({ descriptionThemeId: choices.labels })))
     if (present.has('productType') && channel === 'AMAZON') tasks.push(read(`listing-wizard/product-types?${new URLSearchParams({ channel, marketplace: market })}`, abort.signal)
       .then(body => apply({ productType: Object.fromEntries((body.items ?? []).map((item: { productType: string; displayName: string }) => [item.productType, item.displayName])) })))

@@ -84,6 +84,8 @@ const readPayload = <T,>(x: unknown): SavedViewPayload<T> | null =>
 
 export interface UseGridViewsOptions<TPage> {
   surface: string
+  /** One initial response may share a request with related layouts. Key includes the reader's actor/business scope. */
+  initialRead?: { key: string; read: () => Promise<unknown> }
   /**
    * Where `/api/saved-views` lives. REQUIRED, and supplied by the app on purpose: until
    * 2026-08-31 this hook imported `@/lib/backend-url` directly, which made it the ONE design-system
@@ -140,9 +142,9 @@ interface ViewsState<TPage> {
   activeId: string | null
 }
 
-export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageState, applyColumnsView }: UseGridViewsOptions<TPage>) {
+export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageState, applyColumnsView, initialRead }: UseGridViewsOptions<TPage>) {
   const url = `${baseUrl}/api/saved-views`
-  const scope = JSON.stringify([url, surface])
+  const scope = JSON.stringify(initialRead ? [url, surface, initialRead.key] : [url, surface])
   const blank = (): ViewsState<TPage> => ({ scope, views: [], loaded: false, loadError: null, activeId: null })
   const [state, setState] = useState<ViewsState<TPage>>(blank)
   // Mask the preceding scope synchronously: the landing effect must never see another market's default.
@@ -156,6 +158,8 @@ export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageS
   applyRef.current = applyPageState
   const applyColumnsRef = useRef(applyColumnsView)
   applyColumnsRef.current = applyColumnsView
+  const initialReadRef = useRef(initialRead?.read)
+  initialReadRef.current = initialRead?.read
 
   const change = useCallback((update: (previous: ViewsState<TPage>) => ViewsState<TPage>) => {
     const context = contextRef.current
@@ -166,14 +170,14 @@ export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageS
       : previous)
   }, [scope])
 
-  const refresh = useCallback(async () => {
+  const load = useCallback(async (read?: () => Promise<unknown>) => {
     const context = contextRef.current
     if (context.scope !== scope || !context.mounted) return
     const epoch = context.epoch
     const request = ++context.request
     const current = () => context === contextRef.current && context.mounted && context.epoch === epoch && context.request === request
     try {
-      const raw = await savedViewRequest<ApiView[] | { items?: ApiView[]; views?: ApiView[] }>(`${url}?surface=${encodeURIComponent(surface)}`)
+      const raw = (read ? await read() : await savedViewRequest(`${url}?surface=${encodeURIComponent(surface)}`)) as ApiView[] | { items?: ApiView[]; views?: ApiView[] }
       const list = Array.isArray(raw) ? raw : raw?.items ?? raw?.views
       if (!Array.isArray(list)) throw new Error('The server did not return a saved-view list')
       const received = list.map(fromApi<TPage>)
@@ -183,14 +187,16 @@ export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageS
       if (current()) change((previous) => ({ ...previous, loadError: error instanceof Error ? error.message : String(error) }))
     }
   }, [scope, url, surface, change])
+  // Explicit refreshes after a save/retry always read current server state.
+  const refresh = useCallback(() => load(), [load])
 
   useEffect(() => {
     const context = contextRef.current
     context.mounted = true
     change((previous) => previous)
-    void refresh()
+    void load(initialReadRef.current)
     return () => { context.mounted = false; context.epoch++; context.request++ }
-  }, [refresh, change])
+  }, [load, change])
 
   const defaultView = useMemo(() => views.find((view) => view.isDefault && view.payload) ?? null, [views])
   const bind = useCallback((api: GridApi) => { apiRef.current = api }, [])

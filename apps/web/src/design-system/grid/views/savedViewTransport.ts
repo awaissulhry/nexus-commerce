@@ -34,6 +34,11 @@ export async function loadWorkingLayout<T = ColumnsViewPayload>(
   baseUrl: string, surface: string, validate?: (value: unknown) => value is T,
 ): Promise<StoredSheetLayout<T> | null> {
   const body = await savedViewRequest<unknown>(`${baseUrl}/api/saved-views?surface=${encodeURIComponent(surface)}`)
+  return parseWorkingLayout(body, validate)
+}
+
+/** Both a direct request and a grouped initial read use the same layout validation. */
+export function parseWorkingLayout<T = ColumnsViewPayload>(body: unknown, validate?: (value: unknown) => value is T): StoredSheetLayout<T> | null {
   const items = body && typeof body === 'object' && !Array.isArray(body) ? (body as { items?: unknown }).items : undefined
   if (!Array.isArray(items) || !items.every(isStoredLayout)) {
     throw new Error('The saved layout list could not be read. The saved layout has been kept unchanged.')

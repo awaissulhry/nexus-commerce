@@ -18,6 +18,7 @@
  * that, and this is the function it hands off to.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { EXPR_FUNCTIONS } from '@nexus/shared/formula-functions'
 
 import { formulaSaveOutcome } from '@/design-system/grid'
 import { createFormulaSaveQueue } from '@/design-system/grid/editors/formulaSaveQueue'
@@ -108,7 +109,7 @@ export interface CellFormulas {
    * never prefixed by, anything the client writes.
    */
   errorFor: (rowId: string, fieldKey: string) => string | null
-  /** The language's functions, for the signature hint. Empty until loaded — never invented. */
+  /** The engine's shared function catalog, for the signature hint. */
   functions: FormulaFunctionDoc[]
   preview: (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal) => Promise<FormulaPreviewResponse>
   save: (rowId: string, fieldKey: string, expr: string) => Promise<{ ok: boolean; error?: string }>
@@ -139,7 +140,7 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
   const seedRef = useRef(seedDraft)
   if (seedRef.current.signature !== seedDraft.signature) seedRef.current = seedDraft
   const seed = seedRef.current
-  const [functions, setFunctions] = useState<FormulaFunctionDoc[]>([])
+  const functions = EXPR_FUNCTIONS
   const [nonce, setNonce] = useState(0)
   const live = useRef({ coordinateKey, writeFacts, onSettled, onValueSaved })
   live.current = { coordinateKey, writeFacts, onSettled, onValueSaved }
@@ -154,20 +155,16 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch(`${getBackendUrl()}/api/pim/formulas/functions`, { credentials: 'include', signal: controller.signal })
-      .then(r => r.ok ? r.json() : null).then(j => { if (Array.isArray(j?.functions)) setFunctions(j.functions) }).catch(() => {})
-    return () => controller.abort()
-  }, [])
-
-  useEffect(() => {
-    const controller = new AbortController()
     const mine = revision.current
     /* A reload keeps what is already known; only the errors go, so a retried cell says "Loading" again. */
     setReads(previous => previous.key === readKey ? clearFailures(previous) : emptyReads(readKey))
     const land = (change: (previous: FormulaReads) => FormulaReads) => {
       if (!controller.signal.aborted) setReads(previous => previous.key === readKey ? change(previous) : previous)
     }
-    const ids = idsKey ? idsKey.split(',') : []
+    // The sheet already read this formula state. Only unknown rows need another
+    // initial read. Explicit reloads/saves and previously batched rows still refresh.
+    const ids = (idsKey ? idsKey.split(',') : []).filter(id =>
+      nonce > 0 || !seed.rows.has(id) || current.read.has(id) || current.saved.has(id))
     const groups = new Map<string, string[]>()
     for (const id of ids) {
       const alias = scopes[id]?.aliasKey ?? coord.aliasKey ?? ''
@@ -204,7 +201,7 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
       }
     }), FORMULA_READS_AT_ONCE, controller.signal)
     return () => controller.abort()
-  }, [idsKey, nonce, coord, scopes, readKey, languages, keys, locale])
+  }, [idsKey, nonce, coord, scopes, readKey, languages, keys, locale, seed.signature])
 
   const ids = useMemo(() => idsKey ? idsKey.split(',') : [], [idsKey])
   const ready = ids.every(id => rowKnown(current, seed, languages, id))

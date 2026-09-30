@@ -1,3 +1,7 @@
+## Saved views can share one initial read — 2026-09-30
+
+**`useGridViews`** and **`useGridState`** accept an optional keyed initial reader. A sheet can load its named views and working layouts in one bounded request. Explicit refresh stays a fresh read. Scope and request guards reject old replies. **`parseWorkingLayout`** applies the same checks to either transport. These files exist only in the web app; there is no Factory counterpart.
+
 ## Sheet save progress stays in the status strip — 2026-09-30
 
 **`GridSheetStatus`** can read an optional live status source. Save progress updates the existing strip without a host render. Plain props and rendered markup stay the same. This host exists only in the web app; there is no Factory counterpart.
