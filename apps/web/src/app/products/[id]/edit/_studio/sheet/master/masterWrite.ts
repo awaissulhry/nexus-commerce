@@ -22,6 +22,7 @@ import { commitLanguageGroups } from '../languageWrites'
 import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
+import { saveWarningFor } from '../saveWarnings'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -198,7 +199,9 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         for (const c of bulk) {
           const field = byKey.get(c.colId)?.writeField ?? c.colId
           const mine = errors.find((e) => e.id === req.rowId && (e.field === field || e.field === c.colId))
-          cells[c.colId] = mine ? { ok: false, reason: mine.error || 'Refused' } : { ok: true }
+          /* P1 — a value stored WITH a problem the server names keeps that sentence on its cell (`warnings[]`). */
+          const warning = mine ? undefined : saveWarningFor(body, req.rowId, [field, c.colId])
+          cells[c.colId] = mine ? { ok: false, reason: mine.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
           if (!mine) anyOk = true
         }
         /*

@@ -18,6 +18,8 @@ interface LegacyLanguageFacts {
 
 /** The label of a listing's own stored text (not an operator pin, not Master). */
 export const LISTING_VALUE_LABEL = 'Listing value'
+/** P1 review (4) — an eBay item specific that is not a variation axis, on a variation row. */
+export const LISTING_LEVEL_LABEL = 'eBay listing value — one for all variations'
 
 /** Sources that follow somewhere else: drawn quieter so the cells that hold their own value stand out. Never hidden. */
 export function isRoutineSource(kind: ValueSourceKind): boolean {
@@ -37,6 +39,14 @@ export function describeValueSource(cell: StudioCellValue | undefined, provenanc
   if (provenance === 'formula') return source('formula', 'Cell formula', 'Calculated by this cell’s formula; edit the formula to change how it works')
   if (provenance === 'ai' || provenance === 'aiStale') return source('ai', provenance === 'aiStale' ? 'Outdated AI draft' : 'AI draft', 'Review this suggestion before accepting it')
   if (!cell) return source('missing', 'No value', 'No source information is available')
+  /* P1 review (4) — eBay takes one value per listing for an item specific that is not a variation axis: on a variation
+     row the value is the LISTING's, not the row's, and a set or a clear here writes it for every variation. */
+  const level = cell.mapped?.listingLevel
+  if (level?.variation) return source('channel', LISTING_LEVEL_LABEL, [
+    `eBay takes one value for the whole listing; this one comes from ${level.sku}`,
+    'Setting or clearing it here sets it for every variation of this listing',
+    level.ownValue !== undefined ? `This row also stores ${JSON.stringify(level.ownValue)}, which eBay does not receive` : null,
+  ].filter(Boolean).join('. '))
   // Older sheet responses attached language facts to the mapping result. Keep their dialog
   // explanation while the current wire contract carries these facts on the cell itself.
   const mappedLocale = cell.mapped as (NonNullable<StudioCellValue['mapped']> & LegacyLanguageFacts) | null | undefined

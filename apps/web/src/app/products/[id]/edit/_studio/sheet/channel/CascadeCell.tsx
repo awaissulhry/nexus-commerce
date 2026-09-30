@@ -6,7 +6,7 @@ import { CellAction } from '@/design-system/components'
 import { SourceIndicator } from '@/design-system/components/SourceIndicator'
 
 import type { CellSaveTracker, ICellRendererParams } from '@/design-system/grid'
-import { CellSaveReason, EmptyValue, LongTextCell, MetafieldValue, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron, openCellEditor } from '@/design-system/grid'
+import { CellSaveReason, EmptyValue, LongTextCell, MetafieldValue, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron, openCellEditor, saveNote } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 
 import { hasValue } from './provenance'
@@ -154,7 +154,7 @@ export const CascadeCell = memo(function CascadeCell(
         actionLabel={`Show cell details: ${row.sku}, ${column.label}`}
         onAction={() => onDetails(row, column)}
       />
-      <CellSaveReason reason={save?.reason} />
+      <CellSaveReason reason={saveNote(save)} />
       <CellSaveMark state={save?.state} />
     </span>
   )

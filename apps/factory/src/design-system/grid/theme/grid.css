@@ -648,9 +648,11 @@
    let a later spread silently win. */
 .nds-ag-wrap .ag-cell.nds-cell-is-formula-refused { background: var(--nds-grid-refused-bg) !important; }
 .nds-ag-wrap .ag-cell.nds-cell-is-invalid { background: var(--nds-grid-refused-bg) !important; }
-.nds-ag-wrap .ag-cell.nds-cell-is-invalid::after, .nds-ag-wrap .ag-cell.nds-cell-is-warned::after { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 7px 7px 0; border-color: transparent var(--nds-danger) transparent transparent; }
+.nds-ag-wrap .ag-cell.nds-cell-is-invalid::after, .nds-ag-wrap .ag-cell.nds-cell-is-warned::after, .nds-ag-wrap .ag-cell.nds-cell-is-saved-warned::after { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 7px 7px 0; border-color: transparent var(--nds-danger) transparent transparent; }
 .nds-ag-wrap .ag-cell.nds-cell-is-warned { background: var(--nds-grid-pending-bg) !important; }
-.nds-ag-wrap .ag-cell.nds-cell-is-warned::after { border-color: transparent var(--nds-warning) transparent transparent; }
+.nds-ag-wrap .ag-cell.nds-cell-is-warned::after, .nds-ag-wrap .ag-cell.nds-cell-is-saved-warned::after { border-color: transparent var(--nds-warning) transparent transparent; }
+/* P1 — a value the server stored WITH a warning (its words are the cell's save note): the warning corner, no fade. */
+.nds-ag-wrap .ag-cell.nds-cell-is-saved-warned { box-shadow: inset 0 0 0 1px var(--nds-warning); }
 /* a value inherited from the parent: readable, and quietly not the row's own */
 .nds-ag-wrap .ag-cell.nds-cell-is-inherited { color: var(--nds-grid-muted-fg); background: color-mix(in srgb, var(--nds-info) 6%, transparent); }
 /* PES.2 — cell PROVENANCE. A tint AND a glyph (renderers/provenance.tsx); never colour alone.

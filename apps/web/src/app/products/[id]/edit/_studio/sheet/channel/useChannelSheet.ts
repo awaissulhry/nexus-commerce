@@ -26,6 +26,7 @@ import { columnLanguages } from '../languages'
 import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
+import { saveWarningFor } from '../saveWarnings'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
@@ -239,6 +240,48 @@ export const writeLandsOnListing = (cell: { writeTarget?: string } | null | unde
 /** "I saw no listing on this coordinate" — a listing's own version is never 0 (the schema starts it at 1). */
 export const NO_LISTING_VERSION = 0
 
+/** A family listing a listing-level eBay write moved (`familyListings[]`): its id and the version it holds now. */
+export interface FamilyListing { productId: string; listingId: string; version: number }
+
+/** The family listings a save moved, from its answer. Anything malformed is left out rather than guessed. */
+export function familyListingsOf(body: unknown): FamilyListing[] {
+  const list = (body as { familyListings?: unknown } | null)?.familyListings
+  if (!Array.isArray(list)) return []
+  return list.flatMap((entry) => {
+    const e = entry as { productId?: unknown; listingId?: unknown; version?: unknown } | null
+    return e && typeof e.productId === 'string' && typeof e.listingId === 'string' && typeof e.version === 'number' && Number.isSafeInteger(e.version)
+      ? [{ productId: e.productId, listingId: e.listingId, version: e.version }] : []
+  })
+}
+
+/**
+ * P1 review (2) — a listing-level eBay value set on one row is stored on the family's parent listing (a clear, on every
+ * variation's too). Adopt those listings' new versions, so the next save on any of them carries its real token, and show
+ * the listing's new value on every row of the family on this alias. A reset is left to the sheet's next read (its value
+ * is the mapping's). Returns the rows it changed.
+ */
+export function adoptFamilyListings(rows: Iterable<ChannelSheetRow>, moved: readonly FamilyListing[], saved: ChannelSheetRow,
+  cells: ReadonlyArray<{ colId: string; value: unknown }>): ChannelSheetRow[] {
+  const changed = new Set<ChannelSheetRow>()
+  const all = [...rows]
+  for (const row of all) {
+    const hit = moved.find((entry) => entry.productId === row.id && row.listing?.id === entry.listingId)
+    if (hit && row.listing && row.listing.version !== hit.version) { row.listing.version = hit.version; changed.add(row) }
+  }
+  const root = saved.parentId ?? saved.id
+  const shared = cells.filter((cell) => saved.values[cell.colId]?.mapped?.listingLevel)
+  if (shared.length) for (const row of all) {
+    if (row === saved || (row.aliasId ?? null) !== (saved.aliasId ?? null) || (row.id !== root && row.parentId !== root)) continue
+    for (const { colId, value } of shared) {
+      const cell = row.values[colId]
+      if (!cell) continue
+      row.values = { ...row.values, [colId]: { ...cell, value, ...(cell.mapped ? { mapped: { ...cell.mapped, value } } : {}) } }
+      changed.add(row)
+    }
+  }
+  return [...changed]
+}
+
 /** One listing a save started, as the server reports it (`createdListings[]`). */
 export interface CreatedListing {
   productId: string
@@ -341,6 +384,8 @@ export interface ChannelWriteCoord {
   familyRows?: () => Iterable<ChannelSheetRow>
   /** A save started listings on this coordinate (`adopted`: the rows that now hold one). */
   onListingsCreated?: (created: CreatedListing[], adopted: ChannelSheetRow[]) => void
+  /** P1 review (2) — a listing-level eBay save moved other rows of the family (their listing version, their shown value). */
+  onFamilyChanged?: (rows: ChannelSheetRow[]) => void
   /**
    * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
    * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
@@ -481,7 +526,12 @@ async function commitChannelLanguage(
     }
     // The drafts this save started: adopted into the saved row and its whole family BEFORE the version write-back
     // below, which then lands on the listing the saved row now holds.
-    if (res.ok) reportCreated(req, coord, createdListingsOf(body))
+    if (res.ok) {
+      reportCreated(req, coord, createdListingsOf(body))
+      const moved = adoptFamilyListings([...(coord.familyRows?.() ?? [])], familyListingsOf(body), row,
+        changes.filter(({ change }) => change.intent !== 'reset').map(({ colId, change }) => ({ colId, value: change.value })))
+      if (moved.length) coord.onFamilyChanged?.(moved)
+    }
     const raw = typeof body?.currentVersion === 'number' ? body.currentVersion : undefined
     /**
      * 🔴 `versionOf` says WHICH ROW the number belongs to — read it, never infer it.
@@ -532,11 +582,14 @@ async function commitChannelLanguage(
     // cells that caused them so each one paints its own outcome.
     applyNormalizedReferenceChanges(body ?? {}, row, changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value })))
     const errors: Array<{ id?: string; field?: string; error?: string }> = Array.isArray(body?.errors) ? body.errors : []
+    /* P1 — a value stored WITH a problem the server names keeps that sentence on its cell (`warnings[]`). */
+    const warningOf = (colId: string, field: string) => saveWarningFor(body, row.id, [field, colId])
     if (errors.length > 0) {
-      const cells: Record<string, { ok: boolean; reason?: string }> = {}
+      const cells: Record<string, { ok: boolean; reason?: string; warning?: string }> = {}
       for (const { colId, change } of changes) {
         const hit = errors.find((e) => e.field === change.field && (e.id === undefined || e.id === row.id))
-        cells[colId] = hit ? { ok: false, reason: hit.error || 'Refused' } : { ok: true }
+        const warning = warningOf(colId, change.field)
+        cells[colId] = hit ? { ok: false, reason: hit.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
       }
       return { ok: false, version, cells }
     }
@@ -563,7 +616,8 @@ async function commitChannelLanguage(
       }
     }
 
-    return { ok: true, version }
+    const warned = changes.flatMap(({ colId, change }) => { const warning = warningOf(colId, change.field); return warning ? [[colId, { ok: true, warning }] as const] : [] })
+    return warned.length ? { ok: true, version, cells: { ...Object.fromEntries(changes.map(({ colId }) => [colId, { ok: true }])), ...Object.fromEntries(warned) } } : { ok: true, version }
   } catch (err) {
     return { ok: false, unreachable: true, reason: `Connection lost — refresh to check whether this saved. ${err instanceof Error ? err.message : String(err)}` }
   }

@@ -253,6 +253,12 @@ export interface MappedCell {
   autoCorrected: { from: string; to: string } | null
   requiredByRule: boolean
   overLimit: { chars?: number; bytes?: number } | null
+  /**
+   * P1 — an eBay item specific that is not a variation axis has ONE value per listing: where it comes from
+   * (`productId`/`sku`). `variation`: this row is a variation, so the value is the listing's (a set or a clear here
+   * writes it for every variation; no reset of its own). `ownValue`: this row stores another value eBay does not get.
+   */
+  listingLevel?: { productId: string; sku: string; variation?: true; ownValue?: unknown }
 }
 
 /** PES.5 §3.2 — `SheetCellValue` plus the studio's provenance and write routing. */

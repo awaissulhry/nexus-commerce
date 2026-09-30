@@ -244,7 +244,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         getGridApi()?.refreshCells({ force: true });
     }, [formulas.exprFor, formulas.errorFor, gridReady]);
     const rows = useMemo(() => sheet?.rows ?? [], [sheet]);
-    const { pending, refused, retryable, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
+    const { pending, refused, warned, retryable, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
     const { toast } = useToast();
@@ -639,6 +639,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             /* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */
             pending: pending,
             refused: refused,
+            warned: warned,
             saving: saving,
             lastSavedAt: lastSavedAt,
         }, footerNote: {

@@ -446,8 +446,11 @@ export interface SheetWriteResult {
    * instead of stuck one version behind for the rest of the session.
    */
   version?: number
-  /** Per-cell outcomes, when the server answers per field. Absent ⇒ `ok` applies to every cell. */
-  cells?: Record<string, { ok: boolean; reason?: string; unreachable?: boolean }>
+  /**
+   * Per-cell outcomes, when the server answers per field. Absent ⇒ `ok` applies to every cell. `warning`: the value
+   * was STORED and the server named a problem with it (P1: validation warns while editing) — kept on the cell.
+   */
+  cells?: Record<string, { ok: boolean; reason?: string; unreachable?: boolean; warning?: string }>
   /** True when the server's answer means the grid's copy of this row is stale. */
   conflict?: boolean
 }
@@ -838,7 +841,11 @@ export class SheetWriter<T> {
       // network error and said so. Both mean the same thing: no answer, so no verdict.
       const noAnswer = rejected || (own?.unreachable ?? result.unreachable) === true
       const state = ok ? 'saved' : noAnswer ? 'unknown' : 'refused'
-      if (!q.cells.has(colId)) this.opts.tracker.set(rowId, colId, state, noAnswer ? 'Connection lost — refresh to see whether this saved.' : reason)
+      const warning = ok ? own?.warning : undefined
+      if (!q.cells.has(colId)) {
+        if (warning) this.opts.tracker.setSavedWithWarning(rowId, colId, warning)
+        else this.opts.tracker.set(rowId, colId, state, noAnswer ? 'Connection lost — refresh to see whether this saved.' : reason)
+      }
       // The cell the operator has already re-edited (`q.cells.has(colId)`) keeps no mark, so it gets
       // no announcement either: the refusal is about a value that is no longer on screen.
       if (state === 'refused' && !q.cells.has(colId)) refused.push({ rowId, colId, reason })
@@ -862,11 +869,11 @@ export class SheetWriter<T> {
       void this.reconcile(rowId, Object.fromEntries(batch.filter(b => result.cells?.[b.colId]?.unreachable ?? (rejected || result.unreachable === true)).map(b => [b.colId, b])))
     }
 
-    // A `saved` mark fades; a `refused` one stays until the operator edits the cell again.
-    const fading = settledCols.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved')
+    // A `saved` mark fades; a `refused` one — and a saved one with the server's warning — stays until the cell is edited again.
+    const fading = settledCols.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved' && !this.opts.tracker.get(rowId, c)?.warning)
     if (fading.length) {
       setTimeout(() => {
-        const cleared = fading.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved')
+        const cleared = fading.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved' && !this.opts.tracker.get(rowId, c)?.warning)
         for (const c of cleared) this.opts.tracker.clear(rowId, c)
         if (cleared.length) {
           this.repaint(rowId, cleared)

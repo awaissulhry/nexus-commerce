@@ -37,7 +37,7 @@ import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
-import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
+import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, saveNote, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { SkuTag } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
 import { Banner, EmptyState, Modal, useToast, type MenuItemDef } from '@/design-system/components';
@@ -291,7 +291,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                reported `set` in the editor's own footer and issued no projection request at all.
                The same ref discipline the formula candidates two hooks above already follow. */
             const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
-                familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend });
+                familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend,
+                /* P1 review (2) — the family rows a listing-level eBay save moved: repaint them with their new value and token. */
+                onFamilyChanged: (changed) => {
+                    const api = getGridApi();
+                    if (!api || api.isDestroyed())
+                        return;
+                    const nodes = changed.flatMap((moved) => { const node = api.getRowNode(moved.rowId); if (node?.data && node.data !== moved) node.data.values = moved.values; return node ? [node] : []; });
+                    api.refreshCells({ rowNodes: nodes, force: true });
+                } });
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });
             else
@@ -357,7 +365,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }
     const writer = writerRef.current;
     useSheetPublicationGuard(writer, tracker, getGridApi);
-    const { pending, refused, retryable, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
+    const { pending, refused, warned, retryable, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
     useEffect(() => {
@@ -601,7 +609,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 },
             } : undefined,
             value: value == null || value === '' ? 'Empty' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value),
-            notes: composeCellTooltip(tracker.get(row.rowId, column.key)?.reason, channelValidation(column).validate(value, row, column.key).message, cell?.mapped?.errors.join('\n'), cell?.mapped?.warnings.join('\n'), `${source.label}. ${source.description}`, column.kind === 'longtext' ? longTextTooltipLine(value, column) : null, shapeTooltipLine(column, value), referenceTooltip(value, column.optionLabels), cellHoverNote(cell, data?.scope.label ?? ''), column.helpText),
+            notes: composeCellTooltip(saveNote(tracker.get(row.rowId, column.key)), channelValidation(column).validate(value, row, column.key).message, cell?.mapped?.errors.join('\n'), cell?.mapped?.warnings.join('\n'), `${source.label}. ${source.description}`, column.kind === 'longtext' ? longTextTooltipLine(value, column) : null, shapeTooltipLine(column, value), referenceTooltip(value, column.optionLabels), cellHoverNote(cell, data?.scope.label ?? ''), column.helpText),
         });
     }, [data, tracker, refusedReasonFor, onCascade, aliasLabel, control.reset]);
     const closeCellDetails = useCallback(() => {
@@ -1011,6 +1019,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             pending: pending,
             saving: saving,
             refused: refused,
+            warned: warned,
             lastSavedAt: lastSavedAt,
         }, footerNote: {
             offline: offline,
