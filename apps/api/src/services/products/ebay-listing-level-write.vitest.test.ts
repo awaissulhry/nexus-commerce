@@ -21,6 +21,15 @@ vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, sea
 vi.mock('../product-event.service.js', () => ({ productEventService: { emit: vi.fn(), emitMany: vi.fn(), emitManyTx: vi.fn() } }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(async () => []), refreshInTransaction: vi.fn() }, FACE_IMAGE_ORDER_BY: [], FACE_IMAGE_SELECT: {}, pickFaceImage: () => null }))
 vi.mock('../pim/readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
+/** P1 review (10) — the real projection loads, watched: how many run at once. */
+const axesCalls = vi.hoisted(() => ({ inFlight: 0, max: 0 }))
+vi.mock('../pim/ebay-listing-level.js', async original => {
+  const real = await original<typeof import('../pim/ebay-listing-level.js')>()
+  return { ...real, loadEbayListingAxes: async (input: Parameters<typeof real.loadEbayListingAxes>[0]) => {
+    axesCalls.inFlight++; axesCalls.max = Math.max(axesCalls.max, axesCalls.inFlight)
+    try { await new Promise(resolve => setTimeout(resolve, 20)); return await real.loadEbayListingAxes(input) } finally { axesCalls.inFlight-- }
+  } }
+})
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
@@ -57,6 +66,17 @@ beforeAll(() => scoped(async () => {
   await create(ids.parent, { 'Paese di origine': 'Pakistan', 'Team name': 'Giacca' })
   await create(ids.A, { 'Paese di origine': 'Cina', Colore: 'Rosso', Genere: 'Uomo' })
   await create(ids.B, { Colore: 'Giallo', Genere: 'Donna' })
+  // P1 review (1): a family whose parent has NO eBay listing here, and (5): one whose parent stores '' while a variation
+  // supplies the value; (10): two families saved in one request.
+  for (const family of ['NOPARENT', 'BLANK']) {
+    ids[family] = (await prisma.product.create({ data: { sku: `LL-${family}`, name: family, basePrice: 10, isParent: true, variationAxes: ['Colore'] } as never })).id
+    for (const key of ['A', 'B']) ids[`${family}${key}`] = (await prisma.product.create({ data: { sku: `LL-${family}-${key}`, name: key, basePrice: 10, parentId: ids[family] } as never })).id
+  }
+  await create(ids.NOPARENTA, { 'Paese di origine': 'Cina', Colore: 'Rosso' })
+  await create(ids.NOPARENTB, { Colore: 'Giallo' })
+  await create(ids.BLANK, { 'Paese di origine': '' })
+  await create(ids.BLANKA, { 'Paese di origine': 'Cina', Colore: 'Rosso' })
+  await create(ids.BLANKB, { Colore: 'Giallo' })
 }), 120_000)
 afterAll(async () => { await state.db?.close() }, 30_000)
 
@@ -124,5 +144,37 @@ describe('a stored item specific with no category column', () => {
   })
   it('control: an axis value on the other rows survives the clear', async () => {
     expect(await specifics(ids.A)).toMatchObject({ Colore: 'Rosso' })
+  })
+})
+
+describe('P1 review', () => {
+  it('(1) the parent has no eBay listing here: the value stays on the variation\'s own listing (eBay reads it there) and is never lost', async () => {
+    const result = await save(ids.NOPARENTA, { field: 'attr_paese_di_origine', value: 'Italia' })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true, updated: 1 })
+    expect(result.errors ?? []).toEqual([])
+    expect(await specifics(ids.NOPARENTA)).toMatchObject({ 'Paese di origine': 'Italia', Colore: 'Rosso' })
+    expect(result.familyListings).toBeUndefined()
+  })
+  it('(5) the parent stores \'\' and a variation supplies the value: a clear on the parent row is not a no-op; every copy goes', async () => {
+    const result = await save(ids.BLANK, { field: 'attr_paese_di_origine', value: null })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+    expect(result.unchanged ?? 0).toBe(0)
+    expect((await specifics(ids.BLANKA))['Paese di origine'] ?? null).toBeNull()
+    expect(await specifics(ids.BLANKA)).toMatchObject({ Colore: 'Rosso' })
+  })
+  it('(5) control: a clear where no row of the family holds a value IS a no-op', async () => {
+    const before = await listing(ids.BLANK)
+    const result = await save(ids.BLANKB, { field: 'attr_paese_di_origine', value: null })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true, updated: 0 })
+    expect((await listing(ids.BLANK)).version).toBe(before.version)
+  })
+  it('(10) two families in one save load their variation projections at the same time', async () => {
+    axesCalls.max = 0
+    const result = await scoped(async () => applyProductBulkEdits({ changes: [
+      { id: ids.A, field: 'attr_paese_di_origine', value: 'Cina', target: 'channel', intent: 'set' },
+      { id: ids.BLANKB, field: 'attr_paese_di_origine', value: 'Italia', target: 'channel', intent: 'set' },
+    ] as never, marketplaceContexts: [ebayIT()] }, context) as Promise<any>)
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+    expect(axesCalls.max).toBe(2)
   })
 })
