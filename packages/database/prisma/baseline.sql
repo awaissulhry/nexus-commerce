@@ -6073,6 +6073,7 @@ CREATE TABLE "AgentApproval" (
     "status" TEXT NOT NULL DEFAULT 'pending',
     "requestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "decidedBy" TEXT,
+    "decidedByUserId" TEXT,
     "decidedAt" TIMESTAMP(3),
     "reason" TEXT,
     "operatorNote" TEXT,
