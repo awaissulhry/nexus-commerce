@@ -68,6 +68,19 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
 .nds-card-head.stacked { align-items: flex-start; }
 .nds-card-headmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .nds-card-head .d { font-size: var(--nds-font-size-sm-plus); font-weight: 500; color: var(--nds-text-2); }
+/* 2026-09-30 — a long unbreakable word in a head (an email, a URL, a SKU) breaks at the card's edge instead of running
+   past it. `break-word` leaves a card's min-content width as it was, so no layout that fits today moves. */
+.nds-card-head .t, .nds-card-head .d { overflow-wrap: break-word; }
+/* At phone width a stacked head moves its action under the title and sub-line when both cannot keep 12rem beside it
+   (Team & Access at 390 px squeezed the text to 87 px beside "Manage access"). Wider screens are unchanged. */
+@media (max-width: 600px) {
+  .nds-card-head.stacked { flex-wrap: wrap; }
+  .nds-card-head.stacked > .nds-card-headmain { flex: 1 1 12rem; }
+}
+/* 2026-09-30 — a headed card with nothing in its body (a list row: title, sub-line, action) ends at its head. The empty
+   body kept its 16px padding, so each such card showed a blank band under the head (Team & Access). */
+.nds-card-body:empty { display: none; }
+.nds-card-head:has(+ .nds-card-body:empty) { border-bottom: 0; }
 .nds-card-body {
   padding: 16px;
 }
