@@ -8,7 +8,39 @@
 export interface ContentVersionAnswer { id: string; tier: 'pin' | 'language'; language: string; version: number }
 
 type TokenCell = { contentAddress?: { tier?: string; language?: string } | null; contentVersion?: number } | null | undefined
-type TokenRow = { id: string; values?: Record<string, TokenCell> }
+type TokenRow = { id: string; version?: number; listing?: { id: string; version?: number } | null; values?: Record<string, TokenCell> }
+
+/** Pins name an exact listing (including its account/alias); language text belongs to the product. */
+function tokenKey(row: TokenRow, cell: TokenCell): string | null {
+  const address = cell?.contentAddress
+  if (!address?.language) return null
+  if (address.tier === 'language') return JSON.stringify(['language', row.id, address.language])
+  return address.tier === 'pin' && row.listing?.id ? JSON.stringify(['pin', row.listing.id, address.language]) : null
+}
+
+/** Keep confirmed write tokens, without replacing incoming values or provenance. */
+export function preserveContentVersions<T extends TokenRow>(previous: TokenRow | undefined, incoming: T, knownVersion?: number): T {
+  if (!previous || previous === incoming || previous.id !== incoming.id) return incoming
+  const productVersion = Math.max(previous.version ?? -1, knownVersion ?? -1)
+  // A newer owner snapshot may contain a deleted/recreated translation with a lower counter.
+  const newerProduct = incoming.version !== undefined && incoming.version > productVersion
+  const newerListing = previous.listing?.version !== undefined && incoming.listing?.id === previous.listing.id && incoming.listing.version !== undefined && incoming.listing.version > previous.listing.version
+  if (productVersion >= 0 && (incoming.version === undefined || productVersion > incoming.version)) incoming.version = productVersion
+  if (previous.listing?.version !== undefined && incoming.listing?.id === previous.listing.id && (incoming.listing.version === undefined || previous.listing.version > incoming.listing.version)) {
+    incoming.listing.version = previous.listing.version
+  }
+  const known = new Map<string, number>()
+  for (const cell of Object.values(previous.values ?? {})) {
+    const key = tokenKey(previous, cell)
+    if (key && cell?.contentVersion !== undefined) known.set(key, Math.max(known.get(key) ?? cell.contentVersion, cell.contentVersion))
+  }
+  for (const cell of Object.values(incoming.values ?? {})) {
+    if (cell?.contentAddress?.tier === 'language' ? newerProduct : newerListing) continue
+    const key = tokenKey(incoming, cell), version = key ? known.get(key) : undefined
+    if (cell?.contentVersion !== undefined && version !== undefined && version > cell.contentVersion) cell.contentVersion = version
+  }
+  return incoming
+}
 
 export function contentVersionsOf(body: unknown): ContentVersionAnswer[] {
   const list = (body as { contentVersions?: unknown } | null)?.contentVersions

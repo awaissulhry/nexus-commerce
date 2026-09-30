@@ -1,3 +1,7 @@
+## Replacement rows keep confirmed write versions — 2026-09-30
+
+**`SheetWriter`** accepts an optional `mergeRow(previous, incoming, knownVersion)` function on row seeds and edits. Product sheets use it to retain confirmed content and listing versions without replacing edited values. Ownership rules stay in the sheet. Mirrored in Factory.
+
 ## Batch replies keep newer version numbers — 2026-09-30
 
 **`SheetWriter`** keeps the highest confirmed row version when a save finishes. An older reply cannot undo a newer version learned from another alias, so the next edit uses the right number. Uses the existing seed rule. Mirrored in Factory.

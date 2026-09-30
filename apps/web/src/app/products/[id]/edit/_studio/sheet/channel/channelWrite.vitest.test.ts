@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CellSaveTracker, SheetWriter } from '@/design-system/grid'
 import { commitVariationTheme } from '../master/masterWrite'
 import { runBulkOperation, type BulkSavePost, type BulkSend } from '../bulkOperation'
+import { preserveContentVersions } from '../contentVersions'
 
 import { addListingAlias, channelSheetResponse, commitChannelRow, createdListingsOf, NO_LISTING_VERSION, updateListingAlias, writeLandsOnListing, type CreatedListing } from './useChannelSheet'
 import { wireAliasKey, type ChannelSheetRow, type StudioCellValue } from './types'
@@ -51,6 +52,49 @@ afterEach(() => vi.unstubAllGlobals())
 const coord = { channel: 'EBAY' as const, marketplace: 'IT' }
 
 describe('shared content versions across listing aliases', () => {
+  it.each([['language', 'seed'], ['language', 'edit'], ['pin', 'seed'], ['pin', 'edit']] as const)('an older %s row supplied by %s keeps confirmed versions', async (tier, through) => {
+    const make = () => row({ values: { title: cell({ writeField: 'name',
+      writeTarget: tier === 'language' ? 'master' : 'channelListing', writeVerb: tier === 'language' ? 'master' : 'channel',
+      contentAcknowledged: true, contentAddress: { tier, language: 'de',
+        ...(tier === 'pin' ? { coordinate: { channel: 'EBAY', market: 'DE', accountId: 'account-a' } } : {}) }, contentVersion: 4 } as never) } })
+    const initial = make(), stale = make()
+    let ownerVersion = tier === 'language' ? 7 : 82, contentVersion = 4
+    const sent: Array<{ owner: unknown; content: number }> = []
+    const tracker = new CellSaveTracker()
+    const writer = new SheetWriter<ChannelSheetRow>({ tracker, getApi: () => null, mergeRow: preserveContentVersions, commit: req => commitChannelRow(req, {
+      ...coord, marketplace: 'DE', locale: 'de', accountId: 'account-a', familyRows: () => req.row ? [req.row] : [],
+      onProductVersionsChanged: rows => writer.seed(rows.map(r => ({ id: r.rowId, version: r.version }))),
+      bulkSend: async body => {
+        const token = (body.changes as Array<{ contentVersion: number }>)[0].contentVersion
+        sent.push({ owner: body.expectedVersion, content: token })
+        const ok = body.expectedVersion === ownerVersion && token === contentVersion
+        if (ok) { ownerVersion++; contentVersion++ }
+        return new Response(JSON.stringify(ok ? { updated: 1, currentVersion: ownerVersion,
+          versionOf: tier === 'language' ? 'product' : 'channelListing', contentVersions: [{ id: 'p1', tier, language: 'de', version: contentVersion }] }
+          : { error: 'Changed' }), { status: ok ? 200 : 409 })
+      },
+    }) })
+    writer.seed([{ id: initial.rowId, version: initial.version, row: initial }])
+    try {
+      writer.set(initial.rowId, 'title', 'First'); await writer.flush()
+      expect(initial.values.title.contentVersion).toBe(5)
+      if (through === 'seed') writer.seed([{ id: stale.rowId, version: stale.version, row: stale }])
+      writer.set(initial.rowId, 'title', 'Second', through === 'edit' ? { row: stale } : {}); await writer.flush()
+      expect(sent).toEqual(tier === 'language' ? [{ owner: 7, content: 4 }, { owner: 8, content: 5 }]
+        : [{ owner: 82, content: 4 }, { owner: 83, content: 5 }])
+      expect(tracker.get(initial.rowId, 'title')?.state).toBe('saved')
+      // A later external delete/recreate is a fresh snapshot, not a stale content counter to keep.
+      ownerVersion++; contentVersion = 1
+      const fresh = make()
+      if (tier === 'language') fresh.version = ownerVersion
+      else fresh.listing!.version = ownerVersion
+      fresh.values.title.contentVersion = 1
+      writer.seed([{ id: fresh.rowId, version: fresh.version, row: fresh }])
+      writer.set(fresh.rowId, 'title', 'After reset'); await writer.flush()
+      expect(sent.at(-1)).toEqual({ owner: ownerVersion - 1, content: 1 })
+      expect(tracker.get(fresh.rowId, 'title')?.state).toBe('saved')
+    } finally { writer.destroy() }
+  })
   it.each(['language', 'pin'] as const)('chains an immediate sibling save with the correct %s token before any read', async tier => {
     const makeRow = (aliasId: string | null, listingId: string) => row({ aliasId, rowId: `${aliasId ?? 'primary'}:p1`,
       listing: { id: listingId, version: 82 } as ChannelSheetRow['listing'],
