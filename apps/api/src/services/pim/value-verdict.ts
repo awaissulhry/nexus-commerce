@@ -27,7 +27,13 @@ export type FindingRule =
   | 'format'
   /** The channel's own schema (Amazon's product-type JSON schema, a Shopify definition's validations). */
   | 'schema'
-  /** A rule of Nexus's own. */
+  /**
+   * The check itself could not run, so nobody knows whether the channel accepts the value: category requirements
+   * unavailable, conflicting categories or presentation rules, a mapping expression that failed or was skipped.
+   * Stored while editing; BLOCKS at publish, with its sentence (the lead's P1 review ruling).
+   */
+  | 'unchecked'
+  /** A rule of Nexus's own about the value (readiness, a requirement only a mapping rule claims, translations). */
   | 'nexus'
 
 export interface ValueFinding {
@@ -49,7 +55,7 @@ export function editVerdict(f: ValueFinding): 'store' | 'refuse' {
  */
 const OFF_LIST_REFUSED_BY = new Set(['AMAZON', 'SHOPIFY', 'ETSY'])
 
-/** Publish time: `block` only when the channel itself would reject the value. */
+/** Publish time: `block` only when the channel itself would reject the value, or nobody could check it. */
 export function publishVerdict(channel: string, f: ValueFinding): 'block' | 'warn' {
   if (f.rule === 'nexus' || f.rule === 'deprecated') return 'warn'
   if (f.rule === 'offList') return OFF_LIST_REFUSED_BY.has(channel.toUpperCase()) ? 'block' : 'warn'

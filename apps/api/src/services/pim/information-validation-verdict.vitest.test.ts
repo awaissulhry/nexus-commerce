@@ -47,7 +47,18 @@ it('a NEW problem on a cell this save did not write (derived from it) is a warni
     .mockResolvedValueOnce({ products: [{ productId: 'p', cells: { brand: cell('brand', 'B'), derived: cell('derived', 'x', [finding('type', 'Derived needs a number')]) } }] })
   const out = await run([{ id: 'p', field: 'attr_brand', value: 'B' }])
   expect(out.errors).toEqual([])
-  expect(out.warnings).toEqual([{ id: 'p', field: 'attr_brand', warning: 'DERIVED: Derived needs a number' }])
+  // P1 review (6) — under the DERIVED cell's own key, never the first change's: it must not land on (or replace the
+  // warning of) the cell the operator edited.
+  expect(out.warnings).toEqual([{ id: 'p', field: 'derived', warning: 'DERIVED: Derived needs a number' }])
+})
+
+it('P1 review (6) — a finding names the change that wrote the cell, not the product\'s first change; a type refusal removes only that one', async () => {
+  m.resolve
+    .mockResolvedValueOnce({ products: [{ productId: 'p', cells: { brand: cell('brand', 'A'), quantita: cell('quantita', '1') } }] })
+    .mockResolvedValueOnce({ products: [{ productId: 'p', cells: { brand: cell('brand', 'B'), quantita: cell('quantita', 'x', [finding('type', 'Quantità needs a number')]) } }] })
+  const out = await run([{ id: 'p', field: 'attr_brand', value: 'B' }, { id: 'p', field: 'attr_quantita', value: 'x' }])
+  expect(out.errors).toEqual([{ id: 'p', field: 'attr_quantita', error: 'QUANTITA: Quantità needs a number' }])
+  expect(out.warnings).toEqual([])
 })
 
 it('one sentence per rule and cell (the resolver and the schema both state one over-length value)', async () => {
