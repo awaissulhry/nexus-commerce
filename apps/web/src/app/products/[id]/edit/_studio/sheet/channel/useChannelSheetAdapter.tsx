@@ -1,5 +1,6 @@
 'use client';
 import { describeValueSource } from './cellDetailsSource';
+import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
 import { reviewCopy } from './reviewCopy';
 import { classifyProvenance } from '@/design-system/grid/renderers/provenance';
 import { useSheetPreferences } from '../useSheetPreferences';
@@ -797,6 +798,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     familyShowsAxesRef.current = familyShowsAxes;
     const menuItemsRef = useRef(menuItems);
     menuItemsRef.current = menuItems;
+    useUnpinOnNarrowSheet(getGridApi, gridReady);
     const autoGroupColumnDef = useMemo<ColDef<ChannelSheetRow>>(() => ({
         colSpan: bandSpan,
         valueGetter: (p: ValueGetterParams<ChannelSheetRow>) => p.data?.sku ?? null,
