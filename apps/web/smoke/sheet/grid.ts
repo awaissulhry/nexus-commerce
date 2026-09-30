@@ -58,7 +58,7 @@ export interface SheetRead { columns: ApiColumn[]; rows: ApiRow[]; scope: { kind
 
 /** The sheet contract, read with the page's own session (and business header, as the browser's patched fetch sends it). */
 export async function readSheet(page: Page, scope: Scope, workspace: string): Promise<SheetRead> {
-  const response = await page.request.get(`${scope.api}&cells=compact`, { headers: { 'x-nexus-workspace-id': workspace } })
+  const response = await page.request.get(`${scope.api}&cells=compact`, { headers: { 'x-nexus-workspace-id': workspace }, maxRedirects: 0 })
   expect(response.status(), `GET ${scope.api}`).toBe(200)
   return decodeSheetCells(await response.json()) as SheetRead
 }
