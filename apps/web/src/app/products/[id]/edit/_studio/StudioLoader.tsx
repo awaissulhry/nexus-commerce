@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { AlertTriangle } from 'lucide-react'
 
 import { Button } from '@/design-system/primitives'
@@ -26,16 +25,16 @@ export function StudioLoader({ id }: { id: string }) {
     { kind: 'loading' } | { kind: 'ok'; data: StudioData } | { kind: 'failed'; message: string }
   >({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
-  const search = useSearchParams()
 
   // P2 (I4-2) — the destination check and the sheet read need only the URL: start them now, beside the frame's own
   // reads, instead of after them. The hooks adopt them only if they resolve exactly the same reads. The tab the URL
-  // opens loads its code meanwhile too (I4-7: every tab is its own chunk).
+  // opens loads its code meanwhile too (I4-7: every tab is its own chunk). The URL is read once, here, from the
+  // location: subscribing to it (`useSearchParams`) would re-render the whole studio on every cell the URL records.
   useEffect(() => {
-    if (!search) return
+    const search = new URLSearchParams(window.location.search)
     prefetchStudio(id, search)
     preloadStudioTab(search.get('tab'))
-  }, [id]) // page load only: later URL changes are the hooks' own reads
+  }, [id])
 
   useEffect(() => {
     let cancelled = false
