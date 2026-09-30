@@ -12,6 +12,10 @@ import type { WorkspaceContext } from '../workspace-context.ts'
  * connection. Owns a disposable server (roles are cluster-wide), like runtime-role-postgres.vitest.test.ts; needs
  * Docker and the local postgres:17-alpine image.
  */
+// The off switch (NEXUS_DB_SCOPED_BATCH=off) returns to one short transaction per statement: every SAFETY test below must
+// pass on both paths; the round-trip count and the open-transaction tripwire belong to the one-batch path only.
+const oneBatch = process.env.NEXUS_DB_SCOPED_BATCH !== 'off'
+
 describe('workspace adapter on real PostgreSQL', () => {
   const container = `nexus-workspace-adapter-${process.pid}-${randomBytes(4).toString('hex')}`
   const login = `adapter_login_${randomBytes(4).toString('hex')}`
@@ -85,7 +89,7 @@ describe('workspace adapter on real PostgreSQL', () => {
     } finally { if (started) docker('stop', container) }
   }, 40_000)
 
-  it('runs a statement outside a transaction as the runtime role with its business, in ONE round trip', async () => {
+  it.skipIf(!oneBatch)('runs a statement outside a transaction as the runtime role with its business, in ONE round trip', async () => {
     const db = prisma(pool(), scope('business_a', 'user_1'))
     const { value, calls } = await roundTrips(() => db.$queryRawUnsafe<Seen[]>(WHO))
     expect(value).toEqual([{ login, role: 'nexus_workspace_runtime', workspace: 'business_a', actor: 'user_1' }])
@@ -167,7 +171,7 @@ describe('workspace adapter on real PostgreSQL', () => {
     expect((await shared.query<Seen>(WHO)).rows).toEqual([{ login, role: login, workspace: null, actor: null }])
   })
 
-  it('discards a connection a statement left inside a transaction instead of pooling it', async () => {
+  it.skipIf(!oneBatch)('discards a connection a statement left inside a transaction instead of pooling it', async () => {
     const shared = pool()
     const db = prisma(shared, scope('business_a', 'user_1'))
     // The router refuses this SQL (workspace-sql.ts); the adapter's own tripwire must hold without it.

@@ -179,6 +179,23 @@ export class WorkspacePg extends PrismaPg {
         }
         if (property === 'queryRaw' || property === 'executeRaw') return async (query: Query) => {
           prohibitScopeMutation(query)
+          // The off switch: the previous path, one short transaction per statement (BEGIN, the scope, the statement,
+          // COMMIT). Kept so production can return to it at once if a connection pooler ever handles the one-batch path
+          // differently (P2, 2026-09-30: measured on PostgreSQL 17, not yet behind a pooler).
+          if (process.env.NEXUS_DB_SCOPED_BATCH === 'off') {
+            const tx = await target.startTransaction()
+            try {
+              await configure(tx, captured)
+              const result = await tx[property](query)
+              await tx.executeRaw({ sql: 'COMMIT', args: [], argTypes: [] })
+              await tx.commit()
+              return result
+            } catch (error) {
+              try { await tx.executeRaw({ sql: 'ROLLBACK', args: [], argTypes: [] }) }
+              finally { await tx.rollback() }
+              throw error
+            }
+          }
           // The pg adapter's own statement path (argument mapping, result types), over a checked-out connection whose
           // every statement carries the scope. Only `client` differs from the adapter it reads through.
           return scopedStatement(pool, scopeValues(captured), client => {
