@@ -18,7 +18,7 @@ vi.mock('./channel-price-write.service.js', () => ({ writeChannelPrices: vi.fn()
 vi.mock('./matrix.service.js', () => ({ getMatrixRead: vi.fn() }))
 
 import { applyCell, paramsForChange, restoreWrites } from './matrix-write.service.js'
-import { writeChannelPrices } from './channel-price-write.service.js'
+import { writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
 
 const change = (over: Partial<VerbChange>): VerbChange => ({ rowId: 'r', sku: 'S', coordinateKey: 'AMAZON:EU', cell: 'syncQty', from: 1, to: 2, fromLabel: '', toLabel: '', ...over })
 
@@ -95,7 +95,8 @@ describe('applyCell passes the price it read as expectedPrice', () => {
     const door = vi.mocked(writeChannelPrices)
     door.mockReset().mockResolvedValue({ results: [{ listingId: 'listing', productId: 'row', channel: 'EBAY', marketplace: 'IT', outcome: 'applied', version: 8, guarded: true, queueId: null }], applied: 1, refused: 0, noop: 0, conflict: 0 })
     await applyCell(read(price), cell, ctx)
-    const target = door.mock.calls[0][0].targets[0] as Record<string, unknown>
+    // The door's own target type: `expectedPrice` is on both of its shapes, so no cast is needed to read it.
+    const target: PriceWriteTarget = door.mock.calls[0][0].targets[0]
     expect(target).toMatchObject({ listingId: 'listing', price: 30, expectedVersion: 7 })
     if (expected === undefined) expect(target).not.toHaveProperty('expectedPrice')
     else expect(target.expectedPrice).toBe(expected)
