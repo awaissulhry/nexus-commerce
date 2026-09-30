@@ -1,6 +1,7 @@
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { createOutboundRow, createOutboundRows } from './outbound-rows.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
 /**
  * Stock Import Service — IM.1
  *
@@ -902,7 +903,7 @@ async function executeApplyImport(args: {
               id: true, productId: true, channel: true, region: true, marketplace: true,
               externalListingId: true, quantity: true, masterQuantity: true, stockBuffer: true,
               followMasterQuantity: true, fulfillmentMethod: true, quantityOverride: true,
-              listingStatus: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true, channelConnectionId: true,
+              listingStatus: true, isPublished: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true, channelConnectionId: true,
             },
           })
         : [],
@@ -1160,7 +1161,8 @@ async function executeApplyImport(args: {
           isFba: method === 'FBA',
           offerClosed: !!(listing as { offerClosedAt?: Date | null }).offerClosedAt,
           followMasterQuantity: listing.followMasterQuantity,
-          syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
+          // Cascade parity: a still-draft is held like a paused listing, as in cascadeQuantityToListings.
+          syncPaused: ((listing as { syncPaused?: boolean }).syncPaused ?? false) || isStillDraftListing(listing),
           pinnedQuantity: listing.quantity,
           stockBuffer: listing.stockBuffer ?? 0,
           sourceLocationCodes: pooledSource ? [] : (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],

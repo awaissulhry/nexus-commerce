@@ -5,7 +5,7 @@
 # one passes scripts/ci/check-image-secrets.sh before it is pushed.
 #
 #   deploy-api.yml     (workflow_call, push: true) build, check and push, beside `verify`, for every release on main.
-#                      Services named in RAILWAY_IMAGE_SERVICES deploy these images; rollback.yml redeploys older ones.
+#                      All four services deploy these images; rollback.yml redeploys older ones.
 #                      There is no push trigger of its own: every release would build twice.
 #   pull request       build and check only, when the build itself changed. Never pushes.
 #   workflow_dispatch  build and check; push when asked.

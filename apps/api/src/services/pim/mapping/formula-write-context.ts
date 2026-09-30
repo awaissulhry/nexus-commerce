@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { FastifyPluginAsync } from 'fastify'
 import { randomUUID } from 'node:crypto'
+import { workspaceContext } from '@nexus/database/workspace-context'
 
 export interface FormulaWriteContext {
   productId: string
@@ -24,7 +25,15 @@ export async function withFormulaWrite<T>(context: FormulaWriteContext, action: 
 
 // Carry the caller's session through internal HTTP delegation; permission checks still run normally.
 const requestHeaders = new AsyncLocalStorage<Record<string, string>>()
-export const formulaRequestHeaders = () => requestHeaders.getStore() ?? {}
+/**
+ * The session headers, plus the business the workspace hook VERIFIED for the original request (never the client's own
+ * header, which is only captured before that check). Without it, the internal write of a user in two or more businesses
+ * was refused "Select a business profile." The internal request's hook re-checks the membership.
+ */
+export const formulaRequestHeaders = (): Record<string, string> => {
+  const workspaceId = workspaceContext()?.workspaceId
+  return { ...requestHeaders.getStore(), ...(workspaceId ? { 'x-nexus-workspace-id': workspaceId } : {}) }
+}
 export const registerFormulaRequestContext: FastifyPluginAsync = async fastify => {
   fastify.addHook('onRequest', (request, _reply, done) => {
     const headers: Record<string, string> = {}

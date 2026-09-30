@@ -13,6 +13,19 @@
   min-width: 0;
 }
 
+.footerDetails {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* The toolbar already counts variants. The shared-quantity cell keeps the EU explanation.
+   Leave the phone footer's space for the saved row count and an actionable refusal. */
+@media (max-width: 600px) {
+  .footerDetails { display: none; }
+}
+
 /* The strip label + roll-up tag on one line, the tag trailing. */
 .surface :global(.nds-matrix-strip) {
   display: inline-flex;

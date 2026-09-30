@@ -14,6 +14,7 @@ import { OptionList, type OptionListItem } from '../../components'
 import { TagInput } from '../../primitives'
 import { asList } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
+import { typedStart } from './selectPanelModel'
 
 export interface ListPanelEditorParams {
   /** Closed list → `OptionList`; absent/empty → free-text chips. */
@@ -26,6 +27,7 @@ export interface ListPanelEditorParams {
   stopEditing: (cancel?: boolean) => void
   onValueChange?: (value: unknown) => void
   eGridCell?: HTMLElement
+  eventKey?: string | null
 }
 
 export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(function ListPanelEditor(props, _ref) {
@@ -67,10 +69,23 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
     kind: 'list',
   })
   const closed = !!options && options.length > 0
+  // A stored value the list does not hold stays visible, so it can be seen and unticked (P0, 2026-09-30).
+  const shown = closed ? [...options!, ...items.filter((v) => !options!.some((o) => o.value === v)).map((v) => ({ value: v, label: `${v} (not in the list)` }))] : []
+  /* ↑/↓ walk the search field and the boxes; Space ticks. Inside AG's popup nothing else reaches the boxes: Tab is AG's
+     (it saves and moves), so the list had no keyboard path at all (P0, 2026-09-30). */
+  const walk = (e: React.KeyboardEvent) => {
+    if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || !closed) return
+    const stops = [...(root.current?.querySelectorAll<HTMLElement>('.nds-combo-search input, input[type="checkbox"]') ?? [])]
+    const at = stops.indexOf(document.activeElement as HTMLElement)
+    const next = stops[Math.min(stops.length - 1, Math.max(0, at + (e.key === 'ArrowDown' ? 1 : -1)))]
+    if (!next) return
+    e.preventDefault(); e.stopPropagation()
+    next.focus()
+  }
   return (
-    <div ref={root} className="nds-list-editor" style={{ width: box.width, maxHeight: box.height }} role="group" aria-label={label ? `${label} — values` : 'Values'}>
+    <div ref={root} className="nds-list-editor" style={{ width: box.width, maxHeight: box.height }} role="group" aria-label={label ? `${label} — values` : 'Values'} onKeyDownCapture={walk}>
       {closed ? (
-        <OptionList options={options!} value={items} onChange={change} searchable selectAll={false} listClassName="nds-list-editor-list" />
+        <OptionList options={shown} value={items} onChange={change} searchable selectAll={false} listClassName="nds-list-editor-list" initialQuery={typedStart(props.eventKey)} />
       ) : (
         <div onInput={(e) => onDraft((e.target as HTMLInputElement).value ?? '')}>
           <TagInput value={items} onChange={change} maxTags={maxItems ?? undefined} placeholder="Add a value… (, adds · Enter saves)" aria-label={label ?? 'Values'} />

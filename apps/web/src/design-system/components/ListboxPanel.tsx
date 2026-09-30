@@ -120,14 +120,35 @@ export interface ListboxPanelProps {
   ariaLabel?: string
   /** A combobox input can own keyboard focus while its options stay out of the Tab order. */
   optionTabIndex?: number
+  /**
+   * Text the panel's own search field starts with: the key that opened a grid cell by typing (AG's `eventKey`). The grid
+   * consumed that keystroke to start the edit, so without this the first character was lost ("Cin" searched "in").
+   */
+  initialQuery?: string
+  /**
+   * Offer the typed text as a value of its own — `Use "…"` — for a list the channel leaves open (an eBay FREE_TEXT aspect,
+   * an Amazon open enum). It is the FIRST row, so it is always in view, but the best match stays highlighted: Enter takes
+   * "Nero" for "Ner", ↑ takes the typed text. With no match it is the only row, and Enter takes it.
+   */
+  allowCustom?: boolean
+  /**
+   * Enter or Tab chose the highlighted option, reported in the CAPTURE phase, before a grid ends the edit. AG's popup
+   * listener runs before this panel's bubble `onKeyDown` and commits whatever the editor last reported, so a grid editor
+   * reports the value here and lets the grid commit and move (Enter down, Tab right). `null` = nothing is highlighted:
+   * keep the stored value. When supplied, Enter is the owner's, and the panel does not also commit it.
+   */
+  onKeyChoice?: (value: string | null) => void
 }
+
+const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
 
 export function ListboxPanel({
   options, value, onCommit, onCancel, query, searchable, searchPlaceholder = 'Search…',
   emptyLabel, autoFocus = true, style, className, panelRef,
   activeIndex, onActiveIndexChange, onMatchesChange, idPrefix, ariaLabel, optionTabIndex,
+  initialQuery, allowCustom, onKeyChoice,
 }: ListboxPanelProps) {
-  const [ownQuery, setOwnQuery] = useState('')
+  const [ownQuery, setOwnQuery] = useState(initialQuery ?? '')
   /**
    * `null` until the operator moves: the highlight then IS the selected row (Step 4.3 #2, T1). It
    * used to start at 0 while the panel's Enter commits `matches[active]` — so opening a short list
@@ -157,7 +178,7 @@ export function ListboxPanel({
 
   // An externally supplied query means the caller owns the input, so the panel renders none.
   const external = query !== undefined
-  const ownsSearch = !external && (searchable || options.length > LISTBOX_SEARCH_THRESHOLD)
+  const ownsSearch = !external && (searchable || allowCustom || !!initialQuery || options.length > LISTBOX_SEARCH_THRESHOLD)
   const q = external ? query : ownQuery
   const filtering = ownsSearch || external
 
@@ -166,11 +187,20 @@ export function ListboxPanel({
   // `groupOptions` returns both halves together so they cannot drift apart — see its tests.
   const grouped = groupOptions(ranked)
   const groups = grouped?.groups ?? null
-  const matches = grouped?.flat ?? ranked
+  const listed = grouped?.flat ?? ranked
+  const typed = allowCustom && !external ? q.trim() : ''
+  const custom: ListboxOption | null = typed && !options.some((o) => sameText(o.value, typed) || (typeof o.label === 'string' && sameText(o.label, typed)))
+    ? { value: typed, label: `Use "${typed}"` }
+    : null
+  const matches = custom ? [custom, ...listed] : listed
+  // While the operator types, the highlight starts on the best match — past the typed-text row when there is one.
+  const bestMatch = custom && listed.length ? 1 : 0
   const hasOwnEmpty = options.some((o) => o.value === '')
   const showClear = emptyLabel != null && !hasOwnEmpty
-  const selectedIndex = Math.max(0, matches.findIndex((o) => o.value === value))
-  const active = controlled ? activeIndex : ownActive ?? selectedIndex
+  const selectedIndex = matches.findIndex((o) => o.value === value)
+  /* A stored value that is not in the list highlights NOTHING until the operator moves or types, so Enter keeps a value it
+     cannot show instead of committing row 1 in its place (P0, 2026-09-30: an Amazon product type was overwritten so). */
+  const active = controlled ? activeIndex : ownActive ?? (q && ownsSearch ? bestMatch : selectedIndex >= 0 ? selectedIndex : q ? 0 : -1)
   activeRef.current = active
   const heldReason = (o: ListboxOption) => (o as ListboxPanelOption).heldReason
 
@@ -203,7 +233,8 @@ export function ListboxPanel({
    * fixed here.)
    */
   useLayoutEffect(() => {
-    if (!controlled) return
+    // A searching panel moves its highlight with ↑/↓ while focus stays in the search field, so it is kept in view too.
+    if (!controlled && !filtering) return
     const host = hostRef.current
     const row = host?.querySelectorAll<HTMLElement>('button[role="option"]')[active + (showClear ? 1 : 0)]
     if (!host || !row) return
@@ -212,9 +243,11 @@ export function ListboxPanel({
     // so measure within this scroll viewport instead of counting the editor's preceding tools.
     const top = row.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop - host.clientTop
     const bottom = top + row.offsetHeight
-    if (top < host.scrollTop) host.scrollTop = top
+    // The panel's own search field is sticky, so a row scrolled to the top edge would sit under it.
+    const head = ownsSearch ? host.querySelector<HTMLElement>('.nds-combo-search')?.offsetHeight ?? 0 : 0
+    if (top - head < host.scrollTop) host.scrollTop = top - head
     else if (bottom > host.scrollTop + host.clientHeight) host.scrollTop = bottom - host.clientHeight
-  }, [controlled, active, matchKey, showClear])
+  }, [controlled, filtering, ownsSearch, active, matchKey, showClear])
 
   // D18 — the selected value is scrolled into view, not merely highlighted. Measured 2026-09-02 on
   // the studio's 12-option market Listbox: `selectedInView: false`, `scrollTop: 0` — the current
@@ -265,6 +298,13 @@ export function ListboxPanel({
       role="listbox"
       aria-label={ariaLabel}
       tabIndex={-1}
+      onKeyDownCapture={onKeyChoice ? (e) => {
+        if ((e.key !== 'Enter' && e.key !== 'Tab') || e.nativeEvent.isComposing) return
+        // Not also a click: Enter on a focused option button would activate it and commit a second time (code review).
+        if (e.key === 'Enter') e.preventDefault()
+        const m = active >= 0 ? matches[active] : undefined
+        onKeyChoice(m && !m.disabled && !heldReason(m) ? m.value : null)
+      } : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Escape') { e.preventDefault(); onCancel() }
         else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -273,7 +313,7 @@ export function ListboxPanel({
           // A short uncontrolled list draws no `.active` row, so the focus ring IS the highlight: move it.
           if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>('button[role="option"]')[n + (showClear ? 1 : 0)]?.focus()
         }
-        else if (e.key === 'Enter') {
+        else if (e.key === 'Enter' && !onKeyChoice) {
           const m = matches[active]
           if (m) { e.preventDefault(); if (!m.disabled && !heldReason(m)) onCommit(m.value) }
         }
@@ -282,7 +322,7 @@ export function ListboxPanel({
       {ownsSearch && (
         <div className="nds-combo-search">
           <Search size={13} aria-hidden />
-          <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); moveActive(() => 0) }}
+          <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); if (controlled) moveActive(() => 0); else setOwnActive(null) }}
             placeholder={searchPlaceholder} aria-label="Search options" />
         </div>
       )}
@@ -295,13 +335,16 @@ export function ListboxPanel({
       {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
       {groups
         ? (() => {
-            let i = -1
-            return groups.map((g) => (
-              <div className="nds-combo-group" role="group" aria-label={g.name || undefined} key={g.name}>
-                {g.name !== '' && <div className="nds-combo-grouphd" aria-hidden>{g.name}</div>}
-                {g.options.map((o) => { i += 1; return renderOption(o, i) })}
-              </div>
-            ))
+            let i = custom ? 0 : -1
+            return [
+              custom && renderOption(custom, 0),
+              ...groups.map((g) => (
+                <div className="nds-combo-group" role="group" aria-label={g.name || undefined} key={g.name}>
+                  {g.name !== '' && <div className="nds-combo-grouphd" aria-hidden>{g.name}</div>}
+                  {g.options.map((o) => { i += 1; return renderOption(o, i) })}
+                </div>
+              )),
+            ]
           })()
         : matches.map((o, i) => renderOption(o, i))}
     </div>

@@ -9691,6 +9691,24 @@ CREATE TABLE "ShopifyColourProduct" (
     CONSTRAINT "ShopifyColourProduct_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "ShopifyColourSync" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "familyId" TEXT NOT NULL,
+    "channelConnectionId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL DEFAULT 'GLOBAL',
+    "aliasKey" TEXT NOT NULL DEFAULT '',
+    "revision" INTEGER NOT NULL DEFAULT 0,
+    "dueAt" TIMESTAMP(3),
+    "leaseToken" TEXT,
+    "leaseUntil" TIMESTAMP(3),
+    "lastError" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ShopifyColourSync_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -14737,6 +14755,12 @@ CREATE UNIQUE INDEX "ShopifyColourProduct_workspaceId_channelConnectionId_market
 -- CreateIndex
 CREATE UNIQUE INDEX "ShopifyColourProduct_workspaceId_channelConnectionId_shopif_key" ON "ShopifyColourProduct"("workspaceId", "channelConnectionId", "shopifyProductId");
 
+-- CreateIndex
+CREATE INDEX "ShopifyColourSync_workspaceId_dueAt_idx" ON "ShopifyColourSync"("workspaceId", "dueAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopifyColourSync_workspaceId_familyId_channelConnectionId__key" ON "ShopifyColourSync"("workspaceId", "familyId", "channelConnectionId", "marketplace", "aliasKey");
+
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -15783,4 +15807,10 @@ ALTER TABLE "ShopifyColourProduct" ADD CONSTRAINT "ShopifyColourProduct_familyId
 
 -- AddForeignKey
 ALTER TABLE "ShopifyColourProduct" ADD CONSTRAINT "ShopifyColourProduct_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopifyColourSync" ADD CONSTRAINT "ShopifyColourSync_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopifyColourSync" ADD CONSTRAINT "ShopifyColourSync_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
