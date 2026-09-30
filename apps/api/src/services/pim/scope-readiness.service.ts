@@ -73,7 +73,9 @@ export async function getProductReadiness(input: { productId: string; market: st
   const narrowed = input.onlyCoordinate || input.onlyScope
   if (narrowed && (!input.channel || !(input.accountId || input.listingId))) throw new ReadinessCoordinateRequiredError()
   const destination = input.channel ? await resolveWorkspaceDestination({ productId: input.productId, channel: input.channel, marketplace: market, accountId: input.accountId, listingId: input.listingId }) : null
-  const only = narrowed ? { channel: input.channel!.toUpperCase(), accountId: destination?.accountId ?? input.accountId ?? null, aliasId: destination?.aliasKey ?? null } : null
+  // The primary listing's `aliasKey` is '' in its table; the index keeps the primary band's `aliasId` NULL (review WP4 #1).
+  const aliasKey = destination?.aliasKey || null
+  const only = narrowed ? { channel: input.channel!.toUpperCase(), accountId: destination?.accountId ?? input.accountId ?? null, aliasId: aliasKey } : null
   if (only && !only.accountId) throw new ReadinessCoordinateRequiredError()
   const product = await prisma.product.findFirstOrThrow({ where: { id: input.productId, deletedAt: null }, select: { id: true, parentId: true } })
   const rootId = product.parentId ?? product.id
@@ -81,7 +83,7 @@ export async function getProductReadiness(input: { productId: string; market: st
   const orderBy = [{ coordinateKey: 'asc' as const }, { language: 'asc' as const }, { productId: 'asc' as const }]
   const [familyRows, markets, scopeRows] = await Promise.all([
     prisma.readinessIndex.findMany({ where: { ...family,
-      ...(only ? { channel: only.channel, accountId: only.accountId, ...(only.aliasId !== null ? { aliasId: only.aliasId } : {}) } : {}) },
+      ...(only ? { channel: only.channel, market: { in: [market, 'GLOBAL'] }, accountId: only.accountId, ...(only.aliasId !== null ? { aliasId: only.aliasId } : {}) } : {}) },
     orderBy }),
     prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true, languages: true, language: true } }),
     // The chips' rows: Shared and this market's coordinates (a channel without markets answers for GLOBAL), without the
@@ -141,7 +143,7 @@ export async function getProductReadiness(input: { productId: string; market: st
     let unavailable: string | undefined
     try { accountId = coordinate.channel === input.channel ? destination?.accountId ?? input.accountId ?? null : await readFamilyAccountId(rootId, coordinate.channel, coordinate.marketplace) }
     catch (error) { unavailable = error instanceof Error ? error.message : 'Choose an account for this destination.' }
-    const aliasId = coordinate.channel === input.channel ? destination?.aliasKey ?? null : null
+    const aliasId = coordinate.channel === input.channel ? aliasKey : null
     const candidates = chipRows.filter(r => r.channel === coordinate.channel && r.market === coordinate.marketplace && r.accountId === accountId && r.language === locale && (aliasId === null || r.aliasId === aliasId))
     const summary = summarizeReadinessIndex(candidates, { channel: coordinate.channel, market: coordinate.marketplace, accountId, aliasId }, locale, coordinate.label)
     if (unavailable) { summary.pct = null; summary.state = 'absent'; summary.note = unavailable }

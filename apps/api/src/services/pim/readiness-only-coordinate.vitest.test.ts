@@ -6,15 +6,25 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ db: null as any }))
+const state = vi.hoisted(() => ({ db: null as any, indexReads: [] as Array<{ where?: Record<string, unknown> }> }))
 vi.mock('@nexus/database', async () => {
   const { formulaDatabase } = await import('../../test-support/formula-database.js')
   state.db = await formulaDatabase()
-  return { default: state.db.client }
+  // Every `readinessIndex.findMany` the service asks, for the query-shape test below (review WP4 #8).
+  const client = state.db.client
+  const index = new Proxy(client.readinessIndex, { get: (target, key) => key === 'findMany'
+    ? (args: { where?: Record<string, unknown> }) => { state.indexReads.push(args); return target.findMany(args) }
+    : Reflect.get(target, key) })
+  return { default: new Proxy(client, { get: (target, key) => key === 'readinessIndex' ? index : Reflect.get(target, key) }) }
 })
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
 vi.mock('./family-account.js', () => ({ readFamilyAccountId: async (_id: string, channel: string) => `account-${channel}` }))
-vi.mock('./workspace-destination.js', () => ({ resolveWorkspaceDestination: async (input: { accountId?: string }) => ({ accountId: input.accountId, aliasKey: null }) }))
+// A listing is resolved for real (review WP4 #1): the primary listing's `aliasKey` is '' in the table.
+vi.mock('./workspace-destination.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./workspace-destination.js')>()
+  return { ...actual, resolveWorkspaceDestination: async (input: Parameters<typeof actual.resolveWorkspaceDestination>[0]) =>
+    input.listingId ? actual.resolveWorkspaceDestination(input) : { accountId: input.accountId, aliasKey: null } }
+})
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { getProductReadiness as readiness, ReadinessCoordinateRequiredError } from './scope-readiness.service.js'
@@ -102,5 +112,41 @@ describe('readiness for the open channel scope (audit B02)', () => {
     expect(amazon.matrix.map(entry => [entry.coordinateKey, entry.language])).toEqual([['["AMAZON","IT","account-AMAZON",null]', 'it'], ['["AMAZON","IT","account-AMAZON",null]', 'de']])
     await expect(getProductReadiness({ productId: 'ready-a', market: 'IT', channel: 'EBAY', onlyScope: true })).rejects.toBeInstanceOf(ReadinessCoordinateRequiredError)
     await expect(getProductReadiness({ productId: 'ready-a', market: 'IT', onlyScope: true })).rejects.toBeInstanceOf(ReadinessCoordinateRequiredError)
+  })
+
+  // Review WP4 #8 — the open coordinate's rows are read for this market (or GLOBAL), never every market of the account.
+  it('reads the open coordinate\'s rows of this market only', async () => {
+    state.indexReads.length = 0
+    const open = await getProductReadiness({ productId: 'ready-b', market: 'IT', channel: 'EBAY', accountId: 'store-a', locale: 'it', onlyScope: true })
+    expect(open.matrix.map(entry => entry.coordinateKey)).toEqual([coordinate])
+    const narrowed = state.indexReads.filter(args => args.where?.channel === 'EBAY')
+    expect(narrowed).toHaveLength(1)
+    expect(narrowed[0].where!.market).toEqual({ in: ['IT', 'GLOBAL'] })
+  })
+
+  /**
+   * Review WP4 #1 — every "Open listing" link names the PRIMARY listing, whose `aliasKey` is '' in the table, while the
+   * index keeps the primary band's `aliasId` NULL. Before: the read filtered `aliasId: ''` and the page showed
+   * "Readiness has not been computed" on the Errors tab, unknown Variants progress and a "Not computed" chip.
+   */
+  it('opened on the primary listing, answers the listing\'s coordinate', async () => {
+    const store = await scoped(() => prisma.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'primary-listing', isActive: true, isPrimary: true, externalAccountId: 'FAKE-EBAY' } }))
+    const listing = await scoped(async () => {
+      for (const productId of PRODUCTS) await prisma.readinessIndex.create({ data: {
+        productId, coordinateKey: JSON.stringify(['EBAY', 'IT', store.id, null]), channel: 'EBAY', market: 'IT', accountId: store.id, language: 'it',
+        label: 'EBAY · IT', pct: 50, state: 'warn', requiredFilled: 1, requiredTotal: 2, missing: [{ productId, field: 'brand', label: 'Brand', reason: 'empty' }],
+        optionalFilled: 2, optionalTotal: 62, optionalMissing: FIELDS, mappingRules: 3, computedAt: new Date('2026-09-30T06:00:00Z'),
+      } })
+      return prisma.channelListing.create({ data: { productId: PRODUCTS[0], channel: 'EBAY', marketplace: 'IT', channelMarket: 'EBAY_IT', region: 'EU', channelConnectionId: store.id } })
+    })
+    expect(listing.aliasKey).toBe('')
+    const byAccount = await getProductReadiness({ productId: 'ready-b', market: 'IT', channel: 'EBAY', accountId: store.id, locale: 'it', onlyScope: true })
+    const byListing = await getProductReadiness({ productId: 'ready-b', market: 'IT', channel: 'EBAY', listingId: listing.id, locale: 'it', onlyScope: true })
+    expect(byListing.matrix.map(entry => entry.coordinateKey)).toEqual([JSON.stringify(['EBAY', 'IT', store.id, null])])
+    expect(byListing.matrix).toEqual(byAccount.matrix)
+    // The open channel's chip too (broken before `only=scope`, by the same '').
+    const chip = byListing.scopes.find(scope => scope.id === 'EBAY')!
+    expect(chip.state).toBe('warn')
+    expect(chip).toEqual(byAccount.scopes.find(scope => scope.id === 'EBAY'))
   })
 })
