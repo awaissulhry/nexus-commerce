@@ -92,6 +92,35 @@ export function channelSheetResponse(body: unknown): ChannelScopePage {
   return page as ChannelScopePage
 }
 
+/** Plain data equality (the decoded wire: objects, arrays, primitives). Symbol keys are the sheet's own bookkeeping. */
+function sameData(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false
+  const left = Object.keys(a), right = Object.keys(b)
+  return left.length === right.length && left.every((key) => Object.prototype.hasOwnProperty.call(b, key) &&
+    sameData((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+}
+
+/**
+ * Audit B28 — a quiet read keeps every row the server returned unchanged as the SAME object, so the grid keeps its row
+ * (`withRowIdentity` caches by it) and AG re-renders only the rows that moved; before, every read replaced all of them.
+ * Every write moves its row's version, its listing's or its text's, so an unchanged row is one nothing wrote since the
+ * last read. Only for a quiet read: a Reload replaces every row, whatever the grid holds.
+ */
+export function keepUnchangedRows(previous: ChannelScopePage | null | undefined, next: ChannelScopePage): ChannelScopePage {
+  if (!previous?.rows.length) return next
+  const key = (row: { id: string; aliasId?: string | null }) => `${row.aliasId ?? ''}:${row.id}`
+  const known = new Map(previous.rows.map((row) => [key(row), row]))
+  let kept = 0
+  const rows = next.rows.map((row) => {
+    const old = known.get(key(row))
+    if (!old || !sameData(old, row)) return row
+    kept++
+    return old
+  })
+  return kept ? { ...next, rows } : next
+}
+
 export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetState {
   const url = channelScopeUrl(options)
   const activeUrl = useRef(url)
@@ -154,7 +183,10 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
       })
       if (!res.ok) return false
       const body = channelSheetResponse(await res.json())
-      if (mine === requestRef.current && activeUrl.current === url && canApply()) { setResponse({ url, data: body }); return true }
+      if (mine === requestRef.current && activeUrl.current === url && canApply()) {
+        setResponse((previous) => ({ url, data: keepUnchangedRows(previous?.url === url ? previous.data : null, body) }))
+        return true
+      }
       return false
     } catch {
       // Preserve the confirmed edit if the follow-up read is temporarily unavailable (the caller may try again).
