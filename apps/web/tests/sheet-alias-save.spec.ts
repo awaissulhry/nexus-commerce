@@ -16,7 +16,11 @@ const local = (url: string) => ['localhost', '127.0.0.1', '[::1]'].includes(new 
 
 async function titleCell(page: Page, rowId: string) {
   const row = page.locator(`.ag-row[row-id="${rowId}"]`)
-  await row.locator('.ag-cell').first().click()
+  await page.keyboard.press('Escape')
+  const focused = page.locator('.ag-cell-focus')
+  // A phone scrolls the identity column out of the DOM while Title is edited.
+  if (await focused.count()) await focused.press('Home')
+  await row.locator('.ag-cell[col-id="ag-Grid-AutoColumn"]').click({ position: { x: 100, y: 3 } })
   for (let i = 0; i < 20 && await page.locator('.ag-cell-focus').getAttribute('col-id') !== 'name'; i++) await page.keyboard.press('ArrowRight')
   await expect(page.locator('.ag-cell-focus')).toHaveAttribute('col-id', 'name')
   return row.locator('.ag-cell[col-id="name"]')
@@ -34,6 +38,7 @@ test.describe('an immediate shared save through a sibling alias', () => {
       if (![fixture!.family, fixture!.child, fixture!.alias].every(id => id.startsWith('e2e_'))) throw new Error('Use a synthetic e2e_ fixture only.')
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
       await page.emulateMedia({ colorScheme })
+      await page.addInitScript(theme => { localStorage.setItem('nexus:theme', theme) }, colorScheme)
       let blockSheetReads = false, completedReads = 0
       await page.route('**/*', async route => {
         const url = route.request().url()
@@ -45,6 +50,7 @@ test.describe('an immediate shared save through a sibling alias', () => {
       await page.goto(`/w/${process.env.E2E_WORKSPACE_ID ?? LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=EBAY&market=DE&account=${fixture!.account}&locale=de`, { waitUntil: 'domcontentloaded' })
       const first = `primary:${fixture!.child}`, second = `${fixture!.alias}:${fixture!.child}`
       await expect(page.locator(`.ag-row[row-id="${first}"]`)).toBeVisible({ timeout: 90_000 })
+      await expect.poll(() => page.locator('html').evaluate(el => el.classList.contains('dark'))).toBe(colorScheme === 'dark')
       const save = async (rowId: string, value: string) => {
         const target = await titleCell(page, rowId)
         await page.keyboard.press('Enter')
