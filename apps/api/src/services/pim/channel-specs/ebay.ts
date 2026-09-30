@@ -126,6 +126,10 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     listing('bestOfferCeiling', 'Accettazione automatica da', 'Best offer auto-accept from', { kind: 'number', channelStore: pa('bestOfferCeiling'), helpText: 'Offers at or above this are accepted automatically (eBay autoAcceptPrice). Must be above the auto-decline price.' }),
     listing('handlingTime', 'Tempo di imballaggio', 'Handling time (days)', { kind: 'number', channelStore: pa('handlingTime') }),
     listing('itemLocationCountry', 'Paese dell’oggetto', 'Item location country', { kind: 'text', maxLength: 2, channelStore: pa('itemLocationCountry'), helpText: 'Two-letter country code for the item location. The legacy eBay workbook labels this field Location.' }),
+    // #30 (2026-09-30) — the city and postal code publish already reads (`studio-publication-ebay.ts`, `settings.itemLocation`
+    // / `settings.itemPostalCode`) had no column, so a new listing on an account with no default location could not be published.
+    listing('itemLocation', 'Località dell’oggetto', 'Item location (city)', { kind: 'text', channelStore: pa('itemLocation'), helpText: 'City or town where the item is. eBay needs it, with the country, to create a listing. It overrides the account\'s default location.' }),
+    listing('itemPostalCode', 'CAP dell’oggetto', 'Item location postal code', { kind: 'text', channelStore: pa('itemPostalCode'), helpText: 'Postal code where the item is. It overrides the account\'s default location.' }),
     listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'open', options: PACKAGE_TYPES, channelStore: pa('packageType') }),
     listing('packageWeight', 'Peso del pacco', 'Package weight', { kind: 'number', shape: 'measure', unitOptions: WEIGHT_UNITS, channelStore: { kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] } }),
     listing('packageLength', 'Lunghezza del pacco', 'Package length', { kind: 'number', channelStore: pa('packageLength'), helpText: 'Uses the shared package dimension unit.' }),
