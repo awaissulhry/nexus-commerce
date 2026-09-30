@@ -133,8 +133,25 @@ function writerContext(userId: string | null | undefined): ProductBulkContext {
   }
 }
 
+/**
+ * MCP.12 — two of the writer's refusals are written for the product sheet, which always sends a language address and a
+ * marketplace scope; to a person reading a change Claude asked for they are internal words ("needs a ContentAddress",
+ * "not in the business dictionary … (marketplaceContexts)"). Said plainly here, and the tool's description names both
+ * limits. Every other refusal stays the writer's own words.
+ */
+export const REFUSED_PER_LANGUAGE =
+  'this is text kept per language, which this tool cannot set: change it in the product sheet, in the language it is for'
+export const REFUSED_NOT_IN_FAMILY =
+  "this is not an attribute of the product's family and the product holds no value for it, so it cannot be set here"
+
+export function plainRefusal(error: string): string {
+  if (/needs a ContentAddress before it can be saved/.test(error)) return REFUSED_PER_LANGUAGE
+  if (/^No marketplace context — this attribute is not in the business dictionary/.test(error)) return REFUSED_NOT_IN_FAMILY
+  return error
+}
+
 function writerRefusal(errors: ProductBulkChangeError[], skuOf: Map<string, string>): string {
-  const lines = errors.map((e) => `${skuOf.get(e.id) ?? e.id} ${e.field.replace(/^attr_/, '')}: ${e.error}`)
+  const lines = errors.map((e) => `${skuOf.get(e.id) ?? e.id} ${e.field.replace(/^attr_/, '')}: ${plainRefusal(e.error)}`)
   return `${plural(errors.length, 'change')} would be refused: ${listed(lines)}`
 }
 
@@ -503,7 +520,9 @@ const bulkAttributeChange: AgentTool = {
         message: `name 1 to ${MAX_ATTRIBUTES} attributes`,
       })
       .describe(
-        `the master attributes to set, by attribute code, e.g. { "fit": "slim" }; 1 to ${MAX_ATTRIBUTES}. Only an attribute of the product's family, or one already saved on the product, can be set`,
+        `the master attributes to set, by attribute code, e.g. { "fit": "slim" }; 1 to ${MAX_ATTRIBUTES}. Only an attribute of the product's family, `
+        + 'or one saved on the product WITH a value, can be set: a key stored empty or null does not count. Text kept per language '
+        + '(title, description, bullet points, keywords, and any attribute the family marks translatable) cannot be set here',
       ),
   }),
   requires: [F.productsEdit, F.productsBulkRun],
@@ -513,7 +532,10 @@ const bulkAttributeChange: AgentTool = {
   alwaysAsk: true,
   openWorld: false,
   description:
-    `Set master attributes on up to ${BULK_MAX_PRODUCTS} products at once. ${NEXUS_ONLY} Always waits for a person to approve it in Nexus.`,
+    `Set master attributes on up to ${BULK_MAX_PRODUCTS} products at once. ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. `
+    + "It sets an attribute of the product's family, or one the product already holds a value for (a key saved empty or null does not count). "
+    + 'It cannot set text kept per language — title, description, bullet points, keywords, or an attribute the family marks translatable: '
+    + 'those are changed in the product sheet, in the language they are for.',
   async handler(args): Promise<ToolResult> {
     const plan = await planAttributes(args, 'Nothing was queued.')
     if ('error' in plan) return { ok: false, error: plan.error }
@@ -541,7 +563,7 @@ const bulkAttributeChange: AgentTool = {
           changed: out.updated ?? 0,
           operationId: out.operationId ?? null,
           alreadySet: plan.alreadySet,
-          ...(out.errors?.length ? { notChanged: out.errors.slice(0, PREVIEW_LINES).map((e) => `${skuOf.get(e.id) ?? e.id} ${e.field.replace(/^attr_/, '')}: ${e.error}`) } : {}),
+          ...(out.errors?.length ? { notChanged: out.errors.slice(0, PREVIEW_LINES).map((e) => `${skuOf.get(e.id) ?? e.id} ${e.field.replace(/^attr_/, '')}: ${plainRefusal(e.error)}`) } : {}),
           note: NEXUS_ONLY,
         },
       }

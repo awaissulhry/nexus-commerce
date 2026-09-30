@@ -26,7 +26,7 @@ import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { MAX_RESULT_BYTES } from '../../../lib/pagination/cursor.js'
 import { AMAZON_CONTENT_SOURCE } from '../../channel-drift/amazon-content-compare.js'
 import { EBAY_CONTENT_SOURCE } from '../../channel-drift/ebay-content-compare.js'
-import { READ_BACKS, SYNC_SCAN_BUDGET, coveredAspects } from './channel.tools.js'
+import { READ_BACKS, SYNC_SCAN_BUDGET, coveredAspects, emptySyncSummary, readinessIssue } from './channel.tools.js'
 
 const A = LEGACY_WORKSPACE_ID
 const LENDER = 'ws_mcp9_lender'
@@ -214,8 +214,11 @@ async function seedA() {
         data: {
           productId: productIds[sku], coordinateKey: JSON.stringify([channel, market, null, null]), channel, market,
           accountId: null, aliasId: null, language: 'it', label: `${channel} · ${market}`, pct: state === 'ready' ? 100 : 40,
-          state, requiredFilled: state === 'ready' ? 5 : 2, requiredTotal: 5,
-          missing: state === 'ready' ? [] : [{ field: 'brand', label: 'Brand', reason: 'Required value is empty' }],
+          // MCP.12 — as the readiness index writes a row today: the one empty required field is flagged requiredEmpty.
+          state, requiredFilled: state === 'ready' ? 5 : state === 'blocked' ? 4 : 5, requiredTotal: 5,
+          missing: state === 'ready' ? [] : state === 'blocked'
+            ? [{ field: 'brand', label: 'Brand', reason: 'Required value is empty', requiredEmpty: true }]
+            : [{ field: 'colour', label: 'Colour', reason: 'it content is missing; showing en fallback.', kind: 'language-fallback' }],
           computedAt: new Date(),
         },
       })
@@ -325,10 +328,92 @@ describe('MCP.9 — listing-issues', () => {
     expect(at('MCP9-P02', 'AMAZON', 'DE').issues).toEqual([{ from: 'validation', severity: 'warning', message: 'Bullet point too long' }])
     expect(at('MCP9-P03', 'AMAZON', 'IT').issues).toEqual([expect.objectContaining({ from: 'suppression', severity: 'error', message: 'Missing safety information' })])
     expect(at('MCP9-P03', 'ETSY', 'GLOBAL').issues).toEqual([expect.objectContaining({ from: 'sync', severity: 'error', message: 'Etsy refused the update' })])
-    expect(at('MCP9-P04', 'EBAY', 'IT').issues).toEqual([expect.objectContaining({ from: 'readiness', severity: 'error', missing: ['Brand'] })])
+    expect(at('MCP9-P04', 'EBAY', 'IT').issues).toEqual([{
+      from: 'readiness', severity: 'error', message: 'Blocked for EBAY · IT (it): 4 of 5 required values filled; 1 required value is empty.', missing: ['Brand'],
+    }])
+    expect(at('MCP9-P10', 'EBAY', 'IT').issues.find((i: Row) => i.from === 'readiness')).toEqual({
+      from: 'readiness', severity: 'warning', message: 'Warnings for EBAY · IT (it): 5 of 5 required values filled.', untranslated: ['Colour'],
+    })
     // Errors first, whatever order the sources were read in.
     expect(at('MCP9-P07', 'WOOCOMMERCE', 'GLOBAL').issues.map((i: Row) => i.from).sort()).toEqual(['channel', 'sync'])
     expect(at('MCP9-P10', 'EBAY', 'IT').issues.map((i: Row) => i.severity)).toEqual(['error', 'warning'])
+  })
+})
+
+describe('MCP.12 — a readiness issue lists what its count counts', () => {
+  // The shape of a real Amazon DE row (development data, 2026-09-30): 7 of 10 filled, 3 required fields empty and
+  // flagged, then GPSR findings and optional fields shown in another language. The old tool listed the first eight of
+  // all of them as "missing" beside "7 of 10 required values filled".
+  const fallback = (field: string, label: string) => ({ field, label, kind: 'language-fallback', reason: 'de content is missing; showing it fallback.' })
+  const row = {
+    state: 'blocked', label: 'Amazon · DE', language: 'de', requiredFilled: 7, requiredTotal: 10,
+    missing: [
+      { ...fallback('description', 'Product Description'), requiredEmpty: true },
+      { ...fallback('fabric_type', 'Fabric Type'), requiredEmpty: true },
+      { ...fallback('bulletPoints_1', 'Bullet 1'), requiredEmpty: true },
+      { field: 'gpsr_manufacturer_reference', label: 'Manufacturer’s Email or Electronic Address', reason: 'GPSR: registered manufacturer email missing' },
+      { field: 'gpsr_safety_attestation', label: 'Safety Attestation', reason: 'GPSR: no safety documentation' },
+      ...Array.from({ length: 11 }, (_, i) => fallback(`extra_${i}`, `Extra ${i + 1}`)),
+    ],
+  }
+
+  it('names exactly the empty required fields under missing, and the rest apart, each cut list counted', () => {
+    const issue = readinessIssue(row)
+    expect(issue.message).toBe('Blocked for Amazon · DE (de): 7 of 10 required values filled; 3 required values are empty.')
+    expect(issue.missing).toEqual(['Product Description', 'Fabric Type', 'Bullet 1'])
+    expect(issue.missing).toHaveLength(row.requiredTotal - row.requiredFilled)
+    expect(issue).not.toHaveProperty('moreMissing')
+    expect(issue.otherIssues).toEqual([
+      'Manufacturer’s Email or Electronic Address: GPSR: registered manufacturer email missing',
+      'Safety Attestation: GPSR: no safety documentation',
+    ])
+    expect(issue.untranslated).toEqual(Array.from({ length: 8 }, (_, i) => `Extra ${i + 1}`))
+    expect(issue.moreUntranslated).toBe(3)
+  })
+
+  it('a long required list is cut to eight and says how many more', () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({ field: `f${i}`, label: `Field ${i + 1}`, requiredEmpty: true }))
+    const issue = readinessIssue({ ...row, requiredFilled: 1, requiredTotal: 12, missing: many })
+    expect(issue.missing).toHaveLength(8)
+    expect(issue.moreMissing).toBe(3)
+    expect(issue.message).toBe('Blocked for Amazon · DE (de): 1 of 12 required values filled; 11 required values are empty.')
+  })
+
+  it('a row written before requiredEmpty existed says which ones are not recorded, and never guesses', () => {
+    const legacy = readinessIssue({ ...row, missing: [{ field: 'brand', label: 'Brand', reason: 'Required value is empty' }] })
+    expect(legacy.message).toBe('Blocked for Amazon · DE (de): 7 of 10 required values filled; 3 required values are empty. Which ones are empty is not recorded on this row yet.')
+    expect(legacy).not.toHaveProperty('missing')
+    expect(legacy.otherIssues).toEqual(['Brand: Required value is empty'])
+    const partly = readinessIssue({ ...row, missing: [{ field: 'brand', label: 'Brand', requiredEmpty: true }] })
+    expect(partly.message).toContain('3 required values are empty. 2 of them are not named: this row does not record which.')
+    expect(partly.missing).toEqual(['Brand'])
+  })
+})
+
+describe('MCP.12 — an empty out-of-sync page says what it checked', () => {
+  it('a listing no read-back ever looked at is not passed off as in sync', async () => {
+    const answer = await call('out-of-sync-listings', { sku: 'MCP9-P05' })
+    expect(answer.data!.items).toEqual([])
+    expect(answer.data!.summary).toBe(
+      'Checked 1 live listing: none is out of sync by what Nexus has recorded. Not one of them has ever been read back from its channel, so no channel value was compared: this proves nothing about what the channels show.',
+    )
+  })
+
+  it('a listing that was read back says so', async () => {
+    const answer = await call('out-of-sync-listings', { sku: 'MCP9-P01', channel: 'SHOPIFY' })
+    expect(answer.data!.items).toEqual([])
+    expect(answer.data!.summary).toMatch(/^Checked 1 live listing: none is out of sync by what Nexus has recorded\. Every one of them has been read back/)
+  })
+
+  it('a page with items carries no summary; nothing checked, part read and a reason filter are said', async () => {
+    expect((await call('out-of-sync-listings', { limit: 100 })).data).not.toHaveProperty('summary')
+    expect((await call('out-of-sync-listings', { sku: 'NO-SUCH-SKU' })).data!.summary).toBe('No live listing matches these filters, so none was checked.')
+    expect(emptySyncSummary(4, 1, false)).toBe(
+      'Checked 4 live listings: none is out of sync by what Nexus has recorded. 1 of them has never been read back from its channel, so no channel value was compared for it.',
+    )
+    expect(emptySyncSummary(4, 3, true, 'push-failed')).toBe(
+      'Checked 4 live listings from where this call started: none is out of sync for push-failed by what Nexus has recorded. 3 of them have never been read back from their channel, so no channel value was compared for them.',
+    )
   })
 })
 

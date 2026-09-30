@@ -42,7 +42,8 @@ import { getTool } from '../tool-registry.js'
 import { runToolForClaude } from '../../mcp/mcp-tool-call.js'
 import { checkStaleness } from '../../agent-fleet/approval-inbox.service.js'
 import type { McpPrincipal } from '../../mcp/mcp-auth.js'
-import { MASTER_PRICE_HOLD_MS, NEXUS_ONLY } from './bulk.tools.js'
+import { MASTER_PRICE_HOLD_MS, NEXUS_ONLY, REFUSED_NOT_IN_FAMILY, REFUSED_PER_LANGUAGE } from './bulk.tools.js'
+import { executedMeaning } from './approval.tools.js'
 
 const A = LEGACY_WORKSPACE_ID
 const B = 'mcp10_bulk_bravo'
@@ -68,9 +69,13 @@ const PRICER = person(['ai.run', F.productsPriceEdit, F.productsBulkRun])
 const EDITOR = person(['ai.run', F.productsEdit, F.productsBulkRun])
 const PRICER_NO_BULK = person(['ai.run', F.productsPriceEdit, F.productsEdit])
 const BULK_NO_EDIT = person(['ai.run', F.productsBulkRun, F.productsPriceEdit])
+/** MCP.12 — follows an approval as Claude does (approval-status needs ai.view). */
+const FOLLOWER = person(['ai.run', 'ai.view', F.productsPriceEdit, F.productsEdit, F.productsBulkRun])
+const statusOf = async (approvalId: string) => ((await callTool(FOLLOWER, 'approval-status', { approvalId })).visible as any).data
+
 const claude: McpPrincipal = { ...person(['ai.run', F.productsPriceEdit, F.productsEdit, F.productsBulkRun]), via: 'claude', workspace: business(A), oauthGrantId: 'grant-mcp10' }
 
-const ids = { p1: '', p2: '', p3: '', p4: '', b1: '' }
+const ids = { p1: '', p2: '', p3: '', p4: '', p5: '', b1: '' }
 const listing = { amazonIt: '', ebayIt: '', amazonDe: '', ebayUk: '', amazonFr: '', p2AmazonIt: '' }
 
 /** With business profiles on, as in production: another business's rows are then out of reach. */
@@ -158,13 +163,17 @@ beforeAll(async () => {
     for (const [attributeId, code] of [[fit.id, 'slim'], [fit.id, 'regular'], [protection.id, 'level_1'], [protection.id, 'level_2']]) {
       await db.attributeOption.create({ data: { attributeId, code, label: code } })
     }
+    // MCP.12 — translatable text in the family: the writer keeps it per language, so this tool may not set it.
+    const careNote = await db.customAttribute.create({ data: { code: 'care_note', label: 'Care note', groupId: group.id, type: 'text', localizable: true } })
     const jackets = await db.productFamily.create({ data: { code: 'mcp10-jackets', label: 'Jackets' } })
-    for (const attributeId of [fit.id, protection.id]) await db.familyAttribute.create({ data: { familyId: jackets.id, attributeId, channels: [] } })
+    for (const attributeId of [fit.id, protection.id, careNote.id]) await db.familyAttribute.create({ data: { familyId: jackets.id, attributeId, channels: [] } })
 
     ids.p1 = (await db.product.create({ data: { sku: 'BULK-A-1', name: 'Bulk jacket one', basePrice: '10.00', familyId: jackets.id, categoryAttributes: { lining_note: 'Mesh', fit: 'regular' } } })).id
     ids.p2 = (await db.product.create({ data: { sku: 'BULK-A-2', name: 'Bulk jacket two', basePrice: '20.00', familyId: jackets.id, categoryAttributes: { fit: 'regular' } } })).id
     ids.p3 = (await db.product.create({ data: { sku: 'BULK-A-3', name: 'Bulk jacket three', basePrice: '0.50', familyId: jackets.id } })).id
     ids.p4 = (await db.product.create({ data: { sku: 'BULK-A-4', name: 'Bulk jacket four', basePrice: '40.00', familyId: jackets.id, categoryAttributes: { fit: 'regular' } } })).id
+    // MCP.12 — a key saved as null, as `waterproofRating` is on real products: the product holds no value for it.
+    ids.p5 = (await db.product.create({ data: { sku: 'BULK-A-5', name: 'Bulk jacket five', basePrice: '50.00', familyId: jackets.id, categoryAttributes: { fit: 'regular', waterproofRating: null } } })).id
 
     const make = (productId: string, channel: string, marketplace: string, data: Record<string, unknown>) =>
       db.channelListing.create({ data: { productId, channel, marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, ...data } as never })
@@ -318,6 +327,22 @@ describe('MCP.10 — bulk-price-change', { timeout: DB_TEST_TIMEOUT }, () => {
 
     // An approval runs once.
     expect(await approve(queued.approvalId!, PRICER)).toMatchObject({ ok: false, error: 'already executed' })
+
+    // MCP.12 — approval-status says what is true: applied in Nexus, and the pushes are still waiting. It said
+    // "Approved and done." while every one of them was PENDING.
+    const waiting = await statusOf(queued.approvalId!)
+    expect(waiting).toMatchObject({ status: 'executed', channels: { queued: 3, waiting: 3, sent: 0, failed: 0, notSent: 0 } })
+    expect(waiting.meaning).toBe(
+      'Approved and applied in Nexus: the master price changed. The channels update next: 3 price updates were queued for these products since it was approved — 3 waiting to be sent.',
+    )
+    // As the outbound queue works through them, the count follows the rows.
+    await inside(A, () => database.client.outboundSyncQueue.update({ where: { id: rows[0].id }, data: { syncStatus: 'SUCCESS' } }))
+    await inside(A, () => database.client.outboundSyncQueue.update({ where: { id: rows[1].id }, data: { syncStatus: 'FAILED' } }))
+    const moving = await statusOf(queued.approvalId!)
+    expect(moving.channels).toEqual({ queued: 3, waiting: 1, sent: 1, failed: 1, notSent: 0 })
+    expect(moving.meaning).toContain('— 1 waiting to be sent, 1 sent, 1 failed.')
+    await inside(A, () => database.client.outboundSyncQueue.update({ where: { id: rows[2].id }, data: { syncStatus: 'SUCCESS' } }))
+    expect((await statusOf(queued.approvalId!)).meaning).toContain('The outbound queue has handled them: 3 price updates were queued')
   })
 
   it('an approval is worked out again when it runs: a price gone too low refuses the whole run and changes nothing', async () => {
@@ -382,8 +407,31 @@ describe('MCP.10 — bulk-attribute-change (Nexus only)', { timeout: DB_TEST_TIM
     expect(strict.error.endsWith('Nothing was queued.')).toBe(true)
     const unknown = await preview(EDITOR, 'bulk-attribute-change', { products: [ids.p1], attributes: { collar_style: 'mandarin' } }) as any
     expect(unknown.ok).toBe(false)
-    expect(unknown.error).toContain('not in the business dictionary for this product')
+    expect(unknown.error).toBe(`1 change would be refused: BULK-A-1 collar_style: ${REFUSED_NOT_IN_FAMILY}. Nothing was queued.`)
     expect(await measure()).toEqual(before)
+  })
+
+  it('MCP.12 — text kept per language and a key saved as null are refused in plain words, as the description says', async () => {
+    const before = await measure()
+    // care_note is the family's translatable text; description is the product's own content: both are per language.
+    for (const attributes of [{ care_note: 'Hand wash only' }, { description: 'A new description' }]) {
+      const out = await preview(EDITOR, 'bulk-attribute-change', { products: [ids.p1], attributes }) as any
+      expect(out.ok).toBe(false)
+      expect(out.error).toBe(`1 change would be refused: BULK-A-1 ${Object.keys(attributes)[0]}: ${REFUSED_PER_LANGUAGE}. Nothing was queued.`)
+      expect(out.error).not.toMatch(/ContentAddress/)
+    }
+    // waterproofRating is saved on BULK-A-5 as null: the writer counts a saved attribute only while it holds a value.
+    const nulled = await preview(EDITOR, 'bulk-attribute-change', { products: [ids.p5], attributes: { waterproofRating: 'IPX4' } }) as any
+    expect(nulled.error).toBe(`1 change would be refused: BULK-A-5 waterproofRating: ${REFUSED_NOT_IN_FAMILY}. Nothing was queued.`)
+    expect(nulled.error).not.toMatch(/business dictionary|marketplaceContexts/)
+    // The same product's family attribute is still set: the refusal is about that one key, not the product.
+    expect(((await preview(EDITOR, 'bulk-attribute-change', { products: [ids.p5], attributes: { fit: 'slim' } })) as any).ok).toBe(true)
+    expect(await measure()).toEqual(before)
+
+    const tool = getTool('bulk-attribute-change')!
+    expect(tool.description).toContain('a key saved empty or null does not count')
+    expect(tool.description).toContain('It cannot set text kept per language')
+    expect(String((tool.input as any).shape.attributes.description)).toContain('WITH a value')
   })
 
   it('a product with a formula reading the attribute is refused: its recalculation could reach a marketplace', async () => {
@@ -427,6 +475,33 @@ describe('MCP.10 — bulk-attribute-change (Nexus only)', { timeout: DB_TEST_TIM
     expect(after.A.counts.outboundApiCallLog).toBe(before.A.counts.outboundApiCallLog)
     expect(after.A.listings).toEqual(before.A.listings)
     expect(after.B).toEqual(before.B)
+
+    // MCP.12 — and approval-status says so, with no queue count: nothing was queued.
+    const status = await statusOf(queued.approvalId!)
+    expect(status.status).toBe('executed')
+    expect(status.meaning).toBe(
+      'Approved and applied in Nexus. Nothing was sent to a marketplace: Amazon, eBay, Shopify and Etsy change only when someone publishes from Nexus.',
+    )
+    expect(status).not.toHaveProperty('channels')
+  })
+})
+
+describe('MCP.12 — what approval-status says an executed change did, per tool', () => {
+  const none = { queued: 0, waiting: 0, sent: 0, failed: 0, notSent: 0 }
+  it('never "done" while it cannot say what reached a channel', () => {
+    expect(executedMeaning('set-price', none)).toBe(
+      'Approved and applied in Nexus: the master price changed. No price update was queued to a marketplace for this product: no listing follows the master price, or each one is paused, has its own price, or sells in another currency.',
+    )
+    expect(executedMeaning('set-price', { ...none, queued: 2, waiting: 2 })).toContain('2 price updates were queued for this product since it was approved')
+    expect(executedMeaning('bulk-price-change', none)).toContain('for these products:')
+    expect(executedMeaning('publish-listing', { ...none, queued: 1, waiting: 1 })).toBe(
+      'Approved: the publish was queued in Nexus. The channels update next: 1 publish was queued for this product since it was approved — 1 waiting to be sent.',
+    )
+    expect(executedMeaning('bulk-price-change', { ...none, queued: 2, notSent: 2 })).toContain('— 2 not sent (skipped or cancelled).')
+    expect(executedMeaning('send-customer-message', null)).toBe('Approved, and it ran.')
+    for (const tool of ['set-price', 'bulk-price-change', 'bulk-attribute-change', 'publish-listing', 'apply-content']) {
+      expect(executedMeaning(tool, none)).not.toMatch(/\bdone\b/)
+    }
   })
 })
 
