@@ -45,6 +45,7 @@ import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, 
 import { resetSourceLabel } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { useCellFormulas } from '../../useCellFormulas';
+import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
 import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
@@ -212,6 +213,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         rowIds: formulaRowIds,
         columnKeys: data?.columns.map(column => column.key),
         rowScopes: formulaRowScopes,
+        /* P0 — the rows already say which cells hold a formula, so no editor waits for the formula reads. */
+        seedRows: rows,
         channelConnectionId: data?.scope.connectionId ?? accountId,
         onSettled: () => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
         onValueSaved: (rowId, fieldKey, value) => {
@@ -253,7 +256,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         preview: (rowId, fieldKey, expr, signal) => formulaLive.current.formulas.preview(rowId, fieldKey, expr, signal),
         functions: () => formulaLive.current.formulas.functions,
         replaceFormula: (rowId: string, fieldKey: string, value: unknown) => formulaLive.current.formulas.replace(rowId, fieldKey, value),
-        unavailableReason: () => formulaLive.current.formulas.loadError ?? (formulaLive.current.formulas.ready ? null : 'Loading formulas…'),
+        unavailableReason: (rowId, fieldKey) => formulaLive.current.formulas.unavailableFor(rowId, fieldKey),
         retry: () => formulaLive.current.formulas.reload(),
         sourceLabel: fieldKey => formulaLive.current.formulas.sourceLabelFor(fieldKey),
         exprFor: (rowId, fieldKey) => formulaLive.current.formulas.exprFor(rowId, fieldKey),
@@ -471,12 +474,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return;
         }
         const shopifyValue = !!data?.columns.find(column => column.key === colId)?.shopifyField;
-        if (!shopifyValue && !formulas.ready) {
-            const reason = formulas.loadError ?? 'Formulas are still loading. Retry this edit once they are ready.';
-            tracker.set(e.data.rowId, colId, 'refused', reason);
-            const { writeId, subject } = channelWriteIdentity(e.data.rowId, ++writeSeq.current, { channel, marketplace, accountId, locale, instanceId: writeInstanceId });
-            reporterRef.current.pending(writeId, subject);
-            reporterRef.current.resolved(writeId, false, reason, subject);
+        /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
+           the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
+        if (!shopifyValue && !formulas.knownFor(e.data.rowId, colId)) {
+            const rowId = e.data.rowId;
+            tracker.set(rowId, colId, 'saving', HELD_FOR_FORMULAS);
+            formulas.whenKnown(rowId, colId, () => {
+                if (tracker.get(rowId, colId)?.reason === HELD_FOR_FORMULAS)
+                    latestValueChanged.current(e);
+            }, () => tracker.set(rowId, colId, 'refused', HELD_EDIT_DROPPED));
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
@@ -515,6 +521,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         undo.record({ rowId: e.data.rowId, colId, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.rowId, colId, e.newValue, { row: e.data, intent: 'set' });
     }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record]);
+    /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
+    const latestValueChanged = useRef(onCellValueChanged);
+    latestValueChanged.current = onCellValueChanged;
     /* The band stops before the progress column (2026-09-26): the listing row keeps its own progress cell there, as
        master's parent row does. */
     const bandSpan = useMemo(() => bandColSpan<ChannelSheetRow>({ isBand: (d) => d?.rowKind === 'parent', stopBefore: isProgressColumn }), []);

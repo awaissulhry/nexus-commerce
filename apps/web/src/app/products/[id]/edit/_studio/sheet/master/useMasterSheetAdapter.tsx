@@ -42,6 +42,7 @@ import { familyOps } from './familyOps';
 import { FamilySelectionVerbs } from './FamilySelectionBar';
 import { useFamily } from './useFamily';
 import { useCellFormulas } from '../../useCellFormulas';
+import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { cellOf, editRefusalReason } from './columnRules';
 import type { SheetColumn, StudioRow } from './types';
 import { useMasterSheet } from './useMasterSheet';
@@ -137,7 +138,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const sheet = useReferenceNames(loadedSheet, 'MASTER', market);
     useSheetPublicationGuard(writer, tracker, getGridApi);
     const formulaRowIds = useMemo(() => (sheet?.rows ?? []).map((r) => r.id), [sheet]);
-    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, onSettled: refresh, onValueSaved: (rowId, fieldKey, value) => {
+    /* P0 — the studio read's rows already say which cells hold a formula. Not a legacy read (it carries none) and not the
+       previous language's sheet, which stays on screen while the next one loads. */
+    const formulaSeedRows = useMemo(() => sheet?.meta.source === 'studio' && sheet.scope.locale === locale ? sheet.rows.map(row => ({ rowId: row.id, values: row.values })) : undefined, [sheet, locale]);
+    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, seedRows: formulaSeedRows, onSettled: refresh, onValueSaved: (rowId, fieldKey, value) => {
             const node = getGridApi()?.getRowNode(rowId);
             if (!node?.data)
                 return;
@@ -167,7 +171,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         preview: (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal) => formulaLive.current.formulas.preview(rowId, fieldKey, expr, signal),
         functions: () => formulaLive.current.formulas.functions,
         replaceFormula: (rowId: string, fieldKey: string, value: unknown) => formulaLive.current.formulas.replace(rowId, fieldKey, value),
-        unavailableReason: () => formulaLive.current.formulas.loadError ?? (formulaLive.current.formulas.ready ? null : 'Loading formulas…'),
+        unavailableReason: (rowId: string | undefined, fieldKey: string) => formulaLive.current.formulas.unavailableFor(rowId, fieldKey),
         retry: () => formulaLive.current.formulas.reload(),
         sourceLabel: (fieldKey?: string) => formulaLive.current.formulas.sourceLabelFor(fieldKey),
         exprFor: (rowId: string, fieldKey: string) => formulaLive.current.formulas.exprFor(rowId, fieldKey),
@@ -430,12 +434,15 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const colId = e.colDef.colId;
         if (!writeGate({ colId, source: e.source, selfInflicted: false, oldValue: e.oldValue, newValue: e.newValue }).write)
             return;
-        if (!formulas.ready) {
-            const reason = formulas.loadError ?? 'Formulas are still loading. Retry this edit once they are ready.';
-            tracker.set(e.data.id, colId!, 'refused', reason);
-            const writeId = `${e.data.id}:${colId}:${Date.now()}`;
-            onWriteStart(writeId, e.data.id);
-            onWriteEnd(writeId, false, reason, e.data.id);
+        /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
+           the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
+        if (!formulas.knownFor(e.data.id, colId!)) {
+            const rowId = e.data.id;
+            tracker.set(rowId, colId!, 'saving', HELD_FOR_FORMULAS);
+            formulas.whenKnown(rowId, colId!, () => {
+                if (tracker.get(rowId, colId!)?.reason === HELD_FOR_FORMULAS)
+                    latestValueChanged.current(e);
+            }, () => tracker.set(rowId, colId!, 'refused', HELD_EDIT_DROPPED));
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
@@ -474,6 +481,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         undo.record({ rowId: e.data.id, colId: colId!, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.id, colId!, e.newValue, { row: e.data });
     }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record]);
+    /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
+    const latestValueChanged = useRef(onCellValueChanged);
+    latestValueChanged.current = onCellValueChanged;
     const [importOpen, setImportOpen] = useState(false);
     const [transferIntent, setTransferIntent] = useState<'import' | 'export'>('import');
     const familyVerbs = useFamilyVerbs({
