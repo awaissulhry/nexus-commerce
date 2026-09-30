@@ -95,6 +95,18 @@ describe('the sheet read, once per column', () => {
     expect(b.mapped.appliedTransforms).toEqual([])
   })
 
+  it('B33: compares values as their JSON, without building it — order, holes, NaN, Dates and mixed types', () => {
+    const original = sheet(12, 2)
+    const at = (r: number) => original.rows[r].values.field_0 as Record<string, unknown>
+    at(1).mapped = { ...(at(1).mapped as object), sourceOwner: { path: 'listing.platformAttributes.field_0', label: 'Listing settings', kind: 'listing' } }
+    at(2).extra = [1, undefined, () => 1]; at(3).extra = [1, null, null]; at(4).extra = [1, null]
+    at(5).count = Number.NaN; at(6).count = null; at(7).count = '1'; at(8).count = 1
+    at(9).when = new Date(Date.UTC(2026, 8, 30)); at(10).when = '2026-09-30T00:00:00.000Z'
+    at(11).mapped = { ...(at(11).mapped as object), warnings: [{ message: 'Not on the channel list', code: 'off_list' }] }
+    const encoded = wire(encodeSheetCells(original))
+    expect(JSON.stringify(decodeSheetCells(encoded))).toBe(JSON.stringify(wire(original)))
+  })
+
   it('passes a sheet that was not encoded through unchanged', () => {
     const plain = wire(sheet(3, 2))
     expect(decodeSheetCells(plain)).toBe(plain)

@@ -43,28 +43,79 @@ function identity(value: unknown): string {
   }
 }
 
-const present = (object: Obj): string[] => Object.keys(object).filter(key => object[key] !== undefined)
+const present = (object: Obj): string[] => {
+  const keys: string[] = []
+  for (const key of Object.keys(object)) if (object[key] !== undefined) keys.push(key)
+  return keys
+}
+
+/** A value `JSON.stringify` leaves out of an object (and writes as `null` in an array). */
+const unsent = (value: unknown) => value === undefined || typeof value === 'function' || typeof value === 'symbol'
+
+/**
+ * B33 — `JSON.stringify(a) === JSON.stringify(b)` without building either string (the encoder's hot path): plain objects
+ * key by key in order, arrays item by item, anything else (a Date, a Decimal, NaN, mixed types) by its JSON.
+ */
+function jsonEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return typeof a !== 'number' || Number.isFinite(a)
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      const x = unsent(a[i]) ? null : a[i], y = unsent(b[i]) ? null : b[i]
+      if (!jsonEqual(x, y)) return false
+    }
+    return true
+  }
+  if (isObject(a) && isObject(b)) {
+    const ka = Object.keys(a), kb = Object.keys(b)
+    let i = 0, j = 0
+    for (;;) {
+      while (i < ka.length && unsent(a[ka[i]])) i++
+      while (j < kb.length && unsent(b[kb[j]])) j++
+      if (i === ka.length || j === kb.length) return i === ka.length && j === kb.length
+      if (ka[i] !== kb[j] || !jsonEqual(a[ka[i]], b[kb[j]])) return false
+      i++; j++
+    }
+  }
+  if (typeof a !== 'object' && typeof b !== 'object' && typeof a !== 'number' && typeof b !== 'number') return false
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+/** Past this many distinct non-primitive values of one key, they are counted by their JSON (`identity`) instead. */
+const LINEAR_CANDIDATES = 8
 
 /** The cell most of a column's cells are closest to: per key, the value most cells hold (nested objects per key too). */
 function baseOf(objects: Obj[], depth: number): Obj {
-  const tallies = new Map<string, { absent: number; objects: Obj[]; values: Map<string, { count: number; value: unknown }> }>()
+  type Candidate = { count: number; value: unknown }
+  // Candidates in first-seen order (the tie-break); primitives found by value, others by `jsonEqual` or their JSON.
+  type Tally = { objects: Obj[]; seen: number; candidates: Candidate[]; primitives: Map<unknown, Candidate>; others: Candidate[]; byJson?: Map<string, Candidate> }
+  const tallies = new Map<string, Tally>()
   for (const object of objects) {
-    for (const key of present(object)) {
-      let tally = tallies.get(key)
-      if (!tally) tallies.set(key, tally = { absent: 0, objects: [], values: new Map() })
+    for (const key of Object.keys(object)) {
       const value = object[key]
+      if (value === undefined) continue
+      let tally = tallies.get(key)
+      if (!tally) tallies.set(key, tally = { objects: [], seen: 0, candidates: [], primitives: new Map(), others: [] })
       if (isObject(value) && depth < MAX_DEPTH) { tally.objects.push(value); continue }
-      const id = identity(value)
-      const seen = tally.values.get(id)
-      if (seen) seen.count++
-      else tally.values.set(id, { count: 1, value })
+      tally.seen++
+      let found: Candidate | undefined
+      const primitive = value === null || (typeof value !== 'object' && (typeof value !== 'number' || Number.isFinite(value)))
+      if (primitive) found = tally.primitives.get(value)
+      else if (tally.byJson) found = tally.byJson.get(identity(value))
+      else found = tally.others.find(candidate => jsonEqual(candidate.value, value))
+      if (found) { found.count++; continue }
+      const candidate = { count: 1, value }
+      tally.candidates.push(candidate)
+      if (primitive) tally.primitives.set(value, candidate)
+      else if (tally.byJson) tally.byJson.set(identity(value), candidate)
+      else if (tally.others.push(candidate) > LINEAR_CANDIDATES) tally.byJson = new Map(tally.others.map(other => [identity(other.value), other]))
     }
   }
   const base: Obj = {}
   for (const [key, tally] of tallies) {
-    const absent = objects.length - tally.objects.length - [...tally.values.values()].reduce((sum, v) => sum + v.count, 0)
-    let best: { count: number; value: unknown } | undefined
-    for (const candidate of tally.values.values()) if (!best || candidate.count > best.count) best = candidate
+    const absent = objects.length - tally.objects.length - tally.seen
+    let best: Candidate | undefined
+    for (const candidate of tally.candidates) if (!best || candidate.count > best.count) best = candidate
     const objectCount = tally.objects.length
     if (absent >= objectCount && absent >= (best?.count ?? 0)) continue
     base[key] = objectCount >= (best?.count ?? 0) ? baseOf(tally.objects, depth + 1) : best!.value
@@ -75,17 +126,19 @@ function baseOf(objects: Obj[], depth: number): Obj {
 function same(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false
-  return JSON.stringify(a) === JSON.stringify(b)
+  return jsonEqual(a, b)
 }
 
-/** The key order `apply` gives: the base's keys it keeps, in the base's order, then the patch's keys the base lacks. */
-function decodedOrder(base: Obj, patch: Obj, meta: Meta): string[] {
-  const unset = new Set(meta.u ?? [])
-  const order = Object.keys(base).filter(key => !unset.has(key))
-  for (const key of Object.keys(patch)) if (key !== META && !(key in base)) order.push(key)
-  return order
+/**
+ * Whether `order` is the key order `apply` gives: the base's keys it keeps, in the base's order, then the patch's keys
+ * the base lacks (compared in place: this runs once per cell).
+ */
+function decodesInOrder(order: string[], base: Obj, patch: Obj, meta: Meta): boolean {
+  let i = 0
+  for (const key of Object.keys(base)) if (!meta.u?.includes(key) && order[i++] !== key) return false
+  for (const key of Object.keys(patch)) if (key !== META && !(key in base) && order[i++] !== key) return false
+  return i === order.length
 }
-const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every((key, i) => key === b[i])
 
 function patchOf(base: Obj, object: Obj, depth: number): Obj {
   const patch: Obj = {}
@@ -100,10 +153,10 @@ function patchOf(base: Obj, object: Obj, depth: number): Obj {
     }
     patch[key] = value
   }
-  for (const key of present(base)) if (object[key] === undefined) (meta.u ??= []).push(key)
+  for (const key of Object.keys(base)) if (base[key] !== undefined && object[key] === undefined) (meta.u ??= []).push(key)
   // Key order is kept too: a reader may show an object's values in order (a row's axis values, say).
   const order = present(object)
-  if (!sameOrder(order, decodedOrder(base, patch, meta))) meta.o = order
+  if (!decodesInOrder(order, base, patch, meta)) meta.o = order
   if (meta.n || meta.u || meta.o) patch[META] = meta
   return patch
 }
@@ -121,10 +174,10 @@ function copy(value: unknown): unknown {
 function apply(base: Obj | undefined, patch: Obj, extra?: Obj): unknown {
   const meta = patch[META] as Meta | undefined
   if (meta && 'v' in meta) return copy(meta.v)
-  const unset = new Set(meta?.u ?? [])
+  const unset = meta?.u
   const out: Obj = {}
   for (const key of Object.keys(base ?? {})) {
-    if (unset.has(key)) continue
+    if (unset?.includes(key)) continue
     if (key !== META && key in patch) { out[key] = copy(patch[key]); continue }
     const nested = meta?.n?.[key]
     out[key] = nested ? apply(base![key] as Obj, nested) : copy(base![key])
