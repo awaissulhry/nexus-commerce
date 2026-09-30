@@ -449,6 +449,7 @@ model Product {
   stockPoolTasks    StockPoolTask[]
   /// Shopify colour products of this family (one per value of its split axis, per store).
   shopifyColourProducts ShopifyColourProduct[]
+  shopifyColourSyncs    ShopifyColourSync[]
 
   @@unique([workspaceId, sku], name: "workspace_sku", map: "Product_workspace_sku_key")
   @@index([gtin])
@@ -6933,6 +6934,7 @@ model ChannelConnection {
   channelListings          ChannelListing[]
   listingAliases           ProductListingAlias[] // PES.5
   shopifyColourProducts    ShopifyColourProduct[]
+  shopifyColourSyncs       ShopifyColourSync[]
   sharedListingMemberships SharedListingMembership[]
   orders                   Order[]
   syncChannelPolicies      SyncChannelPolicy[]
@@ -20284,7 +20286,7 @@ model ShopifyColourProduct {
   colourName          String?
   /// The Shopify product (GID) once it is found and confirmed, or created.
   shopifyProductId    String?
-  /// NOT_FOUND (no Shopify product yet) | PROPOSED (Find matched one; not confirmed) | LINKED (confirmed or created).
+  /// NOT_FOUND (no Shopify product yet) | PROPOSED (not confirmed) | LINKED (confirmed) | DELETED (proven absent; needs a replacement).
   state               String            @default("NOT_FOUND")
   /// Find's proposal for the operator's review: the matched product, its variants per Nexus child, and what differs.
   proposal            Json?
@@ -20301,4 +20303,26 @@ model ShopifyColourProduct {
   @@unique([workspaceId, channelConnectionId, shopifyProductId], name: "shopify_product")
   @@index([workspaceId])
   @@index([familyId])
+}
+
+/// Durable, debounced work for one colour family and exact Shopify destination. A newer revision stays pending
+/// while an older run finishes. The lease fences manual Confirm/Link and background runs alike.
+model ShopifyColourSync {
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  familyId            String
+  family              Product           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  channelConnectionId String
+  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  marketplace         String            @default("GLOBAL")
+  aliasKey            String            @default("")
+  revision            Int               @default(0)
+  dueAt               DateTime?
+  leaseToken          String?
+  leaseUntil          DateTime?
+  lastError           String?
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([workspaceId, familyId, channelConnectionId, marketplace, aliasKey], name: "colour_sync")
+  @@index([workspaceId, dueAt])
 }

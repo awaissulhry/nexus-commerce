@@ -27,6 +27,7 @@ import { columnLanguages, languageField } from './sheet/languages'
 import { formulaReadKey } from './sheet/formulaColumns'
 import { useSaveReporter } from './contracts'
 import { reportedFormulaWrite } from './formulaWrites'
+import { FORMULA_READS_AT_ONCE, FORMULAS_LOADING, clearFailures, createHeldEdits, effectiveFormulas, emptyReads, failRead, failureFor, formulaState, landRead, rowKnown, runBounded, saveLocally, seedFromSheet, type FormulaReads, type FormulaSeedRow, type KnownFormula } from './formulaReadiness'
 
 export interface CellFormulaRow {
   productId: string
@@ -72,13 +73,29 @@ export interface UseCellFormulasInput {
   rowIds: readonly string[]
   columnKeys?: readonly string[]
   rowScopes?: Readonly<Record<string, { productId: string; aliasKey: string }>>
+  /**
+   * P0 — the sheet read's rows, which already carry each cell's `formula` / `formulaError`. A row given here is known
+   * at once; the batch reads only refresh it. Pass only rows read for THIS coordinate (not a legacy read, not the
+   * previous language's sheet), or a cell would be judged by another coordinate's formulas.
+   */
+  seedRows?: readonly FormulaSeedRow[]
   onSettled?: () => void
   onValueSaved?: (rowId: string, fieldKey: string, value: unknown) => void
 }
 
 export interface CellFormulas {
+  /** Every row's formula state is known. Editing does not wait for this: see `knownFor`. */
   ready: boolean
   loadError: string | null
+  /** P0 — this cell's formula state is known (from the sheet read, a batch read or this tab's save). */
+  knownFor: (rowId: string, fieldKey: string) => boolean
+  /** Why this cell cannot open its editor yet ("Loading formulas…" or the read's error), or null. No row: the whole sheet. */
+  unavailableFor: (rowId: string | undefined, fieldKey: string) => string | null
+  /**
+   * Run `edit` once this cell's formula state is known — at once if it already is. Held edits apply in the order they
+   * were made; `drop` runs instead if the coordinate or column set changes first.
+   */
+  whenKnown: (rowId: string, fieldKey: string, edit: () => void, drop?: (reason?: string) => void) => void
   sourceLabel: string
   sourceLabelFor: (fieldKey?: string) => string
   replace: (rowId: string, fieldKey: string, value: unknown) => Promise<{ ok: boolean; error?: string }>
@@ -100,19 +117,7 @@ export interface CellFormulas {
   reload: () => void
 }
 
-/* `::`, not a raw NUL. A separator has to be one that neither half can contain, or two different
-   cells collide on one key — a product id is a cuid and a column key is `[A-Za-z0-9_.]`, so `::`
-   cannot appear in either and the key stays unambiguous.
-
-   🔴 It was a literal NUL byte, and that made the whole FILE binary to every text tool: `file(1)`
-   reported `data`, BSD grep answered "Binary file matches", and the grep wrapper here returns a
-   BLANK count — which reads as zero. So every grep-based DS guard was silently scanning nothing
-   here while reporting clean. I met the symptom myself and missed it: two greps on this file came
-   back empty and I worked around them with a direct read instead of asking why. A quiet instrument
-   is not a negative result, and that time the quiet instrument was mine. */
-const key = (rowId: string, fieldKey: string) => `${rowId}::${fieldKey}`
-
-export function useCellFormulas({ productId, scope = 'master', channel = null, marketplace = null, market, locale, channelConnectionId, aliasKey, rowIds, columnKeys, rowScopes, writeFacts, onSettled, onValueSaved }: UseCellFormulasInput): CellFormulas {
+export function useCellFormulas({ productId, scope = 'master', channel = null, marketplace = null, market, locale, channelConnectionId, aliasKey, rowIds, columnKeys, rowScopes, seedRows, writeFacts, onSettled, onValueSaved }: UseCellFormulasInput): CellFormulas {
   const reporter = useSaveReporter()
   const coord = useMemo(() => ({ scope, channel, marketplace, market, locale, channelConnectionId, aliasKey }), [scope, channel, marketplace, market, locale, channelConnectionId, aliasKey])
   const columnsKey = JSON.stringify(columnKeys ?? [])
@@ -125,10 +130,15 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     return { ...coord, ...languageField(fieldKey, locale), productId: scopes[rowId]?.productId ?? rowId, aliasKey: scopes[rowId]?.aliasKey ?? coord.aliasKey }
   }, [coord, scopes, !!rowScopes, locale])
   const coordinateKey = JSON.stringify([coord, rowScopeKey, columnsKey])
+  /* The reads' key leaves the row set out: a row added or removed keeps what is known about every other row. */
+  const readKey = JSON.stringify([coord, columnsKey])
   const idsKey = rowIds.join(',')
-  const snapshotKey = JSON.stringify([coordinateKey, idsKey])
-  const [snapshot, setSnapshot] = useState<{ key: string; formulas: Map<string, CellFormulaRow> }>({ key: '', formulas: new Map() })
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reads, setReads] = useState<FormulaReads>(() => emptyReads(readKey))
+  const current = useMemo(() => reads.key === readKey ? reads : emptyReads(readKey), [reads, readKey])
+  const seedDraft = useMemo(() => seedFromSheet(seedRows ?? []), [seedRows])
+  const seedRef = useRef(seedDraft)
+  if (seedRef.current.signature !== seedDraft.signature) seedRef.current = seedDraft
+  const seed = seedRef.current
   const [functions, setFunctions] = useState<FormulaFunctionDoc[]>([])
   const [nonce, setNonce] = useState(0)
   const live = useRef({ coordinateKey, writeFacts, onSettled, onValueSaved })
@@ -152,48 +162,79 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
   useEffect(() => {
     const controller = new AbortController()
     const mine = revision.current
-    setLoadError(null)
-    const ids = idsKey ? idsKey.split(',') : []
-    const read = async () => {
-      const next = new Map<string, CellFormulaRow>()
-      const groups = new Map<string, string[]>()
-      for (const id of ids) {
-        const alias = scopes[id]?.aliasKey ?? coord.aliasKey ?? ''
-        groups.set(alias, [...(groups.get(alias) ?? []), id])
-      }
-      for (const language of languages) {
-        for (const [listingAlias, group] of groups) {
-          for (let start = 0; start < group.length; start += 250) {
-            const batch = group.slice(start, start + 250)
-            const rowByProduct = new Map(batch.map(id => [scopes[id]?.productId ?? id, id]))
-            const response = await fetch(`${getBackendUrl()}/api/pim/formulas/batch`, {
-              method: 'POST', credentials: 'include', signal: controller.signal,
-              headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...coord, locale: language, aliasKey: listingAlias, productIds: [...rowByProduct.keys()] }),
-            })
-            if (!response.ok) throw new Error('Could not load formulas. Retry before editing formula fields.')
-            const body = await response.json()
-            if (!body.formulas || typeof body.formulas !== 'object') throw new Error('The formula list could not be read. Retry before editing.')
-            const add = (f: CellFormulaRow) => {
-              if (!f || typeof f.expr !== 'string') return
-              const viewKey = formulaReadKey(keys, f.fieldKey, language, locale)
-              if (viewKey) next.set(key(rowByProduct.get(f.productId) ?? f.productId, viewKey), f)
-            }
-            if (Array.isArray(body.formulas)) body.formulas.forEach(add)
-            else for (const [pid, fields] of Object.entries(body.formulas)) {
-              for (const [fieldKey, f] of Object.entries(fields as Record<string, CellFormulaRow>)) add({ ...f, productId: pid, fieldKey })
-            }
-          }
-        }
-      }
-      if (!controller.signal.aborted && mine === revision.current) setSnapshot({ key: snapshotKey, formulas: next })
+    /* A reload keeps what is already known; only the errors go, so a retried cell says "Loading" again. */
+    setReads(previous => previous.key === readKey ? clearFailures(previous) : emptyReads(readKey))
+    const land = (change: (previous: FormulaReads) => FormulaReads) => {
+      if (!controller.signal.aborted) setReads(previous => previous.key === readKey ? change(previous) : previous)
     }
-    read().catch(error => { if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : String(error)) })
+    const ids = idsKey ? idsKey.split(',') : []
+    const groups = new Map<string, string[]>()
+    for (const id of ids) {
+      const alias = scopes[id]?.aliasKey ?? coord.aliasKey ?? ''
+      groups.set(alias, [...(groups.get(alias) ?? []), id])
+    }
+    const requests = languages.flatMap(language => [...groups].flatMap(([listingAlias, group]) =>
+      Array.from({ length: Math.ceil(group.length / 250) }, (_, i) => ({ language, listingAlias, batch: group.slice(i * 250, i * 250 + 250) }))))
+    /* P0 — in parallel (production waited 5 × ~0.43 s, one alias after another), and each answer lands on its own. */
+    void runBounded(requests.map(({ language, listingAlias, batch }) => async () => {
+      const rowByProduct = new Map(batch.map(id => [scopes[id]?.productId ?? id, id]))
+      try {
+        const response = await fetch(`${getBackendUrl()}/api/pim/formulas/batch`, {
+          method: 'POST', credentials: 'include', signal: controller.signal,
+          headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...coord, locale: language, aliasKey: listingAlias, productIds: [...rowByProduct.keys()] }),
+        })
+        if (!response.ok) throw new Error('Could not load formulas. Retry before editing formula fields.')
+        const body = await response.json()
+        if (!body.formulas || typeof body.formulas !== 'object') throw new Error('The formula list could not be read. Retry before editing.')
+        const found = new Map<string, Map<string, KnownFormula>>()
+        const add = (f: CellFormulaRow) => {
+          if (!f || typeof f.expr !== 'string') return
+          const viewKey = formulaReadKey(keys, f.fieldKey, language, locale)
+          const rowId = rowByProduct.get(f.productId) ?? f.productId
+          if (viewKey) found.set(rowId, (found.get(rowId) ?? new Map<string, KnownFormula>()).set(viewKey, f))
+        }
+        if (Array.isArray(body.formulas)) body.formulas.forEach(add)
+        else for (const [pid, fields] of Object.entries(body.formulas)) {
+          for (const [fieldKey, f] of Object.entries(fields as Record<string, CellFormulaRow>)) add({ ...f, productId: pid, fieldKey })
+        }
+        // A read that began before one of this tab's saves may predate it; that save's settle reads again.
+        if (mine === revision.current) land(previous => landRead(previous, { language, locale, rowIds: batch, formulas: found }))
+      } catch (error) {
+        land(previous => failRead(previous, { language, rowIds: batch, error: error instanceof Error ? error.message : String(error) }))
+      }
+    }), FORMULA_READS_AT_ONCE, controller.signal)
     return () => controller.abort()
-  }, [idsKey, nonce, coord, scopes, snapshotKey, languages, keys, locale])
+  }, [idsKey, nonce, coord, scopes, readKey, languages, keys, locale])
 
-  const ready = snapshot.key === snapshotKey && !loadError
-  const exprFor = useCallback((rowId: string, fieldKey: string) => snapshot.key === snapshotKey ? snapshot.formulas.get(key(rowId, fieldKey))?.expr ?? null : null, [snapshot, snapshotKey])
-  const errorFor = useCallback((rowId: string, fieldKey: string) => snapshot.key === snapshotKey ? snapshot.formulas.get(key(rowId, fieldKey))?.lastError ?? null : null, [snapshot, snapshotKey])
+  const ids = useMemo(() => idsKey ? idsKey.split(',') : [], [idsKey])
+  const ready = ids.every(id => rowKnown(current, seed, languages, id))
+  const loadError = useMemo(() => {
+    for (const errors of current.failed.values()) for (const error of errors.values()) return error
+    return null
+  }, [current])
+  const knownFor = useCallback((rowId: string, fieldKey: string) => formulaState(current, seed, languages, locale, rowId, fieldKey).known, [current, seed, languages, locale])
+  const unavailableFor = useCallback((rowId: string | undefined, fieldKey: string) => {
+    if (rowId === undefined) return ready ? null : loadError ?? FORMULAS_LOADING
+    return knownFor(rowId, fieldKey) ? null : failureFor(current, languages, locale, rowId, fieldKey) ?? FORMULAS_LOADING
+  }, [ready, loadError, knownFor, current, languages, locale])
+  /* The marks repaint when a cell's formula CHANGES, not every time a read lands with the same answer. */
+  const effectiveDraft = useMemo(() => effectiveFormulas(current, seed, languages, locale), [current, seed, languages, locale])
+  const effectiveRef = useRef(effectiveDraft)
+  if (effectiveRef.current.signature !== effectiveDraft.signature) effectiveRef.current = effectiveDraft
+  const effective = effectiveRef.current
+  const exprFor = useCallback((rowId: string, fieldKey: string) => effective.formulas.get(rowId)?.get(fieldKey)?.expr ?? null, [effective])
+  const errorFor = useCallback((rowId: string, fieldKey: string) => effective.formulas.get(rowId)?.get(fieldKey)?.lastError ?? null, [effective])
+
+  const held = useMemo(() => createHeldEdits(), [])
+  useEffect(() => () => { held.drop() }, [held, readKey])
+  useEffect(() => {
+    held.release(knownFor)
+    held.dropFailed((rowId, fieldKey) => knownFor(rowId, fieldKey) ? null : failureFor(current, languages, locale, rowId, fieldKey))
+  }, [held, knownFor, current, languages, locale])
+  const whenKnown = useCallback((rowId: string, fieldKey: string, edit: () => void, drop?: (reason?: string) => void) => {
+    if (knownFor(rowId, fieldKey)) edit()
+    else held.hold({ rowId, fieldKey, apply: edit, drop })
+  }, [held, knownFor])
   const preview = useCallback(async (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal): Promise<FormulaPreviewResponse> => {
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/preview`, { method: 'POST', credentials: 'include', signal,
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...target(rowId, fieldKey), expr }) })
@@ -210,17 +251,11 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     const body = await res.json()
     if (!res.ok) return { ok: false, error: body?.error ?? 'Could not save this field.' }
     revision.current += 1
-    if (live.current.coordinateKey === coordinateKey) setSnapshot(previous => {
-      if (previous.key !== snapshotKey) return previous
-      const formulas = new Map(previous.formulas)
-      if (literal) formulas.delete(key(rowId, fieldKey))
-      else if (body.formula) formulas.set(key(rowId, fieldKey), body.formula)
-      return { ...previous, formulas }
-    })
+    if (live.current.coordinateKey === coordinateKey && (literal || body.formula)) setReads(previous => previous.key === readKey ? saveLocally(previous, rowId, fieldKey, literal ? null : body.formula) : previous)
     const result = literal ? { ok: true } : formulaSaveOutcome(body)
     if (result.ok && live.current.coordinateKey === coordinateKey) live.current.onValueSaved?.(rowId, fieldKey, body.value)
     return result
-  })), [reporter, queue, target, coordinateKey, snapshotKey])
+  })), [reporter, queue, target, coordinateKey, readKey])
   const save = useCallback((rowId: string, fieldKey: string, expr: string) => commit(rowId, fieldKey, { expr }), [commit])
   const replace = useCallback((rowId: string, fieldKey: string, value: unknown) => commit(rowId, fieldKey, { value }), [commit])
   const pinOver = useCallback((rowId: string, fieldKey: string) => reportedFormulaWrite(reporter, rowId, fieldKey, () => queue.enqueue(rowId, async () => {
@@ -236,6 +271,6 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     const language = languageField(fieldKey ?? '', locale).locale
     return scope === 'channel' ? `${channel} · ${marketplace} · ${language}` : `Shared product · ${language}`
   }
-  return { ready, loadError, sourceLabel: sourceLabelFor(), sourceLabelFor,
+  return { ready, loadError, knownFor, unavailableFor, whenKnown, sourceLabel: sourceLabelFor(), sourceLabelFor,
     exprFor, errorFor, functions, preview, save, replace, pinOver, reload }
 }

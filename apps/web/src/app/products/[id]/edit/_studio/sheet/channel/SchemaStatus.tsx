@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
-import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
+import { useCommandKey } from '@/lib/command-key'
+import { downloadFieldLists } from './missingFields'
 import { channelLabel } from '../../scopes'
 import Link from '@/lib/workspaces/Link'
 import { chooseCategoryLink, missingRuleSentence } from './rulesStatus'
@@ -17,7 +18,6 @@ export interface MarketDifference {
   missingHere: Array<{ key: string; label: string }>
 }
 
-interface DownloadResult { productType: string; outcome: 'added' | 'already' | 'failed'; error?: string }
 
 export function SchemaStatus({ channel, market, accountId, categories, categorySources = {}, typeConflicts = [], missing, downloadable = [], differences = [], ages, open, onClose, onRefreshed }: {
   channel: string; market: string; categories: string[]; missing: string[]
@@ -53,20 +53,9 @@ export function SchemaStatus({ channel, market, accountId, categories, categoryS
   // server refuses a category that is not in use. One key per press, so a double-click cannot run it twice.
   const download = async () => {
     setBusy(true); setError(null)
-    try {
-      const { response, body, conflict } = await sendCommand<{ results?: DownloadResult[]; remaining?: number; error?: string }>(downloadKey,
-        `${getBackendUrl()}/api/categories/schema/download`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, market, productTypes: downloadable }) })
-      if (conflict) setError(commandConflictMessage(conflict, 'download'))
-      else if (!response.ok) setError(body?.error ?? 'The rules could not be downloaded.')
-      else {
-        const failed = (body?.results ?? []).filter(r => r.outcome === 'failed')
-        if (failed.length) { setError(failed.map(r => `${r.productType}: ${r.error ?? 'download failed'}`).join('; ')); onRefreshed() }
-        else { onClose(); onRefreshed() }
-      }
-    } catch {
-      setError('No answer from the server. The download may still be running: wait a moment, then choose Download rules again.')
-    }
+    const outcome = await downloadFieldLists(downloadKey, channel, market, downloadable)
+    if (outcome.state === 'loaded') { onClose(); onRefreshed() }
+    else { setError(outcome.message); onRefreshed() }
     setBusy(false)
   }
   const canDownload = !store && downloadable.length > 0

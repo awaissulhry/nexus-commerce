@@ -15,6 +15,7 @@ import { contentDestination, type ContentScope } from '../content-workspace.serv
 import { WorkspaceScopeError } from '../../pim/workspace-destination.js'
 import { readColourProductSettings, type ColourProductSettings } from './settings.js'
 import { loadColourPlan } from './family.js'
+import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 
 /** The most Shopify products one Find reads (a group plus the products holding the family's SKUs). */
 export const FIND_PRODUCT_LIMIT = 100
@@ -88,9 +89,13 @@ export async function readColourProducts(productId: string, scope: ContentScope)
 export async function findColourProducts(productId: string, scope: ContentScope, body: unknown) {
   const input = findBodySchema.parse(body ?? {})
   const destination = await contentDestination(productId, scope)
+  return withColourSyncLock(destination, () => findDestination(destination, input))
+}
+
+async function findDestination(destination: Destination, input: z.infer<typeof findBodySchema>) {
   const { rows, settings, plan } = await planFor(destination)
   if (plan.mode !== 'colour-products' || !plan.splitAxis) return colourProductsView(destination, plan, settings)
-  const { graphql } = await shopifyAdmin(destination.accountId)
+  const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
   const linked = linkedProducts(rows)
   const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...(input.sourceProductId ? [input.sourceProductId] : [])])
   const matches = matchColourProducts(plan, candidates, linked)
@@ -124,7 +129,7 @@ export function claimedElsewhere(destination: Destination, shopifyProductIds: re
 
 async function saveProposals(destination: Destination, plan: ColourPlan, matches: ColourMatch[], candidates: ColourCandidate[], claimed: Array<{ shopifyProductId: string | null; family: { sku: string } }>) {
   const at = new Date()
-  await prisma.$transaction(async tx => {
+  await commitColourSyncChange(async tx => {
     const rows = await tx.shopifyColourProduct.findMany({ where: rowsWhere(destination) })
     for (const match of matches) {
       const candidate = candidates.find(c => c.id === match.shopifyProductId) ?? null
