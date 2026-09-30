@@ -34,10 +34,13 @@ import {
   callTool,
   missingPermissions,
   permissionMessage,
+  requestPrincipal,
   systemPrincipal,
+  ToolAccessError,
   type ToolPrincipal,
   type UserPrincipal,
 } from '../agents/call-tool.js'
+import type { FastifyRequest } from 'fastify'
 import { recordControlChange, type ControlAction } from './control-audit.service.js'
 import { mintExemplarFromDecision } from './exemplar.service.js'
 import { logger } from '../../utils/logger.js'
@@ -118,6 +121,33 @@ export async function inboxCounts(): Promise<InboxCounts> {
     prisma.agentApproval.count({ where: whereFor('expired') }),
   ])
   return { waiting, decided, expired }
+}
+
+/** The person looking at the Approvals page; null when the caller is not a signed-in person (an API key). */
+export async function inboxViewer(request: FastifyRequest): Promise<ToolPrincipal | null> {
+  try {
+    return await requestPrincipal(request)
+  } catch (error) {
+    if (error instanceof ToolAccessError) return null
+    throw error
+  }
+}
+
+/**
+ * Why this viewer may NOT approve a request of this tool — the very sentence the approve would answer with
+ * (`scheduleApproval`'s refusal) — or null when they may. The page shows it on the card instead of offering an Apply
+ * that can only fail: a person whose permission was taken away while their approval waited, say, sees why it came
+ * back and that it is no longer theirs to approve. Worked out once per request, then per row.
+ */
+export function cannotApproveFor(viewer: ToolPrincipal | null): (toolName: string) => string | null {
+  if (!viewer) return () => 'Only a signed-in person can approve.'
+  const approvable = approvableToolNames(viewer)
+  return (toolName) => {
+    if (approvable === null || approvable.includes(toolName)) return null
+    const tool = getTool(toolName)
+    const missing = tool ? missingPermissions(viewer, tool) : []
+    return missing.length ? permissionMessage(toolName, missing) : `${toolName} is not a tool this workspace knows`
+  }
 }
 
 export async function listInbox(view: InboxView, limit = 100) {
