@@ -95,7 +95,8 @@ async function runJob(channel: string, actionPayload: Record<string, unknown>, e
 }
 /** What a queue row says, without the fields that name the row itself or when it was made. */
 const rowShape = (row: Record<string, any>) => {
-  const { actor: _actor, ...payload } = row.payload
+  // The row names its own product's SKU (`productSku`); the twins are different products, so it is checked apart.
+  const { actor: _actor, productSku: _sku, ...payload } = row.payload
   return { targetChannel: row.targetChannel, targetRegion: row.targetRegion, syncStatus: row.syncStatus, syncType: row.syncType,
     maxRetries: row.maxRetries, externalListingId: row.externalListingId, channelConnectionId: row.channelConnectionId, payload }
 }
@@ -146,7 +147,8 @@ describe('a bulk channel price override goes through the ONE channel price write
       expect(sq.length, `${channel}: the single edit queues at most one PRICE_UPDATE`).toBeLessThanOrEqual(1)
       if (bq.length) {
         queuedChannels.push(channel)
-        expect(bq[0], channel).toMatchObject({ syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { price: 19.99, source: 'CHANNEL_PRICE_WRITE', actor: 'person-1', marketplace } })
+        expect(bq[0], channel).toMatchObject({ syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { price: 19.99, source: 'CHANNEL_PRICE_WRITE', actor: 'person-1', marketplace, productSku: 'BULK-ALL' } })
+        expect((sq[0]!.payload as any).productSku, channel).toBe('SINGLE-ALL')
         expect(inThirtySeconds(bq[0].holdUntil), channel).toBe(true)
         // Sent to the instant lane after the commit, never from inside the transaction.
         expect(state.fired[0], channel).toEqual({ ids: [bq[0].id], insideTransaction: false })
@@ -234,6 +236,24 @@ describe('a bulk channel price override goes through the ONE channel price write
     expect(await queueOf(late.id)).toEqual([])
     expect(await overridesOf(late.id)).toEqual([])
     expect(state.fired).toEqual([])
+  }), 60_000)
+})
+
+describe('a superseded price row says why it was cancelled', () => {
+  it('🔴 a second price for the same listing cancels the first row with a plain reason; an older cancelled row is left as it was', () => scoped(async () => {
+    const l = (await seed('superseded', [CHANNELS[1]]))['EBAY:IT']
+    // An old cancellation from before this change: no reason, and it must not be given this one.
+    const old = await prisma.outboundSyncQueue.create({ data: { productId: 'superseded', channelListingId: l.id, targetChannel: 'EBAY', syncStatus: 'CANCELLED', syncType: 'PRICE_UPDATE', payload: {}, maxRetries: 3 } })
+    await prisma.$executeRaw`UPDATE "OutboundSyncQueue" SET "updatedAt" = now() - interval '1 day' WHERE id = ${old.id}`
+    await runJob('EBAY', { priceOverride: 11 }, { targetProductIds: ['superseded'] })
+    await runJob('EBAY', { priceOverride: 12 }, { targetProductIds: ['superseded'] })
+    const rows = await queueOf(l.id)
+    expect(rows.map((r) => [r.syncStatus, (r.payload as any).price ?? null, r.errorMessage])).toEqual([
+      ['CANCELLED', null, null],
+      ['CANCELLED', 11, 'Replaced by a newer price change for this listing'],
+      ['PENDING', 12, null],
+    ])
+    expect(rows.slice(1).map((r) => (r.payload as any).productSku)).toEqual(['SUPERSEDED', 'SUPERSEDED'])
   }), 60_000)
 })
 
