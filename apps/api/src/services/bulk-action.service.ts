@@ -31,6 +31,10 @@ import { assertPushAllowed } from '@nexus/shared/push-lock';
 import { writeChannelPrices } from './pim/channel-price-write.service.js';
 import { activeDatabaseTransaction, inDatabaseTransaction } from '../lib/database-context.js';
 import { bulkActorNames } from './bulk-action-actor.js';
+// The quantity and buffer primitives the Studio matrix and Sync Control use (the single-listing edit's path).
+import { setFollowMasterQuantity, setStockBuffer, type FollowMasterChannel } from './follow-master.service.js';
+import { AMAZON_EU_SHARED_MARKETS } from './amazon-eu-quantity-guard.js';
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js';
 // Shared stock — a pooled product's fallback is the pool's number, not its business's own total.
 import { sellableQuantity } from './stock-pool/sync-ledgers.js';
 // W1.8 — ATTRIBUTE_UPDATE helpers lifted into a focused module. Pure
@@ -283,20 +287,35 @@ export interface ConflictingJob {
  * `createJob` (refuse a bad payload before a job exists), the preview and the run, so the preview cannot show a
  * different change from the one that runs.
  *
- * `price` is a channel price and goes through the ONE channel price write (`writeChannelPrices`): `undefined` =
- * untouched, a number pins the listing at it, `null` hands it back to the master price. `priceOverride: null` and
- * `followMasterPrice: true` are both that hand-back. Everything else (`columns`) is written to the listing as
- * before this fix — quantity, buffer, publish flag and pricing rule included — and queues nothing, as before.
+ * Each field goes the way the app's single-listing edit of that field goes:
+ *   - `price` → the ONE channel price write (`writeChannelPrices`): `undefined` = untouched, a number pins the listing
+ *     at it, `null` hands it back to the master price. `priceOverride: null` and `followMasterPrice: true` are both
+ *     that hand-back.
+ *   - `quantity` → the follow/pin primitive the Studio matrix and Sync Control use (`setFollowMasterQuantity`):
+ *     `{ follow: true }` rejoins the stock pool; `{ follow: false, value }` fixes it at `value` (the matrix's typed
+ *     number); `{ follow: false }` fixes it at the number it shows now (Sync Control's Fixed number).
+ *   - `buffer` → the stock-buffer primitive (`setStockBuffer`), as the matrix's buffer cell.
+ *   - `isPublished` is refused, as the single-listing edit refuses it (`PATCH /listings/:id`): a local flag cannot
+ *     confirm a marketplace change; publishing and withdrawing go through the listing channel workflow.
+ *   - `columns` — the content follow flags and the pricing rule — are written as before and queue nothing. The
+ *     single-listing edit of the pricing rule queues nothing either (reported, not guessed at).
  */
+/** `follow: true` rejoins the stock pool; `follow: false` fixes it — at `value` when given, else at the number it shows now. */
+export type OverrideQuantity = { follow: boolean; value?: number };
 export interface MarketplaceOverridePlan {
   price?: number | null;
+  quantity?: OverrideQuantity;
+  buffer?: number;
   columns: Prisma.ChannelListingUpdateInput;
 }
+
+/** The single-listing edit's own sentence (`PATCH /listings/:id`, `POST /listings/bulk-action`). */
+export const PUBLISH_FLAG_REFUSAL =
+  'isPublished cannot be set by a bulk override. Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.';
 
 const OVERRIDE_FOLLOW_KEYS = [
   'followMasterTitle',
   'followMasterDescription',
-  'followMasterQuantity',
   'followMasterImages',
   'followMasterBulletPoints',
 ] as const;
@@ -310,6 +329,8 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
     return undefined;
   };
   const columns: Prisma.ChannelListingUpdateInput = {};
+
+  if ('isPublished' in payload) throw new Error(PUBLISH_FLAG_REFUSAL);
 
   let price: number | null | undefined;
   if ('priceOverride' in payload) {
@@ -332,17 +353,42 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
     throw new Error('followMasterPrice: false needs the price to send: set priceOverride to it.');
   }
 
+  // The quantity — never dropped silently either, and a whole number (the matrix's own rule).
+  let quantity: OverrideQuantity | undefined;
   if ('quantityOverride' in payload) {
     const v = numOrNull(payload.quantityOverride);
-    if (v !== undefined) columns.quantityOverride = v === null ? null : Math.max(0, Math.floor(v));
+    if (v === undefined) {
+      throw new Error('quantityOverride must be a whole number, or null to follow the stock again.');
+    }
+    if (v !== null && (!Number.isInteger(v) || v < 0)) {
+      throw new Error('quantityOverride must be a whole number, zero or more.');
+    }
+    quantity = v === null ? { follow: true } : { follow: false, value: v };
   }
-  if (typeof payload.stockBuffer === 'number') {
-    columns.stockBuffer = Math.max(0, Math.floor(payload.stockBuffer));
+  if (payload.followMasterQuantity === true) {
+    if (quantity && !quantity.follow) {
+      throw new Error('quantityOverride and followMasterQuantity: true contradict each other: send one of them.');
+    }
+    quantity = { follow: true };
+  } else if (payload.followMasterQuantity === false) {
+    if (quantity?.follow) {
+      throw new Error('quantityOverride: null and followMasterQuantity: false contradict each other: send one of them.');
+    }
+    quantity ??= { follow: false };
   }
+
+  let buffer: number | undefined;
+  if ('stockBuffer' in payload) {
+    const v = numOrNull(payload.stockBuffer);
+    if (v == null || !Number.isInteger(v) || v < 0) {
+      throw new Error('stockBuffer must be a whole number, zero or more.');
+    }
+    buffer = v;
+  }
+
   for (const k of OVERRIDE_FOLLOW_KEYS) {
     if (typeof payload[k] === 'boolean') (columns as Record<string, unknown>)[k] = payload[k];
   }
-  if (typeof payload.isPublished === 'boolean') columns.isPublished = payload.isPublished;
   if (
     typeof payload.pricingRule === 'string' &&
     (OVERRIDE_PRICING_RULES as readonly string[]).includes(payload.pricingRule)
@@ -353,12 +399,17 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
     columns.priceAdjustmentPercent = payload.priceAdjustmentPercent.toFixed(2);
   }
 
-  if (price === undefined && Object.keys(columns).length === 0) {
+  if (price === undefined && quantity === undefined && buffer === undefined && Object.keys(columns).length === 0) {
     throw new Error(
       'Invalid MARKETPLACE_OVERRIDE_UPDATE payload: at least one override field required',
     );
   }
-  return price === undefined ? { columns } : { price, columns };
+  return {
+    ...(price !== undefined ? { price } : {}),
+    ...(quantity !== undefined ? { quantity } : {}),
+    ...(buffer !== undefined ? { buffer } : {}),
+    columns,
+  };
 }
 
 /**
@@ -374,6 +425,12 @@ function ownPriceAsRead(listing: Pick<ChannelListing, 'price' | 'priceOverride' 
 export class BulkActionService {
   private readonly masterPriceService: MasterPriceService;
   private readonly masterStatusService: MasterStatusService;
+  /**
+   * A running MARKETPLACE_OVERRIDE_UPDATE job's listings, and the inventory groups it has already changed. An Amazon
+   * EU quantity is one number for every EU market of a SKU, so a quantity or buffer change on one EU row is applied to
+   * the SKU's whole EU group at once — and only when the job itself holds every row of that group.
+   */
+  private readonly overrideRuns = new Map<string, { scope: Set<string>; inventoryDone: Set<string> }>();
 
   constructor(private prisma: PrismaClient = prisma) {
     this.masterPriceService = new MasterPriceService(prisma);
@@ -407,7 +464,25 @@ export class BulkActionService {
       // Calculate total items to process
       let totalItems = 0;
 
-      if (input.targetVariationIds?.length) {
+      if (
+        ACTION_ENTITY[input.actionType] === 'channelListing' &&
+        (input.targetProductIds?.length || input.targetVariationIds?.length)
+      ) {
+        // A channel-listing job runs on LISTINGS, not products: a product on four Amazon markets is four rows. Counting
+        // products here made such a job report "Progress exceeds 100%" and fail mid-run.
+        const productIds = input.targetProductIds?.length
+          ? input.targetProductIds
+          : Array.from(new Set((await this.prisma.productVariation.findMany({
+              where: { id: { in: input.targetVariationIds } },
+              select: { productId: true },
+            })).map((v) => v.productId)));
+        totalItems = await this.prisma.channelListing.count({
+          where: this.buildChannelListingWhere(
+            { channel: input.channel ?? null } as BulkActionJob,
+            { productIds, filters: input.filters as ScopeFilters | undefined },
+          ),
+        });
+      } else if (input.targetVariationIds?.length) {
         totalItems = input.targetVariationIds.length;
       } else if (input.targetProductIds?.length) {
         totalItems = input.targetProductIds.length;
@@ -604,6 +679,9 @@ export class BulkActionService {
       if (items.length === 0) {
         throw new Error('No items found to process');
       }
+      if (job.actionType === 'MARKETPLACE_OVERRIDE_UPDATE') {
+        this.overrideRuns.set(jobId, { scope: new Set(items.map((i) => i.id)), inventoryDone: new Set() });
+      }
 
       let processedItems = 0;
       let failedItems = 0;
@@ -772,6 +850,7 @@ export class BulkActionService {
         }
       }
 
+      this.overrideRuns.delete(jobId);
       // Final progress update
       await this.updateProgress(jobId, {
         processedItems,
@@ -869,6 +948,7 @@ export class BulkActionService {
         errors
       };
     } catch (error) {
+      this.overrideRuns.delete(jobId);
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       logger.error(`Job processing failed with error`, {
@@ -1967,6 +2047,20 @@ export class BulkActionService {
               : FOLLOWS;
           newValue.price = plan.price === null ? FOLLOWS : Math.round(plan.price * 100) / 100;
         }
+        // Quantity and buffer: what the follow/pin and buffer primitives will be asked for. Whether a row is FBA
+        // (refused), an Amazon EU market outside the job's scope (refused) or already so (a no-op) is decided when
+        // the job runs, and the job's items say which.
+        if (plan.quantity !== undefined) {
+          const FOLLOWS_STOCK = 'follows the stock';
+          currentValue.quantity = listing.followMasterQuantity === false ? (listing.quantityOverride ?? listing.quantity) : FOLLOWS_STOCK;
+          newValue.quantity = plan.quantity.follow
+            ? FOLLOWS_STOCK
+            : plan.quantity.value ?? 'fixed at the number it shows now';
+        }
+        if (plan.buffer !== undefined) {
+          currentValue.stockBuffer = listing.stockBuffer ?? 0;
+          newValue.stockBuffer = plan.buffer;
+        }
         for (const [key, value] of Object.entries(plan.columns)) {
           const before = (listing as Record<string, unknown>)[key];
           currentValue[key] = before instanceof Prisma.Decimal ? Number(before) : before ?? null;
@@ -2190,6 +2284,8 @@ export class BulkActionService {
           price: item.price != null ? Number(item.price) : null,
           priceOverride:
             item.priceOverride != null ? Number(item.priceOverride) : null,
+          // `quantity` is the number the channel push sends; the diff shows it beside the override.
+          quantity: item.quantity ?? null,
           quantityOverride: item.quantityOverride ?? null,
           stockBuffer: item.stockBuffer ?? null,
           followMasterPrice: item.followMasterPrice ?? null,
@@ -2309,6 +2405,7 @@ export class BulkActionService {
           select: {
             price: true,
             priceOverride: true,
+            quantity: true,
             quantityOverride: true,
             stockBuffer: true,
             followMasterPrice: true,
@@ -3211,27 +3308,31 @@ export class BulkActionService {
    * Payload (one or more keys; missing keys are no-ops; read by `marketplaceOverridePlan`):
    *   priceOverride?: number | null    — pins the channel price; null hands it back to the master price
    *   followMasterPrice?: boolean      — true = the same hand-back; false needs priceOverride
-   *   quantityOverride?: number | null — overrides master quantity; null clears
+   *   quantityOverride?: number | null — fixes the quantity at a whole number; null follows the stock again
+   *   followMasterQuantity?: boolean   — true = follow the stock; false = fix it at the number it shows now
    *   stockBuffer?: number             — overselling-protection units
    *   followMasterTitle?: boolean      — when false, keep titleOverride
    *   followMasterDescription?: boolean
-   *   followMasterQuantity?: boolean
    *   followMasterImages?: boolean
    *   followMasterBulletPoints?: boolean
-   *   isPublished?: boolean            — master toggle for marketplace push
    *   pricingRule?: 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER'
    *   priceAdjustmentPercent?: number  — paired with PERCENT_OF_MASTER rule
+   *   isPublished                      — refused, as the single-listing edit refuses it
    *
-   * 🔴 The price goes through the ONE channel price write (`writeChannelPrices`), exactly as a single price edit
-   * does: `price` + `priceOverride` + `followMasterPrice`, the override audit row, the price timeline row and one
-   * PRICE_UPDATE row on the 30 s grace window. Before, this wrote `priceOverride` alone: `followMasterPrice` stayed
-   * true, `price` (the column the push reads) did not move, nothing was queued — the job said COMPLETED and the
-   * channel never got the price.
+   * 🔴 Every field reaches the channel the way the app's single-listing edit of it does, never by a path of its own:
+   *   - the price through the ONE channel price write (`writeChannelPrices`): `price` + `priceOverride` +
+   *     `followMasterPrice`, the override audit row, the price timeline row and one PRICE_UPDATE row on the 30 s grace
+   *     window. Before, this wrote `priceOverride` alone and the channel never got the price.
+   *   - the quantity through the follow/pin primitive (`setFollowMasterQuantity`, the Studio matrix's and Sync
+   *     Control's) and the buffer through `setStockBuffer`: the three quantity columns written together and one
+   *     QUANTITY_UPDATE row. Before, `quantityOverride` / `stockBuffer` were written alone and nothing was sent.
+   *     FBA is never touched (refused by name); an Amazon EU quantity is one number for every EU market, so it
+   *     changes the SKU's whole EU group at once, and only when the job holds every row of that group.
    *
-   * One listing = one transaction: the price and the other columns land together or not at all, and the queue
-   * row is sent only after the commit. The compare-and-set is against the listing as this job read it (the
-   * matrix verb's rule, A-17): a price changed elsewhere during the run is not overwritten — the row fails and says
-   * so; a quantity write in between does not count as a change.
+   * Every refusal is decided BEFORE anything is written. The price and the other columns then land in one
+   * transaction (the queue row is sent after the commit); the quantity and buffer follow through their primitives'
+   * own transactions. The price's compare-and-set is against the listing as this job read it (the matrix verb's
+   * rule, A-17): a price changed elsewhere during the run is not overwritten — the row fails and says so.
    */
   private async processMarketplaceOverrideUpdate(
     item: ChannelListing,
@@ -3239,7 +3340,12 @@ export class BulkActionService {
     job: Pick<BulkActionJob, 'id' | 'createdBy'>,
   ): Promise<{ status: 'processed' | 'skipped' }> {
     const plan = marketplaceOverridePlan(payload)
+    const actor = job.createdBy ?? 'bulk-action'
     const hasColumns = Object.keys(plan.columns).length > 0
+    const hasInventory = plan.quantity !== undefined || plan.buffer !== undefined
+    // Refusals first — nothing is written for a row that cannot be done whole.
+    const group = hasInventory ? await this.inventoryGroupFor(item, job.id) : null
+
     const writeColumns = (db: Pick<PrismaClient, 'channelListing'> | Prisma.TransactionClient) =>
       db.channelListing.update({
         where: { id: item.id },
@@ -3247,38 +3353,147 @@ export class BulkActionService {
         data: { ...plan.columns, lastOverrideAt: new Date() },
       })
 
-    if (plan.price === undefined) {
+    let changed = false
+    if (plan.price !== undefined) {
+      const price = plan.price
+      const seen = ownPriceAsRead(item)
+      changed = await inDatabaseTransaction(this.prisma, async () => {
+        const written = await writeChannelPrices({
+          targets: [{
+            listingId: item.id,
+            price,
+            expectedVersion: item.version,
+            ...(seen !== undefined ? { expectedPrice: seen } : {}),
+          }],
+          actor,
+          source: 'BULK_OVERRIDE',
+          reason: `Bulk action ${job.id}`,
+        })
+        const outcome = written.results[0]
+        if (!outcome) throw new Error('The price write returned no outcome for this listing.')
+        if (outcome.outcome === 'conflict') {
+          throw new Error(
+            'The price of this listing changed after the job read it, so it was not overwritten. Retry the failed rows to apply this job\'s price over it.',
+          )
+        }
+        if (outcome.outcome === 'refused') {
+          throw new Error(outcome.reason ?? 'The price write refused this listing.')
+        }
+        if (hasColumns) await writeColumns(activeDatabaseTransaction() ?? this.prisma)
+        return outcome.outcome === 'applied' || hasColumns
+      })
+    } else if (hasColumns) {
       await writeColumns(this.prisma)
-      return { status: 'processed' }
+      changed = true
     }
 
-    const price = plan.price
-    const seen = ownPriceAsRead(item)
-    return inDatabaseTransaction(this.prisma, async () => {
-      const written = await writeChannelPrices({
-        targets: [{
-          listingId: item.id,
-          price,
-          expectedVersion: item.version,
-          ...(seen !== undefined ? { expectedPrice: seen } : {}),
-        }],
-        actor: job.createdBy ?? 'bulk-action',
-        source: 'BULK_OVERRIDE',
-        reason: `Bulk action ${job.id}`,
-      })
-      const outcome = written.results[0]
-      if (!outcome) throw new Error('The price write returned no outcome for this listing.')
-      if (outcome.outcome === 'conflict') {
-        throw new Error(
-          'The price of this listing changed after the job read it, so it was not overwritten. Retry the failed rows to apply this job\'s price over it.',
-        )
+    if (group) {
+      try {
+        if (await this.applyInventory(item, group, plan, actor, job.id)) changed = true
+      } catch (err) {
+        const why = err instanceof Error ? err.message : String(err)
+        throw new Error(changed ? `The price and other fields were saved; the quantity change failed: ${why}` : why)
       }
-      if (outcome.outcome === 'refused') {
-        throw new Error(outcome.reason ?? 'The price write refused this listing.')
+    }
+    return { status: changed ? 'processed' : 'skipped' }
+  }
+
+  /**
+   * The rows a quantity or buffer change on `item` must land on — the item itself, or on an Amazon EU market the SKU's
+   * whole open EU group (Amazon keeps ONE merchant quantity per SKU across the EU markets). Throws the refusal when
+   * the change cannot be made whole: a channel the primitives do not serve, an FBA listing, or an EU group the job
+   * does not hold entirely. Nothing has been written when it throws.
+   */
+  private async inventoryGroupFor(item: ChannelListing, jobId: string): Promise<ListingCoordinate[]> {
+    if (item.channel !== 'AMAZON' && item.channel !== 'EBAY') {
+      throw new Error('A fixed quantity or a stock buffer is set on Amazon and eBay listings only, so nothing was changed.')
+    }
+    const fbaStock = async (productId: string) => (await this.prisma.stockLevel.aggregate({
+      where: { productId, location: { type: 'AMAZON_FBA' } }, _sum: { quantity: true },
+    }))._sum.quantity ?? 0
+    const product = await this.prisma.product.findUnique({ where: { id: item.productId }, select: { fulfillmentMethod: true } })
+    const coordinate = (row: Pick<ChannelListing, 'productId' | 'channel' | 'marketplace' | 'channelConnectionId' | 'aliasKey'>): ListingCoordinate =>
+      ({ productId: row.productId, channel: row.channel, marketplace: row.marketplace, channelConnectionId: row.channelConnectionId, aliasKey: row.aliasKey })
+
+    if (item.channel === 'AMAZON') {
+      const fbaQty = await fbaStock(item.productId)
+      // Owner rule: FBA quantity is untouchable. The same fail-closed evidence the primitives use.
+      if (isFbaListing(item, product, { fbaStockQty: fbaQty })) {
+        throw new Error('Amazon manages this listing\'s quantity (FBA). Nexus never changes an FBA quantity, so nothing was changed.')
       }
-      if (hasColumns) await writeColumns(activeDatabaseTransaction() ?? this.prisma)
-      return { status: outcome.outcome === 'applied' || hasColumns ? 'processed' : 'skipped' }
-    })
+      if (item.offerClosedAt) {
+        throw new Error('This Amazon market\'s offer is closed, and a quantity change never reopens it (reopen the offer first), so nothing was changed.')
+      }
+      if (AMAZON_EU_SHARED_MARKETS.has(item.marketplace.toUpperCase())) {
+        const siblings = await this.prisma.channelListing.findMany({
+          where: {
+            productId: item.productId, channel: 'AMAZON', channelConnectionId: item.channelConnectionId, aliasKey: item.aliasKey,
+            marketplace: { in: [...AMAZON_EU_SHARED_MARKETS] }, listingStatus: { notIn: ['ENDED', 'REMOVED'] },
+            // SCT.6 — a closed market offer expresses no quantity and is never reopened by a quantity change.
+            offerClosedAt: null,
+          },
+        })
+        // FBA rows never take part in the shared merchant number (amazon-eu-quantity-guard `intentOf`).
+        const group = siblings.filter((row) => !isFbaListing(row, product, { fbaStockQty: fbaQty }))
+        const scope = this.overrideRuns.get(jobId)?.scope
+        const outside = group.filter((row) => row.id !== item.id && !scope?.has(row.id))
+        if (outside.length > 0) {
+          const markets = [...new Set(outside.map((row) => row.marketplace.toUpperCase()))].sort().join(', ')
+          throw new Error(
+            `Amazon keeps ONE quantity per SKU across the EU markets, so this change also covers ${markets}. ` +
+              'Include every EU market of this listing in the job (no market filter) — nothing was changed.',
+          )
+        }
+        return group.map(coordinate)
+      }
+    }
+    return [coordinate(item)]
+  }
+
+  /**
+   * The buffer, then the quantity, through the primitives the single-listing edit uses. Buffer first, so a listing
+   * that follows the stock is recomputed with its new buffer. Returns whether anything changed. An EU group is
+   * changed once per job, at its first row; its other rows report the change they were part of.
+   */
+  private async applyInventory(
+    item: ChannelListing,
+    group: ListingCoordinate[],
+    plan: MarketplaceOverridePlan,
+    actor: string,
+    jobId: string,
+  ): Promise<boolean> {
+    const run = this.overrideRuns.get(jobId)
+    if (run?.inventoryDone.has(item.id)) return true
+    const channel = item.channel as FollowMasterChannel
+    const markets = [...new Set(group.map((c) => c.marketplace))]
+    const base = { productIds: [item.productId], channel, markets, actor, coordinates: group }
+    const check = (r: { skippedFba: number; error?: string }) => {
+      if (r.skippedFba > 0) throw new Error('Amazon manages this listing\'s quantity (FBA). Nexus never changes an FBA quantity, so nothing was changed.')
+      if (r.error) throw new Error(r.error)
+    }
+    let changed = false
+    if (plan.buffer !== undefined) {
+      const r = await setStockBuffer({ ...base, buffer: plan.buffer })
+      check(r)
+      if (r.updated > 0) changed = true
+    }
+    if (plan.quantity !== undefined) {
+      if (!plan.quantity.follow && plan.quantity.value !== undefined) {
+        // The matrix's typed number (D-MX3): stage it in `quantity`; the PIN then fixes exactly that number.
+        await this.prisma.channelListing.updateMany({
+          where: { OR: group.map(whereCoordinate) },
+          data: { quantity: plan.quantity.value },
+        })
+      }
+      const r = await setFollowMasterQuantity({ ...base, follow: plan.quantity.follow })
+      check(r)
+      if (r.updated > 0) changed = true
+    }
+    if (run) {
+      const ids = await this.prisma.channelListing.findMany({ where: { OR: group.map(whereCoordinate) }, select: { id: true } })
+      for (const row of ids) run.inventoryDone.add(row.id)
+    }
+    return changed
   }
   /**
    * Count items matching the given ScopeFilters, scoped to the

@@ -193,10 +193,10 @@ describe('a bulk channel price override goes through the ONE channel price write
   it('a payload without a price keeps its old path: written as before, the door not called, nothing queued', () => scoped(async () => {
     const l = (await seed('no-price', [CHANNELS[0]]))['AMAZON:IT']
     const before = await listing(l.id)
-    const { result } = await runJob('AMAZON', { isPublished: false }, { targetProductIds: ['no-price'] })
+    const { result } = await runJob('AMAZON', { followMasterTitle: false }, { targetProductIds: ['no-price'] })
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 1 })
     const after = await listing(l.id)
-    expect(after.isPublished).toBe(false)
+    expect(after.followMasterTitle).toBe(false)
     expect(after.lastOverrideAt).not.toBeNull()
     expect(listingShape(after)).toEqual(listingShape(before))
     expect(door).not.toHaveBeenCalled()
@@ -205,17 +205,17 @@ describe('a bulk channel price override goes through the ONE channel price write
 
   it('a price and other columns land together in one transaction — or not at all', () => scoped(async () => {
     const l = (await seed('together', [CHANNELS[0]]))['AMAZON:IT']
-    await runJob('AMAZON', { priceOverride: 15, isPublished: false }, { targetProductIds: ['together'] })
-    expect(await listing(l.id)).toMatchObject({ isPublished: false, followMasterPrice: false })
+    await runJob('AMAZON', { priceOverride: 15, followMasterTitle: false }, { targetProductIds: ['together'] })
+    expect(await listing(l.id)).toMatchObject({ followMasterTitle: false, followMasterPrice: false })
     expect(Number((await listing(l.id)).price)).toBe(15)
     expect(await queueOf(l.id)).toHaveLength(1)
 
     // The door refuses (a listing that vanished between the job's read and its write): the other column is not written either.
     const gone = (await seed('together-refused', [CHANNELS[0]]))['AMAZON:IT']
     door.mockImplementationOnce(async (input) => ({ results: [{ listingId: input.targets[0].listingId, productId: null, channel: null, marketplace: null, outcome: 'refused', reason: 'No listing with this id', version: 0, guarded: true, queueId: null }], applied: 0, refused: 1, noop: 0, conflict: 0 }))
-    const { items } = await runJob('AMAZON', { priceOverride: 15, isPublished: false }, { targetProductIds: ['together-refused'] })
+    const { items } = await runJob('AMAZON', { priceOverride: 15, followMasterTitle: false }, { targetProductIds: ['together-refused'] })
     expect(items.map((i) => [i.status, i.errorMessage])).toEqual([['FAILED', 'No listing with this id']])
-    expect((await listing(gone.id)).isPublished).toBe(true)
+    expect((await listing(gone.id)).followMasterTitle).toBe(true)
 
     // 🔴 The other way round: the price is written, then the other column fails (5000 does not fit the 5,2 column).
     // The price is rolled back with it, and nothing was queued or sent for a price that is not there.
