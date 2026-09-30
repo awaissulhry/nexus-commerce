@@ -179,7 +179,8 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
     report(next.text)
   }, [report, commitKind, formulasOn])
   useEffect(() => { if (touched.current) report(initial) }, [])
-  useGridCellEditor({ isCancelAfterEnd: () => !touched.current || (formula && !exprOf(text).trim()) })
+  const replaced = useRef(false)
+  useGridCellEditor({ isCancelAfterEnd: () => replaced.current || !touched.current || (formula && !exprOf(text).trim()) })
 
   const focusAt = useCallback((position: number) => {
     requestAnimationFrame(() => {
@@ -292,13 +293,21 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
   const syncScroll = () => { if (inputRef.current && overlayRef.current) overlayRef.current.scrollLeft = inputRef.current.scrollLeft }
   useLayoutEffect(syncScroll, [text, caret, metrics])
 
-  /** Commit what is typed, then leave the cell (`move`: Tab moves right, Shift+Tab left — AG's own Tab, reproduced). */
-  const save = async (move: 'next' | 'previous' | null = null) => {
-    const leave = () => {
+  /**
+   * Commit what is typed, then leave the cell (`move`: Tab moves right, Shift+Tab left — AG's own Tab, reproduced).
+   * `enter`: the Enter that saves. The edit then ends through the editor's own stop WITH that key, so AG moves down as it
+   * does after every other editor (GridSheet: "Enter commits and moves DOWN"); a cancel-after-end still keeps the stored
+   * value. It ended without the key and the cell stayed, while a list saved and moved (audit B10).
+   */
+  const save = async (move: 'next' | 'previous' | null = null, enter?: KeyboardEvent) => {
+    const end = (cancel: boolean) => {
+      if (enter) props.stopEditing(false, enter)
+      else if (cancel) props.api.stopEditing(true)
+      else props.stopEditing()
       if (move === 'next') props.api.tabToNextCell()
       else if (move === 'previous') props.api.tabToPreviousCell()
     }
-    if (!touched.current || (formula && !expr.trim())) { props.api.stopEditing(true); leave(); return }
+    if (!touched.current || (formula && !expr.trim())) { end(true); return }
     if (submitting) return
     if (formula) {
       const revision = editRevision.current
@@ -323,8 +332,9 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
         const removed = await props.replaceFormula(commitValue(commitKind === 'number' ? numberCommitText(text) : text, original == null ? '' : String(original), commitKind))
         if (revision !== editRevision.current) return
         if (!removed.ok) { setPickMessage(removed.error ?? 'Could not replace this formula.'); return }
-        props.api.stopEditing(true)
-        leave()
+        // Written already: the end is a cancel (`isCancelAfterEnd`), so the value is not written twice.
+        replaced.current = true
+        end(true)
         return
       } catch {
         if (revision === editRevision.current) setPickMessage('Could not replace this formula. Please try again.')
@@ -334,8 +344,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
       }
     }
     report(text)
-    props.stopEditing()
-    leave()
+    end(false)
   }
   const cancel = () => props.api.stopEditing(true)
   const keyboard = (e: React.KeyboardEvent) => {
@@ -349,7 +358,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
     } else if (e.key === 'Escape') {
       e.preventDefault(); e.stopPropagation(); cancel()
     } else if (e.key === 'Enter' && !(multiline && !formula && e.shiftKey)) {
-      e.preventDefault(); e.stopPropagation(); void save()
+      e.preventDefault(); e.stopPropagation(); void save(null, e.nativeEvent)
     } else if (e.key === 'Tab' && formula) {
       // `suppressFormulaKeys` handed Tab to this editor on a formula: check it like Enter, then move like AG would.
       e.preventDefault(); e.stopPropagation(); void save(e.shiftKey ? 'previous' : 'next')

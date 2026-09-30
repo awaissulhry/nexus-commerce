@@ -6,6 +6,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **`MeasureEditor`**, **`ListPanelEditor`** and **`SlotListEditor`** type AG's editor stop as it is: **`EditorStop`** = `(suppressNavigateAfterEdit?, event?)`, which ENDS the edit with the last reported value. A cancel is the grid API's `stopEditing(true)` (**`GridCancel`**, both in `selectPanelModel.ts`). Escape in the measure editor's unit list saved the abandoned edit; it now cancels (B09). Mirrored in Factory.
 
+- **One Enter for every editor kind** ("Enter commits and moves DOWN"). **`FormulaCellEditor`** and **`SlotListEditor`** end Enter with the editor stop AND its key (`stopEditing(false, event)`), so AG moves down; they ended it without the key and the cell stayed while lists moved. **`AsyncListboxPanel`** with **`onKeyChoice`** reports Enter as it reports Tab and lets the grid end it (a search with nothing highlighted yet keeps the panel open); it ended Enter itself (B10). **`ListboxPanel.onKeyChoice`** and **`AsyncListboxPanel.onKeyChoice`** take **`end`**: Ctrl/Cmd+Enter is kept from the grid, whose Ctrl+Enter wrote the value into every selected cell unfenced and unasked, and the owner saves its one cell with it (B14). An Enter that confirms an IME composition never reaches the grid (B18). New in `selectPanelModel.ts`: **`keepGridOffEnter`**, used by **`MeasureEditor`** and **`ListPanelEditor`**. Mirrored in Factory.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Factory.

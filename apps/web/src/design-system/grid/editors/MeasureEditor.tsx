@@ -13,7 +13,7 @@ import { ListboxPanel } from '../../components'
 import { Input } from '../../primitives'
 import { asMeasure } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
-import { typedStart, type EditorStop, type GridCancel } from './selectPanelModel'
+import { keepGridOffEnter, typedStart, type EditorStop, type GridCancel } from './selectPanelModel'
 import { measureFromText, type MeasureDraft } from './shapeValue'
 
 export interface MeasureEditorParams {
@@ -29,7 +29,7 @@ export interface MeasureEditorParams {
 }
 
 export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function MeasureEditor(props, _ref) {
-  const { unitOptions = [], label, value, column, api, onValueChange } = props
+  const { unitOptions = [], label, value, column, api, stopEditing, onValueChange } = props
   const [m, setM] = useState<MeasureDraft>(() => asMeasure(value))
   /* A digit, point, comma or minus that opened the cell by typing starts the number; the grid consumed that keystroke
      (P0, 2026-09-30). The field is text with a decimal keypad, not `type="number"`: a number field clears "." and "-",
@@ -64,10 +64,12 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
     kind: 'measure',
   })
   /* Tab from the number goes to the units and Shift+Tab back; Tab from the units is AG's (it saves and moves). Tab used to
-     leave at once, so a unit could be chosen only with the mouse (P0, 2026-09-30). */
-  const tabToUnits = (e: React.KeyboardEvent) => {
-    if (e.key !== 'Tab' || unitOptions.length === 0) return
+     leave at once, so a unit could be chosen only with the mouse (P0, 2026-09-30). The number field's IME and Ctrl/Cmd
+     Enter stay off the grid here; the unit list keeps its own (`onKeyChoice` below). */
+  const keys = (e: React.KeyboardEvent) => {
     const units = root.current?.querySelector<HTMLElement>('.nds-listbox-pop')
+    if (!(e.target instanceof Node && units?.contains(e.target)) && keepGridOffEnter(e, stopEditing)) return
+    if (e.key !== 'Tab' || unitOptions.length === 0) return
     const inNumber = e.target instanceof HTMLInputElement && !units?.contains(e.target)
     if (!units || inNumber === e.shiftKey) return
     e.preventDefault(); e.stopPropagation()
@@ -75,14 +77,14 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
     else root.current?.querySelector<HTMLInputElement>('input')?.focus()
   }
   return (
-    <div ref={root} className="nds-measure-editor" style={{ width: box.width }} role="group" aria-label={label ? `${label} — value and unit` : 'Value and unit'} onKeyDownCapture={tabToUnits}>
+    <div ref={root} className="nds-measure-editor" style={{ width: box.width }} role="group" aria-label={label ? `${label} — value and unit` : 'Value and unit'} onKeyDownCapture={keys}>
       <Input type="text" inputMode="decimal" value={text} onChange={(e) => onText(e.target.value)} aria-label="Value" className="nds-measure-editor-value" />
       {unitOptions.length > 0 && (
         <ListboxPanel
           options={unitOptions.map((u) => ({ value: u, label: u }))}
           value={m.unit ?? undefined}
           onCommit={(u) => report({ value: m.value, unit: u })}
-          onKeyChoice={(u) => { if (u !== null && u !== m.unit) report({ value: m.value, unit: u }) }}
+          onKeyChoice={(u, end) => { if (u !== null && u !== m.unit) report({ value: m.value, unit: u }); if (end) stopEditing(false, end) }}
           onCancel={() => api.stopEditing(true)}
           emptyLabel="No units"
         />

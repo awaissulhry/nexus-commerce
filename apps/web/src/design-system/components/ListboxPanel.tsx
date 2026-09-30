@@ -138,8 +138,13 @@ export interface ListboxPanelProps {
    * listener runs before this panel's bubble `onKeyDown` and commits whatever the editor last reported, so a grid editor
    * reports the value here and lets the grid commit and move (Enter down, Tab right). `null` = nothing is highlighted:
    * keep the stored value. When supplied, Enter is the owner's, and the panel does not also commit it.
+   *
+   * `end` is set for Ctrl/Cmd+Enter only: the panel keeps that key from the grid, whose Ctrl+Enter writes the value into
+   * EVERY cell of the selected ranges with no fence and no question (audit B14). The owner ends the edit itself with
+   * `stopEditing(false, end)`, so it saves this one cell and moves down, as Enter does. An Enter that confirms an IME
+   * composition never reaches the grid and reports nothing (audit B18).
    */
-  onKeyChoice?: (value: string | null) => void
+  onKeyChoice?: (value: string | null, end?: KeyboardEvent) => void
 }
 
 const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
@@ -303,11 +308,16 @@ export function ListboxPanel({
       aria-label={ariaLabel}
       tabIndex={-1}
       onKeyDownCapture={onKeyChoice ? (e) => {
-        if ((e.key !== 'Enter' && e.key !== 'Tab') || e.nativeEvent.isComposing) return
+        if (e.key !== 'Enter' && e.key !== 'Tab') return
+        if (e.nativeEvent.isComposing) { if (e.key === 'Enter') e.stopPropagation(); return }
         // Not also a click: Enter on a focused option button would activate it and commit a second time (code review).
         if (e.key === 'Enter') e.preventDefault()
+        const ranged = e.key === 'Enter' && (e.ctrlKey || e.metaKey)
+        if (ranged) e.stopPropagation()
         const m = active >= 0 ? matches[active] : undefined
-        onKeyChoice(active === CLEAR_INDEX && showClear ? '' : m && !m.disabled && !heldReason(m) ? m.value : null)
+        const chosen = active === CLEAR_INDEX && showClear ? '' : m && !m.disabled && !heldReason(m) ? m.value : null
+        if (ranged) onKeyChoice(chosen, e.nativeEvent)
+        else onKeyChoice(chosen)
       } : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Escape') { e.preventDefault(); onCancel() }

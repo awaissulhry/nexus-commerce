@@ -112,15 +112,18 @@ export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(fu
    * the edit with whatever was last reported, so a choice made in the bubble phase was always too late — Enter and Tab
    * closed every list with its old value (P0, measured in production 2026-09-29). Reported in the capture phase, AG then
    * commits it and moves as it does for every other cell: Enter down, Tab right. An unchanged or empty choice reports
-   * nothing, so AG ends the edit with the stored value and no write.
+   * nothing, so AG ends the edit with the stored value and no write. Ctrl/Cmd+Enter is kept from the grid (it would write
+   * every selected cell) and handed back as `end`: the editor ends it, and AG still moves down (audit B14).
    */
   const onKeyChoice = useCallback(
-    (chosen: string | null) => {
-      if (chosen === null || isUnchanged(value, chosen)) return
-      const selected = cellValueOf(chosen)
-      onValueChange?.(selected !== null && parseValue ? parseValue(selected) : selected)
+    (chosen: string | null, end?: KeyboardEvent) => {
+      if (chosen !== null && !isUnchanged(value, chosen)) {
+        const selected = cellValueOf(chosen)
+        onValueChange?.(selected !== null && parseValue ? parseValue(selected) : selected)
+      }
+      if (end) stopEditing(false, end)
     },
-    [value, onValueChange, parseValue],
+    [value, stopEditing, onValueChange, parseValue],
   )
 
   /* The shared box. Measured from the cell's own rect where AG gives one — the column's WIDTH is not

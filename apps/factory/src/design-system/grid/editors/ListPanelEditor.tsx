@@ -14,7 +14,7 @@ import { OptionList, type OptionListItem } from '../../components'
 import { TagInput } from '../../primitives'
 import { asList } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
-import { typedStart, type EditorStop } from './selectPanelModel'
+import { keepGridOffEnter, typedStart, type EditorStop } from './selectPanelModel'
 
 export interface ListPanelEditorParams {
   /** Closed list → `OptionList`; absent/empty → free-text chips. */
@@ -74,6 +74,7 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
   /* ↑/↓ walk the search field and the boxes; Space ticks. Inside AG's popup nothing else reaches the boxes: Tab is AG's
      (it saves and moves), so the list had no keyboard path at all (P0, 2026-09-30). */
   const walk = (e: React.KeyboardEvent) => {
+    if (keepGridOffEnter(e, props.stopEditing)) return
     if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || !closed) return
     const stops = [...(root.current?.querySelectorAll<HTMLElement>('.nds-combo-search input, input[type="checkbox"]') ?? [])]
     const at = stops.indexOf(document.activeElement as HTMLElement)

@@ -46,7 +46,7 @@ export function ChannelCategoryEditor({ value, onValueChange, channel, market, a
     message={matches.length === 50 ? 'Showing the first 50 matches. Refine your search to narrow the list.' : undefined}
     emptyMessage={needsSearch ? 'Enter at least 2 characters to find a category.' : 'No categories match your search.'}
     onRetry={error ? () => setRevision(value => value + 1) : undefined} onCancel={cancel} onCommit={commit}
-    onKeyChoice={chosen => { if (chosen !== null && chosen !== String(value ?? '')) onValueChange(toCell(chosen)) }}
+    onKeyChoice={(chosen, end) => { if (chosen !== null && chosen !== String(value ?? '')) onValueChange(toCell(chosen)); if (end) stopEditing(false, end) }}
     currentLabel={value == null || value === '' ? undefined : String(value)}
     style={{ width: 'min(480px, 85vw)' }} /><Button asChild size="xs" variant="link"><Link href={categoryHref('assignments', { channel, market })} onClick={cancel}>Manage categories</Link></Button></div>
 }

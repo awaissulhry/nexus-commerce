@@ -72,3 +72,22 @@ export function typedStart(eventKey: string | null | undefined): string {
 export type EditorStop = (suppressNavigateAfterEdit?: boolean, event?: KeyboardEvent) => void
 /** The grid API's own stop: `stopEditing(true)` is a real cancel, and no value is written. */
 export type GridCancel = { stopEditing(cancel?: boolean): void }
+
+/** The part of a React keyboard event `keepGridOffEnter` reads. */
+type EnterEvent = { key: string; ctrlKey: boolean; metaKey: boolean; nativeEvent: { isComposing: boolean }; preventDefault(): void; stopPropagation(): void }
+
+/**
+ * For a popup editor's root, in the CAPTURE phase: the two Enters the grid must not get. An Enter that confirms an IME
+ * composition is the operator's, not a save (audit B18). Ctrl/Cmd+Enter would make AG write this value into every cell of
+ * the selected ranges, unfenced and unasked (audit B14); it saves this one cell and moves down, as Enter does. Every
+ * other Enter is left to the grid, which ends the edit and moves down (GridSheet: "Enter commits and moves DOWN").
+ * `true` = handled here.
+ */
+export function keepGridOffEnter(e: EnterEvent, stop: EditorStop): boolean {
+  if (e.key !== 'Enter') return false
+  if (e.nativeEvent.isComposing) { e.stopPropagation(); return true }
+  if (!e.ctrlKey && !e.metaKey) return false
+  e.preventDefault(); e.stopPropagation()
+  stop(false, e.nativeEvent as KeyboardEvent)
+  return true
+}

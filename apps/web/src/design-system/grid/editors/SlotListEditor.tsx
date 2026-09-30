@@ -138,7 +138,8 @@ export const SlotListEditor = forwardRef<unknown, SlotListEditorParams>(function
     if (pendingFocus.current) { focusField(pendingFocus.current); pendingFocus.current = null }
   }, [order, focusField])
 
-  const save = () => { props.stopEditing?.() }
+  // With its key, so the grid moves down after the save as it does after every other editor (audit B10).
+  const save = (end?: KeyboardEvent) => { props.stopEditing?.(false, end) }
   const cancel = () => { props.api?.stopEditing(true) }
 
   const keyboard = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -150,7 +151,7 @@ export const SlotListEditor = forwardRef<unknown, SlotListEditorParams>(function
     e.stopPropagation()
     if (action === 'next') focusField(order[position])
     else if (action === 'prev') focusField(order[position - 2])
-    else if (action === 'save') save()
+    else if (action === 'save') save(e.nativeEvent)
     else if (action === 'up' || action === 'down') {
       const step = moveByKey(order, position, action, (id) => positionLabel(id))
       if (!step) return
@@ -209,7 +210,7 @@ export const SlotListEditor = forwardRef<unknown, SlotListEditorParams>(function
           <span className="nds-slotlist-fact">{slotListMoveFact(itemLabel)}</span>
         </span>
         <Button size="sm" onClick={cancel}>Cancel</Button>
-        <Button size="sm" variant="primary" onClick={save}>Apply</Button>
+        <Button size="sm" variant="primary" onClick={() => save()}>Apply</Button>
       </div>
     </div>
   )

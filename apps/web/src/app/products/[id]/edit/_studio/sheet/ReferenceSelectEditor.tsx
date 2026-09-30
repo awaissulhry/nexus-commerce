@@ -30,7 +30,7 @@ export function ReferenceSelectEditor({ fieldKey, market, productType, connectio
     options={(choices?.options ?? []).filter(option => `${option.searchText ?? option.label}`.toLowerCase().includes(query.trim().toLowerCase()))}
     message={missingCurrent ? `The current selection (${choices.labels[text] ?? text}) is unavailable. Choose an available option to replace it.` : undefined}
     onRetry={() => setRevision(value => value + 1)} onCancel={() => api.stopEditing(true)}
-    onKeyChoice={chosen => { if (chosen !== null && choices?.options.some(option => option.value === chosen) && !isUnchanged(value, chosen)) onValueChange(cellValueOf(chosen)) }}
+    onKeyChoice={(chosen, end) => { if (chosen !== null && choices?.options.some(option => option.value === chosen) && !isUnchanged(value, chosen)) onValueChange(cellValueOf(chosen)); if (end) stopEditing(false, end) }}
     onCommit={chosen => {
       if (!choices?.options.some(option => option.value === chosen) || isUnchanged(value, chosen)) return api.stopEditing(true)
       onValueChange(cellValueOf(chosen)); stopEditing()

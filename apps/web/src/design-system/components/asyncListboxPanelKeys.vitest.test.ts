@@ -46,7 +46,7 @@ const render = (props: AsyncListboxPanelProps) => {
 }
 class FakeInput {}
 const key = (root: El, k: string, target: unknown = new FakeInput()) => {
-  const event = { key: k, target, preventDefault: vi.fn(), stopPropagation: vi.fn() }
+  const event = { key: k, target, nativeEvent: { isComposing: false }, preventDefault: vi.fn(), stopPropagation: vi.fn() }
   ;(root.props.onKeyDownCapture as (e: unknown) => void)(event)
   return event
 }

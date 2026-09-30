@@ -23,10 +23,11 @@ export interface AsyncListboxPanelProps {
   onCommit: (value: string) => void
   onCancel: () => void
   /**
-   * Tab chose the highlighted choice, reported in the capture phase so a grid can commit it and move right (see
-   * `ListboxPanel.onKeyChoice`). Absent, Tab leaves as it always did.
+   * Enter or Tab chose the highlighted choice, reported in the capture phase so a grid commits it and moves (Enter down,
+   * Tab right), exactly as `ListboxPanel.onKeyChoice` does — `end` included. Enter with a search and nothing highlighted
+   * (the choices are still loading) keeps the panel open. Absent, Enter commits here and Tab leaves, as they always did.
    */
-  onKeyChoice?: (value: string | null) => void
+  onKeyChoice?: (value: string | null, end?: KeyboardEvent) => void
   /** Names the stored value when the loaded choices do not include it ("Current: …"); absent, nothing is shown. */
   currentLabel?: string
   style?: CSSProperties
@@ -51,9 +52,18 @@ export function AsyncListboxPanel({ label, query, onQueryChange, options, value,
   const storedHidden = currentLabel !== undefined && !!value && !loading && !choices.some(option => option.value === value)
   return <div className="nds-async-listbox" style={style} onKeyDownCapture={event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onCancel(); return }
+    if (event.key === 'Enter' && event.nativeEvent.isComposing) { event.stopPropagation(); return }
     if (event.key === 'Tab' && onKeyChoice) { onKeyChoice(selected && !selected.disabled ? selected.value : null); return }
     if (!(event.target instanceof HTMLInputElement)) return
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && onKeyChoice) {
+      /* The grid ends Enter as it ends every other editor's, and moves down; this panel used to end it itself and the
+         cell stayed (audit B10). */
+      event.preventDefault()
+      if (!selected && query) { event.stopPropagation(); return }
+      const chosen = selected && !selected.disabled ? selected.value : null
+      if (event.ctrlKey || event.metaKey) { event.stopPropagation(); onKeyChoice(chosen, event.nativeEvent) }
+      else onKeyChoice(chosen)
+    } else if (event.key === 'Enter') {
       event.preventDefault(); event.stopPropagation()
       // Nothing highlighted = the operator has not chosen: keep the stored value.
       if (selected && !selected.disabled) onCommit(selected.value)
