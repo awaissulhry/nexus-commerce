@@ -23,7 +23,7 @@ import { compactSheetUrl, masterSheetUrl } from '../../sheetUrls'
 import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 
 import { adaptLegacySheet, type LegacySheetPage } from './adaptLegacy'
-import { recoverSheetRow } from '../sheetRecovery'
+import { recoverSheetRow, unconfirmedIn } from '../sheetRecovery'
 import { commitMasterRow } from './masterWrite'
 import { runBulkOperation, type BulkSend } from '../bulkOperation'
 import { preserveContentVersions } from '../contentVersions'
@@ -139,7 +139,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
           const res = await fetch(url, { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30_000) }).catch(() => null)
           if (!res?.ok) return null
           const page = await res.json().catch(() => null)
-          const reads = await Promise.all(requests.map((request) => recoverSheetRow(page, request, { channel: 'MASTER', market, locale })))
+          const reads = await Promise.all(requests.map((request) => recoverSheetRow(page, request, { channel: 'MASTER', market, locale, busy: unconfirmedIn(tracker, request.rowId) })))
           return new Map(requests.flatMap((request, i) => (reads[i] ? [[request.rowId, reads[i]!] as const] : [])))
         },
         getApi: () => apiRef.current,
@@ -158,7 +158,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
           const url = `${getBackendUrl()}/api/products/${productIdRef.current}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
           const res = await fetch(url, { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30_000) }).catch(() => null)
           if (!res?.ok) return null
-          return recoverSheetRow(await res.json().catch(() => null), request, { channel: 'MASTER', market, locale })
+          return recoverSheetRow(await res.json().catch(() => null), request, { channel: 'MASTER', market, locale, busy: unconfirmedIn(tracker, request.rowId) })
         },
         // Through `optsRef` for the reason `readRow` gives above: this memo's deps are
         // `[tracker, commit]`, and adding the callback would rebuild the writer and orphan its queue.

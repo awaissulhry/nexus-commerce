@@ -7,7 +7,15 @@ import { adoptReadContentVersions } from './contentVersions'
 
 type RecoveryCell = { contentAddress?: { tier?: string; language?: string } | null; contentVersion?: number; shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite; value: unknown; pinned?: boolean; follows?: boolean | null; writeTarget?: string; writeField?: string; source?: string | null }
 type RecoveryRow = { id: string; version: number; aliasId?: string | null; productType?: string | null; listing?: { id: string; version?: number } | null; values: Record<string, RecoveryCell> }
-export type RecoveryScope = { channel: string; market: string; locale?: string; accountId?: string }
+export type RecoveryScope = { channel: string; market: string; locale?: string; accountId?: string
+  /** A cell of the row with an edit queued or unconfirmed (review WP2 #2): its text may not take the read's token. */
+  busy?: (colId: string) => boolean
+  /** The grid's rows: the same product's other alias bands take a language text's token too. */
+  family?: () => readonly RecoveryRow[] }
+
+/** `RecoveryScope.busy` from the sheet's marks: any mark but `saved` is an edit not yet confirmed (queued, in flight, unknown, refused). */
+export const unconfirmedIn = (tracker: { get: (rowId: string, colId: string) => { state: string } | undefined }, rowId: string) =>
+  (colId: string) => { const state = tracker.get(rowId, colId)?.state; return state !== undefined && state !== 'saved' }
 
 /** A recovery read must address the same product, alias, account, market and language as the write. */
 export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, request: SheetWriteRequest<T>, scope: RecoveryScope) {
@@ -51,6 +59,7 @@ export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, requ
   // a quiet sheet refresh after recovery when no newer edits are queued.
   if (row.listing && request.row.listing && typeof row.listing.version === 'number' && row.listing.version > (request.row.listing.version ?? -1)) request.row.listing.version = row.listing.version
   // Audit A09 — and the content token of every text found stored, or the next edit there is refused as changed.
-  adoptReadContentVersions(request.row, row, Object.keys(matches).filter(colId => matches[colId] === true), Object.keys(matches).filter(colId => matches[colId] !== true))
+  adoptReadContentVersions(request.row, row, Object.keys(matches).filter(colId => matches[colId] === true), Object.keys(matches).filter(colId => matches[colId] !== true),
+    { busy: scope.busy, siblings: scope.family?.() })
   return { values, matches, version: row.version, row: request.row }
 }

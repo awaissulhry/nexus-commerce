@@ -5,11 +5,13 @@
  * only a later sheet read moved the token, and an edit made before that read landed was refused as "Bullet 2 changed.
  * Reload before saving it." (the P3 commit sweep, 2026-09-30).
  */
+import { sheetValuesMatch } from '@/design-system/grid/editors/sheetWriter'
+
 export interface ContentVersionAnswer { id: string; tier: 'pin' | 'language'; language: string; version: number }
 
 const snapshotKey = Symbol('sheet content confirmation')
 type ContentSnapshot = { key: string; ownerVersion: number | undefined; version: number }
-type TokenCell = { [snapshotKey]?: ContentSnapshot; contentAddress?: { tier?: string; language?: string } | null; contentVersion?: number } | null | undefined
+type TokenCell = { [snapshotKey]?: ContentSnapshot; contentAddress?: { tier?: string; language?: string } | null; contentVersion?: number; value?: unknown } | null | undefined
 type TokenRow = { id: string; version?: number; listing?: { id: string; version?: number } | null; values?: Record<string, TokenCell> }
 
 /** Pins name an exact listing (including its account/alias); language text belongs to the product. */
@@ -98,10 +100,18 @@ export function adoptContentVersions(row: TokenRow | null | undefined, body: unk
 /**
  * Audit A09 — a read that resolved a lost save (`recoverSheetRow`) found `stored` cells holding what was typed: the
  * content rows they write hand the read's token to every cell of `row` writing there, as a save's answer does
- * (`adoptContentVersions`). A content row that one of the `unconfirmed` cells also writes (the read shows it different,
- * or could not tell) keeps the token the operator saw, so an edit there is still checked against the other writer.
+ * (`adoptContentVersions`), and to the same product's other alias bands for language text. A content row that one of
+ * the `unconfirmed` cells also writes (the read shows it different, or could not tell) keeps the token the operator saw,
+ * so an edit there is still checked against the other writer.
+ *
+ * Review WP2 #2 — and only a content row nobody else can have written since: the read holds the operator's token + 1
+ * (their save alone moved it), or every other cell writing there shows what the read holds and has no edit waiting
+ * (`busy`). Otherwise a colleague's bullet, saved after this title, was folded into the adopted token while the grid
+ * still showed the old one, and the next bullet edit overwrote it unchecked. The token stays; the quiet read that
+ * follows a reconcile brings the other writer's text.
  */
-export function adoptReadContentVersions(row: TokenRow, read: TokenRow, stored: readonly string[], unconfirmed: readonly string[] = []): string[] {
+export function adoptReadContentVersions(row: TokenRow, read: TokenRow, stored: readonly string[], unconfirmed: readonly string[] = [],
+  options: { busy?: (colId: string) => boolean; siblings?: readonly TokenRow[] } = {}): string[] {
   const confirmed = new Map<string, ContentSnapshot>()
   for (const colId of stored) {
     const snapshot = snapshotOf(read, read.values?.[colId])
@@ -111,13 +121,25 @@ export function adoptReadContentVersions(row: TokenRow, read: TokenRow, stored: 
     const key = tokenKey(row, row.values?.[colId])
     if (key) confirmed.delete(key)
   }
+  for (const [key, next] of confirmed) {
+    const writers = Object.entries(row.values ?? {}).filter(([, cell]) => tokenKey(row, cell) === key)
+    const seen = Math.max(...writers.map(([, cell]) => cell?.contentVersion ?? -Infinity))
+    const readCell = (colId: string) => read.values?.[colId]
+    const untouched = writers.every(([colId, cell]) => stored.includes(colId) || (!options.busy?.(colId) &&
+      !!readCell(colId) && Object.prototype.hasOwnProperty.call(readCell(colId), 'value') && sheetValuesMatch(readCell(colId)!.value, cell?.value)))
+    if (next.version !== seen + 1 && !untouched) confirmed.delete(key)
+  }
   const moved: string[] = []
-  for (const [colId, cell] of Object.entries(row.values ?? {})) {
-    const current = snapshotOf(row, cell), next = current && confirmed.get(current.key)
-    if (!cell || !current || !next || !newer(next, current)) continue
-    if (cell.contentVersion !== next.version) moved.push(colId)
-    cell.contentVersion = next.version
-    cell[snapshotKey] = next
+  for (const target of new Set([row, ...(options.siblings ?? [])])) {
+    if (target !== row && target.id !== row.id) continue
+    for (const [colId, cell] of Object.entries(target.values ?? {})) {
+      const current = snapshotOf(target, cell), next = current && confirmed.get(current.key)
+      if (!cell || !current || !next || !newer(next, current)) continue
+      if (target !== row && cell.contentAddress?.tier !== 'language') continue
+      if (target === row && cell.contentVersion !== next.version) moved.push(colId)
+      cell.contentVersion = next.version
+      cell[snapshotKey] = next
+    }
   }
   return moved
 }

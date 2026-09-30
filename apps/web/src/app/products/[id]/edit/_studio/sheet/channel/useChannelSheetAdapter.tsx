@@ -15,7 +15,7 @@ import type { ProductSheetModel } from '../productSheetModel';
 import { formulaCandidates, formulaColumnId } from '../formulaColumns';
 import { columnLanguages } from '../languages';
 import { ShopifySheetReview } from '../../shopify/ShopifySheetReview';
-import { recoverSheetRow } from '../sheetRecovery';
+import { recoverSheetRow, unconfirmedIn } from '../sheetRecovery';
 import { runBulkOperation, type BulkSend } from '../bulkOperation';
 import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo } from '../useSheetUndo';
@@ -368,7 +368,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             if (!response.ok)
                 return null;
             const page = await response.json();
-            return Promise.all(requests.map(request => recoverSheetRow(page, request, { channel, market: marketplace, accountId, locale })));
+            return Promise.all(requests.map(request => recoverSheetRow(page, request, { channel, market: marketplace, accountId, locale,
+                busy: unconfirmedIn(tracker, request.rowId), family: () => rowsRef.current })));
         };
         writerRef.current = new SheetWriter<ChannelSheetRow>({
             mergeRow: preserveContentVersions,
