@@ -25,6 +25,7 @@ import { applyStockMovement } from './stock-movement.service.js'
 import { MasterPriceService } from './master-price.service.js'
 import { MasterContentService } from './master-content.service.js'
 import { MasterStatusService } from './master-status.service.js'
+import { applyImport } from './stock-import.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
@@ -97,6 +98,30 @@ describe('a paused draft is inert to every cascade', () => {
     }
   }))
 
+  it('a master price change queues nothing for an UNPAUSED still-draft either, and still queues a DRAFT row with a channel id', () => scoped(async () => {
+    // eBay IT: a still-draft started before drafts were born paused (DRAFT, unpublished, no ItemID, not paused).
+    // Amazon DE: a row whose status says DRAFT but which has a channel id and is published — it reached the channel.
+    const { product, rows } = await seed('DRAFT-SAFETY-PRICE-UNPAUSED', [
+      { marketplace: 'IT', live: true, paused: false },
+      { channel: 'EBAY', marketplace: 'IT', live: false, paused: false },
+      { marketplace: 'DE', live: true, paused: false, status: 'DRAFT' },
+    ])
+    const result = await new MasterPriceService(prisma as never).update(product.id, 13.5, { reason: 'draft-safety' })
+    expect(result.currencyRefused).toEqual([])
+    expect(result.cascadedListingIds.sort()).toEqual([rows.AMAZON_IT.id, rows.EBAY_IT.id, rows.AMAZON_DE.id].sort())
+    expect(await queueFor(rows.EBAY_IT.id, 'PRICE_UPDATE')).toEqual([])
+    expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: rows.EBAY_IT.id } })).toBe(0)
+    // The draft keeps following the master, so Publish sends the current price.
+    expect(await stored(rows.EBAY_IT.id)).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, externalListingId: null, syncPaused: false })
+    expect(Number((await stored(rows.EBAY_IT.id)).price)).toBe(13.5)
+    const queued = [...await queueFor(rows.AMAZON_IT.id, 'PRICE_UPDATE'), ...await queueFor(rows.AMAZON_DE.id, 'PRICE_UPDATE')]
+    expect(queued).toEqual([
+      expect.objectContaining({ channelListingId: rows.AMAZON_IT.id, payload: expect.objectContaining({ price: 13.5 }) }),
+      expect.objectContaining({ channelListingId: rows.AMAZON_DE.id, payload: expect.objectContaining({ price: 13.5 }) }),
+    ])
+    expect(result.queuedSyncIds.sort()).toEqual(queued.map((row) => row.id).sort())
+  }))
+
   it('a master content change queues nothing for a paused row, and queues the live row', () => scoped(async () => {
     const { product, rows } = await seed('DRAFT-SAFETY-CONTENT', [
       { channel: 'AMAZON', marketplace: 'IT', live: true, paused: false },
@@ -159,5 +184,57 @@ describe('a product status change leaves a still-draft listing alone', () => {
     const result = await new MasterStatusService(prisma as never).update(product.id, 'ACTIVE', { reason: 'draft-safety' })
     expect(result.cascadedListingIds).toEqual([rows.AMAZON_IT.id])
     expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ listingStatus: 'ACTIVE' })
+  }))
+})
+
+describe('an UNPAUSED still-draft is inert too (a draft started before drafts were born paused)', () => {
+  // DRAFT, never published, no channel id, NOT paused. The live listing on the same product is the control: it is still
+  // queued with the quantity or text it always got.
+  const stillDraft = (listing: { channel?: 'AMAZON' | 'EBAY'; marketplace: string }): ListingSeed => ({ ...listing, live: false, paused: false })
+
+  it('a stock movement queues nothing for it and leaves its quantity alone; the live listing is queued as before', () => scoped(async () => {
+    const { product, rows } = await seed('DRAFT-UNPAUSED-STOCK', [
+      { marketplace: 'IT', live: true, paused: false },
+      stillDraft({ marketplace: 'DE' }),
+    ], { stock: 5 })
+    await applyStockMovement({ productId: product.id, locationId: warehouse, change: 3, reason: 'MANUAL_ADJUSTMENT', actor: 'draft-safety' })
+    expect(await queueFor(rows.AMAZON_IT.id, 'QUANTITY_UPDATE')).toEqual([expect.objectContaining({ payload: expect.objectContaining({ quantity: 8 }) })])
+    expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ quantity: 8 })
+    expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: rows.AMAZON_DE.id } })).toBe(0)
+    expect(await stored(rows.AMAZON_DE.id)).toMatchObject({ quantity: null, syncPaused: false, listingStatus: 'DRAFT', isPublished: false, version: rows.AMAZON_DE.version })
+  }))
+
+  it('a stock import queues nothing for it either (cascade parity); the live listing is queued as before', () => scoped(async () => {
+    const { product, rows } = await seed('DRAFT-UNPAUSED-IMPORT', [
+      { marketplace: 'IT', live: true, paused: false },
+      stillDraft({ marketplace: 'DE' }),
+    ], { stock: 5 })
+    const importRows = [{
+      rowIndex: 0, raw: `${product.sku},9`, sku: product.sku, quantity: 9, productId: product.id, resolvedSku: product.sku,
+      matchType: 'EXACT', confidence: 1, candidates: [], channel: null, marketplace: null, notes: null,
+      currentWarehouseQty: 5, wouldBeWarehouseQty: 9, currentChannelQty: null, wouldBeChannelQty: null,
+      channelListings: [], warnings: [], error: null,
+    }] as unknown as import('./stock-import.service.js').PreviewRow[]
+    const result = await applyImport({ rows: importRows, locationCode: 'DRAFT-SAFETY-WH', mode: 'SET', target: 'WAREHOUSE' })
+    expect(result.failed).toBe(0)
+    expect(await queueFor(rows.AMAZON_IT.id, 'QUANTITY_UPDATE')).toEqual([expect.objectContaining({ payload: expect.objectContaining({ quantity: 9 }) })])
+    expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: rows.AMAZON_DE.id } })).toBe(0)
+    expect(await stored(rows.AMAZON_DE.id)).toMatchObject({ quantity: null, listingStatus: 'DRAFT', version: rows.AMAZON_DE.version })
+  }))
+
+  it('a master content change queues nothing for it, while it still follows the text; the live listing is queued', () => scoped(async () => {
+    const { product, rows } = await seed('DRAFT-UNPAUSED-CONTENT', [
+      { channel: 'AMAZON', marketplace: 'IT', live: true, paused: false },
+      stillDraft({ channel: 'EBAY', marketplace: 'IT' }),
+    ])
+    await prisma.product.update({ where: { id: product.id }, data: { name: 'Titolo nuovo' } })
+    const result = await new MasterContentService(prisma as never).update(product.id, { title: 'Titolo nuovo' },
+      { address: { tier: 'language', language: 'it' }, masterAlreadyWritten: true, reason: 'draft-safety' })
+    expect(result.cascadedListingIds.sort()).toEqual([rows.AMAZON_IT.id, rows.EBAY_IT.id].sort())
+    const live = await queueFor(rows.AMAZON_IT.id, 'CONTENT_UPDATE')
+    expect(live).toEqual([expect.objectContaining({ payload: expect.objectContaining({ title: 'Titolo nuovo', language: 'it' }) })])
+    expect(result.queuedSyncIds).toEqual([live[0].id])
+    expect(await queueFor(rows.EBAY_IT.id, 'CONTENT_UPDATE')).toEqual([])
+    expect(await prisma.channelListingTranslation.findFirst({ where: { channelListingId: rows.EBAY_IT.id, language: 'it' } })).toMatchObject({ follows: ['title'] })
   }))
 })
