@@ -4,6 +4,7 @@ import { contentDestination, type ContentScope } from '../../services/shopify/co
 import { WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
 import { findColourProducts, readColourProducts } from '../../services/shopify/colour-products/find.service.js'
 import { confirmColourProducts } from '../../services/shopify/colour-products/confirm.service.js'
+import { linkColourProducts } from '../../services/shopify/colour-products/link.service.js'
 import { readColourProductSettings, saveColourProductSettings } from '../../services/shopify/colour-products/settings.js'
 
 /**
@@ -11,17 +12,19 @@ import { readColourProductSettings, saveColourProductSettings } from '../../serv
  * the family and the explicit connected store first (`contentDestination`), like the other Shopify routes.
  * `GET ''` the plan and the rows · `POST /find` read Shopify and store proposals (no Shopify write) ·
  * `POST /confirm` adopt the confirmed colours (identity + missing SKUs on Shopify, ids on the size listings) ·
+ * `POST /link` write and read back every colour product's colour name and colour list (PR 4) ·
  * `GET|PUT /settings` the store switch.
  */
 type Request = { Params: { productId: string }; Querystring: ContentScope; Body: unknown }
 export const shopifyColourProductsRoutes: FastifyPluginAsync = async app => {
-  for (const [method, suffix] of [['GET', ''], ['POST', '/find'], ['POST', '/confirm'], ['GET', '/settings'], ['PUT', '/settings']] as const) {
+  for (const [method, suffix] of [['GET', ''], ['POST', '/find'], ['POST', '/confirm'], ['POST', '/link'], ['GET', '/settings'], ['PUT', '/settings']] as const) {
     app.route<Request>({ method, url: `/products/:productId/shopify-colour-products${suffix}`, handler: async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store')
       try {
         const { productId } = request.params
         if (suffix === '/find') return await findColourProducts(productId, request.query, request.body)
         if (suffix === '/confirm') return await confirmColourProducts(productId, request.query, request.body)
+        if (suffix === '/link') return await linkColourProducts(productId, request.query)
         if (suffix === '/settings') {
           const destination = await contentDestination(productId, request.query)
           return method === 'PUT' ? await saveColourProductSettings(destination.accountId, request.body) : await readColourProductSettings(destination.accountId)
@@ -32,7 +35,8 @@ export const shopifyColourProductsRoutes: FastifyPluginAsync = async app => {
         if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })
         request.log.error({ err: error }, 'Shopify colour products request failed')
         return reply.code(502).send({ error: suffix === '/find' ? 'Shopify could not be read. Check the connected store and retry. Nothing was changed.'
-          : suffix === '/confirm' ? 'The confirm stopped. Some colours may be confirmed. Run Find again to see where it stopped, then confirm what is left.' : 'The request could not be completed. Reload and retry.' })
+          : suffix === '/confirm' ? 'The confirm stopped. Some colours may be confirmed. Run Find again to see where it stopped, then confirm what is left.'
+          : suffix === '/link' ? 'The link stopped. Run it again: it writes only what is still missing.' : 'The request could not be completed. Reload and retry.' })
       }
     } })
   }

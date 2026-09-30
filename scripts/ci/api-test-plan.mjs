@@ -17,8 +17,8 @@
  * - After a run, a test file that skipped ALL its tests must be on SKIP_ALLOWED. A test that skips
  *   because CI forgot an environment variable measured nothing, and that must be loud.
  *
- *   node scripts/ci/api-test-plan.mjs --shard 1/3          print shard 1's files, one per line
- *   node scripts/ci/api-test-plan.mjs --shard 1/3 --run -- --reporter=json …   run vitest on them
+ *   node scripts/ci/api-test-plan.mjs --shard 1/4          print shard 1's files, one per line (CI: 4 shards)
+ *   node scripts/ci/api-test-plan.mjs --shard 1/4 --run -- --reporter=json …   run vitest on them
  *     (the file list goes to vitest as an argument array, so no shell can mangle it)
  *   node scripts/ci/api-test-plan.mjs --summary            print the counts and the exclusions
  *   node scripts/ci/api-test-plan.mjs --check-skips a.json[,b.json]   judge vitest JSON reports
@@ -87,9 +87,13 @@ function durations() {
   try { return JSON.parse(readFileSync(DURATIONS, 'utf8')).files ?? {} } catch { return {} }
 }
 
-/** Greedy longest-first split, so the slow database files do not pile into one shard. */
-export function shards(files, count, weights = durations()) {
-  const bins = Array.from({ length: count }, () => ({ total: 0, files: [] }))
+/**
+ * Greedy longest-first split, so the slow database files do not pile into one shard. `start[i]` is time bin i
+ * spends on other work before its files (the real-PostgreSQL parts give part 1 its one-off steps); the API shards
+ * pass none.
+ */
+export function shards(files, count, weights = durations(), start = []) {
+  const bins = Array.from({ length: count }, (_, i) => ({ total: start[i] ?? 0, files: [] }))
   const weighted = files.map(f => ({ f, w: weights[f] ?? 1000 })).sort((a, b) => b.w - a.w || a.f.localeCompare(b.f))
   for (const { f, w } of weighted) {
     const bin = bins.reduce((min, b) => (b.total < min.total ? b : min))
@@ -120,7 +124,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 
   if (value('--shard')) {
     const [index, count] = value('--shard').split('/').map(Number)
-    if (!(index >= 1 && index <= count)) fail([`✗ --shard must look like 1/3, got ${value('--shard')}`])
+    if (!(index >= 1 && index <= count)) fail([`✗ --shard must look like n/m (shard n of m, e.g. 1/4), got ${value('--shard')}`])
     const bins = shards(included, count)
     const covered = bins.flatMap(b => b.files)
     if (covered.length !== included.length || new Set(covered).size !== included.length) fail(['✗ the shards do not cover every included file exactly once'])

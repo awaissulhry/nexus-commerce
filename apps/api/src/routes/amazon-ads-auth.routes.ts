@@ -525,10 +525,10 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     // needs the token's SHAPE, and none of its characters.
     const isJwt = tokens.access_token?.startsWith('eyJ') === true
 
-    // CX.3a — the old link pointed at https://nexus-commerce-web.up.railway.app,
-    // a host that no longer resolves. Amazon Ads is an account in Settings →
-    // Channels now, so that is where the operator lands.
-    const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/+$/, '')
+    // CX.3a — the old link pointed at a web host that did not resolve then
+    // (the web took that Railway address on 2026-09-29). Amazon Ads is an
+    // account in Settings → Channels now, so that is where the operator lands.
+    const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/+$/, '')
     const channelsUrl = `${webBase}/settings/channels?tab=accounts`
 
     // Return a simple success page the operator can read in the browser

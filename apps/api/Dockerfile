@@ -4,8 +4,8 @@
 # only by start command (`node apps/api/dist/index.js`, `… background.js worker`, `… background.js scheduler`).
 # Built by .github/workflows/images.yml; see docs/ci-fast-deploys/PLAN-2026-09-29.md.
 #
-# Context: the repository root (.dockerignore is an allow-list). The image is public, so no secret goes into any layer:
-# the only build argument is the commit SHA. Railway provides every runtime variable.
+# Context: the repository root; apps/api/Dockerfile.dockerignore is its allow-list. The image is public, so no secret
+# goes into any layer: the only build argument is the commit SHA. Railway provides every runtime variable.
 
 ARG NODE_IMAGE=node:22.23.2-bookworm-slim
 
