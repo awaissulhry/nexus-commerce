@@ -1,4 +1,12 @@
 import { shopifyJson } from '@nexus/shared/shopify-linked-products'
+import { informationDraftFieldError } from '@nexus/shared/shopify-information-editing'
+import { nativeFieldValueError, type InformationField, type NativeEdit } from '@nexus/shared/shopify-information'
+
+/** The sheet's draft check; native content capability comes from its actual write route. */
+export function informationDraftCellError(field: InformationField, value: string | null, baseline: string | null, hasContentAddress: boolean): string | null {
+  if (field.id === 'title' && hasContentAddress && (value === null || value.length <= 60000 && !value.trim() && !/[\r\n]/.test(value))) return null
+  return field.definition ? informationDraftFieldError(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, baseline)
+}
 
 /** Human-readable summaries never replace the underlying structured wire value. */
 export function informationValueLabel(type: string, raw: string | null | undefined): string {

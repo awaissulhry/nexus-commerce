@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { emptyShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
+import { emptyShopifyLinkedDraft, validateShopifyField } from '@nexus/shared/shopify-linked-products'
 import { informationRegistry, informationStoredValue } from '@nexus/shared/shopify-information'
 import { LAB_CATEGORIES, LAB_ENTRIES, LAB_FILES, LAB_PAGES, LAB_PRODUCTS, LAB_SCHEMA, LAB_STORE_FIELDS, LAB_TAXONOMY_VALUES, labReferences, labTypeField } from '@nexus/shared/shopify-lab-store'
 import { shopifyCellToken } from './channel-sheet-projection.js'
 
 /*
  * Lane B slice B1 (docs/shopify-metafields/PLAN-2026-09-28.md §6.1, §7 L4, decision LB-D2): the draft save of the 11 types
- * a real store uses, on the made-up store. A good value lands in the Nexus draft exactly as given; a bad one is refused
- * with the rule's plain sentence; a pasted entry of another kind, or one the store no longer has, is refused HERE — not
+ * a real store uses, on the made-up store. Type-valid drafts retain store-rule warnings until publish. Malformed values,
+ * a pasted entry of another kind, or one the store no longer has, are refused HERE — not
  * first at publish. No Shopify write happens on this path.
  */
 const s = vi.hoisted(() => ({ workspace: null as any, snapshot: null as any, schema: null as any, writes: [] as any[], nameReads: [] as string[][], refs: [] as any[], namesDown: false }))
@@ -84,21 +84,30 @@ describe('B1 · draft save of the 11 store types (no Shopify write)', () => {
     expect(drafted(key)).toBe(value)
     expect(graphql).not.toHaveBeenCalled()
   })
-  it.each([
-    ['related_items_display', 'maybe', 'Choose one of these values: ahead, only manual.'],
-    ['search_words', JSON.stringify(Array.from({ length: 11 }, (_, i) => `w${i}`)), 'Use 10 values or fewer. Remove 1.'],
+  it.each<[string, string, string, boolean?]>([
+    ['related_items_display', 'maybe', 'Choose one of these values: ahead, only manual.', true],
+    ['search_words', JSON.stringify(Array.from({ length: 11 }, (_, i) => `w${i}`)), 'Use 10 values or fewer. Remove 1.', true],
     ['related_items', JSON.stringify([LAB_PAGES[0].id]), 'Value 1: This field takes products only.'],
     ['average_rating', '{"value":"6","scale_min":"1.0","scale_max":"5.0"}', 'Choose a rating from 1 to 5.'],
-    ['rating_count', '-1', 'Enter 0 or more.'],
+    ['rating_count', '-1', 'Enter 0 or more.', true],
     ['feed_custom_product', 'yes', 'Choose Yes or No.'],
     ['size_guide_page', LAB_PRODUCTS[0].id, 'This field takes pages only.'],
     ['swatch_picture', LAB_PRODUCTS[0].id, 'This field takes files only.'],
     ['swatch_colour', '#12345', 'Enter a colour as # and six characters, for example #1A2B3C.'],
     ['limited_file', LAB_FILES[4].id, 'This field takes images only.'],
-  ])('%s refuses %j with the plain sentence, and writes nothing', async (key, value, sentence) => {
+  ])('%s preserves the storage refusal or publish warning for %j', async (key, value, sentence, draftAllowed) => {
     const result = await save(key, value)
     const field = fieldFor(key)
     const owner = field.owner === 'PRODUCT' ? 'Listed title' : 'Listed title / Small'
+    // Store-only rules move to publish. The real buildLinkedPlan cases beside this file retain these refusals.
+    if (draftAllowed) {
+      expect(result.cells[field.id]).toMatchObject({ ok: true })
+      expect(drafted(key)).toBe(value)
+      expect(validateShopifyField(field.definition!, value)).toBe(sentence)
+      expect(s.writes).toHaveLength(1)
+      expect(graphql).not.toHaveBeenCalled()
+      return
+    }
     expect(result.cells[field.id]).toEqual({ ok: false, reason: `${owner} / ${field.label}: ${sentence}` })
     expect(s.writes).toEqual([])
   })

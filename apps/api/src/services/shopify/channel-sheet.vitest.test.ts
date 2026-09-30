@@ -44,6 +44,46 @@ function page() {
   return { columns, scope: { channel: 'SHOPIFY', connectionId: 'store-a' }, rows: [{ id: 'family', sku: 'NEXUS', name: 'Shared title', aliasId: 'alias-a', parentId: null, version: 5, values, listing: { id: 'listing-a', version: 7 }, readiness: { state: 'ready', issues: [] } }, { id: 'child', sku: 'S', aliasId: 'alias-a', parentId: 'family', version: 2, values, listing: { id: 'variant-listing', version: 2 } }] } as any
 }
 describe('Shopify behind the common channel sheet', () => {
+  it.each(['', null, 'Nexus pin'])('keeps addressed title %j and its source facts instead of replacing it with the provider baseline', value => {
+    const base = page()
+    const cell = { ...base.rows[0].values.title, value, pinned: true, inherited: false,
+      contentAcknowledgement: { pin: { address: { tier: 'pin', language: 'en' } } },
+      contentAddress: { tier: 'pin', language: 'en' }, contentVersion: 7, source: 'channelExplicit',
+      mapped: { status: 'mapped', value, sourceOwner: { kind: 'listing', id: 'listing-a' } },
+    }
+    base.rows[0].values.title = cell
+    const rows = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values.title).toMatchObject(cell)
+    expect(rows[0].values.title.shopifyWrite).toBeUndefined()
+  })
+  it.each(['four', '', null])('saves %j as a draft and projects its store warning after reload', async value => {
+    const definition = s.schema.definitions[0]
+    Object.assign(definition, { type: 'single_line_text_field', required: true, validations: [{ name: 'max', value: '3' }] })
+    Object.assign(s.snapshot.rows[0].fields[0], { type: definition.type, value: 'old' })
+    const fieldId = 'metafield:PRODUCT:custom.flag'
+    const result = await saveShopifySheetCells('family', scope, { cells: [change(fieldId, value)] }, 'editor')
+    expect(result.cells[fieldId]).toMatchObject({ ok: true, shopifyWrite: { ownerId: product, fieldId } })
+    expect(s.workspace.draft.edits[0]).toMatchObject({ value: 'old', nextValue: value, compareDigest: 'digest-1' })
+    expect(s.workspace.draft.sheetValues[0]).toMatchObject({ ownerId: product, value, locale: '' })
+    const base = page()
+    base.columns = base.columns.map((column: object) => ({ ...column, requiredBy: [] }))
+    base.rows[0].completeness = { required: { filled: 0, total: 0, missing: [] }, optional: { filled: 0, total: 0, missing: [] } }
+    const rows = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values[fieldId]).toMatchObject({ value, writable: true, nexusDraft: true, pinned: true })
+    expect(rows[0].readiness.issues).toContainEqual(expect.objectContaining({ key: fieldId,
+      message: value === null ? 'Enter a value. Shopify needs this field.' : value === '' ? 'Enter one line of text, or clear the field.' : 'Use 3 characters or fewer. Now: 4.' }))
+  })
+  it('refuses a malformed cell without losing a type-valid draft that violates store limits', async () => {
+    const definition = s.schema.definitions[0]
+    s.schema.definitions.push({ ...definition, id: 'definition-2', key: 'label', name: 'Label', type: 'single_line_text_field', validations: [{ name: 'max', value: '3' }] })
+    const result = await saveShopifySheetCells('family', scope, { cells: [change('metafield:PRODUCT:custom.flag', 'maybe'), change('metafield:PRODUCT:custom.label', 'four')] }, 'editor')
+    expect(result.ok).toBe(false)
+    expect(result.cells['metafield:PRODUCT:custom.flag']).toMatchObject({ ok: false, reason: expect.stringContaining('Yes or No') })
+    expect(result.cells['metafield:PRODUCT:custom.label'].ok).toBe(true)
+    expect(s.workspace.draft.edits).toEqual([expect.objectContaining({ key: 'label', nextValue: 'four' })])
+  })
   it.each(['ACTIVE', 'ARCHIVED', 'DRAFT'])('carries raw %s only in fact detail and uses the stored status vocabulary', status => {
     s.snapshot.rows[0].values.status = status
     const rows = projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema,

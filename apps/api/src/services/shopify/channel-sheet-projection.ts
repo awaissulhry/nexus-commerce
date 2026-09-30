@@ -101,6 +101,12 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
       const pin = saved && !saved.inherited ? saved : undefined
       const mapped = field.id !== 'inventory' && base?.mapped?.status === 'mapped' && base.mapped.sourceOwner?.kind !== 'listing'
       const reason = pin && pin.type !== field.type ? 'This definition changed type. The saved override is preserved; review and migrate it before editing.' : informationRestriction(remote, field, workspace.draft, active(workspace))
+      // The common content writer owns these values, source facts and save tokens. A provider read must not
+      // replace a confirmed Nexus pin (including a blank). Keep older pending Shopify drafts visible for review.
+      if (base?.contentAcknowledgement && pending === undefined && !pin) {
+        row.values[column.key] = { ...base, shopifyWrite: undefined, editable: !reason, writable: !reason, writeBlockedReason: reason }
+        continue
+      }
       const value = pending !== undefined ? pending : pin ? pin.value : mapped ? informationSheetValue(field, base.value) : baseline
       const ownValue = pending !== undefined || !!pin || !mapped
       // Remaining fields are provider-owned facts. Only the content resolver above assigns language readiness.

@@ -1,6 +1,5 @@
 import { formulaFillSourceIndex } from '@/design-system/grid/editors/formulaTransfer'
-import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
-import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
+import { informationDraftCellError } from './informationEditing'
 import type { ChannelSheetRow, SheetColumn } from '../sheet/channel/types'
 import type { mediaGridTransfer } from '../media/mediaGridTransfer'
 import { encodeInformationTransfer, decodeInformationTransfer, transferableField } from './informationTransfer'
@@ -18,7 +17,8 @@ export function shopifyGridTransfer(base: ReturnType<typeof mediaGridTransfer<Ch
       const current = p.node ? p.api.getCellValue({ rowNode: p.node, colKey: p.column }) : null
       if (!field) { if (text.startsWith('NEXUS_SHOPIFY_VALUE_V1:')) { announce('This Shopify value requires a compatible Shopify field.'); return current }; return base.processCellFromClipboard(p) }
       const result = decodeInformationTransfer(text, field, accountId)
-      const error = result.error ?? (field.definition ? validateShopifyField(field.definition, result.value) : nativeFieldValueError(field.id as NativeEdit['field'], result.value, shopifyRawValue(current)))
+      const cell = p.node?.data?.values[p.column.getColId()]
+      const error = result.error ?? informationDraftCellError(field, result.value, shopifyRawValue(current), !!cell?.contentAcknowledgement && !cell.shopifyWrite)
       if (error) { announce(`${field.label}: ${error}`); return current }
       return result.value
     },
@@ -32,7 +32,8 @@ export function shopifyGridTransfer(base: ReturnType<typeof mediaGridTransfer<Ch
       if (!field && !from) return base.cellSelection.handle.setFillValue(p)
       if (!field || !from || !source || !sourceColumn || field.type !== from.type || !!field.definition !== !!from.definition || !transferableField(field)) return p.currentCellValue
       const value = shopifyRawValue(p.api.getCellValue({ rowNode: source, colKey: sourceColumn }))
-      const error = field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, shopifyRawValue(p.currentCellValue))
+      const cell = p.rowNode.data?.values[p.column.getColId()]
+      const error = informationDraftCellError(field, value, shopifyRawValue(p.currentCellValue), !!cell?.contentAcknowledgement && !cell.shopifyWrite)
       if (error) { announce(`${field.label}: ${error}`); return p.currentCellValue }
       return value
     } } },

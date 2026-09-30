@@ -1,5 +1,13 @@
 import { nativeFieldError, nativeFieldValueError, nativeValuesEqual, nativeEditAddress, type InformationField, type InformationRow, type NativeEdit } from './shopify-information.js'
-import { fieldAddress, validateShopifyField, shopifyDefinitionApplicability, type ShopifyLinkedDraft } from './shopify-linked-products.js'
+import { fieldAddress, validateShopifyField, shopifyDefinitionApplicability, type ShopifyFieldDefinition, type ShopifyLinkedDraft } from './shopify-linked-products.js'
+
+/** Drafts keep type-valid values. Store limits remain visible and are enforced at publish.
+ * References retain their draft-time checks (LB-D2); clearing one needs no remote identity. */
+export function informationDraftFieldError(def: Pick<ShopifyFieldDefinition, 'type' | 'validations' | 'required'>, value: string | null): string | null {
+  if (value === '' && ['single_line_text_field', 'id'].includes(def.type)) return null
+  const error = validateShopifyField({ ...def, required: false, validations: def.type.includes('_reference') ? def.validations : [] }, value)
+  return error ? validateShopifyField(def, value) ?? error : null
+}
 
 export function informationRestriction(row: InformationRow, field: InformationField, draft: ShopifyLinkedDraft, disabled: boolean): string | null {
   if (row.kind !== field.owner) return `This field belongs to ${field.owner === 'PRODUCT' ? 'the product' : 'a variant'}.`
@@ -36,7 +44,7 @@ export function applyInformationCells(draft: ShopifyLinkedDraft, cells: Informat
     if (row.locale) {
       const source = row.translations?.[field.id]
       if (!source) throw new Error('This field has no independent value in the selected language.')
-      const error = value === null ? null : field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value)
+      const error = value === null ? null : field.definition ? informationDraftFieldError(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value)
       if (error) throw new Error(error)
       const { value: baseline, sourceValue: _source, outdated: _outdated, ...translation } = source
       const address = { ownerId: row.id, field: 'translation' as const, translation }
@@ -47,7 +55,7 @@ export function applyInformationCells(draft: ShopifyLinkedDraft, cells: Informat
       continue
     }
     if (field.definition) {
-      const error = validateShopifyField(field.definition, value)
+      const error = informationDraftFieldError(field.definition, value)
       if (error) throw new Error(`${ownerLabel} / ${field.label}: ${error}`)
       const address = { ownerId: row.id, namespace: field.definition.namespace, key: field.definition.key }
       const base = next.edits.find(e => fieldAddress(e) === fieldAddress(address)) ?? row.fields.find(e => fieldAddress(e) === fieldAddress(address)) ?? { ...address, type: field.type, value: null, compareDigest: null }
