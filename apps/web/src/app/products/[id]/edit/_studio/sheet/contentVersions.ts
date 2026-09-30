@@ -7,7 +7,9 @@
  */
 export interface ContentVersionAnswer { id: string; tier: 'pin' | 'language'; language: string; version: number }
 
-type TokenCell = { contentAddress?: { tier?: string; language?: string } | null; contentVersion?: number } | null | undefined
+const snapshotKey = Symbol('sheet content confirmation')
+type ContentSnapshot = { key: string; ownerVersion: number | undefined; version: number }
+type TokenCell = { [snapshotKey]?: ContentSnapshot; contentAddress?: { tier?: string; language?: string } | null; contentVersion?: number } | null | undefined
 type TokenRow = { id: string; version?: number; listing?: { id: string; version?: number } | null; values?: Record<string, TokenCell> }
 
 /** Pins name an exact listing (including its account/alias); language text belongs to the product. */
@@ -20,17 +22,16 @@ function tokenKey(row: TokenRow, cell: TokenCell): string | null {
 
 // A conflict may advance the row's owner version without confirming its content. Keep the
 // pair on the cell object: quiet reads can retain a busy cell while replacing its siblings.
-// Weak keys disappear with the sheet; nothing is added to the wire or to persisted values.
-type ContentSnapshot = { key: string; ownerVersion: number | undefined; version: number }
-const snapshots = new WeakMap<NonNullable<TokenCell>, ContentSnapshot>()
+// An enumerable Symbol survives the column setters' object spreads, while JSON and the wire
+// omit it. Object identity alone is insufficient: a local cell edit copies its metadata too.
 const ownerVersionOf = (row: TokenRow, cell: NonNullable<TokenCell>) => cell.contentAddress?.tier === 'pin' ? row.listing?.version : row.version
 function snapshotOf(row: TokenRow, cell: TokenCell): ContentSnapshot | undefined {
   const key = tokenKey(row, cell)
   if (!key || cell?.contentVersion === undefined) return undefined
-  const previous = snapshots.get(cell)
+  const previous = cell[snapshotKey]
   if (previous?.key === key && previous.version === cell.contentVersion) return previous
   const snapshot = { key, ownerVersion: ownerVersionOf(row, cell), version: cell.contentVersion }
-  snapshots.set(cell, snapshot)
+  cell[snapshotKey] = snapshot
   return snapshot
 }
 const newer = (a: ContentSnapshot, b: ContentSnapshot) =>
@@ -50,7 +51,7 @@ export function preserveContentVersions<T extends TokenRow>(previous: TokenRow |
     const snapshot = snapshotOf(incoming, cell), confirmed = snapshot && known.get(snapshot.key)
     if (cell && confirmed && newer(confirmed, snapshot!)) {
       cell.contentVersion = confirmed.version
-      snapshots.set(cell, confirmed)
+      cell[snapshotKey] = confirmed
     }
   }
   if (!previous || previous.id !== incoming.id) return incoming
@@ -87,7 +88,7 @@ export function adoptContentVersions(row: TokenRow | null | undefined, body: unk
         if (current && newer(current, confirmed)) continue
         if (cell.contentVersion !== entry.version) moved.add(colId)
         cell.contentVersion = entry.version
-        snapshots.set(cell, confirmed)
+        cell[snapshotKey] = confirmed
       }
     }
   }

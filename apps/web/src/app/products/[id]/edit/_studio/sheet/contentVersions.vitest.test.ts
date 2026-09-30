@@ -86,6 +86,12 @@ describe('replacement rows keep the versions already confirmed for their owners'
     preserveContentVersions(old, fresh)
     expect(fresh.values.bullet.contentVersion).toBe(1)
   })
+  it('keeps local confirmation metadata out of JSON, including after a cell copy', () => {
+    const row = snapshot(), wire = JSON.stringify(row)
+    preserveContentVersions(undefined, row)
+    row.values.title = { ...row.values.title }
+    expect(JSON.stringify(row)).toBe(wire)
+  })
   it('finds the content owner across renamed language columns', () => {
     const previous = snapshot(), incoming = { ...snapshot(7), values: {
       description_de: { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 },
