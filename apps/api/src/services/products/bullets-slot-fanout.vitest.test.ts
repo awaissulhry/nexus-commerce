@@ -145,4 +145,3 @@ it('F9 the answer names the pin text\'s new version, and the next save sent with
   expect(stale.statusCode).not.toBe(200)
   expect(await stored(ids.chain)).toEqual(['one', 'two'])
 })
-
