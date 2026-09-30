@@ -14,6 +14,7 @@ import { OptionList, type OptionListItem } from '../../components'
 import { TagInput } from '../../primitives'
 import { asList } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
+import { splitListText } from './shapeValue'
 import { keepGridOffEnter, typedStart, type EditorStop } from './selectPanelModel'
 
 export interface ListPanelEditorParams {
@@ -37,20 +38,30 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
      before React's, so on Enter AG commits whatever was last reported and the `TagInput`'s own Enter
      handler (which would have turned the draft into a chip) runs too late or not at all — the last
      typed value vanished (measured on the design, 2026-09-05). The draft is mirrored from the input
-     and reported as the final item, de-duplicated against the chips, so Enter means "add and save". */
-  const [draft, setDraft] = useState('')
+     and reported as the final item, de-duplicated against the chips, so Enter means "add and save".
+     The key that opened a free-text list by typing starts the draft (the grid consumed it: "Rosso" saved "osso", audit
+     B11); a list with options searches with it instead. A draft or chip holding "a | b" is two values, as a paste is. */
+  const closed = !!options && options.length > 0
+  const typed = closed ? '' : typedStart(props.eventKey)
+  const [draft, setDraft] = useState(typed)
   const root = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    root.current?.querySelector<HTMLElement>('input')?.focus()
-  }, [])
   const reported = (list: string[], pending: string) => {
-    const p = pending.trim()
-    return p && !list.includes(p) ? [...list, p] : [...list]
+    const out = [...list]
+    for (const v of splitListText(pending)) if (!out.includes(v)) out.push(v)
+    return out
   }
+  useEffect(() => {
+    const input = root.current?.querySelector<HTMLInputElement>('input')
+    input?.focus()
+    if (typed) { input?.setSelectionRange(typed.length, typed.length); onValueChange?.(reported(items, typed)) }
+    // mount only: the typed key is taken once, as if typed into the field
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const change = useCallback(
     (next: string[]) => {
-      setItems(next)
-      onValueChange?.(reported(next, draft))
+      const split = reported([], next.join('\n'))
+      setItems(split)
+      onValueChange?.(reported(split, draft))
     },
     [onValueChange, draft],
   )
@@ -68,7 +79,6 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
     roomToRight: cellRect ? roomToRightOf(cellRect.left, window.innerWidth) : window.innerWidth,
     kind: 'list',
   })
-  const closed = !!options && options.length > 0
   // A stored value the list does not hold stays visible, so it can be seen and unticked (P0, 2026-09-30).
   const shown = closed ? [...options!, ...items.filter((v) => !options!.some((o) => o.value === v)).map((v) => ({ value: v, label: `${v} (not in the list)` }))] : []
   /* ↑/↓ walk the search field and the boxes; Space ticks. Inside AG's popup nothing else reaches the boxes: Tab is AG's
@@ -89,7 +99,7 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
         <OptionList options={shown} value={items} onChange={change} searchable selectAll={false} listClassName="nds-list-editor-list" initialQuery={typedStart(props.eventKey)} />
       ) : (
         <div onInput={(e) => onDraft((e.target as HTMLInputElement).value ?? '')}>
-          <TagInput value={items} onChange={change} maxTags={maxItems ?? undefined} placeholder="Add a value… (, adds · Enter saves)" aria-label={label ?? 'Values'} />
+          <TagInput value={items} onChange={change} initialInput={typed} maxTags={maxItems ?? undefined} placeholder="Add a value… (, adds · Enter saves)" aria-label={label ?? 'Values'} />
         </div>
       )}
       <span className="nds-list-editor-count" aria-live="polite">

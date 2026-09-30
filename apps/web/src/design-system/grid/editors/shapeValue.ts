@@ -2,6 +2,14 @@ import { asMeasure, unitSymbol, type CellShape } from '../renderers/shapeFormat'
 import { isFormulaDraft } from './formulaEditing'
 import { optionCode } from './scalarValue'
 
+/** What separates the values of a list in text: a paste, a typed draft, a chip ("a | b", "a · b", one per line). */
+export const LIST_SEPARATOR = /\s*[|·]\s*|\r?\n/
+
+/** A list's values in a text, by the paste's rule. */
+export function splitListText(text: string): string[] {
+  return text.split(LIST_SEPARATOR).map((v) => v.trim()).filter((v) => v !== '')
+}
+
 /** Decode displayed labels using this column's schema; preserve unparseable input for refusal. */
 export function parseShape(shape: CellShape | undefined, raw: unknown, col: {
   options?: string[]; optionLabels?: Record<string, string>; unitOptions?: string[]
@@ -9,7 +17,7 @@ export function parseShape(shape: CellShape | undefined, raw: unknown, col: {
   if (raw == null || raw === '') return null
   if (typeof raw === 'string' && isFormulaDraft(raw)) return raw
   if (shape === 'list') {
-    const items = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/\s*[|·]\s*|\r?\n/) : null
+    const items = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(LIST_SEPARATOR) : null
     if (!items || items.some(v => v !== null && typeof v === 'object')) return raw
     return items.filter(v => v != null && String(v).trim() !== '').map(v => optionCode(col, String(v)))
   }

@@ -8,6 +8,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **One Enter for every editor kind** ("Enter commits and moves DOWN"). **`FormulaCellEditor`** and **`SlotListEditor`** end Enter with the editor stop AND its key (`stopEditing(false, event)`), so AG moves down; they ended it without the key and the cell stayed while lists moved. **`AsyncListboxPanel`** with **`onKeyChoice`** reports Enter as it reports Tab and lets the grid end it (a search with nothing highlighted yet keeps the panel open); it ended Enter itself (B10). **`ListboxPanel.onKeyChoice`** and **`AsyncListboxPanel.onKeyChoice`** take **`end`**: Ctrl/Cmd+Enter is kept from the grid, whose Ctrl+Enter wrote the value into every selected cell unfenced and unasked, and the owner saves its one cell with it (B14). An Enter that confirms an IME composition never reaches the grid (B18). New in `selectPanelModel.ts`: **`keepGridOffEnter`**, used by **`MeasureEditor`** and **`ListPanelEditor`**. Mirrored in Web.
 
+- **`ListPanelEditor`** (a free-text list: Etsy tags and materials, eBay free-text multi-value specifics) starts its draft with the key that opened the cell and reports it, so "Rosso" no longer saves "osso"; a draft or chip holding "a | b" is two values, as a paste is (B11). **`TagInput`** takes **`initialInput`**. New in `shapeValue.ts`: **`LIST_SEPARATOR`**, **`splitListText`** (the paste's rule, now shared). Mirrored in Web.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.

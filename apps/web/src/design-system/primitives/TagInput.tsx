@@ -11,13 +11,15 @@ export interface TagInputProps {
   className?: string
   maxTags?: number
   'aria-label'?: string
+  /** Text the field starts with — the key that opened a grid cell by typing (AG's `eventKey`), which the grid consumed. */
+  initialInput?: string
 }
 
 export function TagInput({
   value, onChange, placeholder = 'Add value…', suggestions = [],
-  disabled = false, className, maxTags, 'aria-label': ariaLabel,
+  disabled = false, className, maxTags, 'aria-label': ariaLabel, initialInput = '',
 }: TagInputProps) {
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(initialInput)
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const atMax = maxTags != null && value.length >= maxTags
