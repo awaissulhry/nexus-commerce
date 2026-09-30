@@ -45,21 +45,22 @@ const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
 
 let baseRoleId = ''
 let publishRoleId = ''
+let priceRoleId = ''
 let productId = ''
 let listingId = ''
 
 interface Person { id: string; label: string; membershipId: string; principal: UserPrincipal }
 
 /**
- * A person who may publish listings in business A — through BOTH sources a request reads (login roles, and the
- * membership of the business), so the same test means the same thing with business profiles off and on.
+ * A person in business A with these roles — through BOTH sources a request reads (login roles, and the membership
+ * of the business), so the same test means the same thing with business profiles off and on.
  */
-async function publisher(label: string): Promise<Person> {
+async function personWith(label: string, roles: Array<{ id: string; permissions: string[] }>): Promise<Person> {
   const db = database.client
   const user = await db.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: label } })
-  for (const roleId of [baseRoleId, publishRoleId]) await db.userRole.create({ data: { userId: user.id, roleId } })
+  for (const role of roles) await db.userRole.create({ data: { userId: user.id, roleId: role.id } })
   const membership = await db.workspaceMembership.create({ data: { workspaceId: A, userId: user.id, status: 'active' } })
-  for (const roleId of [baseRoleId, publishRoleId]) await db.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId } })
+  for (const role of roles) await db.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   return {
     id: user.id,
     label,
@@ -68,12 +69,18 @@ async function publisher(label: string): Promise<Person> {
       kind: 'user',
       userId: user.id,
       label,
-      permissions: { isOwner: false, permissions: new Set(['ai.run', F.productsView, F.listingsPublish]) },
+      permissions: { isOwner: false, permissions: new Set(roles.flatMap((role) => role.permissions)) },
       workspace: business,
       via: 'app',
     },
   }
 }
+
+const BASE = ['ai.run', F.productsView]
+/** A person who may publish listings. */
+const publisher = (label: string) => personWith(label, [{ id: baseRoleId, permissions: BASE }, { id: publishRoleId, permissions: [F.listingsPublish] }])
+/** A person who may change master prices. */
+const pricer = (label: string) => personWith(label, [{ id: baseRoleId, permissions: BASE }, { id: priceRoleId, permissions: [F.productsPriceEdit] }])
 
 /** The publish role taken away, from both sources, as a person managing the team would (the version bumps with it). */
 async function takePublishingAway(person: Person) {
@@ -110,6 +117,7 @@ beforeAll(async () => {
     db.role.create({ data: { key: `DECIDER_${name}_${randomUUID().slice(0, 8)}`, name, description: 'test', permissions, isSystem: false } })
   baseRoleId = (await role('BASE', ['ai.run', F.productsView])).id
   publishRoleId = (await role('PUBLISH', [F.listingsPublish])).id
+  priceRoleId = (await role('PRICE', [F.productsPriceEdit])).id
   await inside(async () => {
     const account = await db.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'decider-amazon', isActive: true, externalAccountId: 'SELLER-TEST-D' } as never })
     productId = (await db.product.create({ data: { sku: 'DECIDER-1', name: 'Decider jacket', basePrice: '10.00' } })).id
@@ -182,6 +190,27 @@ describe('an approval from the Approvals page runs only while its approver still
     }))
     expect((push.payload as { requestedBy?: string }).requestedBy).toBe(person.id)
     expect(await approval(id)).toMatchObject({ status: 'executed', decidedBy: 'Sara Approver', decidedByUserId: person.id })
+  })
+
+  it('an unchanged set-price approved on the page runs AS the approver: the price audit row names them by id', async () => {
+    const person = await pricer('Vera Approver')
+    const priced = await inside(() => database.client.product.create({ data: { sku: 'DECIDER-PRICE', name: 'Decider priced jacket', basePrice: '10.00' } }))
+    const run = await inside(() => database.client.agentRun.create({ data: { agentKey: 'manual-action', trigger: 'manual', status: 'done' } }))
+    const queued = await inside(() => runOrQueueTool('set-price', { productId: priced.id, price: 12 }, person.principal, run.id))
+    expect(queued, queued.error).toMatchObject({ ok: true, mode: 'queued' })
+    const parked = await inside(() => decideFleetApproval({ id: queued.approvalId!, decision: 'approve', actor: person.principal }))
+    expect(parked).toMatchObject({ ok: true, status: 'scheduled' })
+
+    const out = await commitAfterTheWindow(queued.approvalId!)
+    expect(out, out.error).toMatchObject({ ok: true })
+    expect(Number((await inside(() => database.client.product.findUniqueOrThrow({ where: { id: priced.id } }))).basePrice)).toBe(12)
+    // The master price service's own audit row: who changed this price, by id — not the name shown.
+    const audits = (await inside(() => database.client.auditLog.findMany({ where: { entityId: priced.id } })))
+      .filter((row) => (row.metadata as { field?: string } | null)?.field === 'basePrice')
+    expect(audits).toHaveLength(1)
+    expect(audits[0]).toMatchObject({ userId: person.id, before: { basePrice: 10 }, after: { basePrice: 12 } })
+    expect((audits[0].metadata as { reason?: string }).reason).toBe('agent:set-price')
+    expect(await approval(queued.approvalId!)).toMatchObject({ status: 'executed', decidedBy: 'Vera Approver', decidedByUserId: person.id })
   })
 
   it('a fleet worker proposes as the system; a person approves it; it runs as that person', async () => {
