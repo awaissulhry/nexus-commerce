@@ -48,7 +48,6 @@ on:
       - 'patches/**'
       - 'apps/web/**'
       - 'turbo.json'
-      - '.dockerignore'
       - 'docs/fixtures/vt1/fixtures.ts'
       - 'scripts/ci/check-image-secrets.sh'
       - 'scripts/ci/image-services.sh'
@@ -75,7 +74,9 @@ jobs:
   # (workflow_dispatch) ships everything; so does a push when that release cannot be found or read, and a push after a
   # rollback (rollback.yml): a service this push does not change would otherwise stay on the rolled-back commit.
   # Code of one service ships that service; what builds or ships the services (dependencies, the images, the
-  # workflows and scripts/ci) ships both, so a pipeline change is proven end to end by its own release.
+  # workflows and scripts/ci) ships both, so a pipeline change is proven end to end by its own release. Each image's
+  # Dockerfile and allow-list (apps/api/Dockerfile.dockerignore, apps/web/Dockerfile.dockerignore; #183 replaced the
+  # root .dockerignore, which Railway's own builds also read) shape that image only, so they ship its service only.
   changes:
     name: What changed
     runs-on: ubuntu-latest
@@ -129,7 +130,7 @@ jobs:
               files=$(git diff --name-only "$base" "$GITHUB_SHA")
               echo "Changed since $base, the last successful release:"
               printf '%s\n' "$files"
-              shared='package(-lock)?\.json$|patches/|turbo\.json$|\.dockerignore$|scripts/ci/(check-image-secrets|image-services|railway-deploy-image|railway-up)\.sh$|\.github/workflows/(deploy-api|ci|images)\.yml$'
+              shared='package(-lock)?\.json$|patches/|turbo\.json$|scripts/ci/(check-image-secrets|image-services|railway-deploy-image|railway-up)\.sh$|\.github/workflows/(deploy-api|ci|images)\.yml$'
               grep -qE "^(apps/api/|packages/(database|shared|events)/|$shared)" <<< "$files" && api=true || api=false
               grep -qE "^(apps/web/|packages/(database|shared)/|docs/fixtures/vt1/fixtures\.ts$|\.github/workflows/prod-smoke\.yml$|$shared)" <<< "$files" && web=true || web=false
             fi
