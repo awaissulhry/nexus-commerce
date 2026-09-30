@@ -16,6 +16,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **Every list can be cleared, with one label.** **`SELECT_CLEAR_LABEL`** ("Clear") now lives in `selectPanelModel.ts` (still exported from `SelectCellEditor`). **`BOOLEAN_EDITOR_PARAMS`** (`scalarValue.ts`): Yes, No and Clear for a yes/no cell, one frozen object for both sheets. **`AsyncListboxPanel`** takes **`emptyLabel`**: a Clear row above the choices (↑ from the first choice reaches it; Enter, Tab and a click choose `''`), shown for a stored value even before any choice is loaded. **`ListboxPanel`** no longer says "No matches" under a lone Clear row that nothing searched (B16). Mirrored in Factory.
 
+- **`ListboxPanel`** with its own search field is announced: the field is a **combobox** (`aria-controls`, `aria-activedescendant` on the highlighted row, `aria-expanded`), the options sit in a listbox of their own beside it (named by **`ariaLabel`**), and every row has an id even without `idPrefix` (`useId`). A short list without a search field is unchanged. **`SelectPanelEditor`** names its list after the column header; **`MeasureEditor`** names its unit list (B19). Mirrored in Factory.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Factory.

@@ -36,7 +36,8 @@ vi.mock('react', async (original) => {
     if (!prev || !deps || deps.some((d, k) => !Object.is(d, prev[k]))) runtime.pending.push(fn)
     runtime.slots[i] = deps
   }
-  return { ...real, default: { ...real, useState, useRef, useEffect, useLayoutEffect: useEffect }, useState, useRef, useEffect, useLayoutEffect: useEffect }
+  const useId = () => ':lb:'
+  return { ...real, default: { ...real, useState, useRef, useEffect, useLayoutEffect: useEffect, useId }, useState, useRef, useEffect, useLayoutEffect: useEffect, useId }
 })
 
 import { ListboxPanel, type ListboxPanelProps } from './ListboxPanel'
@@ -312,5 +313,38 @@ describe('ListboxPanel — an open list keeps a whole typed value', () => {
     const onKeyChoice = vi.fn()
     capture(render({ options: materials, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: typed }), 'Enter')
     expect(onKeyChoice).toHaveBeenLastCalledWith(saved)
+  })
+})
+
+/**
+ * Audit B19 (2026-09-30) — a searching list keeps focus in its search field, so a screen reader follows nothing unless the
+ * field points at the highlighted row. The field had no combobox role, no aria-activedescendant, no aria-controls; the
+ * listbox had no name; and the field sat INSIDE role=listbox.
+ */
+describe('ListboxPanel — a searching list is announced', () => {
+  const arrow = (root: El, key: 'ArrowDown' | 'ArrowUp') => (root.props.onKeyDown as (e: unknown) => void)({ key, preventDefault() {} })
+  const input = (root: El) => flat(root).find((el) => el.type === 'input')!
+  const listbox = (root: El) => flat(root).find((el) => el.props.role === 'listbox')!
+  const props: ListboxPanelProps = { options, value: 'b', searchable: true, ariaLabel: 'Colore', onCommit() {}, onCancel() {} }
+
+  it('the search field is a combobox that controls the named listbox', () => {
+    const root = render(props)
+    expect(input(root).props.role).toBe('combobox')
+    expect(input(root).props['aria-controls']).toBe(listbox(root).props.id)
+    expect(listbox(root).props['aria-label']).toBe('Colore')
+    expect(flat(listbox(root)).some((el) => el.type === 'input')).toBe(false)
+  })
+  it('aria-activedescendant follows the highlighted row', () => {
+    const root = render(props)
+    const ids = optionEls(listbox(root)).map((o) => o.props.id)
+    expect(ids.every(Boolean)).toBe(true)
+    expect(input(root).props['aria-activedescendant']).toBe(ids[1])
+    arrow(render(props), 'ArrowDown')
+    expect(input(render(props)).props['aria-activedescendant']).toBe(ids[2])
+  })
+  it('a short list without a search field is unchanged: the container is the listbox', () => {
+    const root = render({ options, value: 'b', ariaLabel: 'Colore', onCommit() {}, onCancel() {} })
+    expect(root.props.role).toBe('listbox')
+    expect(root.props['aria-label']).toBe('Colore')
   })
 })

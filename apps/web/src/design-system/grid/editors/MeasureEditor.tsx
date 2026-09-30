@@ -87,6 +87,7 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
           onKeyChoice={(u, end) => { if (u !== null && u !== m.unit) report({ value: m.value, unit: u }); if (end) stopEditing(false, end) }}
           onCancel={() => api.stopEditing(true)}
           emptyLabel="No units"
+          ariaLabel={label ? `${label} — unit` : 'Unit'}
         />
       )}
     </div>

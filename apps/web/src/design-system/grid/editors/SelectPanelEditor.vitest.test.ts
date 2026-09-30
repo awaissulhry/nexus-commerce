@@ -85,3 +85,14 @@ describe('Enter and Tab: the editor reports the choice and the grid commits and 
     expect(panel.current.initialQuery).toBe('')
   })
 })
+
+describe('the list is named after its column (audit B19)', () => {
+  it('passes the column header as the listbox name', () => {
+    vi.stubGlobal('window', { innerWidth: 1200 })
+    renderToStaticMarkup(React.createElement(SelectPanelEditor, {
+      value: null, options: [{ value: 'Nero', label: 'Nero' }], onValueChange: vi.fn(), stopEditing: vi.fn(),
+      column: { getActualWidth: () => 150 }, colDef: { headerName: 'Colore' },
+    } as any))
+    expect(panel.current.ariaLabel).toBe('Colore')
+  })
+})

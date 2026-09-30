@@ -39,7 +39,7 @@
  *
  * Requires `styles/components.css`.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Search } from 'lucide-react'
 import { groupOptions } from '../lib/group-options'
 import { searchOptions, searchTokens } from '../lib/option-search'
@@ -194,6 +194,11 @@ export function ListboxPanel({
   // An externally supplied query means the caller owns the input, so the panel renders none.
   const external = query !== undefined
   const ownsSearch = !external && (searchable || allowCustom || !!initialQuery || options.length > LISTBOX_SEARCH_THRESHOLD)
+  /* A searching panel keeps DOM focus in its own field, so the field is a combobox pointing at the highlighted row and the
+     options sit in a listbox of their own, beside it — a screen reader heard nothing as the operator walked the list, and
+     the field sat inside role=listbox (audit B19). Its rows need ids for that, with or without `idPrefix`. */
+  const ownId = useId()
+  const ids = idPrefix ?? (ownsSearch ? ownId : undefined)
   const q = external ? query : ownQuery
   const filtering = ownsSearch || external
 
@@ -294,7 +299,7 @@ export function ListboxPanel({
 
   const renderOption = (o: ListboxOption, i: number) => (
     <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
-      id={idPrefix ? `${idPrefix}-o${i}` : undefined} tabIndex={optionTabIndex}
+      id={ids ? `${ids}-o${i}` : undefined} tabIndex={optionTabIndex}
       className={[o.value === value ? 'on' : '', (filtering || controlled) && i === active ? 'active' : '', heldReason(o) ? 'held' : ''].filter(Boolean).join(' ') || undefined}
       title={heldReason(o) ?? o.title ?? o.label}
       aria-disabled={heldReason(o) ? true : undefined}
@@ -307,6 +312,33 @@ export function ListboxPanel({
     </button>
   )
 
+  const activeId = !ids ? undefined : active === CLEAR_INDEX && showClear ? `${ids}-o${CLEAR_INDEX}` : active >= 0 && matches[active] ? `${ids}-o${active}` : undefined
+  const rows = <>
+    {showClear && (
+      <button type="button" role="option" aria-selected={!value} tabIndex={optionTabIndex}
+        id={ids ? `${ids}-o${CLEAR_INDEX}` : undefined}
+        className={[!value ? 'on' : '', (filtering || controlled) && active === CLEAR_INDEX ? 'active' : ''].filter(Boolean).join(' ') || undefined}
+        onFocus={controlled ? undefined : () => { if (activeRef.current !== CLEAR_INDEX) moveActive(() => CLEAR_INDEX) }}
+        onClick={() => onCommit('')}>
+        {emptyLabel}
+      </button>
+    )}
+    {groups
+      ? (() => {
+          let i = custom ? 0 : -1
+          return [
+            custom && renderOption(custom, 0),
+            ...groups.map((g) => (
+              <div className="nds-combo-group" role="group" aria-label={g.name || undefined} key={g.name}>
+                {g.name !== '' && <div className="nds-combo-grouphd" aria-hidden>{g.name}</div>}
+                {g.options.map((o) => { i += 1; return renderOption(o, i) })}
+              </div>
+            )),
+          ]
+        })()
+      : matches.map((o, i) => renderOption(o, i))}
+  </>
+
   return (
     <div
       ref={(n) => {
@@ -316,9 +348,9 @@ export function ListboxPanel({
       }}
       style={style}
       className={['nds-combo-pop', 'nds-listbox-pop', className].filter(Boolean).join(' ')}
-      id={idPrefix ? `${idPrefix}-listbox` : undefined}
-      role="listbox"
-      aria-label={ariaLabel}
+      id={!ownsSearch && ids ? `${ids}-listbox` : undefined}
+      role={ownsSearch ? undefined : 'listbox'}
+      aria-label={ownsSearch ? undefined : ariaLabel}
       tabIndex={-1}
       onKeyDownCapture={onKeyChoice ? (e) => {
         if (e.key !== 'Enter' && e.key !== 'Tab') return
@@ -355,34 +387,13 @@ export function ListboxPanel({
         <div className="nds-combo-search">
           <Search size={13} aria-hidden />
           <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); if (controlled) moveActive(() => 0); else setOwnActive(null) }}
-            placeholder={searchPlaceholder} aria-label="Search options" />
+            placeholder={searchPlaceholder} aria-label={ariaLabel ? `Search ${ariaLabel}` : 'Search options'}
+            role="combobox" aria-autocomplete="list" aria-expanded aria-controls={`${ids}-listbox`} aria-activedescendant={activeId} />
         </div>
-      )}
-      {showClear && (
-        <button type="button" role="option" aria-selected={!value} tabIndex={optionTabIndex}
-          id={idPrefix ? `${idPrefix}-o${CLEAR_INDEX}` : undefined}
-          className={[!value ? 'on' : '', (filtering || controlled) && active === CLEAR_INDEX ? 'active' : ''].filter(Boolean).join(' ') || undefined}
-          onFocus={controlled ? undefined : () => { if (activeRef.current !== CLEAR_INDEX) moveActive(() => CLEAR_INDEX) }}
-          onClick={() => onCommit('')}>
-          {emptyLabel}
-        </button>
       )}
       {/* Nothing searched and only Clear to offer (a picker's choices not loaded yet): Clear is the list, not "No matches". */}
       {matches.length === 0 && !(showClear && !q) && <div className="nds-combo-empty">No matches</div>}
-      {groups
-        ? (() => {
-            let i = custom ? 0 : -1
-            return [
-              custom && renderOption(custom, 0),
-              ...groups.map((g) => (
-                <div className="nds-combo-group" role="group" aria-label={g.name || undefined} key={g.name}>
-                  {g.name !== '' && <div className="nds-combo-grouphd" aria-hidden>{g.name}</div>}
-                  {g.options.map((o) => { i += 1; return renderOption(o, i) })}
-                </div>
-              )),
-            ]
-          })()
-        : matches.map((o, i) => renderOption(o, i))}
+      {ownsSearch ? <div role="listbox" id={`${ids}-listbox`} aria-label={ariaLabel}>{rows}</div> : rows}
     </div>
   )
 }

@@ -73,3 +73,14 @@ describe('MeasureEditor — Escape in the unit list cancels the edit', () => {
     expect(stopEditing).not.toHaveBeenCalled()
   })
 })
+
+describe('MeasureEditor — the unit list is named (audit B19)', () => {
+  it('names the unit list after the column', () => {
+    vi.stubGlobal('window', { innerWidth: 1200 })
+    renderToStaticMarkup(React.createElement(MeasureEditor, {
+      value: { value: 1, unit: 'kilograms' }, unitOptions: UNITS, label: 'Item weight', onValueChange: vi.fn(), stopEditing: vi.fn(),
+      api: { stopEditing: vi.fn() }, column: { getActualWidth: () => 150 },
+    } as any))
+    expect(capture.units.ariaLabel).toBe('Item weight — unit')
+  })
+})

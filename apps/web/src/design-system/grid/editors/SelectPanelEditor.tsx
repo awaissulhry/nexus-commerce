@@ -146,6 +146,8 @@ export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(fu
       initialQuery={typedStart(eventKey)}
       allowCustom={allowCustom}
       emptyLabel={emptyLabel}
+      // The list is named after its column, so a screen reader says which list it is in (audit B19).
+      ariaLabel={props.colDef?.headerName}
       /**
        * The anchor floor, and nothing else. DS.2's CSS resolves the rest as
        * `clamp(anchor, content, var(--nds-popover-max-w))`, so a 7-option list of short labels is
