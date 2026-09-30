@@ -4,7 +4,8 @@ import { useEffect, useId, useState, type CSSProperties } from 'react'
 import { Search } from 'lucide-react'
 import { Button, Input } from '../primitives'
 import { Field } from './Field'
-import { ListboxPanel } from './ListboxPanel'
+import { ListboxPanel, listboxPageSize } from './ListboxPanel'
+import { nextActiveIndex } from '../lib/media-choice'
 import type { ListboxOption } from './Listbox'
 import { groupOptions } from '../lib/group-options'
 import { searchTokens } from '../lib/option-search'
@@ -91,6 +92,14 @@ export function AsyncListboxPanel({ label, query, onQueryChange, options, value,
           if (!choices[index].disabled) return index
         }
         return direction < 0 && clearRow ? CLEAR : current
+      })
+    } else if (event.key === 'PageDown' || event.key === 'PageUp') {
+      // A page of choices (audit B20). Home and End stay the search field's caret keys.
+      event.preventDefault(); event.stopPropagation()
+      const page = listboxPageSize(typeof document === 'undefined' ? null : document.getElementById(`${id}-listbox`))
+      setActive(current => {
+        const next = nextActiveIndex(choices, current === CLEAR ? -1 : current, event.key as 'PageDown' | 'PageUp', page)
+        return next === -1 ? current : next
       })
     }
   }}>

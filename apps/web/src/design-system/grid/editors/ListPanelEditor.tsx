@@ -12,6 +12,7 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 
 import { OptionList, type OptionListItem } from '../../components'
 import { TagInput } from '../../primitives'
+import { nextActiveIndex, type ListKey } from '../../lib/media-choice'
 import { asList } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
 import { splitListText } from './shapeValue'
@@ -32,6 +33,8 @@ export interface ListPanelEditorParams {
   eGridCell?: HTMLElement
   eventKey?: string | null
 }
+
+const WALK_KEYS = new Set(['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End'])
 
 export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(function ListPanelEditor(props, _ref) {
   const { options, allowCustom, maxItems, label, value, column, onValueChange } = props
@@ -87,13 +90,15 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
   const note = (v: string) => stored.includes(v) ? allowCustom ? 'current' : 'current · not in the list' : 'added'
   const shown = closed ? [...items.filter((v) => !options!.some((o) => o.value === v)).map((v) => ({ value: v, label: `${v} (${note(v)})` })), ...options!] : []
   /* ↑/↓ walk the search field and the boxes; Space ticks. Inside AG's popup nothing else reaches the boxes: Tab is AG's
-     (it saves and moves), so the list had no keyboard path at all (P0, 2026-09-30). */
+     (it saves and moves), so the list had no keyboard path at all (P0, 2026-09-30). PageUp/PageDown move 8 and Home/End
+     reach the ends, as in the single-value lists; in the search field Home and End stay the caret's (audit B20). */
   const walk = (e: React.KeyboardEvent) => {
     if (keepGridOffEnter(e, props.stopEditing)) return
-    if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || !closed) return
+    if (!WALK_KEYS.has(e.key) || !closed) return
     const stops = [...(root.current?.querySelectorAll<HTMLElement>('.nds-combo-search input, input[type="checkbox"]') ?? [])]
     const at = stops.indexOf(document.activeElement as HTMLElement)
-    const next = stops[Math.min(stops.length - 1, Math.max(0, at + (e.key === 'ArrowDown' ? 1 : -1)))]
+    if ((e.key === 'Home' || e.key === 'End') && at <= 0) return
+    const next = stops[nextActiveIndex(stops.map(() => ({})), at, e.key as ListKey, 8)]
     if (!next) return
     e.preventDefault(); e.stopPropagation()
     next.focus()

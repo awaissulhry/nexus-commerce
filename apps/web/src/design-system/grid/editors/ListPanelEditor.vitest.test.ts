@@ -149,3 +149,28 @@ describe('open multi-value lists take a typed value', () => {
     expect(closed[0]).toEqual({ value: 'Old', label: 'Old (current · not in the list)' })
   })
 })
+
+/** Audit B20 — the checkbox list walks by page and to its ends, as the single-value lists do. */
+describe('ListPanelEditor — page and end keys walk the boxes', () => {
+  const walk = (key: string, focusedAt: number, count = 20) => {
+    const { tree } = mount({ value: [], options: Array.from({ length: count - 1 }, (_, i) => ({ value: `v${i}`, label: `v${i}` })) })
+    const stops = Array.from({ length: count }, (_, i) => ({ i, focus: vi.fn() }))
+    const rootRef = runtime.slots.find((s) => s && typeof s === 'object' && 'current' in (s as object)) as { current: unknown }
+    rootRef.current = { querySelectorAll: () => stops }
+    vi.stubGlobal('document', { activeElement: stops[focusedAt] })
+    const e = { key, ctrlKey: false, metaKey: false, nativeEvent: { isComposing: false }, preventDefault: vi.fn(), stopPropagation: vi.fn() }
+    ;(tree.props.onKeyDownCapture as Function)(e)
+    return stops.findIndex((s) => s.focus.mock.calls.length > 0)
+  }
+  it('PageDown and PageUp move 8 boxes', () => {
+    expect(walk('PageDown', 2)).toBe(10)
+    expect(walk('PageUp', 12)).toBe(4)
+  })
+  it('Home and End reach the ends from a box', () => {
+    expect(walk('End', 3)).toBe(19)
+    expect(walk('Home', 3)).toBe(0)
+  })
+  it('in the search field, Home and End stay the caret\'s', () => {
+    expect(walk('End', 0)).toBe(-1)
+  })
+})

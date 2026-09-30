@@ -131,3 +131,16 @@ describe('AsyncListboxPanel — Clear (audit B16)', () => {
     expect(props.onCommit).not.toHaveBeenCalled()
   })
 })
+
+describe('AsyncListboxPanel — PageDown and PageUp move a page (audit B20)', () => {
+  const many = Array.from({ length: 30 }, (_, i) => ({ value: `T${i}`, label: `Type ${i}` }))
+  it('PageDown from the stored row moves 8 rows, PageUp back', () => {
+    const props = base({ value: 'T1', options: many })
+    key(render(props), 'PageDown')
+    key(render(props), 'Enter')
+    expect(props.onCommit).toHaveBeenLastCalledWith('T9')
+    key(render(props), 'PageUp')
+    key(render(props), 'Enter')
+    expect(props.onCommit).toHaveBeenLastCalledWith('T1')
+  })
+})

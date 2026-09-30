@@ -348,3 +348,42 @@ describe('ListboxPanel — a searching list is announced', () => {
     expect(root.props['aria-label']).toBe('Colore')
   })
 })
+
+/**
+ * Audit B20 (2026-09-30) — no list editor handled Home, End, PageUp or PageDown: in a 244-option eBay list PageDown scrolled
+ * the panel but the highlight stayed on row 3, and Enter committed the off-screen row. A page is the rows in view (8 when
+ * nothing can be measured, as here). Home and End stay the search field's own keys (the editable-combobox convention).
+ */
+describe('ListboxPanel — page and end keys move the highlight', () => {
+  const capture = (root: El, key: string) => (root.props.onKeyDownCapture as (e: unknown) => void)({ key, nativeEvent: { isComposing: false }, preventDefault() {}, stopPropagation() {} })
+  const press = (root: El, key: string) => { const e = { key, preventDefault: vi.fn() }; (root.props.onKeyDown as (e: unknown) => void)(e); return e }
+  const many = Array.from({ length: 30 }, (_, i) => ({ value: `v${i}`, label: `Option ${String(i).padStart(2, '0')}` }))
+
+  it('PageDown and PageUp move a page in a searching list, and Enter takes the row in view', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options: many, value: 'v2', onCommit() {}, onCancel() {}, onKeyChoice }
+    press(render(props), 'PageDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('v10')
+    press(render(props), 'PageDown'); press(render(props), 'PageDown'); press(render(props), 'PageDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('v29')
+    press(render(props), 'PageUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('v21')
+  })
+  it('Home and End move to the first and last row of a list without a search field', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'b', onCommit() {}, onCancel() {}, onKeyChoice }
+    press(render(props), 'End')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('d')
+    press(render(props), 'Home')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('a')
+  })
+  it('in a searching list, Home and End are left to the search field', () => {
+    const e = press(render({ options: many, value: 'v2', onCommit() {}, onCancel() {} }), 'End')
+    expect(e.preventDefault).not.toHaveBeenCalled()
+  })
+})

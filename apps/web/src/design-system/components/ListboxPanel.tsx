@@ -42,6 +42,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Search } from 'lucide-react'
 import { groupOptions } from '../lib/group-options'
+import { nextActiveIndex } from '../lib/media-choice'
 import { searchOptions, searchTokens } from '../lib/option-search'
 import type { ListboxOption } from './Listbox'
 
@@ -147,6 +148,15 @@ export interface ListboxPanelProps {
    * composition never reaches the grid and reports nothing (audit B18).
    */
   onKeyChoice?: (value: string | null, end?: KeyboardEvent) => void
+}
+
+/**
+ * How many rows PageUp / PageDown move: the rows in view, less one kept for context. 8 (the panel's `--nds-combo-rows`)
+ * when nothing can be measured.
+ */
+export function listboxPageSize(host: HTMLElement | null | undefined): number {
+  const row = host?.querySelector<HTMLElement>('button[role="option"]')
+  return host && row && row.offsetHeight ? Math.max(1, Math.floor(host.clientHeight / row.offsetHeight) - 1) : 8
 }
 
 const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
@@ -375,6 +385,16 @@ export function ListboxPanel({
           })
           // A short uncontrolled list draws no `.active` row, so the focus ring IS the highlight: move it.
           if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>('button[role="option"]')[n === CLEAR_INDEX ? 0 : n + (showClear ? 1 : 0)]?.focus()
+        }
+        /* A page of rows, and the ends (audit B20): PageDown scrolled the panel and left the highlight — and Enter's row —
+           out of view. Home and End stay the search field's caret keys where there is one. */
+        else if (e.key === 'PageDown' || e.key === 'PageUp' || ((e.key === 'Home' || e.key === 'End') && !ownsSearch)) {
+          e.preventDefault()
+          const n = moveActive((i) => {
+            const next = nextActiveIndex(matches, i === CLEAR_INDEX ? -1 : i, e.key as 'PageDown' | 'PageUp' | 'Home' | 'End', listboxPageSize(hostRef.current))
+            return next === -1 ? i : next
+          })
+          if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>('button[role="option"]')[n + (showClear ? 1 : 0)]?.focus()
         }
         else if (e.key === 'Enter' && !onKeyChoice) {
           if (active === CLEAR_INDEX && showClear) { e.preventDefault(); onCommit(''); return }
