@@ -44,3 +44,17 @@ it('never sends a page reachable without a session to the profile picker', () =>
     expect(at(path).headers.get('location'), path).toBeNull()
   }
 })
+
+// 2026-09-30 — sign-in lands on a page with no profile through a client-side navigation, which Next sends as a React
+// Server Component request carrying `_rsc`. That marker went into `next`, and the address bar showed it.
+it('keeps Next’s `_rsc` out of the picker’s `next`, and keeps the page’s own query', () => {
+  const rsc = proxy(new NextRequest('https://web.example.test/dashboard/overview?_rsc=TvnZkL2Whu58I-dd', { headers: { rsc: '1' } }))
+  expect(rsc.status).toBe(307)
+  const location = new URL(rsc.headers.get('location')!)
+  expect(location.pathname).toBe('/profiles')
+  expect(location.search).toBe('?next=%2Fdashboard%2Foverview')
+  const withQuery = new URL(at('/products?search=SKU&_rsc=abc').headers.get('location')!)
+  expect(withQuery.searchParams.get('next')).toBe('/products?search=SKU')
+  // The control: a page's own query was always kept.
+  expect(new URL(at('/products?search=SKU').headers.get('location')!).searchParams.get('next')).toBe('/products?search=SKU')
+})

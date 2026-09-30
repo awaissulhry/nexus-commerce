@@ -40,8 +40,16 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react'
+import { Banner } from '@/design-system/components'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import {
+  approveLabelFor,
+  channelEffectOf,
+  moreThanShown,
+  type ChannelEffect,
+  type Delta,
+} from './approval-words'
 
 export interface FleetLabels {
   campaigns: Record<string, { name: string; marketplace: string | null }>
@@ -231,12 +239,6 @@ const EDITABLE: Record<string, Editable> = {
 
 /* ── what it touches, and what it changes ──────────────────────────────── */
 
-interface Delta {
-  field: string
-  from: string | null
-  to: string
-}
-
 interface Described {
   /** The thing being acted on, named. Null when we genuinely cannot say. */
   entity: string | null
@@ -245,6 +247,9 @@ interface Described {
   /** Named, decision-relevant signals — never a bare confidence score. */
   evidence: Array<{ label: string; value: string }>
 }
+
+/** MCP.12 — how a changes map shows a value that is not set. */
+export const EMPTY_VALUE = '(empty)'
 
 const euro = (cents: unknown) =>
   typeof cents === 'number' ? `€${(cents / 100).toFixed(2)}` : null
@@ -278,8 +283,15 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
            rendered card, not reasoned about. The card names the unit the tool
            omitted; every other field keeps its value verbatim. */
         const money = /price|cost|fee/i.test(field)
+        /* MCP.12 — a value that is not there reads as a word. `plain(null)` is
+           "—", and "number_of_pockets — → 4" put a dash where the old value
+           goes, which reads as a typo rather than as "nothing was set". */
         const fmt = (v: unknown) =>
-          money && typeof v === 'number' && Number.isFinite(v) ? `€${v.toFixed(2)}` : plain(v)
+          v == null || v === '' || (Array.isArray(v) && v.length === 0)
+            ? EMPTY_VALUE
+            : money && typeof v === 'number' && Number.isFinite(v)
+              ? `€${v.toFixed(2)}`
+              : plain(v)
         out.deltas.push({ field, from: fmt(ch.from), to: fmt(ch.to) })
       }
     }
@@ -435,6 +447,38 @@ const ago = (iso: string) => {
   return `${Math.floor(h / 24)}d ago`
 }
 
+/* ── MCP.12 · what each marketplace gets ───────────────────────────────── */
+
+/**
+ * The listing side of a bulk price change, as its preview states it: the listing lines the tool kept (at most 20,
+ * the rest counted) and one clause per count — sent, paused, own price, another currency, already there. The card
+ * used to show the master prices only, so an approver could not see what "eBay IT" would be sent.
+ */
+export function ChannelEffectDetail({ effect }: { effect: ChannelEffect }) {
+  return (
+    <>
+      {effect.lines.length > 0 ? (
+        <ul className="aq-channels">
+          {effect.lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+          {effect.more > 0 ? (
+            <li className="aq-channelsmore">
+              and {effect.more} more listing{effect.more === 1 ? '' : 's'}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+      <p className="aq-channelcounts">{sentenceOf(effect.counts)}</p>
+    </>
+  )
+}
+
+const sentenceOf = (clauses: string[]) => {
+  const text = clauses.join('; ')
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`
+}
+
 /* ── the card ──────────────────────────────────────────────────────────── */
 
 export function ApprovalCard({
@@ -536,12 +580,11 @@ export function ApprovalCard({
     ].filter((o) => now + o.ms < expiry - 5 * 60_000)
   })()
 
-  const primaryDelta = d.deltas[0]
-  const approveLabel = primaryDelta
-    ? primaryDelta.from
-      ? `Apply — ${primaryDelta.field} ${primaryDelta.from} → ${primaryDelta.to}`
-      : `Apply — ${primaryDelta.field}: ${primaryDelta.to}`
-    : vocab.approveLabel
+  /* MCP.12 — one change keeps its own wording; several say what the whole request does. The label used to name
+     `d.deltas[0]` only, so a 3-product price change read as a change to its first product. */
+  const approveLabel = approveLabelFor(approval.toolName, d.deltas, approval.preview, vocab.approveLabel)
+  const more = moreThanShown(approval.toolName, approval.preview)
+  const channels = channelEffectOf(approval.toolName, approval.preview)
 
   return (
     /*
@@ -613,14 +656,21 @@ export function ApprovalCard({
 
       {/* A request that came back sits ABOVE the delta: it changes how the
           number below should be read, so it cannot come after it. */}
+      {/* MCP.12 — the DS Banner, whose layout puts the icon beside the text: the
+          page's own <p> had colours but no layout, so the icon sat on a line of
+          its own above the sentence. Warning when it did not run; danger when it
+          was attempted and failed (something was sent). */}
       {comeback ? (
-        <p className={`aq-cameback${comeback.attempted ? ' attempted' : ''}`}>
-          <RotateCcw size={12} aria-hidden />
-          <span>
+        <Banner
+          tone={comeback.attempted ? 'danger' : 'warning'}
+          icon={<RotateCcw size={16} aria-hidden />}
+          className="aq-cameback"
+        >
+          <span className="aq-camebacktext">
             <strong>{comeback.headline}</strong> {comeback.detail} {comeback.tail} Its waiting time restarted when it
             came back: handing it back asks the question again, so the full time to decide starts over.
           </span>
-        </p>
+        </Banner>
       ) : null}
 
       {/* 1 — THE DELTA. First, and the only large type on the card.
@@ -686,7 +736,7 @@ export function ApprovalCard({
               <span className="aq-dfield">{x.field}</span>
               {x.from != null ? (
                 <>
-                  <span className="aq-dfrom">{x.from}</span>
+                  <span className={x.from === EMPTY_VALUE ? 'aq-dfrom aq-dempty' : 'aq-dfrom'}>{x.from}</span>
                   <ArrowRight size={14} aria-hidden />
                 </>
               ) : (
@@ -695,6 +745,8 @@ export function ApprovalCard({
               <span className="aq-dto">{x.to}</span>
             </li>
           ))}
+          {/* MCP.12 — a bulk preview keeps 20 lines; the rest are counted, and the card says so. */}
+          {more ? <li className="aq-dmore">{more}</li> : null}
         </ul>
       ) : (
         /* (h) the honest fallback — it takes the DELTA slot, at delta size,
@@ -761,6 +813,14 @@ export function ApprovalCard({
             <div>
               <dt>What it does</dt>
               <dd>{approval.preview.effect as string}</dd>
+            </div>
+          ) : null}
+          {channels ? (
+            <div>
+              <dt>What each marketplace gets</dt>
+              <dd>
+                <ChannelEffectDetail effect={channels} />
+              </dd>
             </div>
           ) : null}
           {d.evidence.length > 0 ? (

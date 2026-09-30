@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import { AI_DRAFT_SURFACES, aiDraft } from './draft.tools.js'
+import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
 const DAY = 86_400_000
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -32,8 +33,8 @@ const productAnalytics: AgentTool = {
     if (!id) return { ok: false, error: 'productId is required' }
     const days = Math.min(Math.max(Number(args.days) || 30, 1), 365)
     const since = new Date(Date.now() - days * DAY)
-    const p = await prisma.product.findUnique({
-      where: { id },
+    const p = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: { sku: true, totalStock: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }
@@ -78,10 +79,12 @@ const channelStockDrift: AgentTool = {
   async handler(args) {
     const id = args.productId ? String(args.productId) : null
     const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100)
+    // MCP.12 — a deleted product is not found, and its drift is never a row; a row whose SKU matched no product stays.
+    if (id && !(await isLiveProduct(id))) return { ok: false, error: PRODUCT_NOT_FOUND }
     const rows = await prisma.channelStockEvent.findMany({
       where: {
         status: { in: ['PENDING', 'REVIEW_NEEDED'] },
-        ...(id ? { productId: id } : {}),
+        ...(id ? { productId: id } : { OR: [{ productId: null }, { product: { deletedAt: null } }] }),
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -112,6 +115,8 @@ const replenishmentForecast: AgentTool = {
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
+    // MCP.12 — a deleted product is not found; its last recommendation is not read.
+    if (!(await isLiveProduct(id))) return { ok: false, error: PRODUCT_NOT_FOUND }
     const rec = await prisma.replenishmentRecommendation.findFirst({
       where: { productId: id },
       orderBy: { generatedAt: 'desc' },
@@ -242,8 +247,8 @@ const draftAltText: AgentTool = {
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findUnique({
-      where: { id },
+    const p = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: { name: true, brand: true, productType: true, keywords: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }

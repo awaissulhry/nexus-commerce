@@ -42,6 +42,21 @@ import { refusedTooltip } from './refusals'
 export const IDENTITY_COL = 'identity'
 /** §3.3: the identity column FIXED at 380 (the same reasoning as the Variants page: a fixed slot set). */
 export const IDENTITY_COL_W = 380
+/**
+ * 2026-09-30 — a phone. At 390px the grid is ~322px wide, and a 380px PINNED column covered all of it: no coordinate
+ * column was ever on screen, and scrolling the grid moved nothing you could see. So the pinned band gives way on a
+ * narrow grid, leaving at least `IDENTITY_MIN_SCROLL_W` for the coordinate columns to scroll in, and never goes below
+ * `IDENTITY_MIN_W`: the DS identity band keeps its role chip, picture and `⋯` whole and truncates the SKU (the full
+ * key stays on hover — `IdentityBand`, `.nds-identity-band-sku`). A wide grid keeps exactly 380.
+ */
+export const IDENTITY_MIN_W = 160
+export const IDENTITY_MIN_SCROLL_W = 160
+
+/** The identity column's width, given the grid width it shares (the grid's client width less any other pinned column, px). Unknown → the desktop 380. */
+export function identityWidthFor(gridWidth: number): number {
+  if (!Number.isFinite(gridWidth) || gridWidth <= 0) return IDENTITY_COL_W
+  return Math.max(IDENTITY_MIN_W, Math.min(IDENTITY_COL_W, Math.floor(gridWidth - IDENTITY_MIN_SCROLL_W)))
+}
 export const BASE_PRICE_COL = 'basePrice'
 /**
  * MX.F item 2, measured on the live page at 1440/1728: at 100px the header's 10/10 padding and the 16px menu button left a
@@ -105,15 +120,27 @@ export function notListedTitle(c: MatrixCoordinate): string {
   return `${c.label} — ${c.cells.length} ${c.cells.length === 1 ? 'cell' : 'cells'}${c.sharedInventoryWith ? ` · ${MATRIX_COPY.sharedEu(c.sharedInventoryWith)}` : ''}`
 }
 
-export function MatrixGroupHeader(p: { displayName: string; coordinate?: MatrixCoordinate }) {
-  const c = p.coordinate
+/** The group's roll-up tag: `20 listed`, `0 listed · 1 draft`; null for a group that serves no `Listing` cell. */
+export function stripTag(c: MatrixCoordinate | undefined): string | null {
   /* A group that serves no `Listing` cell (the EU inventory group) has nothing to count: no tag,
      rather than a `0 listed` that reads as "nothing is listed here". */
-  const tag = c && c.listed !== null && c.cells.includes('listing')
+  return c && c.listed !== null && c.cells.includes('listing')
     ? `${c.listed} listed${c.draft !== null && c.draft > 0 ? ` · ${c.draft} draft` : ''}`
     : null
+}
+
+/** The strip's tooltip: the whole name, and the counts — which a narrow group moves off its line (matrix.module.css). */
+export function stripTitle(c: MatrixCoordinate | undefined, displayName: string): string {
+  if (!c) return displayName
+  const tag = stripTag(c)
+  return tag ? `${notListedTitle(c)} · ${tag}` : notListedTitle(c)
+}
+
+export function MatrixGroupHeader(p: { displayName: string; coordinate?: MatrixCoordinate }) {
+  const c = p.coordinate
+  const tag = stripTag(c)
   return (
-    <span className="nds-matrix-strip" title={c ? notListedTitle(c) : p.displayName}>
+    <span className="nds-matrix-strip" title={stripTitle(c, p.displayName)}>
       <span className="nds-matrix-strip-label">{p.displayName}</span>
       {tag && <Tag tone={c && c.listed! > 0 ? 'success' : 'neutral'} className="nds-matrix-strip-tag">{tag}</Tag>}
     </span>
@@ -157,17 +184,21 @@ export interface BuildMatrixColumnsOptions {
   /** The fulfilment select's CHOICE — the engine's setter routes it here and writes nothing (§3.4). */
   onPickFulfilment: (method: FulfilmentMethod, params: ICellRendererParams) => void
   rowsRef: MutableRefObject<StudioRow[]>
+  /** The identity column's width (`identityWidthFor`); the desktop 380 when not given. */
+  identityWidth?: number
 }
 
 const rowId = (r: StudioRow) => r.id
 
 export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] {
   const { coordinates, cellsOf, rowOf, tracker, sheetColumns, locale, market, axesRef, rowMenuRef, masterHeldReason, onJump, onPickFulfilment, rowsRef } = opts
+  const identityWidth = opts.identityWidth ?? IDENTITY_COL_W
 
   const identity: ColDef<StudioRow> = {
     colId: IDENTITY_COL,
     headerName: 'Product',
-    width: IDENTITY_COL_W, minWidth: IDENTITY_COL_W, maxWidth: IDENTITY_COL_W,
+    /* Still a FIXED slot at any one grid width (min = max = width): only the grid's own width changes it. */
+    width: identityWidth, minWidth: identityWidth, maxWidth: identityWidth, resizable: false,
     pinned: 'left', lockPinned: true, lockPosition: 'left',
     suppressMovable: true, suppressHeaderMenuButton: true, sortable: false,
     cellClass: 'nds-ag-cell',

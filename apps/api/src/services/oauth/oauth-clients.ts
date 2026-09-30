@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto'
 import https from 'node:https'
 import prisma from '../../db.js'
 import { guardedLookup } from '../../lib/outbound-webhook.js'
+import { logger } from '../../utils/logger.js'
 import { cimdHosts, redirectMatches, redirectUriAllowed } from './oauth-config.js'
 
 const CIMD_TTL_MS = 24 * 3600 * 1000
@@ -103,6 +104,10 @@ function validRedirects(uris: string[] | null): string[] {
   return uris
 }
 
+/** MCP.12 — what the person reads when an app's details could not be fetched from its host. */
+export const cimdUnreachable = (host: string) =>
+  `Nexus could not reach ${host} to check which app is asking to connect, so it cannot be connected right now. Start the connection again from Claude in a few minutes.`
+
 async function loadCimdClient(clientId: string, url: URL): Promise<OAuthClientRecord> {
   const existing = await prisma.oAuthClient.findUnique({ where: { clientId } })
   if (existing?.disabledAt) throw new OAuthClientError('invalid_client', 'this app has been disabled')
@@ -115,7 +120,10 @@ async function loadCimdClient(clientId: string, url: URL): Promise<OAuthClientRe
   } catch (error) {
     // A cached document keeps working through a brief outage of its host.
     if (existing) return existing
-    throw new OAuthClientError('invalid_client', `could not read the client metadata document: ${String((error as Error).message ?? error)}`)
+    // MCP.12 — the consent page shows this sentence to a person, so it names the app's host and what to do; the
+    // network detail ("…:443 blocked", a DNS or TLS error) goes to the server log only.
+    logger.warn('[oauth] could not read a client metadata document', { host: url.hostname, error: String((error as Error)?.message ?? error) })
+    throw new OAuthClientError('invalid_client', cimdUnreachable(url.hostname))
   }
   if (!document || typeof document !== 'object' || document.client_id !== clientId) {
     throw new OAuthClientError('invalid_client_metadata', 'the metadata document must name itself as client_id')

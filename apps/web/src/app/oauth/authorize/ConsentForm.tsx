@@ -90,8 +90,8 @@ export function ConsentForm(props: ConsentFormProps) {
               </Select>
             </Field>
             <div role="group" aria-labelledby={scopesLabel} className="business-profile-form">
-              <p id={scopesLabel}>
-                <strong>Claude may</strong>
+              <p id={scopesLabel} className="oauth-consent-group-label">
+                Claude may
               </p>
               <Checkbox checked disabled label="Read the products, orders, stock, listings and reports you can see" />
               {view.scopes.includes('nexus.write') && (

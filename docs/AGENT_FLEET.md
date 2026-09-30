@@ -1,7 +1,7 @@
 # NEXUS AGENT FLEET (NAF) — Master Brief for Claude Code
 
 > **Series tag:** `NAF`
-> **Status:** Specification. Nothing below is built yet.
+> **Status:** Specification. Part 1 records the repository as it stands; 1.2a records what has since been built for connecting Claude (MCP).
 > **Audience:** Claude Code, working inside `github.com/awaissulhry/nexus-commerce`.
 > **Approval model:** Phase-by-phase. Written spec approved before implementation. Do not start Phase N+1 without explicit approval.
 
@@ -56,10 +56,20 @@ apps/api/src/services/agents/
 ├── autonomous/
 │   ├── listing-quality-keeper.ts
 │   └── pricing-watchdog.ts
-└── tools/  read · analytics · draft · mutate   (21 tools)
+└── tools/  read · analytics · draft · mutate · ads-propose · approval · channel · bulk   (30 tools)
 ```
 
-Existing tools: `product-snapshot`, `product-search`, `order-search`, `order-detail`, `stock-levels`, `price-status`, `listing-health`, `product-analytics`, `channel-stock-drift`, `replenishment-forecast`, `insights-metric`, `detect-anomalies`, `draft-alt-text`, `draft-listing-content`, `draft-seo`, `translate-content`, `draft-customer-message`, `set-price`, `publish-listing`, `send-customer-message`, `apply-content`.
+Existing tools (2026-09-30):
+
+| Kind | Tools |
+|---|---|
+| Read the catalog, stock and orders | `product-snapshot`, `product-search`, `order-search`, `order-detail`, `stock-levels`, `price-status`, `listing-health` |
+| Read across channels | `listing-issues`, `channel-price-stock`, `out-of-sync-listings` |
+| Analytics | `product-analytics`, `channel-stock-drift`, `replenishment-forecast`, `insights-metric`, `detect-anomalies` |
+| Drafts (in-app assistant only, not offered to Claude) | `draft-alt-text`, `draft-listing-content`, `draft-seo`, `translate-content`, `draft-customer-message` |
+| Changes — always approved by a person | `set-price`, `bulk-price-change`, `bulk-attribute-change`, `apply-content`, `publish-listing`, `send-customer-message` |
+| Advertising proposals (preview only) | `create-negative-keyword`, `graduate-keyword`, `set-target-bid` |
+| Following a request | `approval-status` |
 
 Existing Prisma models: `AgentDefinition`, `AgentRun`, `AgentTool`, `AgentApproval`, `AgentMemory`.
 
@@ -67,7 +77,19 @@ Routes: `apps/api/src/routes/agents.routes.ts` — `/agent/run`, `/agent/chat`, 
 
 UI: `apps/web/src/app/settings/ai/AiAgentsClient.tsx` (thin).
 
-**What is missing:** L4 (declarative per-surface config), real L6 (evals + Control Room), L7 (memory/learning + multi-agent orchestration), MCP exposure. Those are what this brief builds.
+**What is missing:** L4 (declarative per-surface config), real L6 (evals + Control Room), L7 (memory/learning + multi-agent orchestration). Those are what this brief builds. MCP exposure is built: see 1.2a.
+
+### 1.2a Claude over MCP (built 2026-09)
+
+A person can connect Claude (claude.ai, Claude Desktop or Claude Code) to Nexus and work in one business through the same tools the in-app assistant uses. The code is in `apps/api/src/services/mcp/` (the `/mcp` endpoint), `apps/api/src/services/oauth/` (connecting) and `apps/web/src/app/oauth/authorize/` (the consent page).
+
+**Connecting.** Claude sends the person to Nexus's consent page. They sign in, choose one business, choose whether Claude may only read or may also ask for changes, and confirm with a fresh two-factor code. A connection reaches that one business only; a second business needs a second connection. The person can end a connection in Settings › Security, and whoever manages a business's sessions can end any connection to it from its team settings. Every call re-checks the person's membership and role, so a person who leaves a business, or loses a permission, loses it for Claude at the same moment.
+
+**What Claude can do.** Claude sees the tools the person's role allows, minus the AI drafting tools. Read tools answer from Nexus's own data and never call a marketplace. Calls are counted per connection and per business, and every call is recorded as a run made via Claude.
+
+**The rule: only a person approves a change.** Every change tool — a price, many prices, attributes, content, a publish, a customer message — runs its preview only and returns it with an `approvalId` and a link to the Approvals page. Nothing changes until a person with the permission for that change approves it there. Claude cannot approve anything, cannot change its own permissions, and cannot raise what the connection allows. An approval waits a short undo window before it runs, re-checks that the facts it was shown still hold, and refuses to run if they have moved. Claude can follow a request with `approval-status`, which says whether it was approved or rejected and, for a change sent on to a marketplace, how many updates are still queued, sent or failed.
+
+**Bulk changes.** `bulk-price-change` sets or moves the master price of up to 250 products; listings that follow the master price change with it and are queued to their marketplace. `bulk-attribute-change` sets master attributes on up to 250 products in Nexus only; no marketplace changes until someone publishes from Nexus. Both show what would change before anyone approves, and both are worked out again from the stored values when they run.
 
 ### 1.3 The advertising domain is already an expert system
 
@@ -929,6 +951,8 @@ Plus: a shadow-grading job that, for each finding, records what the deterministi
 ### PHASE J — Model economics + MCP
 
 **Build** the eval harness (Part 9.1), the local OpenAI-compatible provider in `services/ai/providers/`, a scheduled bake-off report, and — separately — expose the tool registry as an MCP server so Claude Code, Claude Desktop, and the Excel add-in can drive Nexus through the same governed path.
+
+*Status (2026-09-30):* the MCP server is built for Claude (1.2a) — the same tool policy and the same approval gate, covered by tests. The eval harness, the local provider and the bake-off are not built.
 
 **Acceptance**
 - Bake-off report produced for every tier against the frozen eval set.

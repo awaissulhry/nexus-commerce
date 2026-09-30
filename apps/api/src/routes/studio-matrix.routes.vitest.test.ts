@@ -15,6 +15,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { previewVerb } from '@nexus/shared/matrix-preview'
+import { FEATURES as F } from '@nexus/shared/permissions'
 import { MATRIX_CELL_KINDS, type MatrixRead } from '@nexus/shared/matrix-contract'
 
 const mocks = vi.hoisted(() => ({
@@ -72,8 +73,25 @@ const read = (): MatrixRead => ({
   ],
 })
 
+/**
+ * Every request carries the permissions production resolves before a route runs (`req.__rbacResolved`: the business
+ * membership's with business profiles on, lib/workspace-hook.ts; the login's otherwise, lib/auth/rbac-hook.ts), so the
+ * door judges `products.price.edit` from THIS person's permissions in both modes. Without them it falls back to the
+ * gate's own answer for an anonymous request, which refuses whenever RBAC is enforced (always, with profiles on).
+ * By default the person may edit prices; `x-test-permissions` names a narrower set for one request.
+ */
+const PRICE_EDITOR = [F.productsView, F.productsEdit, F.productsPriceEdit]
+const NO_PRICE_EDIT = [F.productsView, F.productsEdit].join(',')
 let app: FastifyInstance
-beforeAll(async () => { app = Fastify(); await app.register(routes); await app.ready() })
+beforeAll(async () => {
+  app = Fastify()
+  app.addHook('onRequest', async (request) => {
+    const narrowed = request.headers['x-test-permissions']
+    request.__rbacResolved = { isOwner: false, permissions: new Set(typeof narrowed === 'string' ? narrowed.split(',') : PRICE_EDITOR) }
+  })
+  await app.register(routes)
+  await app.ready()
+})
 afterAll(() => app.close())
 beforeEach(() => {
   vi.clearAllMocks()
@@ -129,6 +147,9 @@ describe('GET /products/:id/studio/matrix', () => {
     expect(res.statusCode).toBe(200)
     expect(assertMatrixShape(res.json())).toEqual([])
     expect(mocks.read).toHaveBeenCalledWith(expect.objectContaining({ productId: 'root', accountId: 'acc', locale: 'it', canEditPrice: true }))
+    /* control: a person without products.price.edit is read without it */
+    await app.inject({ method: 'GET', url: '/products/root/studio/matrix?accountId=acc&locale=it', headers: { 'x-test-permissions': NO_PRICE_EDIT } })
+    expect(mocks.read).toHaveBeenLastCalledWith(expect.objectContaining({ canEditPrice: false }))
     /* the validator has teeth: a read with a held cell and no sentence is a problem */
     const broken = read(); broken.rows[1]!.cells['AMAZON:IT']!.writable.price = false
     expect(assertMatrixShape(broken)).toEqual(['CHILD-1/AMAZON:IT: price held without a sentence'])
@@ -136,7 +157,7 @@ describe('GET /products/:id/studio/matrix', () => {
 })
 
 describe('PATCH /products/:id/studio/matrix — the door', () => {
-  const write = (cells: unknown[]) => app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells } })
+  const write = (cells: unknown[], headers: Record<string, string> = {}) => app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', headers, payload: { cells } })
   it('a stale expectedVersion is a conflict carrying the CURRENT version and delegates nothing; the right version applies once', async () => {
     const stale = await write([{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 2 }])
     expect(stale.json().results[0]).toMatchObject({ outcome: 'conflict', version: 3 })
@@ -167,12 +188,9 @@ describe('PATCH /products/:id/studio/matrix — the door', () => {
     expect(mocks.follow).not.toHaveBeenCalled()
   })
   it('products.price.edit is enforced on the price cells inside the door, with a positive control', async () => {
-    process.env.NEXUS_RBAC_MODE = 'enforce'
-    try {
-      const held = await write([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3 }])
-      expect(held.json().results[0]).toMatchObject({ outcome: 'refused', reason: expect.stringContaining('products.price.edit') })
-      expect(mocks.prices).not.toHaveBeenCalled()
-    } finally { delete process.env.NEXUS_RBAC_MODE }
+    const held = await write([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3 }], { 'x-test-permissions': NO_PRICE_EDIT })
+    expect(held.json().results[0]).toMatchObject({ outcome: 'refused', reason: expect.stringContaining('products.price.edit') })
+    expect(mocks.prices).not.toHaveBeenCalled()
     const ok = await write([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3 }])
     expect(ok.json().results[0]).toMatchObject({ outcome: 'applied', version: 4 })
     // A-17: the cell follows the master in the read, so the door is told the operator saw "following" (null).

@@ -842,7 +842,7 @@
 /* S5.2 — the four hexes invented for this block (#f0c9c9 / #c53030 / #fdf7f7 /
    #f0dcdc) retired to the design system's own danger ramp. #c53030's other
    call sites are deliberately untouched: .aq-err and .aq-gateunknown are real
-   error states and .aq-cameback.attempted is a real failure, so their red is
+   error states and an attempted, failed request (the Banner's danger tone) is a real failure, so their red is
    already correct. Only .aq-card.r-high changed MEANING. */
 .aq-outside-card {
   margin: 14px 0 0;
@@ -1031,14 +1031,8 @@
 /* before → after */
 
 
-.aq-cameback {
-  border: 1px solid #e6d6b8;
-  background: #fffaeb;
-  color: #3a4658;
-}
-.aq-cameback svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
+.aq-page .aq-cameback {
+  margin: 10px 0 4px;
 }
 /*
  * The one prose block on the card that S6.a left without a measure: at a
@@ -1051,7 +1045,7 @@
  * house rule on this page is that a measure caps the prose and never the
  * block, or the background shrinks to a stub beside the text.
  */
-.aq-cameback > span {
+.aq-cameback .aq-camebacktext {
   display: block;
   max-width: 58ch;
 }
@@ -1270,13 +1264,6 @@
 
 /* An execution failure is not a staleness hand-back: something was actually
    sent. Louder, because the operator may need to check Amazon. */
-.aq-cameback.attempted {
-  border-color: #f0c9c9;
-  background: #fdf5f5;
-}
-.aq-cameback.attempted svg {
-  color: #c53030;
-}
 
 /* ── "Not now" ──────────────────────────────────────────────────────────── */
 
@@ -1343,6 +1330,64 @@
   font-size: 11.5px;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── MCP.12 · the verbs, and this page's light palette ───────────────────
+ *
+ * `.acr-btn`'s base look now lives once in fleet-pages.css, for every fleet
+ * page. What stays here is this page's own: the S4.c and S6.d `:disabled`
+ * blocks below, and a disabled primary losing its green edge with its green.
+ *
+ * And one pin the fleet's shared pin cannot hold: `--nds-danger-strong`, the
+ * edge of the section of requests that can run. Under a dark OS `.dark` makes
+ * it #f79289, and measured on this light page (2026-09-30) that edge turned
+ * pink. Its light value is a literal with no ramp step, so it is pinned as the
+ * DS's own light literal, as shared-shell.css pins it; the example's green
+ * below reads the pinned token instead of a literal, so this file's literal
+ * count does not rise. */
+.aq-page {
+  --nds-danger-strong: #a3211a;
+  /* MCP.12 — the returned-request Banner's warning tone: `.dark` makes its fill #3a2e12 and its icon #f0b46a,
+     a dark block on this light page. Pinned to the DS's light values; the fill has no ramp step, so it is
+     its light literal, and the banner's own six literals left this file with it. */
+  --nds-warning-soft: #fff6e8;
+  --nds-warning-strong: var(--nds-amber-700);
+  /* …and its edge: the app chrome's dark block (`.dark .nds-chrome-host`, shared-shell.css) sets #e0a82e. */
+  --nds-warning: var(--nds-amber-600);
+}
+.aq-page .acr-btn.go:disabled {
+  border-color: transparent;
+}
+
+/* MCP.12 — an old value that was not set: a word, not struck through (there was nothing to strike). */
+.aq-page .aq-deltas .aq-dempty {
+  text-decoration: none;
+  font-weight: 400;
+}
+/* MCP.12 — "and N more": a bulk preview keeps 20 lines and counts the rest. */
+.aq-page .aq-deltas .aq-dmore {
+  font-size: var(--nds-font-size-base);
+  font-weight: 400;
+  color: var(--nds-text-2);
+}
+/* MCP.12 — what each marketplace gets, inside the detail list. */
+.aq-channels {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.aq-channels li {
+  padding: 1px 0;
+  color: var(--nds-text);
+}
+.aq-channels .aq-channelsmore {
+  color: var(--nds-text-2);
+}
+.aq-channelcounts {
+  margin: 4px 0 0;
+  color: var(--nds-text-2);
 }
 
 /* ── S4.c · the example must be READABLE, and `disabled` was preventing it ──
@@ -1433,7 +1478,7 @@
  * Wins on specificity (5 classes to 4), so it holds wherever it sits.
  */
 .aq-example .aq-card .acr-btn.go:disabled {
-  background: #15804f;
+  background: var(--nds-success-strong);
   color: var(--nds-white);
 }
 

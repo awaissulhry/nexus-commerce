@@ -175,7 +175,10 @@ export async function publishTranslations(gql: ShopifyGraphql, resourceId: strin
 export async function publishMetaobjects(gql: ShopifyGraphql, content: ShopifyContent, mediaIds: Record<string, string> = {}) {
   const ids: Record<string, string> = {}, pending = [...content.metaobjects]
   while (pending.length) {
-    const index = pending.findIndex(m => Object.entries(m.fields).filter(([key]) => content.metaobjectDefinitions.find(d => d.type === m.type)?.fields.find(f => f.key === key)?.type.includes('metaobject_reference')).every(([, v]) => !(v.value?.match(/@metaobject:([A-Za-z0-9_-]+)/g) ?? []).some(ref => !ids[ref.slice(12)])))
+    // `[] as string[]`, not a bare `[]`: with `strict` off a bare `[]` is `never[]`, and `.some` on the union
+    // `RegExpMatchArray | never[]` typed `ref` as `never` whenever the checker met this file after a test file (`tsc`
+    // with a test file listed first), though never in the plain typecheck. The values at runtime are the same.
+    const index = pending.findIndex(m => Object.entries(m.fields).filter(([key]) => content.metaobjectDefinitions.find(d => d.type === m.type)?.fields.find(f => f.key === key)?.type.includes('metaobject_reference')).every(([, v]) => !(v.value?.match(/@metaobject:([A-Za-z0-9_-]+)/g) ?? ([] as string[])).some(ref => !ids[ref.slice(12)])))
     if (index < 0) throw new Error('Reusable entries contain a cycle or a missing reference.')
     const entry = pending.splice(index, 1)[0]
     const fields = Object.entries(entry.fields).filter(([, value]) => value.value !== null).map(([key, value]) => { const raw = localizedValue(value, content.defaultLocale, content.defaultLocale)!; const field = content.metaobjectDefinitions.find(d => d.type === entry.type)!.fields.find(f => f.key === key)!; return { key, value: field.type.includes('reference') ? replaceReferences(raw, ids, mediaIds) : raw } })
