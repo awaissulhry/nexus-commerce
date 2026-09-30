@@ -13441,6 +13441,10 @@ model AgentApproval {
   status       String    @default("pending") // pending | scheduled | approved | rejected | expired | executed
   requestedAt  DateTime  @default(now())
   decidedBy    String?
+  /// The PERSON behind `decidedBy` (UserProfile.id), set when a person decides; `decidedBy` stays the name shown.
+  /// An approve waits out the undo window and the commit re-checks this person's permissions in this business at
+  /// run time, so an approval never runs on a permission the approver has since lost. Null for a system decider.
+  decidedByUserId String?
   decidedAt    DateTime?
   /// What the SYSTEM recorded: "not run — …", "execution failed: …",
   /// "approved; this tool is preview-only". Never the operator's voice.
@@ -20287,6 +20291,9 @@ model ShopifyColourProduct {
   /// Shopify's product status when last read: ACTIVE | DRAFT | ARCHIVED | UNLISTED.
   remoteStatus        String?
   checkedAt           DateTime?
+  /// When the link writer (PR 4) last read back this product's colour name and colour list equal to what Nexus wants.
+  /// Null: never verified, or the last link run stopped before its read-back.
+  linkVerifiedAt      DateTime?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 

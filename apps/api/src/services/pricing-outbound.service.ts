@@ -6,7 +6,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * Reads PricingSnapshot rows that need pushing (computedAt > last sync,
  * or fresh signals) and dispatches per-channel updates:
  *
- *   - Amazon: amazonSpApiClient.patchListingPrice (price-only PATCH)
+ *   - Amazon: amazonSpApiClient.patchListingPrice (price-only PATCH); with
+ *     NEXUS_AMAZON_OFFER_MERGE=1 a merge on the live offer (pushAmazonPriceAsMerge)
  *   - eBay:   ReviseInventoryStatus (skeleton; real wiring under
  *             ebay-publish.adapter.ts pattern)
  *   - Shopify / WooCommerce / Etsy: stub for now; same pattern when
@@ -26,6 +27,8 @@ import type { PrismaClient } from '@prisma/client'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { closedMarketSet } from './amazon-market-offer.service.js'
+import { getAmazonPublishMode } from './amazon-publish-gate.service.js'
+import { amazonListingPriceOffer, amazonOfferMergeEnabled, amazonOfferReadFailure, amazonPriceOfferPlan, readAmazonOfferLive } from './amazon/purchasable-offer.js'
 import { logger } from '../utils/logger.js'
 
 export interface PushPriceArgs {
@@ -200,7 +203,7 @@ async function pushAmazonPrice(
     }
   }
 
-  const result = await amazonSpApiClient.patchListingPrice({
+  const priceArgs = {
     sellerId,
     sku,
     marketplaceId: marketplace.marketplaceId,
@@ -208,7 +211,14 @@ async function pushAmazonPrice(
     price: Number(snapshot.computedPrice),
     currencyCode: snapshot.currency,
     taxInclusive: marketplace.taxInclusive ?? false,
-  })
+  }
+  // NEXUS_AMAZON_OFFER_MERGE (amazon/purchasable-offer.ts) — OFF by default, and OFF is exactly the replace this always
+  // sent. ON, in live mode only (gated / dry-run / sandbox answer without HTTP inside patchListingPrice, as before), the
+  // price goes as a merge on the live offer and the rest of Amazon's offer stays.
+  const result: { success: boolean; error?: string; dryRun?: boolean } =
+    amazonOfferMergeEnabled() && getAmazonPublishMode() === 'live'
+      ? await pushAmazonPriceAsMerge(priceArgs)
+      : await amazonSpApiClient.patchListingPrice(priceArgs)
 
   // Record the override + sync state.
   // PD.3 — a gated/dry-run patch publishes NOTHING; it must not write a green
@@ -260,6 +270,27 @@ async function pushAmazonPrice(
     error: result.success ? undefined : result.error,
     durationMs: Date.now() - startedAt,
   }
+}
+
+/**
+ * The pricing-engine push with NEXUS_AMAZON_OFFER_MERGE on — the queue's reader and plan (amazon/purchasable-offer.ts),
+ * not a copy. `patchListingPrice` replaces `purchasable_offer` with an instance that holds only `our_price`; this reads
+ * the live offer and merges `our_price` into the instance it prices, so a Seller Central sale, map_price, the min/max
+ * seller-allowed prices, the offer dates and the B2B instance stay. The engine never owns a sale (a scheduled sale
+ * reaches it as the price itself), so it never sends `discounted_price`.
+ *
+ * A failed read sends nothing and fails like any failed push here — `ok: false`, the listing FAILED with the reason —
+ * so pushing again retries. No live instance in the market: the replace, as before. An instance it cannot name: refused.
+ */
+async function pushAmazonPriceAsMerge(args: Parameters<typeof amazonSpApiClient.patchListingPrice>[0]): Promise<{ success: boolean; error?: string; dryRun?: boolean }> {
+  const live = await readAmazonOfferLive({ sellerId: args.sellerId, sku: args.sku, marketplaceId: args.marketplaceId })
+  if (live.read === 'failed') return { success: false, error: `${amazonOfferReadFailure(args.sku, live.error)} Push the price again to retry.` }
+  const plan = amazonPriceOfferPlan({ built: amazonListingPriceOffer(args), live: live.instances, marketplaceId: args.marketplaceId, saleRemoved: false })
+  if (plan.kind === 'refused') return { success: false, error: plan.reason }
+  if (plan.kind === 'first-offer') return amazonSpApiClient.patchListingPrice(args)
+  return amazonSpApiClient.patchPurchasableOffer({
+    sellerId: args.sellerId, sku: args.sku, marketplaceId: args.marketplaceId, productType: args.productType, op: 'merge', value: plan.patch.value,
+  })
 }
 
 /**

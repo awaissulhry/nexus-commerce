@@ -140,14 +140,20 @@ export async function confirmColourProducts(productId: string, scope: ContentSco
   if (!definition) checked((await graphql(`mutation NexusCreateDefinition($definition:MetafieldDefinitionInput!) { metafieldDefinitionCreate(definition:$definition) { createdDefinition { id } userErrors { field message } } }`,
     { definition: { namespace: 'nexus', key: 'family_id', name: 'Nexus family identity', type: 'id', ownerType: 'PRODUCT', access: { storefront: 'PUBLIC_READ' }, validations: [], capabilities: { uniqueValues: { enabled: true } } } })).metafieldDefinitionCreate, 'Create metafield definition')
   const confirmed: Array<Awaited<ReturnType<typeof adopt>>> = []
-  for (const adoption of adoptions) {
-    try {
-      confirmed.push(await adopt(graphql, destination, adoption))
-    } catch (error) {
-      const done = confirmed.length ? ` ${confirmed.map(c => `"${c.name}"`).join(', ')} ${confirmed.length === 1 ? 'is' : 'are'} confirmed.` : ''
-      if (error instanceof WorkspaceScopeError) throw new WorkspaceScopeError(`${error.message}${done}`, error.statusCode)
-      throw new WorkspaceScopeError(`Shopify did not accept the change to "${adoption.title}" (${adoption.name}): ${error instanceof Error ? error.message : String(error)}.${done} Run Find again, then confirm what is left.`, 502)
+  try {
+    for (const adoption of adoptions) {
+      try {
+        confirmed.push(await adopt(graphql, destination, adoption))
+      } catch (error) {
+        const done = confirmed.length ? ` ${confirmed.map(c => `"${c.name}"`).join(', ')} ${confirmed.length === 1 ? 'is' : 'are'} confirmed.` : ''
+        if (error instanceof WorkspaceScopeError) throw new WorkspaceScopeError(`${error.message}${done}`, error.statusCode)
+        throw new WorkspaceScopeError(`Shopify did not accept the change to "${adoption.title}" (${adoption.name}): ${error instanceof Error ? error.message : String(error)}.${done} Run Find again, then confirm what is left.`, 502)
+      }
     }
+  } finally {
+    // A colour confirmed (or renamed) is not linked yet: no "Linked ✓" on the family until the link writer reads it back.
+    // After the loop, so no adoption's own optimistic check sees another row change.
+    if (confirmed.length) await prisma.shopifyColourProduct.updateMany({ where: { ...rowsWhere(destination), linkVerifiedAt: { not: null } }, data: { linkVerifiedAt: null } })
   }
   return { ...await colourProductsView(destination, plan, settings), confirmed }
 }

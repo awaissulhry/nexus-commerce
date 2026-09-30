@@ -36,8 +36,9 @@
  *
  * Outbound push:
  *   When a listing's `price` actually changes, we enqueue an OutboundSyncQueue row
- *   with syncType='PRICE_UPDATE' and a 5-minute holdUntil grace window (matches
- *   the existing PHASE 12a pattern in outbound-sync-phase9.service.ts). The
+ *   with syncType='PRICE_UPDATE' and a holdUntil grace window of DEFAULT_HOLD_MS
+ *   (30 seconds; IS.2b shortened it from the 5 minutes of the PHASE 12a pattern in
+ *   outbound-sync-phase9.service.ts). The
  *   bullmq-sync.worker.ts consumer picks the row up after the grace window and
  *   dispatches to pricing-outbound.service.ts → marketplace API. Listings whose
  *   price didn't change (followMasterPrice=false, or MATCH_AMAZON) get only the
@@ -78,7 +79,8 @@ import { marketCurrency, type MarketCurrencyRow } from './pim/market-currency.js
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
 // should reach channels within ~1 minute. The route layer debounces
 // rapid consecutive edits before calling this service.
-const DEFAULT_HOLD_MS = 30 * 1000
+// Exported so a surface that states the hold (a preview, a note) reads it from here rather than retyping it.
+export const DEFAULT_HOLD_MS = 30 * 1000
 
 export interface MasterPriceUpdateContext {
   /** Who initiated the change. Surfaces in AuditLog.userId; null for system writes. */
@@ -88,7 +90,7 @@ export interface MasterPriceUpdateContext {
   /** Idempotency key from the caller (HTTP request id, job id, etc.). */
   idempotencyKey?: string
   /**
-   * Override the 5-minute push grace window. Defaults to true (apply grace).
+   * Override the push grace window (DEFAULT_HOLD_MS, 30 seconds). Defaults to true (apply grace).
    * Set false for non-interactive callers (imports, scheduled repricing) where
    * an immediate push is the correct behavior.
    */
