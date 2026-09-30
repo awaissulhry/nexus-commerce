@@ -251,7 +251,6 @@ export async function writeChannelPrices(input: {
       }
 
       const written = await inTransaction(async (tx) => {
-        const supersededFrom = new Date() // the rows the cancel below replaces are the ones it updates from here on
         // A recorded channel price leaves the sync state alone: nothing is queued, so nothing is pending.
         const data: Prisma.ChannelListingUpdateManyMutationInput = input.recordOnly ? { version: { increment: 1 } } : { syncStatus: 'PENDING', lastSyncStatus: 'PENDING', version: { increment: 1 } }
         if (priceChanges) {
@@ -280,8 +279,7 @@ export async function writeChannelPrices(input: {
         }
         let queueId: string | null = null
         if (!input.recordOnly && VALID_SYNC_TARGETS.has(l.channel)) {
-          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
-          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'CANCELLED', errorMessage: null, updatedAt: { gte: supersededFrom } }, data: { errorMessage: 'Replaced by a newer price change for this listing' } })
+          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
           const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
           const row = await createOutboundRow(tx, {
             data: {

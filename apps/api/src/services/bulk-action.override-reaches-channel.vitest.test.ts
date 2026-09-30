@@ -246,6 +246,8 @@ describe('a superseded price row says why it was cancelled', () => {
     const old = await prisma.outboundSyncQueue.create({ data: { productId: 'superseded', channelListingId: l.id, targetChannel: 'EBAY', syncStatus: 'CANCELLED', syncType: 'PRICE_UPDATE', payload: {}, maxRetries: 3 } })
     await prisma.$executeRaw`UPDATE "OutboundSyncQueue" SET "updatedAt" = now() - interval '1 day' WHERE id = ${old.id}`
     await runJob('EBAY', { priceOverride: 11 }, { targetProductIds: ['superseded'] })
+    // A retried row may already have an error; cancellation must explain its current state.
+    await prisma.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncStatus: 'PENDING' }, data: { errorMessage: 'Temporary channel error' } })
     await runJob('EBAY', { priceOverride: 12 }, { targetProductIds: ['superseded'] })
     const rows = await queueOf(l.id)
     expect(rows.map((r) => [r.syncStatus, (r.payload as any).price ?? null, r.errorMessage])).toEqual([
