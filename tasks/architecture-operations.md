@@ -91,7 +91,11 @@ endpoint and expected build SHA. Ordinary restart/replica scale-up does not migr
 A push ships only the services whose files differ from the commit each one runs now
 (read from its latest successful Railway deployment, `scripts/ci/release-changes.sh`).
 CI-only and docs-only pushes start no deploy. A hand run (`gh workflow run
-deploy-api.yml`) ships every service.
+deploy-api.yml`) compares the same way, so it ships what a failed or skipped release
+left behind; `-f ship=all` ships every service. A service that already runs a newer
+commit is never rolled back by a re-run of an older run. "Re-run failed jobs" on an
+old run reuses its old decision, so after a newer release shipped, start a hand run
+instead.
 
 Disable/restrict any parallel native Railway autodeploy path before relying on the
 GitHub gate. Verify branch protection separately; local YAML cannot establish it.

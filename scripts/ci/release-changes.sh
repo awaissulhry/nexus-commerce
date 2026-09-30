@@ -10,19 +10,25 @@
 #
 # The running commit is read from the service's latest SUCCESS deployment on Railway: deploy-api.yml names every
 # deployment "<role> GitHub <sha>" (`railway up --message`), and a Railway redeploy keeps that name. When it cannot be
-# read or fetched, that service ships: shipping too much is safe, skipping a change is not. A hand run
-# (workflow_dispatch) ships everything.
+# read or fetched, that service ships: shipping too much is safe, skipping a change is not. A service that already
+# runs a NEWER commit does not ship: re-running an old run must not roll it back onto a schema that has moved on.
+# SHIP_ALL=true (`gh workflow run deploy-api.yml -f ship=all`) ships everything.
 #
-#   EVENT=push GITHUB_SHA=<sha> RAILWAY_TOKEN=… API_SERVICE=<id> WORKER_SERVICE=<id> SCHEDULER_SERVICE=<id> \
-#     WEB_SERVICE=<id> scripts/ci/release-changes.sh
+# Needs the history of main (checkout with fetch-depth 0; blob:none is enough).
+#
+#   GITHUB_SHA=<sha> RAILWAY_TOKEN=… API_SERVICE=<id> WORKER_SERVICE=<id> SCHEDULER_SERVICE=<id> WEB_SERVICE=<id> \
+#     [SHIP_ALL=true] scripts/ci/release-changes.sh
 #
 # Writes api, worker, scheduler and web (true/false) and background (the JSON list of worker/scheduler to ship) to
 # $GITHUB_OUTPUT when it is set, and prints them either way.
 set -uo pipefail
 
-# The files each service is built from. Markdown never ships: CLAUDE.md files and notes live beside the code.
-API_FILES='^(apps/api/|packages/(database|shared|events)/|package(-lock)?\.json$|patches/)'
-WEB_FILES='^(apps/web/|packages/(database|shared)/|package(-lock)?\.json$|patches/)'
+# The files each service is built from. Markdown never ships: CLAUDE.md files and notes live beside the code. BUILD is
+# what Railway's own build reads at the root (2026-09-29: a root .dockerignore broke the API build, run 36636596664).
+BUILD='package(-lock)?\.json$|patches/|\.dockerignore$|\.gitignore$|\.railwayignore$|railway\.(json|toml)$|railpack\.json$|nixpacks\.toml$'
+API_FILES="^(apps/api/|packages/(database|shared|events)/|$BUILD)"
+# docs/fixtures/vt1/fixtures.ts: the one file outside the workspaces that the web imports (/design-system).
+WEB_FILES="^(apps/web/|packages/(database|shared)/|docs/fixtures/vt1/fixtures\.ts$|$BUILD)"
 
 # The commit a service runs, or nothing when it cannot be read.
 running_sha() {
@@ -36,8 +42,8 @@ running_sha() {
 must_ship() {
   local role=$1 service=$2 files_re=$3 sha all changed
   ship=true
-  if [ "${EVENT:-}" != push ]; then
-    echo "$role: ships (a ${EVENT:-hand} run ships everything)"
+  if [ "${SHIP_ALL:-}" = true ]; then
+    echo "$role: ships (ship=all)"
     return
   fi
   if [ -z "$service" ]; then
@@ -58,7 +64,14 @@ must_ship() {
     echo "::warning::$role: could not fetch $sha, the commit it runs — it ships"
     return
   fi
-  if ! all=$(git diff --name-only "$sha" "$GITHUB_SHA"); then
+  if git merge-base --is-ancestor "$GITHUB_SHA" "$sha" 2>/dev/null; then
+    echo "::warning::$role: runs ${sha:0:9}, which is newer than this release — not rolled back"
+    ship=false
+    return
+  fi
+  # --no-renames: a file moved out of a service's tree must count for that tree too. quotePath off: a non-ASCII
+  # path would otherwise come quoted and miss the patterns.
+  if ! all=$(git -c core.quotePath=false diff --no-renames --name-only "$sha" "$GITHUB_SHA"); then
     echo "::warning::$role: could not compare $sha with $GITHUB_SHA — it ships"
     return
   fi
