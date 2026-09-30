@@ -98,6 +98,7 @@ const GATES = {
   'DS-GAPS append-only': node('scripts/check-ds-gaps-append-only.mjs', '--check'),
   // P3 (2026-09-30) — every editor the product sheet can mount is named by the Enter/Tab node test and the commit sweep.
   'sheet editor coverage': node('scripts/check-sheet-editor-coverage.mjs', '--check'),
+  'sheet CI dependency paths and skip policy': node('apps/web/smoke/sheet/ci-policy.mjs', 'self-test'),
   'sheet editor coverage self-test': node('scripts/check-sheet-editor-coverage.mjs', '--self-test'),
   'DS api guard': node('apps/web/src/design-system/tools/api-guard.mjs'),
 }

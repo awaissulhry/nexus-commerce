@@ -19,6 +19,7 @@
  *   R4  the studio's web copies of `SheetColumnKind` equal the API's union;
  *   R5  the sweep's `NETWORK_STUBS` (reads it answers itself) may not grow;
  *   R6  the sweep's `KNOWN_DEFECTS` (found, not fixed yet) may not grow.
+ *   R7  an already driven editor/gesture may not be replaced with an abstention.
  *
  * RATCHET: `scripts/sheet-editor-coverage-baseline.json` names the gaps that existed when this landed. They may only go:
  * a gap not in the baseline fails; `--write` refuses to add one and only drops the ones that closed.
@@ -184,7 +185,9 @@ export function gaps(sources) {
     const extra = web.filter((k) => !apiKinds.includes(k))
     if (missing.length || extra.length) out.push(`R4 ${file}: SheetColumnKind differs from the API (${[...missing.map((k) => `-${k}`), ...extra.map((k) => `+${k}`)].join(' ')})`)
   }
-  return { gaps: out, editors, cases, drivers, stubs: networkStubCount(read(SWEEP), SWEEP), known: listLength(read(SWEEP), SWEEP, 'KNOWN_DEFECTS'), kinds: apiKinds }
+  const abstentions = [...drivers].flatMap(([id, driver]) => driver.abstain ? [`${id}: all gestures`]
+    : ['keyboard', 'mouse', 'paste'].filter(arm => driver[arm] === 'reason').map(arm => `${id}: ${arm}`)).sort()
+  return { gaps: out, abstentions, editors, cases, drivers, stubs: networkStubCount(read(SWEEP), SWEEP), known: listLength(read(SWEEP), SWEEP, 'KNOWN_DEFECTS'), kinds: apiKinds }
 }
 
 /* ── self-test: a check that cannot fail is not passing ───────────────────────────────────────────────────── */
@@ -216,7 +219,11 @@ function selfTest() {
   const known = listLength(real[SWEEP], SWEEP, 'KNOWN_DEFECTS')
   const moreKnown = listLength(real[SWEEP].replace(/(export const KNOWN_DEFECTS[^=]*= \[)/, "$1{ editors: [], path: 'paste', reason: 'x' },"), SWEEP, 'KNOWN_DEFECTS')
   if (moreKnown !== known + 1) { console.error('✗ self-test: an added known defect was not counted'); process.exit(1) }
-  console.log(`✓ sheet editor coverage self-test: new editor (R1, R2), missing arm (R2), new kind (R3, R4), an added stub (R5) and an added known defect (R6) caught; a covered editor passes`)
+  const abstaining = { ...real, [SWEEP]: real[SWEEP].replace('SelectPanelEditor: {', "SelectPanelEditor: { abstain: 'No longer tested',") }
+  if (!gaps(abstaining).abstentions.includes('SelectPanelEditor: all gestures') || gaps(real).abstentions.includes('SelectPanelEditor: all gestures')) {
+    console.error('✗ self-test: replacing a driven editor with an abstention was not detected'); process.exit(1)
+  }
+  console.log(`✓ sheet editor coverage self-test: new editor (R1, R2), missing arm (R2), new kind (R3, R4), an added stub (R5), an added known defect (R6), and a new abstention (R7) caught; a covered editor passes`)
 }
 
 if (process.argv.includes('--self-test')) { selfTest(); process.exit(0) }
@@ -232,33 +239,36 @@ const fresh = result.gaps.filter((g) => !allowed.has(g))
 const closed = [...allowed].filter((g) => !result.gaps.includes(g))
 const stubsRose = baseline && result.stubs > baseline.networkStubs
 const knownRose = baseline && result.known > (baseline.knownDefects ?? 0)
+const newAbstentions = result.abstentions.filter(item => !(baseline?.abstentions ?? []).includes(item))
 
 console.log(`sheet editors: ${[...result.editors.keys()].sort().join(', ')}`)
 console.log(`  (wrappers, not editors: ${Object.keys(WRAPPERS).join(', ')})`)
-console.log(`node test cases: ${result.cases.size} · sweep drivers: ${result.drivers.size} · kinds: ${result.kinds.join(', ')} · network stubs: ${result.stubs} · known defects: ${result.known}`)
+console.log(`node test cases: ${result.cases.size} · sweep drivers: ${result.drivers.size} · kinds: ${result.kinds.join(', ')} · network stubs: ${result.stubs} · known defects: ${result.known} · abstentions: ${result.abstentions.length}`)
 for (const g of result.gaps) console.log(`  ${allowed.has(g) ? '· (baseline)' : '✗'} ${g}`)
 for (const g of closed) console.log(`  ↓ closed — drop it from the baseline: ${g}`)
 
 if (process.argv.includes('--write')) {
   // The first --write records the gaps that existed when the rule landed; every later one may only drop gaps.
   if (baseline && fresh.length) { console.error(`✗ --write refuses to add a gap; cover it instead:\n  ${fresh.join('\n  ')}`); process.exit(1) }
+  if (baseline && newAbstentions.length) { console.error(`✗ --write refuses new abstentions: ${newAbstentions.join(", ")}`); process.exit(1) }
   if (knownRose || stubsRose) { console.error('✗ --write refuses to raise the network stubs or the known defects'); process.exit(1) }
   const stubs = baseline ? Math.min(baseline.networkStubs, result.stubs) : result.stubs
   const known = baseline ? Math.min(baseline.knownDefects ?? 0, result.known) : result.known
   writeFileSync(BASELINE, JSON.stringify({
     note: 'P3 guardrail 3 — sheet editors and kinds no test drives. Entries may only be REMOVED (cover the gap); networkStubs and knownDefects may only go down.',
-    updatedAt: new Date().toISOString().slice(0, 10), networkStubs: stubs, knownDefects: known, gaps: result.gaps.filter((g) => allowed.has(g) || !baseline),
+    updatedAt: new Date().toISOString().slice(0, 10), networkStubs: stubs, knownDefects: known, abstentions: result.abstentions, gaps: result.gaps.filter((g) => allowed.has(g) || !baseline),
   }, null, 2) + '\n')
   console.log(`✓ baseline written: ${result.gaps.length} gap(s), ${stubs} network stub(s), ${known} known defect(s)`)
   process.exit(0)
 }
 if (process.argv.includes('--check')) {
   if (!baseline) { console.error('✗ sheet editor coverage: no baseline — run with --write once'); process.exit(1) }
-  if (fresh.length || stubsRose || knownRose) {
+  if (fresh.length || stubsRose || knownRose || newAbstentions.length) {
+    if (newAbstentions.length) console.error(`✗ sheet editor coverage: new abstentions (R7): ${newAbstentions.join(", ")}`)
     if (fresh.length) console.error(`\n✗ sheet editor coverage: ${fresh.length} new gap(s). A sheet editor or column kind needs a case in ${UNIT_TEST} and a driver in ${SWEEP} (every arm a gesture or a written reason).`)
     if (stubsRose) console.error(`✗ sheet editor coverage: NETWORK_STUBS grew from ${baseline.networkStubs} to ${result.stubs}. The sweep answers only reads that need the network; seed the rest.`)
     if (knownRose) console.error(`✗ sheet editor coverage: KNOWN_DEFECTS grew from ${baseline.knownDefects ?? 0} to ${result.known}. Fix the defect the sweep found; do not excuse it.`)
     process.exit(1)
   }
-  console.log(`✓ sheet editor coverage: every editor the sheet can mount has an Enter/Tab case and a sweep driver (${allowed.size} baselined gap(s), ${result.stubs} network stub(s), ${result.known} known defect(s))`)
+  console.log(`✓ sheet editor coverage inventory accepted (reasons are coverage gaps, not exercised editors) (${allowed.size} baselined gap(s), ${result.stubs} network stub(s), ${result.known} known defect(s))`)
 }

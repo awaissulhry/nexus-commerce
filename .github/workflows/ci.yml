@@ -15,8 +15,8 @@
 #                suite passed in exactly one PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
 #
-# Nothing here is path-filtered except the typecheck of the other workspaces (turbo --affected; the two apps are always
-# type-checked) and the small-workspace tests.
+# Sheet runs for web/API/shared/DB and build dependencies; release/manual runs always include it.
+# Both apps are always type-checked. Other workspaces (turbo --affected) and the small-workspace tests use change selection.
 # Selecting "security" tests by file name misses real ones, so the API suite always runs whole.
 
 name: CI
@@ -43,6 +43,26 @@ env:
   ENABLE_QUEUE_WORKERS: '0'
 
 jobs:
+  sheet-changes:
+    name: Sheet dependency paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: node apps/web/smoke/sheet/ci-policy.mjs paths >> "$GITHUB_OUTPUT"
+
   checks:
     name: Static gates, typecheck, web and workspace tests
     runs-on: ubuntu-latest
@@ -360,6 +380,8 @@ jobs:
   #     id; the one channel read that needs the network (eBay business policies) is answered by the sweep itself.
   # Steps are the smoke job's, plus the sheet seed; keep the two in step.
   sheet:
+    needs: [sheet-changes]
+    if: needs.sheet-changes.outputs.run == 'true'
     name: Sheet commit sweep (${{ matrix.shard }}/3) — production build
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -438,6 +460,14 @@ jobs:
         if: steps.browsers.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
         if: steps.browsers.outputs.cache-hit == 'true'
+
+      - name: Authenticated trivial GET SQL budgets
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          cd apps/api
+          NODE_ENV=production DATABASE_URL="$APP_DATABASE_URL" DIRECT_DATABASE_URL="$APP_DATABASE_URL" \
+          REDIS_URL=redis://127.0.0.1:6379 NEXUS_WORKSPACES_ENABLED=1 NEXUS_RBAC_MODE=enforce \
+            npx tsx ../web/smoke/sheet/sql-budget.mts
 
       - name: '@sheet commit sweep'
         working-directory: apps/web
@@ -526,16 +556,16 @@ jobs:
 
   ci-ok:
     name: ci-ok
-    needs: [checks, api, postgres, smoke, sheet, db-security]
+    needs: [checks, api, postgres, smoke, sheet-changes, sheet, db-security]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Every job passed
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every required job passed (sheet may be intentionally skipped)
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: |
-          node -e '
-            const needs = JSON.parse(process.env.NEEDS)
-            for (const [job, v] of Object.entries(needs)) console.log((v.result === "success" ? "✓ " : "✗ ") + job + ": " + v.result)
-            process.exit(Object.values(needs).every(v => v.result === "success") ? 0 : 1)'
+        run: node apps/web/smoke/sheet/ci-policy.mjs result
