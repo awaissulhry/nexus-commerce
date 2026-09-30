@@ -172,6 +172,44 @@ describe('an approval from the Approvals page runs only while its approver still
     expect(await approval(queued.approvalId!)).toMatchObject({ decidedBy: 'Noor Approver', decidedByUserId: person.id })
   })
 
+  it('the committed tool runs AS the approver: it records their id, not the name shown', async () => {
+    const person = await publisher('Sara Approver')
+    const id = await approveOnThePage(person)
+    expect(await commitAfterTheWindow(id)).toMatchObject({ ok: true })
+    // publish-listing writes the `ctx.userId` it ran with into the push it queues.
+    const [push] = await inside(() => database.client.outboundSyncQueue.findMany({
+      where: { channelListingId: listingId, syncType: 'LISTING_SYNC' }, orderBy: { createdAt: 'desc' }, take: 1,
+    }))
+    expect((push.payload as { requestedBy?: string }).requestedBy).toBe(person.id)
+    expect(await approval(id)).toMatchObject({ status: 'executed', decidedBy: 'Sara Approver', decidedByUserId: person.id })
+  })
+
+  it('a fleet worker proposes as the system; a person approves it; it runs as that person', async () => {
+    const person = await publisher('Tomas Approver')
+    const run = await inside(() => database.client.agentRun.create({ data: { agentKey: 'pricing-watchdog', trigger: 'cron', status: 'done' } }))
+    const { systemPrincipal } = await import('../agents/call-tool.js')
+    // As the autonomous agents do (pricing-watchdog, listing-quality-keeper): the proposal is the system's…
+    const queued = await inside(() => runOrQueueTool('publish-listing', { productId, channel: 'AMAZON' }, systemPrincipal('pricing-watchdog'), run.id))
+    expect(queued).toMatchObject({ ok: true, mode: 'queued' })
+    expect(await approval(queued.approvalId!)).toMatchObject({ decidedBy: null, decidedByUserId: null })
+    // …the decision is a person's, and so is the run.
+    const parked = await inside(() => decideFleetApproval({ id: queued.approvalId!, decision: 'approve', actor: person.principal }))
+    expect(parked).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commitAfterTheWindow(queued.approvalId!)).toMatchObject({ ok: true })
+    const [push] = await inside(() => database.client.outboundSyncQueue.findMany({
+      where: { channelListingId: listingId, syncType: 'LISTING_SYNC' }, orderBy: { createdAt: 'desc' }, take: 1,
+    }))
+    expect((push.payload as { requestedBy?: string }).requestedBy).toBe(person.id)
+  })
+
+  it('a system run that no person decides (a tool that needs no approval) still runs as the system', async () => {
+    const run = await inside(() => database.client.agentRun.create({ data: { agentKey: 'amazon-ads-director', trigger: 'cron', status: 'done' } }))
+    const { systemPrincipal } = await import('../agents/call-tool.js')
+    const out = await inside(() => runOrQueueTool('product-snapshot', { productId }, systemPrincipal('amazon-ads-director'), run.id))
+    expect(out).toMatchObject({ ok: true, mode: 'executed' })
+    expect(out.data).toMatchObject({ sku: 'DECIDER-1' })
+  })
+
   it('taking an approve back inside the window forgets the person too', async () => {
     const person = await publisher('Ines Approver')
     const id = await approveOnThePage(person)

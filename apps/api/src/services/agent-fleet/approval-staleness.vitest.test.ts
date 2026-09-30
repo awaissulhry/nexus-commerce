@@ -219,7 +219,7 @@ describe('AP.6 — commit refuses a stale action', () => {
     expect(gate).toHaveBeenCalledWith(
       'a1',
       'approve',
-      expect.objectContaining({ kind: 'system', label: 'Awais' }),
+      expect.objectContaining({ kind: 'user', userId: 'u1', label: 'Awais' }),
     )
   })
 })

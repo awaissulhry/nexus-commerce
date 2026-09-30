@@ -36,12 +36,13 @@ import {
   permissionMessage,
   systemPrincipal,
   type ToolPrincipal,
+  type UserPrincipal,
 } from '../agents/call-tool.js'
 import { recordControlChange, type ControlAction } from './control-audit.service.js'
 import { mintExemplarFromDecision } from './exemplar.service.js'
 import { logger } from '../../utils/logger.js'
 import { resolvePermissions, type ResolvedPermissions } from '../../lib/auth/rbac.js'
-import { WorkspaceError } from '../../lib/workspace-context.js'
+import { WorkspaceError, type WorkspaceContext } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
 
 /** The tools the fleet's own workers may propose. */
@@ -363,16 +364,17 @@ export async function undoScheduledApproval(input: {
 }
 
 /**
- * The permissions the person who approved holds NOW in the approval's business, from the same place a signed-in
- * request reads them (workspace-hook.ts): with business profiles on, their membership of that business; off, their
- * login roles. Null when they can no longer act there at all (membership, person or business no longer active).
+ * The person who approved as they are NOW in the approval's business, from the same place a signed-in request reads
+ * them (workspace-hook.ts): with business profiles on, their membership of that business — its permissions and the
+ * business context a request gets; off, their login roles. Null when they can no longer act there at all
+ * (membership, person or business no longer active).
  */
 const workspaces = createWorkspaceService(prisma)
-async function deciderPermissionsNow(userId: string, workspaceId: string): Promise<ResolvedPermissions | null> {
+async function deciderNow(userId: string, workspaceId: string): Promise<{ permissions: ResolvedPermissions; workspace?: WorkspaceContext } | null> {
   if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
     try {
       const access = await workspaces.membership(userId, workspaceId)
-      return { isOwner: access.isOwner, permissions: access.permissions }
+      return { permissions: { isOwner: access.isOwner, permissions: access.permissions }, workspace: access.context }
     } catch (error) {
       if (error instanceof WorkspaceError) return null
       throw error
@@ -383,24 +385,33 @@ async function deciderPermissionsNow(userId: string, workspaceId: string): Promi
     select: { id: true, status: true, permissionsVersion: true, roleAssignments: { select: { role: { select: { key: true } } } } },
   })
   if (!user || user.status !== 'active') return null
-  return resolvePermissions({ id: user.id, permissionsVersion: user.permissionsVersion, roleKeys: user.roleAssignments.map((a) => a.role.key) })
+  return { permissions: await resolvePermissions({ id: user.id, permissionsVersion: user.permissionsVersion, roleKeys: user.roleAssignments.map((a) => a.role.key) }) }
 }
 
 /**
- * Why the person who approved may not run this now, in plain words; null when they still may. The same test the
- * approve itself passed (`missingPermissions`: `ai.run` and the tool's `requires`), on their permissions as they
- * are at run time. An approval that does not say which person approved it is not run (fail closed).
+ * The person who approved, as the principal the tool runs AS — their id, their permissions now, their business —
+ * or why they may not run it now, in plain words. The same test the approve itself passed (`missingPermissions`:
+ * `ai.run` and the tool's `requires`), on their permissions as they are at run time. The label stays the name shown.
+ * An approval that does not say which person approved it is not run (fail closed): a person's decision never runs
+ * as the system.
  */
-async function deciderRefusal(ap: { toolName: string; decidedBy: string | null; decidedByUserId: string | null; workspaceId: string }): Promise<string | null> {
-  const tool = getTool(ap.toolName)
-  if (!tool) return null // the gate answers for a tool it does not know
+async function deciderPrincipal(ap: { toolName: string; decidedBy: string | null; decidedByUserId: string | null; workspaceId: string }): Promise<{ principal: UserPrincipal } | { refusal: string }> {
   const who = ap.decidedBy ?? 'the person who approved it'
-  if (!ap.decidedByUserId) return 'it could not be re-checked — it does not say which person approved it. Approve it again.'
-  const now = await deciderPermissionsNow(ap.decidedByUserId, ap.workspaceId)
-  if (!now) return `${who} no longer has access to this business profile`
-  const missing = missingPermissions({ kind: 'user', userId: ap.decidedByUserId, label: who, permissions: now, via: 'app' }, tool)
-  if (missing.length) return `${who} no longer holds ${missing.join(' and ')}, which ${ap.toolName.replace(/-/g, ' ')} needs`
-  return null
+  if (!ap.decidedByUserId) return { refusal: 'it could not be re-checked — it does not say which person approved it. Approve it again.' }
+  const now = await deciderNow(ap.decidedByUserId, ap.workspaceId)
+  if (!now) return { refusal: `${who} no longer has access to this business profile` }
+  const principal: UserPrincipal = {
+    kind: 'user',
+    userId: ap.decidedByUserId,
+    label: ap.decidedBy ?? 'unattributed',
+    permissions: now.permissions,
+    workspace: now.workspace,
+    via: 'app', // the Approvals page, where the decision was taken
+  }
+  const tool = getTool(ap.toolName)
+  const missing = tool ? missingPermissions(principal, tool) : [] // the gate answers for a tool it does not know
+  if (missing.length) return { refusal: `${who} no longer holds ${missing.join(' and ')}, which ${ap.toolName.replace(/-/g, ' ')} needs` }
+  return { principal }
 }
 
 /** Back to pending with the reason on the row, never run: the operator's decision is handed back, not thrown away. */
@@ -465,8 +476,8 @@ export async function commitScheduledApproval(
 
   // The person who approved must still be allowed to do this NOW, in this business: the window, or the sweep that
   // commits after it, can end after their role changed or their access was removed. Checked before anything runs.
-  const denied = await deciderRefusal(ap)
-  if (denied) return handBack(id, ap.decidedBy, denied, 'permission_refused')
+  const decider = await deciderPrincipal(ap)
+  if ('refusal' in decider) return handBack(id, ap.decidedBy, decider.refusal, 'permission_refused')
 
   // AP.6 — the world may have moved while this sat parked. Re-validate
   // BEFORE releasing it: an approval describes a state of the world, and if
@@ -482,10 +493,10 @@ export async function commitScheduledApproval(
   })
   if (release.count === 0) return { ok: false, error: 'already taken' }
 
-  // The person's permissions were checked when they approved (scheduleApproval);
-  // the sweep runs that decision under their name.
+  // The tool runs AS the person who approved — the principal just re-checked — in their business, so what it writes
+  // (a price audit row, a queued push) names them by id. The label stays the name shown.
   const decidedBy = ap.decidedBy ?? 'unattributed'
-  const out = await decideApproval(id, 'approve', systemPrincipal(decidedBy))
+  const out = await decideApproval(id, 'approve', decider.principal)
   if (!out.ok) {
     /*
      * S9.4 — a failed execution left the row lying about itself.
