@@ -11,6 +11,8 @@
  * - one family per scope — `master`, `EBAY` (IT), `AMAZON` (IT), `ETSY` (GLOBAL) — each a parent and `--rows` variations
  *   (default 150: the sweep gives every (column × gesture) its own row, so a commit always changes a known value). A
  *   channel family's rows each carry one DRAFT listing on that channel: no external id, never published;
+ * - a separate eBay speed family of the same size, with a stored subtitle, so the commit sweep cannot change its scenario;
+ * - a scoped default warehouse and its active StockLocation link when missing; an existing default is kept;
  * - the cached schemas those listings point at, under made-up codes that no channel uses (each code has a twin with the
  *   same contract, so the sweep can change a row's category without changing its columns):
  *     EBAY IT category `99000101` — aspects covering a long strict list (12), a short strict list (4), an open list (a
@@ -27,14 +29,14 @@
  *   app answering is the one on THIS database (the smoke suite's fence).
  *
  * Idempotent: it deletes and recreates its own rows, and only those. The listings, products and schemas it deletes are
- * matched by their made-up ids and codes.
+ * matched by their made-up ids and codes within the requested workspace. Non-legacy workspaces use their own id prefix.
  *
  * SAFETY: loopback only, and the database name must contain "test" (as `seed-smoke.mts`). Writes `--out` (mode 600).
  *
  *   npx tsx scripts/ci/seed-sheet-fixture.mts --url postgresql://postgres@127.0.0.1:5432/nexus_smoke_test --out "$RUNNER_TEMP/sheet.json"
  *   … --workspace <id>   the business to seed (default: the legacy one)      … --rows <n>   variations per family
  */
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 import pg from 'pg'
 
@@ -48,6 +50,7 @@ if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname) || !url.p
   process.exit(1)
 }
 const workspace = value('--workspace') ?? 'nexus_legacy_workspace'
+const prefix = workspace === 'nexus_legacy_workspace' ? 'e2e_sheet_' : `e2e_sheet_${createHash('sha256').update(workspace).digest('hex').slice(0, 12)}_`
 const rows = Number(value('--rows') ?? 150)
 if (!Number.isInteger(rows) || rows < 1 || rows > 999) { console.error('✗ --rows must be 1..999'); process.exit(1) }
 const nonce = randomBytes(4).toString('hex').toUpperCase()
@@ -63,7 +66,7 @@ const CATEGORIES = {
   ETSY: { market: 'GLOBAL', schemaMarket: 'GLOBAL', ids: [ETSY_TAXONOMY, '99000202'], names: ['E2E Jackets', 'E2E Coats'] },
 } as const
 const SCHEMA_VERSION = 'e2e-sheet-fixture'
-const THEMES = [{ id: 'e2e_sheet_theme_a', name: 'E2E Sheet Theme A' }, { id: 'e2e_sheet_theme_b', name: 'E2E Sheet Theme B' }]
+const THEMES = [{ id: `${prefix}theme_a`, name: 'E2E Sheet Theme A' }, { id: `${prefix}theme_b`, name: 'E2E Sheet Theme B' }]
 
 /* Made-up aspects in the eBay cache shape (`channel-specs/ebay.ts` EbayCachedAspect). Labels are "localized (English)". */
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL', '7XL']
@@ -91,10 +94,12 @@ const ETSY_PROPERTIES = [
 const amazonDefinition = JSON.parse(readFileSync(new URL('../../apps/api/src/services/pim/channel-specs/__tests__/fixtures/amazon-it-outerwear.trimmed.json', import.meta.url), 'utf8'))
 
 const FAMILIES = [
-  { scope: 'master', id: 'e2e_sheet_master', sku: 'E2E-SHEET-MASTER', label: 'Shared' },
-  { scope: 'EBAY', id: 'e2e_sheet_ebay', sku: 'E2E-SHEET-EBAY', label: 'eBay', channel: 'EBAY', market: 'IT', channelMarket: 'EBAY_IT', region: 'IT', attributes: { categoryId: EBAY_CATEGORY } },
-  { scope: 'AMAZON', id: 'e2e_sheet_amazon', sku: 'E2E-SHEET-AMAZON', label: 'Amazon', channel: 'AMAZON', market: 'IT', channelMarket: 'AMAZON_IT', region: 'IT', productType: AMAZON_TYPE, attributes: { productType: AMAZON_TYPE } },
-  { scope: 'ETSY', id: 'e2e_sheet_etsy', sku: 'E2E-SHEET-ETSY', label: 'Etsy', channel: 'ETSY', market: 'GLOBAL', channelMarket: 'ETSY_GLOBAL', region: 'GLOBAL', attributes: { taxonomy_id: Number(ETSY_TAXONOMY) } },
+  { scope: 'master', id: `${prefix}master`, sku: 'E2E-SHEET-MASTER', label: 'Shared' },
+  { scope: 'EBAY', id: `${prefix}ebay`, sku: 'E2E-SHEET-EBAY', label: 'eBay', channel: 'EBAY', market: 'IT', channelMarket: 'EBAY_IT', region: 'IT', attributes: { categoryId: EBAY_CATEGORY } },
+  { scope: 'AMAZON', id: `${prefix}amazon`, sku: 'E2E-SHEET-AMAZON', label: 'Amazon', channel: 'AMAZON', market: 'IT', channelMarket: 'AMAZON_IT', region: 'IT', productType: AMAZON_TYPE, attributes: { productType: AMAZON_TYPE } },
+  { scope: 'ETSY', id: `${prefix}etsy`, sku: 'E2E-SHEET-ETSY', label: 'Etsy', channel: 'ETSY', market: 'GLOBAL', channelMarket: 'ETSY_GLOBAL', region: 'GLOBAL', attributes: { taxonomy_id: Number(ETSY_TAXONOMY) } },
+  // Independent from the edit sweep: its category changes and first fills must not change the speed scenario.
+  { scope: 'speed', id: `${prefix}speed`, sku: 'E2E-SHEET-SPEED', label: 'Speed', channel: 'EBAY', market: 'IT', channelMarket: 'EBAY_IT', region: 'IT', attributes: { categoryId: EBAY_CATEGORY, subtitle: 'E2E speed baseline' } },
 ] as const
 
 const client = new pg.Client({ connectionString: url.toString() })
@@ -105,6 +110,25 @@ try {
   await client.query(`SELECT set_config('nexus.workspace_id', $1, true)`, [workspace])
   const exists = await client.query(`SELECT 1 FROM "Workspace" WHERE id = $1`, [workspace])
   if (!exists.rowCount) throw new Error(`business ${workspace} does not exist — run prepare-test-database (and seed-smoke) first`)
+
+  // Stock writes need a default warehouse. Keep an existing default; create only our own scoped fixture otherwise.
+  // The workspace suffix prevents the global id from colliding when this seed is used for two businesses.
+  const warehouseId = `e2e_sheet_warehouse_${workspace}`
+  const warehouse = await client.query(`SELECT id FROM "Warehouse" WHERE "workspaceId" = $1 AND "isDefault" AND "isActive" AND "sharedFromLocationId" IS NULL ORDER BY id LIMIT 1`, [workspace])
+  if (!warehouse.rowCount) {
+    await client.query(`INSERT INTO "Warehouse" (id, "workspaceId", code, name, "isDefault", "isActive", "updatedAt")
+      VALUES ($1, $2, 'E2E-SHEET-STOCK', 'E2E sheet stock', true, true, now())
+      ON CONFLICT (id) DO UPDATE SET "isDefault" = true, "isActive" = true
+      WHERE "Warehouse"."workspaceId" = EXCLUDED."workspaceId"`, [warehouseId, workspace])
+  }
+
+  // Warehouse is the shipping address; stock writes resolve the linked inventory location.
+  const stockWarehouse = warehouse.rows[0]?.id ?? warehouseId
+  await client.query(`INSERT INTO "StockLocation" (id, "workspaceId", type, code, name, "warehouseId", "updatedAt")
+    SELECT $1, "workspaceId", 'WAREHOUSE', code, name, id, now() FROM "Warehouse" WHERE id = $2 AND "workspaceId" = $3
+    ON CONFLICT ("warehouseId") DO NOTHING`, [`e2e_sheet_stock_${workspace}`, stockWarehouse, workspace])
+  const stockLocation = await client.query(`SELECT 1 FROM "StockLocation" WHERE "warehouseId" = $1 AND "workspaceId" = $2 AND "isActive" AND type = 'WAREHOUSE'`, [stockWarehouse, workspace])
+  if (!stockLocation.rowCount) throw new Error('the default warehouse has no active warehouse stock location; the seed will not change an existing location')
 
   // ── markets and connections ────────────────────────────────────────────────────────────────────────────
   for (const f of FAMILIES) {
@@ -117,9 +141,9 @@ try {
     let id = (await client.query(`SELECT id FROM "ChannelConnection" WHERE "channelType" = $1 AND "isActive" AND "workspaceId" = $2
       ORDER BY "isPrimary" DESC, id LIMIT 1`, [channel, workspace])).rows[0]?.id as string | undefined
     if (!id) {
-      id = `e2e_sheet_${channel.toLowerCase()}_connection`
-      await client.query(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "isActive", "isPrimary", "displayName", "updatedAt")
-        VALUES ($1, $2, $3, true, true, $4, now()) ON CONFLICT (id) DO NOTHING`, [id, workspace, channel, `E2E sheet ${channel} (no credentials)`])
+      id = `${prefix}${channel.toLowerCase()}_connection`
+      await client.query(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "isActive", "isPrimary", "displayName", "externalAccountId", "updatedAt")
+        VALUES ($1, $2, $3, true, true, $4, $1, now()) ON CONFLICT (id) DO NOTHING`, [id, workspace, channel, `E2E sheet ${channel} (no credentials)`])
     }
     connections[channel] = id
   }
@@ -129,7 +153,7 @@ try {
   const schema = (channel: string, marketplace: string, productType: string, definition: unknown, twin: number) => client.query(
     `INSERT INTO "CategorySchema" (id, "workspaceId", channel, marketplace, "productType", "schemaVersion", "schemaDefinition", "fetchedAt", "expiresAt", "isActive")
      VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now() + interval '30 days', true)`,
-    [`e2e_sheet_schema_${channel.toLowerCase()}_${twin}`, workspace, channel, marketplace, productType, SCHEMA_VERSION, JSON.stringify(definition)])
+    [`${prefix}schema_${channel.toLowerCase()}_${twin}`, workspace, channel, marketplace, productType, SCHEMA_VERSION, JSON.stringify(definition)])
   const definitions = {
     EBAY: { aspects: EBAY_ASPECTS, conditions: EBAY_CONDITIONS },
     AMAZON: amazonDefinition,
@@ -139,10 +163,10 @@ try {
   for (const [channel, c] of Object.entries(CATEGORIES)) {
     for (const [i, id] of c.ids.entries()) await schema(channel, c.schemaMarket, id, definitions[channel as keyof typeof definitions], i)
     // The category search reads the business's active taxonomy revision. Seed one only where there is none.
-    await client.query(`DELETE FROM "MarketplaceTaxonomy" WHERE id = $1`, [`e2e_sheet_taxonomy_${channel.toLowerCase()}`])
+    await client.query(`DELETE FROM "MarketplaceTaxonomy" WHERE id = $1 AND "workspaceId" = $2`, [`${prefix}taxonomy_${channel.toLowerCase()}`, workspace])
     const own = await client.query(`SELECT 1 FROM "MarketplaceTaxonomy" WHERE channel = $1 AND marketplace = $2 AND "workspaceId" = $3`, [channel, c.market, workspace])
     if (own.rowCount) { categories[channel] = { sweep: false, reason: `the business has its own ${channel} ${c.market} taxonomy, and this seed never writes into a real one` }; continue }
-    const source = `e2e_sheet_taxonomy_${channel.toLowerCase()}`
+    const source = `${prefix}taxonomy_${channel.toLowerCase()}`
     const snapshot = `${source}_snapshot`
     await client.query(`INSERT INTO "MarketplaceTaxonomy" (id, "workspaceId", channel, marketplace, "nextSyncAt", "updatedAt") VALUES ($1, $2, $3, $4, now() + interval '30 days', now())`, [source, workspace, channel, c.market])
     await client.query(`INSERT INTO "MarketplaceTaxonomySnapshot" (id, "workspaceId", "sourceId", status, "nodeCount", "completedAt") VALUES ($1, $2, $3, 'active', $4, now())`, [snapshot, workspace, source, c.ids.length])
@@ -162,9 +186,10 @@ try {
 
   // ── the families: listings, then variations, then parents (only these ids) ──────────────────────────────
   for (const f of FAMILIES) {
-    await client.query(`DELETE FROM "ChannelListing" WHERE "productId" = $1 OR "productId" LIKE $2`, [f.id, `${f.id}\\_%`])
-    await client.query(`DELETE FROM "Product" WHERE "parentId" = $1`, [f.id])
-    await client.query(`DELETE FROM "Product" WHERE id = $1`, [f.id])
+    await client.query(`DELETE FROM "ChannelListing" WHERE "workspaceId" = $2 AND "productId" IN
+      (SELECT id FROM "Product" WHERE "workspaceId" = $2 AND (id = $1 OR "parentId" = $1))`, [f.id, workspace])
+    await client.query(`DELETE FROM "Product" WHERE "parentId" = $1 AND "workspaceId" = $2`, [f.id, workspace])
+    await client.query(`DELETE FROM "Product" WHERE id = $1 AND "workspaceId" = $2`, [f.id, workspace])
     const productType = 'productType' in f ? f.productType : null
     await client.query(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", "isParent", "productType", "updatedAt")
       VALUES ($1, $2, $3, $4, 10, true, $5, now())`, [f.id, workspace, f.sku, `E2E sheet ${f.label} ${nonce}`, productType])

@@ -52,3 +52,14 @@ export class Wire {
     expect(this.offLoopback, 'a request left the machine').toEqual([])
   }
 }
+
+/** A committed unit can still refuse individual cells. `saved` counts units, not successful cells. */
+export function assertSaved(save: Pick<Save, 'status' | 'answer'>, what: string) {
+  expect(save.status, `${what}: HTTP status`).toBe(200)
+  expect(save.answer, `${what}: save counts`).toMatchObject({ saved: 1, failed: 0 })
+  expect(save.answer.units, `${what}: answered units`).toHaveLength(1)
+  for (const unit of save.answer.units) {
+    expect(unit.status, `${what}: unit status`).toBe(200)
+    expect(unit.body.errors ?? [], `${what}: refused cells ${JSON.stringify(unit.body.errors ?? [])}`).toEqual([])
+  }
+}

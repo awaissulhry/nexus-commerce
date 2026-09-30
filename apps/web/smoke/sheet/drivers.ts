@@ -61,52 +61,8 @@ export const NETWORK_STUBS = [
   },
 ] as const
 
-/**
- * Defects the sweep FOUND that are not fixed yet. A commit they match that fails is reported as known (the run stays
- * green); when EVERY commit an entry matches in a chunk passes, the run fails until the entry is removed — the day the fix
- * lands. Guardrail 3 holds the list's length: it may only shrink.
- */
-export interface KnownDefect {
-  /** Where it shows: a commit that fails (`commit`), or a commit answered saved whose value does not read back (`stored`). */
-  stage: 'commit' | 'stored'
-  editors?: EditorId[]
-  path?: Path
-  scope?: ScopeName
-  columns?: string[]
-  /** Only where the row already held a value in this column's repeated attribute when the sheet loaded. */
-  when?: 'rowHeldSlotValues'
-  reason: string
-}
-export const KNOWN_DEFECTS: readonly KnownDefect[] = [
-  {
-    stage: 'commit',
-    editors: ['ListPanelEditor', 'MeasureEditor', 'SlotListEditor'],
-    path: 'paste',
-    reason: 'A paste into a list or measure column writes the pasted TEXT ("9 OUNCE", "a | b"): media/mediaGridTransfer.ts '
-      + 'processCellFromClipboard returns p.value raw, and a processCellFromClipboard makes AG skip the column\'s valueParser. '
-      + 'Returning p.parseValue(p.value) there sends { value: 9, unit: "OUNCE" } and ["a", "b"] (measured locally, P3).',
-  },
-  {
-    stage: 'commit',
-    scope: 'AMAZON',
-    columns: Array.from({ length: 10 }, (_, i) => `bulletPoints_${i + 1}`),
-    when: 'rowHeldSlotValues',
-    reason: 'On a row that had bullets when the sheet loaded, the first bullet save works and every later one is refused: '
-      + '500 "Bullet 3 changed. Reload before saving it." (nothingSaved) — the sheet keeps the load-time bullet token after its '
-      + 'own save. Reproduced alone (P3 report): pin Bullet 1, save twice, save Bullet 2 → all 200; reload; save Bullet 2 → 200, '
-      + 'again → 500, Bullet 3 → 500.',
-  },
-  {
-    stage: 'stored',
-    scope: 'master',
-    columns: ['totalStock'],
-    reason: 'Shared "Total stock" is served editable and writable, and a write is answered saved (200, saved 1), but the '
-      + 'value reads back 0: the edit is dropped without a word (measured on the CI-like stack, P3).',
-  },
-]
-export const knownDefect = (stage: KnownDefect['stage'], scope: ScopeName, column: string, editor: EditorId, path?: Path, rowHeldSlotValues = false) =>
-  KNOWN_DEFECTS.find((d) => d.stage === stage && (!d.scope || d.scope === scope) && (!d.columns || d.columns.includes(column))
-    && (!d.editors || d.editors.includes(editor)) && (!d.path || !path || d.path === path) && (d.when !== 'rowHeldSlotValues' || rowHeldSlotValues))
+/** No failing commits are excused. The static gate prevents this list from growing. */
+export const KNOWN_DEFECTS = [] as const
 
 export const REFERENCE_KEYS = ['descriptionThemeId', 'merchant_shipping_group', 'shippingTemplate', 'shipping_profile_id', 'shop_section_id', 'return_policy_id', 'readiness_state_id']
 const POLICY_KEYS = ['paymentPolicyId', 'returnPolicyId', 'fulfillmentPolicyId']
@@ -258,16 +214,17 @@ async function clickAway(ctx: ArmContext) {
   await (await elsewhereInRow(ctx.page, ctx.cell)).click()
 }
 
-/** A short list moves focus down its options; a searchable one moves the `.active` row. Walk until the target is on. */
-async function arrowTo(page: Page, label: string) {
+/** Both lists can open on a stored value. Walk toward the target; neither list wraps at its last option. */
+export async function arrowTo(page: Page, label: string) {
   for (let i = 0; i < 60; i++) {
-    const on = await page.evaluate(() => {
+    const state = await page.evaluate((target) => {
       const pop = document.querySelector('.ag-popup-editor')
+      const options = [...(pop?.querySelectorAll('[role="option"]') ?? [])]
       const active = pop?.querySelector('[role="option"].active') ?? (document.activeElement?.getAttribute('role') === 'option' ? document.activeElement : null)
-      return active?.textContent?.trim() ?? null
-    })
-    if (on === label) return
-    await page.keyboard.press('ArrowDown')
+      return { active: options.indexOf(active!), target: options.findIndex((option) => option.textContent?.trim() === target) }
+    }, label)
+    if (state.target >= 0 && state.active === state.target) return
+    await page.keyboard.press(state.target >= 0 && state.target < state.active ? 'ArrowUp' : 'ArrowDown')
   }
   throw new Error(`the list never reached "${label}"`)
 }

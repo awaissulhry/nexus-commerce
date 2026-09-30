@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 export interface SheetSeed {
   workspace: string
   nonce: string
-  families: Record<'master' | 'EBAY' | 'AMAZON' | 'ETSY', { family: string; sku: string; name: string; variations: number; channel?: string; market?: string; connection?: string }>
+  families: Record<'master' | 'EBAY' | 'AMAZON' | 'ETSY' | 'speed', { family: string; sku: string; name: string; variations: number; channel?: string; market?: string; connection?: string }>
   /** Per channel: whether the category column can be swept (the seed made the taxonomy it searches), and why not. */
   categories: Record<string, { sweep: boolean; choices?: Array<{ id: string; name: string }>; reason?: string }>
   themes: Array<{ id: string; name: string }>

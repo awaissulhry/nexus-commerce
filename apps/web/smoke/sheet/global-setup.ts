@@ -26,7 +26,7 @@ export default async function globalSetup(config: FullConfig) {
   }
   const browser = await chromium.launch()
   try {
-    const page = await authenticatedStudioPage(browser, { base, viewport: { width: 1440, height: 900 } })
+    const page = await authenticatedStudioPage(browser, { base, viewport: { width: 1440, height: 900 }, colorScheme: 'light' })
     // The family's own studio page: its name carries the nonce, and nothing else in any database does.
     await page.goto(`${base}/w/${seed.workspace}/products/${seed.families.master.family}/edit/studio?scope=master&market=IT&locale=it&tab=sheet`)
     await expect(page.getByText(seed.families.master.name).first(), `the sheet seed's nonce ${seed.nonce} did not come back through the UI — refusing to run against an unknown stack`).toBeVisible({ timeout: 60_000 })

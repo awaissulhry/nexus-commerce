@@ -3,6 +3,7 @@
  * renderer receives); nothing here writes except through the gestures in `drivers.ts`.
  */
 import { expect, type Locator, type Page } from '@playwright/test'
+import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import type { SheetSeed } from './seed'
 
 /** The AG api of the sheet's grid, found from any rendered cell and kept on `window` for the page's life. */
@@ -34,8 +35,7 @@ export interface Scope {
   connection?: string
 }
 
-export function scopeOf(seed: SheetSeed, name: ScopeName): Scope {
-  const f = seed.families[name]
+export function scopeOf(seed: SheetSeed, name: ScopeName, f = seed.families[name]): Scope {
   const locale = name === 'ETSY' ? 'en' : 'it'
   if (name === 'master') {
     return { name, family: f.family, locale, page: `/w/${seed.workspace}/products/${f.family}/edit/studio?scope=master&market=IT&locale=${locale}&tab=sheet`,
@@ -58,9 +58,9 @@ export interface SheetRead { columns: ApiColumn[]; rows: ApiRow[]; scope: { kind
 
 /** The sheet contract, read with the page's own session (and business header, as the browser's patched fetch sends it). */
 export async function readSheet(page: Page, scope: Scope, workspace: string): Promise<SheetRead> {
-  const response = await page.request.get(scope.api, { headers: { 'x-nexus-workspace-id': workspace } })
+  const response = await page.request.get(`${scope.api}&cells=compact`, { headers: { 'x-nexus-workspace-id': workspace } })
   expect(response.status(), `GET ${scope.api}`).toBe(200)
-  return await response.json() as SheetRead
+  return decodeSheetCells(await response.json()) as SheetRead
 }
 
 export async function openSheet(page: Page, scope: Scope) {

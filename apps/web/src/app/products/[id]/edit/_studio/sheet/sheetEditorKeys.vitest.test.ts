@@ -276,7 +276,7 @@ const CASES: Record<string, Case> = {
       return number ? 42 : 'New'
     },
   },
-  AxesPanelEditor: { na: 'The variation theme editor reports every change through onValueChange (AxesPanelEditor.vitest.test.ts, "AG 36 — reporting and discarding") and owns Tab through suppressAxesPanelKeys; its value is a whole family projection that this harness does not build. The commit sweep (apps/web/smoke/sheet) drives it in a browser.' },
+  AxesPanelEditor: { na: 'The variation theme editor reports every change through onValueChange (AxesPanelEditor.vitest.test.ts, "AG 36 — reporting and discarding") and owns Tab through suppressAxesPanelKeys; its value is a whole family projection that this harness does not build. The commit sweep also abstains; whole-family axis gestures need a separate browser fixture.' },
   FormulaUnavailableEditor: { na: 'Shown while this cell\'s formula state is loading: a message with Retry and Close. It holds no value and always cancels.' },
   Gateway: { na: 'The Shopify cell: cancels the grid edit on open and hands off to the Shopify value dialog, which owns its keys.' },
   MediaEditorGateway: { na: 'The product media cell: cancels the grid edit on open and hands off to the media dialog, which owns its keys.' },

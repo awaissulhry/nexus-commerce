@@ -7,7 +7,8 @@
  *   · send exactly ONE `bulk-save`, one unit, one change — the cell's own field, target and content address, the value
  *     chosen, intent `set`, the scope's marketplace context and the version the GET gave the row;
  *   · be answered saved (200, `saved: 1, failed: 0`) and show on the cell;
- *   · be STORED: after the chunk, one read of the sheet API must hold every value it wrote.
+ *   · be STORED: after each gesture, the sheet API must hold its value before a later gesture overwrites it.
+ *     A final chunk read also verifies that later edits did not overwrite another cell.
  * The contract test cross-checks the API's columns with the grid's: a writable contract column the grid does not build, or
  * an editable grid column the contract does not name, fails.
  *
@@ -15,16 +16,16 @@
  * contract and takes its slice. A slice past the end abstains, and a scope with more columns than the chunks hold FAILS.
  * Every commit is tried and every failure is reported at the end of its chunk. What the sweep cannot do is said by name:
  * a driver's `abstain` or `{ na }` arm, a pick's `skip`, a driver's `refusedOffline` (the exact write, then the API's own
- * refusal), and `KNOWN_DEFECTS` — defects this sweep found that are not fixed yet (drivers.ts; they may only shrink).
+ * refusal). No failing commit or read-back is excused.
  *
  * Why this exists: the 2026-09-29 defects (Enter and Tab kept the old value, the chevron did nothing, the first typed key
  * was lost, an open list refused a typed value) all live between the key and the wire, where no test looked.
  */
 import { expect, test, type Page } from '@playwright/test'
-import { DRIVERS, NETWORK_STUBS, PATHS, editorOf, knownDefect, labelledCodes, pickFor, type EditorId, type KnownDefect, type Path } from './drivers'
+import { DRIVERS, NETWORK_STUBS, PATHS, editorOf, labelledCodes, pickFor, type EditorId, type Path } from './drivers'
 import { focusCell, gridLabels, openSheet, readSheet, revealAllColumns, scopeOf, type ApiColumn, type ApiRow, type ScopeName, type SheetRead } from './grid'
 import { sheetSeed } from './seed'
-import { Wire } from './wire'
+import { Wire, assertSaved } from './wire'
 
 const SCOPES: ScopeName[] = ['master', 'EBAY', 'AMAZON', 'ETSY']
 const CHUNK = 8
@@ -105,19 +106,10 @@ for (const scopeName of SCOPES) {
         const versions = new Map(read.rows.map((r) => [r.id, versionOf(r, scopeName)]))
         const results: string[] = []
         const failures: string[] = []
-        // A known defect is excused only while it still happens: if every commit it covers here passed, it is fixed.
-        const knownSeen = new Map<KnownDefect, { passed: number; failed: number }>()
-        const tally = (known: KnownDefect, passed: boolean) => {
-          const t = knownSeen.get(known) ?? { passed: 0, failed: 0 }
-          t[passed ? 'passed' : 'failed']++
-          knownSeen.set(known, t)
-        }
-
+        let attempted = 0
         for (const { column, editor, row } of mine) {
           let current: unknown = row.values[column.key]?.value ?? null
           const cell0 = row.values[column.key]
-          const slot = (column as { slot?: { of: string; max: number } }).slot
-          const heldSlots = !!slot && Array.from({ length: slot.max }, (_, i) => row.values[`${slot.of}_${i + 1}`]?.value).some((v) => v != null && v !== '')
           const labels = await gridLabels(page, column.key, labelledCodes(editor, column), column.shape === 'list')
           for (const [n, path] of PATHS.entries()) {
             const arm = DRIVERS[editor][path]
@@ -127,6 +119,7 @@ for (const scopeName of SCOPES) {
             if (pick.skip) { results.push(`– ${what}: ${pick.skip}`); continue }
             // Every commit is tried and every failure reported (a chunk that stops at its first red hides the rest).
             await test.step(what, async () => {
+              attempted++
               try {
               const cell = await focusCell(page, row.id, column.key)
               const mark = wire.mark()
@@ -146,49 +139,50 @@ for (const scopeName of SCOPES) {
               const [change] = unit.changes
               expect(change.id, `${what}: row`).toBe(row.id)
               expect(change.field, `${what}: field`).toBe(cell0.writeField ?? column.writeField ?? column.key)
-              // A number list's editor sends its items as typed text; the API stores numbers (the read-back checks that).
-              const sent = column.kind === 'number' && Array.isArray(change.value) ? change.value.map((v) => (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)) ? Number(v) : v)) : change.value
-              expect(stripped(sent), `${what}: value`).toEqual(stripped(pick.wire))
+              expect(stripped(change.value), `${what}: value`).toEqual(stripped(pick.wire))
+              // The master writer omits the API's default set intent; reset must never be inferred here.
               expect(change.intent ?? 'set', `${what}: intent`).toBe('set')
               // The server says where the cell lands (`writeTarget`); on a channel scope a listing write is `channel`, and
               // a pinned shared text is too.
               if (scope.channel) expect(change.target, `${what}: target`).toBe(pinned || ['channel', 'channelListing'].includes(String(cell0.writeTarget)) ? 'channel' : 'master')
               else if (change.target !== undefined) expect(change.target, `${what}: target`).toBe('master')
               const address = change.contentAddress as { language?: string; coordinate?: { channel?: string; market?: string; accountId?: string } } | undefined
+              if (cell0.contentAddress) expect(address, `${what}: required content address`).toBeDefined()
               if (address && scope.channel) {
                 // A channel text is written at this listing's own language and coordinate.
                 expect(address.language, `${what}: language`).toBe(scope.locale)
                 expect(address.coordinate, `${what}: coordinate`).toEqual({ channel: scope.channel, market: scope.market, accountId: scope.connection })
               } else if (address) expect(address, `${what}: content address`).toEqual(cell0.contentAddress)
               if (scope.channel) {
+                expect(unit.marketplaceContexts, `${what}: exactly one marketplace context`).toHaveLength(1)
                 expect(unit.marketplaceContexts?.[0], `${what}: marketplace context`).toMatchObject({ channel: scope.channel, marketplace: scope.market, accountId: scope.connection, locale: scope.locale })
               }
               expect(unit.expectedVersion, `${what}: expectedVersion`).toBe(versions.get(row.id))
+              expect(save.answer.units.map(answer => answer.key), `${what}: answer belongs to this unit`).toEqual([unit.key])
               const offline = DRIVERS[editor].refusedOffline
               if (offline) {
                 // The write is exact; storing it needs the channel. The API must say so by name and keep the value.
                 expect(save.answer, `${what}: answer`).toMatchObject({ saved: 0, failed: 1 })
                 expect(JSON.stringify(save.answer.units[0]?.body), `${what}: the refusal names why`).toMatch(offline.answer)
+                const afterRefusal = await readSheet(page, scope, seed.workspace)
+                expect(stripped(afterRefusal.rows.find(savedRow => savedRow.id === row.id)?.values[column.key]?.value), `${what}: refusal kept the stored value`).toEqual(stripped(current))
                 results.push(`  (${column.key}: refused offline, as expected — ${offline.reason})`)
               } else {
-                expect(save.answer, `${what}: answer ${JSON.stringify(save.answer?.units?.[0] ?? save.answer).slice(0, 500)}`).toMatchObject({ saved: 1, failed: 0 })
+                assertSaved(save, what)
                 const next = save.answer.units[0]?.body?.currentVersion
                 if (typeof next === 'number') versions.set(row.id, next)
                 if (pick.shows) await expect(cell, `${what}: the cell shows it`).toContainText(pick.shows)
+                // Read every gesture before a later gesture overwrites it. End-of-chunk checks alone only proved paste.
+                const persisted = await readSheet(page, scope, seed.workspace)
+                expect(stripped(persisted.rows.find((savedRow) => savedRow.id === row.id)?.values[column.key]?.value), `${what}: persisted value`).toEqual(stripped(pick.stored ?? pick.wire))
                 current = pick.stored ?? pick.wire
                 expected.set(`${row.id}|${column.key}`, { row: row.id, key: column.key, value: pick.stored ?? pick.wire, editor })
               }
-              const known = knownDefect('commit', scopeName, column.key, editor, path, heldSlots)
-              if (known) tally(known, true)
               results.push(`✓ ${what}`)
               } catch (error) {
-                const known = knownDefect('commit', scopeName, column.key, editor, path, heldSlots)
-                if (known) { tally(known, false); results.push(`! ${what}: KNOWN DEFECT — ${known.reason}`) }
-                else {
-                  const message = String(error instanceof Error ? error.message : error).split('\n').slice(0, 8).join(' | ')
-                  failures.push(message.startsWith(scopeName) ? message : `${what}: ${message}`)
-                  results.push(`✗ ${what}`)
-                }
+                const message = String(error instanceof Error ? error.message : error).split('\n').slice(0, 8).join(' | ')
+                failures.push(message.startsWith(scopeName) ? message : `${what}: ${message}`)
+                results.push(`✗ ${what}`)
                 // Close whatever is open, and take the row's state from the server before the next arm.
                 for (const key of ['Escape', 'Escape']) await page.keyboard.press(key).catch(() => {})
                 const cancel = page.getByRole('button', { name: 'Cancel', exact: true })
@@ -207,21 +201,13 @@ for (const scopeName of SCOPES) {
         const stored = [...expected.values()].map(({ row, key, value, editor }) => {
           const got = after.rows.find((r) => r.id === row)?.values?.[key]?.value
           return { cell: `${row} · ${key}`, key, editor, got: stripped(got), want: stripped(value) }
-        }).filter((s) => {
-          const known = knownDefect('stored', scopeName, s.key, s.editor)
-          const same = JSON.stringify(s.got) === JSON.stringify(s.want)
-          if (known) tally(known, same)
-          if (known && !same) results.push(`! ${s.cell}: KNOWN DEFECT — ${known.reason}`)
-          return !known
         })
-        for (const [known, t] of knownSeen) {
-          if (t.failed === 0) failures.push(`fixed? every commit KNOWN_DEFECTS excuses here passed (${t.passed}) — remove the entry in drivers.ts: ${known.reason.slice(0, 100)}…`)
-        }
         const unstored = stored.filter((s) => JSON.stringify(s.got) !== JSON.stringify(s.want)).map(({ cell, got, want }) => ({ cell, got, want }))
         test.info().annotations.push({ type: 'commits', description: results.join('\n') })
         console.log(results.join('\n'))
         expect(failures, 'commits that failed').toEqual([])
         expect(unstored, 'read back from the API').toEqual([])
+        expect(wire.mark(), 'one write per attempted gesture over the whole chunk, including late writes').toBe(attempted)
         wire.assertLoopback()
       })
     }
