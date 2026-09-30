@@ -1,10 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { GridApi } from '@/design-system/grid'
 import type { PreferencesModalProps, PreferencesValue } from '@/design-system/patterns/PreferencesModal'
 import type { SheetColumnsApi } from './useSheetColumns'
 import type { RevealIntent } from '../drawer'
+import { getBackendUrl } from '@/lib/backend-url'
+import { familyAttributesElsewhere, type FamilyAttributePlaces, type FamilyElsewhere } from './familyPlaces'
+import { FamilyAttributesElsewhere } from './FamilyAttributesElsewhere'
 
 /** Personal layouts and named views follow the same save/reset flow on every scope. */
 export function useSheetPreferences<Row, Page>(options: {
@@ -14,6 +17,11 @@ export function useSheetPreferences<Row, Page>(options: {
   bandWidthRef: MutableRefObject<number>
   bandDerivedRef: MutableRefObject<boolean>
   revealCell: (key: string, intent?: RevealIntent) => void
+  /**
+   * P1 (issue #15) — the product whose family's attributes Customise accounts for: the columns of this sheet, and the
+   * channel it shows (`null` = the Shared product sheet). Read when Customise opens, never with the sheet.
+   */
+  family?: { productId: string; channel: string | null; columns: () => ReadonlyArray<{ key: string; writeField?: string }> }
 }) {
   const [open, setOpen] = useState(false)
   /* `new-view`: opened by the views menu's "New view…" — the same dialog, with the name field open. */
@@ -71,6 +79,21 @@ export function useSheetPreferences<Row, Page>(options: {
     await live.current.sheetColumns.savePreferencesAs(name, next)
     setDraft(next)
   }, [])
+  const [places, setPlaces] = useState<FamilyAttributePlaces | 'loading' | 'error' | null>(null)
+  const familyProductId = options.family?.productId
+  useEffect(() => {
+    if (!open || !familyProductId) return
+    let current = true
+    setPlaces('loading')
+    fetch(`${getBackendUrl()}/api/products/${encodeURIComponent(familyProductId)}/studio/family-attributes`, { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((body: FamilyAttributePlaces) => { if (current) setPlaces(body) })
+      .catch(() => { if (current) setPlaces('error') })
+    return () => { current = false }
+  }, [open, familyProductId])
+  const family = live.current.family
+  const elsewhere: FamilyElsewhere | 'loading' | 'error' | null = !family || places === null ? null
+    : places === 'loading' || places === 'error' ? places : familyAttributesElsewhere(places, family.columns(), family.channel)
   const { sheetColumns } = options
   const own = sheetColumns.ownActiveView
   const where = options.scope === 'master' ? 'the shared product' : 'this channel'
@@ -85,6 +108,7 @@ export function useSheetPreferences<Row, Page>(options: {
     // Save already updates the operator's own view, so the footer offers no second "Update" button.
     viewSave: { activeName: sheetColumns.activeViewName, onSaveAs: saveAs, startNaming: intent === 'new-view' },
     confirmLabel: own ? `Save “${own.name}”` : 'Save',
+    ...(elsewhere ? { workspaceSlot: createElement(FamilyAttributesElsewhere, { state: elsewhere }) } : {}),
     title: intent === 'new-view' ? 'New view' : `Customise columns · ${viewLabel(sheetColumns)}`,
     listHint: own
       ? `Tick the attributes to show. Save updates your view “${own.name}” for ${where}, on every product and market.`

@@ -336,3 +336,24 @@ describe('the mapped category fills only the channel category field', () => {
       .toMatchObject({ value: 0, errors: [expect.stringMatching(/at least 1|minimum|greater/i)] })
   })
 })
+
+// P1 (report 3 I-3.3) — "Stile" stored on the listing was hidden by language content that only follows the shared text:
+// the cell showed nothing and publish sent nothing. The listing's own stored value wins; a content PIN still wins over it.
+describe('a stored item specific is never hidden by language content', () => {
+  it('shows and sends the listing\'s own "Stile" over a computed shared value', async () => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, masterLocalizableKeys: ['style'], fields: [field('style', { label: 'Style', rule: { source: 'style' },
+      channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Stile'] } })] })
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', platformAttributes: { itemSpecifics: { Stile: 'Da motociclista' } } }])
+    expect((await resolveBatch(input)).products[0].cells.style).toMatchObject({ value: 'Da motociclista', provenance: 'override' })
+  })
+})
+
+// P1 review (7) — a check that could not run (a mapping expression that failed, requirements unavailable, conflicting
+// categories) is `unchecked`: stored, and BLOCKING at publish with its sentence.
+describe('findings that mean the check could not run', () => {
+  it('a failed mapping expression is `unchecked`', async () => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('packageWeight', { rule: { source: 'basePrice', transforms: [{ type: 'expr', expr: 'measure($basePrice, null)' }] } })] })
+    const cell = (await resolveBatch(input)).products[0].cells.packageWeight
+    expect(cell.findings?.filter(f => /measure\(\) needs a unit/.test(f.message)).map(f => f.rule)).toEqual(['unchecked'])
+  })
+})

@@ -280,3 +280,15 @@ describe('progress columns are NOT structural (2026-09-27)', () => {
     expect(structuralColumnKeys(cols)).toEqual(['variation_theme'])
   })
 })
+
+describe('P1 (issue #15) — the ground view names its scope', () => {
+  it('"All eBay · IT columns", never "All attributes" of a family it does not count', async () => {
+    const { sheetViews, allColumnsLabel } = await import('./views')
+    const cols = [{ key: 'brand', label: 'Brand', group: 'g', requiredBy: [], scope: 'global' }] as never
+    const all = sheetViews(cols, { variationAxes: [], locale: 'it', scopeLabel: 'eBay · IT' }).presets[0]
+    expect(all.label).toBe('All eBay · IT columns')
+    expect(all.description).toContain('family attributes kept elsewhere are listed in Customise')
+    expect(allColumnsLabel('Shared product')).toBe('All Shared product columns')
+    expect(sheetViews(cols, { variationAxes: [], locale: 'it' }).presets[0].label).toBe('All attributes')
+  })
+})

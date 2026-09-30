@@ -22,17 +22,22 @@ export interface SourceIndicatorProps {
   onAction?: () => void
   /** Labels stay visible in legends; dense cells use the same icon with a tooltip. */
   showLabel?: boolean
+  /**
+   * A routine source (a value that follows somewhere else) drawn in the muted text colour, so the cells that hold
+   * their own value stand out on a dense sheet. Quieter, never hidden: the icon, its name and its action stay.
+   */
+  quiet?: boolean
   tabIndex?: number
 }
 
 /** A value's origin, with a hover/focus explanation that escapes scrolling grids. */
-export function SourceIndicator({ kind, label, description, tooltip, actionLabel, onAction, showLabel = false, tabIndex = 0 }: SourceIndicatorProps) {
+export function SourceIndicator({ kind, label, description, tooltip, actionLabel, onAction, showLabel = false, quiet = false, tabIndex = 0 }: SourceIndicatorProps) {
   const Icon = ICONS[kind]
   const actionable = !!onAction && !!actionLabel
   const explanation = [label, description, actionable ? actionLabel : null]
     .filter((part): part is string => !!part).map(part => part.trim().replace(/\.+$/, '')).join('. ')
   const content = <><Icon size={14} strokeWidth={2} aria-hidden="true" />{showLabel && <span>{label}</span>}</>
-  const className = `nds-source-indicator${showLabel ? ' nds-source-indicator--label' : ''}`
+  const className = `nds-source-indicator${showLabel ? ' nds-source-indicator--label' : ''}${quiet ? ' nds-source-indicator--quiet' : ''}`
   return (
     <Tooltip portal label={tooltip ?? explanation}>
       {actionable ? (

@@ -4,7 +4,7 @@ import { loadReferenceChoices, isReferenceField as isPickerReference } from './r
 import { loadEbayPolicies, policyLists } from './ebayPolicies'
 import { wholeListWriteField } from './channel/provenance'
 
-type RecoveryCell = { shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite; value: unknown; pinned?: boolean; follows?: boolean | null; writeTarget?: string; writeField?: string }
+type RecoveryCell = { shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite; value: unknown; pinned?: boolean; follows?: boolean | null; writeTarget?: string; writeField?: string; source?: string | null }
 type RecoveryRow = { id: string; version: number; aliasId?: string | null; productType?: string | null; listing?: { id: string; version?: number } | null; values: Record<string, RecoveryCell> }
 export type RecoveryScope = { channel: string; market: string; locale?: string; accountId?: string }
 
@@ -28,7 +28,8 @@ export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, requ
     if (channel && reset && stored.writeTarget === 'channelListing') {
       const base = cell.intent === 'reset-list' ? wholeListWriteField(stored.writeField ?? cell.colId) : null
       const slots = base ? Object.values(row.values).filter(value => wholeListWriteField(value.writeField ?? '') === base) : [stored]
-      matches[cell.colId] = slots.length > 0 && slots.every(value => value.pinned === false && value.follows !== false)
+      // An old listing text reads `pinned: false, follows: true` too — it is not a reset that landed (P1).
+      matches[cell.colId] = slots.length > 0 && slots.every(value => value.pinned === false && value.follows !== false && value.source !== 'channelSnapshot')
       if (matches[cell.colId] && stored.shopifyWrite && request.row.values[cell.colId]) request.row.values[cell.colId].shopifyWrite = stored.shopifyWrite
       continue
     }

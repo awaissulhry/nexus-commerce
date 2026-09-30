@@ -9,7 +9,7 @@ import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { normalizeLanguage } from './content-language.js'
 import { marketLanguages } from './market-languages.js'
 import { resolveWriteRouting } from './studio-sheet.service.js'
-import { coerceForShape, parseSlotField, withSlotValue } from './sheet-values.js'
+import { checkForStorage, parseSlotField, withSlotValue } from './sheet-values.js'
 import { writeContent } from './content-write.js'
 import { DraftListingError, ensureDraftListings } from './draft-listing.service.js'
 import type { SheetColumn } from './sheet-columns.service.js'
@@ -23,8 +23,11 @@ const addressKey = (value: unknown, label: string) => {
 }
 export interface ContentEdit { change: Change; column: SheetColumn }
 export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: () => Promise<any>,
-  priorErrors: Array<{ id: string; field: string; error: string }> = []) {
+  priorErrors: Array<{ id: string; field: string; error: string }> = [], priorWarnings: Array<{ id: string; field: string; warning: string }> = []) {
   const errors: Array<{ id: string; field: string; error: string }> = [...priorErrors]
+  /** P1 (`value-verdict.ts`) — a stored value with a problem (a title over the channel's limit), and its reason. */
+  const warnings: Array<{ id: string; field: string; warning: string }> = [...priorWarnings]
+  const withWarnings = (rest: { warnings?: typeof warnings }) => { const all = [...warnings, ...(rest.warnings ?? [])]; return all.length ? { warnings: all } : {} }
   // `draft`: a PIN on a coordinate where the product has no listing yet — its draft is started when the write runs.
   const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number; draft?: true }> = []
   const contexts = input.marketplaceContexts ?? (input.marketplaceContext ? [input.marketplaceContext] : [])
@@ -78,9 +81,11 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
         if (!acknowledgement) throw new Error(`${column.label} has no shared/pin choice on this coordinate; reload the sheet before saving it.`)
         throw new Error(`${column.label} needs a choice: ${acknowledgement.shared.label} or ${acknowledgement.pin.label}.`)
       }
-      const checked = coerceForShape({ ...column, shape: slot ? 'scalar' : column.shape }, change.value)
+      // P1 — only what the field's type cannot hold is refused; a length or a list problem is stored and flagged.
+      const checked = checkForStorage({ ...column, shape: slot ? 'scalar' : column.shape }, change.value)
       if (checked.ok === false) throw new Error(checked.error)
       const value = checked.value
+      for (const found of checked.findings) warnings.push({ id: change.id, field: change.field, warning: found.message })
       plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version, ...(draft ? { draft: true as const } : {}) })
     } catch (error) {
       if (error instanceof ProductBulkError) throw error
@@ -94,9 +99,9 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     if (input.dryRun) return { success: false, dryRun: true, updated: 0, validated: 0, errors }
     const rest = await inDatabaseTransaction(prisma, () => facts())
     const updated = rest.updated ?? 0
-    return { ...rest, success: updated > 0, updated, errors: [...errors, ...(rest.errors ?? [])] }
+    return { ...rest, success: updated > 0, updated, errors: [...errors, ...(rest.errors ?? [])], ...withWarnings(rest) }
   }
-  if (input.dryRun) return { success: true, dryRun: true, updated: 0, validated: plans.length, errors: perRow ? errors : [] }
+  if (input.dryRun) return { success: true, dryRun: true, updated: 0, validated: plans.length, errors: perRow ? errors : [], ...withWarnings({}) }
   return inDatabaseTransaction(prisma, async () => {
     const groups = new Map<string, typeof plans>()
     for (const plan of plans) { const key = `${plan.edit.change.id}:${JSON.stringify(plan.address)}`; groups.set(key, [...(groups.get(key) ?? []), plan]) }
@@ -157,6 +162,6 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     const createdOut = [...createdListings.map(row => ({ ...row, version: created.find(r => r.id === row.listingId)?.version ?? null })), ...(rest.createdListings ?? [])]
     const skipped = [...refused].reduce((n, group) => n + group.length, 0)
     return { ...rest, success: true, updated: plans.length - skipped + (rest.updated ?? 0), ...(createdOut.length ? { createdListings: createdOut } : {}),
-      currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [] }
+      currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [], ...withWarnings(rest) }
   })
 }

@@ -24,6 +24,7 @@ import {
 } from './types.js'
 import { toInventoryCondition } from '../../ebay-condition.js'
 import { englishEbayAspectLabel } from '../../ebay-aspect-names.js'
+import { EBAY_ASPECT_VALUE_MAX } from '../../ebay-aspect-values.js'
 
 export interface EbayCachedAspect {
   id: string
@@ -79,7 +80,7 @@ const GROUP_FOR_LISTING_FIELD: Record<string, string> = {
   imageUrls: 'images', videoId: 'images',
   conditionId: 'offer', listingFormat: 'offer', listingDuration: 'offer',
   bestOffer: 'offer', bestOfferFloor: 'offer', bestOfferCeiling: 'offer', vatRate: 'offer',
-  dimensionUnit: 'shipping', handlingTime: 'shipping', itemLocationCountry: 'shipping', packageType: 'shipping', packageWeight: 'shipping',
+  dimensionUnit: 'shipping', handlingTime: 'shipping', itemLocationCountry: 'shipping', itemLocation: 'shipping', itemPostalCode: 'shipping', packageType: 'shipping', packageWeight: 'shipping',
   packageLength: 'shipping', packageWidth: 'shipping', packageHeight: 'shipping',
   paymentPolicyId: 'policies', returnPolicyId: 'policies', fulfillmentPolicyId: 'policies',
 }
@@ -125,6 +126,10 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     listing('bestOfferCeiling', 'Accettazione automatica da', 'Best offer auto-accept from', { kind: 'number', channelStore: pa('bestOfferCeiling'), helpText: 'Offers at or above this are accepted automatically (eBay autoAcceptPrice). Must be above the auto-decline price.' }),
     listing('handlingTime', 'Tempo di imballaggio', 'Handling time (days)', { kind: 'number', channelStore: pa('handlingTime') }),
     listing('itemLocationCountry', 'Paese dell’oggetto', 'Item location country', { kind: 'text', maxLength: 2, channelStore: pa('itemLocationCountry'), helpText: 'Two-letter country code for the item location. The legacy eBay workbook labels this field Location.' }),
+    // #30 (2026-09-30) — the city and postal code publish already reads (`studio-publication-ebay.ts`, `settings.itemLocation`
+    // / `settings.itemPostalCode`) had no column, so a new listing on an account with no default location could not be published.
+    listing('itemLocation', 'Località dell’oggetto', 'Item location (city)', { kind: 'text', channelStore: pa('itemLocation'), helpText: 'City or town where the item is. eBay needs it, with the country, to create a listing. It overrides the account\'s default location.' }),
+    listing('itemPostalCode', 'CAP dell’oggetto', 'Item location postal code', { kind: 'text', channelStore: pa('itemPostalCode'), helpText: 'Postal code where the item is. It overrides the account\'s default location.' }),
     listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'open', options: PACKAGE_TYPES, channelStore: pa('packageType') }),
     listing('packageWeight', 'Peso del pacco', 'Package weight', { kind: 'number', shape: 'measure', unitOptions: WEIGHT_UNITS, channelStore: { kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] } }),
     listing('packageLength', 'Lunghezza del pacco', 'Package length', { kind: 'number', channelStore: pa('packageLength'), helpText: 'Uses the shared package dimension unit.' }),
@@ -167,7 +172,10 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     const options = Array.isArray(a.options) && a.options.length > 0 ? a.options.map(String) : undefined
     const isEnum = a.kind === 'enum' && !!options
     const kind: ChannelFieldSpec['kind'] = isEnum ? 'select' : a.kind === 'number' || a.dataType === 'NUMBER' ? 'number' : a.kind === 'date' || a.dataType === 'DATE' ? 'date' : isProseKey(norm) ? 'longtext' : 'text'
-    const maxLength = typeof a.maxLength === 'number' && a.maxLength > 0 ? a.maxLength : typeof row?.maxLength === 'number' && row.maxLength > 0 ? row.maxLength : undefined
+    // P1 (report 3 I-3.9) — eBay refuses any ONE value over 65 characters (21919308) whatever the cache says; the cache
+    // carries no cap, so the column declares eBay's: the sheet warns while editing and publish blocks it.
+    const cached = typeof a.maxLength === 'number' && a.maxLength > 0 ? a.maxLength : typeof row?.maxLength === 'number' && row.maxLength > 0 ? row.maxLength : undefined
+    const maxLength = Math.min(cached ?? EBAY_ASPECT_VALUE_MAX, EBAY_ASPECT_VALUE_MAX)
     const spec: ChannelFieldSpec = {
       key: norm,
       attribute: `aspect_${names.english}`,
@@ -176,8 +184,8 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
       englishLabel: englishEbayAspectLabel(names.english) ?? names.english,
       shape: multi ? 'list' : 'scalar',
       kind,
-      // eBay's aspect metadata declares no per-aspect maximum in the cache; the adapter records
-      // the truth (unbounded) rather than inventing one.
+      // eBay's aspect metadata declares no per-aspect maximum NUMBER of values in the cache; the adapter
+      // records the truth (unbounded) rather than inventing one.
       cardinality: multi ? { min: 1, max: null } : { min: 1, max: 1 },
       options,
       mode: options ? (a.enumMode === 'strict' ? 'strict' : 'open') : undefined,

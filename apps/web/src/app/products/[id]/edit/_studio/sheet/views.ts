@@ -153,7 +153,15 @@ export interface ViewContext {
    */
   flaggedKeys?: readonly string[]
   requiredKeys?: readonly string[]
+  /**
+   * P1 (issue #15) — the scope the sheet shows (`eBay · IT`, `Shared product`). "All attributes (79)" counted this
+   * scope's columns while the family page counts every family attribute (197): the ground view now names its scope.
+   */
+  scopeLabel?: string
 }
+
+/** The ground view's name: the columns of THIS scope, never "all attributes" of the family. */
+export const allColumnsLabel = (scopeLabel?: string) => (scopeLabel ? `All ${scopeLabel} columns` : 'All attributes')
 
 /**
  * An axis is what the CONTRACT says it is (#711/P11) — never a substring of a localised label.
@@ -339,7 +347,9 @@ export function sheetViews(
      "every column". Required keeps Bullet 1 — the requirement lives on position 1. */
   const note = slotListViewNote(columns)
   const allKeys = defaultViewKeys(orderColumnKeys(columns, ctx), columns)
-  const all = note ? { ...allColumnsPreset(allKeys), description: note } : allColumnsPreset(allKeys)
+  const ground = allColumnsPreset(allKeys, allColumnsLabel(ctx.scopeLabel))
+  const all = note ? { ...ground, description: note }
+    : ctx.scopeLabel ? { ...ground, description: `Every column ${ctx.scopeLabel} has for this product; family attributes kept elsewhere are listed in Customise` } : ground
   /* TOOLBAR REBUILD (Owner, 2026-09-27): the "Languages" view is gone. Languages are the Languages menu's alone, and
      every view shows each of its text fields in every language picked there. */
   if (serverViews && serverViews.length > 0) {

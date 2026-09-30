@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn() }))
 vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: m.closed }))
 vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) } } }))
@@ -156,4 +156,100 @@ it('still refuses a paused still-draft that is deliberately held — only the pa
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft, presenceIntent: 'HELD' }, { id: 'listing-child', productId: 'child', ...stillDraft }])
   m.excluded.mockResolvedValue(new Set())
   expect((await readPublicationFacts('parent', scope)).issues).toContainEqual(expect.objectContaining({ severity: 'error', message: expect.stringContaining('deliberately held') }))
+})
+
+// P1 (`value-verdict.ts`) — the publish review blocks only what the channel itself would reject, with the channel's rule;
+// report 2 I-9, report 5 I-2, report 6 §2a: every cell error used to be a block.
+describe('the publish verdict per cell', () => {
+  const found = (rule: string, message: string) => ({ rule, message })
+  const cells = {
+    season: { label: 'Season', value: 'Tutte le stagioni', errors: ['Season contains an unaccepted value. Allowed values: Estate · Inverno · Tutte le stagione.'],
+      findings: [found('offList', 'Season contains an unaccepted value. Allowed values: Estate · Inverno · Tutte le stagione.')] },
+    title: { label: 'Title', value: 'x'.repeat(94), errors: ['Title exceeds 80 characters (94).'], findings: [found('length', 'Title exceeds 80 characters (94).')] },
+    brand: { label: 'Brand', value: null, errors: ["Field 'Brand' is required."], findings: [found('nexus', "Field 'Brand' is required.")] },
+    condition: { label: 'Condition', value: null, errors: ["Field 'Condition' is required."], findings: [found('required', "Field 'Condition' is required.")] },
+    legacy: { label: 'Legacy', value: 'x', errors: ['A sentence with no finding'] },
+    // P1 review (7) — the check could not run: blocks.
+    theme: { label: 'Theme', value: 'x', errors: ['Category requirement validation is unavailable: timeout'], findings: [found('unchecked', 'Category requirement validation is unavailable: timeout')] },
+  }
+  const severities = async (channel: string) => {
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells })), missingProductIds: [], catalogue: {} }))
+    m.languages.mockResolvedValue(['it'])
+    const facts = await readPublicationFacts('parent', { ...scope, channel })
+    return Object.fromEntries(facts.issues.filter(i => i.productId === 'parent').map(i => [i.field, i.severity]))
+  }
+  it('eBay: an off-list value and a Nexus-only requirement warn; over 80 characters, a channel requirement and an unexplained error block', async () => {
+    expect(await severities('EBAY')).toEqual({ season: 'warning', title: 'error', brand: 'warning', condition: 'error', legacy: 'error', theme: 'error' })
+  })
+  it('Amazon: an off-list value blocks (a closed enum); the Nexus-only requirement still warns', async () => {
+    expect(await severities('AMAZON')).toMatchObject({ season: 'error', brand: 'warning' })
+  })
+  it('the message keeps the channel\'s words', async () => {
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: { title: cells.title } })), missingProductIds: [], catalogue: {} }))
+    const facts = await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })
+    expect(facts.issues).toContainEqual(expect.objectContaining({ field: 'title', severity: 'error', message: 'Title: Title exceeds 80 characters (94).' }))
+  })
+})
+
+// P1 (report 5 I-1/I-2/I-3, report 3 I-3.4/I-3.9) — eBay takes one value per listing for an item specific that is not an
+// axis, parent first, then the first variation in SKU order. The review judges that value once, on the row it comes
+// from, and names the rows whose own value is not sent.
+describe('eBay listing-level item specifics in the publish review', () => {
+  const store = (name: string) => ({ kind: 'platformAttributes', path: ['itemSpecifics', name] })
+  const fields = [{ fieldKey: 'colore_specifico', sheetKey: 'colore_specifico', label: 'Specific color', channelStore: store('Colore specifico') },
+    { fieldKey: 'season', sheetKey: 'season', label: 'Season', channelStore: store('Stagione') }]
+  const offList = { rule: 'offList', message: 'Season contains an unaccepted value. Allowed values: Estate.' }
+  const cell = (value: unknown, findings: Array<{ rule: string; message: string }> = []) => ({ label: 'x', value, errors: findings.map(f => f.message), findings })
+  const run = async (cells: Record<string, Record<string, unknown>>) => {
+    m.languages.mockResolvedValue(['it'])
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: cells[productId] ?? {} })),
+      missingProductIds: [], catalogue: { fields } }))
+    return (await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues
+  }
+  it('a variation\'s own value that is not sent does not block, and is named once with the value eBay gets (report 5 I-2, I-3)', async () => {
+    const issues = await run({
+      parent: { season: cell('Tutte le stagioni', [offList]) },
+      child: { colore_specifico: cell('Giallo'), season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) },
+    })
+    // the child's over-length season is not sent (the parent's is): no block for it; the parent's off-list one warns once
+    expect(issues.filter(i => i.field === 'season')).toEqual([
+      expect.objectContaining({ productId: 'parent', severity: 'warning', message: 'x: Season contains an unaccepted value. Allowed values: Estate.' }),
+      expect.objectContaining({ productId: 'parent', severity: 'warning', message: expect.stringContaining('will get "Tutte le stagioni" (from PARENT). 1 row holds another value that is not sent: CHILD') }),
+    ])
+    // no parent value: the first variation supplies it, and it is judged there
+    expect(issues.filter(i => i.field === 'colore_specifico')).toEqual([])
+  })
+  it('a problem on the value eBay receives still blocks, on the row it comes from', async () => {
+    const issues = await run({ parent: {}, child: { season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) } })
+    expect(issues.filter(i => i.field === 'season')).toEqual([expect.objectContaining({ productId: 'child', severity: 'error' })])
+  })
+  it('a stored item specific with no column (Genere): the rows whose own value is not sent are named; a value over 65 blocks', async () => {
+    const { ebayStoredSpecificIssues } = await import('./studio-publication-plan.js')
+    const { ebayAxisIdentities } = await import('./ebay-listing-level.js')
+    const rows = [{ productId: 'p', sku: 'VENTRA', isParent: true }, { productId: 'a', sku: 'VENTRA-RED-MEN', isParent: false }, { productId: 'b', sku: 'VENTRA-YELLOW-WOMEN', isParent: false }]
+    const listing = (productId: string, itemSpecifics: Record<string, unknown>) => ({ productId, platformAttributes: { itemSpecifics } })
+    const issues = ebayStoredSpecificIssues({ parentId: 'p', rows, axes: ebayAxisIdentities(['Colore', 'Taglia']), fields: [],
+      listings: [listing('p', { 'Body type': 'x'.repeat(70) }), listing('a', { Genere: 'Uomo', Colore: 'Rosso' }), listing('b', { Genere: 'Donna', Colore: 'Giallo' })] })
+    expect(issues).toEqual([
+      expect.objectContaining({ productId: 'p', field: 'itemSpecifics.Body type', severity: 'error', message: expect.stringContaining('eBay takes at most 65 characters per value') }),
+      expect.objectContaining({ productId: 'a', field: 'itemSpecifics.Genere', severity: 'warning',
+        message: 'Genere: eBay takes one value for the whole listing and will get "Uomo" (from VENTRA-RED-MEN). 1 row holds another value that is not sent: VENTRA-YELLOW-WOMEN ("Donna").' }),
+    ])
+  })
+})
+
+// P1 review (8) — the sheet names the row eBay's value comes from with the publisher's OWN order: one comparator.
+describe('the family order the publisher sends in', () => {
+  it('the sheet\'s supplier is the first row readPublicationFacts orders, whatever the SKU case and accents', async () => {
+    const { ebayFamilySupplier } = await import('./ebay-listing-level.js')
+    const skus = ['FAM-b', 'FAM-B', 'FAM-É', 'FAM-a', 'FAM-10', 'FAM-9']
+    m.products.mockResolvedValue([{ id: 'parent', sku: 'FAM', isParent: true }, ...skus.map(sku => ({ id: sku, sku, parentId: 'parent' }))])
+    m.listingRead.mockResolvedValue([{ id: 'lp', productId: 'parent' }, ...skus.map(sku => ({ id: `l-${sku}`, productId: sku }))])
+    m.excluded.mockResolvedValue(new Set())
+    const facts = await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })
+    const published = facts.products.map(p => p.sku)
+    // Every variation holds a value, the parent none: the supplier must be the first variation the publisher sends.
+    const supplier = ebayFamilySupplier([{ productId: 'parent', sku: 'FAM', isParent: true, value: '' }, ...[...skus].reverse().map(sku => ({ productId: sku, sku, isParent: false, value: sku }))])
+    expect(supplier?.sku).toBe(published[1])
+  })
 })

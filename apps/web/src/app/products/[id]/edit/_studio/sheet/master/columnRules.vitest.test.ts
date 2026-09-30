@@ -180,3 +180,21 @@ describe('editRefusalReason', () => {
     )
   })
 })
+
+describe('P1 — the family row and per-variant columns (report 2 I-11)', () => {
+  const pv = (over: Record<string, unknown>) => ({ key: 'neckline', label: 'Neckline', group: 'g', requiredBy: [], editable: true, scope: 'per_variant', storage: 'categoryAttributes', axis: false, ...over }) as never
+  const parent = { id: 'p', sku: 'REGAL', isParent: true, parentId: null, productType: 'OUTERWEAR', values: { neckline: { value: null, editable: true }, color: { value: null, editable: true } } } as never
+  it('the family row edits a value its variations inherit; it is optional there, never required', async () => {
+    const { cellIsEditable, editRefusalReason, holdsFamilyValue, requiredOnRow } = await import('./columnRules')
+    expect(cellIsEditable(pv({}), parent)).toBe(true)
+    expect(editRefusalReason(pv({}), parent)).toBeNull()
+    expect(holdsFamilyValue(pv({}), parent)).toBe(true)
+    expect(requiredOnRow(pv({ requiredBy: ['Master'] }), parent)).toBe(false)
+  })
+  it('an axis stays locked and says it is an axis; another per-variant column keeps the per-variation sentence', async () => {
+    const { cellIsEditable, editRefusalReason } = await import('./columnRules')
+    expect(cellIsEditable(pv({ key: 'color', label: 'Colour', axis: true }), parent)).toBe(false)
+    expect(editRefusalReason(pv({ key: 'color', label: 'Colour', axis: true }), parent)).toBe('Colour is a variation axis — each variation has its own value, so the parent has none. Open a variation row to edit it.')
+    expect(editRefusalReason(pv({ key: 'ean', label: 'EAN', storage: 'column' }), parent)).toBe('EAN is set per variation — open a variation row to edit it, not the parent.')
+  })
+})

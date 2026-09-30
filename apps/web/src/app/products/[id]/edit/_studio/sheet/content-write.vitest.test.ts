@@ -19,7 +19,7 @@ describe('LX.8 both sheet hosts echo the addressed write contract',()=>{
   for(const address of [shared,{tier:'source'} as const]){
    const r=row({contentAddress:address,contentVersion:3});r.values.bullets={...r.values.name,writeField:'bulletPoints'}
    await commitMasterRow({rowId:'p',row:r,expectedVersion:4,cells:[{colId:'name',value:'After',intent:'set'},{colId:'bullets',value:[],intent:'set'}]} as any,{sheet:{columns:[{key:'name',writeField:'name'},{key:'bullets',writeField:'bulletPoints'}]} as any,locale:address.tier==='source'?'it':'de',market:address.tier==='source'?'IT':'DE',opts:{}})
-   expect(requests.at(-1).url).toContain('/products/bulk');expect(requests.at(-1).body.changes.map((c:any)=>c.contentAddress)).toEqual([address,address]);expect(requests.at(-1).body.changes[1].value).toEqual([]);expect(requests.at(-1).body.expectedVersion).toBe(4)
+   expect(requests.at(-1).url).toContain('/products/bulk');expect(requests.at(-1).body.changes.map((c:any)=>c.contentAddress)).toEqual([address,address]);/* P1 — the clear is kept, as `null`: every write path stores it as the same explicit empty list, and `[]` alone met a list's minimum ("0 values — needs at least 1", report 1 I-10). */expect(requests.at(-1).body.changes[1].value).toBeNull();expect(requests.at(-1).body.expectedVersion).toBe(4)
   }
  })
  it.each(['edit','paste','rangeService'])('%s uses the acknowledgement for inherited and drift cells',source=>{

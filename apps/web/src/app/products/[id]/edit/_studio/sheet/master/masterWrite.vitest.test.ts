@@ -387,3 +387,24 @@ describe('commitMasterRow — a variation-theme save tells the host the family c
   })
 })
 
+
+describe('P1 — an emptied list is a clear (report 1 I-10)', () => {
+  it('sends null for [] (the route refused [] with "0 values — Search keywords needs at least 1")', async () => {
+    fetchMock.mockResolvedValue(json(200, { updated: 1, errors: [] }))
+    await commitMasterRow(req([{ colId: 'attr_colour', value: [], intent: 'set' }] as never), ctx())
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.changes[0]).toMatchObject({ value: null })
+  })
+})
+
+/* P1 review (3) — a value the server STORED with a problem it names (a business-strict list, a listed channel's cap)
+   keeps that sentence on its cell; before this the master save answered plain "saved". */
+describe('commitMasterRow — a value stored with a warning', () => {
+  it('the cell carries the server\'s warning; the other cell is plainly saved', async () => {
+    fetchMock.mockResolvedValue(json(200, { updated: 2, currentVersion: 4, versionOf: 'product',
+      warnings: [{ id: 'p1', field: 'attr_colour', warning: '"Viola" is not one of the allowed values for Colour' }] }))
+    const result = await commitMasterRow(req([{ colId: 'attr_colour', value: 'Viola', intent: 'set' }, { colId: 'name', value: 'Giacca', intent: 'set' }]), ctx())
+    expect(cellsOf(result)).toMatchObject({ attr_colour: { ok: true, warning: '"Viola" is not one of the allowed values for Colour' }, name: { ok: true } })
+    expect(cellsOf(result).name).not.toHaveProperty('warning')
+  })
+})

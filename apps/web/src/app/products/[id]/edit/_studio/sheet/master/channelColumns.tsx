@@ -26,7 +26,7 @@ const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({
 import {
   classifyProvenance, provenanceClassRules, roundTripClassRules, type CellSaveTracker,
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
-  longTextEditor, selectEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, formulaCellEditorSelector, numericColumn,
+  longTextEditor, textLimitFor, selectEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, formulaCellEditorSelector, numericColumn,
   sheetValidationFor, composeSheetCellClassRules, shapeColumnDef, shapeEditorSpec, isShaped,
   suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef,
 } from '@/design-system/grid'
@@ -63,7 +63,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     width: col.width ?? 180,
     suppressKeyboardEvent: suppressFormulaKeys,
     ...(col.kind === 'longtext'
-      ? longTextEditor(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {})
+      ? longTextEditor()
       : col.kind === 'select'
         ? selectEditor((col.options ?? []).map((o) => ({ value: o, label: col.optionLabels?.[o] ?? o })))
         : col.kind === 'boolean'
@@ -94,7 +94,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
         ? {
             component: 'agLargeTextCellEditor',
             popup: true,
-            params: { ...(colForRow.maxLength ? { maxLength: Math.max(colForRow.maxLength, 200) } : {}) },
+            params: { maxLength: textLimitFor(colForRow.maxLength) },
           }
         : colForRow.kind === 'select'
           ? {
@@ -149,8 +149,8 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     },
     ...(Array.isArray(col.validation?.recordFields) ? { valueParser: (p: { newValue: unknown }) => parseRecordValue(p.newValue), valueFormatter: (p: { value: unknown }) => recordSummary(p.value, col.validation!.recordFields as any) } : {}),
     cellRenderer: CascadeCell,
-    cellRendererParams: { column: col, onDetails: openCellDetails, productLevelOnly, refusedReasonFor, tracker,
-      hideRoutineSourceIndicators: ['EBAY', 'AMAZON', 'SHOPIFY'].includes(data.scope.channel) },
+    // P1 — every cell names its source at rest, on every channel (eBay, Amazon and Shopify hid it: report 2 I-4).
+    cellRendererParams: { column: col, onDetails: openCellDetails, productLevelOnly, refusedReasonFor, tracker },
     cellClassRules: composeSheetCellClassRules<ChannelSheetRow>({
       validation: channelValidation(col),
       // The tint is PES.2's too (hub ruling #11) — one definition of what "inherited" looks like.

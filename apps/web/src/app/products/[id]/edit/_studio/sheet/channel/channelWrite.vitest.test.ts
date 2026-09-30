@@ -614,3 +614,11 @@ describe('a variation-theme save keeps the listing version and the product versi
     expect(result).toMatchObject({ ok: true, version: 9 })
   })
 })
+
+describe('P1 — an emptied list is a clear (report 1 I-10)', () => {
+  it('sends null, which the write path takes for every shape, instead of [] (refused: "0 values — needs at least 1")', async () => {
+    const seen = captureBody()
+    await commitChannelRow({ rowId: 'primary:p1', row: row(), cells: [{ colId: 'material', value: [], intent: 'set' }] } as never, coord)
+    expect(seen.body.changes[0]).toMatchObject({ field: 'material', value: null, intent: 'set' })
+  })
+})

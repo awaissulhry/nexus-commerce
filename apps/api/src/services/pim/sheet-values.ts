@@ -11,6 +11,7 @@
  *   scalar  — as stored.
  */
 import type { SheetColumn } from './sheet-columns.service.js'
+import { finding, type FindingRule, type ValueFinding } from './value-verdict.js'
 
 export type MeasureValue = { value: number | null; unit: string | null }
 
@@ -142,6 +143,13 @@ export interface ShapeWriteFacts {
 
 export type ShapeWriteResult = { ok: true; value: unknown } | { ok: false; error: string }
 
+/**
+ * P1 (`value-verdict.ts`) — the write check split in two. `ok: false` only when the field's TYPE cannot hold the value
+ * (a list to one value, text in a number, a malformed measure or record); every other rule (length, list, count,
+ * format) is a FINDING on a value that is stored anyway, with the same sentence the old refusal used.
+ */
+export type StorageCheck = { ok: true; value: unknown; findings: ValueFinding[] } | { ok: false; error: string }
+
 const named = (f: ShapeWriteFacts) => f.label ?? f.key ?? 'this field'
 
 /**
@@ -151,8 +159,16 @@ const named = (f: ShapeWriteFacts) => f.label ?? f.key ?? 'this field'
  * silent corruption (b0's reading of the route, 2026-09-05). `null`/`''`/`undefined` always means
  * CLEAR and is accepted for every shape. A legacy JSON-encoded array string (`'["a","b"]'`, the
  * wizard's L.2 encoding) is accepted for a list, because imports still carry it.
+ *
+ * The STRICT form: any finding refuses, with its sentence. The writers the Owner's rule governs call `checkForStorage`.
  */
 export function coerceForShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWriteResult {
+  const checked = checkForStorage(facts, raw)
+  if (checked.ok === false) return checked
+  return checked.findings.length ? { ok: false, error: checked.findings[0].message } : { ok: true, value: checked.value }
+}
+
+export function checkForStorage(facts: ShapeWriteFacts | undefined, raw: unknown): StorageCheck {
   // VT.1 - a structure-valued column has no scalar/list/measure form to coerce INTO, so this writer refuses it
   // with a sentence instead of stringifying it. The refusal is the loud half of "one fact, one writer": the
   // variation theme is written by `PATCH /studio/projection` (channel) or `PATCH /studio/variation-axes` (master),
@@ -160,43 +176,45 @@ export function coerceForShape(facts: ShapeWriteFacts | undefined, raw: unknown)
   if (facts?.shape === 'axes') {
     return { ok: false, error: `${named(facts)} is set by the variation theme editor, not by a cell write.` }
   }
-  const result = coerceShape(facts, raw)
-  if (result.ok === false || result.value === null || result.value === undefined) return result
+  const findings: ValueFinding[] = []
+  const result = coerceShape(facts, raw, findings)
+  if (result.ok === false) return result
+  if (result.value === null || result.value === undefined) return { ok: true, value: result.value, findings }
   const value = result.value
   const rules = facts?.validation ?? {}
   const number = (key: string): number | undefined => typeof rules[key] === 'number' && Number.isFinite(rules[key]) ? rules[key] as number : undefined
-  const fail = (reason: string): ShapeWriteResult => ({ ok: false, error: `${named(facts ?? {})} ${reason}` })
+  const flag = (rule: FindingRule, reason: string) => { findings.push(finding(rule, `${named(facts ?? {})} ${reason}`)) }
   if (Array.isArray(value)) {
-    if (number('minItems') !== undefined && value.length < number('minItems')!) return fail(`needs at least ${number('minItems')} values`)
-    if (number('maxItems') !== undefined && value.length > number('maxItems')!) return fail(`takes at most ${number('maxItems')} values`)
-    if (rules.uniqueItems === true && new Set(value).size !== value.length) return fail('requires distinct values')
+    if (number('minItems') !== undefined && value.length < number('minItems')!) flag('count', `needs at least ${number('minItems')} values`)
+    if (number('maxItems') !== undefined && value.length > number('maxItems')!) flag('count', `takes at most ${number('maxItems')} values`)
+    if (rules.uniqueItems === true && new Set(value).size !== value.length) flag('format', 'requires distinct values')
   }
   const members = Array.isArray(value) ? value : facts?.shape === 'measure' ? [(value as MeasureValue).value] : [value]
   for (const member of members) {
     if (typeof member === 'string') {
       const max = facts?.maxLength ?? number('maxLength')
-      if (max !== undefined && member.length > max) return fail(`takes at most ${max} characters`)
-      if (number('minLength') !== undefined && member.length < number('minLength')!) return fail(`needs at least ${number('minLength')} characters`)
-      if (facts?.maxBytes !== undefined && Buffer.byteLength(member, 'utf8') > facts.maxBytes) return fail(`takes at most ${facts.maxBytes} UTF-8 bytes`)
+      if (max !== undefined && member.length > max) flag('length', `takes at most ${max} characters`)
+      if (number('minLength') !== undefined && member.length < number('minLength')!) flag('length', `needs at least ${number('minLength')} characters`)
+      if (facts?.maxBytes !== undefined && Buffer.byteLength(member, 'utf8') > facts.maxBytes) flag('length', `takes at most ${facts.maxBytes} UTF-8 bytes`)
       if (typeof rules.pattern === 'string') {
-        try { if (!new RegExp(rules.pattern, 'u').test(member)) return fail('does not match its configured format') }
-        catch { return fail('has an invalid validation pattern; correct the attribute definition before saving') }
+        try { if (!new RegExp(rules.pattern, 'u').test(member)) flag('format', 'does not match its configured format') }
+        catch { flag('nexus', 'has an invalid validation pattern; correct the attribute definition before saving') }
       }
     }
     if (typeof member === 'number') {
       const min = number('minimum') ?? number('min'), max = number('maximum') ?? number('max')
-      if (min !== undefined && member < min) return fail(`must be at least ${min}`)
-      if (max !== undefined && member > max) return fail(`must be at most ${max}`)
-      if (number('exclusiveMinimum') !== undefined && member <= number('exclusiveMinimum')!) return fail(`must be greater than ${number('exclusiveMinimum')}`)
-      if (number('exclusiveMaximum') !== undefined && member >= number('exclusiveMaximum')!) return fail(`must be less than ${number('exclusiveMaximum')}`)
+      if (min !== undefined && member < min) flag('format', `must be at least ${min}`)
+      if (max !== undefined && member > max) flag('format', `must be at most ${max}`)
+      if (number('exclusiveMinimum') !== undefined && member <= number('exclusiveMinimum')!) flag('format', `must be greater than ${number('exclusiveMinimum')}`)
+      if (number('exclusiveMaximum') !== undefined && member >= number('exclusiveMaximum')!) flag('format', `must be less than ${number('exclusiveMaximum')}`)
       const multiple = number('multipleOf')
-      if (multiple !== undefined && (multiple <= 0 || Math.abs(member / multiple - Math.round(member / multiple)) > 1e-8)) return fail(`must be a multiple of ${multiple}`)
+      if (multiple !== undefined && (multiple <= 0 || Math.abs(member / multiple - Math.round(member / multiple)) > 1e-8)) flag('format', `must be a multiple of ${multiple}`)
     }
   }
-  return result
+  return { ok: true, value, findings }
 }
 
-function coerceShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWriteResult {
+function coerceShape(facts: ShapeWriteFacts | undefined, raw: unknown, findings: ValueFinding[]): ShapeWriteResult {
   if (raw === null || raw === undefined || raw === '') return { ok: true, value: null }
   if (Array.isArray(facts?.validation?.recordFields)) {
     let records: unknown = raw
@@ -208,19 +226,21 @@ function coerceShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWri
       for (const field of facts.validation.recordFields as Array<Record<string, any>>) {
         if (!field.key || !['text', 'number', 'boolean', 'select'].includes(field.kind)) return { ok: false, error: `${named(facts)} has an invalid record definition` }
         const value = row[field.key]
-        if (field.required && (value == null || value === '')) return { ok: false, error: `${named(facts)} record ${index + 1} needs ${field.label ?? field.key}` }
+        // An incomplete record is stored and flagged (P1): the operator finishes it later.
+        if (field.required && (value == null || value === '')) { findings.push(finding('format', `${named(facts)} record ${index + 1} needs ${field.label ?? field.key}`)); continue }
         if (value === undefined) continue
-        const checked = coerceForShape({ label: `${named(facts)} record ${index + 1}: ${field.label ?? field.key}`, kind: field.kind,
+        const checked = checkForStorage({ label: `${named(facts)} record ${index + 1}: ${field.label ?? field.key}`, kind: field.kind,
           mode: field.options?.length ? 'strict' : 'open', options: field.options?.map((option: any) => option.value), validation: { minimum: field.min, maximum: field.max } }, value)
-        if (!checked.ok) return checked
+        if (checked.ok === false) return checked
+        findings.push(...checked.findings)
         row[field.key] = checked.value
       }
       result.push(row)
     }
     const unique = facts.validation.uniqueBy
-    if (typeof unique === 'string' && new Set(result.map(row => row[unique])).size !== result.length) return { ok: false, error: `${named(facts)} needs distinct ${unique} values` }
+    if (typeof unique === 'string' && new Set(result.map(row => row[unique])).size !== result.length) findings.push(finding('format', `${named(facts)} needs distinct ${unique} values`))
     const sum = facts.validation.sum as { field?: string; total?: number } | undefined
-    if (result.length && sum?.field && typeof sum.total === 'number' && Math.abs(result.reduce((total, row) => total + Number(row[sum.field!] ?? 0), 0) - sum.total) > 0.001) return { ok: false, error: `${named(facts)} ${sum.field} values must total ${sum.total}` }
+    if (result.length && sum?.field && typeof sum.total === 'number' && Math.abs(result.reduce((total, row) => total + Number(row[sum.field!] ?? 0), 0) - sum.total) > 0.001) findings.push(finding('format', `${named(facts)} ${sum.field} values must total ${sum.total}`))
     return { ok: true, value: result }
   }
   const shape = facts?.shape ?? 'scalar'
@@ -239,22 +259,23 @@ function coerceShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWri
     for (const item of items) {
       if (isBlankValue(item)) continue
       if (facts?.kind === 'number' || facts?.kind === 'boolean') {
-        const member = coerceShape({ ...facts, shape: 'scalar' }, item)
+        const member = coerceShape({ ...facts, shape: 'scalar', mode: 'open' }, item, findings)
         if (member.ok === false) return member
         cleaned.push(member.value)
       } else cleaned.push(String(item).trim())
     }
     const max = facts?.cardinality?.max ?? null
     if (max !== null && cleaned.length > max) {
-      return { ok: false, error: `${cleaned.length} values — ${named(facts!)} takes at most ${max}` }
+      findings.push(finding('count', `${cleaned.length} values — ${named(facts!)} takes at most ${max}`))
     }
     const min = facts?.cardinality?.min ?? 1
     if (cleaned.length < min) {
-      return { ok: false, error: `${cleaned.length} value${cleaned.length === 1 ? '' : 's'} — ${named(facts!)} needs at least ${min}` }
+      findings.push(finding('count', `${cleaned.length} value${cleaned.length === 1 ? '' : 's'} — ${named(facts!)} needs at least ${min}`))
     }
     if (facts?.mode === 'strict' && facts.options && facts.options.length > 0) {
-      const off = cleaned.find((x) => !facts.options!.includes(String(x)))
-      if (off !== undefined) return { ok: false, error: `"${off}" is not one of the allowed values for ${named(facts)}` }
+      for (const off of cleaned.filter((x) => !facts.options!.includes(String(x)))) {
+        findings.push(finding('offList', `"${off}" is not one of the allowed values for ${named(facts)}`))
+      }
     }
     return { ok: true, value: cleaned }
   }
@@ -279,10 +300,10 @@ function coerceShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWri
     const unit = typeof m.unit === 'string' && m.unit.trim() ? m.unit.trim() : null
     if (value === null && unit === null) return { ok: true, value: null }
     if (unit !== null && facts?.unitOptions && facts.unitOptions.length > 0 && !facts.unitOptions.includes(unit)) {
-      return { ok: false, error: `unit "${unit}" is not one of ${facts.unitOptions.join(', ')} for ${named(facts)}` }
+      findings.push(finding('format', `unit "${unit}" is not one of ${facts.unitOptions.join(', ')} for ${named(facts)}`))
     }
     if (value !== null && unit === null && facts?.unitOptions && facts.unitOptions.length > 0) {
-      return { ok: false, error: `${named(facts)} needs a unit (${facts.unitOptions.join(', ')})` }
+      findings.push(finding('format', `${named(facts)} needs a unit (${facts.unitOptions.join(', ')})`))
     }
     return { ok: true, value: { value, unit } }
   }
@@ -302,7 +323,7 @@ function coerceShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWri
     if (typeof value !== 'boolean') return { ok: false, error: `${named(facts)} needs Yes or No` }
   }
   if (facts?.mode === 'strict' && facts.options && facts.options.length > 0 && !facts.options.includes(String(value))) {
-    return { ok: false, error: `"${String(value)}" is not one of the allowed values for ${named(facts)}` }
+    findings.push(finding('offList', `"${String(value)}" is not one of the allowed values for ${named(facts)}`))
   }
   return { ok: true, value }
 }

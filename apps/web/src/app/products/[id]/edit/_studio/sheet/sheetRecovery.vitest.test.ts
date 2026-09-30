@@ -38,6 +38,11 @@ describe('scoped save recovery', () => {
     page.rows[0].values.title = cell('Inherited title', true)
     expect((await recoverSheetRow(page, { ...req, cells: [{ colId: 'title', value: null, intent: 'reset' }] }, scope))?.matches.title).toBe(false)
   })
+  it('does not confirm a lost "Follow Master" while the old listing text is still what the listing shows (P1)', async () => {
+    const page = body(); page.rows[0].values.title = { ...cell('Old eBay title', false), follows: true, source: 'channelSnapshot' } as never
+    const req = request()
+    expect((await recoverSheetRow(page, { ...req, cells: [{ colId: 'title', value: null, intent: 'reset' }] }, scope))?.matches.title).toBe(false)
+  })
   it('does not mistake an inherited matching value for a successful pin', async () => {
     const page = body(); page.rows[0].values.title = cell('Typed', false)
     const req = request()

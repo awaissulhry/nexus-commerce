@@ -47,7 +47,7 @@ afterAll(async () => { await state.db?.close() })
 
 const pin = () => ({ tier: 'pin', language: 'it', coordinate: { channel: 'AMAZON', market: 'IT', accountId: account } })
 /** What the sheet sends for one row: one change per changed position, the listing's version as the CAS token. */
-const slotChanges = (id: string, values: Record<number, string | null>) => Object.entries(values).map(([i, value]) =>
+const slotChanges = (id: string, values: Record<number, string | string[] | null>) => Object.entries(values).map(([i, value]) =>
   ({ id, field: `bulletPoints[${i}]`, value, target: 'channel', contentAddress: pin(), contentAcknowledged: true }))
 const contexts = () => [{ channel: 'AMAZON', marketplace: 'IT', accountId: account, locale: 'it', aliasKey: '' }]
 const listing = (id: string) => scoped(() => prisma.channelListing.findFirstOrThrow({ where: { productId: id }, include: { translations: true } }))
@@ -69,7 +69,7 @@ beforeAll(async () => {
 afterAll(async () => { await app?.close() })
 
 /** The sheet's route: `PATCH /products/bulk` (per-row content refusals, R-60). */
-const patch = (id: string, values: Record<number, string | null>, version?: number) => scoped(async () => {
+const patch = (id: string, values: Record<number, string | string[] | null>, version?: number) => scoped(async () => {
   const expectedVersion = version ?? (await listing(id)).version
   return app.inject({ method: 'PATCH', url: '/products/bulk', payload: { changes: slotChanges(id, values), marketplaceContexts: contexts(), expectedVersion } })
 })
@@ -91,13 +91,24 @@ it('F2 ONE position edited: only that position changes, the other nine (holes in
   expect(after.filter((_, i) => i !== 3)).toEqual(before.filter((_, i) => i !== 3))
 }, 60_000)
 
-it('F3 ten changes with position 4 over the 700 cap: position 4 alone is refused by name, the other nine are stored', async () => {
+// P1 (`pim/value-verdict.ts`) — only a value the slot's type cannot hold is refused (a list sent to one position); an
+// over-cap bullet is stored and named in `warnings` (F6).
+it('F3 ten changes with position 4 holding a LIST (its type cannot hold it): position 4 alone is refused by name, the other nine are stored', async () => {
   expect((await patch(ids.refuse, { 1: 'old1', 2: 'old2', 3: 'old3', 4: 'old4' })).statusCode).toBe(200)
+  const response = await patch(ids.refuse, { ...TEN, 4: ['one', 'two'] })
+  expect(response.statusCode, response.body).toBe(200)
+  const body = response.json()
+  expect(body.errors).toEqual([expect.objectContaining({ id: ids.refuse, field: 'bulletPoints[4]', error: expect.stringContaining('takes ONE value') })])
+  expect(await stored(ids.refuse)).toEqual(['b1', 'b2', '', 'old4', 'b5', 'b6', '', 'b8', 'b9', 'b10'])
+}, 60_000)
+
+it('F6 P1: position 4 over the 700 cap is STORED with the other nine, and the warning names Bullet 4 and the cap', async () => {
   const response = await patch(ids.refuse, { ...TEN, 4: 'x'.repeat(CAP + 1) })
   expect(response.statusCode, response.body).toBe(200)
   const body = response.json()
-  expect(body.errors).toEqual([expect.objectContaining({ id: ids.refuse, field: 'bulletPoints[4]', error: expect.stringMatching(/^Bullet 4 takes at most 700 characters/) })])
-  expect(await stored(ids.refuse)).toEqual(['b1', 'b2', '', 'old4', 'b5', 'b6', '', 'b8', 'b9', 'b10'])
+  expect(body.errors ?? []).toEqual([])
+  expect(body.warnings).toEqual([expect.objectContaining({ id: ids.refuse, field: 'bulletPoints[4]', warning: expect.stringMatching(/^Bullet 4 takes at most 700 characters/) })])
+  expect(await stored(ids.refuse)).toEqual(['b1', 'b2', '', 'x'.repeat(CAP + 1), 'b5', 'b6', '', 'b8', 'b9', 'b10'])
 }, 60_000)
 
 it('F4 a stale version refuses the WHOLE request (one row, one CAS): nothing is stored', async () => {
@@ -110,9 +121,9 @@ it('F4 a stale version refuses the WHOLE request (one row, one CAS): nothing is 
   expect(after.version).toBe(before.version)
 }, 60_000)
 
-it('F5 control — off the sheet route (no per-row opt-in) the same over-cap request stores NOTHING', async () => {
+it('F5 control — off the sheet route (no per-row opt-in) the same refused request stores NOTHING', async () => {
   const before = await stored(ids.direct)
-  const result = await scoped(async () => applyProductBulkEdits({ changes: slotChanges(ids.direct, { ...TEN, 4: 'x'.repeat(CAP + 1) }), marketplaceContexts: contexts(),
+  const result = await scoped(async () => applyProductBulkEdits({ changes: slotChanges(ids.direct, { ...TEN, 4: ['one', 'two'] }), marketplaceContexts: contexts(),
     expectedVersion: (await listing(ids.direct)).version } as never, context) as Promise<any>)
   expect(result).toMatchObject({ success: false, updated: 0 })
   expect(await stored(ids.direct)).toEqual(before)
