@@ -16,7 +16,7 @@ vi.mock('@nexus/database', async () => {
 vi.mock('./queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
 vi.mock('../services/outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn(async () => undefined) }))
 import prisma from '../db.js'
-import { inDatabaseTransaction, inSavepoint } from './database-context.js'
+import { activeDatabaseTransaction, inDatabaseTransaction, inSavepoint } from './database-context.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from './workspace-context.js'
 import { applyProductBulkSave, type BulkSaveUnit } from '../services/products/bulk-save.service.js'
 
@@ -98,6 +98,55 @@ describe('remembered reads', () => {
 
   it('is refused outside a snapshot transaction', async () => {
     await expect(scoped(() => inDatabaseTransaction(prisma, async () => 1, { memoReads: true, isolationLevel: 'ReadCommitted' }))).rejects.toThrow('snapshot transaction')
+  })
+})
+
+describe('remembered reads — code review P2 (findings 6 and 7)', () => {
+  // A reference-table read that looks through a relation depends on product rows: a product write must make it read again.
+  it('reads a reference table again after a product write when the read looks through a relation', async () => {
+    await scoped(() => prisma.productFamily.create({ data: { id: 'memo-family', code: 'memo-family', label: 'Memo family' } }))
+    try {
+      await remembered(async () => {
+        const byProduct = () => prisma.productFamily.findMany({ where: { products: { some: { id: 'memo-p' } } }, select: { id: true } })
+        const counted = () => prisma.productFamily.findUnique({ where: { id: 'memo-family' }, select: { _count: { select: { products: true } } } })
+        const included = () => prisma.productFamily.findUnique({ where: { id: 'memo-family' }, include: { products: { select: { id: true } } } })
+        expect(await byProduct()).toEqual([])
+        expect(await counted()).toEqual({ _count: { products: 0 } })
+        expect((await included())?.products).toEqual([])
+        await prisma.product.update({ where: { id: 'memo-p' }, data: { familyId: 'memo-family' } })
+        expect(await byProduct()).toEqual([{ id: 'memo-family' }])
+        expect(await counted()).toEqual({ _count: { products: 1 } })
+        expect((await included())?.products).toEqual([{ id: 'memo-p' }])
+        await prisma.product.update({ where: { id: 'memo-p' }, data: { familyId: null } })
+      })
+    } finally { await scoped(() => prisma.productFamily.delete({ where: { id: 'memo-family' } })) }
+  })
+
+  it('reads raw SQL again after a product write when it joins a product table with a comma', async () => {
+    await scoped(() => prisma.productFamily.create({ data: { id: 'memo-family-raw', code: 'memo-family-raw', label: 'Memo family raw' } }))
+    try {
+      await remembered(async () => {
+        const joined = () => prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM "ProductFamily" f, "Product" p WHERE p."familyId" = f.id AND f.id = ${'memo-family-raw'}`
+        expect(await joined()).toEqual([{ n: 0 }])
+        await prisma.product.update({ where: { id: 'memo-p' }, data: { familyId: 'memo-family-raw' } })
+        expect(await joined()).toEqual([{ n: 1 }])
+        await prisma.product.update({ where: { id: 'memo-p' }, data: { familyId: null } })
+      })
+    } finally { await scoped(() => prisma.productFamily.delete({ where: { id: 'memo-family-raw' } })) }
+  })
+
+  // A nested interactive transaction is a savepoint: when it throws, its writes are undone, and so must be what was read after them.
+  it('forgets what a nested transaction read after its own writes when that transaction rolls back', async () => {
+    await remembered(async () => {
+      const read = () => prisma.product.findUnique({ where: { id: 'memo-p' }, select: { name: true } })
+      const tx = activeDatabaseTransaction() as unknown as { $transaction: (work: (inner: typeof prisma) => Promise<unknown>) => Promise<unknown> }
+      await expect(tx.$transaction(async inner => {
+        await inner.product.update({ where: { id: 'memo-p' }, data: { name: 'Rolled back' } })
+        expect(await inner.product.findUnique({ where: { id: 'memo-p' }, select: { name: true } })).toEqual({ name: 'Rolled back' })
+        throw new Error('undo')
+      })).rejects.toThrow('undo')
+      expect(await read()).toEqual({ name: 'Before' })
+    })
   })
 })
 
