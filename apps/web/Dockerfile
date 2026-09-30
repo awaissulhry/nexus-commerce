@@ -3,10 +3,10 @@
 # The web image (Railway service nexus-web): Next.js `standalone` output, started by apps/web/scripts/start.mjs.
 # Built by .github/workflows/images.yml; see docs/ci-fast-deploys/PLAN-2026-09-29.md.
 #
-# Context: the repository root (.dockerignore is an allow-list). The image is public. The build arguments are the
-# values Next inlines at build time: NEXT_PUBLIC_* reach the browser anyway, and NEXUS_API_PROXY_TARGET (the API's
-# private address) is frozen into the standalone server's /backend rewrite. No secret is a build argument; Railway
-# provides the runtime variables (DATABASE_URL, …).
+# Context: the repository root; apps/web/Dockerfile.dockerignore is its allow-list. The image is public. The build
+# arguments are the values Next inlines at build time: NEXT_PUBLIC_* reach the browser anyway, and
+# NEXUS_API_PROXY_TARGET (the API's private address) is frozen into the standalone server's /backend rewrite. No secret
+# is a build argument; Railway provides the runtime variables (DATABASE_URL, …).
 
 ARG NODE_IMAGE=node:22.23.2-bookworm-slim
 
