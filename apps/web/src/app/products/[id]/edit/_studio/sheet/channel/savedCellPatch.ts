@@ -14,7 +14,7 @@
  *  - an eBay listing-level item specific only when the family row already supplies it (the value then changes on every
  *    row, nothing else does); a value supplied by a variation reads (the whole family's provenance moves);
  *  - the cell had no mapping problem, and the answer names none: no refusal, no warning, no cascade, no started draft,
- *    no normalised reference.
+ *    no normalised reference, no recalculated formula.
  */
 import { saveWarningFor } from '../saveWarnings'
 import type { ChannelSheetRow, SheetColumn, StudioCellValue } from './types'
@@ -96,6 +96,9 @@ export function planSavedCellPatch({ row, changes, column, body, sent }: PlanInp
   if (Number(answer.cascadeCount ?? 0) > 0 || Number(answer.affectedChildren ?? 0) > 0) return read('the save cascaded')
   if (Array.isArray(answer.createdListings) && answer.createdListings.length) return read('the save started a draft')
   if (Array.isArray(answer.normalizedChanges) && answer.normalizedChanges.length) return read('the server normalised a value')
+  // Audit A02 — a formula that reads a saved field was recomputed (its new value, or its refusal) or could not be: those
+  // cells, on this row or its family, are only in the next read.
+  if (Array.isArray(answer.recalculated) && answer.recalculated.length || answer.recalcError) return read('a dependent formula was recalculated')
   if (answer.versionOf !== 'channelListing' || typeof answer.currentVersion !== 'number' || !row.listing) return read('no listing version in the answer')
   if (!changes.length) return read('nothing stored')
   const rootId = row.parentId ?? row.id

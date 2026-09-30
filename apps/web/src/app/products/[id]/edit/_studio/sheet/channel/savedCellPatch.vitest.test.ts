@@ -81,6 +81,10 @@ describe('a save the browser cannot rebuild is read again', () => {
     ['a started draft', { ...plain.body, createdListings: [{ productId: 'p', listingId: 'l', version: 1 }] }],
     ['a value equal to the stored one', { ...plain.body, updated: 0, unchanged: 1 }],
     ['a normalised reference', { ...plain.body, normalizedChanges: [{ id: 'x', field: 'f', value: 'y' }] }],
+    // Audit A02 — a formula that reads the saved field was recomputed (or failed to be): its cell is only in the next read.
+    ['a recalculated dependent formula', { ...plain.body, recalculated: [{ productId: 'p', fieldKey: 'name', scope: 'master', value: 'New brand Jacket', error: null, sourceField: 'brand' }] }],
+    ['a dependent formula refused', { ...plain.body, recalculated: [{ productId: 'p', fieldKey: 'name', scope: 'master', value: null, error: 'Name is too long', sourceField: 'brand' }] }],
+    ['a failed recalculation pass', { ...plain.body, recalcError: 'formula recalculation failed' }],
   ]
   for (const [what, body] of cases) {
     it(`an answer with ${what}`, async () => {
