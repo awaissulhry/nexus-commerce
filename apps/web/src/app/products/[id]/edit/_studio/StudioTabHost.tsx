@@ -12,25 +12,17 @@
  * (feedback_keep_placeholder_controls); a blank panel is indistinguishable from a page that broke.
  */
 
-import type { ReactNode } from 'react'
+import dynamic from 'next/dynamic'
+import type { ComponentType } from 'react'
 
 import { Banner, ProgressBar } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
-import { PresentationTab, VariationOrderTab } from './PresentationTab'
-import { ActivityTab } from './ancillary/ActivityTab'
-import { AnalyticsAdsTab } from './ancillary/AnalyticsAdsTab'
-import { ImagesTabRoute } from './images'
 
 import { useStudioScope, useStudioProduct } from './contracts'
 import { studioAccountAccess } from './accountScope'
 import { STUDIO_TAB_LABELS } from './navigation'
-import { ErrorsSyncTab } from './channel-ops/ErrorsSyncTab'
-import { MatrixTab } from './matrix/MatrixTab'
-import { ProductSheetTab } from './sheet/ProductSheetTab'
-import { MASTER_SCOPE, type StudioTabId } from './types'
-import { ShopifyFamilyTab, ShopifyMetafieldsTab } from './shopify/ShopifyLinkedRoute'
-import { SharingTab } from './sharing/SharingTab'
-import { VariantsTab } from './variants/VariantsTab'
+import { STUDIO_TAB_LOADERS } from './studioTabs'
+import { MASTER_SCOPE, STUDIO_TABS, type StudioTabId } from './types'
 import styles from './studio.module.css'
 
 /*
@@ -38,27 +30,14 @@ import styles from './studio.module.css'
  * real component (PES.7 filled the last two, `analytics` and `activity`), so it had no callers and
  * `noUnusedLocals` failed the build. Removed by PES.7 as a consequence of filling those slots —
  * disclosed in docs/pes-claims.md, not a silent edit to another lane's frame.
+ *
+ * P2 (2026-09-30, I4-7) — each tab is its own chunk (`studioTabs.ts`), loaded when it is opened; the frame does not
+ * know what any of them look like. MX.P's Matrix, the ONE Variants switch (master is VP.3's surface, a channel scope
+ * VP.4's projection) and the Sharing studio are the same components as before, only loaded later.
  */
-const TABS: Record<StudioTabId, () => ReactNode> = {
-  sheet: ProductSheetTab,
-  // MX.P — the Matrix: variants × (coordinate × offer field), on the same sheet substrate. ONE state,
-  // every coordinate at once; the scope bar's chips FILTER its groups rather than switching surfaces
-  // (`docs/2026-09-13-matrix-page-design.md` Revision). The frame does not know what it looks like.
-  matrix: MatrixTab,
-  // ONE Variants page: `VariantsTab` is the SWITCH — master is VP.3's surface, a channel scope is VP.4's
-  // projection of the same family (variants spec §1.1). The frame does not know what either looks like.
-  variants: VariantsTab,
-  presentation: PresentationTab,
-  'variation-order': VariationOrderTab,
-  'shopify-family': ShopifyFamilyTab,
-  'shopify-metafields': ShopifyMetafieldsTab,
-  images: ImagesTabRoute,
-  // Sharing studio step 2 — one product between business profiles: what it follows, who it is shared with, its stock.
-  sharing: SharingTab,
-  analytics: AnalyticsAdsTab,
-  errors: ErrorsSyncTab,
-  activity: ActivityTab,
-}
+const TABS = Object.fromEntries(STUDIO_TABS.map((id) => [id, dynamic(STUDIO_TAB_LOADERS[id], {
+  loading: () => <ProgressBar indeterminate ariaLabel={`Loading ${STUDIO_TAB_LABELS[id]}`} />,
+})])) as Record<StudioTabId, ComponentType>
 
 export function StudioTabHost() {
   const product = useStudioProduct()
