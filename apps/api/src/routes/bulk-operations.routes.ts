@@ -15,6 +15,7 @@ import {
 } from '../services/bulk-action.service.js'
 import prisma from '../db.js'
 import { CreateBulkJobSchema } from './validation.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 
 const bulkActionService = new BulkActionService(prisma)
 
@@ -26,6 +27,7 @@ interface CreateBody {
   targetVariationIds?: string[]
   filters?: Record<string, unknown>
   actionPayload?: Record<string, unknown>
+  /** Ignored: a job acts for the signed-in person (`bulkActorOf`), never for a name the caller sends. */
   createdBy?: string
   /**
    * Conflict detection (Commit 18). When false/unset, the create endpoint
@@ -94,12 +96,12 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
           })),
         })
       }
+      // The job acts for the signed-in person; a `createdBy` in the body is ignored.
+      const input = { ...parsed.data, createdBy: bulkActorOf(request) ?? undefined }
       try {
         const force = request.body?.force === true
         if (!force) {
-          const conflicts = await bulkActionService.findConflictingJobs(
-            parsed.data,
-          )
+          const conflicts = await bulkActionService.findConflictingJobs(input)
           if (conflicts.length > 0) {
             return reply.code(409).send({
               success: false,
@@ -117,7 +119,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
             '[bulk-operations] force=true — bypassing conflict detection',
           )
         }
-        const job = await bulkActionService.createJob(parsed.data)
+        const job = await bulkActionService.createJob(input)
         return reply.code(201).send({ success: true, job })
       } catch (error) {
         const message =
@@ -154,9 +156,10 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       try {
-        const conflicts = await bulkActionService.findConflictingJobs(
-          parsed.data,
-        )
+        const conflicts = await bulkActionService.findConflictingJobs({
+          ...parsed.data,
+          createdBy: bulkActorOf(request) ?? undefined,
+        })
         return reply.send({ success: true, conflicts })
       } catch (error) {
         const message =
@@ -203,7 +206,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       )
       try {
         const result = await bulkActionService.previewJob(
-          parsed.data,
+          { ...parsed.data, createdBy: bulkActorOf(request) ?? undefined },
           sampleSize,
         )
         return reply.send({ success: true, ...result })
@@ -356,12 +359,14 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/bulk-operations/history', async (request, reply) => {
     try {
       const { limit, status, actionType, since } = request.query
-      const jobs = await bulkActionService.listJobs({
-        limit: limit ? Number(limit) : undefined,
-        status,
-        actionType,
-        since: since ? new Date(since) : undefined,
-      })
+      const jobs = await bulkActionService.withActorNames(
+        await bulkActionService.listJobs({
+          limit: limit ? Number(limit) : undefined,
+          status,
+          actionType,
+          since: since ? new Date(since) : undefined,
+        }),
+      )
       return reply.send({ success: true, jobs, count: jobs.length })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -398,7 +403,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ success: false, error: 'job id required' })
       }
       try {
-        const result = await bulkActionService.rollbackBulkActionJob(id)
+        const result = await bulkActionService.rollbackBulkActionJob(id, bulkActorOf(request))
         return reply.code(201).send({ success: true, ...result })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -443,7 +448,8 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ success: false, error: 'job id required' })
       }
       try {
-        const job = await bulkActionService.retryFailedItems(id)
+        // The retry acts for the person who asked for it, not for whoever ran the original.
+        const job = await bulkActionService.retryFailedItems(id, bulkActorOf(request))
         return reply.code(201).send({ success: true, job })
       } catch (error) {
         const message =

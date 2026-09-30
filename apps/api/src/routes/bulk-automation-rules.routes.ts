@@ -18,6 +18,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 import { logger } from '../utils/logger.js'
 import {
   BULK_OPS_TRIGGERS,
@@ -167,7 +168,8 @@ const bulkAutomationRulesRoutes: FastifyPluginAsync = async (fastify) => {
                 ? null
                 : (body.maxExecutionsPerDay ?? 100),
             maxValueCentsEur: body.maxValueCentsEur ?? null,
-            createdBy: body.createdBy ?? null,
+            // The signed-in person, never a name from the body (bulk-action-actor.ts). The rule's jobs act as automation:<rule id>.
+            createdBy: bulkActorOf(request),
           },
         })
         return reply.code(201).send({ success: true, rule })

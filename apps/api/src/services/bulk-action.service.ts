@@ -30,6 +30,7 @@ import { assertPushAllowed } from '@nexus/shared/push-lock';
 // The ONE channel price write: a bulk price override goes through it like every other channel price edit.
 import { writeChannelPrices } from './pim/channel-price-write.service.js';
 import { activeDatabaseTransaction, inDatabaseTransaction } from '../lib/database-context.js';
+import { bulkActorNames } from './bulk-action-actor.js';
 // Shared stock — a pooled product's fallback is the pool's number, not its business's own total.
 import { sellableQuantity } from './stock-pool/sync-ledgers.js';
 // W1.8 — ATTRIBUTE_UPDATE helpers lifted into a focused module. Pure
@@ -963,7 +964,7 @@ export class BulkActionService {
    *   - Original.rollbackJobId must be null (no double-rollback)
    *   - Rollback job is NOT itself rollbackable
    */
-  async rollbackBulkActionJob(originalJobId: string): Promise<{
+  async rollbackBulkActionJob(originalJobId: string, actor: string | null = null): Promise<{
     rollbackJobId: string
     succeeded: number
     failed: number
@@ -1041,7 +1042,8 @@ export class BulkActionService {
         status: 'IN_PROGRESS',
         totalItems: succeededItems.length,
         startedAt: new Date(),
-        createdBy: 'bulk-action-rollback',
+        // The person who asked for the rollback (bulk-action-actor.ts); the system name only when none is known.
+        createdBy: actor ?? 'bulk-action-rollback',
         // Rollback rows themselves are not rollbackable.
         isRollbackable: false,
       },
@@ -1278,7 +1280,7 @@ export class BulkActionService {
    * were transient (DB hiccup, marketplace rate limit, etc.) — the
    * user fixes the cause and re-runs only the items that failed.
    */
-  async retryFailedItems(jobId: string): Promise<BulkActionJob> {
+  async retryFailedItems(jobId: string, actor: string | null = null): Promise<BulkActionJob> {
     const original = await this.prisma.bulkActionJob.findUnique({
       where: { id: jobId },
     });
@@ -1354,8 +1356,15 @@ export class BulkActionService {
         ? { filters: original.filters as Record<string, any> }
         : {}),
       actionPayload: original.actionPayload as Record<string, any>,
-      createdBy: original.createdBy ?? undefined,
+      // The retry acts for the person who asked for it (bulk-action-actor.ts), never the original's stored name.
+      createdBy: actor ?? undefined,
     });
+  }
+
+  /** The history's jobs with the name of who ran each (`createdByName`: a person's display name or a system label). */
+  async withActorNames<T extends Pick<BulkActionJob, 'createdBy'>>(jobs: T[]): Promise<Array<T & { createdByName: string | null }>> {
+    const names = await bulkActorNames(this.prisma, jobs.map((j) => j.createdBy));
+    return jobs.map((j) => ({ ...j, createdByName: (j.createdBy && names.get(j.createdBy)) || null }));
   }
 
   /**
