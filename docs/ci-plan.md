@@ -417,10 +417,10 @@ Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: the slowest `api` s
 
 | Lever | Use? | Saves (est.) | Risk | Rollback |
 |---|---|---|---|---|
-| Turbo remote cache (Vercel Remote Cache; the project is already linked) | Yes, for `build` and `typecheck`. PRs **read only** (`--cache=local:rw,remote:r`); only main writes. `test` and `@nexus/database#build` are `cache: false`: the latter writes tracked files and the Prisma client, which turbo cannot restore. | 1–4 min per job on a hit | A stale or poisoned output if an input or env var is undeclared. Declare `NEXT_PUBLIC_*`, `NODE_ENV` and the schema. Add `passThroughEnv` for test variables (turbo 2 strips undeclared env). | delete the `TURBO_TOKEN` secret |
+| Turbo remote cache (Vercel Remote Cache) | **Removed 2026-09-30** (docs/ci-fast-deploys/PLAN-2026-09-29.md §4): it was never configured, and CI logged "Remote caching disabled", 0 cached. Planned: for `build` and `typecheck`. PRs **read only** (`--cache=local:rw,remote:r`); only main writes. `test` and `@nexus/database#build` are `cache: false`: the latter writes tracked files and the Prisma client, which turbo cannot restore. | 1–4 min per job on a hit | A stale or poisoned output if an input or env var is undeclared. Declare `NEXT_PUBLIC_*`, `NODE_ENV` and the schema. Add `passThroughEnv` for test variables (turbo 2 strips undeclared env). | — (removed; the env and flag are in git history) |
 | cancel-in-progress | PRs only | minutes and queue slots | none | one line |
 | `node_modules` cache (key: lockfile + `patches/**`) | Yes. Then **always** run the database build (prisma generate + runtime) and the shared/events builds. The factory's `prisma generate` runs before its typecheck. | ~1 min per job | a stale Prisma client, prevented by the forced generate | remove the step |
-| Playwright browser cache | Yes; `install-deps chromium` still runs | ~30 s per smoke shard | none | remove the step |
+| Playwright browser cache (key: the installed Playwright version, since 2026-09-30) | Yes; `install-deps chromium` still runs | ~30 s per smoke shard | none | remove the step |
 | `.next/cache` | Yes, measured before it is kept (Turbopack's build cache may be off by default) | 0–1 min | low | remove the step |
 | PG with fsync, synchronous_commit, full_page_writes off, on tmpfs | Yes | 10–20 % of real-PG time | none (throwaway database) | drop the flags |
 | **Template DB clone** | Yes, **one clone per test FILE, not per worker**. A per-worker database lets files see each other's rows. At 0.34 s a clone is cheap enough for every file. | PGlite: 2.3 s → 0.34 s × 53 files ≈ **1.7 CPU-min**. Real PG: `CREATE DATABASE … TEMPLATE nexus_template`, roles made once. | objects that span the cluster (roles) could leak, so per-file role names stay | env `NEXUS_TEST_NO_TEMPLATE=1` |
@@ -641,7 +641,7 @@ Job times in run 3: checks 5.7 · API 6.0 / 4.6 / 7.2 · postgres 2.4 · smoke 3
 - The API in the smoke job runs through `tsx`. The web is the production build.
 - Smoke has 7 journeys. The cell-edit round trip is still to write.
 - `database-target` is excluded, not rewritten: it reads the real `.env` files by design (R-VT-12).
-- The Turbo remote cache is wired (`TURBO_TOKEN` secret, `TURBO_TEAM` variable) but **not configured**. Without them, turbo uses its local cache.
+- The Turbo remote cache was wired (`TURBO_TOKEN` secret, `TURBO_TEAM` variable) but never configured. Removed 2026-09-30: turbo uses its local cache, empty at the start of each job.
 
 ## 6b. PR-2 … PR-5 (2026-09-26)
 

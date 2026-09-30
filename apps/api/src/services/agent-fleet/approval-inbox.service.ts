@@ -550,6 +550,28 @@ export interface StalenessVerdict {
 const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : String(c))
 
 /**
+ * One text per value whatever the order of its keys, for comparing a stored preview with a fresh one.
+ *
+ * The stored preview is jsonb, and jsonb re-orders an object's keys (shorter first): `{ from, to }` reads back as
+ * `{ to, from }`. Compared through plain JSON.stringify, every object-valued material field therefore "moved" when
+ * nothing had, and an approved set-price or apply-content was handed back as stale at every commit (measured on
+ * PGlite). Keys are sorted at every depth; array order still counts, and values keep their types (5 is not "5",
+ * null is not ""). The value goes through JSON first, as the stored copy did: a Date or a Decimal becomes the
+ * string jsonb holds, and an undefined key is dropped as it was dropped there.
+ */
+function canonicalJson(value: unknown): string | undefined {
+  const plain = JSON.stringify(value)
+  if (plain === undefined) return undefined
+  const sorted = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(sorted)
+      : v !== null && typeof v === 'object'
+        ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted((v as Record<string, unknown>)[k])]))
+        : v
+  return JSON.stringify(sorted(JSON.parse(plain)))
+}
+
+/**
  * Re-validate an approval against the world as it is NOW.
  *
  * It re-runs the tool's OWN dry-run handler — the same code that produced
@@ -618,7 +640,7 @@ export async function checkStaleness(approvalId: string): Promise<StalenessVerdi
   const moved: string[] = []
   for (const key of MATERIAL_PREVIEW_FIELDS[ap.toolName] ?? []) {
     if (!(key in before)) continue
-    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+    if (canonicalJson(before[key]) !== canonicalJson(after[key])) {
       moved.push(
         key.toLowerCase().includes('cents')
           ? `${key} changed from ${money(before[key])} to ${money(after[key])}`
