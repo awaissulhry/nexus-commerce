@@ -201,6 +201,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   useEffect(() => { if (refusedMarks.length === 0) setShowRefusedOnly(false) }, [refusedMarks.length])
   const refusedIds = useMemo(() => refusedRowIds(refusedMarks), [refusedMarks])
   const refusalExample = useMemo(() => refusalLead(refusedMarks), [refusedMarks])
+  const refusalReason = refusedMarks.find((mark) => mark.reason)?.reason ?? refusalExample
 
   const [search, setSearch] = useState('')
   const visibleRows = useMemo(() => {
@@ -573,22 +574,24 @@ export function MatrixSurface({ productId }: { productId: string }) {
           !busy && !error && (
             <>
               {/* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */}
-              <GridSheetStatus rows={visibleRows.length} pending={pending} refused={refused} saving={writer.busy} lastSavedAt={lastSavedAt}>
+              <GridSheetStatus rows={visibleRows.length} pending={pending} saving={writer.busy} lastSavedAt={lastSavedAt}>
                 {/* The sheet's refusal note (`SheetFooterNote`'s): the count is a VIEW — it narrows the grid to the affected
                     rows — and it carries ONE phrased example, so the reason is never only behind a hover. */}
                 {refused > 0 && (
                   <span className="nds-grid-sheet-noteslot is-urgent">
                     <GridSheetNote
                       kind="refusal" count={refused} noun="cell" title={refusalExample}
-                      lead={showRefusedOnly ? `showing only the affected rows · ${refusalExample ?? ''}` : refusalExample}
+                      lead={refusalReason}
                       onShow={() => setShowRefusedOnly((v) => !v)}
                     />
                   </span>
                 )}
-                <span className="nds-cell-muted">{variants} {variants === 1 ? 'variant' : 'variants'}</span>
-                {euGroups.map((g) => (
-                  <span key={g.key} className="nds-cell-muted" title={MATRIX_COPY.sharedEu(g.sharedInventoryWith!)}>Amazon EU: quantity is shared by {g.sharedInventoryWith!.length} markets</span>
-                ))}
+                <span className={styles.footerDetails}>
+                  <span className="nds-cell-muted">{variants} {variants === 1 ? 'variant' : 'variants'}</span>
+                  {euGroups.map((g) => (
+                    <span key={g.key} className="nds-cell-muted" title={MATRIX_COPY.sharedEu(g.sharedInventoryWith!)}>Amazon EU: quantity is shared by {g.sharedInventoryWith!.length} markets</span>
+                  ))}
+                </span>
                 {matrix.pinnedThisSession > 0 && matrix.undoLastPin && (
                   <span className="nds-cell-muted">
                     {MATRIX_COPY.pinnedThisSession(matrix.pinnedThisSession).replace(/ · Undo$/, '')}
