@@ -114,6 +114,7 @@ describe('a bulk channel price override goes through the ONE channel price write
     const bulk = await seed('bulk-all', CHANNELS as never)
     const single = await seed('single-all', CHANNELS as never)
     const before = Object.fromEntries(await Promise.all(Object.values(bulk).map(async (l) => [l.id, await listing(l.id)])))
+    const queuedChannels: string[] = []
 
     for (const [index, { channel, marketplace }] of CHANNELS.entries()) {
       const key = `${channel}:${marketplace}`
@@ -137,12 +138,14 @@ describe('a bulk channel price override goes through the ONE channel price write
       // 🔴 Never a quantity: the price job leaves every quantity column exactly as it was.
       expect(quantityShape(b), channel).toEqual(quantityShape(before[bulk[key].id]))
 
+      // 🔴 For EVERY channel, the bulk action queues exactly what the single edit queues in this same run — whatever
+      // the door's channel lanes are today. No count is hard-coded per channel: when the door gains a lane (Etsy,
+      // PR #205) both queue it; if the bulk ever differs from the single edit, this fails.
       const [bq, sq] = [await queueOf(bulk[key].id), await queueOf(single[key].id)]
       expect(bq.map(rowShape), channel).toEqual(sq.map(rowShape))
-      // Amazon, eBay and Shopify each get ONE PRICE_UPDATE on the 30 s grace window. Etsy gets what the single
-      // edit gets: the door has no Etsy price lane (its VALID_SYNC_TARGETS), so neither one queues for Etsy.
-      expect(bq.length, channel).toBe(channel === 'ETSY' ? 0 : 1)
+      expect(sq.length, `${channel}: the single edit queues at most one PRICE_UPDATE`).toBeLessThanOrEqual(1)
       if (bq.length) {
+        queuedChannels.push(channel)
         expect(bq[0], channel).toMatchObject({ syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { price: 19.99, source: 'CHANNEL_PRICE_WRITE', actor: 'person-1', marketplace } })
         expect(inThirtySeconds(bq[0].holdUntil), channel).toBe(true)
         // Sent to the instant lane after the commit, never from inside the transaction.
@@ -156,6 +159,8 @@ describe('a bulk channel price override goes through the ONE channel price write
       expect(bt.map((e) => [Number(e.oldPrice), Number(e.newPrice), e.currency]), channel).toEqual(st.map((e) => [Number(e.oldPrice), Number(e.newPrice), e.currency]))
       expect(bt.map((e) => e.source), channel).toEqual(['BULK_OVERRIDE'])
     }
+    // Not vacuous: the channels the door has always sent to did queue (Etsy may or may not, as the door decides).
+    expect(queuedChannels).toEqual(expect.arrayContaining(['AMAZON', 'EBAY', 'SHOPIFY']))
     // Four jobs, four calls of the door, one listing each.
     expect(door.mock.calls.filter(([input]) => input.source === 'BULK_OVERRIDE').map(([input]) => input.targets.length)).toEqual([1, 1, 1, 1])
   }), 60_000)
