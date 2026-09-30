@@ -243,6 +243,15 @@ export function changeTarget(cell: StudioCellValue | undefined, intent?: string)
   return cell?.contentAcknowledgement ? address?.tier === 'pin' ? 'channel' : 'master' : writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb === 'channel' ? 'channel' : 'master'
 }
 
+/**
+ * Audit A03 — the shared record a channel cell writes, for the sheet writer's `sharedRecordOf`: the product's own record
+ * (a Master field, a shared-language text) is ONE record under every listing-alias band that shows the product, and a
+ * unit writing it moves the product's version for every band. A listing's cell (a pin included) is its own row's.
+ */
+export function channelSharedRecord(row: ChannelSheetRow | null, change: { colId: string; intent?: string }): string | null {
+  return row && changeTarget(row.values?.[change.colId], change.intent) !== 'channel' ? `product:${row.id}` : null
+}
+
 /** A family listing a listing-level eBay write moved (`familyListings[]`): its id and the version it holds now. */
 export interface FamilyListing { productId: string; listingId: string; version: number }
 

@@ -22,7 +22,7 @@ import { useSheetUndo } from '../useSheetUndo';
 import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
 import { withShopifyColumns } from '../../shopify/unlinkedInformationColumns';
-import { channelScopeUrl } from './useChannelSheet';
+import { channelScopeUrl, channelSharedRecord } from './useChannelSheet';
 import { reloadImpact } from '../master/reloadGuard';
 import { ProductRoleChip } from '../ProductRoleChip';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
@@ -360,6 +360,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         };
         writerRef.current = new SheetWriter<ChannelSheetRow>({
             mergeRow: preserveContentVersions,
+            // Audit A03 — one product under several alias bands: its shared record is written once per call.
+            sharedRecordOf: (request, cell) => channelSharedRecord(request.row, cell),
             tracker,
             getApi: getGridApi,
             commit: (req: SheetWriteRequest<ChannelSheetRow>) => commitOne(req),

@@ -10,7 +10,7 @@ import { commitVariationTheme } from '../master/masterWrite'
 import { runBulkOperation, type BulkSavePost, type BulkSend } from '../bulkOperation'
 import { preserveContentVersions } from '../contentVersions'
 
-import { addListingAlias, channelSheetResponse, commitChannelRow, createdListingsOf, NO_LISTING_VERSION, updateListingAlias, writeLandsOnListing, type CreatedListing } from './useChannelSheet'
+import { addListingAlias, channelSharedRecord, channelSheetResponse, commitChannelRow, createdListingsOf, NO_LISTING_VERSION, updateListingAlias, writeLandsOnListing, type CreatedListing } from './useChannelSheet'
 import { wireAliasKey, type ChannelSheetRow, type StudioCellValue } from './types'
 
 const cell = (over: Partial<StudioCellValue>): StudioCellValue =>
@@ -802,5 +802,107 @@ describe('the next content edit on a row chains on the version the last save ans
     expect(bodies.map(body => body.changes[0].contentVersion)).toEqual([4, 5])
     expect(bodies.map(body => body.expectedVersion)).toEqual([82, 83])
     expect(r.values.bulletPoints_1.contentVersion).toBe(6)
+  })
+})
+
+/*
+ * Audit A03 (2026-09-30) — one operation across listing-alias bands. The same product appears once per band, and every
+ * band's shared cell (Master's record: a shared-language text, a master field) carries the same tokens. The fake server
+ * below is the REAL contract, proven on the real bulk-save route (`apps/api/.../bulk-save-alias-chain.vitest.test.ts`):
+ * units run in turn; a unit writing the shared record is refused when its content token or product version is not the
+ * current one, and every stored unit moves the product version (the text's token moves when the text changes).
+ */
+describe('one operation across listing-alias bands (audit A03)', () => {
+  const bands = (aliases: Array<string | null>, extra: Record<string, StudioCellValue> = {}) => aliases.map(aliasId => row({ aliasId, rowId: `${aliasId ?? 'primary'}:p1`, values: {
+    title: cell({ value: 'Old', writeField: 'name', writeTarget: 'master', writeVerb: 'master', contentAcknowledged: true,
+      contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } as never),
+    brand: cell({ value: 'Old brand', writeField: 'brand', writeTarget: 'master', writeVerb: 'master' }),
+    material: cell({ value: 'Wool', writeField: 'attr_material', writeTarget: 'channelListing', writeVerb: 'channel' }),
+    ...extra,
+  }, listing: { id: `l-${aliasId ?? 'primary'}`, version: 82 } as ChannelSheetRow['listing'] }))
+  const harness = (rows: ChannelSheetRow[]) => {
+    const server = { version: 7, content: 4, title: 'Old', brand: 'Old brand', units: 0, calls: 0 }
+    const post: BulkSavePost = async (_operation, units) => {
+      server.calls++
+      return new Response(JSON.stringify({ units: units.map(unit => {
+        server.units++
+        const changes = unit.changes as Array<{ field: string; value: string; target?: string; contentVersion?: number }>
+        const shared = changes.filter(change => change.target !== 'channel')
+        const text = shared.find(change => change.field === 'name')
+        if (text && text.contentVersion !== server.content) return { key: unit.key, status: 409, body: { error: 'Title changed. Reload before saving it.' } }
+        if (shared.length && unit.expectedVersion !== server.version) {
+          return { key: unit.key, status: 409, body: { code: 'VERSION_CONFLICT', error: 'Another change landed first — refresh the product to pick up the latest version.', currentVersion: server.version, versionOf: 'product' } }
+        }
+        if (text && text.value !== server.title) { server.title = text.value; server.content++ }
+        const brand = shared.find(change => change.field === 'brand')
+        if (brand) server.brand = brand.value
+        if (shared.length) server.version++
+        return { key: unit.key, status: 200, body: shared.length
+          ? { updated: 1, currentVersion: server.version, versionOf: 'product', errors: [], contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: server.content }] }
+          : { updated: 1, currentVersion: 83, versionOf: 'channelListing', errors: [] } }
+      }) }))
+    }
+    const tracker = new CellSaveTracker()
+    const refusals: unknown[] = []
+    const commit = (request: Parameters<typeof commitChannelRow>[0], bulkSend?: BulkSend) => commitChannelRow(request, {
+      ...coord, marketplace: 'DE', locale: 'de', familyRows: () => rows, bulkSend,
+      onProductVersionsChanged: changed => writer.seed(changed.map(r => ({ id: r.rowId, version: r.version }))),
+    })
+    const writer = new SheetWriter<ChannelSheetRow>({ tracker, getApi: () => null, commit, mergeRow: preserveContentVersions,
+      onRefused: list => refusals.push(...list),
+      sharedRecordOf: (request, change) => channelSharedRecord(request.row, change),
+      commitBatch: requests => runBulkOperation(requests, commit, { post }) })
+    writer.seed(rows.map(r => ({ id: r.rowId, version: r.version, row: r })))
+    const operation = async (edits: Array<[ChannelSheetRow, string, unknown]>) => {
+      writer.beginOperation()
+      for (const [r, colId, value] of edits) writer.set(r.rowId, colId, value, { row: r })
+      writer.endOperation()
+      await writer.flush()
+    }
+    return { server, tracker, writer, refusals, operation }
+  }
+  const states = (tracker: CellSaveTracker, rows: ChannelSheetRow[], colId: string) => rows.map(r => tracker.get(r.rowId, colId)?.state)
+
+  it('"Set every row…" on a shared title across five bands stores it once and paints every band saved', async () => {
+    const rows = bands([null, 'a2', 'a3', 'a4', 'a5'])
+    const h = harness(rows)
+    try {
+      await h.operation(rows.map(r => [r, 'title', 'Neu'] as [ChannelSheetRow, string, unknown]))
+      expect(h.refusals).toEqual([])
+      expect(states(h.tracker, rows, 'title')).toEqual(['saved', 'saved', 'saved', 'saved', 'saved'])
+      expect(h.server).toMatchObject({ title: 'Neu', units: 1, calls: 1 })
+      expect(h.writer.failedCount).toBe(0)
+    } finally { h.writer.destroy() }
+  })
+  it('a paste of DIFFERENT shared values into two bands sends the second in the next call, with the tokens the first moved', async () => {
+    const rows = bands([null, 'a2'])
+    const h = harness(rows)
+    try {
+      await h.operation([[rows[0], 'title', 'Erste'], [rows[1], 'title', 'Zweite']])
+      expect(h.refusals).toEqual([])
+      expect(states(h.tracker, rows, 'title')).toEqual(['saved', 'saved'])
+      expect(h.server).toMatchObject({ title: 'Zweite', calls: 2, version: 9, content: 6 })
+    } finally { h.writer.destroy() }
+  })
+  it('two different shared fields of one product on two bands, and a listing cell beside them, all save', async () => {
+    const rows = bands([null, 'a2'])
+    const h = harness(rows)
+    try {
+      await h.operation([[rows[0], 'title', 'Neu'], [rows[1], 'brand', 'New brand'], [rows[1], 'material', 'Cotton']])
+      expect(h.refusals).toEqual([])
+      expect([h.tracker.get(rows[0].rowId, 'title')?.state, h.tracker.get(rows[1].rowId, 'brand')?.state, h.tracker.get(rows[1].rowId, 'material')?.state]).toEqual(['saved', 'saved', 'saved'])
+      expect(h.server).toMatchObject({ title: 'Neu', brand: 'New brand' })
+    } finally { h.writer.destroy() }
+  })
+  it('a refused shared value is refused on every band that asked for it, with the same sentence', async () => {
+    const rows = bands([null, 'a2'])
+    const h = harness(rows)
+    h.server.content = 99
+    try {
+      await h.operation(rows.map(r => [r, 'title', 'Neu'] as [ChannelSheetRow, string, unknown]))
+      expect(states(h.tracker, rows, 'title')).toEqual(['refused', 'refused'])
+      expect(rows.map(r => h.tracker.get(r.rowId, 'title')?.reason)).toEqual(['Title changed. Reload before saving it.', 'Title changed. Reload before saving it.'])
+      expect(h.server.units).toBe(1)
+    } finally { h.writer.destroy() }
   })
 })
