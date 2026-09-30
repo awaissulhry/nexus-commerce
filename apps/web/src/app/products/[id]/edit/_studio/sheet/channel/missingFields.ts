@@ -6,7 +6,8 @@
  * ones through the channel gateway. The sheet tries that once per open, then offers "Load eBay fields". A key it cannot
  * load (no category chosen, the Shopify store list) keeps its own sentence and pointer (`rulesStatus.ts`).
  */
-import { commandConflictMessage, type CommandConflict } from '@/lib/command-key'
+import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, sendCommand, type CommandConflict, type CommandKey } from '@/lib/command-key'
 import { channelLabel } from '../../scopes'
 import { downloadableCategory, missingRuleSentence } from './rulesStatus'
 
@@ -40,8 +41,9 @@ export function autoLoadKey(channel: string, market: string, loadable: readonly 
   return loadable.length ? `${channel}|${market}|${[...loadable].sort().join(',')}` : null
 }
 
-interface DownloadAnswer { results?: Array<{ productType: string; outcome: string; error?: string }>; error?: string }
-export type FieldsLoadOutcome = { state: 'loaded' } | { state: 'failed'; message: string }
+interface DownloadAnswer { results?: Array<{ productType: string; outcome: string; error?: string }>; remaining?: number; error?: string }
+/** `partial`: the server loads at most 25 lists per call and said how many are left — load again. */
+export type FieldsLoadOutcome = { state: 'loaded' } | { state: 'partial'; remaining: number; message: string } | { state: 'failed'; message: string }
 
 /** The provider's reason, cut so the banner stays a banner at phone width. */
 const DETAIL_MAX = 120
@@ -49,13 +51,29 @@ const DETAIL_MAX = 120
 /** What one download answer means for the banner. Anything short of every list loaded is a failure with its reason. */
 export function fieldsLoadOutcome(channel: string, answer: { status: number; body: DownloadAnswer | null; conflict: CommandConflict | null } | 'no-answer'): FieldsLoadOutcome {
   const name = channelLabel(channel)
-  if (answer === 'no-answer') return { state: 'failed', message: 'No answer from the server. Try again.' }
+  if (answer === 'no-answer') return { state: 'failed', message: 'No answer from the server. The download may still be running: wait a moment, then try again.' }
   if (answer.conflict) return { state: 'failed', message: commandConflictMessage(answer.conflict, 'field download') }
   if (answer.status < 200 || answer.status >= 300) {
     return { state: 'failed', message: answer.body?.error ? `${name} fields could not be loaded: ${answer.body.error}` : 'No answer from the server. Try again.' }
   }
   const failed = (answer.body?.results ?? []).filter(r => r.outcome === 'failed')
+  const remaining = answer.body?.remaining ?? 0
+  if (!failed.length && remaining > 0) return { state: 'partial', remaining, message: `${remaining} more ${name} field ${remaining === 1 ? 'list' : 'lists'} to load. Choose ${loadButtonLabel(channel)} again.` }
   if (!failed.length) return { state: 'loaded' }
   const detail = failed.map(r => r.error ? `${r.productType}: ${r.error}` : r.productType).join('; ')
   return { state: 'failed', message: `Could not reach ${name}. Try again. (${detail.length > DETAIL_MAX ? `${detail.slice(0, DETAIL_MAX - 1)}…` : detail})` }
+}
+
+/**
+ * THE field-list download: the sheet's banner and the Requirements dialog both call this, so the two cannot word or
+ * judge one answer differently (code review 2026-09-30). The server fetches through the channel gateway, per business.
+ */
+export async function downloadFieldLists(commandKey: CommandKey, channel: string, market: string, productTypes: readonly string[]): Promise<FieldsLoadOutcome> {
+  try {
+    const answer = await sendCommand<DownloadAnswer>(commandKey, `${getBackendUrl()}/api/categories/schema/download`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, market, productTypes }) })
+    return fieldsLoadOutcome(channel, { status: answer.response.status, body: answer.body, conflict: answer.conflict })
+  } catch {
+    return fieldsLoadOutcome(channel, 'no-answer')
+  }
 }

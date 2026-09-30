@@ -4,11 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Banner } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
-import { getBackendUrl } from '@/lib/backend-url'
-import { sendCommand, useCommandKey } from '@/lib/command-key'
+import { useCommandKey } from '@/lib/command-key'
 import { channelLabel } from '../../scopes'
 import { chooseCategoryLink } from './rulesStatus'
-import { autoLoadKey, fieldsLoadOutcome, loadButtonLabel, missingFields, notLoadedTitle, type FieldsLoadOutcome } from './missingFields'
+import { autoLoadKey, downloadFieldLists, loadButtonLabel, missingFields, notLoadedTitle } from './missingFields'
 
 /** Loading a field list is PIM management, as the Requirements dialog's "Download rules" (`categories.routes.ts`). */
 export const LOAD_FIELDS_PERMISSION = 'pim.manage'
@@ -33,17 +32,10 @@ export function useMissingFieldsBanner({ channel, market, missing, ready, canLoa
   const load = useCallback(async () => {
     if (!auto) return
     setBusy(true); setFailure(null)
-    let outcome: FieldsLoadOutcome
-    try {
-      const answer = await sendCommand<{ results?: Array<{ productType: string; outcome: string; error?: string }>; error?: string }>(commandKey,
-        `${getBackendUrl()}/api/categories/schema/download`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, market, productTypes: loadable.split(',') }) })
-      outcome = fieldsLoadOutcome(channel, { status: answer.response.status, body: answer.body, conflict: answer.conflict })
-    } catch {
-      outcome = fieldsLoadOutcome(channel, 'no-answer')
-    }
+    const outcome = await downloadFieldLists(commandKey, channel, market, loadable.split(','))
     setBusy(false)
-    if (outcome.state === 'loaded') onLoaded()
+    // A partial load reloads too: the set of missing lists shrinks, so its key changes and the next batch loads on its own.
+    if (outcome.state !== 'failed') onLoaded()
     else setFailure({ key: auto, message: outcome.message })
   }, [auto, commandKey, channel, market, loadable, onLoaded])
 

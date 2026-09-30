@@ -483,7 +483,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             formulas.whenKnown(rowId, colId, () => {
                 if (tracker.get(rowId, colId)?.reason === HELD_FOR_FORMULAS)
                     latestValueChanged.current(e);
-            }, () => tracker.set(rowId, colId, 'refused', HELD_EDIT_DROPPED));
+            }, (reason) => tracker.set(rowId, colId, 'refused', reason ?? HELD_EDIT_DROPPED));
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;

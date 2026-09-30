@@ -2,7 +2,7 @@
 import { REFERENCE_FIELDS } from '@nexus/shared/reference-values'
 import { useEffect, useState } from 'react'
 import { AsyncListboxPanel } from '@/design-system/components'
-import { cellValueOf, isUnchanged, typedStart } from '@/design-system/grid/editors/selectPanelModel'
+import { cellValueOf, isUnchanged, typedStart } from '@/design-system/grid'
 import { loadReferenceChoices, type ReferenceChoices, type ReferenceField, type ReferenceScope } from './referenceOptions'
 
 export function ReferenceSelectEditor({ fieldKey, market, productType, connectionId, value, onValueChange, stopEditing, eventKey }: ReferenceScope & {

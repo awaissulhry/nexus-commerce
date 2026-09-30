@@ -29,7 +29,9 @@ export interface MeasureEditorParams {
 export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function MeasureEditor(props, _ref) {
   const { unitOptions = [], label, value, column, stopEditing, onValueChange } = props
   const [m, setM] = useState<MeasureValue>(() => asMeasure(value))
-  // A digit that opened the cell by typing starts the number; the grid consumed that keystroke (P0, 2026-09-30).
+  /* A digit, point, comma or minus that opened the cell by typing starts the number; the grid consumed that keystroke
+     (P0, 2026-09-30). The field is text with a decimal keypad, not `type="number"`: a number field clears "." and "-",
+     so ".5" was saved as 5 (code review 2026-09-30), and it refused the Italian decimal comma that `onText` accepts. */
   const typed = /^[\d.,-]$/.test(typedStart(props.eventKey)) ? typedStart(props.eventKey) : ''
   const [text, setText] = useState(() => (m.value === null ? '' : String(m.value)))
   const root = useRef<HTMLDivElement>(null)
@@ -74,7 +76,7 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
   }
   return (
     <div ref={root} className="nds-measure-editor" style={{ width: box.width }} role="group" aria-label={label ? `${label} — value and unit` : 'Value and unit'} onKeyDownCapture={tabToUnits}>
-      <Input type="number" inputMode="decimal" step="any" value={text} onChange={(e) => onText(e.target.value)} aria-label="Value" className="nds-measure-editor-value" />
+      <Input type="text" inputMode="decimal" value={text} onChange={(e) => onText(e.target.value)} aria-label="Value" className="nds-measure-editor-value" />
       {unitOptions.length > 0 && (
         <ListboxPanel
           options={unitOptions.map((u) => ({ value: u, label: u }))}

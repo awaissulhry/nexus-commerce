@@ -4,7 +4,7 @@ import Link from '@/lib/workspaces/Link'
 import { Button } from '@/design-system/primitives'
 import { categoryHref } from '@/app/catalog/categories/api'
 import { AsyncListboxPanel } from '@/design-system/components'
-import { typedStart } from '@/design-system/grid/editors/selectPanelModel'
+import { typedStart } from '@/design-system/grid'
 import { loadCategoryOptions, type CategoryOption } from './categoryOptions'
 
 export function ChannelCategoryEditor({ value, onValueChange, channel, market, accountId, stopEditing, eventKey }: {

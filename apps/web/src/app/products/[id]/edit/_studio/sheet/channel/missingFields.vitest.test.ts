@@ -46,7 +46,17 @@ describe('fieldsLoadOutcome', () => {
   it('the server refused, or never answered: says which, never "loaded"', () => {
     expect(fieldsLoadOutcome('EBAY', answer(400, { error: 'Only rule sets in use in this market can be downloaded' }))).toEqual({
       state: 'failed', message: 'eBay fields could not be loaded: Only rule sets in use in this market can be downloaded' })
-    expect(fieldsLoadOutcome('EBAY', 'no-answer')).toEqual({ state: 'failed', message: 'No answer from the server. Try again.' })
+    expect(fieldsLoadOutcome('EBAY', 'no-answer')).toEqual({ state: 'failed', message: 'No answer from the server. The download may still be running: wait a moment, then try again.' })
     expect(fieldsLoadOutcome('EBAY', { status: 409, body: null, conflict: 'running' }).state).toBe('failed')
+  })
+})
+
+describe('a partial load says how many lists are left (code review 2026-09-30)', () => {
+  it('the server loads at most 25 per call: remaining > 0 is not "loaded"', () => {
+    const outcome = fieldsLoadOutcome('AMAZON', { status: 200, conflict: null, body: { results: [{ productType: 'SHIRT', outcome: 'added' }], remaining: 15 } })
+    expect(outcome).toEqual({ state: 'partial', remaining: 15, message: '15 more Amazon field lists to load. Choose Load Amazon fields again.' })
+  })
+  it('remaining 0 is loaded', () => {
+    expect(fieldsLoadOutcome('EBAY', { status: 200, conflict: null, body: { results: [{ productType: '57988', outcome: 'added' }], remaining: 0 } })).toEqual({ state: 'loaded' })
   })
 })

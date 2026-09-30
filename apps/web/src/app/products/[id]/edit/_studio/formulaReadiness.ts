@@ -171,22 +171,37 @@ export async function runBounded<T>(tasks: ReadonlyArray<() => Promise<T>>, limi
   return results
 }
 
-export interface HeldEdit { rowId: string; fieldKey: string; apply: () => void; drop?: () => void }
+export interface HeldEdit { rowId: string; fieldKey: string; apply: () => void; drop?: (reason?: string) => void }
 
 /**
- * Edits made to a cell whose formula state is not known yet. They are kept — never refused — and applied in the order
- * they were made as soon as their cell is known, so a cell that turns out to hold a formula still takes the formula path.
+ * Edits made to a cell whose formula state is not known yet. They are kept — never refused — and applied as soon as their
+ * cell is known, so a cell that turns out to hold a formula still takes the formula path. ONE edit per cell: a later edit
+ * to the same cell (a retype, an undo, a fill over it) replaces the earlier one, because the grid shows the later value
+ * and that is the one to save (code review 2026-09-30: the earlier one was saved and the later one skipped).
  */
 export function createHeldEdits() {
   let held: HeldEdit[] = []
   return {
-    hold(edit: HeldEdit) { held.push(edit) },
+    hold(edit: HeldEdit) {
+      held = [...held.filter(other => other.rowId !== edit.rowId || other.fieldKey !== edit.fieldKey), edit]
+    },
     release(known: (rowId: string, fieldKey: string) => boolean): number {
       const ready = held.filter(edit => known(edit.rowId, edit.fieldKey))
       if (!ready.length) return 0
       held = held.filter(edit => !ready.includes(edit))
       for (const edit of ready) edit.apply()
       return ready.length
+    },
+    /**
+     * A cell whose formula read FAILED will not become known until the operator retries, so its edit is not left
+     * "Saving…" forever: it is refused with the read's own error, and can be entered again after Retry.
+     */
+    dropFailed(failure: (rowId: string, fieldKey: string) => string | null): number {
+      const failed = held.map(edit => ({ edit, reason: failure(edit.rowId, edit.fieldKey) })).filter(f => f.reason)
+      if (!failed.length) return 0
+      held = held.filter(edit => !failed.some(f => f.edit === edit))
+      for (const { edit, reason } of failed) edit.drop?.(reason!)
+      return failed.length
     },
     /** The sheet changed under the held edits (another coordinate or column set): tell each one it was not saved. */
     drop(): number {

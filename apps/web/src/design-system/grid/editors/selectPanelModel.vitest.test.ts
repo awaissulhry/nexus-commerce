@@ -98,6 +98,8 @@ describe('typedStart — the key that opened the editor by typing', () => {
     expect(typedStart('5')).toBe('5')
     expect(typedStart('Enter')).toBe('')
     expect(typedStart('F2')).toBe('')
+    // Space would start a search on row 1, and Enter would then replace the stored value (code review).
+    expect(typedStart(' ')).toBe('')
     expect(typedStart(null)).toBe('')
     expect(typedStart(undefined)).toBe('')
   })

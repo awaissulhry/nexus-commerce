@@ -119,6 +119,21 @@ test.describe('product sheet — lists by keyboard and by one click', () => {
     await expect(page.locator('.ag-cell-focus')).not.toHaveAttribute('col-id', STRICT)
   })
 
+  test('Enter on a short list commits the option once (not also as a click on the focused option)', async () => {
+    const target = await focusCell(page, 4, STRICT)
+    const before = saves.length
+    await page.keyboard.press('Enter')
+    await expect(popup(page)).toBeVisible()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    const chosen = (await page.evaluate(() => document.activeElement?.textContent ?? '')).trim()
+    await page.keyboard.press('Enter')
+    await expect(target).toContainText(chosen)
+    await expect.poll(() => saves.length, { timeout: 30_000 }).toBe(before + 1)
+    await page.waitForTimeout(2_000)
+    expect(saves.length).toBe(before + 1)
+  })
+
   test('Enter with nothing changed closes the list and writes nothing', async () => {
     await focusCell(page, 1, OPEN)
     const before = saves.length

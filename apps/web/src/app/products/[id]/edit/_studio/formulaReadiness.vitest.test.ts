@@ -175,19 +175,31 @@ describe('runBounded — the batch reads run in parallel, at most FORMULA_READS_
 })
 
 describe('an edit to a cell whose formula state is unknown is held, never refused', () => {
-  it('applies held edits in the order they were made, as soon as their cell is known', () => {
+  it('applies each held edit as soon as its cell is known; a later edit to the same cell replaces the earlier one', () => {
     const held = createHeldEdits()
     const applied: string[] = []
     held.hold({ rowId: 'r1', fieldKey: 'a', apply: () => applied.push('r1.a=1') })
     held.hold({ rowId: 'r2', fieldKey: 'a', apply: () => applied.push('r2.a') })
+    // A retype (or an undo) of the same cell: the grid now shows 2, so 2 is what must be saved — never 1 (code review).
     held.hold({ rowId: 'r1', fieldKey: 'a', apply: () => applied.push('r1.a=2') })
     expect(held.release(() => false)).toBe(0)
-    expect(held.release((rowId) => rowId === 'r1')).toBe(2)
-    expect(applied).toEqual(['r1.a=1', 'r1.a=2'])
+    expect(held.release((rowId) => rowId === 'r1')).toBe(1)
+    expect(applied).toEqual(['r1.a=2'])
     expect(held.size).toBe(1)
     held.release(() => true)
-    expect(applied).toEqual(['r1.a=1', 'r1.a=2', 'r2.a'])
+    expect(applied).toEqual(['r1.a=2', 'r2.a'])
     expect(held.size).toBe(0)
+  })
+
+  it('an edit whose formula read FAILED is refused with the read\'s error, not left saving forever', () => {
+    const held = createHeldEdits()
+    const refused: Array<string | undefined> = []
+    held.hold({ rowId: 'r1', fieldKey: 'a', apply: () => { throw new Error('must not apply') }, drop: (reason) => refused.push(reason) })
+    held.hold({ rowId: 'r2', fieldKey: 'a', apply: () => {}, drop: (reason) => refused.push(reason) })
+    expect(held.dropFailed(() => null)).toBe(0)
+    expect(held.dropFailed((rowId) => rowId === 'r1' ? 'Could not load formulas. Retry before editing formula fields.' : null)).toBe(1)
+    expect(refused).toEqual(['Could not load formulas. Retry before editing formula fields.'])
+    expect(held.size).toBe(1)
   })
 
   it('an edit the sheet dropped first says so instead of vanishing', () => {

@@ -80,6 +80,24 @@ describe('an Amazon variation with no product type of its own', () => {
     expect(ebay[ids.typeless]).toMatchObject({ channelCategoryId: null, source: 'none' })
   }))
 
+  it('takes the parent\'s RESOLVED category, not its raw product type (code review 2026-09-30)', () => scoped(async () => {
+    // The parent is mapped to OUTERWEAR through its category while its own legacy productType says SHIRT; the variation
+    // sits in an unmapped category of its own, so nothing resolves for it and it reaches the parent fallback.
+    const mapped = await prisma.category.create({ data: { slug: 'pt-mapped-jackets' } })
+    const unmapped = await prisma.category.create({ data: { slug: 'pt-unmapped-sizes' } })
+    await prisma.categoryChannelMapping.create({ data: { categoryId: mapped.id, channel: 'AMAZON', marketplace: 'IT', channelCategoryId: 'OUTERWEAR' } })
+    const parent = (await prisma.product.create({ data: { sku: 'PT-LEGACY', name: 'Legacy', basePrice: 10, isParent: true, productType: 'SHIRT', variationAxes: ['size'] } as never })).id
+    const child = (await prisma.product.create({ data: { sku: 'PT-LEGACY-M', name: 'Legacy M', basePrice: 10, parentId: parent, productType: null, variantAttributes: { size: 'M' } } as never })).id
+    await prisma.productCategory.create({ data: { productId: parent, categoryId: mapped.id, isPrimary: true } })
+    await prisma.productCategory.create({ data: { productId: child, categoryId: unmapped.id, isPrimary: true } })
+    const alone = await resolveCategoriesForProducts({ productIds: [child], channel: 'AMAZON', marketplace: 'IT' })
+    expect(alone[child]).toMatchObject({ channelCategoryId: 'OUTERWEAR', source: 'categoryExact', fromParent: true })
+    expect(Object.keys(alone)).toEqual([child])
+    expect(categorySourceLabel(alone[child])).toMatch(/^The parent product's: mapped on/)
+    const together = await resolveCategoriesForProducts({ productIds: [child, parent], channel: 'AMAZON', marketplace: 'IT' })
+    expect(together[child].channelCategoryId).toBe(together[parent].channelCategoryId)
+  }))
+
   it('gets the parent\'s columns on the sheet: editable, never "Not applicable", and the row says where its type came from', () => scoped(async () => {
     const sheet = await getStudioSheet({ productId: ids.parent, scope: 'channel', channel: 'AMAZON', market: 'IT', locale: 'it', accountId: account } as never)
     const row = (sheet.rows as any[]).find(r => r.id === ids.typeless)

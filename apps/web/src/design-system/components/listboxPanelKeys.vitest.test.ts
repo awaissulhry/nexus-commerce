@@ -126,7 +126,7 @@ describe('ListboxPanel — Enter commits what the operator is on', () => {
  * commit and the move to the grid. Measured in production: Enter and Tab closed every list with its old value.
  */
 describe('ListboxPanel — onKeyChoice reports Enter and Tab before the grid ends the edit', () => {
-  const capture = (root: El, key: string) => (root.props.onKeyDownCapture as (e: unknown) => void)({ key, nativeEvent: { isComposing: false } })
+  const capture = (root: El, key: string) => (root.props.onKeyDownCapture as (e: unknown) => void)({ key, nativeEvent: { isComposing: false }, preventDefault() {} })
   const arrow = (root: El, key: 'ArrowDown' | 'ArrowUp') => (root.props.onKeyDown as (e: unknown) => void)({ key, preventDefault() {} })
   const search = (root: El) => flat(root).find((el) => el.type === 'input')
   const labels = (root: El) => optionEls(root).map((o) => [o.props.children].flat().filter((c) => typeof c === 'string').join(''))
@@ -181,14 +181,24 @@ describe('ListboxPanel — onKeyChoice reports Enter and Tab before the grid end
     expect(onKeyChoice).toHaveBeenCalledWith('Xavia Racing')
   })
 
-  it('allowCustom puts the typed text LAST when there are matches, so Enter still takes the best match', () => {
+  it('allowCustom shows the typed text FIRST, but Enter takes the best match and ↑ takes the typed text', () => {
     const onKeyChoice = vi.fn()
-    const root = render({ options, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: 'lt' })
-    const rows = labels(root)
+    const props: ListboxPanelProps = { options, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: 'lt' }
+    const rows = labels(render(props))
+    expect(rows[0]).toBe('Use "lt"')
     expect(rows.length).toBeGreaterThan(1)
-    expect(rows[rows.length - 1]).toBe('Use "lt"')
-    capture(root, 'Enter')
-    expect(onKeyChoice).not.toHaveBeenCalledWith('lt')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(options.find((o) => o.label === rows[1])!.value)
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('lt')
+  })
+
+  it('Enter is not also a click on a focused option (the capture handler takes the default)', () => {
+    const root = render({ options, value: 'b', onCommit() {}, onCancel() {}, onKeyChoice: vi.fn() })
+    const preventDefault = vi.fn()
+    ;(root.props.onKeyDownCapture as (e: unknown) => void)({ key: 'Enter', nativeEvent: { isComposing: false }, preventDefault })
+    expect(preventDefault).toHaveBeenCalled()
   })
 
   it('allowCustom adds nothing for an exact match, whatever the case', () => {

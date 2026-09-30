@@ -95,7 +95,7 @@ export interface CellFormulas {
    * Run `edit` once this cell's formula state is known — at once if it already is. Held edits apply in the order they
    * were made; `drop` runs instead if the coordinate or column set changes first.
    */
-  whenKnown: (rowId: string, fieldKey: string, edit: () => void, drop?: () => void) => void
+  whenKnown: (rowId: string, fieldKey: string, edit: () => void, drop?: (reason?: string) => void) => void
   sourceLabel: string
   sourceLabelFor: (fieldKey?: string) => string
   replace: (rowId: string, fieldKey: string, value: unknown) => Promise<{ ok: boolean; error?: string }>
@@ -227,8 +227,11 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
 
   const held = useMemo(() => createHeldEdits(), [])
   useEffect(() => () => { held.drop() }, [held, readKey])
-  useEffect(() => { held.release(knownFor) }, [held, knownFor])
-  const whenKnown = useCallback((rowId: string, fieldKey: string, edit: () => void, drop?: () => void) => {
+  useEffect(() => {
+    held.release(knownFor)
+    held.dropFailed((rowId, fieldKey) => knownFor(rowId, fieldKey) ? null : failureFor(current, languages, locale, rowId, fieldKey))
+  }, [held, knownFor, current, languages, locale])
+  const whenKnown = useCallback((rowId: string, fieldKey: string, edit: () => void, drop?: (reason?: string) => void) => {
     if (knownFor(rowId, fieldKey)) edit()
     else held.hold({ rowId, fieldKey, apply: edit, drop })
   }, [held, knownFor])

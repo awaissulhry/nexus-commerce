@@ -127,7 +127,8 @@ export interface ListboxPanelProps {
   initialQuery?: string
   /**
    * Offer the typed text as a value of its own — `Use "…"` — for a list the channel leaves open (an eBay FREE_TEXT aspect,
-   * an Amazon open enum). It is the LAST row, so Enter still takes the best match; with no match it is the only row.
+   * an Amazon open enum). It is the FIRST row, so it is always in view, but the best match stays highlighted: Enter takes
+   * "Nero" for "Ner", ↑ takes the typed text. With no match it is the only row, and Enter takes it.
    */
   allowCustom?: boolean
   /**
@@ -154,7 +155,7 @@ export function ListboxPanel({
    * on "Bravo" and pressing Enter committed "Alpha", a hidden row 1 (proved by
    * `listboxPanelKeys.vitest.test.ts` before this fix).
    */
-  const [ownActive, setOwnActive] = useState<number | null>(initialQuery ? 0 : null)
+  const [ownActive, setOwnActive] = useState<number | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const controlled = activeIndex !== undefined
   /**
@@ -187,17 +188,19 @@ export function ListboxPanel({
   const grouped = groupOptions(ranked)
   const groups = grouped?.groups ?? null
   const listed = grouped?.flat ?? ranked
-  const typed = allowCustom ? q.trim() : ''
+  const typed = allowCustom && !external ? q.trim() : ''
   const custom: ListboxOption | null = typed && !options.some((o) => sameText(o.value, typed) || (typeof o.label === 'string' && sameText(o.label, typed)))
     ? { value: typed, label: `Use "${typed}"` }
     : null
-  const matches = custom ? [...listed, custom] : listed
+  const matches = custom ? [custom, ...listed] : listed
+  // While the operator types, the highlight starts on the best match — past the typed-text row when there is one.
+  const bestMatch = custom && listed.length ? 1 : 0
   const hasOwnEmpty = options.some((o) => o.value === '')
   const showClear = emptyLabel != null && !hasOwnEmpty
   const selectedIndex = matches.findIndex((o) => o.value === value)
   /* A stored value that is not in the list highlights NOTHING until the operator moves or types, so Enter keeps a value it
      cannot show instead of committing row 1 in its place (P0, 2026-09-30: an Amazon product type was overwritten so). */
-  const active = controlled ? activeIndex : ownActive ?? (selectedIndex >= 0 ? selectedIndex : q ? 0 : -1)
+  const active = controlled ? activeIndex : ownActive ?? (q && ownsSearch ? bestMatch : selectedIndex >= 0 ? selectedIndex : q ? 0 : -1)
   activeRef.current = active
   const heldReason = (o: ListboxOption) => (o as ListboxPanelOption).heldReason
 
@@ -297,6 +300,8 @@ export function ListboxPanel({
       tabIndex={-1}
       onKeyDownCapture={onKeyChoice ? (e) => {
         if ((e.key !== 'Enter' && e.key !== 'Tab') || e.nativeEvent.isComposing) return
+        // Not also a click: Enter on a focused option button would activate it and commit a second time (code review).
+        if (e.key === 'Enter') e.preventDefault()
         const m = active >= 0 ? matches[active] : undefined
         onKeyChoice(m && !m.disabled && !heldReason(m) ? m.value : null)
       } : undefined}
@@ -317,7 +322,7 @@ export function ListboxPanel({
       {ownsSearch && (
         <div className="nds-combo-search">
           <Search size={13} aria-hidden />
-          <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); moveActive(() => 0) }}
+          <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); if (controlled) moveActive(() => 0); else setOwnActive(null) }}
             placeholder={searchPlaceholder} aria-label="Search options" />
         </div>
       )}
@@ -330,15 +335,15 @@ export function ListboxPanel({
       {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
       {groups
         ? (() => {
-            let i = -1
+            let i = custom ? 0 : -1
             return [
+              custom && renderOption(custom, 0),
               ...groups.map((g) => (
                 <div className="nds-combo-group" role="group" aria-label={g.name || undefined} key={g.name}>
                   {g.name !== '' && <div className="nds-combo-grouphd" aria-hidden>{g.name}</div>}
                   {g.options.map((o) => { i += 1; return renderOption(o, i) })}
                 </div>
               )),
-              custom && renderOption(custom, listed.length),
             ]
           })()
         : matches.map((o, i) => renderOption(o, i))}

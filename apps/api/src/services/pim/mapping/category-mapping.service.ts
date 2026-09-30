@@ -83,7 +83,7 @@ export interface ResolvedCategory {
    * (`resolve-batch`), while this is a fact to show beside a category that still resolved.
    */
   otherMarketConflicts?: string[]
-  /** `productType` only: the variation has no product type of its own, so this is its parent's. */
+  /** The variation resolved to nothing of its own, so this is its PARENT's resolved category (any source). */
   fromParent?: boolean
 }
 
@@ -160,9 +160,11 @@ export function categorySourceLabel(category: ResolvedCategory): string {
       default: { const unlabelled: never = category.source; return String(unlabelled) }
     }
   })()
+  // The productType wording says it already; any other source is the parent's, so it is named as the parent's.
+  const own = category.fromParent && category.source !== 'productType' ? `The parent product's: ${base.charAt(0).toLowerCase()}${base.slice(1)}` : base
   return category.otherMarketConflicts?.length
-    ? `${base}. Its Amazon listings in other markets disagree: ${category.otherMarketConflicts.join(', ')}`
-    : base
+    ? `${own}. Its Amazon listings in other markets disagree: ${category.otherMarketConflicts.join(', ')}`
+    : own
 }
 
 /** `{ "en": { "name": "Coats" } }` or `{ "en": "Coats" }` — both shapes exist in the wild. */
@@ -277,10 +279,12 @@ export async function resolveCategoriesForProducts(input: {
   })
   const membershipIds = [...new Set([...productIds, ...products.map(p => p.parentId).filter((id): id is string => !!id)])]
   const amazon = channel.toUpperCase() === 'AMAZON'
-  // Step 5's parent fallback needs the type of a parent that was not asked for (a bulk save names only the edited rows).
-  const typeOf = new Map(products.map(p => [p.id, p.productType]))
-  const typelessParentIds = amazon ? [...new Set(products.filter(p => !p.productType && p.parentId && !typeOf.has(p.parentId)).map(p => p.parentId!))] : []
-  const [memberships, mappings, siblingTypes, typelessParents] = await Promise.all([
+  /* A variation that resolves to nothing of its own takes its parent's RESOLVED category (Amazon keeps one product type per
+     family), so a parent that was not asked for (a bulk save names only the edited rows) is resolved too, first. Its raw
+     `productType` would not do: a mapping or a sibling listing can resolve the parent to another type (code review). */
+  const asked = new Set(products.map(p => p.id))
+  const extraParentIds = amazon ? [...new Set(products.filter(p => !p.productType && p.parentId && !asked.has(p.parentId)).map(p => p.parentId!))] : []
+  const [memberships, mappings, siblingTypes, extraParents] = await Promise.all([
     prisma.productCategory.findMany({
       where: { productId: { in: membershipIds } },
       select: { productId: true, categoryId: true, isPrimary: true },
@@ -297,9 +301,8 @@ export async function resolveCategoriesForProducts(input: {
       },
     }),
     amazon ? amazonTypesInSiblingMarkets(membershipIds, marketplace, input.channelConnectionId) : Promise.resolve(new Map<string, Map<string, Set<string>>>()),
-    typelessParentIds.length ? prisma.product.findMany({ where: { id: { in: typelessParentIds } }, select: { id: true, productType: true } }) : Promise.resolve([]),
+    extraParentIds.length ? prisma.product.findMany({ where: { id: { in: extraParentIds } }, select: { id: true, parentId: true, productType: true } }) : Promise.resolve([]),
   ])
-  for (const parent of typelessParents) typeOf.set(parent.id, parent.productType)
 
   const mappedCategoryIds = new Set(mappings.map((m) => m.categoryId))
   const productCategoryIds = [...new Set(memberships.map((m) => m.categoryId))]
@@ -339,7 +342,9 @@ export async function resolveCategoriesForProducts(input: {
   const names = new Map(nameRows.map((r) => [r.id, categoryName(r.name)]))
 
   const disagreements = new Map<string, string[]>()
-  for (const p of products) {
+  // Parents first, so a variation's fallback reads its parent's finished answer.
+  const ordered = [...extraParents, ...products].sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId))
+  for (const p of ordered) {
     // Tier 0 (Amazon): the variant's own sibling listings, else its parent's, like category memberships below.
     const sibling = siblingTypes.get(p.id) ?? siblingTypes.get(p.parentId ?? '')
     if (sibling?.size === 1) {
@@ -375,14 +380,16 @@ export async function resolveCategoriesForProducts(input: {
       out[p.id] = resolved
     } else if (amazon && p.productType) {
       out[p.id] = { ...EMPTY, channelCategoryId: p.productType, source: 'productType' }
-    } else if (amazon && p.parentId && typeOf.get(p.parentId)) {
+    } else if (amazon && p.parentId && out[p.parentId]?.channelCategoryId) {
       // Without it every column of the variation's type is "Not applicable" (REGAL DE, 2026-09-30: 16 rows, 2,816 cells).
-      out[p.id] = { ...EMPTY, channelCategoryId: typeOf.get(p.parentId)!, source: 'productType', fromParent: true }
+      out[p.id] = { ...out[p.parentId], fromParent: true }
     } else {
       out[p.id] = { ...EMPTY }
     }
   }
   for (const [id, conflicts] of disagreements) out[id] = { ...out[id], otherMarketConflicts: conflicts }
+  // Only what was asked for: a parent resolved for its variations' sake is not an answer the caller requested.
+  for (const parent of extraParents) if (!productIds.includes(parent.id)) delete out[parent.id]
 
   for (const id of productIds) if (!out[id]) out[id] = { ...EMPTY }
   return out

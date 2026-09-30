@@ -56,7 +56,10 @@ export function withStoredValue<T extends { value: string; label: unknown }>(opt
   return stored && !options.some((o) => o.value === stored) ? [{ value: stored, label: stored, trailing: note }, ...options] : options
 }
 
-/** The printable key that opened the editor by typing (AG's `eventKey`), or `''` for Enter, F2 and double-click. */
+/**
+ * The printable key that opened the editor by typing (AG's `eventKey`), or `''` for Enter, F2, double-click and Space. A
+ * space would start a search that highlights row 1, so Space then Enter replaced the stored value (code review 2026-09-30).
+ */
 export function typedStart(eventKey: string | null | undefined): string {
-  return eventKey?.length === 1 ? eventKey : ''
+  return eventKey?.length === 1 && eventKey.trim() !== '' ? eventKey : ''
 }
