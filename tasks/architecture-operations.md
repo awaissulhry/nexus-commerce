@@ -88,6 +88,11 @@ Both push and manual dispatch follow this dependency. Railway then builds, execu
 `npm run db:migrate:deploy` as pre-deploy, starts the API, and waits for the readiness
 endpoint and expected build SHA. Ordinary restart/replica scale-up does not migrate.
 
+A push ships only the services whose files differ from the commit each one runs now
+(read from its latest successful Railway deployment, `scripts/ci/release-changes.sh`).
+CI-only and docs-only pushes start no deploy. A hand run (`gh workflow run
+deploy-api.yml`) ships every service.
+
 Disable/restrict any parallel native Railway autodeploy path before relying on the
 GitHub gate. Verify branch protection separately; local YAML cannot establish it.
 The history check has 10-second connection and 30-second query deadlines. The Prisma
