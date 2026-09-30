@@ -17,6 +17,7 @@ import { columnLanguages } from '../languages';
 import { ShopifySheetReview } from '../../shopify/ShopifySheetReview';
 import { recoverSheetRow } from '../sheetRecovery';
 import { runBulkOperation, type BulkSend } from '../bulkOperation';
+import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo } from '../useSheetUndo';
 import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
@@ -358,6 +359,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return Promise.all(requests.map(request => recoverSheetRow(page, request, { channel, market: marketplace, accountId, locale })));
         };
         writerRef.current = new SheetWriter<ChannelSheetRow>({
+            mergeRow: preserveContentVersions,
             tracker,
             getApi: getGridApi,
             commit: (req: SheetWriteRequest<ChannelSheetRow>) => commitOne(req),

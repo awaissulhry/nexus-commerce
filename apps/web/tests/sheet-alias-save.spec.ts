@@ -1,7 +1,7 @@
 /**
  * Local browser proof for shared product tokens across listing aliases. Supply a synthetic two-alias family through
  * E2E_ALIAS_FIXTURE (JSON: family, child, alias, account), E2E_AUTH_STATE, and PLAYWRIGHT_BASE_URL. Both aliases need a
- * German translation and eBay DE drafts. This changes only that family's shared German title, and leaves it saved.
+ * German translation and eBay DE drafts. This changes only that family's shared and pinned German titles.
  * The caller owns seeding and cleanup; no production URL or live channel is allowed.
  */
 import { readFileSync } from 'node:fs'
@@ -148,4 +148,82 @@ test.describe('an immediate shared save through a sibling alias', () => {
     await expect(await titleCell(page, primary)).toContainText(final)
     await expect(await titleCell(page, alias)).toContainText(final)
   })
+  for (const width of [1680, 390]) for (const colorScheme of ['light', 'dark'] as const) {
+    test(`${colorScheme}, ${width}px: an older sheet read keeps the next pin save writable`, async ({ page }, info) => {
+      if (!local(base)) throw new Error('This test may only use a local web app and local API.')
+      if (![fixture!.family, fixture!.child, fixture!.alias].every(id => id.startsWith('e2e_'))) throw new Error('Use a synthetic e2e_ fixture only.')
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
+      await page.emulateMedia({ colorScheme })
+      await page.addInitScript(theme => { localStorage.setItem('nexus:theme', theme) }, colorScheme)
+      let snapshot: string | null = null, capture = false, replay = false, replays = 0
+      await page.route('**/*', async route => {
+        const url = route.request().url()
+        if (!local(url)) return route.abort()
+        if (url.includes('/studio/sheet?')) {
+          if (replay && snapshot) {
+            replay = false; replays++
+            return route.fulfill({ status: 200, contentType: 'application/json', body: snapshot })
+          }
+          if (capture) {
+            capture = false
+            const response = await route.fetch()
+            expect(response.ok()).toBe(true)
+            snapshot = await response.text()
+            return route.fulfill({ response, body: snapshot })
+          }
+        }
+        return route.continue()
+      })
+      await page.goto(`/w/${process.env.E2E_WORKSPACE_ID ?? LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=EBAY&market=DE&account=${fixture!.account}&locale=de`)
+      const rowId = `primary:${fixture!.child}`
+      await expect(page.locator(`.ag-row[row-id="${rowId}"]`)).toBeVisible({ timeout: 90_000 })
+      await expect.poll(() => page.locator('html').evaluate(el => el.classList.contains('dark'))).toBe(colorScheme === 'dark')
+      let writes = 0
+      page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/products/bulk-save')) writes++ })
+      const edit = async (value: string) => {
+        await titleCell(page, rowId)
+        await page.keyboard.press('Enter')
+        const input = page.locator('.ag-cell-inline-editing input, .ag-popup-editor textarea, .ag-popup-editor input').first()
+        await expect(input).toBeVisible()
+        await input.fill(value)
+        const before = writes
+        const pending = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/products/bulk-save'))
+        await page.keyboard.press('Enter')
+        const pin = page.getByRole('button', { name: 'Pin on eBay · DE · de', exact: true })
+        await expect.poll(async () => writes > before || await pin.isVisible()).toBe(true)
+        if (writes === before) await pin.click()
+        const response = await pending, body = await response.json()
+        expect(response.status()).toBe(200)
+        expect(body).toMatchObject({ saved: 1, failed: 0, units: [{ status: 200, body: { errors: [] } }] })
+        await expect(page.locator('.nds-cell-is-saving')).toHaveCount(0)
+        await expect(await titleCell(page, rowId)).toContainText(value)
+        return { request: response.request().postDataJSON(), body }
+      }
+      const refresh = async () => {
+        await page.keyboard.press('Escape')
+        await page.getByRole('button', { name: 'More', exact: true }).click()
+        await page.getByRole('menuitem', { name: /^Refresh progress/ }).click()
+      }
+      const old = `Pin before read ${width} ${colorScheme} ${Date.now()}`
+      await edit(old)
+      capture = true
+      await refresh()
+      await expect.poll(() => snapshot !== null).toBe(true)
+      const confirmed = await edit(`Pin confirmed ${width} ${colorScheme} ${Date.now()}`)
+      replay = true
+      await refresh()
+      await expect.poll(() => replays).toBe(1)
+      // Fault injection is limited to one old read. All saves and the final read use the local API.
+      await expect(await titleCell(page, rowId)).toContainText(old)
+      const final = `Pin after old read ${width} ${colorScheme} ${Date.now()}`
+      const next = await edit(final)
+      expect(next.request.units[0].expectedVersion).toBe(confirmed.body.units[0].body.currentVersion)
+      expect(next.request.units[0].changes[0].contentVersion).toBe(confirmed.body.units[0].body.contentVersions[0].version)
+      await page.screenshot({ path: info.outputPath('saved-after-old-read.png'), fullPage: true })
+      await page.reload()
+      await expect(await titleCell(page, rowId)).toContainText(final)
+    })
+  }
+
+
 })

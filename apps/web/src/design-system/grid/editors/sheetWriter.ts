@@ -457,6 +457,8 @@ export interface SheetWriteResult {
 
 export interface SheetWriterOptions<T> {
   tracker: CellSaveTracker
+  /** Keep host-owned write metadata when a read or an edit supplies a replacement row. */
+  mergeRow?: (previous: T | undefined, incoming: T, knownVersion: number | undefined) => T
   /** Send one row's batch. Never throws for a refusal. */
   commit: (req: SheetWriteRequest<T>) => Promise<SheetWriteResult>
   /** The live grid, for repainting cells. May return null before the grid is ready. */
@@ -621,8 +623,8 @@ export class SheetWriter<T> {
       // Guarding only "a write is in flight" is not enough: the damaging order is the refetch
       // resolving AFTER the save completes, when nothing is in flight at all.
       const known = this.versions.get(r.id)
+      if (r.row !== undefined) this.rememberRow(r.id, r.row)
       if (typeof r.version === 'number' && (known === undefined || r.version > known)) this.versions.set(r.id, r.version)
-      if (r.row !== undefined) this.rows.set(r.id, r.row)
     }
   }
 
@@ -631,13 +633,17 @@ export class SheetWriter<T> {
     return this.versions.get(rowId)
   }
 
+  private rememberRow(rowId: string, row: T): void {
+    this.rows.set(rowId, this.opts.mergeRow ? this.opts.mergeRow(this.rows.get(rowId) ?? undefined, row, this.versions.get(rowId)) : row)
+  }
+
   /**
    * Queue one cell. Paints it `saving` immediately, so a burst of 100 pasted cells reads as work in
    * progress from the first frame rather than after the first response.
    */
   set(rowId: string, colId: string, value: unknown, opts: { row?: T; intent?: SheetWriteIntent } = {}): void {
     if (this.destroyed) return
-    if (opts.row !== undefined) this.rows.set(rowId, opts.row)
+    if (opts.row !== undefined) this.rememberRow(rowId, opts.row)
     const q = this.queues.get(rowId) ?? { cells: new Map<string, { value: unknown; intent: SheetWriteIntent }>(), timer: null, inFlight: false }
     // The LAST edit to a cell inside the window wins — its intent along with its value, so a
     // reset following a set is a reset and not a set carrying a stale null.
