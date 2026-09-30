@@ -253,3 +253,36 @@ describe('the family order the publisher sends in', () => {
     expect(supplier?.sku).toBe(published[1])
   })
 })
+
+// Audit A24 — an eBay family listing takes its title, description, category, condition, policies and location from the
+// parent row (`buildSharedListingInput`, `src = parentRow`); a variation sends only its SKU, price, quantity, variation
+// specifics and EAN. A variation's own value of a listing field is never sent, so it is not judged.
+describe('eBay family: a variation\'s listing fields are not sent and not judged', () => {
+  const fields = [
+    { fieldKey: 'title', sheetKey: 'name', label: 'Title', channelStore: { kind: 'listingColumn', column: 'title' } },
+    { fieldKey: 'categoryId', sheetKey: 'categoryId', label: 'Category', channelStore: { kind: 'platformAttributes', path: ['categoryId'] } },
+    { fieldKey: 'price', sheetKey: 'price', label: 'Price', channelStore: { kind: 'listingColumn', column: 'price' } },
+  ]
+  const long = { rule: 'length', message: 'Title exceeds 80 characters (92).' }
+  const cell = (value: unknown, findings: Array<{ rule: string; message: string }> = []) => ({ label: 'x', value, errors: findings.map(f => f.message), findings })
+  const run = async (cells: Record<string, Record<string, unknown>>) => {
+    m.languages.mockResolvedValue(['it'])
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: cells[productId] ?? {} })),
+      missingProductIds: [], catalogue: { fields } }))
+    return (await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues
+  }
+  it('a 92-character variation title does not block when the parent\'s 11-character title is what eBay receives', async () => {
+    const issues = await run({ parent: { title: cell('Giacca GALE') }, child: { title: cell('x'.repeat(92), [long]), categoryId: cell(null, [{ rule: 'required', message: "Field 'Category' is required." }]) } })
+    expect(issues.filter(i => i.field === 'title' || i.field === 'categoryId')).toEqual([])
+  })
+  it('POSITIVE CONTROL — the parent\'s own over-long title blocks; a variation\'s price problem still blocks (a variation sends its price)', async () => {
+    const issues = await run({ parent: { title: cell('x'.repeat(92), [long]) }, child: { price: cell(null, [{ rule: 'required', message: "Field 'Price' is required." }]) } })
+    expect(issues.filter(i => i.severity === 'error').map(i => [i.productId, i.field])).toEqual([['parent', 'title'], ['child', 'price']])
+  })
+  it('a single product keeps every field judged', async () => {
+    m.products.mockResolvedValue([{ id: 'parent', sku: 'PARENT', isParent: false }])
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }])
+    const issues = await run({ parent: { title: cell('x'.repeat(92), [long]) } })
+    expect(issues.filter(i => i.field === 'title').map(i => i.severity)).toEqual(['error'])
+  })
+})

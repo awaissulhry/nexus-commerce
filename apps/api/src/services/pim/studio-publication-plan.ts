@@ -83,11 +83,15 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
       valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value }) : []
     const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])
     const reporterOf = (field: string) => levels.find(level => level.field.key === field)?.supplier.productId ?? parent.id
+    const storeOf = new Map((result.catalogue?.fields ?? []).map(f => [f.fieldKey, f.channelStore as ListingLevelField['store']]))
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
       if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
       // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
       if (listingLevelKeys.has(field) && row.productId !== reporterOf(field)) continue
+      // Audit A24 — nor is a variation's own title, description, category, condition, policy or location: the family
+      // listing takes them from the parent row (`buildSharedListingInput`). A variation sends its price, quantity and specifics.
+      if (ebayAxes && row.productId !== parent.id && !ebayVariationSends(field, storeOf.get(field))) continue
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
       for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
@@ -120,6 +124,16 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     excluded: products.length - selected.length, aliasLabel: alias?.label ?? 'Primary listing' }
 }
 export type PublicationFacts = Awaited<ReturnType<typeof readPublicationFacts>>
+
+/**
+ * What an eBay variation sends of its own (`buildSharedListingInput`'s TradingVariation: SKU, price, quantity, specifics,
+ * EAN). A field the catalogue does not describe is judged, as before.
+ */
+function ebayVariationSends(field: string, store: ListingLevelField['store'] | undefined): boolean {
+  if (!store) return true
+  if (store.kind === 'platformAttributes') return store.path?.[0] === 'itemSpecifics'
+  return ['price', 'quantity'].includes(field)
+}
 
 /** The eBay catalogue fields as listing-level candidates (key, label, store, the names they go by). */
 function ebayFields(fields: ReadonlyArray<{ fieldKey: string; sheetKey?: string; label: string; channelStore?: unknown }> | undefined): ListingLevelField[] {
