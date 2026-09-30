@@ -13,6 +13,7 @@ import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { isBlankValue } from './sheet-values.js'
 import { familyPublicationOrder } from './family-publication-order.js'
+import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
 
 type Store = { kind: string; path?: string[] } | null | undefined
 
@@ -104,6 +105,15 @@ export function listingLevelWarning(label: string, value: unknown, fromSku: stri
   const more = differing.length > 10 ? ` and ${differing.length - 10} more` : ''
   return `${label}: eBay takes one value for the whole listing and will get ${shown(value)} (from ${fromSku}). `
     + `${differing.length} ${differing.length === 1 ? 'row holds' : 'rows hold'} another value that is not sent: ${named}${more}.`
+}
+
+/**
+ * eBay refuses an item specific value over 65 characters (21919308). The one sentence the publish review blocks with
+ * and the save warns with, for a stored specific no category column serves (audit A29). Null when every value fits.
+ */
+export function ebayAspectLengthProblem(label: string, value: unknown): string | null {
+  const long = ebayAspectValues(value).find(entry => entry.length > EBAY_ASPECT_VALUE_MAX)
+  return long ? `${label}: eBay takes at most ${EBAY_ASPECT_VALUE_MAX} characters per value; ${JSON.stringify(long.slice(0, 40) + '…')} has ${long.length}.` : null
 }
 
 interface SheetCellLike {

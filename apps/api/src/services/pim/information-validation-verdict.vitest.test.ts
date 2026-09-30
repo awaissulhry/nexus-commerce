@@ -78,3 +78,17 @@ it('a cell this save CLEARED answers the channel\'s requirement as a warning (st
   // Only the cleared cell speaks; an empty cell this save did not touch stays out of its answer.
   expect(out.warnings).toEqual([{ id: 'p', field: 'attr_conditionId', warning: "CONDITIONID: Field 'Condition' is required." }])
 })
+
+// Audit A29 — an "Other item specifics" column (a stored specific no category column serves) has no resolved cell, yet
+// it is sent: the save warns over eBay's 65 characters with the publish review's own sentence.
+it('an Other item specific over 65 characters is stored with the publish review\'s warning; 65 or fewer says nothing', async () => {
+  const empty = { products: [{ productId: 'p', cells: {} }] }
+  m.resolve.mockResolvedValue(empty)
+  const column = { key: 'other_specific_team_name', label: 'Team name', channels: { 'eBay · IT': { key: 'other_specific_team_name', store: { kind: 'platformAttributes', path: ['itemSpecifics', 'Team name'] } } } }
+  const columns = new Map([['p', new Map([['other_specific_team_name', column as never]])]])
+  const save = (value: unknown) => informationChangeErrors({ channel: 'EBAY', marketplace: 'IT', changes: [{ id: 'p', field: 'attr_other_specific_team_name', value }], listings: [], columns })
+  const long = await save('T'.repeat(70))
+  expect(long.errors).toEqual([])
+  expect(long.warnings).toEqual([{ id: 'p', field: 'attr_other_specific_team_name', warning: `Team name: eBay takes at most 65 characters per value; "${'T'.repeat(40)}…" has 70.` }])
+  expect((await save('T'.repeat(65))).warnings).toEqual([])
+})

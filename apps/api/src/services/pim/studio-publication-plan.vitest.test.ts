@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn() }))
+const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn(), exclusions: vi.fn() }))
 vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: m.closed }))
 vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) } } }))
 vi.mock('./workspace-destination.js', () => ({ resolveWorkspaceDestination: m.destination, WorkspaceScopeError: class extends Error { constructor(message: string, public statusCode = 409) { super(message) } } }))
@@ -7,6 +7,8 @@ vi.mock('../connection-resolver.service.js', () => ({ resolveConnection: async (
 vi.mock('./variation-excluded.js', () => ({ readExcludedListingIds: m.excluded }))
 vi.mock('./mapping/resolve-batch.service.js', () => ({ resolveBatch: m.resolve }))
 vi.mock('./market-languages.js', () => ({ marketLanguages: m.languages }))
+// Audit A30 — the active eBay mapping's exclusions, per category.
+vi.mock('../channel-mapping/push.js', async (importOriginal) => ({ ...(await importOriginal<object>()), pushExclusionsCache: () => m.exclusions }))
 // A-32 — the primary content language is pinned here, whatever a local .env says.
 vi.mock('./content-locale.js', async (importOriginal) => ({ ...(await importOriginal<object>()), PRIMARY_CONTENT_LOCALE: 'it' }))
 vi.mock('./publish-review-gate.js', () => ({ resolvePublishContent: async () => [], publishContentIssues: () => [], requireReviewedContent: () => false }))
@@ -16,6 +18,7 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b', li
 beforeEach(() => {
   vi.clearAllMocks(); m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: 'summer' })
   m.closed.mockResolvedValue(new Set())
+  m.exclusions.mockResolvedValue({ fieldKeys: new Set(), sentKeys: new Set(), specifics: new Set() })
   m.languages.mockResolvedValue(['it', 'en'])
   m.products.mockResolvedValue([{ id: 'child', sku: 'CHILD', parentId: 'parent' }, { id: 'excluded', sku: 'EXCLUDED', parentId: 'parent' }, { id: 'parent', sku: 'PARENT', isParent: true }])
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
@@ -284,5 +287,38 @@ describe('eBay family: a variation\'s listing fields are not sent and not judged
     m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }])
     const issues = await run({ parent: { title: cell('x'.repeat(92), [long]) } })
     expect(issues.filter(i => i.field === 'title').map(i => i.severity)).toEqual(['error'])
+  })
+})
+
+// Audit A29 — a single-product eBay listing sends its stored specifics too (`buildEbayListingInput` starts from the bag),
+// so a value over eBay's 65 characters blocks there as it does on a family.
+// Audit A30 — an item specific the active eBay mapping excludes is never sent, so the review does not judge it.
+describe('eBay stored and excluded item specifics in the publish review', () => {
+  const store = (name: string) => ({ kind: 'platformAttributes', path: ['itemSpecifics', name] })
+  const fields = [{ fieldKey: 'caratteristiche', sheetKey: 'caratteristiche', label: 'Caratteristiche', channelStore: store('Caratteristiche') }]
+  const long = { rule: 'length', message: 'Caratteristiche exceeds 65 characters (90).' }
+  const single = (itemSpecifics: Record<string, unknown>, cells: Record<string, unknown> = {}) => {
+    m.products.mockResolvedValue([{ id: 'parent', sku: 'SOLO', isParent: false }])
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', platformAttributes: { itemSpecifics } }])
+    m.languages.mockResolvedValue(['it'])
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: 'SOLO', cells, category: { channelCategoryId: '177104' } })),
+      missingProductIds: [], catalogue: { fields } }))
+  }
+  it('A29: a single product\'s "Team name" of 70 characters blocks, with eBay\'s rule', async () => {
+    single({ 'Team name': 'T'.repeat(70) })
+    const issues = (await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues
+    expect(issues).toEqual([expect.objectContaining({ productId: 'parent', field: 'itemSpecifics.Team name', severity: 'error', message: expect.stringContaining('eBay takes at most 65 characters per value') })])
+  })
+  it('A30: an excluded item specific is not judged — neither its column nor a stored one', async () => {
+    m.exclusions.mockResolvedValue({ fieldKeys: new Set(), sentKeys: new Set(), specifics: new Set(['caratteristiche', 'team name']) })
+    single({ 'Team name': 'T'.repeat(70) }, { caratteristiche: { label: 'Caratteristiche', value: 'x'.repeat(90), errors: [long.message], findings: [long] } })
+    const issues = (await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues
+    expect(issues).toEqual([])
+    expect(m.exclusions).toHaveBeenCalledWith('EBAY', 'IT', '177104')
+  })
+  it('POSITIVE CONTROL — with nothing excluded, the same column value blocks', async () => {
+    single({}, { caratteristiche: { label: 'Caratteristiche', value: 'x'.repeat(90), errors: [long.message], findings: [long] } })
+    const issues = (await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues
+    expect(issues).toEqual([expect.objectContaining({ field: 'caratteristiche', severity: 'error' })])
   })
 })

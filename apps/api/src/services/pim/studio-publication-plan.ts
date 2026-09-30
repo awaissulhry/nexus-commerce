@@ -12,9 +12,9 @@ import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
 import { familyPublicationOrder } from './family-publication-order.js'
-import { ebayListingLevelValues, isEbayListingLevel, listingLevelWarning, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
+import { ebayAspectLengthProblem, ebayListingLevelValues, isEbayListingLevel, listingLevelWarning, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
-import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
+import { foldName, pushExclusionsCache } from '../channel-mapping/push.js'
 
 // JSONB can return object keys in a different order from the preview request.
 // Preserve semantic array order and JSON/toJSON values while hashing objects canonically.
@@ -75,6 +75,12 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     ? await loadEbayListingAxes({ parentId: parent.id, market: scope.marketplace, accountId: scope.accountId, aliasKey: destination.aliasKey ?? '', familyAxes: parent.variationAxes })
     : null
   const familyRows = included.map(p => ({ productId: p.id, sku: p.sku, isParent: p.id === parent.id }))
+  // Audit A30 — the item specifics the ACTIVE eBay mapping excludes are never sent (`buildEbayListingInput`): not judged.
+  const exclusionsFor = pushExclusionsCache()
+  const excludedSpecifics = async (category: string | null | undefined) => {
+    if (scope.channel !== 'EBAY' || !category) return { fieldKeys: new Set<string>(), specifics: new Set<string>() }
+    return exclusionsFor('EBAY', scope.marketplace, category)
+  }
   const resolved = []
   for (const locale of languages) {
     const result = await resolveBatch({ channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
@@ -84,7 +90,9 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])
     const reporterOf = (field: string) => levels.find(level => level.field.key === field)?.supplier.productId ?? parent.id
     const storeOf = new Map((result.catalogue?.fields ?? []).map(f => [f.fieldKey, f.channelStore as ListingLevelField['store']]))
-    for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
+    for (const row of result.products) {
+      const excluded = await excludedSpecifics(row.category?.channelCategoryId)
+      for (const [field, cell] of Object.entries(row.cells)) {
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
       if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
       // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
@@ -92,9 +100,13 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
       // Audit A24 — nor is a variation's own title, description, category, condition, policy or location: the family
       // listing takes them from the parent row (`buildSharedListingInput`). A variation sends its price, quantity and specifics.
       if (ebayAxes && row.productId !== parent.id && !ebayVariationSends(field, storeOf.get(field))) continue
+      const store = storeOf.get(field)
+      if (excluded.fieldKeys.has(field) && store?.path?.[0] === 'itemSpecifics') continue
+      if (store?.kind === 'platformAttributes' && store.path?.[0] === 'itemSpecifics' && store.path[1] && excluded.specifics.has(foldName(store.path[1]))) continue
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
       for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
+      }
     }
     if (result.missingProductIds.length) error('Some products could not be read. Refresh the product before publishing.')
     if (!resolved.length) for (const level of levels.filter(level => level.differing.length)) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field: level.field.key,
@@ -102,7 +114,12 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     resolved.push(result)
   }
   if (!languages.length) error('Configure a content language for this destination before publishing.')
-  if (ebayAxes && resolved[0]) issues.push(...ebayStoredSpecificIssues({ parentId: parent.id, rows: familyRows, listings, fields: ebayFields(resolved[0].catalogue?.fields), axes: ebayAxes }))
+  // Audit A29 — a single product's stored specifics ship too: the 65-character block is the same for it.
+  if (scope.channel === 'EBAY' && resolved[0] && (ebayAxes || included.length === 1)) {
+    const excluded = await excludedSpecifics(resolved[0].products.find(p => p.productId === parent.id)?.category?.channelCategoryId)
+    issues.push(...ebayStoredSpecificIssues({ parentId: parent.id, rows: familyRows, listings, fields: ebayFields(resolved[0].catalogue?.fields),
+      axes: ebayAxes ?? new Set(), excluded: excluded.specifics }))
+  }
   for (const product of included) {
     const listing = listings.find(l => l.productId === product.id)
     const content = await resolvePublishContent({ product: product as any, parent: product.id === parent.id ? null : parent as any,
@@ -151,6 +168,8 @@ export function ebayStoredSpecificIssues(input: {
   listings: Array<{ productId: string; platformAttributes?: unknown }>
   fields: ListingLevelField[]
   axes: Set<string>
+  /** Folded names the active mapping excludes from sending (`foldName`). */
+  excluded?: Set<string>
 }): StudioPublishIssue[] {
   const issues: StudioPublishIssue[] = []
   const covered = new Set(input.fields.flatMap(f => f.store?.kind === 'platformAttributes' && f.store.path?.[0] === 'itemSpecifics' && f.store.path[1] ? [aspectCanonicalName(f.store.path[1])] : []))
@@ -161,7 +180,7 @@ export function ebayStoredSpecificIssues(input: {
   const names = new Map<string, string>()
   for (const row of input.rows) for (const name of Object.keys(bagOf(row.productId))) {
     const key = aspectCanonicalName(name)
-    if (key && key !== 'condizione' && !covered.has(key) && !names.has(key)) names.set(key, name)
+    if (key && key !== 'condizione' && !covered.has(key) && !names.has(key) && !input.excluded?.has(foldName(name))) names.set(key, name)
   }
   const fields: ListingLevelField[] = [...names].map(([key, name]) => ({ key, label: name, store: { kind: 'platformAttributes', path: ['itemSpecifics', name] } }))
   const levels = ebayListingLevelValues({ rows: input.rows, fields, axes: input.axes,
@@ -170,9 +189,8 @@ export function ebayStoredSpecificIssues(input: {
     const field = `itemSpecifics.${level.field.label}`
     if (level.differing.length) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field, severity: 'warning',
       message: listingLevelWarning(level.field.label, level.value, level.supplier.sku, level.differing) })
-    const long = ebayAspectValues(level.value).find(value => value.length > EBAY_ASPECT_VALUE_MAX)
-    if (long) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field, severity: 'error',
-      message: `${level.field.label}: eBay takes at most ${EBAY_ASPECT_VALUE_MAX} characters per value; ${JSON.stringify(long.slice(0, 40) + '…')} has ${long.length}.` })
+    const long = ebayAspectLengthProblem(level.field.label, level.value)
+    if (long) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field, severity: 'error', message: long })
   }
   return issues
 }

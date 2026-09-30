@@ -5,6 +5,8 @@ import { readListValue } from './sheet-values.js'
 import { storedChannelState } from './channel-value-mutation.js'
 import type { SheetColumn } from './sheet-columns.service.js'
 import { cellFindings, editVerdict } from './value-verdict.js'
+import { OTHER_SPECIFIC_PREFIX } from './channel-specs/ebay-other-specifics.js'
+import { ebayAspectLengthProblem } from './ebay-listing-level.js'
 
 type Change = { id: string; field: string; value: unknown; reset?: boolean; slot?: number; target?: string }
 /**
@@ -25,6 +27,7 @@ export async function informationChangeErrors(input: {
   const editedKeys = new Map<string, Set<string>>()
   /** Every key each change edits (its field, its column, the channel's own key), so a cell names the change that wrote it. */
   const changeKeys: Array<{ change: Change; keys: Set<string> }> = []
+  const otherSpecificWarnings: Array<{ id: string; field: string; warning: string }> = []
   for (const change of input.changes) {
     const key = change.field.replace(/^attr_/, '').replace(/^(amazon|ebay)_/, '').replace(/^name$/, 'title')
     const col = input.columns.get(change.id)?.get(key) ?? input.columns.get(change.id)?.get(key === 'title' ? 'name' : key)
@@ -44,11 +47,15 @@ export async function informationChangeErrors(input: {
     patches[change.id] = { ...listing, ...channelValuePatch(listing, target, channelOverrideKeys(change.field), change.reset ? 'INHERIT' : 'SET', value) }
     const own = new Set<string>([key, ...(col ? [col.key, Object.values(col.channels ?? {})[0]?.key].filter((k): k is string => !!k) : [])])
     changeKeys.push({ change, keys: own })
+    // Audit A29 — a stored item specific no category column serves ("Other item specifics") has no resolved cell below;
+    // it is still sent, so the save warns in publish's words when a value is over eBay's 65 characters.
+    const problem = col?.key.startsWith(OTHER_SPECIFIC_PREFIX) && !change.reset ? ebayAspectLengthProblem(col.label, value) : null
+    if (problem) otherSpecificWarnings.push({ id: change.id, field: change.field, warning: problem })
     editedKeys.set(change.id, new Set([...(editedKeys.get(change.id) ?? []), ...own]))
   }
   const after = await resolveBatch({ ...coordinate, listingChangesByProduct: patches })
   const errors: Array<{ id: string; field: string; error: string }> = []
-  const warnings: Array<{ id: string; field: string; warning: string }> = []
+  const warnings: Array<{ id: string; field: string; warning: string }> = [...otherSpecificWarnings]
   for (const product of after.products) {
     const changes = input.changes.filter(c => c.id === product.productId)
     // Category changes preserve old values; the newly applicable errors appear on reload.
