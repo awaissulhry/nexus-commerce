@@ -87,6 +87,12 @@ describe('workspace destination isolation', () => {
 })
 
 describe('the same destination reaches observations', () => {
+  it('retirement can name a deleted family without weakening default or alias scope checks', async () => {
+    fixture.data.product[0].deletedAt = new Date()
+    await expect(resolveWorkspaceDestination(input)).rejects.toThrow('unavailable')
+    expect(await resolveWorkspaceDestination({ ...input, listingId: 'b-alt' }, { includeDeleted: true })).toMatchObject({ familyId: 'p', accountId: 'b', aliasKey: 'alt' })
+    await expect(resolveWorkspaceDestination({ ...input, listingId: 'a-primary' }, { includeDeleted: true })).rejects.toThrow('does not belong')
+  })
   it('filters account and listing events before paging; unscoped and other-account events stay out', async () => {
     const event = (id: string, accountId?: string, aliasKey = '') => ({ id, aggregateType: 'Product', aggregateId: 'p', metadata: { channel: 'EBAY', marketplace: 'IT', accountId, aliasKey }, data: { fields: [{ field: 'title', value: id }] } })
     fixture.data.productEvent = [event('foreign', 'a'), event('unknown'), event('primary', 'b'), event('selected', 'b', 'alt'), { id: 'listing-event', aggregateType: 'ChannelListing', aggregateId: 'b-alt', metadata: { channel: 'EBAY', marketplace: 'IT', accountId: 'b', aliasKey: 'alt' } }, { id: 'old-owner', aggregateType: 'ChannelListing', aggregateId: 'b-alt', metadata: { channel: 'EBAY', marketplace: 'IT', accountId: 'a', aliasKey: 'alt' } }]

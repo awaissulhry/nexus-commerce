@@ -61,10 +61,10 @@ export const PUBLISH_KEY = '_nexusContentPublish'
 export const object = (v: unknown): Record<string, any> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, any> : {}
 // A never-saved document is `undefined`, which JSON cannot spell; it hashes as null so a first open does not throw.
 export const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v ?? null)).digest('hex')
-export type ContentScope = { accountId?: string; listingId?: string; market?: string }
+export type ContentScope = { accountId?: string; listingId?: string; market?: string; aliasKey?: string }
 
-export async function contentDestination(productId: string, scope: ContentScope) {
-  const destination = await resolveWorkspaceDestination({ productId, accountId: scope.accountId, listingId: scope.listingId, channel: 'SHOPIFY', marketplace: scope.market ?? 'GLOBAL' })
+export async function contentDestination(productId: string, scope: ContentScope, includeDeleted = false) {
+  const destination = await resolveWorkspaceDestination({ productId, accountId: scope.accountId, listingId: scope.listingId, aliasKey: scope.aliasKey, channel: 'SHOPIFY', marketplace: scope.market ?? 'GLOBAL' }, { includeDeleted })
   // Child editor routes deliberately resolve to one family document.
   return destination
 }

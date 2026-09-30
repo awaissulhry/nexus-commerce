@@ -4,6 +4,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { logger } from '../utils/logger.js'
 import { AUTOMATION_KEY } from '../services/shopify/linked-products.service.js'
 import { runLinkedAutomation } from '../services/shopify/linked-automation.service.js'
+import { processColourSyncs, queueColourChecks } from '../workers/shopify-colour-sync.worker.js'
 
 let scheduled: ReturnType<typeof cron.schedule> | null = null
 let running = false
@@ -14,7 +15,7 @@ export async function runShopifyLinkedAutomationCron() {
     await recordCronRun('shopify-linked-automation', async () => {
       let after: string | undefined, checked = 0, errors = 0
       do {
-        const rows = await prisma.channelListing.findMany({ where: { channel: 'SHOPIFY', marketplace: 'GLOBAL', aliasKey: '', channelConnectionId: { not: null }, product: { deletedAt: null },
+        const rows = await prisma.channelListing.findMany({ where: { channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: { not: null }, product: { deletedAt: null },
           OR: ['MONITOR', 'AUTOMATIC'].map(mode => ({ platformAttributes: { path: [AUTOMATION_KEY, 'mode'], equals: mode } })) },
           select: { id: true, productId: true, channelConnectionId: true }, orderBy: { id: 'asc' }, take: 25, ...(after ? { cursor: { id: after }, skip: 1 } : {}) })
         for (const row of rows) {
@@ -23,7 +24,9 @@ export async function runShopifyLinkedAutomationCron() {
         }
         after = rows.length === 25 ? rows[rows.length - 1].id : undefined
       } while (after)
-      return `checked=${checked} errors=${errors}`
+      const colourGroups = await queueColourChecks()
+      const colours = await processColourSyncs()
+      return `checked=${checked} errors=${errors} colourGroups=${colourGroups} colourDone=${colours.done} colourFailed=${colours.failed}`
     })
   } catch (error) { logger.error('Shopify family automation check failed', { error: error instanceof Error ? error.message : String(error) }) }
   finally { running = false }
