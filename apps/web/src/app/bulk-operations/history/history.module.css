@@ -1,0 +1,341 @@
+/*
+ * Bulk-operations job history — layout and domain content only. Every control is a design-system component
+ * (FilterChip, PressableRow, Pill, Button, Banner, Drawer); nothing here restyles one.
+ *
+ * Phone first: at 390 px the old card squeezed the name to "ve…", pushed the meta line off the right edge and
+ * held a six-column table. Now a job's name wraps, its tags and meta wrap onto their own lines, and an item is
+ * a stacked block that becomes a four-column row from 720 px.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  /* Plain text otherwise shows at the browser's 16 px. */
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.job {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.skeletonJob {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.leading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-3);
+}
+
+.jobName {
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.tags,
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.meta {
+  color: var(--nds-text-2);
+}
+
+.processed {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-success-text);
+}
+
+.failed {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+
+.skipped {
+  color: var(--nds-warning-text);
+}
+
+.jobError {
+  flex-basis: 100%;
+  color: var(--nds-danger-text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The status glyph's colour, from its tone. */
+.success { color: var(--nds-success-text); }
+.warning { color: var(--nds-warning-text); }
+.danger { color: var(--nds-danger-text); }
+.info { color: var(--nds-info-text); }
+.neutral { color: var(--nds-text-3); }
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+}
+
+/* ── One job's items ─────────────────────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  min-width: 0;
+}
+
+.panelBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.panelActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.none {
+  margin: 0;
+  padding: var(--nds-space-16) 0;
+  text-align: center;
+  color: var(--nds-text-2);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.item:first-child {
+  border-top: 0;
+}
+
+/* A column header only where the items are laid out as columns. */
+.itemsHead {
+  display: none;
+}
+
+.itemTarget {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-2) var(--nds-space-8);
+  min-width: 0;
+}
+
+.sku {
+  font-family: var(--nds-font-mono);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.subtle {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.errorText {
+  color: var(--nds-danger-text);
+  overflow-wrap: anywhere;
+}
+
+.diffs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: 0;
+}
+
+.diff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-2) var(--nds-space-6);
+  min-width: 0;
+}
+
+.diff dt {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+
+.diff dt::after {
+  content: ':';
+}
+
+.diff dd {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin: 0;
+  min-width: 0;
+}
+
+.before {
+  font-family: var(--nds-font-mono);
+  color: var(--nds-text-2);
+  text-decoration: line-through;
+  overflow-wrap: anywhere;
+}
+
+.after {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.arrow {
+  flex: none;
+  color: var(--nds-text-3);
+}
+
+.itemMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 720px) {
+  .itemsHead,
+  .item {
+    grid-template-columns: 120px minmax(0, 1fr) minmax(0, 2fr) 170px;
+    column-gap: var(--nds-space-12);
+    align-items: start;
+  }
+
+  .itemsHead {
+    display: grid;
+    padding: 0 var(--nds-space-12);
+    color: var(--nds-text-2);
+    font-size: var(--nds-font-size-sm);
+    font-weight: var(--nds-font-weight-medium);
+  }
+
+  .itemMeta {
+    justify-content: flex-end;
+  }
+}
+
+/* ── The item drawer ────────────────────────────────────────────────────────────── */
+
+.drawerBody {
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.states {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+@media (min-width: 720px) {
+  .states {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stateHead {
+  margin: 0 0 var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.code,
+.pre {
+  margin: 0;
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.code {
+  max-height: 60vh;
+  overflow: auto;
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+}

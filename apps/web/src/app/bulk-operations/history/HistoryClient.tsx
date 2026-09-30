@@ -6,6 +6,7 @@ import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle,
   ArrowRight,
+  Ban,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -14,20 +15,17 @@ import {
   Loader2,
   RefreshCw,
   RotateCw,
-  XCircle,
   SkipForward,
-  Ban,
+  XCircle,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/Badge'
-import { EmptyState } from '@/components/ui/EmptyState'
-import { Modal } from '@/components/ui/Modal'
-import { useToast } from '@/components/ui/Toast'
+import { Button, FilterChip, Pill, Skeleton, type Tone } from '@/design-system/primitives'
+import { Banner, Drawer, EmptyState, KeyValue, PressableRow, useToast } from '@/design-system/components'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
-import { Skeleton } from '@/components/ui/Skeleton'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
+import Link from '@/lib/workspaces/Link'
 import { getBackendUrl } from '@/lib/backend-url'
-import { cn } from '@/lib/utils'
+import s from './history.module.css'
 
 // ── Types (mirror the API response shapes) ─────────────────────────
 
@@ -49,6 +47,8 @@ interface JobRow {
   // Rollback eligibility — drives the Rollback button visibility
   isRollbackable: boolean
   rollbackJobId: string | null
+  /** Who ran it: a person's display name or a system label (bulk-action-actor.ts); null when unknown. */
+  createdByName?: string | null
 }
 
 interface ItemRow {
@@ -93,9 +93,7 @@ const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
 
 // ── Status presentation ────────────────────────────────────────────
 
-function statusVariant(
-  status: string,
-): 'success' | 'warning' | 'danger' | 'info' | 'default' {
+function statusTone(status: string): Tone {
   switch (status) {
     case 'COMPLETED':
     case 'SUCCEEDED':
@@ -105,41 +103,40 @@ function statusVariant(
       return 'warning'
     case 'FAILED':
       return 'danger'
-    case 'CANCELLED':
-      return 'default'
     case 'PENDING':
     case 'QUEUED':
     case 'IN_PROGRESS':
     case 'PROCESSING':
       return 'info'
     default:
-      return 'default'
+      return 'neutral'
   }
 }
 
-function StatusIcon({ status, className }: { status: string; className?: string }) {
-  const cls = cn('w-3.5 h-3.5', className)
+/** The status glyph beside a job; decorative — the status is also written out in its pill. */
+function StatusIcon({ status }: { status: string }) {
+  const tone = s[statusTone(status)]
+  const props = { size: 14, 'aria-hidden': true as const, className: tone }
   switch (status) {
     case 'COMPLETED':
     case 'SUCCEEDED':
-      return <CheckCircle2 className={cn(cls, 'text-green-600 dark:text-green-400')} />
+      return <CheckCircle2 {...props} />
     case 'PARTIALLY_COMPLETED':
-      return <AlertCircle className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
+      return <AlertCircle {...props} />
     case 'FAILED':
-      return <XCircle className={cn(cls, 'text-red-600 dark:text-red-400')} />
+      return <XCircle {...props} />
     case 'CANCELLED':
-      return <Ban className={cn(cls, 'text-slate-500 dark:text-slate-400')} />
+      return <Ban {...props} />
     case 'SKIPPED':
-      return <SkipForward className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
-    case 'PENDING':
-    case 'QUEUED':
-      return <Clock className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
+      return <SkipForward {...props} />
     case 'IN_PROGRESS':
-      return <Loader2 className={cn(cls, 'text-blue-600 dark:text-blue-400 animate-spin')} />
+      return <Loader2 {...props} className={`${tone} ${s.spin}`} />
     default:
-      return <Clock className={cn(cls, 'text-tertiary dark:text-slate-500')} />
+      return <Clock {...props} />
   }
 }
+
+const statusLabel = (status: string) => status.replace(/_/g, ' ')
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -290,178 +287,103 @@ function ItemsPanel({ jobId }: { jobId: string }) {
   ]
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-800 border-t border-default dark:border-slate-700 px-5 py-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-1">
+    <div className={s.panel}>
+      <div className={s.panelBar}>
+        <div className={s.chips} role="group" aria-label="Show items">
           {ITEM_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setStatusFilter(f.key)}
-              className={cn(
-                'px-2.5 py-1 text-sm font-medium rounded border transition-colors',
-                statusFilter === f.key
-                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-              )}
-            >
+            <FilterChip key={f.key} pressed={statusFilter === f.key} count={f.count} onClick={() => setStatusFilter(f.key)}>
               {f.label}
-              {f.count !== undefined && (
-                <span className="ml-1 opacity-70">{f.count}</span>
-              )}
-            </button>
+            </FilterChip>
           ))}
         </div>
-        <div className="flex items-center gap-3">
+        <div className={s.panelActions}>
           {counts.FAILED > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="danger-outline"
+              size="sm"
               onClick={retryFailed}
               disabled={retrying}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900 rounded hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 transition-colors"
               title={`Create a new job that re-runs only the ${counts.FAILED} failed items`}
             >
-              <RotateCw className={cn('w-3 h-3', retrying && 'animate-spin')} />
-              {retrying
-                ? 'Starting retry…'
-                : `Retry ${counts.FAILED} failed`}
-            </button>
+              <RotateCw size={12} aria-hidden className={retrying ? s.spin : undefined} />
+              {retrying ? 'Starting retry…' : `Retry ${counts.FAILED} failed`}
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={fetchItems}
-            disabled={loading}
-            className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1 disabled:opacity-50"
-          >
-            <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
+          <Button variant="quiet" size="sm" onClick={fetchItems} disabled={loading}>
+            <RefreshCw size={12} aria-hidden className={loading ? s.spin : undefined} />
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
-      {retryNotice && (
-        <div className="text-base text-green-800 dark:text-green-200 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
-          {retryNotice}
-        </div>
-      )}
-
-      {error && (
-        <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 mb-3">
-          {error}
-        </div>
-      )}
+      {retryNotice && <Banner tone="success">{retryNotice}</Banner>}
+      {error && <Banner tone="danger">{error}</Banner>}
 
       {loading && !items && (
-        <div
-          className="space-y-1"
-          aria-busy="true"
-          aria-label="Loading history items"
-        >
+        <div className={s.items} aria-busy="true" aria-label="Loading history items">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-9 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded flex items-center px-3"
-            >
-              <Skeleton variant="text" width="60%" />
+            <div key={i} className={s.item}>
+              <Skeleton width="60%" />
             </div>
           ))}
         </div>
       )}
 
-      {items && items.length === 0 && !loading && (
-        <div className="text-center py-6 text-base text-slate-500 dark:text-slate-400">
-          No items match this filter.
-        </div>
-      )}
+      {items && items.length === 0 && !loading && <p className={s.none}>No items match this filter.</p>}
 
       {items && items.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded overflow-hidden">
-          <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-default dark:border-slate-700">
-              <tr>
-                <th className="text-left font-medium px-3 py-2 w-32">Status</th>
-                <th className="text-left font-medium px-3 py-2">Target</th>
-                <th className="text-left font-medium px-3 py-2">Before → After</th>
-                <th className="text-right font-medium px-3 py-2 w-20">Duration</th>
-                <th className="text-left font-medium px-3 py-2 w-32">When</th>
-                <th className="text-right font-medium px-3 py-2 w-12"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => {
-                const diffs = diffEntries(it.beforeState, it.afterState)
-                const changed = diffs.filter((d) => d.changed)
-                return (
-                  <tr key={it.id} className="border-b border-subtle dark:border-slate-800 last:border-0 align-top">
-                    <td className="px-3 py-2">
-                      <Badge variant={statusVariant(it.status)} size="sm">
-                        <StatusIcon status={it.status} className="w-3 h-3" />
-                        {it.status}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
-                        {it.sku ?? <span className="text-tertiary dark:text-slate-500">(deleted)</span>}
-                      </div>
-                      {it.channelLabel && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          {it.channelLabel}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {it.errorMessage ? (
-                        <div className="text-red-700 dark:text-red-300 text-sm">
-                          {it.errorMessage}
-                        </div>
-                      ) : changed.length === 0 ? (
-                        <span className="text-tertiary dark:text-slate-500 text-sm">no change</span>
-                      ) : (
-                        <div className="space-y-0.5">
-                          {changed.map((d) => (
-                            <div
-                              key={d.key}
-                              className="flex items-center gap-1.5 text-sm"
-                            >
-                              <span className="text-slate-500 dark:text-slate-400 font-medium">
-                                {d.key}:
-                              </span>
-                              <span className="font-mono text-slate-500 dark:text-slate-400 line-through">
-                                {formatStateValue(d.before)}
-                              </span>
-                              <ArrowRight className="w-3 h-3 text-tertiary dark:text-slate-500" />
-                              <span className="font-mono text-slate-900 dark:text-slate-100 font-medium">
-                                {formatStateValue(d.after)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-sm text-right tabular-nums text-slate-500 dark:text-slate-400">
-                      {formatDurationMs(it.durationMs)}
-                    </td>
-                    <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
-                      {relativeTime(it.completedAt ?? it.createdAt)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setDrawerItem(it)}
-                        title="View full payload"
-                        aria-label={`View full payload for ${it.sku ?? 'deleted item'}`}
-                        className="text-blue-700 dark:text-blue-300 hover:underline text-sm"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className={s.itemsHead} aria-hidden>
+            <span>Status</span>
+            <span>Target</span>
+            <span>Before → After</span>
+            <span>Duration · When</span>
+          </div>
+          <ul className={s.items}>
+            {items.map((it) => {
+              const changed = diffEntries(it.beforeState, it.afterState).filter((d) => d.changed)
+              return (
+                <li key={it.id} className={s.item}>
+                  <div className={s.itemStatus}>
+                    <Pill tone={statusTone(it.status)} icon={<StatusIcon status={it.status} />}>{it.status}</Pill>
+                  </div>
+                  <div className={s.itemTarget}>
+                    <span className={s.sku}>{it.sku ?? '(deleted)'}</span>
+                    {it.channelLabel && <span className={s.subtle}>{it.channelLabel}</span>}
+                  </div>
+                  <div className={s.itemChange}>
+                    {it.errorMessage ? (
+                      <span className={s.errorText}>{it.errorMessage}</span>
+                    ) : changed.length === 0 ? (
+                      <span className={s.subtle}>no change</span>
+                    ) : (
+                      <dl className={s.diffs}>
+                        {changed.map((d) => (
+                          <div key={d.key} className={s.diff}>
+                            <dt>{d.key}</dt>
+                            <dd>
+                              <span className={s.before}>{formatStateValue(d.before)}</span>
+                              <ArrowRight size={12} aria-hidden className={s.arrow} />
+                              <span className="nds-vh"> changed to </span>
+                              <span className={s.after}>{formatStateValue(d.after)}</span>
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </div>
+                  <div className={s.itemMeta}>
+                    <span>{formatDurationMs(it.durationMs)}</span>
+                    <span>{relativeTime(it.completedAt ?? it.createdAt)}</span>
+                    <Button variant="link" size="sm" inline onClick={() => setDrawerItem(it)} aria-label={`View full payload for ${it.sku ?? 'deleted item'}`}>
+                      View
+                    </Button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </>
       )}
 
       <ItemDiffDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
@@ -485,86 +407,35 @@ function ItemDiffDrawer({
   onClose: () => void
 }) {
   return (
-    <Modal
-      open={item !== null}
-      onClose={onClose}
-      placement="drawer-right"
-      size="2xl"
-      title={item ? `Item — ${item.sku ?? '(deleted)'}` : ''}
-    >
+    <Drawer open={item !== null} onClose={onClose} width={640} title={item ? `Item — ${item.sku ?? '(deleted)'}` : ''}>
       {item && (
-        <div className="space-y-4 p-4">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Status
-              </div>
-              <div className="mt-1">
-                <Badge variant={statusVariant(item.status)} size="sm">
-                  <StatusIcon status={item.status} className="w-3 h-3" />
-                  {item.status}
-                </Badge>
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Duration
-              </div>
-              <div className="mt-1 font-mono text-slate-800 dark:text-slate-200 tabular-nums">
-                {formatDurationMs(item.durationMs)}
-              </div>
-            </div>
-            <div className="col-span-2">
-              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Target
-              </div>
-              <div className="mt-1 font-mono text-slate-800 dark:text-slate-200">
-                {item.sku ?? '(deleted)'}
-                {item.channelLabel && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
-                    {item.channelLabel}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
+        <div className={s.drawerBody}>
+          <KeyValue
+            columns={2}
+            items={[
+              { label: 'Status', value: <Pill tone={statusTone(item.status)} icon={<StatusIcon status={item.status} />}>{item.status}</Pill> },
+              { label: 'Duration', value: formatDurationMs(item.durationMs) },
+              { label: 'Target', value: <span className={s.sku}>{item.sku ?? '(deleted)'}</span>, hint: item.channelLabel ?? undefined },
+            ]}
+          />
           {item.errorMessage && (
-            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded p-3">
-              <div className="text-xs uppercase tracking-wide text-red-700 dark:text-red-300 mb-1">
-                Error
-              </div>
-              <pre className="text-sm font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap break-words">
-                {item.errorMessage}
-              </pre>
-            </div>
+            <Banner tone="danger" title="Error">
+              <pre className={s.pre}>{item.errorMessage}</pre>
+            </Banner>
           )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
-                Before
-              </div>
-              <pre className="bg-slate-50 dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-2 text-xs font-mono whitespace-pre-wrap break-words max-h-[60vh] overflow-auto">
-                {item.beforeState
-                  ? JSON.stringify(item.beforeState, null, 2)
-                  : '(empty)'}
-              </pre>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
-                After
-              </div>
-              <pre className="bg-slate-50 dark:bg-slate-900 border border-default dark:border-slate-700 rounded p-2 text-xs font-mono whitespace-pre-wrap break-words max-h-[60vh] overflow-auto">
-                {item.afterState
-                  ? JSON.stringify(item.afterState, null, 2)
-                  : '(empty)'}
-              </pre>
-            </div>
+          <div className={s.states}>
+            <section>
+              <h3 className={s.stateHead}>Before</h3>
+              <pre className={s.code}>{item.beforeState ? JSON.stringify(item.beforeState, null, 2) : '(empty)'}</pre>
+            </section>
+            <section>
+              <h3 className={s.stateHead}>After</h3>
+              <pre className={s.code}>{item.afterState ? JSON.stringify(item.afterState, null, 2) : '(empty)'}</pre>
+            </section>
           </div>
         </div>
       )}
-    </Modal>
+    </Drawer>
   )
 }
 
@@ -600,8 +471,7 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
   const askConfirm = useConfirm()
   const eligible = isRollbackEligible(job)
 
-  const handleRollback = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleRollback = async () => {
     const confirmed = await askConfirm({
       title: `Roll back "${job.jobName}"?`,
       description:
@@ -621,102 +491,70 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
       const parts = [`${body.succeeded} reverted`]
       if (body.failed > 0) parts.push(`${body.failed} failed`)
       if (body.skipped > 0) parts.push(`${body.skipped} skipped`)
-      toast.success(`Rollback complete: ${parts.join(' · ')}`)
+      toast(`Rollback complete: ${parts.join(' · ')}`, 'success')
       await onChanged()
     } catch (err) {
-      toast.error(
-        `Rollback failed: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      toast(`Rollback failed: ${err instanceof Error ? err.message : String(err)}`, 'danger')
     } finally {
       setRollingBack(false)
     }
   }
 
+  const panelId = `bulk-job-items-${job.id}`
   return (
-    <div className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
+    <li className={s.job}>
+      {/* One row per job. The row itself opens the items (a real button, PressableRow); Rollback sits in
+          the row's own actions, never inside that button — the old card nested a button in a button. */}
+      <PressableRow
+        stacked
+        expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-5 py-3 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
+        leading={
+          <span className={s.leading}>
+            {expanded ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
+            <StatusIcon status={job.status} />
+          </span>
+        }
+        label={<span className={s.jobName}>{job.jobName}</span>}
+        actions={
+          eligible ? (
+            <Button
+              variant="warning"
+              size="sm"
+              onClick={handleRollback}
+              disabled={rollingBack}
+              title="Apply each item's beforeState (basePrice / totalStock / status) back through the master cascade"
+            >
+              {rollingBack ? <Loader2 size={14} aria-hidden className={s.spin} /> : <RotateCw size={14} aria-hidden />}
+              Rollback
+            </Button>
+          ) : undefined
+        }
       >
-        <div className="flex-shrink-0">
-          {expanded ? (
-            <ChevronDown className="w-4 h-4 text-tertiary dark:text-slate-500" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-tertiary dark:text-slate-500" />
-          )}
+        <span className={s.tags}>
+          <Pill tone={statusTone(job.status)}>{statusLabel(job.status)}</Pill>
+          <Pill tone="neutral">{formatActionType(job.actionType)}</Pill>
+          {job.channel && <Pill tone="info">{job.channel}</Pill>}
+          {job.rollbackJobId && <Pill tone="warning">Rolled back</Pill>}
+        </span>
+        <span className={s.meta}>
+          <span>
+            <strong className={s.processed}>{job.processedItems}</strong> / {job.totalItems} processed
+          </span>
+          {job.failedItems > 0 && <span className={s.failed}>{job.failedItems} failed</span>}
+          {job.skippedItems > 0 && <span className={s.skipped}>{job.skippedItems} skipped</span>}
+          {duration && <span>{duration}</span>}
+          <span title={new Date(job.createdAt).toLocaleString()}>{relativeTime(job.createdAt)}</span>
+          {job.createdByName && <span>by {job.createdByName}</span>}
+        </span>
+        {job.lastError && job.status !== 'COMPLETED' && <span className={s.jobError}>{job.lastError}</span>}
+      </PressableRow>
+      {expanded && (
+        <div id={panelId}>
+          <ItemsPanel jobId={job.id} />
         </div>
-        <StatusIcon status={job.status} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium text-slate-900 dark:text-slate-100 text-md truncate">
-              {job.jobName}
-            </h3>
-            <Badge variant="default" size="sm">
-              {formatActionType(job.actionType)}
-            </Badge>
-            {job.channel && (
-              <Badge variant="info" size="sm">
-                {job.channel}
-              </Badge>
-            )}
-            {job.rollbackJobId && (
-              <Badge variant="warning" size="sm">
-                Rolled back
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
-            <Badge variant={statusVariant(job.status)} size="sm">
-              {job.status.replace(/_/g, ' ')}
-            </Badge>
-            <span>
-              <span className="font-medium text-green-700 dark:text-green-300">
-                {job.processedItems}
-              </span>
-              {' / '}
-              <span>{job.totalItems}</span> processed
-            </span>
-            {job.failedItems > 0 && (
-              <span className="text-red-700 dark:text-red-300 font-medium">
-                {job.failedItems} failed
-              </span>
-            )}
-            {job.skippedItems > 0 && (
-              <span className="text-amber-700 dark:text-amber-300">
-                {job.skippedItems} skipped
-              </span>
-            )}
-            {duration && <span>· {duration}</span>}
-            <span title={new Date(job.createdAt).toLocaleString()}>
-              · {relativeTime(job.createdAt)}
-            </span>
-          </div>
-          {job.lastError && job.status !== 'COMPLETED' && (
-            <div className="mt-1.5 text-sm text-red-700 dark:text-red-300 truncate">
-              {job.lastError}
-            </div>
-          )}
-        </div>
-        {eligible && (
-          <button
-            type="button"
-            onClick={handleRollback}
-            disabled={rollingBack}
-            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-medium text-amber-800 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 disabled:opacity-50"
-            title="Apply each item's beforeState (basePrice / totalStock / status) back through the master cascade"
-          >
-            {rollingBack ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RotateCw className="w-3.5 h-3.5" />
-            )}
-            Rollback
-          </button>
-        )}
-      </button>
-      {expanded && <ItemsPanel jobId={job.id} />}
-    </div>
+      )}
+    </li>
   )
 }
 
@@ -782,97 +620,59 @@ export default function HistoryClient() {
   }, [fetchJobs])
 
   return (
-    <div className="space-y-3">
+    <div className={s.page}>
       <GridToolbar
         quickFilterSlot={
-          <>
+          <div className={s.chips} role="group" aria-label="Show jobs">
             {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setStatusFilter(f.key)}
-                className={cn(
-                  'px-3 py-1 text-sm font-medium rounded border transition-colors',
-                  statusFilter === f.key
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-                )}
-              >
+              <FilterChip key={f.key} pressed={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
                 {f.label}
-              </button>
+              </FilterChip>
             ))}
-          </>
+          </div>
         }
-        autoRefresh={
-          <AutoRefreshSelect
-            value={autoRefreshMin}
-            onChange={setAutoRefreshMin}
-            onTick={fetchJobs}
-          />
-        }
-        freshness={
-          <FreshnessIndicator
-            lastFetchedAt={lastFetchedAt}
-            onRefresh={fetchJobs}
-            loading={loading}
-          />
-        }
+        autoRefresh={<AutoRefreshSelect value={autoRefreshMin} onChange={setAutoRefreshMin} onTick={fetchJobs} />}
+        freshness={<FreshnessIndicator lastFetchedAt={lastFetchedAt} onRefresh={fetchJobs} loading={loading} />}
       />
 
-      {/* Error */}
-      {error && (
-        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2">
-          Failed to load: {error}
-        </div>
-      )}
+      {error && <Banner tone="danger" title="Failed to load the job history">{error}</Banner>}
 
-      {/* Loading skeleton */}
       {loading && !jobs && (
-        <div
-          className="space-y-2"
-          aria-busy="true"
-          aria-label="Loading bulk-action jobs"
-        >
+        <div className={s.jobs} aria-busy="true" aria-label="Loading bulk-action jobs">
           {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="border border-default dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 p-3"
-            >
-              <Skeleton variant="text" lines={2} />
+            <div key={i} className={s.skeletonJob}>
+              <Skeleton width="45%" />
+              <Skeleton width="70%" />
             </div>
           ))}
         </div>
       )}
 
-      {/* Empty state */}
       {jobs && jobs.length === 0 && !loading && (
         <EmptyState
-          icon={HistoryIcon}
-          title={
-            statusFilter === 'all'
-              ? 'No bulk operations yet'
-              : 'No jobs match this filter'
-          }
+          icon={<HistoryIcon size={20} aria-hidden />}
+          title={statusFilter === 'all' ? 'No bulk operations yet' : 'No jobs match this filter'}
           description={
             statusFilter === 'all'
               ? 'Run a bulk operation from /bulk-operations and it will show up here for review.'
               : 'Try a different filter or wait for jobs to land in this state.'
           }
           action={
-            statusFilter === 'all'
-              ? { label: 'Open Bulk Operations', href: '/bulk-operations' }
-              : undefined
+            statusFilter === 'all' ? (
+              <Button asChild>
+                <Link href="/bulk-operations">Open Bulk Operations</Link>
+              </Button>
+            ) : undefined
           }
         />
       )}
 
-      {/* Jobs */}
       {jobs && jobs.length > 0 && (
-        <div className="space-y-2">
+        <ul className={s.jobs}>
           {jobs.map((job) => (
             <JobCard key={job.id} job={job} onChanged={fetchJobs} />
           ))}
-        </div>
+        </ul>
       )}
     </div>
   )

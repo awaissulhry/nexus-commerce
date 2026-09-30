@@ -19,9 +19,10 @@ const m = vi.hoisted(() => {
     inventory: vi.fn(), content: vi.fn(),
     destinations: vi.fn(),
     queueUpdate: vi.fn(),
+    market: vi.fn(),
   }
 })
-vi.mock('../db.js', () => ({ default: { channelListing: { findUnique: m.read, findMany: m.many }, outboundSyncQueue: { update: m.queueUpdate } } }))
+vi.mock('../db.js', () => ({ default: { channelListing: { findUnique: m.read, findMany: m.many }, outboundSyncQueue: { update: m.queueUpdate }, marketplace: { findFirst: m.market } } }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('./sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
 vi.mock('./channel-publish-audit.service.js', () => ({ writeAttemptLog: m.audit, digestPayload: () => 'stub' }))
@@ -55,6 +56,7 @@ beforeEach(() => {
   m.destinations.mockResolvedValue([{ connectionId: 'etsy-acct', reason: 'NAMED' }])
   m.inventory.mockResolvedValue({ sent: true, body: {}, drift: [], confirmed: true })
   m.content.mockResolvedValue({ sent: true, fields: {} })
+  m.market.mockResolvedValue({ currency: 'EUR' })   // the ETSY/GLOBAL Marketplace row a price is sent in
 })
 afterEach(() => { expect(m.outbound).not.toHaveBeenCalled(); vi.unstubAllEnvs() })
 
@@ -148,6 +150,7 @@ describe('P4.6e — what each syncType does', () => {
     live()
     await service.syncToEtsy(row({ syncType: 'PRICE_UPDATE', payload: { price: 24.5 } }))
     expect(m.inventory.mock.calls[0][0].changes).toEqual([{ sku: 'RED-S', price: 24.5 }])
+    expect(m.inventory.mock.calls[0][0].priceCurrency).toBe('EUR')
   })
 })
 

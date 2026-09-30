@@ -37,7 +37,9 @@ import { CHANNEL_FIELD_MAP, channelOverrideKeys } from './channel-field-map.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
 import { storedCompareAt, withCompareAt } from './compare-at-price.js'
 
-const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
+// ETSY since 2026-09-30: `syncToEtsy` sends a PRICE_UPDATE (P4.6e). It was left off while Etsy was read-only (D6,
+// overridden 2026-09-21), so an Etsy price was saved here and never queued.
+const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 /** The same operator grace window the FOLLOW/PIN primitives use: 30 s to undo before the push leaves. */
 const PRICE_HOLD_MS = 30 * 1000
 
@@ -289,7 +291,7 @@ export async function writeChannelPrices(input: {
           const saleRemoved = l.channel === 'AMAZON' && effectiveSale.value == null && (
             (saleChanges && currentSale.value != null && !!currentSale.start && !!currentSale.end)
             || !!(await tx.outboundSyncQueue.findFirst({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { path: ['saleRemoved'], equals: true } }, select: { id: true } })))
-          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
+          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
           const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
           const row = await createOutboundRow(tx, {
             data: {
@@ -297,6 +299,7 @@ export async function writeChannelPrices(input: {
               syncStatus: 'PENDING' as never, syncType: 'PRICE_UPDATE', holdUntil, externalListingId: l.externalListingId, maxRetries: 3,
               payload: {
                 source: 'CHANNEL_PRICE_WRITE', marketplace: l.marketplace, actor: input.actor,
+                productSku: l.product?.sku ?? null,
                 price: effectivePrice ?? undefined,
                 salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
                 ...(saleRemoved ? { saleRemoved: true } : {}),

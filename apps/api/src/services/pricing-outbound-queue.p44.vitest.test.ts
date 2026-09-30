@@ -58,12 +58,10 @@ describe('P4.4d: eBay prices go through the one queue', () => {
     await expect(push({ channel })).resolves.toMatchObject({ ok: true, queued: true, channel })
   })
 
-  it('🔴 Etsy is refused, not queued for a sender that does not exist', async () => {
-    const result = await push({ channel: 'ETSY' })
-    expect(result.ok).toBe(false)
-    expect(result.queued).toBeUndefined()
-    expect(result.error).toContain('read-only')
-    expect(m.createRow).not.toHaveBeenCalled()
+  it('🔴 Etsy takes the same road: its sender exists (P4.6e) and D6 was overridden 2026-09-21', async () => {
+    const result = await push({ channel: 'ETSY', marketplace: 'GLOBAL' })
+    expect(result).toMatchObject({ ok: true, queued: true, queueId: 'q-1', channel: 'ETSY' })
+    expect(m.createRow.mock.calls[0][1].data).toMatchObject({ channelListingId: 'cl-1', targetChannel: 'ETSY', syncType: 'PRICE_UPDATE', payload: { price: 49.9 } })
   })
 
   it('an unknown channel is refused with a plain sentence', async () => {

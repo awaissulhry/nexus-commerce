@@ -11,10 +11,11 @@ import { raiseChannelAlert, writeDriftAlert } from '../cx/channel-alerts.service
 import { etsyReader } from './read-client.js'
 import { etsyWriter } from './write-client.js'
 import {
-  applyOfferingChanges, inventoryDrift, toInventoryWrite,
+  applyOfferingChanges, EtsyPriceRefusal, etsyPriceCurrencyRefusal, inventoryDrift, toInventoryWrite,
   type EtsyInventoryWrite, type EtsyReadInventory, type InventoryDrift, type OfferingChange,
 } from './inventory.js'
 import type { GatewayRequest } from '../gateway/gateway.js'
+import { withEtsyListingLock, type EtsyListingLease } from './listing-lock.js'
 
 export interface EtsyInventoryWriteInput {
   accountId: string
@@ -29,6 +30,12 @@ export interface EtsyInventoryWriteInput {
    * land" (banked: *read before the write arrived*). Injectable so a test does not sleep.
    */
   readBackDelayMs?: number
+  /**
+   * 2026-09-30 — the currency Nexus holds a price change in (the listing market's `Marketplace.currency`). Required
+   * with any price change: Etsy's PUT takes a bare number in the shop's currency, and the read below, where Etsy states
+   * its currency, is the only place the two can be compared. A mismatch, or no stated currency, sends nothing.
+   */
+  priceCurrency?: string
 }
 
 export interface EtsyInventoryWriteResult {
@@ -47,8 +54,20 @@ export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promis
   const listingId = String(input.listingId)
   if (!/^[1-9]\d*$/.test(listingId)) throw new Error('That is not an Etsy listing id; nothing was sent.')
 
+  // 2026-09-30 — one read → change → replace per listing at a time (`listing-lock.ts`): two overlapping writes to one
+  // listing would each replace the inventory the other had just changed. Held through the read-back, so a sibling
+  // write cannot land between our PUT and the check of it.
+  return withEtsyListingLock({ accountId: input.accountId, listingId }, (lease) => writeHoldingLock(input, listingId, lease))
+}
+
+async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: string, lease: EtsyListingLease): Promise<EtsyInventoryWriteResult> {
   const reader = await etsyReader(input.accountId)
+  // A read that fails throws here, before anything is built or sent: the caller retries it.
   const before = await reader.get<EtsyReadInventory>(`/listings/${listingId}/inventory`)
+  if (input.changes.some((change) => change.price !== undefined)) {
+    const refusal = etsyPriceCurrencyRefusal(before, input.priceCurrency)
+    if (refusal) throw new EtsyPriceRefusal(refusal)
+  }
   const current = toInventoryWrite(before)
   const body = applyOfferingChanges(current, input.changes)
 
@@ -68,6 +87,7 @@ export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promis
   }
 
   const writer = await etsyWriter(input.accountId)
+  await lease.assertHeld()
   await writer.send({
     path: `/listings/${listingId}/inventory`,
     method: 'PUT',
@@ -76,6 +96,7 @@ export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promis
     pushLock: input.pushLock,
     ledger: input.ledger,
     operation: 'PUT /listings/:id/inventory',
+    signal: lease.signal,
   })
 
   /**
