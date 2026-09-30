@@ -27,6 +27,8 @@ const READS = new Set(['findUnique', 'findUniqueOrThrow', 'findFirst', 'findFirs
 const delegateModels = new Map(Prisma.dmmf.datamodel.models.map(model => [model.name[0].toLowerCase() + model.name.slice(1), model.name]))
 /** Each model's relation fields: a write that names one reaches another table (a nested create, connect, update …). */
 const relationFields = new Map(Prisma.dmmf.datamodel.models.map(model => [model.name, new Set(model.fields.filter(field => field.kind === 'object').map(field => field.name))]))
+/** Database table name → model name, for raw SQL. */
+const tableModels = new Map(Prisma.dmmf.datamodel.models.map(model => [model.dbName ?? model.name, model.name]))
 
 type Thenable = PromiseLike<unknown> & { catch?: unknown; finally?: unknown }
 
@@ -48,6 +50,35 @@ function copy(value: unknown): unknown {
   const out: Record<string, unknown> = {}
   for (const key of Object.keys(value)) out[key] = copy(value[key])
   return out
+}
+
+/**
+ * Does this read look beyond its own table — a relation in `where`, `select`, `include` or `orderBy`, an `include`,
+ * or a `_count`? Then it depends on other tables' rows, and is remembered only until the next write (code review P2 #6).
+ */
+function readsThroughRelation(model: string, input: unknown): boolean {
+  const relations = relationFields.get(model)
+  if (!relations) return true
+  const visit = (value: unknown, depth: number): boolean => {
+    if (depth > 12) return true
+    if (Array.isArray(value)) return value.some(item => visit(item, depth + 1))
+    if (!isPlain(value)) return false
+    return Object.entries(value).some(([key, item]) => relations.has(key) || key === 'include' || key === '_count' || visit(item, depth + 1))
+  }
+  return visit(input, 0)
+}
+
+/**
+ * A raw read remembered with the reference tables must read reference tables only: every FROM / JOIN names one, no
+ * FROM list joins with a comma, and no quoted identifier names any other table (code review P2 #6).
+ */
+function rawReadsReferenceOnly(sql: string): boolean {
+  const tables = [...sql.matchAll(/\b(?:FROM|JOIN)\s+(?:"?public"?\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi)].map(match => match[1])
+  if (!tables.length || !tables.every(table => REFERENCE_MODELS.has(tableModels.get(table) ?? table))) return false
+  const fromLists = [...sql.matchAll(/\bFROM\b([\s\S]*?)(?=\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|\bHAVING\b|\bWINDOW\b|\bUNION\b|\bEXCEPT\b|\bINTERSECT\b|\bJOIN\b|\)|;|$)/gi)].map(match => match[1])
+  if (fromLists.some(list => list.includes(','))) return false
+  const quoted = [...sql.matchAll(/"([^"]+)"/g)].map(match => match[1])
+  return quoted.every(name => !name.startsWith('_') && (!tableModels.has(name) || REFERENCE_MODELS.has(tableModels.get(name)!)))
 }
 
 /** Does this write's data name a relation field (and so write through it to another table)? */
@@ -142,7 +173,8 @@ export function memoizeReads<T extends object>(client: T): { client: T; memo: Re
           }
           let key: string
           try { key = `${name}.${method}:${JSON.stringify(args)}` } catch { return original.apply(owner, args) }
-          return remember(REFERENCE_MODELS.has(model) ? reference : epoch, key, () => original.apply(owner, args))
+          const store = REFERENCE_MODELS.has(model) && !readsThroughRelation(model, args[0]) ? reference : epoch
+          return remember(store, key, () => original.apply(owner, args))
         }
       },
     })
@@ -163,8 +195,7 @@ export function memoizeReads<T extends object>(client: T): { client: T; memo: Re
             const sql = cleanSql(rawText(args))
             if (plainSelect(sql)) {
               // A plain read of reference tables only (the dictionary stamp, say) is remembered like a model read of them.
-              const tables = [...sql.matchAll(/\b(?:FROM|JOIN)\s+(?:"?public"?\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi)].map(match => match[1])
-              if (property !== '$queryRaw' && property !== '$queryRawUnsafe' || !tables.length || !tables.every(table => REFERENCE_MODELS.has(table))) return value.apply(owner, args)
+              if (property !== '$queryRaw' && property !== '$queryRawUnsafe' || !rawReadsReferenceOnly(sql)) return value.apply(owner, args)
               let key: string
               try { key = `raw:${JSON.stringify([rawText(args), args.slice(1), (args[0] as { values?: unknown })?.values ?? null])}` } catch { return value.apply(owner, args) }
               return remember(reference, key, () => value.apply(owner, args))
@@ -177,7 +208,14 @@ export function memoizeReads<T extends object>(client: T): { client: T; memo: Re
         // statements runs in order on this transaction, as `contextualDatabase` runs one inside a transaction.
         if (property === '$transaction') return async (work: unknown, ...rest: unknown[]) => {
           if (Array.isArray(work)) { const results: unknown[] = []; for (const statement of work) results.push(await statement); return results }
-          return value.call(owner, typeof work === 'function' ? (nested: object) => (work as (client: object) => unknown)(wrap(nested)) : work, ...rest)
+          try {
+            return await value.call(owner, typeof work === 'function' ? (nested: object) => (work as (client: object) => unknown)(wrap(nested)) : work, ...rest)
+          } catch (error) {
+            // A nested transaction that failed rolled back to its savepoint: what was read after its writes is gone
+            // too (code review P2 #7).
+            forgetAll()
+            throw error
+          }
         }
         return value.bind(owner)
       },
