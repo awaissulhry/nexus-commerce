@@ -1,8 +1,9 @@
 /** Local-only save/reload races. The caller seeds and removes the synthetic E2E_ALIAS_FIXTURE. */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from '../smoke/sheet/fixture'
 import { LEGACY_WORKSPACE_ID } from '@nexus/database/workspace-context'
 
 const fixture = process.env.E2E_ALIAS_FIXTURE ? JSON.parse(readFileSync(process.env.E2E_ALIAS_FIXTURE, 'utf8')) as { family: string; child: string } : null
@@ -66,7 +67,7 @@ test.describe('product sheet save snapshots', () => {
       return route.continue()
     })
     await page.setViewportSize({ width: 1680, height: 1000 })
-    await page.goto(`/w/${LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=master&market=DE&locale=de`)
+    await page.goto(`/w/${LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=master&market=DE&locale=de&tab=sheet`)
     await expect(page.locator(`.ag-row[row-id="${fixture!.child}"]`)).toBeVisible({ timeout: 90_000 })
     holdRead = true
     await page.getByRole('button', { name: 'More', exact: true }).click()
@@ -94,6 +95,101 @@ test.describe('product sheet save snapshots', () => {
   })
 
   for (const width of [1680, 390]) for (const colorScheme of ['light', 'dark'] as const) {
+    for (const scenario of ['two quiet reads', 'recreated equal counter'] as const) {
+      test(`${colorScheme}, ${width}px: ${scenario} cannot confirm an unseen Shared Name`, async ({ page }, info) => {
+        if (!local(base) || !local(api) || ![fixture!.family, fixture!.child].every(id => id.startsWith('e2e_'))) throw new Error('Synthetic local fixture required')
+        const external = (name: string, mode: string) => JSON.parse(execFileSync(process.execPath,
+          [join(__dirname, 'fixtures/recreate-sheet-translation.mjs'), fixture!.child, name, mode], { encoding: 'utf8' })) as { productVersion: number; contentVersion: number }
+        const initialName = `Initial shared name ${Date.now()}`
+        const initial = external(initialName, 'seed-pair')
+        expect(initial.contentVersion).toBe(1)
+        const writes: unknown[] = []
+        const pageErrors: string[] = []
+        page.on('pageerror', error => pageErrors.push(error.message))
+        page.on('request', request => {
+          if (request.method() === 'POST' && request.url().endsWith('/api/products/bulk-save')) writes.push(request.postDataJSON())
+        })
+        let readNumber = 0
+        await page.route('**/studio/sheet?*', async route => {
+          const url = new URL(route.request().url())
+          if (!local(url.href)) return route.abort()
+          url.searchParams.delete('cells')
+          const response = await route.fetch({ url: url.href, maxRedirects: 0 })
+          expect(response.status()).toBe(200)
+          const body = await response.json()
+          // This changes display-only SKU text, not values or tokens. Wait for actual read adoption below.
+          body.rows.find((row: { id: string }) => row.id === fixture!.child).sku = `E2E-TOKEN-READ-${++readNumber}`
+          await route.fulfill({ response, json: body })
+        })
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
+        await page.emulateMedia({ colorScheme })
+        await page.addInitScript(theme => localStorage.setItem('nexus:theme', theme), colorScheme)
+        await page.goto(`/w/${LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=master&market=DE&locale=de&tab=sheet`)
+        await expect(page.locator(`.ag-row[row-id="${fixture!.child}"]`)).toBeVisible({ timeout: 90_000 })
+        await expect(await fieldCell(page, 'name')).toContainText(initialName)
+        const unseenName = `Unseen shared name ${Date.now()}`
+        const newer = external(unseenName, scenario === 'two quiet reads' ? 'advance' : 'same-counter')
+        if (scenario === 'recreated equal counter') expect(newer.contentVersion).toBe(initial.contentVersion)
+        const attemptedName = `Refused shared name ${Date.now()}`
+        const first = await edit(page, scenario === 'two quiet reads' ? 'name' : 'brand', attemptedName)
+        expect(first.body).toMatchObject({ saved: 0, failed: 1, units: [{ status: 409 }] })
+        expect(first.request.units).toHaveLength(1)
+        expect(first.request.units[0]).toMatchObject({ expectedVersion: initial.productVersion,
+          changes: [{ id: fixture!.child, field: scenario === 'two quiet reads' ? 'name' : 'brand', value: attemptedName }] })
+        if (scenario === 'two quiet reads') expect(first.request.units[0].changes[0]).toMatchObject({
+          contentAddress: { tier: 'language', language: 'de' }, contentVersion: initial.contentVersion })
+        else expect(first.body.units[0].body).toMatchObject({ currentVersion: newer.productVersion, versionOf: 'product' })
+        expect(first.body.units[0].key).toBe(first.request.units[0].key)
+        let second: Awaited<ReturnType<typeof edit>>
+        if (scenario === 'two quiet reads') {
+          for (let pass = 0; pass < 2; pass++) {
+            const read = page.waitForResponse(response => response.request().method() === 'GET' && response.url().includes('/studio/sheet?'))
+            await page.getByRole('button', { name: 'More', exact: true }).click()
+            await page.getByRole('menuitem', { name: /^Refresh progress/ }).click()
+            const body = await (await read).json()
+            const fresh = body.rows.find((row: { id: string }) => row.id === fixture!.child)
+            expect(fresh.version).toBe(newer.productVersion)
+            expect(fresh.values.name).toMatchObject({ value: unseenName, contentVersion: newer.contentVersion })
+            expect(fresh.values.description).toMatchObject({ value: `${unseenName} description`, contentVersion: newer.contentVersion })
+            const witness = fresh.sku
+            await page.locator(`.ag-row[row-id="${fixture!.child}"] .ag-cell`).first().press('Home')
+            await expect(page.locator(`.ag-row[row-id="${fixture!.child}"]`)).toContainText(witness)
+          }
+          await expect(await fieldCell(page, 'name')).toContainText(attemptedName)
+          const retry = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/products/bulk-save'))
+          const button = page.getByRole('button', { name: 'Retry 1 failed cell', exact: true })
+          await button.focus()
+          await page.keyboard.press('Enter')
+          const response = await retry
+          second = { request: response.request().postDataJSON(), body: await response.json() }
+        } else second = await edit(page, 'name', attemptedName)
+        const storedResponse = await page.request.get(`${api}/api/products/${fixture!.family}/studio/sheet?scope=master&market=DE&locale=de`,
+          { headers: { 'x-nexus-workspace-id': LEGACY_WORKSPACE_ID }, maxRedirects: 0 })
+        expect(storedResponse.status()).toBe(200)
+        const stored = (await storedResponse.json()).rows.find((row: { id: string }) => row.id === fixture!.child)
+        // Record the actual overwrite on the deliberate old-code red before its expected verdict assertion fails.
+        const proofPath = info.outputPath('content-token-proof.json')
+        writeFileSync(proofPath, JSON.stringify({ scenario, initial, newer, first, second,
+          stored: { version: stored.version, name: stored.values.name.value, contentVersion: stored.values.name.contentVersion } }), { mode: 0o600 })
+        await info.attach('content-token-proof', { path: proofPath, contentType: 'application/json' })
+        expect(second.body).toMatchObject({ saved: 0, failed: 1, units: [{ status: 409 }] })
+        expect(second.request.units).toHaveLength(1)
+        expect(second.request.units[0]).toMatchObject({ expectedVersion: initial.productVersion,
+          changes: [{ id: fixture!.child, field: 'name', value: attemptedName,
+            contentAddress: { tier: 'language', language: 'de' }, contentVersion: initial.contentVersion }] })
+        expect(second.body.units[0].key).toBe(second.request.units[0].key)
+        expect(stored.version).toBe(newer.productVersion)
+        expect(stored.values.name).toMatchObject({ value: unseenName, contentVersion: newer.contentVersion })
+        await page.getByRole('button', { name: 'More', exact: true }).click()
+        await page.getByRole('menuitem', { name: /^Reload/ }).click()
+        await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
+        await expect(await fieldCell(page, 'name')).toContainText(unseenName)
+        expect(writes).toHaveLength(2)
+        expect(pageErrors).toEqual([])
+        await page.screenshot({ path: info.outputPath('unseen-value-kept-after-refusal.png'), fullPage: true })
+      })
+    }
+
     test(`${colorScheme}, ${width}px: reload after a conflict and cell copy accepts a recreated translation`, async ({ page }, info) => {
       if (!local(base) || !local(api) || ![fixture!.family, fixture!.child].every(id => id.startsWith('e2e_'))) throw new Error('Synthetic local fixture required')
       let oldRead: string | null = null, replayRead = false, blockReads = false
@@ -119,7 +215,7 @@ test.describe('product sheet save snapshots', () => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
       await page.emulateMedia({ colorScheme })
       await page.addInitScript(theme => { localStorage.setItem('nexus:theme', theme) }, colorScheme)
-      await page.goto(`/w/${LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=master&market=DE&locale=de`)
+      await page.goto(`/w/${LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=master&market=DE&locale=de&tab=sheet`)
       await expect(page.locator(`.ag-row[row-id="${fixture!.child}"]`)).toBeVisible({ timeout: 90_000 })
       const external = `Recreated ${width} ${colorScheme} ${Date.now()}`
       // Change only the synthetic translation outside this browser, as another writer would.
