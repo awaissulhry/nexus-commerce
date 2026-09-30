@@ -539,6 +539,13 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // whether outbound email is live or dry-run, and that flip turns a recorded
   // no-op into an irreversible real send.
   'send-customer-message': ['suppressed', 'emailOnFile', 'note'],
+
+  // MCP.10 — the bulk changes (tools/bulk.tools.ts). `changes` shows at most 20 of up to 250 products, so
+  // `basis` fingerprints every product's starting value and to-value and every listing that follows the
+  // price (it covers `changes` and `totals`). A plain string on purpose: the stored preview is jsonb, which
+  // re-orders an object's keys, so an object compared through JSON.stringify reads as moved when nothing did.
+  'bulk-price-change': ['basis'],
+  'bulk-attribute-change': ['basis'],
 }
 
 export interface StalenessVerdict {
