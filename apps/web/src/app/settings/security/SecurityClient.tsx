@@ -4,7 +4,7 @@
  * Settings rebuild — Phase C.6 + C.7
  *
  * /settings/security — 2FA enroll/disable + recovery codes + active
- * sessions + login history.
+ * sessions + connected apps (MCP.6) + login history.
  *
  * 2FA flow:
  *   1. Click "Enable 2FA" → POST /api/settings/2fa/enroll/start
@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { ConnectedApps } from '@/components/connected-apps/ConnectedApps'
 
 interface TwoFactorStatus {
   enabled: boolean
@@ -93,6 +94,8 @@ export default function SecurityClient({
       )}
       <TwoFactorSection initial={twoFactor} />
       <SessionsSection initial={sessions} />
+      {/* MCP.6 — the Claude connections this person made, in every business. */}
+      <ConnectedApps scope="mine" headingLevel={3} />
       <LoginHistorySection initial={loginEvents} />
     </div>
   )

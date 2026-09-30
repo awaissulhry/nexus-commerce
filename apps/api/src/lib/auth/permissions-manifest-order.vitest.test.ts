@@ -139,6 +139,15 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('GET', '/api/products-ai/anything')).toBe('ai.view')
   })
 
+  it("a tool's policy needs the security setting, not only ai.run", () => {
+    // Turning a tool on, dropping its approval or raising its hourly limit changes what the
+    // assistant may do for everyone in the business.
+    expect(permissionForRoute('PUT', '/api/agent/tools/:name')).toBe('settings.security.manage')
+    expect(permissionForRoute('GET', '/api/agent/tools')).toBe('ai.view')
+    expect(permissionForRoute('POST', '/api/agent/tools/:name/invoke')).toBe('ai.run')
+    expect(permissionForRoute('POST', '/api/agent/tools/seed')).toBe('ai.run')
+  })
+
   it('the catalogue routes are unaffected by that fix', () => {
     expect(permissionForRoute('GET', '/api/products/123')).toBe('products.view')
     expect(permissionForRoute('POST', '/api/products/bulk')).toBe('products.edit')

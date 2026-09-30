@@ -25,7 +25,8 @@ on:
       - 'apps/web/next.config.js'
       - 'apps/web/scripts/start.mjs'
       - 'package-lock.json'
-      - '.dockerignore'
+      - 'apps/api/Dockerfile.dockerignore'
+      - 'apps/web/Dockerfile.dockerignore'
       - 'scripts/ci/check-image-secrets.sh'
       - '.github/workflows/images.yml'
   workflow_call:
