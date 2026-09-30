@@ -118,6 +118,29 @@ export function projectActionAndDetect(
   return detectEuIntentConflict(projected)
 }
 
+/**
+ * A stock buffer shapes the ONE EU number too: a listing that follows the pool publishes pool − buffer, so two EU
+ * markets of a SKU holding different buffers send Amazon two different numbers for one quantity. The Studio matrix
+ * writes a buffer to the whole EU group; this is the same rule for Sync Control. Project the buffer onto `targets`,
+ * then the rows that express a live intent (`intentOf`: not FBA, not paused, not a closed offer) must agree.
+ */
+export function projectBufferAndDetect(
+  rows: Array<EuIntentRow & { stockBuffer: number | null }>,
+  targets: Set<string>,
+  buffer: number,
+): EuConflict {
+  const live = rows
+    .map((r) => ({ row: r, buffer: targets.has(r.marketplace.toUpperCase()) ? buffer : r.stockBuffer ?? 0 }))
+    .filter(({ row }) => intentOf(row) !== null)
+  const buffers = new Set(live.map((l) => l.buffer))
+  if (buffers.size <= 1) return { conflict: false, detail: '' }
+  return {
+    conflict: true,
+    detail: `buffers would differ (${live.map((l) => `${l.row.marketplace.toUpperCase()}=${l.buffer}`).join(', ')}) — ` +
+      'Amazon keeps ONE quantity per SKU across EU markets',
+  }
+}
+
 /** The operator-facing remedy, appended to every guard error. */
 export const EU_GUARD_REMEDY =
   'Apply the action to ALL Amazon EU markets of these SKUs so they agree, or use ' +
