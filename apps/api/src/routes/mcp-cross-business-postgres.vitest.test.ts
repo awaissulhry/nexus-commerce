@@ -18,6 +18,7 @@
  *   6. no B canary in any answer given outside B, in any log line, or in any AgentRun / AgentApproval row
  *      written outside B; every run is filed under its connection's business
  *   7. an approval queued in A is "not found" to a B-only connection and to a B session in the Approvals routes
+ *   8. a tool policy one business sets (a tool turned off) never applies in the other, cache included
  *
  * Business profiles are ON for the whole file, as production runs: with them off there is one business and
  * nothing to keep apart. The runner leaves NEXUS_WORKSPACES_ENABLED unset (vitest.setup.ts then sets 0), so the
@@ -466,7 +467,7 @@ function rpcOf(text: string): { result?: { tools?: Array<{ name: string }> } & P
 }
 
 /** A request from the web app: a signed-in person, their session cookie and CSRF pair, and a business when named. */
-async function inApp(tag: Tag, method: 'GET' | 'POST' | 'PATCH', path: string, session: string, business?: string, payload?: unknown) {
+async function inApp(tag: Tag, method: 'GET' | 'POST' | 'PATCH' | 'PUT', path: string, session: string, business?: string, payload?: unknown) {
   const response = await app.inject({
     method,
     url: path,
@@ -866,6 +867,26 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       const own = await inApp('B-control', 'POST', `/api/agent/approvals/${seeded.b.spareApprovalId}/reject`, sessions.bOnly, B, { reason: 'MCP.8 control' })
       expect(own.statusCode).toBe(200)
       expect(own.json()).toMatchObject({ ok: true, status: 'rejected' })
+    })
+  })
+
+  describe('8 — a tool policy belongs to one business', () => {
+    it("a tool turned off in one business is refused there at once and still runs in the other within the cache's minute; both ways", async () => {
+      const setPolicy = (tag: Tag, session: string, business: string, name: string, enabled: boolean) =>
+        inApp(tag, 'PUT', `/api/agent/tools/${name}`, session, business, { enabled })
+      const call = (token: string, tag: Tag, name: string) => withClaude(token, tag, (client) => client.callTool({ name, arguments: {} }))
+      const b = { id: B, session: sessions.bOnly, sessionTag: 'B-only' as Tag, token: tokens.bOwn.access, tag: 'B-control' as Tag, sees: seeded.b.market }
+      const a = { id: A, session: sessions.both, sessionTag: 'A' as Tag, token: tokens.a.access, tag: 'A' as Tag, sees: seeded.a.sku }
+      for (const [off, on, name] of [[b, a, 'product-search'], [a, b, 'order-search']] as const) {
+        // An admin turns it off in Settings, which empties that business's policy cache; the refused call refills it.
+        expect((await setPolicy(off.sessionTag, off.session, off.id, name, false)).statusCode).toBe(200)
+        expect({ name, in: off.id, answer: textOf(await call(off.token, off.tag, name)) }).toEqual({ name, in: off.id, answer: `tool ${name} is disabled` })
+        // Straight after, well inside the 60 s the cache keeps a policy: the other business still runs it.
+        const ran = await call(on.token, on.tag, name)
+        expect({ name, in: on.id, outcome: outcomeOf(ran) }).toEqual({ name, in: on.id, outcome: 'answered' })
+        expect(textOf(ran)).toContain(on.sees)
+        expect((await setPolicy(off.sessionTag, off.session, off.id, name, true)).statusCode).toBe(200)
+      }
     })
   })
 
