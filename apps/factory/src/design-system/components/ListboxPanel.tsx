@@ -265,8 +265,10 @@ export function ListboxPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // With no search field there is no other focusable element in the panel.
-  useEffect(() => {
+  // With no search field there is no other focusable element in the panel. Before paint (a layout effect), like the
+  // search field's own `autoFocus`: a key pressed as soon as the list shows must reach the list, not the cell under it
+  // (P2, 2026-09-30 — measured: an Enter-then-ArrowDown on a busy page reached the grid cell and Tab then committed nothing).
+  useLayoutEffect(() => {
     if (autoFocus && !ownsSearch) hostRef.current?.focus()
   }, [autoFocus, ownsSearch])
 
