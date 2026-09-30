@@ -76,11 +76,14 @@ export const CascadeCell = memo(function CascadeCell(
   )
   // Blocking mapping errors remain visible beside the source; details come from the resolver.
   const mapped = cell?.mapped ?? null
+  // Audit A20 — only what publish would block is drawn as blocking; an eBay off-list value warns, as publish does.
+  const blocking = mapped ? mapped.blocking ?? mapped.errors : []
+  const warnings = mapped ? [...mapped.errors.filter(error => !blocking.includes(error)), ...mapped.warnings] : []
   const mappingNote = mapped
-    ? mapped.errors.length > 0
-      ? `${(mapped.mappingErrors ?? mapped.errors).length ? 'Mapping error' : 'Field validation'}: ${mapped.errors.join(' · ')}`
-      : mapped.warnings.length > 0
-          ? `Mapped, with warnings: ${mapped.warnings.join(' · ')}`
+    ? blocking.length > 0
+      ? `${(mapped.mappingErrors ?? mapped.errors).length ? 'Mapping error' : 'Field validation'}: ${blocking.join(' · ')}`
+      : warnings.length > 0
+          ? `Mapped, with warnings: ${warnings.join(' · ')}`
           : null
     : null
 
@@ -137,7 +140,7 @@ export const CascadeCell = memo(function CascadeCell(
         * value is `flex: 1 1 auto`, so as a sibling the value truncates before the glyph moves.
         */}
       {(column.kind === 'select' || column.kind === 'boolean' || isReferenceField(column.key)) && !isShaped(column) && <SelectChevron onOpen={openCellEditor(p.api, p.node, column.key)} />}
-      {mapped && mapped.errors.length > 0 && (
+      {blocking.length > 0 && (
         <span className="nds-cascade-maperr" aria-label={mappingNote ?? 'Mapping error'}>!</span>
       )}
       {p.openEditor && <CellAction label={`${p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Edit' : 'Details'}: ${row.sku}, ${column.label}`} description={cell?.writeBlockedReason != null ? cell.writeBlockedReason : p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Enter or F2 opens the editor.' : 'Read-only cell. The reason was not reported.'}

@@ -75,6 +75,7 @@ import { writerAcceptsField } from './master-field-gate.js'
 import { completenessFor, decimalToNumber, listedState, type SheetCellValue, type SheetListing, type SheetReadiness, type ReadinessIssue } from './sheet-rows.service.js'
 import type { MasterCompleteness } from './master-completeness.service.js'
 import { categoryFieldValue, channelCategoryField } from './mapping/category-mapping.service.js'
+import { cellFindings, publishVerdict } from './value-verdict.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types — the contract PES.2 / PES.3 / PES.4 consume
@@ -133,6 +134,11 @@ export interface MappedCell {
   appliedTransforms: string[]
   warnings: string[]
   errors: string[]
+  /**
+   * Audit A20 — the `errors` publish would block (`publishVerdict`); the rest only warn (an eBay off-list value, a
+   * deprecated option, a requirement only a mapping rule claims). Readiness and the cell's mark read this one list.
+   */
+  blocking?: string[]
   mappingErrors?: string[]
   autoCorrected: { from: string; to: string } | null
   requiredByRule: boolean
@@ -1521,6 +1527,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
                 appliedTransforms: m.appliedTransforms,
                 warnings: m.warnings,
                 errors: m.errors,
+                blocking: cellFindings(m).filter(found => publishVerdict(coordinate!.channel, found) === 'block').map(found => found.message),
                 mappingErrors: m.mappingErrors,
                 autoCorrected: m.autoCorrected,
                 requiredByRule: m.required && (!col.slot || col.slot.index <= (channelFacts?.cardinality?.min ?? 1)),
@@ -1636,15 +1643,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           else issues.push({ key: column.key, label: column.label, message, kind: 'language-fallback',
             severity: columnRequiredByAny(column, rowShape) || localized.mapped?.requiredByRule ? 'error' : 'warn' })
         }
-        for (const message of values[column.key]?.mapped?.errors ?? []) {
-          // A blocking mapping verdict replaces the weaker warning for the same field.
-          for (let index = issues.length - 1; index >= 0; index--) {
-            if (issues[index].key === column.key && issues[index].severity === 'warn') issues.splice(index, 1)
-          }
-          if (!issues.some(issue => issue.key === column.key && issue.severity === 'error')) {
-            issues.push({ key: column.key, label: column.label, message, severity: 'error' })
-          }
-        }
+        pushMappedIssues(issues, column, values[column.key]?.mapped)
       }
       if (missingSchemaFor(effectiveCategory)) {
         const categoryKey = channelCategoryField(coordinate?.channel) ?? 'productType'
@@ -1652,16 +1651,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         issues.push({ key: categoryColumn?.key ?? categoryKey, label: 'Channel requirements', severity: 'error',
           message: `Requirements for ${effectiveCategory ?? 'this category'} on ${coordinate!.label} are unavailable. Readiness cannot be verified until the category schema is loaded.` })
       }
-      const hasErrors = issues.some((i) => i.severity === 'error')
       const readiness: SheetReadiness = {
-        state: hasErrors
-          ? 'errors'
-          : listedState(listing, listingRow?.channel)
-            ?? (!listing && coordinate
-              ? 'unlisted'
-              : issues.length > 0
-                ? 'missing'
-                : 'ready'),
+        state: readinessState(issues, listing, listingRow?.channel, !!coordinate),
         issues,
         ref: listing?.externalListingId ?? undefined,
       }
@@ -1846,8 +1837,19 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     // value eBay receives (`ebay-listing-level.ts`). After the theme cells, which read the rows' own values as candidates.
     if (coordinate?.channel === 'EBAY' && exclusionKnown && !input.rowOwnValues) {
       const { showEbayListingLevel } = await import('./ebay-listing-level.js')
-      showEbayListingLevel({ rows, columns, label: coordinate.label, groups: projections.map(group => ({ aliasKey: group.id ?? '', axes: cells.get(group.id ?? '')?.axes,
+      const judged = showEbayListingLevel({ rows, columns, label: coordinate.label, groups: projections.map(group => ({ aliasKey: group.id ?? '', axes: cells.get(group.id ?? '')?.axes,
         familyAxes: root.variationAxes, includedIds: new Set(children.filter(child => { const own = listingByRow.get(`${child.id}:${group.id ?? ''}`); return !!own && !excluded.has(own.id) }).map(child => child.id)) })) })
+      // Audit A21 — a row showing the listing's value is judged on that value, as publish judges it (`reporterOf`):
+      // its own value's issues (a required-missing one, a problem of a value eBay never receives from it) go.
+      for (const row of new Set(judged.map(entry => entry.row))) {
+        for (const { key } of judged.filter(entry => entry.row === row)) {
+          const column = columns.find(c => c.key === key)!
+          row.readiness.issues = row.readiness.issues.filter(issue => issue.key !== key)
+          pushMappedIssues(row.readiness.issues, column, row.values[key]?.mapped)
+        }
+        row.readiness.state = readinessState(row.readiness.issues, row.listing, coordinate.channel, true)
+        row.completeness = completenessFor(columns, { isParent: row.isParent, productType: row.productType, familyId: row.familyId }, row.values)
+      }
     }
   }
 
@@ -2024,3 +2026,31 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
 }
 
 export { UnknownMarketError }
+
+/** The row's readiness state from its issues: an error dominates, then the listing's own state, then what is missing. */
+function readinessState(issues: ReadinessIssue[], listing: SheetListing | null, channel: string | null | undefined, onChannel: boolean): SheetReadiness['state'] {
+  if (issues.some((i) => i.severity === 'error')) return 'errors'
+  return listedState(listing, channel) ?? (!listing && onChannel ? 'unlisted' : issues.length > 0 ? 'missing' : 'ready')
+}
+
+/**
+ * A mapped cell's findings as readiness issues. Audit A20 — the publish verdict decides (`mapped.blocking`): only what
+ * publish would block is an error; the others warn (an eBay off-list value, a deprecated option, a Nexus-only rule).
+ */
+function pushMappedIssues(issues: ReadinessIssue[], column: { key: string; label: string }, mapped: MappedCell | null | undefined) {
+  for (const message of mapped?.errors ?? []) {
+    if (!(mapped!.blocking ?? mapped!.errors).includes(message)) {
+      if (!issues.some(issue => issue.key === column.key && (issue.severity === 'error' || issue.message === message))) {
+        issues.push({ key: column.key, label: column.label, message, severity: 'warn' })
+      }
+      continue
+    }
+    // A blocking mapping verdict replaces the weaker warning for the same field.
+    for (let index = issues.length - 1; index >= 0; index--) {
+      if (issues[index].key === column.key && issues[index].severity === 'warn') issues.splice(index, 1)
+    }
+    if (!issues.some(issue => issue.key === column.key && issue.severity === 'error')) {
+      issues.push({ key: column.key, label: column.label, message, severity: 'error' })
+    }
+  }
+}

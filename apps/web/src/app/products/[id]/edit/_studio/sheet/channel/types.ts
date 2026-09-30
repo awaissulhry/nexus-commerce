@@ -249,6 +249,8 @@ export interface MappedCell {
   appliedTransforms: string[]
   warnings: string[]
   errors: string[]
+  /** Audit A20 — the `errors` publish would block; the others only warn (an eBay off-list value, a deprecated option). */
+  blocking?: string[]
   mappingErrors?: string[]
   autoCorrected: { from: string; to: string } | null
   requiredByRule: boolean

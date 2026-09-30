@@ -113,7 +113,7 @@ interface SheetCellLike {
   inheritedFrom?: string | null
   pinned?: boolean
   resettable?: boolean
-  mapped?: { value?: unknown; warnings: string[]; errors: string[]; listingLevel?: ListingLevelMark } | null
+  mapped?: { value?: unknown; warnings: string[]; errors: string[]; blocking?: string[]; listingLevel?: ListingLevelMark } | null
 }
 interface SheetRowLike { id: string; sku: string; parentId: string | null; aliasId?: string | null; values: Record<string, SheetCellLike> }
 interface SheetColumnLike { key: string; label: string; channelLabel?: string; channels?: Record<string, { store?: unknown } | undefined> }
@@ -130,10 +130,12 @@ export interface ListingLevelMark { productId: string; sku: string; variation?: 
  * row the value is the listing's (P1 review 4): shown inherited from the listing's row (`layer: 'alias'`), with no reset
  * of its own — a clear or a set there writes the listing's value. Runs after the Variation theme cells are built, which
  * read the rows' own values for axis candidates. `groups`: each listing (primary and aliases) with its projection's axes
- * and the variations it sends.
+ * and the variations it sends. Returns the cells now showing another row's value (audit A21): their readiness is the
+ * listing's value's, not the row's own.
  */
-export function showEbayListingLevel(input: { rows: SheetRowLike[]; columns: SheetColumnLike[]; label: string
-  groups: Array<{ aliasKey: string; axes: ReadonlyArray<{ included: boolean; channelName?: string | null; familyKey?: string; label?: string }> | null | undefined; includedIds: Set<string>; familyAxes?: unknown }> }) {
+export function showEbayListingLevel<R extends SheetRowLike>(input: { rows: R[]; columns: SheetColumnLike[]; label: string
+  groups: Array<{ aliasKey: string; axes: ReadonlyArray<{ included: boolean; channelName?: string | null; familyKey?: string; label?: string }> | null | undefined; includedIds: Set<string>; familyAxes?: unknown }> }): Array<{ row: R; key: string }> {
+  const judged: Array<{ row: R; key: string }> = []
   const fields: ListingLevelField[] = input.columns.flatMap(col => {
     const store = col.channels?.[input.label]?.store as Store
     return store ? [{ key: col.key, label: col.label, store, names: [col.key, col.label, col.channelLabel] }] : []
@@ -170,7 +172,9 @@ export function showEbayListingLevel(input: { rows: SheetRowLike[]; columns: She
           // The row's own different value is named once, by the cell's source (`listingLevel.ownValue`), not again here.
           mapped: shown ? { ...shown, errors: [...shown.errors], warnings: [...shown.warnings], listingLevel: mark }
             : { value: cell.value, warnings: [], errors: [], listingLevel: mark } }
+        if (level) judged.push({ row, key: field.key })
       }
     }
   }
+  return judged
 }
