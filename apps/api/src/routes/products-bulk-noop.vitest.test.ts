@@ -158,7 +158,9 @@ describe('Shopify and Etsy store information saves', () => {
       const persisted = JSON.parse(update[1])
       expect(persisted.keep).toBe(false)
       expect(locale ? persisted._shopifyInformationLocales[locale]['metafield:PRODUCT:custom.value'] : persisted.metafields.PRODUCT.custom.value[type!]).toBe(value)
-      expect(channelListingFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ OR: expect.arrayContaining([expect.objectContaining({ channelConnectionId: 'store-outlet', aliasKey: '', channel: 'SHOPIFY', marketplace: 'GLOBAL' })]) }) }))
+      // The listing is read on its exact account and alias (B31: one read shape, with the coordinate at the top level).
+      expect(channelListingFindMany.mock.calls.some(([args]: any[]) => [args?.where, ...(args?.where?.OR ?? [])].some((where: any) =>
+        where?.channelConnectionId === 'store-outlet' && where?.aliasKey === '' && where?.channel === 'SHOPIFY' && where?.marketplace === 'GLOBAL'))).toBe(true)
       expect(productUpdate).not.toHaveBeenCalled()
     } finally { columns.mockRestore(); category.mockRestore() }
   })

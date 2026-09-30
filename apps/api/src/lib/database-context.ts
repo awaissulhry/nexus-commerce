@@ -79,6 +79,20 @@ export async function afterDatabaseCommitBatch<T>(key: string, items: readonly T
   active.effects.set(key, () => run([...((active.batches.get(key) ?? []) as Set<T>)]))
 }
 
+/**
+ * B31 — `afterDatabaseCommitBatch`, but the work runs INSIDE the transaction, just before it commits: every caller's
+ * items, in order, in one call (a bulk save's per-row audit rows become one INSERT). A savepoint rolled back drops its
+ * own items with it. Outside a transaction the work runs at once.
+ */
+export async function beforeDatabaseCommitBatch<T>(key: string, items: readonly T[], run: (items: T[]) => Promise<unknown>) {
+  const active = context.getStore()
+  if (!active) { await run([...items]); return }
+  const bag = (active.batches.get(key) ?? new Set<unknown>()) as Set<T>
+  for (const item of items) bag.add(item)
+  active.batches.set(key, bag)
+  active.producers.set(key, () => run([...((active.batches.get(key) ?? []) as Set<T>)]))
+}
+
 /** PSIE — is a before-commit producer with this key already registered in the active transaction? */
 export function hasBeforeDatabaseCommit(key: string): boolean {
   return context.getStore()?.producers.has(key) ?? false

@@ -22,7 +22,9 @@ import { Prisma } from '@prisma/client'
 
 /** Configuration a product save reads and never writes; kept across the save's writes until one touches them. */
 const REFERENCE_MODELS = new Set(['Marketplace', 'ChannelConnection', 'CategorySchema', 'ChannelSchema', 'CustomAttribute', 'AttributeGroup',
-  'AttributeOption', 'FamilyAttribute', 'ProductFamily', 'CategoryChannelMapping', 'CategoryClosure', 'Category'])
+  'AttributeOption', 'FamilyAttribute', 'ProductFamily', 'CategoryChannelMapping', 'CategoryClosure', 'Category',
+  // B31 — the eBay description themes a theme cell is checked against (`reference-values.service.ts`), once per row.
+  'EbayDescriptionTheme'])
 const READS = new Set(['findUnique', 'findUniqueOrThrow', 'findFirst', 'findFirstOrThrow', 'findMany', 'count', 'aggregate', 'groupBy'])
 const delegateModels = new Map(Prisma.dmmf.datamodel.models.map(model => [model.name[0].toLowerCase() + model.name.slice(1), model.name]))
 /** Each model's relation fields: a write that names one reaches another table (a nested create, connect, update …). */

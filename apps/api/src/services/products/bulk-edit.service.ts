@@ -10,7 +10,7 @@ import type { SheetChannel } from '../pim/sheet-columns.service.js'
 import type { FastifyBaseLogger } from 'fastify'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
-import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
+import { activeDatabaseTransaction, afterDatabaseCommitBatch, beforeDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
@@ -499,6 +499,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // #569 — the registry marketplace comes from the RAW contexts, before the
   // channel filter above drops a master scope's channel-less context.
   const registryMarketplace = validationMarketplace(rawContexts) ?? primaryContext?.marketplace ?? null
+  /**
+   * B31 — the listings of these products on ONE coordinate, in one read shape (full rows). Every reader of those rows
+   * before the request writes (the reference check, the no-op pass, the channel check, the draft step, the bag writes)
+   * asks the same question the same way, so the transaction's read memo answers it once.
+   */
+  const coordinateListings = (ctx: { channel: SheetChannel; marketplace: string; aliasKey?: string }, productIds: string[]) =>
+    prisma.channelListing.findMany({ where: { productId: { in: [...new Set(productIds)] }, channel: ctx.channel, marketplace: ctx.marketplace,
+      channelConnectionId: connFor.get(ctx.channel) ?? null, aliasKey: ctx.aliasKey ?? '' } })
   if (!Array.isArray(changes) || changes.length === 0) {
     throw new ProductBulkError(400, { error: 'No changes provided' })
   }
@@ -1578,10 +1586,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const scope = effectiveContexts.length === 1 ? primaryContext : null
     const refused = new Set<Validated>()
     try {
-      const listings = scope ? await prisma.channelListing.findMany({ where: {
-        productId: { in: [...new Set(references.map(v => v.id))] }, channel: scope.channel, marketplace: scope.marketplace,
-        channelConnectionId: connFor.get(scope.channel) ?? null, aliasKey: scope.aliasKey ?? '',
-      } }) : []
+      const listings = scope ? await coordinateListings(scope, references.map(v => v.id)) : []
       const listingsByProduct = new Map(listings.map(listing => [listing.productId, listing]))
       for (const change of references) {
         const field = change.field.slice(5)
@@ -1705,7 +1710,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       const ids = [...new Set(validated.map((v) => v.id))]
       const [prodRows, listingRows] = await Promise.all([
         prisma.product.findMany({ where: { id: { in: ids } } }),
-        effectiveContexts.length > 0
+        effectiveContexts.length === 1 ? coordinateListings(effectiveContexts[0], ids) : effectiveContexts.length > 0
           ? prisma.channelListing.findMany({
               where: {
                 productId: { in: ids },
@@ -1866,8 +1871,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     if (candidates.length) {
       try {
         const { informationChangeErrors } = await import('../pim/information-validation.js')
-        const listings = await prisma.channelListing.findMany({ where: { productId: { in: [...new Set(candidates.map(c => c.id))] },
-          channel: primaryContext.channel, marketplace: primaryContext.marketplace, channelConnectionId: connFor.get(primaryContext.channel) ?? null, aliasKey: primaryContext.aliasKey ?? '' } })
+        const listings = await coordinateListings(primaryContext, candidates.map(c => c.id))
         const issues = await informationChangeErrors({ ...primaryContext, accountId: connFor.get(primaryContext.channel), changes: candidates, listings, columns: rowContract })
         errors.push(...issues.errors)
         // The channel's own verdict on a cell replaces the column contract's sentence for it (one reason, not two).
@@ -1928,8 +1932,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const productIds = [...new Set(onCoordinate.map(v => v.id))]
     const accountId = connFor.get(ctx.channel) ?? null
     const aliasKey = ctx.aliasKey ?? ''
-    const existing = await prisma.channelListing.findMany({ where: { productId: { in: productIds }, channel: ctx.channel, marketplace: ctx.marketplace,
-      channelConnectionId: accountId, aliasKey }, select: { id: true, productId: true, version: true } })
+    const existing = await coordinateListings(ctx, productIds)
     if (listingToken && expectedVersion === 0 && existing.length) throw new ProductBulkError(409, {
       code: 'VERSION_CONFLICT', error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.',
       expectedVersion, currentVersion: existing[0].version, listingId: existing[0].id, versionOf: 'channelListing',
@@ -2119,12 +2122,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // no previous value, which the history API reports honestly rather than
     // rendering as "unchanged".
     const capturePrevious = expectedVersion !== undefined
-    const targetProducts = await prisma.product.findMany({
-      where: { id: { in: targetIds } },
-      select: capturePrevious
-        ? { id: true, parentId: true, isParent: true, categoryAttributes: true, localizedContent: true, name: true, description: true, brand: true, manufacturer: true, basePrice: true, bulletPoints: true, keywords: true }
-        : { id: true, parentId: true, isParent: true },
-    })
+    // B31 — with a token, the full rows: the same read as the no-op pass above, which the read memo then answers.
+    const targetProducts: Array<{ id: string; parentId: string | null; isParent: boolean }> = capturePrevious
+      ? await prisma.product.findMany({ where: { id: { in: targetIds } } })
+      : await prisma.product.findMany({ where: { id: { in: targetIds } }, select: { id: true, parentId: true, isParent: true } })
     const priorById = new Map(targetProducts.map((p) => [p.id, p as Record<string, unknown>]))
     const childIdSet = new Set(
       targetProducts.filter((p) => p.parentId).map((p) => p.id)
@@ -2783,7 +2784,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     if (platformPatchByCoord.size > 0) {
       const entries = [...platformPatchByCoord.values()]
       const entryKeyOf = (e: (typeof entries)[number]) => `${e.productId}|${e.channel}|${e.marketplace}|${e.aliasKey}`
-      const rows = await prisma.channelListing.findMany({
+      const rows = effectiveContexts.length === 1 ? await coordinateListings(effectiveContexts[0], entries.map(e => e.productId)) : await prisma.channelListing.findMany({
         where: {
           productId: { in: [...new Set(entries.map((e) => e.productId))] },
           OR: entries.map((e) => ({ channel: e.channel as never, marketplace: e.marketplace, aliasKey: e.aliasKey, channelConnectionId: connFor.get(e.channel) ?? null })),
@@ -3097,7 +3098,6 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         },
       }
     })
-    await auditLogService.writeMany(auditRows)
 
     // Activity consumes the same scoped receipts as field history. Mixed shared/channel
     // requests must never put another destination's fields in a scoped event.
@@ -3113,9 +3113,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       data: { fields: rows.map(row => row.after), bulkOperationId: bulkOp.id },
       metadata: { ...rows[0].metadata, source: 'OPERATOR' as const, userId: auditActor },
     }))
-    const activeTx = activeDatabaseTransaction()
-    if (activeTx) await productEventService.emitManyTx(activeTx, activityEvents)
-    else await productEventService.emitMany(activityEvents)
+    // B31 — written once per transaction, just before it commits: a bulk save's rows share one audit INSERT and one
+    // event INSERT instead of one each per row (a unit rolled back to its savepoint takes its rows with it).
+    await beforeDatabaseCommitBatch('product-activity:bulk-edit', [{ auditRows, activityEvents }], async writes => {
+      await auditLogService.writeMany(writes.flatMap(write => write.auditRows))
+      const events = writes.flatMap(write => write.activityEvents)
+      const activeTx = activeDatabaseTransaction()
+      if (activeTx) await productEventService.emitManyTx(activeTx, events)
+      else await productEventService.emitMany(events)
+    })
 
     // Phase 1 — refresh ProductReadCache synchronously for every product
     // this PATCH touched, so the /products grid (which reads the cache)
