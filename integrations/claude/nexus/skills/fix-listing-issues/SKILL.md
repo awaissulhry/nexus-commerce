@@ -17,7 +17,7 @@ Use the channel (`AMAZON`, `EBAY`, `SHOPIFY`, `ETSY`) and market (such as `DE` o
 
 Call `listing-issues` with `channel`, `market` and `severity: "error"`. Look at warnings only after the errors, or when the person asks.
 
-- Each item is one listing: SKU, status, whether it is published, and up to 10 issues, errors first (`moreIssues` counts the rest).
+- Each item is one listing: SKU, status, `draft` (Nexus has not sent it yet) and `linked` (it carries the channel's own item id; a draft can be linked), and up to 10 issues, errors first (`moreIssues` counts the rest). Never call a listing "published" or "live" from these fields alone: say draft or not, linked or not.
 - `from` says where an issue came from: `channel` (the channel reported it), `suppression` (Amazon hides the listing from buyers), `status` (the listing is in an error or suppressed state), `sync` (the last push failed), `validation` (a Nexus check), `readiness` (required values are missing before it can publish; `missing` names them).
 - To read on, call again with the same filters and `cursor` set to `nextCursor`; the list has ended only when `nextCursor` is null. Work through about 10 listings at a time and say how many are left (`total`).
 - This reads what Nexus has saved; it does not ask the channel again. Something fixed directly on the channel can still show here until Nexus next reads the channel.
