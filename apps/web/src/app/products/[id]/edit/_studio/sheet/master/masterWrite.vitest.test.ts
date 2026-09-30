@@ -333,9 +333,10 @@ describe('commitMasterRow — failures and reporting', () => {
   })
 
   it('uses each language column address and advances CAS from the prior language response', async () => {
-    fetchMock.mockResolvedValueOnce(json(200, { errors: [], currentVersion: 8, versionOf: 'product' }))
-      .mockResolvedValueOnce(json(200, { errors: [], currentVersion: 9, versionOf: 'product' }))
-    const row = { values: { 'name@it': { contentAddress: { tier: 'source' }, contentVersion: 1 }, 'name@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } } } as unknown as StudioRow
+    fetchMock.mockResolvedValueOnce(json(200, { updated: 1, errors: [], currentVersion: 8, versionOf: 'product' }))
+      .mockResolvedValueOnce(json(200, { updated: 1, errors: [], currentVersion: 9, versionOf: 'product' }))
+    // The studio DTO supplies id/version; a successful bulk write supplies updated, unlike a diagnostic/no-op reply.
+    const row = { id: 'p1', version: 7, values: { 'name@it': { contentAddress: { tier: 'source' }, contentVersion: 1 }, 'name@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } } } as unknown as StudioRow
     const translated = { ...sheet, columns: [col('name@it', { writeField: 'name', locale: 'it' }), col('name@de', { writeField: 'name', locale: 'de' })] }
     const result = await commitMasterRow(req([{ colId: 'name@it', value: 'Italian' }, { colId: 'name@de', value: 'German' }] as never, { expectedVersion: 7, row }), ctx({ sheet: translated }))
     const bodies = fetchMock.mock.calls.map(call => JSON.parse(call[1].body))
@@ -346,9 +347,9 @@ describe('commitMasterRow — failures and reporting', () => {
   })
 
   it('chains the next translated edit on the translation version the last save answered (P3 commit sweep)', async () => {
-    fetchMock.mockResolvedValueOnce(json(200, { errors: [], currentVersion: 8, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 5 }] }))
-      .mockResolvedValueOnce(json(200, { errors: [], currentVersion: 9, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 6 }] }))
-    const row = { id: 'p1', values: { 'name@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 }, 'description@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } } } as unknown as StudioRow
+    fetchMock.mockResolvedValueOnce(json(200, { updated: 1, errors: [], currentVersion: 8, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 5 }] }))
+      .mockResolvedValueOnce(json(200, { updated: 1, errors: [], currentVersion: 9, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 6 }] }))
+    const row = { id: 'p1', version: 7, values: { 'name@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 }, 'description@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } } } as unknown as StudioRow
     const translated = { ...sheet, columns: [col('name@de', { writeField: 'name', locale: 'de' }), col('description@de', { writeField: 'description', locale: 'de' })] }
     await commitMasterRow(req([{ colId: 'name@de', value: 'Name' }] as never, { expectedVersion: 7, row }), ctx({ sheet: translated }))
     await commitMasterRow(req([{ colId: 'description@de', value: 'Text' }] as never, { expectedVersion: 8, row }), ctx({ sheet: translated }))

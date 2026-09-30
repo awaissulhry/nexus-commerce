@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adoptContentVersions, contentVersionsOf, preserveContentVersions } from './contentVersions'
+import { adoptContentVersions, contentVersionsOf, contentWriteProof, preserveContentVersions } from './contentVersions'
 
 const pin = { tier: 'pin', language: 'it' }
 const row = () => ({
@@ -104,6 +104,24 @@ describe('replacement rows keep the versions already confirmed for their owners'
 })
 
 describe('a save moves the write token of every cell on the content row it wrote', () => {
+  it('a successful absent-pin retry does not rebase a different-language absence', () => {
+    const r = { id: 'p1', listing: null as { id: string; version: number } | null, values: {
+      french: { contentAddress: { tier: 'pin', language: 'fr' }, contentVersion: 0 },
+      dutch: { contentAddress: { tier: 'pin', language: 'nl' }, contentVersion: 0 },
+    } }
+    const selected = contentWriteProof(r, [r.values.french], 'channelListing', 0)
+    if (!selected.ok) throw new Error(selected.reason)
+    r.listing = { id: 'existing-listing', version: 5 }
+    selected.proof.listingRetry = { listingId: 'existing-listing', expectedVersion: 4 }
+    adoptContentVersions(r, { updated: 1, currentVersion: 5, versionOf: 'channelListing',
+      contentVersions: [{ id: 'p1', tier: 'pin', language: 'fr', version: 1 }] }, [], selected.proof)
+    expect(r.values.french.contentVersion).toBe(1)
+    const other = contentWriteProof(r, [r.values.dutch], 'channelListing', 5)
+    if (!other.ok) throw new Error(other.reason)
+    expect(other.proof.expectedVersion).toBe(0)
+    expect(r.values.dutch.contentVersion).toBe(0)
+  })
+
   it('moves the pin cells of that language on that row, and nothing else', () => {
     const r = row()
     expect(adoptContentVersions(r, { contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: 5 }] })).toEqual(['bulletPoints_1', 'bulletPoints_2'])

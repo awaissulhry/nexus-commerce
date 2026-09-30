@@ -23,7 +23,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
-import { adoptContentVersions } from '../contentVersions'
+import { adoptContentVersions, contentWriteProof } from '../contentVersions'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -126,6 +126,15 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
   const writeId = `${req.rowId}:${Date.now()}`
   ctx.opts.onWriteStart?.(writeId, req.rowId)
 
+  const selection = contentWriteProof(req.row ?? { id: req.rowId }, bulk.map(cell => req.row?.values?.[cell.colId]),
+    'product', req.expectedVersion, ctx.sheet?.rows ?? [])
+  if (!selection.ok) {
+    for (const cell of bulk) cells[cell.colId] = { ok: false, reason: selection.reason }
+    ctx.opts.onWriteEnd?.(writeId, false, selection.reason, req.rowId)
+    return { ok: false, conflict: true, reason: selection.reason, cells }
+  }
+  const proof = selection.proof
+
   let version: number | undefined
   let conflict = false
   let batchReason: string | undefined
@@ -166,16 +175,9 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         ...(ctx.market
           ? { marketplaceContexts: [{ marketplace: ctx.market, locale: ctx.locale }] }
           : {}),
-        // Omitted when unknown — the endpoint treats absent as "no concurrency guard", which is
-        // honest, where a guessed number would refuse a write the operator is entitled to make.
-        //
-        // ⚠ NOT covered by a test, and it cannot be: `expectedVersion: req.expectedVersion` with
-        // an undefined value is an EQUIVALENT MUTANT, because `JSON.stringify` drops undefined
-        // properties — both forms put identical bytes on the wire. The spread stays because it
-        // states the intent at the call site, but do not read the green suite as evidence that
-        // this line is load-bearing; it becomes so only if the body stops going through
-        // `JSON.stringify`.
-        ...(req.expectedVersion !== undefined ? { expectedVersion: req.expectedVersion } : {}),
+        // Content uses the owner that confirmed its counter. Facts keep the writer's token.
+        // An unknown fact token remains omitted; a diagnostic 409 cannot supply a content pair.
+        ...(proof.expectedVersion !== undefined ? { expectedVersion: proof.expectedVersion } : {}),
       })
       const body = await res.json().catch(() => null)
       // A 5xx is "no answer" — unless the bulk save states nothing of it was stored (rolled back): that is a refusal.
@@ -217,7 +219,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
          */
         version = versionFromBody(body) ?? version
         // The translation the save moved hands its new token to every cell writing to it.
-        adoptContentVersions(req.row, body)
+        adoptContentVersions(req.row, body, ctx.sheet?.rows ?? [], proof)
       }
     }
 

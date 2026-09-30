@@ -52,6 +52,31 @@ afterEach(() => vi.unstubAllGlobals())
 const coord = { channel: 'EBAY' as const, marketplace: 'IT' }
 
 describe('shared content versions across listing aliases', () => {
+  it('does not confirm an older alias cell from another alias own save', async () => {
+    const make = (id: string, version: number, contentVersion: number) => row({ rowId: id, aliasId: id, version,
+      values: { title: cell({ writeField: 'name', writeTarget: 'master', writeVerb: 'master',
+        contentAddress: { tier: 'language', language: 'de' }, contentVersion } as never) } })
+    const fresh = make('fresh-alias', 7, 4), stale = make('stale-alias', 6, 3)
+    const bodies: Array<{ expectedVersion?: number; changes: Array<{ contentVersion?: number }> }> = []
+    let owner = 7, content = 4
+    const options = { ...coord, locale: 'de', familyRows: () => [fresh, stale], bulkSend: async (body: unknown) => {
+      const sent = body as (typeof bodies)[number]
+      bodies.push(sent)
+      const accepted = sent.expectedVersion === owner && sent.changes[0].contentVersion === content
+      if (accepted) { owner++; content++ }
+      return new Response(JSON.stringify(accepted ? { updated: 1, currentVersion: owner, versionOf: 'product',
+        contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: content }] }
+        : { error: 'Changed', currentVersion: owner, versionOf: 'product' }), { status: accepted ? 200 : 409 })
+    } }
+    const save = (target: ChannelSheetRow) => commitChannelRow({ rowId: target.rowId, row: target, expectedVersion: target.version,
+      cells: [{ colId: 'title', value: 'Next title', intent: 'set' }] }, options)
+    expect((await save(fresh)).ok).toBe(true)
+    expect(stale.version).toBe(8) // Generic fact ownership can move; the content proof must remain older.
+    expect(stale.values.title.contentVersion).toBe(3)
+    expect((await save(stale)).ok).toBe(false)
+    expect(bodies.map(body => [body.expectedVersion, body.changes[0].contentVersion])).toEqual([[7, 4], [6, 3]])
+  })
+
   it.each([['language', 'seed'], ['language', 'edit'], ['pin', 'seed'], ['pin', 'edit']] as const)('an older %s row supplied by %s keeps confirmed versions', async (tier, through) => {
     const make = () => row({ values: { title: cell({ writeField: 'name',
       writeTarget: tier === 'language' ? 'master' : 'channelListing', writeVerb: tier === 'language' ? 'master' : 'channel',
@@ -124,7 +149,7 @@ describe('shared content versions across listing aliases', () => {
     expect(bulkSend).toHaveBeenCalledTimes(2)
   })
   it('a late answer never puts sibling content tokens behind a newer confirmed save', async () => {
-    const r = row({ version: 9, values: { title: cell({ writeField: 'title', contentAddress: { tier: 'language', language: 'de' }, contentVersion: 6 } as never) } })
+    const r = row({ version: 9, values: { title: cell({ writeField: 'title', writeTarget: 'master', writeVerb: 'master', contentAddress: { tier: 'language', language: 'de' }, contentVersion: 6 } as never) } })
     const changed = vi.fn()
     const result = await commitChannelRow({ rowId: r.rowId, row: r, expectedVersion: 7, cells: [{ colId: 'title', value: 'Old response', intent: 'set' }] } as never,
       { ...coord, familyRows: () => [r], onProductVersionsChanged: changed,
@@ -782,6 +807,57 @@ describe('P1 — an emptied list is a clear (report 1 I-10)', () => {
 })
 
 describe('the next content edit on a row chains on the version the last save answered (P3 commit sweep)', () => {
+  it('chains a pin created under a real version-zero absence check', async () => {
+    const bodies: Array<{ expectedVersion?: number; changes: Array<{ contentVersion?: number }> }> = []
+    const address = { tier: 'pin', language: 'it', coordinate: { channel: 'EBAY', market: 'IT', accountId: 'account-a' } }
+    const draft = row({ listing: null, values: { title: cell({ writeField: 'name', contentAddress: address, contentVersion: 0 } as never) } })
+    const options = { ...coord, accountId: 'account-a', bulkSend: async (body: unknown) => {
+      const sent = body as (typeof bodies)[number]
+      bodies.push(sent)
+      const before = bodies.length - 1
+      const accepted = sent.expectedVersion === before && sent.changes[0].contentVersion === before
+      return new Response(JSON.stringify(accepted ? { updated: 1, currentVersion: before + 1, versionOf: 'channelListing',
+        ...(before === 0 ? { createdListings: [{ productId: 'p1', listingId: 'created-listing', version: 1 }] } : {}),
+        contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: before + 1 }] } : { error: 'Changed' }), { status: accepted ? 200 : 409 })
+    } }
+    const save = (value: string) => commitChannelRow({ rowId: draft.rowId, row: draft, expectedVersion: 7,
+      cells: [{ colId: 'title', value, intent: 'set' }] }, options)
+    expect((await save('First pin')).ok).toBe(true)
+    expect((await save('Next pin')).ok).toBe(true)
+    expect(bodies.map(body => [body.expectedVersion, body.changes[0].contentVersion])).toEqual([[0, 0], [1, 1]])
+  })
+
+  it.each([false, true])('an existing listing only confirms a successfully created absent pin (foreign pin=%s)', async foreignPin => {
+    const bodies: Array<{ expectedVersion?: number; changes: Array<{ contentVersion?: number; value?: string }> }> = []
+    const address = { tier: 'pin', language: 'it', coordinate: { channel: 'EBAY', market: 'IT', accountId: 'account-a' } }
+    const draft = row({ listing: null, values: { title: cell({ writeField: 'name', contentAddress: address, contentVersion: 0 } as never) } })
+    let owner = 4, content = foreignPin ? 1 : 0, stored = foreignPin ? 'Foreign pin' : null
+    const options = { ...coord, accountId: 'account-a', bulkSend: async (body: unknown) => {
+      const sent = body as (typeof bodies)[number]
+      bodies.push(sent)
+      if (sent.expectedVersion === 0) return new Response(JSON.stringify({ code: 'VERSION_CONFLICT', currentVersion: owner,
+        listingId: 'existing-listing', versionOf: 'channelListing' }), { status: 409 })
+      if (sent.expectedVersion !== owner || sent.changes[0].contentVersion !== content) return new Response(JSON.stringify({ error: 'Changed' }), { status: 409 })
+      owner++; content++; stored = sent.changes[0].value ?? null
+      return new Response(JSON.stringify({ updated: 1, currentVersion: owner, versionOf: 'channelListing',
+        contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: content }] }))
+    } }
+    const save = (value: string) => commitChannelRow({ rowId: draft.rowId, row: draft, expectedVersion: 7,
+      cells: [{ colId: 'title', value, intent: 'set' }] }, options)
+    expect((await save('Own pin')).ok).toBe(!foreignPin)
+    expect(bodies.map(body => body.expectedVersion)).toEqual([0, 4])
+    expect(draft.listing?.id).toBe('existing-listing')
+    if (foreignPin) {
+      expect(draft.values.title.contentVersion).toBe(0)
+      expect(stored).toBe('Foreign pin')
+    } else {
+      expect(draft.values.title.contentVersion).toBe(1)
+      expect((await save('Next own pin')).ok).toBe(true)
+      expect(bodies[2]).toMatchObject({ expectedVersion: 5, changes: [{ contentVersion: 1 }] })
+      expect(stored).toBe('Next own pin')
+    }
+  })
+
   it('a second bullet save sends the version the first save moved the pin to, with no read in between', async () => {
     const bodies: any[] = []
     const answers = [
