@@ -25,7 +25,7 @@ import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
 
 import { variationThemeColumnDef } from '@/design-system/grid'
-import { scalarColumnDef, booleanLabel, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
+import { scalarColumnDef, booleanLabel, BOOLEAN_OPTIONS, BOOLEAN_EDITOR_PARAMS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
 import { cellIsEditable, cellOf, holdsFamilyValue, sourceLabel, validationApplies, widthFor } from './columnRules'
@@ -567,10 +567,12 @@ export function buildMasterColumns(
       return {
         ...def,
         ...selectEditor(BOOLEAN_OPTIONS),
+        // Yes, No and Clear, like every other list (audit B16).
+        cellEditorParams: BOOLEAN_EDITOR_PARAMS,
         ...(opts.formula
           ? formulaSelector(opts.formula, col, {
               component: SelectPanelEditor,
-              params: { options: BOOLEAN_OPTIONS },
+              params: BOOLEAN_EDITOR_PARAMS,
             })
           : {}),
         editable,

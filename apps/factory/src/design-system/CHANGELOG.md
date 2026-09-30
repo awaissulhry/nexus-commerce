@@ -14,6 +14,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **`ListboxPanel`** and **`AsyncListboxPanel`**: a typed key with no search token ("-", ".", "/", "&", "#") searches for nothing, so the highlight stays on the stored value; it jumped to row 1 and Enter replaced the value (B15). **`ListboxPanel.allowCustom`**: when every typed word is a whole word of the best match ("Cotone" for "Cotone biologico"), the `Use "…"` row is highlighted, so Enter keeps the typed value; a partial word still takes the best match ("Ner" → "Nero") (B23). Mirrored in Web.
 
+- **Every list can be cleared, with one label.** **`SELECT_CLEAR_LABEL`** ("Clear") now lives in `selectPanelModel.ts` (still exported from `SelectCellEditor`). **`BOOLEAN_EDITOR_PARAMS`** (`scalarValue.ts`): Yes, No and Clear for a yes/no cell, one frozen object for both sheets. **`AsyncListboxPanel`** takes **`emptyLabel`**: a Clear row above the choices (↑ from the first choice reaches it; Enter, Tab and a click choose `''`), shown for a stored value even before any choice is loaded. **`ListboxPanel`** no longer says "No matches" under a lone Clear row that nothing searched (B16). Mirrored in Web.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.

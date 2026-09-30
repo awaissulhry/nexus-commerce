@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Field, Listbox, Modal, OptionList } from '@/design-system/components'
+import { SELECT_CLEAR_LABEL } from '@/design-system/grid'
 import { Button, Input, TagInput, Textarea } from '@/design-system/primitives'
 import { clearChoiceWords, setColumnWords, type ClearChoice, type SetColumnFacts } from './sheetReset'
 export type { SetColumnFacts } from './sheetReset'
@@ -64,7 +65,7 @@ export function SetColumnDialog({ request, onApply, onClose }: { request: SetCol
       ? <OptionList options={options} value={Array.isArray(draft) ? draft : []} onChange={setDraft} searchable selectAll={false} allowCustom={column.mode === 'open'} />
       : <TagInput value={Array.isArray(draft) ? draft : []} onChange={setDraft} aria-label={column.label} placeholder="Add a value… (, adds)" />
     : choice
-      ? <Listbox options={options} value={typeof draft === 'string' ? draft : ''} onChange={setDraft} searchable emptyLabel="Empty" ariaLabel={column.label} width="100%" />
+      ? <Listbox options={options} value={typeof draft === 'string' ? draft : ''} onChange={setDraft} searchable emptyLabel={SELECT_CLEAR_LABEL} ariaLabel={column.label} width="100%" />
       : column.kind === 'longtext'
         ? <Textarea value={typeof draft === 'string' ? draft : ''} onChange={e => setDraft(e.target.value)} rows={4} />
         : <Input value={typeof draft === 'string' ? draft : ''} onChange={e => setDraft(e.target.value)} inputMode={column.kind === 'number' ? 'decimal' : undefined} />

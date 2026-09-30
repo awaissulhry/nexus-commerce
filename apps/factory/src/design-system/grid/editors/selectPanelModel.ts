@@ -15,6 +15,13 @@
  * own answer, which is the shape that made a byte cap read as "no cap" one file over.
  */
 
+/**
+ * The row that empties a list, in every list of the sheets: select and yes/no cells, the category, product-type,
+ * reference and policy pickers, and "Set every row…". It read "Clear", "Empty", "Not set" or "No policy selected"
+ * depending on the list (audit B16).
+ */
+export const SELECT_CLEAR_LABEL = 'Clear'
+
 /** What the panel should highlight, given whatever the cell holds. `undefined` = nothing selected. */
 export function panelValueOf(cellValue: unknown): string | undefined {
   if (cellValue == null) return undefined

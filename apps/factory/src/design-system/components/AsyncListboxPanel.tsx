@@ -31,11 +31,20 @@ export interface AsyncListboxPanelProps {
   onKeyChoice?: (value: string | null, end?: KeyboardEvent) => void
   /** Names the stored value when the loaded choices do not include it ("Current: …"); absent, nothing is shown. */
   currentLabel?: string
+  /**
+   * A row above the choices that empties the value (`SELECT_CLEAR_LABEL`), as `ListboxPanel.emptyLabel`: ↑ from the first
+   * choice reaches it, and Enter / Tab / a click choose `''`. Shown while a stored value can be cleared even when no
+   * choice is loaded yet (an eBay category before the 2-character search). Not added when a choice is already `''`.
+   */
+  emptyLabel?: string
   style?: CSSProperties
 }
 
 /** Search plus externally loaded choices. The caller owns fetching/filtering and popup placement. */
-export function AsyncListboxPanel({ label, query, onQueryChange, options, value, loading, error, message, placeholder = 'Search by name', emptyMessage = 'No matches', onRetry, onCommit, onCancel, onKeyChoice, currentLabel, style }: AsyncListboxPanelProps) {
+/** Clear's index, as `ListboxPanel` numbers it. */
+const CLEAR = -2
+
+export function AsyncListboxPanel({ label, query, onQueryChange, options, value, loading, error, message, placeholder = 'Search by name', emptyMessage = 'No matches', onRetry, onCommit, onCancel, onKeyChoice, currentLabel, emptyLabel, style }: AsyncListboxPanelProps) {
   const id = useId()
   const [active, setActive] = useState(-1)
   const choices = loading || error ? [] : groupOptions(options)?.flat ?? options
@@ -51,51 +60,56 @@ export function AsyncListboxPanel({ label, query, onQueryChange, options, value,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchKey, query, value])
   const selected = active >= 0 ? choices[active] : undefined
+  const clearRow = emptyLabel != null && !choices.some(option => option.value === '')
+  // What Enter or Tab chooses: Clear, the highlighted choice, or nothing (keep the stored value).
+  const chosen = active === CLEAR && clearRow ? '' : selected && !selected.disabled ? selected.value : null
+  const showList = !loading && !error && (choices.length > 0 || (clearRow && !!value))
   const storedHidden = currentLabel !== undefined && !!value && !loading && !choices.some(option => option.value === value)
   return <div className="nds-async-listbox" style={style} onKeyDownCapture={event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onCancel(); return }
     if (event.key === 'Enter' && event.nativeEvent.isComposing) { event.stopPropagation(); return }
-    if (event.key === 'Tab' && onKeyChoice) { onKeyChoice(selected && !selected.disabled ? selected.value : null); return }
+    if (event.key === 'Tab' && onKeyChoice) { onKeyChoice(chosen); return }
     if (!(event.target instanceof HTMLInputElement)) return
     if (event.key === 'Enter' && onKeyChoice) {
       /* The grid ends Enter as it ends every other editor's, and moves down; this panel used to end it itself and the
          cell stayed (audit B10). */
       event.preventDefault()
-      if (!selected && query) { event.stopPropagation(); return }
-      const chosen = selected && !selected.disabled ? selected.value : null
+      if (chosen === null && query) { event.stopPropagation(); return }
       if (event.ctrlKey || event.metaKey) { event.stopPropagation(); onKeyChoice(chosen, event.nativeEvent) }
       else onKeyChoice(chosen)
     } else if (event.key === 'Enter') {
       event.preventDefault(); event.stopPropagation()
       // Nothing highlighted = the operator has not chosen: keep the stored value.
-      if (selected && !selected.disabled) onCommit(selected.value)
+      if (chosen !== null) onCommit(chosen)
       else if (!query) onCancel()
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault(); event.stopPropagation()
       const direction = event.key === 'ArrowDown' ? 1 : -1
       setActive(current => {
-        for (let index = current + direction; index >= 0 && index < choices.length; index += direction) {
+        const from = current === CLEAR ? -1 : current
+        for (let index = from + direction; index >= 0 && index < choices.length; index += direction) {
           if (!choices[index].disabled) return index
         }
-        return current
+        return direction < 0 && clearRow ? CLEAR : current
       })
     }
   }}>
     <Field label={label}>
-      <Input size="sm" autoFocus data-autofocus role="combobox" aria-autocomplete="list" aria-expanded={choices.length > 0}
-        aria-controls={choices.length ? `${id}-listbox` : undefined}
-        aria-activedescendant={selected && !selected.disabled ? `${id}-o${active}` : undefined}
+      <Input size="sm" autoFocus data-autofocus role="combobox" aria-autocomplete="list" aria-expanded={showList}
+        aria-controls={showList ? `${id}-listbox` : undefined}
+        aria-activedescendant={chosen !== null && showList ? `${id}-o${active}` : undefined}
         value={query} onChange={event => { setActive(0); onQueryChange(event.target.value) }}
         leadingIcon={<Search size={14} aria-hidden />} placeholder={placeholder} />
     </Field>
     {storedHidden && !query && <p role="status">Current: {currentLabel}</p>}
     {loading ? <p role="status">Loading choices…</p>
       : error ? <p role="alert">{error}</p>
-      : choices.length ? <ListboxPanel idPrefix={id} optionTabIndex={-1} activeIndex={active} onActiveIndexChange={setActive}
-        autoFocus={false} query="" options={choices} value={value} ariaLabel={label}
+      : showList ? <ListboxPanel idPrefix={id} optionTabIndex={-1} activeIndex={active} onActiveIndexChange={setActive}
+        autoFocus={false} query="" options={choices} value={value} ariaLabel={label} emptyLabel={clearRow ? emptyLabel : undefined}
         style={{ width: '100%', maxWidth: '100%', maxHeight: 'min(280px, 40vh)', boxShadow: 'none' }}
-        onCancel={onCancel} onCommit={chosen => { if (choices.some(option => option.value === chosen && !option.disabled)) onCommit(chosen) }} />
-      : <p role="status">{emptyMessage}</p>}
+        onCancel={onCancel} onCommit={picked => { if (picked === '' ? clearRow : choices.some(option => option.value === picked && !option.disabled)) onCommit(picked) }} />
+      : null}
+    {!loading && !error && !choices.length && <p role="status">{emptyMessage}</p>}
     {message && !error && !loading && <p role="status">{message}</p>}
     <div className="nds-async-listbox-actions">
       {onRetry && <Button size="sm" variant="secondary" disabled={loading} onClick={onRetry}>{error ? 'Try again' : 'Refresh'}</Button>}

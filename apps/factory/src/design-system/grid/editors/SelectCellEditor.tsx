@@ -83,8 +83,8 @@ export interface SelectEditorParams {
  */
 export const SELECT_CELL_CLASS = 'nds-cell-is-select'
 
-/** The row that empties a closed list from its editor. */
-export const SELECT_CLEAR_LABEL = 'Clear'
+/** The row that empties a list from its editor — one label for every list (`selectPanelModel.ts`). */
+export { SELECT_CLEAR_LABEL } from './selectPanelModel'
 
 /**
  * The same lucide `ChevronDown` every other DS select uses — one glyph convention, not a new one.

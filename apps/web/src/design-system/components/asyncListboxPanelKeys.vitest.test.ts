@@ -100,3 +100,34 @@ describe('AsyncListboxPanel — a typed key that searches for nothing keeps the 
     expect(props.onCommit).toHaveBeenCalledWith('ABRASIVE_DISCS')
   })
 })
+
+describe('AsyncListboxPanel — Clear (audit B16)', () => {
+  it('↑ from the first choice reaches Clear, and Enter commits an empty value', () => {
+    const props = base({ value: 'ABRASIVE_DISCS', emptyLabel: 'Clear' })
+    key(render(props), 'ArrowUp')
+    key(render(props), 'ArrowUp')
+    key(render(props), 'Enter')
+    expect(props.onCommit).toHaveBeenCalledWith('')
+  })
+  it('Tab on Clear reports an empty value to the grid, and ↓ leaves it for the first choice', () => {
+    const onKeyChoice = vi.fn()
+    const props = base({ value: 'OUTERWEAR', emptyLabel: 'Clear', onKeyChoice })
+    key(render(props), 'ArrowUp')
+    key(render(props), 'Tab')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+    key(render(props), 'ArrowDown')
+    key(render(props), 'Tab')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('3D_PRINTABLE_DESIGNS')
+  })
+  it('a stored value can be cleared before any choice is loaded (an eBay category before its search)', () => {
+    const tree = render(base({ value: '11450', options: [], emptyLabel: 'Clear' }))
+    const panel = flat(tree).find((el) => (el.props as { emptyLabel?: string }).emptyLabel === 'Clear' && 'activeIndex' in el.props)
+    expect(panel).toBeDefined()
+  })
+  it('without emptyLabel nothing changes: ↑ from nothing stays on nothing', () => {
+    const props = base({ value: 'OUTERWEAR' })
+    key(render(props), 'ArrowUp')
+    key(render(props), 'Enter')
+    expect(props.onCommit).not.toHaveBeenCalled()
+  })
+})

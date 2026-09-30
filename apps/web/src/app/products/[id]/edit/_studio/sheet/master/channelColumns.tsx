@@ -1,5 +1,5 @@
 'use client'
-import { scalarColumnDef, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
+import { scalarColumnDef, BOOLEAN_OPTIONS, BOOLEAN_EDITOR_PARAMS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { columnForCategory, columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 import { EbayPolicyEditor, isEbayPolicyField } from '../EbayPolicyInput'
@@ -69,7 +69,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
       : col.kind === 'select'
         ? selectEditor((col.options ?? []).map((o) => ({ value: o, label: col.optionLabels?.[o] ?? o })))
         : col.kind === 'boolean'
-          ? selectEditor(BOOLEAN_OPTIONS)
+          ? { ...selectEditor(BOOLEAN_OPTIONS), cellEditorParams: BOOLEAN_EDITOR_PARAMS }
           : col.kind === 'number'
             /* R-63 — no static editor: the selector below ALWAYS decides on this sheet (the formula-aware popup where a
                formula is available, the same popup with formulas off where not). A static editor's params would be
@@ -111,7 +111,8 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
           : colForRow.kind === 'boolean'
             ? {
                 component: SelectPanelEditor,
-                params: { options: BOOLEAN_OPTIONS },
+                // Yes, No and Clear, as on the Master sheet (audit B16).
+                params: BOOLEAN_EDITOR_PARAMS,
               }
             : colForRow.kind === 'number'
               ? 

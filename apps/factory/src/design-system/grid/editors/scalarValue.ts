@@ -1,4 +1,5 @@
 import type { ColDef } from 'ag-grid-community'
+import { SELECT_CLEAR_LABEL } from './selectPanelModel'
 
 export interface ScalarColumnLike {
   kind: string
@@ -8,6 +9,12 @@ export interface ScalarColumnLike {
 }
 
 export const BOOLEAN_OPTIONS = [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]
+
+/**
+ * A yes/no cell's list editor, on both sheets: Yes, No, and Clear like every other list — a Yes set by mistake could not be
+ * emptied from its own list (audit B16). ONE frozen object: new params identity re-runs AG's column model.
+ */
+export const BOOLEAN_EDITOR_PARAMS = Object.freeze({ options: BOOLEAN_OPTIONS, emptyLabel: SELECT_CLEAR_LABEL })
 
 /** Decode only declared scalar types. Unknown input stays visible for validation. */
 export function parseScalarValue(col: ScalarColumnLike, raw: unknown): unknown {

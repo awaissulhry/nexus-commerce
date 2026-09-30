@@ -4,7 +4,7 @@ import Link from '@/lib/workspaces/Link'
 import { Button } from '@/design-system/primitives'
 import { categoryHref } from '@/app/catalog/categories/api'
 import { AsyncListboxPanel } from '@/design-system/components'
-import { typedStart, type EditorStop, type GridCancel } from '@/design-system/grid'
+import { SELECT_CLEAR_LABEL, typedStart, type EditorStop, type GridCancel } from '@/design-system/grid'
 import { loadCategoryOptions, type CategoryOption } from './categoryOptions'
 
 export function ChannelCategoryEditor({ value, onValueChange, channel, market, accountId, stopEditing, api, eventKey }: {
@@ -34,7 +34,8 @@ export function ChannelCategoryEditor({ value, onValueChange, channel, market, a
   }, [channel, market, accountId, remoteQuery, revision, key, needsSearch])
 
   const cancel = () => api.stopEditing(true)
-  const toCell = (chosen: string) => channel === 'ETSY' ? Number(chosen) : chosen
+  // Clear stores null — never Etsy's Number('') = 0.
+  const toCell = (chosen: string) => chosen === '' ? null : channel === 'ETSY' ? Number(chosen) : chosen
   const commit = (chosen: string) => {
     if (chosen === String(value ?? '')) return cancel()
     onValueChange(toCell(chosen))
@@ -47,6 +48,6 @@ export function ChannelCategoryEditor({ value, onValueChange, channel, market, a
     emptyMessage={needsSearch ? 'Enter at least 2 characters to find a category.' : 'No categories match your search.'}
     onRetry={error ? () => setRevision(value => value + 1) : undefined} onCancel={cancel} onCommit={commit}
     onKeyChoice={(chosen, end) => { if (chosen !== null && chosen !== String(value ?? '')) onValueChange(toCell(chosen)); if (end) stopEditing(false, end) }}
-    currentLabel={value == null || value === '' ? undefined : String(value)}
+    currentLabel={value == null || value === '' ? undefined : String(value)} emptyLabel={SELECT_CLEAR_LABEL}
     style={{ width: 'min(480px, 85vw)' }} /><Button asChild size="xs" variant="link"><Link href={categoryHref('assignments', { channel, market })} onClick={cancel}>Manage categories</Link></Button></div>
 }

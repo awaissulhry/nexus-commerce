@@ -367,7 +367,8 @@ export function ListboxPanel({
           {emptyLabel}
         </button>
       )}
-      {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
+      {/* Nothing searched and only Clear to offer (a picker's choices not loaded yet): Clear is the list, not "No matches". */}
+      {matches.length === 0 && !(showClear && !q) && <div className="nds-combo-empty">No matches</div>}
       {groups
         ? (() => {
             let i = custom ? 0 : -1

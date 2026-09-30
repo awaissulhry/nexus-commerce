@@ -2,7 +2,7 @@
 import { REFERENCE_FIELDS, type ReferenceField } from '@nexus/shared/reference-values'
 import { useEffect, useState } from 'react'
 import { AsyncListboxPanel } from '@/design-system/components'
-import { cellValueOf, isUnchanged, typedStart, type EditorStop, type GridCancel } from '@/design-system/grid'
+import { cellValueOf, isUnchanged, typedStart, SELECT_CLEAR_LABEL, type EditorStop, type GridCancel } from '@/design-system/grid'
 import { Button, Select } from '@/design-system/primitives'
 import { loadEbayPolicies, policyLists, type Policy } from './ebayPolicies'
 
@@ -61,7 +61,7 @@ export function EbayPolicyEditor({ value, onValueChange, fieldKey, market, conne
   return <AsyncListboxPanel label={`Search ${label.toLowerCase()}`} query={query} onQueryChange={setQuery} value={current}
     loading={!loaded} error={loaded?.error}
     options={(loaded?.options ?? []).filter(option => `${option.name} ${option.id}`.toLowerCase().includes(search)).map(option => ({ value: option.id, label: option.name, title: `${option.name}\nID: ${option.id}` }))}
-    currentLabel={current || undefined}
+    currentLabel={current || undefined} emptyLabel={SELECT_CLEAR_LABEL}
     onRetry={() => setRevision(revision => revision + 1)} onCancel={() => api.stopEditing(true)}
     onKeyChoice={(chosen, end) => { if (chosen !== null && changed(chosen)) onValueChange(cellValueOf(chosen)); if (end) stopEditing(false, end) }}
     onCommit={chosen => {
