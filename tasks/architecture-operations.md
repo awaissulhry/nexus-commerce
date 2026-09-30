@@ -146,20 +146,22 @@ Before the next step, check that the service is healthy on the right commit, and
 Then run Deploy API by hand (`gh workflow run deploy-api.yml`). It ships the service whose way of
 deploying changed, and nothing else that is current: `release-changes.sh` sees that the service
 runs a `railway up` build while the variable names it. The deploy points the service at its image
-in the project token's environment and starts a deployment, through Railway's GraphQL API
-(`serviceInstanceUpdate` with `source.image`, a read-back of the source, then
-`serviceInstanceDeployV2`, which returns the deployment id); Settings → Source then shows the
-image. The commit each
-service runs: the API reports it at `/api/health/ready` (`build`); for all four,
-`railway deployment list -s <service> --limit 1 --json` shows `meta.image`
+in the project token's environment and starts a deployment, through Railway's GraphQL API: a read
+of the project's environments, `serviceInstanceUpdate` with `source.image`, a read-back of the
+source, then `serviceInstanceDeployV2`, which returns the deployment id. Settings → Source then
+shows the image. The commit each service runs: the API reports it at `/api/health/ready` (`build`);
+for all four, `railway deployment list -s <service> --limit 1 --json` shows `meta.image`
 (`…/nexus-api:<sha>`) or, for a `railway up` build, `meta.cliMessage` (`<role> GitHub <sha>`).
-After the first switch of each service, read its deploy log. It ends
-with `✓ Railway runs ghcr.io/<owner>/nexus-…:<sha>` when Railway's record of the deployment names
-that image. A `::warning::` that the image is not confirmed means the record names none: check the
-deployment on Railway once, and report it. A deployment that runs another image fails the job.
-The log also names the deployment Railway started: `✓ Railway started deployment …`. A
-`::notice::` that Railway answered with the deployment that already serves means it started none:
-report it.
+After the first switch of each service, read its deploy log. It ends with `✓ Railway runs
+ghcr.io/<owner>/nexus-…:<sha>` when Railway's record of the deployment names that image. A
+`::warning::` that the record does not confirm it means the record names no image while the
+read-back found the image in the service's source: check the deployment on Railway once, and report
+it. The job fails when the record names another image or a `railway up` build, and when it names
+nothing (or cannot be read) while the read-back failed too: then nothing confirms the image. The log
+also names the deployment Railway started: `✓ Railway started deployment …`. A `::notice::` that
+Railway answered with the deployment that already serves means it started none: report it. A
+deployment that stops being Railway's latest before it succeeds (removed or cancelled) fails the job
+at once.
 
 The web image carries the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values that `nexus-web` had
 when the image was built. Once the web deploys by image, a change to one of them on `nexus-web`
@@ -177,21 +179,48 @@ service keeps running its `railway up` build. Remove its name from the variable 
 needed; later releases ship it with `railway up`), and report it. Do not set the image by hand in
 Settings → Source instead: the workflow sets the image on every deploy, so it fails again there.
 
-Also not yet proven: that Railway applies the source change rather than staging it. The deploy
-reads the service's source back before it deploys. If Railway staged the change, the job stops with
-`✗ Railway staged the image change instead of applying it (Settings → Source) — nothing was
-deployed; …`; report it. If that read fails, a `::warning::` says so and the deploy goes on; a
-deployment that then runs the old image fails the job with `✗ deployment … succeeded, but it runs
-…, not …`. The schema marks the mutation's environment "[Experimental]": for an environment that is
-not a fork, the change reaches every environment that is not a fork. On 2026-09-30 the Railway
-project had one environment, production, so the change reaches production only.
+Also not yet proven:
+
+- that Railway applies the source change rather than staging it. The deploy reads the service's
+  source back before it deploys. If Railway staged the change, the job stops with `✗ Railway staged
+  the image change instead of applying it (Settings → Source) — nothing was deployed; …`; report
+  it. If that read fails, a `::warning::` says so and the deploy goes on; the job then passes only
+  when Railway's record of the deployment names the image.
+- whether `serviceInstanceUpdate` starts a deployment of its own. The deploy follows the one
+  `serviceInstanceDeployV2` returns; if the other becomes the latest after it, the job fails with
+  `✗ deployment … was replaced by deployment …`: report it.
+- that `serviceInstanceDeployV2` deploys the image the update set. Railway's docs say that by
+  default it deploys "the commit currently associated with the service"; they say nothing of
+  images. A deployment of anything else fails the job at the record check.
+
+The schema marks `serviceInstanceUpdate`'s environment "[Experimental]": for an environment that is
+not a fork, the change reaches every environment that is not a fork. So the deploy first reads the
+project's environments and changes nothing unless exactly one is not a fork (`✗ the Railway project
+has N environments that are not forks …`, or `✗ could not read all of the Railway project's
+environments …`). On 2026-09-30 the project had one environment, production. If this refusal
+appears, another environment was added: remove the service's name from the variable and report it.
+
+When a step fails, what to do:
+
+- `✗ Railway refused the token's environment and the project's environments (projectToken): …`:
+  nothing changed. Check that the `RAILWAY_TOKEN` secret is a project token of this project's
+  production environment. If the message names `project.environments`, the token may not read the
+  environments, and the deploy does not go on without them. Remove the service's name from the
+  variable and report it.
+- `✗ could not reach Railway for …: nothing was sent`: nothing changed. Run the deploy again.
+- `✗ no answer from Railway to the change of the service's source … (serviceInstanceUpdate) … it may
+  still apply`: no deployment was started, and the service keeps serving its last build. Look at
+  Settings → Source. If it names the image, the change applied: run Deploy API by hand again, which
+  sets the same image and deploys it. If it names the old source, nothing changed: run it again, or
+  remove the name from the variable.
+- `✗ no answer from Railway to a deployment of …`: a deployment may have started. Look at the
+  service's deployments on Railway before running the deploy again.
 
 If the source change works but the image deployment fails (or Railway refuses to start it), the
 service keeps serving its last `railway up` build while Settings → Source already names the image.
-Before the next deploy of that service,
-either fix the cause and run Deploy API by hand again (the name still in the variable), or remove the
-name and disconnect the image in Settings → Source: a hand run would not ship it then, because it
-already runs a current `railway up` build.
+Before the next deploy of that service, either fix the cause and run Deploy API by hand again (the
+name still in the variable), or remove the name and disconnect the image in Settings → Source: a
+hand run would not ship it then, because it already runs a current `railway up` build.
 
 Check first that the service's start command works in the image:
 
