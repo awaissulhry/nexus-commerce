@@ -222,6 +222,14 @@ describe('eBay listing-level item specifics in the publish review', () => {
     // no parent value: the first variation supplies it, and it is judged there
     expect(issues.filter(i => i.field === 'colore_specifico')).toEqual([])
   })
+  it('A22 — a variation whose value only its mapping gives (Marca from Master brand) is not named as holding another value', async () => {
+    const withSource = (value: unknown, provenance: string) => ({ ...cell(value), provenance })
+    const mapped = await run({ parent: { colore_specifico: withSource('Xavia Racing', 'override') }, child: { colore_specifico: withSource('Xavia', 'catalogRule') } })
+    expect(mapped.filter(i => i.field === 'colore_specifico')).toEqual([])
+    // POSITIVE CONTROL — a value the variation STORES is named.
+    const stored = await run({ parent: { colore_specifico: withSource('Xavia Racing', 'override') }, child: { colore_specifico: withSource('Xavia', 'override') } })
+    expect(stored.filter(i => i.field === 'colore_specifico')).toEqual([expect.objectContaining({ severity: 'warning', message: expect.stringContaining('CHILD ("Xavia")') })])
+  })
   it('a problem on the value eBay receives still blocks, on the row it comes from', async () => {
     const issues = await run({ parent: {}, child: { season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) } })
     expect(issues.filter(i => i.field === 'season')).toEqual([expect.objectContaining({ productId: 'child', severity: 'error' })])

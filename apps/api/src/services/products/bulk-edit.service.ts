@@ -2383,6 +2383,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           // Clearing (or resetting) the listing's one value empties every row's copy too: eBay takes the first variation
           // that still holds one when the parent holds none, so a copy left behind would be what eBay receives.
           const clearing = !!family && (v.reset || isBlankValue(v.value))
+          // Audit A22 — a CLEAR stores an explicit blank on every row, not a removal: a row with no copy of its own falls
+          // back to its mapping (Marca from Master brand), which eBay would then receive. A reset removes (mapping again).
+          const emptied: 'SET' | 'INHERIT' = clearing && !v.reset ? 'SET' : 'INHERIT'
           for (const ctx of effectiveContexts) {
             const aliasKey = (ctx as { aliasKey?: string }).aliasKey ?? ''
             const entryKey = (productId: string) => `${productId}|${ctx.channel}|${ctx.marketplace}|${aliasKey}`
@@ -2401,13 +2404,13 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             if (familyOwner && ctx.channel === 'EBAY') {
               // The row's own entry first: it is the listing this request's token and answer belong to. Its copy is
               // removed only if the parent's write lands (`needs`), so the value is never lost.
-              mutate(v.id, 'INHERIT', false, false, entryKey(familyOwner))
+              mutate(v.id, emptied, false, false, entryKey(familyOwner))
               mutate(familyOwner, v.reset ? 'INHERIT' : 'SET', true)
               familyWrites.set(`${familyOwner}|${ctx.marketplace}|${aliasKey}`, { productId: familyOwner, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey })
             } else mutate(v.id, v.reset ? 'INHERIT' : 'SET')
             if (clearing && family && ctx.channel === 'EBAY') for (const sibling of familyChildren.get(family) ?? []) {
               if (sibling === v.id) continue
-              mutate(sibling, 'INHERIT', true, true)
+              mutate(sibling, emptied, true, true)
               familyWrites.set(`${sibling}|${ctx.marketplace}|${aliasKey}`, { productId: sibling, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey })
             }
           }

@@ -12,7 +12,7 @@ import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
 import { familyPublicationOrder } from './family-publication-order.js'
-import { ebayAspectLengthProblem, ebayListingLevelValues, isEbayListingLevel, listingLevelWarning, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
+import { ebayAspectLengthProblem, ebayListingLevelValues, storesOwnValue, isEbayListingLevel, listingLevelWarning, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { foldName, pushExclusionsCache } from '../channel-mapping/push.js'
 
@@ -86,7 +86,8 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     const result = await resolveBatch({ channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
       aliasKey: destination.aliasKey ?? '', productIds: included.map(p => p.id), locale, includeCatalogue: true })
     const levels = ebayAxes ? ebayListingLevelValues({ rows: familyRows, axes: ebayAxes, fields: ebayFields(result.catalogue?.fields),
-      valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value }) : []
+      valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value,
+      stores: (row, field) => storesOwnValue(result.products.find(p => p.productId === row.productId)?.cells[field.key]) }) : []
     const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])
     const reporterOf = (field: string) => levels.find(level => level.field.key === field)?.supplier.productId ?? parent.id
     const storeOf = new Map((result.catalogue?.fields ?? []).map(f => [f.fieldKey, f.channelStore as ListingLevelField['store']]))

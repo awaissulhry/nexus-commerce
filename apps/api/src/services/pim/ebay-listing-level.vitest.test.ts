@@ -64,6 +64,15 @@ describe('showEbayListingLevel — what the eBay sheet shows', () => {
     // An axis is the row's own: untouched.
     expect(out.a.color).not.toHaveProperty('resettable')
   })
+  it('A22 — a row whose value only its mapping gives is not said to store another value (no `ownValue`)', () => {
+    const input = rows()
+    input[1].values.origin = { ...cell('Xavia'), mapped: { ...cell('Xavia').mapped, provenance: 'catalogRule' } } as never
+    input[2].values.origin = { ...cell('Albania'), mapped: { ...cell('Albania').mapped, provenance: 'override' } } as never
+    const out = show(input)
+    expect(out.a.origin.mapped.listingLevel).toEqual({ productId: 'p', sku: 'F', variation: true })
+    // POSITIVE CONTROL — a stored different value is still named.
+    expect(out.b.origin.mapped.listingLevel).toMatchObject({ ownValue: 'Albania' })
+  })
   it('control: an axis stays per row', () => {
     const out = show()
     expect([out.a.color.value, out.b.color.value]).toEqual(['Rosso', 'Giallo'])

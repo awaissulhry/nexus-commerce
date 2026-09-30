@@ -180,3 +180,24 @@ describe('P1 review', () => {
     expect(axesCalls.max).toBe(2)
   })
 })
+
+// Audit A22 — a clear of a listing-level value stores an explicit blank on EVERY row of the family: a row with no copy of
+// its own would otherwise fall back to its mapping (Marca from Master brand), and eBay takes the first variation that
+// holds a value when the parent holds none. A reset still removes (the mapping applies again).
+describe('A22 — clearing the listing\'s value stops every row\'s mapping too', () => {
+  it('a clear on a variation row stores a blank on the parent and on every variation, not a removal', async () => {
+    await save(ids.parent, { field: 'attr_paese_di_origine', value: 'Pakistan' })
+    const result = await save(ids.A, { field: 'attr_paese_di_origine', value: null })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+    for (const id of [ids.parent, ids.A, ids.B]) {
+      expect(await specifics(id)).toHaveProperty('Paese di origine')
+      expect((await specifics(id))['Paese di origine']).toBeNull()
+    }
+    expect(await specifics(ids.B)).toMatchObject({ Colore: expect.any(String) })
+  })
+  it('POSITIVE CONTROL — a reset removes every copy instead (the mapping applies again)', async () => {
+    const result = await save(ids.A, { field: 'attr_paese_di_origine', value: null, intent: 'reset' })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+    for (const id of [ids.parent, ids.B]) expect(await specifics(id)).not.toHaveProperty('Paese di origine')
+  })
+})

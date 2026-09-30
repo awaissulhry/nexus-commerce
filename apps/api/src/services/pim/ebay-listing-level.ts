@@ -82,14 +82,16 @@ export interface ListingLevelValue<T extends FamilyRow> { field: ListingLevelFie
  * differs (sorted by SKU). `rows` are the rows the listing SENDS (the parent and its included variations); `valueOf`
  * reads a row's own value of a field.
  */
-export function ebayListingLevelValues<T extends Omit<FamilyRow, 'value'>>(input: { rows: T[]; fields: ListingLevelField[]; axes: Set<string>; valueOf: (row: T, field: ListingLevelField) => unknown }): Array<ListingLevelValue<T & { value: unknown }>> {
+export function ebayListingLevelValues<T extends Omit<FamilyRow, 'value'>>(input: { rows: T[]; fields: ListingLevelField[]; axes: Set<string>; valueOf: (row: T, field: ListingLevelField) => unknown
+  /** Audit A22 — whether the row STORES its value (a mapped value is not a row's own); absent: every value is stored. */
+  stores?: (row: T, field: ListingLevelField) => boolean }): Array<ListingLevelValue<T & { value: unknown }>> {
   const out: Array<ListingLevelValue<T & { value: unknown }>> = []
   for (const field of input.fields) {
     if (!isEbayListingLevel(field, input.axes)) continue
     const rows = input.rows.map(row => ({ ...row, value: input.valueOf(row, field) }))
     const supplier = ebayFamilySupplier(rows)
     if (!supplier) continue
-    const differing = rows.filter(row => row !== supplier && !isBlankValue(row.value) && !sameEbayValue(row.value, supplier.value)).sort(familyPublicationOrder<T & { value: unknown }>(row => row.isParent))
+    const differing = rows.filter(row => row !== supplier && !isBlankValue(row.value) && !sameEbayValue(row.value, supplier.value) && (input.stores?.(row, field) ?? true)).sort(familyPublicationOrder<T & { value: unknown }>(row => row.isParent))
     out.push({ field, supplier, value: supplier.value, differing })
   }
   return out
@@ -123,10 +125,15 @@ interface SheetCellLike {
   inheritedFrom?: string | null
   pinned?: boolean
   resettable?: boolean
-  mapped?: { value?: unknown; warnings: string[]; errors: string[]; blocking?: string[]; listingLevel?: ListingLevelMark } | null
+  mapped?: { value?: unknown; warnings: string[]; errors: string[]; blocking?: string[]; provenance?: string | null; listingLevel?: ListingLevelMark } | null
 }
 interface SheetRowLike { id: string; sku: string; parentId: string | null; aliasId?: string | null; values: Record<string, SheetCellLike> }
 interface SheetColumnLike { key: string; label: string; channelLabel?: string; channels?: Record<string, { store?: unknown } | undefined> }
+
+/** A resolved cell's value is the row's own STORED value (not a mapping's or the content's): its provenance says so. */
+export function storesOwnValue(cell: { provenance?: string | null } | null | undefined): boolean {
+  return !cell?.provenance || cell.provenance === 'override' || cell.provenance === 'default'
+}
 
 /**
  * On a cell: where the listing's one value comes from (`productId`/`sku`). `variation`: the cell is on a variation row,
@@ -158,7 +165,8 @@ export function showEbayListingLevel<R extends SheetRowLike>(input: { rows: R[];
     const axes = ebayAxisIdentities(names.length ? names : Array.isArray(group.familyAxes) ? group.familyAxes as string[] : [])
     const sending = [parent, ...rows.filter(row => row.parentId !== null && group.includedIds.has(row.id))]
     const levels = ebayListingLevelValues({ rows: sending.map(row => ({ productId: row.id, sku: row.sku, isParent: row === parent })), fields, axes,
-      valueOf: (row, field) => rows.find(r => r.id === row.productId)?.values[field.key]?.value })
+      valueOf: (row, field) => rows.find(r => r.id === row.productId)?.values[field.key]?.value,
+      stores: (row, field) => storesOwnValue(rows.find(r => r.id === row.productId)?.values[field.key]?.mapped) })
     for (const field of fields.filter(field => isEbayListingLevel(field, axes))) {
       const level = levels.find(entry => entry.field.key === field.key)
       // With no value anywhere, the listing's (empty) value lives on its parent row.
@@ -173,7 +181,7 @@ export function showEbayListingLevel<R extends SheetRowLike>(input: { rows: R[];
           if (variation) Object.assign(cell, { layer: 'alias', pinned: false, resettable: false })
           continue
         }
-        const differs = !!level && !isBlankValue(cell.value) && !sameEbayValue(cell.value, source.value)
+        const differs = !!level && !isBlankValue(cell.value) && !sameEbayValue(cell.value, source.value) && storesOwnValue(cell.mapped)
         const mark: ListingLevelMark = { ...from, ...(variation ? { variation: true as const } : {}), ...(differs ? { ownValue: cell.value } : {}) }
         const shown = source?.mapped ?? cell.mapped
         // The parent row holds nothing here (else it would supply the value): it shows the variation's value eBay gets.
