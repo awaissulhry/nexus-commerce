@@ -11,9 +11,10 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 
 import { ListboxPanel } from '../../components'
 import { Input } from '../../primitives'
-import { asMeasure, type MeasureValue } from '../renderers/shapeFormat'
+import { asMeasure } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
 import { typedStart } from './selectPanelModel'
+import { measureFromText, type MeasureDraft } from './shapeValue'
 
 export interface MeasureEditorParams {
   unitOptions?: string[]
@@ -28,7 +29,7 @@ export interface MeasureEditorParams {
 
 export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function MeasureEditor(props, _ref) {
   const { unitOptions = [], label, value, column, stopEditing, onValueChange } = props
-  const [m, setM] = useState<MeasureValue>(() => asMeasure(value))
+  const [m, setM] = useState<MeasureDraft>(() => asMeasure(value))
   /* A digit, point, comma or minus that opened the cell by typing starts the number; the grid consumed that keystroke
      (P0, 2026-09-30). The field is text with a decimal keypad, not `type="number"`: a number field clears "." and "-",
      so ".5" was saved as 5 (code review 2026-09-30), and it refused the Italian decimal comma that `onText` accepts. */
@@ -44,7 +45,7 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const report = useCallback(
-    (next: MeasureValue) => {
+    (next: MeasureDraft) => {
       setM(next)
       onValueChange?.(next.value === null && next.unit === null ? null : { value: next.value, unit: next.unit })
     },
@@ -52,9 +53,7 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
   )
   const onText = (s: string) => {
     setText(s)
-    const t = s.trim().replace(',', '.')
-    const n = t === '' ? null : Number(t)
-    report({ value: n === null || !Number.isFinite(n) ? null : n, unit: m.unit })
+    report(measureFromText(s, m.unit, unitOptions))
   }
   const cellRect = props.eGridCell?.getBoundingClientRect()
   const box = editorBox({
