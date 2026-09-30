@@ -26,6 +26,7 @@ import { ProductRoleChip } from '../ProductRoleChip';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
 import { historyLoaderFor, inheritedContextOf } from '../cellEditorContext';
 import { SchemaStatus } from './SchemaStatus';
+import { LOAD_FIELDS_PERMISSION, useMissingFieldsBanner } from './MissingFieldsBanner';
 import { rulesStatus } from './rulesStatus';
 import { channelLabel, languageLabel } from '../../scopes';
 import { buildCompareTargets } from '../compareTargets';
@@ -532,6 +533,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         : auth.status === 'anon' ? 'no-session'
             : auth.has(CHANNEL_VERB_PERMISSION) ? 'granted'
                 : 'denied';
+    const fieldsBanner = useMissingFieldsBanner({ channel, market: marketplace, missing: data?.meta.schemaMissing ?? [], ready: !!data && !loading && auth.status !== 'loading',
+        canLoad: auth.has(LOAD_FIELDS_PERMISSION), onLoaded: reload });
     const verbs = useMemo(() => data
         ? channelActions({
             accountSpecific: alternateAccount,
@@ -994,9 +997,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the shared master record — every channel sees those edits
             </span>)}</>,
-        notice: startsDraftHere
-            ? <Banner tone={noAccount ? 'warning' : 'info'}>{noAccount ? connectAccountSentence(channel, marketplace) : notListedSentence(channel, marketplace)}</Banner>
-            : null,
+        notice: <>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'}>{noAccount ? connectAccountSentence(channel, marketplace) : notListedSentence(channel, marketplace)}</Banner>}
+            {fieldsBanner}</>,
         grid: {
             loading: loading,
             noRowsOverlayComponentParams: emptyState,
