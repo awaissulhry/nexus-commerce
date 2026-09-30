@@ -28,7 +28,7 @@
  * the old card, and not before.
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   ArrowRight,
   Check,
@@ -63,6 +63,11 @@ export interface CardApproval {
   expiresAt: string | null
   reason?: string | null
   trackRecord?: { approved: number; rejected: number; total: number } | null
+  /**
+   * Why the person looking at the page may NOT approve this — the approve's own refusal, from the API — or
+   * null/absent when they may. Apply is then disabled and the reason shown, never a click that can only fail.
+   */
+  cannotApprove?: string | null
 }
 
 /* ── reversibility, as ONE class ───────────────────────────────────────── */
@@ -500,6 +505,10 @@ export function ApprovalCard({
 
   const needsAck = heavy && canExecute
   const approveBlocked = needsAck && !acked
+  // Not this viewer's to approve (they lack the tool's permission — perhaps taken away while their own approval
+  // waited). Apply is disabled and the reason is written out; Reject stays.
+  const notYours = approval.cannotApprove ?? null
+  const notYoursId = useId()
 
   /**
    * The button states the CONSEQUENCE, not the verb. "Approve" tells a
@@ -608,7 +617,8 @@ export function ApprovalCard({
         <p className={`aq-cameback${comeback.attempted ? ' attempted' : ''}`}>
           <RotateCcw size={12} aria-hidden />
           <span>
-            <strong>{comeback.headline}</strong> {comeback.detail} {comeback.tail}
+            <strong>{comeback.headline}</strong> {comeback.detail} {comeback.tail} Its waiting time restarted when it
+            came back: handing it back asks the question again, so the full time to decide starts over.
           </span>
         </p>
       ) : null}
@@ -867,12 +877,14 @@ export function ApprovalCard({
           </div>
         </div>
       ) : (
+        <>
         <div className="aq-actions">
           {/* The card's ONE primary. It states the consequence, not the verb. */}
           <button
             className="acr-btn go"
-            disabled={busy || approveBlocked}
-            title={approveBlocked ? 'Tick the box above first.' : undefined}
+            disabled={busy || approveBlocked || notYours !== null}
+            title={notYours ?? (approveBlocked ? 'Tick the box above first.' : undefined)}
+            aria-describedby={notYours ? notYoursId : undefined}
             onClick={() => onDecide(approval.id, 'approve', note.trim() || undefined)}
           >
             <Check size={13} /> {approveLabel}
@@ -898,6 +910,13 @@ export function ApprovalCard({
             </span>
           ) : null}
         </div>
+        {/* Written out, not only a tooltip: a disabled button's tooltip is not reachable by keyboard. */}
+        {notYours ? (
+          <p className="aq-editnote" id={notYoursId}>
+            You cannot apply this: {notYours} You can still reject it.
+          </p>
+        ) : null}
+        </>
       )}
 
       {/* The rare controls, BELOW the verbs and visibly lighter. Neither is
