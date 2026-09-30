@@ -396,6 +396,11 @@ export interface ChannelWriteCoord {
    */
   onStored?: (outcome: { patched: ChannelSheetRow[]; columns: string[] } | { read: string }) => void
   /**
+   * P2 review 2 — the cells this row's save was built from, as the grid held them when the save left (set once, by the
+   * outermost `commitChannelRow`). A cell the operator has edited again since then is not settled from this answer.
+   */
+  sentCells?: ReadonlyMap<string, StudioCellValue | undefined>
+  /**
    * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
    * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
    */
@@ -538,7 +543,7 @@ async function commitChannelLanguage(
     const family = [...(coord.familyRows?.() ?? [])]
     const listingVersions = new Map([row, ...family].map((r) => [r, r.listing?.version]))
     // P2 — decided against the answer before its other effects land; applied once the save is known to be clean.
-    const settle = res.ok && coord.onStored ? planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId),
+    const settle = res.ok && coord.onStored ? planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId), sent: coord.sentCells,
       changes: changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value, intent: change.intent, target: change.target })) }) : null
     if (res.ok) {
       reportCreated(req, coord, createdListingsOf(body))
@@ -718,6 +723,8 @@ export function commitChannelRow(
   req: SheetWriteRequest<ChannelSheetRow>,
   coord: ChannelWriteCoord,
 ): Promise<SheetWriteResult> {
+  // P2 review 2 — remember the cells as they were sent, once, before any part of the save leaves.
+  if (!coord.sentCells) coord = { ...coord, sentCells: new Map(req.cells.map(({ colId }) => [colId, req.row?.values?.[colId]])) }
   /**
    * VT.2 — a `variationTheme` cell leaves by its OWN route, exactly as the master sheet's does.
    *
