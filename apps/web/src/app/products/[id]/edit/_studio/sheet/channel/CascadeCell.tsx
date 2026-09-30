@@ -6,7 +6,7 @@ import { CellAction } from '@/design-system/components'
 import { SourceIndicator } from '@/design-system/components/SourceIndicator'
 
 import type { CellSaveTracker, ICellRendererParams } from '@/design-system/grid'
-import { CellSaveReason, EmptyValue, LongTextCell, MetafieldValue, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron } from '@/design-system/grid'
+import { CellSaveReason, EmptyValue, LongTextCell, MetafieldValue, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron, openCellEditor } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 
 import { hasValue } from './provenance'
@@ -138,7 +138,7 @@ export const CascadeCell = memo(function CascadeCell(
         * item, and falls to a second line. `.nds-cascade` is `inline-flex` with `gap: 6px` and the
         * value is `flex: 1 1 auto`, so as a sibling the value truncates before the glyph moves.
         */}
-      {(column.kind === 'select' || column.kind === 'boolean' || isReferenceField(column.key)) && !isShaped(column) && <SelectChevron />}
+      {(column.kind === 'select' || column.kind === 'boolean' || isReferenceField(column.key)) && !isShaped(column) && <SelectChevron onOpen={openCellEditor(p.api, p.node, column.key)} />}
       {mapped && mapped.errors.length > 0 && (
         <span className="nds-cascade-maperr" aria-label={mappingNote ?? 'Mapping error'}>!</span>
       )}
