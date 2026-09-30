@@ -115,6 +115,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         marketplace,
         locale,
         accountId,
+        displayedRow: (row) => rowObjects.current.get(row),
     });
     const selectedAlias = destination.status === 'ready' ? destination.data.aliasKey : null;
     const selectedData = useMemo(() => !loadedData || selectedAlias === null ? loadedData : {

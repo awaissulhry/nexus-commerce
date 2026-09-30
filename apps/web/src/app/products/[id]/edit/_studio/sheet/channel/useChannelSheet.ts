@@ -37,7 +37,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
 import { adoptContentVersions } from '../contentVersions'
-import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
+import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue, StudioRow } from './types'
 
 export interface UseChannelSheetOptions {
   schemaRevision?: string
@@ -50,6 +50,8 @@ export interface UseChannelSheetOptions {
   locale?: string
   locales?: string[] | null
   view?: string
+  /** The grid row built from a server row, if any: a quiet read keeps a row only while the grid still shows the read (review WP2 #3). */
+  displayedRow?: (row: StudioRow) => object | undefined
 }
 
 export interface ChannelSheetState {
@@ -107,14 +109,19 @@ function sameData(a: unknown, b: unknown): boolean {
  * Every write moves its row's version, its listing's or its text's, so an unchanged row is one nothing wrote since the
  * last read. Only for a quiet read: a Reload replaces every row, whatever the grid holds.
  */
-export function keepUnchangedRows(previous: ChannelScopePage | null | undefined, next: ChannelScopePage): ChannelScopePage {
+export function keepUnchangedRows(previous: ChannelScopePage | null | undefined, next: ChannelScopePage,
+  displayed?: (row: StudioRow) => object | undefined): ChannelScopePage {
   if (!previous?.rows.length) return next
   const key = (row: { id: string; aliasId?: string | null }) => `${row.aliasId ?? ''}:${row.id}`
   const known = new Map(previous.rows.map((row) => [key(row), row]))
   let kept = 0
   const rows = next.rows.map((row) => {
     const old = known.get(key(row))
-    if (!old || !sameData(old, row)) return row
+    // Review WP2 #3 — compared with what the GRID shows (the value setter and an in-place settle change the grid row, not
+    // this server row), without the identity the grid adds; a row the grid changed locally is replaced by the read.
+    const shown = old && displayed?.(old)
+    const { rowId: _rowId, aliasPosition: _position, ...grid } = (shown ?? old ?? {}) as Record<string, unknown>
+    if (!old || !sameData(shown ? grid : old, row)) return row
     kept++
     return old
   })
@@ -174,6 +181,8 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
+  const displayedRef = useRef(options.displayedRow)
+  displayedRef.current = options.displayedRow
   const refresh = useCallback(async (canApply: () => boolean): Promise<boolean> => {
     if (activeUrl.current !== url) return false
     const mine = ++requestRef.current
@@ -184,7 +193,7 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
       if (!res.ok) return false
       const body = channelSheetResponse(await res.json())
       if (mine === requestRef.current && activeUrl.current === url && canApply()) {
-        setResponse((previous) => ({ url, data: keepUnchangedRows(previous?.url === url ? previous.data : null, body) }))
+        setResponse((previous) => ({ url, data: keepUnchangedRows(previous?.url === url ? previous.data : null, body, displayedRef.current) }))
         return true
       }
       return false

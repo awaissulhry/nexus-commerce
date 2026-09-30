@@ -36,6 +36,24 @@ describe('a quiet read keeps the rows it did not change', () => {
     const kept = keepUnchangedRows(previous, next).rows.map((row, i) => row === previous.rows[i])
     expect(kept.slice(2, 8)).toEqual([true, true, true, false, false, true])
   })
+  /**
+   * Review WP2 #3 — the value setter changes the GRID row (`p.data.values = …`), never the server row it was built from.
+   * A save the server answered `unchanged` (re-typing an override's own value, a title equal to the listing's copy while
+   * it follows Master) settles nothing in place and asks for this read to correct the optimistic cell. Before: the read
+   * equalled the previous SERVER row, so the grid kept its row and its wrong "pinned" / layer label.
+   */
+  it('a row the grid changed locally is replaced, even when the read equals the last server row', () => {
+    const cache = new WeakMap<object, never>()
+    const shown = withRowIdentity(previous.rows, [], cache as never)
+    const key = Object.keys(shown[4].values)[0]
+    shown[4].values = { ...shown[4].values, [key]: { ...shown[4].values[key], pinned: true, follows: false, source: 'channelExplicit' } }
+    const next = keepUnchangedRows(previous, read(), (row) => cache.get(row))
+    const grid = withRowIdentity(next.rows, [], cache as never)
+    expect(grid[4]).not.toBe(shown[4])
+    expect(grid[4].values[key]).toEqual(previous.rows[4].values[key])
+    // Every row the grid did not touch still keeps its object.
+    expect(grid.filter((row, i) => row === shown[i]).length).toBe(102)
+  })
   it('a row of another alias is never taken for this one', () => {
     const next = read()
     next.rows[3] = { ...next.rows[3], aliasId: 'alias-2' }
