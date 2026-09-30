@@ -1,5 +1,5 @@
-import { nativeFieldError, nativeFieldValueError, nativeValuesEqual, nativeEditAddress, type InformationField, type InformationRow, type NativeEdit } from './shopify-information.js'
-import { fieldAddress, validateShopifyField, shopifyDefinitionApplicability, type ShopifyFieldDefinition, type ShopifyLinkedDraft } from './shopify-linked-products.js'
+import { nativeFieldError, nativeFieldValueError, nativeValuesEqual, nativeEditAddress, informationPendingValue, informationStoredValue, type InformationField, type InformationRow, type NativeEdit } from './shopify-information.js'
+import { fieldAddress, validateShopifyField, shopifyDefinitionApplicability, type ShopifyFieldDefinition, type ShopifySharedField, type ShopifyLinkedDraft } from './shopify-linked-products.js'
 
 /** Drafts keep type-valid values. Store limits remain visible and are enforced at publish.
  * References retain their draft-time checks (LB-D2); clearing one needs no remote identity. */
@@ -7,6 +7,29 @@ export function informationDraftFieldError(def: Pick<ShopifyFieldDefinition, 'ty
   if (value === '' && ['single_line_text_field', 'id'].includes(def.type)) return null
   const error = validateShopifyField({ ...def, required: false, validations: def.type.includes('_reference') ? def.validations : [] }, value)
   return error ? validateShopifyField(def, value) ?? error : null
+}
+
+/** Shared rules address primary product fields; translations remain separate values. */
+export function informationSharingRule(row: InformationRow, field: InformationField, draft: ShopifyLinkedDraft) {
+  return !row.locale && row.kind === 'PRODUCT' && field.definition
+    ? draft.sharedFields?.find(rule => rule.namespace === field.definition!.namespace && rule.key === field.definition!.key)
+    : undefined
+}
+
+/** The value the shared-content publisher will copy. Null is an intentional empty source, never a fallback. */
+export function informationSharedValue(row: InformationRow, field: InformationField, draft: ShopifyLinkedDraft, rows: InformationRow[]) {
+  const rule = row.locale ? undefined : informationSharingRule(row, field, draft)
+  if (!rule || rule.sourceProductId === row.id || rule.excludedProductIds.includes(row.id)) return undefined
+  if (informationPendingValue(row, field, draft) !== undefined || draft.sheetValues?.some(v => v.ownerId === row.id && v.fieldId === field.id && v.locale === '' && !v.inherited)) return undefined
+  return sharedInformationSource(rule, field, draft, rows)
+}
+
+/** Source selection shared with the projection, including conflicts that must retain their own stored pin. */
+export function sharedInformationSource(rule: ShopifySharedField, field: InformationField, draft: ShopifyLinkedDraft, rows: InformationRow[]) {
+  const source = rows.find(owner => owner.id === rule.sourceProductId)
+  if (!source) throw new Error('The shared source is unavailable. Reload the sheet before editing this field.')
+  const pending = informationPendingValue(source, field, draft)
+  return { sourceProductId: source.id, value: pending !== undefined ? pending : informationStoredValue(source, field) }
 }
 
 export function informationRestriction(row: InformationRow, field: InformationField, draft: ShopifyLinkedDraft, disabled: boolean): string | null {
@@ -27,8 +50,6 @@ export function informationRestriction(row: InformationRow, field: InformationFi
   if (field.definition && row.kind === 'PRODUCT') {
     const def = field.definition, rel = draft.relationship
     if (rel?.namespace === def.namespace && rel.key === def.key) return 'This field is managed by Product family to keep linked products consistent.'
-    const rule = draft.sharedFields?.find(r => r.namespace === def.namespace && r.key === def.key)
-    if (rule && rule.sourceProductId !== row.id && !rule.excludedProductIds.includes(row.id)) return 'This product follows shared content. Open sharing rules to create an individual override.'
   }
   return null
 }
@@ -57,6 +78,8 @@ export function applyInformationCells(draft: ShopifyLinkedDraft, cells: Informat
     if (field.definition) {
       const error = informationDraftFieldError(field.definition, value)
       if (error) throw new Error(`${ownerLabel} / ${field.label}: ${error}`)
+      const rule = informationSharingRule(row, field, next)
+      if (rule && rule.sourceProductId !== row.id && !rule.excludedProductIds.includes(row.id)) rule.excludedProductIds.push(row.id)
       const address = { ownerId: row.id, namespace: field.definition.namespace, key: field.definition.key }
       const base = next.edits.find(e => fieldAddress(e) === fieldAddress(address)) ?? row.fields.find(e => fieldAddress(e) === fieldAddress(address)) ?? { ...address, type: field.type, value: null, compareDigest: null }
       next.edits = next.edits.filter(e => fieldAddress(e) !== fieldAddress(address))

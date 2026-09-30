@@ -1,4 +1,4 @@
-import { informationRestriction, applyInformationCells } from '@nexus/shared/shopify-information-editing'
+import { informationRestriction, applyInformationCells, informationSharingRule, informationSharedValue } from '@nexus/shared/shopify-information-editing'
 import { active, projectShopifyChannelSheet, shopifyCellToken } from './channel-sheet-projection.js'
 import { z } from 'zod'
 import prisma from '../../db.js'
@@ -149,7 +149,19 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
           throw new Error(`${ownerLabel} / ${field.label}: ${referenceRefusal}`)
         }
         if (informationPendingValue(row, field, current.draft) === undefined && informationStoredValue(row, field) !== change.baseline) throw new Error('Shopify changed this value since it was read. Your input is retained; reload to review it.')
-        if (change.intent === 'reset' || change.intent === 'reset-list') {
+        const rule = !row.locale ? informationSharingRule(row, field, draft) : undefined
+        const sharedReset = (change.intent === 'reset' || change.intent === 'reset-list') && rule && rule.sourceProductId !== row.id
+        if (sharedReset) {
+          const next = structuredClone(draft), ownRule = informationSharingRule(row, field, next)!
+          ownRule.excludedProductIds = ownRule.excludedProductIds.filter(id => id !== row.id)
+          const observedField = row.fields.find(f => f.namespace === ownRule.namespace && f.key === ownRule.key)
+            ?? { ownerId: row.id, namespace: ownRule.namespace, key: ownRule.key, type: field.type, value: null, compareDigest: null }
+          ownRule.baseline = [...ownRule.baseline.filter(f => f.ownerId !== row.id), { ...observedField, value: observedField.value ?? null, compareDigest: observedField.compareDigest ?? null }]
+          next.edits = next.edits.filter(edit => !(edit.ownerId === row.id && edit.namespace === ownRule.namespace && edit.key === ownRule.key))
+          next.sheetValues = next.sheetValues?.filter(v => !(v.ownerId === row.id && v.fieldId === field.id && v.locale === ''))
+          informationSharedValue(row, field, next, snapshot.rows) // Refuse a missing source before adopting any change.
+          draft = next
+        } else if (change.intent === 'reset' || change.intent === 'reset-list') {
           if (!resetValues.has(change.colId)) throw new Error('The inherited source is unavailable. Reload the sheet before resetting this cell.')
           draft = applyValue(draft, row, field, resetValues.get(change.colId)!)
         } else if (field.id === 'media') {
@@ -167,7 +179,7 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
         if (field.id !== 'media' && field.id !== 'inventory') {
           draft.sheetValues = (draft.sheetValues ?? []).filter(v => !(v.ownerId === row.id && v.fieldId === field.id && v.locale === (row.locale ?? '')))
           const inherited = change.intent === 'reset' || change.intent === 'reset-list'
-          draft.sheetValues.push({ ownerId: row.id, fieldId: field.id, type: field.type, locale: row.locale ?? '', value: inherited ? resetValues.get(change.colId)! : change.value, ...(inherited ? { inherited: true as const } : {}) })
+          if (!sharedReset) draft.sheetValues.push({ ownerId: row.id, fieldId: field.id, type: field.type, locale: row.locale ?? '', value: inherited ? resetValues.get(change.colId)! : change.value, ...(inherited ? { inherited: true as const } : {}) })
         }
         cells[change.colId] = { ok: true }
       } catch (e) { cells[change.colId] = { ok: false, reason: e instanceof Error ? e.message : 'This edit could not be saved.' } }
@@ -187,10 +199,11 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
       if (owner) {
         const previous = current.draft.sheetValues?.find(v => v.ownerId === row.id && v.fieldId === field.id && v.locale === (row.locale ?? ''))
         const next = draft.sheetValues?.find(v => v.ownerId === row.id && v.fieldId === field.id && v.locale === (row.locale ?? ''))
+        const beforeShared = informationSharedValue(row, field, current.draft, snapshot.rows), afterShared = informationSharedValue(row, field, draft, snapshot.rows)
         await tx.auditLog.create({ data: { userId: actorUserId, entityType: 'Product', entityId: owner.productId, action: 'update',
-          before: { field: change.colId, value: previous ? previous.value : informationPendingValue(row, field, current.draft) ?? change.baseline },
-          after: { field: change.colId, value: next ? next.value : change.value },
-          metadata: { layer: 'channel', source: 'manual', channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: destination.accountId, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '', locale: scope.locale ?? '', ownerId: row.id, providerFieldId: field.id, deliveryState: 'nexusDraft', beforeSource: previous ? 'nexusDraft' : 'providerBaseline' } } })
+          before: { field: change.colId, value: beforeShared ? beforeShared.value : previous ? previous.value : informationPendingValue(row, field, current.draft) ?? change.baseline },
+          after: { field: change.colId, value: afterShared ? afterShared.value : next ? next.value : change.value },
+          metadata: { layer: 'channel', source: 'manual', channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: destination.accountId, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '', locale: scope.locale ?? '', ownerId: row.id, providerFieldId: field.id, deliveryState: 'nexusDraft', beforeSource: beforeShared ? 'sharedField' : previous ? 'nexusDraft' : 'providerBaseline', afterSource: afterShared ? 'sharedField' : next ? 'nexusDraft' : 'providerBaseline' } } })
       }
       cells[change.colId].shopifyWrite = { ownerId: row.id, fieldId: field.id, token: shopifyCellToken(saved.workspace, row.id, field, row.locale), baseline: informationStoredValue(row, field) }
     }

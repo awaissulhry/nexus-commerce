@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 import { informationRegistry, informationStoredValue } from '@nexus/shared/shopify-information'
 import { projectShopifyChannelSheet, shopifyCellToken } from './channel-sheet-projection.js'
+import { resolveSharedContent } from './linked-shared-content.service.js'
+import type { ShopifyGraphql } from './admin-client.js'
 
 const s = vi.hoisted(() => ({ workspace: null as any, snapshot: null as any, schema: null as any, writes: [] as any[], audit: vi.fn() }))
 vi.mock('../../db.js', () => ({ default: { channelListing: { findMany: async () => [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }] } } }))
@@ -43,7 +45,189 @@ function page() {
   values.vendor = { ...values.vendor, value: 'Shared vendor', mapped: { status: 'mapped', value: 'Shared vendor' } as any }
   return { columns, scope: { channel: 'SHOPIFY', connectionId: 'store-a' }, rows: [{ id: 'family', sku: 'NEXUS', name: 'Shared title', aliasId: 'alias-a', parentId: null, version: 5, values, listing: { id: 'listing-a', version: 7 }, readiness: { state: 'ready', issues: [] } }, { id: 'child', sku: 'S', aliasId: 'alias-a', parentId: 'family', version: 2, values, listing: { id: 'variant-listing', version: 2 } }] } as any
 }
+
+function sharedFixture() {
+  const sourceId = 'gid://shopify/Product/20', siblingId = 'gid://shopify/Product/30'
+  const original = s.snapshot.rows[0]
+  for (const id of [sourceId, siblingId]) s.snapshot.rows.push({ ...structuredClone(original), id, productId: id,
+    title: id === sourceId ? 'Shared source' : 'Other follower',
+    fields: [{ ...original.fields[0], ownerId: id, value: id === sourceId ? 'true' : 'false' }],
+  })
+  s.workspace.draft.members = s.snapshot.rows.filter((r: any) => r.kind === 'PRODUCT').map((r: any) => ({ id: r.id, title: r.title, handle: r.handle, image: null }))
+  s.workspace.draft.sharedFields = [{ namespace: 'custom', key: 'flag', sourceProductId: sourceId, excludedProductIds: [],
+    baseline: s.snapshot.rows.filter((r: any) => r.kind === 'PRODUCT').flatMap((r: any) => r.fields) }]
+  return { sourceId, siblingId, fieldId: 'metafield:PRODUCT:custom.flag' }
+}
+async function sharedPublishPlan() {
+  const provider = async (_query: string, variables: Record<string, unknown> = {}) => {
+    const result: Record<string, unknown> = {}
+    for (let i = 0; variables[`id${i}`]; i++) {
+      const id = variables[`id${i}`], row = s.snapshot.rows.find((r: any) => r.id === id)
+      result[`owner${i}`] = { id, metafield: row.fields.find((f: any) => f.namespace === variables[`ns${i}`] && f.key === variables[`key${i}`]) }
+    }
+    return result
+  }
+  return resolveSharedContent(provider as ShopifyGraphql, s.workspace.draft, s.schema)
+}
+
+
 describe('Shopify behind the common channel sheet', () => {
+  it('creates an own override and resets to the shared source without changing its siblings', async () => {
+    const { sourceId, siblingId, fieldId } = sharedFixture()
+    const untouched = structuredClone(s.snapshot.rows.filter((r: any) => [sourceId, siblingId].includes(r.id)))
+    const result = await saveShopifySheetCells('family', scope, { cells: [change(fieldId, 'false')] }, 'editor')
+    expect(result.cells[fieldId].ok).toBe(true)
+    expect(s.workspace.draft.sharedFields[0].excludedProductIds).toEqual([product])
+    expect(s.workspace.draft.sheetValues).toEqual([expect.objectContaining({ ownerId: product, value: 'false', locale: '' })])
+    const reset = await saveShopifySheetCells('family', scope, { cells: [{ ...change(fieldId, null), intent: 'reset' }] }, 'editor')
+    expect(reset.cells[fieldId].ok).toBe(true)
+    expect(s.workspace.draft.sharedFields[0].excludedProductIds).toEqual([])
+    expect(s.workspace.draft.edits.filter((e: any) => e.ownerId === product)).toEqual([])
+    const rows = projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values[fieldId]).toMatchObject({ value: 'true', writable: true, pinned: false, inherited: true, follows: true })
+    expect(s.snapshot.rows.filter((r: any) => [sourceId, siblingId].includes(r.id))).toEqual(untouched)
+    expect(s.workspace.draft.sheetValues.every((v: any) => v.ownerId === product)).toBe(true)
+  })
+  it('does not exclude a follower when its new value cannot be stored', async () => {
+    const { fieldId } = sharedFixture(), before = structuredClone(s.workspace.draft)
+    const result = await saveShopifySheetCells('family', scope, { cells: [change(fieldId, 'maybe')] }, 'editor')
+    expect(result.cells[fieldId].ok).toBe(false)
+    expect(s.workspace.draft).toEqual(before)
+    expect(s.writes).toEqual([])
+  })
+  it('keeps an excluded product own even when its value equals the shared source', async () => {
+    const { fieldId } = sharedFixture()
+    s.workspace.draft.sharedFields[0].excludedProductIds = [product]
+    s.snapshot.rows[0].fields[0].value = 'true'
+    const rows = projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values[fieldId]).toMatchObject({ value: 'true', pinned: true, inherited: false, follows: false, resettable: true })
+  })
+  it('captures only the reset product’s current provider baseline when it rejoins sharing', async () => {
+    const { fieldId } = sharedFixture()
+    s.workspace.draft.sharedFields[0].excludedProductIds = [product]
+    const otherBaselines = structuredClone(s.workspace.draft.sharedFields[0].baseline.filter((f: any) => f.ownerId !== product))
+    s.snapshot.rows[0].fields = [{ ...s.snapshot.rows[0].fields[0], value: 'true', compareDigest: 'new-provider-value' }]
+    const result = await saveShopifySheetCells('family', scope, { cells: [{ ...change(fieldId, null), intent: 'reset' }] }, 'editor')
+    expect(result.cells[fieldId].ok).toBe(true)
+    expect(s.workspace.draft.sharedFields[0].baseline.find((f: any) => f.ownerId === product)).toMatchObject({ value: 'true', compareDigest: 'new-provider-value' })
+    expect(s.workspace.draft.sharedFields[0].baseline.filter((f: any) => f.ownerId !== product)).toEqual(otherBaselines)
+    expect(s.workspace.draft.sharedFields[0].excludedProductIds).toEqual([])
+  })
+  it('uses the Shopify sharing address instead of a lower content mapping for a shared field', () => {
+    const { fieldId } = sharedFixture(), base = page()
+    base.rows[0].values[fieldId] = { ...base.rows[0].values[fieldId], value: 'false', pinned: true,
+      contentAddress: { tier: 'source' }, contentAcknowledgement: { shared: { address: { tier: 'source' } } }, contentVersion: 8,
+      mapped: { status: 'mapped', value: 'false', sourceOwner: { kind: 'product', id: 'family' } } }
+    const rows = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values[fieldId]).toMatchObject({ value: 'true', pinned: false, inherited: true, layer: 'linked',
+      mapped: null, shopifyWrite: { ownerId: product, fieldId } })
+    expect(rows[0].values[fieldId].contentAcknowledgement).toBeUndefined()
+    expect(rows[0].values[fieldId].contentAddress).toBeUndefined()
+  })
+  it('retains the required-field warning when the inherited source is empty', () => {
+    const { fieldId, sourceId } = sharedFixture(), base = page()
+    s.schema.definitions[0].required = true
+    s.snapshot.rows.find((r: any) => r.id === sourceId).fields[0].value = null
+    base.columns = base.columns.map((column: object) => ({ ...column, requiredBy: [] }))
+    base.rows[0].completeness = { required: { filled: 0, total: 0, missing: [] }, optional: { filled: 0, total: 0, missing: [] } }
+    const rows = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values[fieldId]).toMatchObject({ value: null, inherited: true, follows: true })
+    expect(rows[0].readiness.issues).toContainEqual(expect.objectContaining({ key: fieldId, message: 'Enter a value. Shopify needs this field.' }))
+  })
+  it('edits a translated shared field without changing primary-language sharing or another product', async () => {
+    s.schema.definitions[0].type = 'single_line_text_field'
+    s.snapshot.rows[0].fields[0].type = 'single_line_text_field'
+    const { fieldId, sourceId } = sharedFixture(), rule = structuredClone(s.workspace.draft.sharedFields[0])
+    const source = s.snapshot.rows.find((r: any) => r.id === sourceId)
+    const primary = { ...source.fields[0], nextValue: 'Primary pending text', ownerLabel: source.title }
+    s.workspace.draft.edits = [primary]
+    s.schema.locales.push({ locale: 'it', primary: false, published: true })
+    s.schema.native = { scopes: ['read_products', 'write_products', 'read_translations', 'write_translations'], inputs: {}, enums: {} }
+    s.snapshot.rows[0].locale = 'it'
+    s.snapshot.rows[0].translations = { [fieldId]: { resourceId: 'gid://shopify/Metafield/14', fieldId,
+      key: 'value', locale: 'it', digest: 'source-it', value: 'Prima', sourceValue: 'false', outdated: false } }
+    const result = await saveShopifySheetCells('family', { ...scope, locale: 'it' }, { cells: [change(fieldId, 'Dopo')] }, 'editor')
+    expect(result.cells[fieldId].ok).toBe(true)
+    expect(s.workspace.draft.sharedFields).toEqual([rule])
+    expect(s.workspace.draft.edits).toEqual([primary])
+    expect(s.workspace.draft.nativeEdits).toEqual([expect.objectContaining({ ownerId: product, nextValue: 'Dopo', translation: expect.objectContaining({ locale: 'it' }) })])
+    expect(s.workspace.draft.sheetValues).toEqual([expect.objectContaining({ ownerId: product, locale: 'it', value: 'Dopo' })])
+    const reset = await saveShopifySheetCells('family', { ...scope, locale: 'it' }, { cells: [{ ...change(fieldId, null), intent: 'reset' }] }, 'editor')
+    expect(reset.cells[fieldId].ok).toBe(true)
+    expect(s.workspace.draft.sharedFields).toEqual([rule])
+    expect(s.workspace.draft.edits).toEqual([primary])
+    expect(s.workspace.draft.nativeEdits).toEqual([])
+    expect(s.workspace.draft.sheetValues).toEqual([expect.objectContaining({ ownerId: product, locale: 'it', value: 'Prima', inherited: true })])
+  })
+  it('refuses a follower token captured before its shared draft source changed', async () => {
+    const { sourceId, fieldId } = sharedFixture(), stale = change(fieldId, 'false')
+    const source = await saveShopifySheetCells('family', scope, { cells: [change(fieldId, 'false', sourceId)] }, 'editor')
+    expect(source.cells[fieldId].ok).toBe(true)
+    const result = await saveShopifySheetCells('family', scope, { cells: [stale] }, 'editor')
+    expect(result.cells[fieldId]).toMatchObject({ ok: false, reason: expect.stringContaining('Another editor changed') })
+    expect(s.workspace.draft.sharedFields[0].excludedProductIds).toEqual([])
+    expect(s.workspace.draft.edits).toEqual([expect.objectContaining({ ownerId: sourceId, nextValue: 'false' })])
+  })
+  it('keeps an own override token current when only the shared source value changes', async () => {
+    const { sourceId, fieldId } = sharedFixture()
+    s.workspace.draft.sharedFields[0].excludedProductIds = [product]
+    const own = change(fieldId, 'false')
+    expect((await saveShopifySheetCells('family', scope, { cells: [change(fieldId, 'false', sourceId)] }, 'editor')).ok).toBe(true)
+    const result = await saveShopifySheetCells('family', scope, { cells: [own] }, 'editor')
+    expect(result.cells[fieldId].ok).toBe(true)
+    expect(s.workspace.draft.sharedFields[0].excludedProductIds).toEqual([product])
+  })
+  it('uses the publisher’s remote source value when only a surviving source pin differs', async () => {
+    const { sourceId, fieldId } = sharedFixture()
+    s.workspace.draft.sheetValues = [{ ownerId: sourceId, fieldId, type: 'boolean', locale: '', value: 'false' }]
+    const rows = projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values[fieldId]).toMatchObject({ value: 'true', inherited: true, follows: true })
+    const plan = await sharedPublishPlan()
+    expect(plan.changes.find(change => change.ownerId === product)?.nextValue).toBe(rows[0].values[fieldId].value)
+  })
+  it('does not attach product sharing dependencies to a variant definition with the same namespace/key', async () => {
+    const { sourceId, fieldId } = sharedFixture()
+    s.schema.definitions.push({ ...s.schema.definitions[0], id: 'variant-flag', ownerType: 'PRODUCTVARIANT', name: 'Variant flag' })
+    s.snapshot.rows[1].fields = [{ ownerId: variant, namespace: 'custom', key: 'flag', type: 'boolean', value: 'false', compareDigest: 'variant-digest' }]
+    const variantField = 'metafield:PRODUCTVARIANT:custom.flag', own = change(variantField, 'true', variant)
+    expect((await saveShopifySheetCells('family', scope, { cells: [change(fieldId, 'false', sourceId)] }, 'editor')).ok).toBe(true)
+    expect(change(variantField, 'true', variant).token).toBe(own.token)
+    expect((await saveShopifySheetCells('family', scope, { cells: [own] }, 'editor')).cells[variantField].ok).toBe(true)
+    expect(s.workspace.draft.sharedFields[0].excludedProductIds).toEqual([])
+  })
+  it.each(['false', 'true'])('makes a surviving follower pin %s and its conflicting sharing rule explicit', async value => {
+    const { fieldId } = sharedFixture(), base = page()
+    s.workspace.draft.sheetValues = [{ ownerId: product, fieldId, type: 'boolean', locale: '', value }]
+    base.columns = base.columns.map((column: object) => ({ ...column, requiredBy: [] }))
+    base.rows[0].completeness = { required: { filled: 0, total: 0, missing: [] }, optional: { filled: 0, total: 0, missing: [] } }
+    const before = structuredClone(s.workspace.draft)
+    const rows = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    const plan = await sharedPublishPlan()
+    expect(rows[0].values[fieldId].value).toBe(value)
+    expect(rows[0].values[fieldId].divergence).toMatchObject({ publishesAs: plan.changes.find(change => change.ownerId === product)!.nextValue })
+    expect(rows[0].readiness.issues).toContainEqual(expect.objectContaining({ key: fieldId, severity: 'warn', message: expect.stringContaining('sharing rule') }))
+    expect(s.workspace.draft).toEqual(before)
+  })
+  it('preserves locale content facts when the product has a primary-only sharing rule', () => {
+    s.schema.definitions[0].type = 'single_line_text_field'; s.snapshot.rows[0].fields[0].type = 'single_line_text_field'
+    const { fieldId } = sharedFixture(), base = page()
+    s.snapshot.rows[0].locale = 'it'
+    s.snapshot.rows[0].translations = { [fieldId]: { resourceId: 'gid://shopify/Metafield/14', fieldId,
+      key: 'value', locale: 'it', digest: 'source-it', value: 'Prima', sourceValue: 'false', outdated: false } }
+    const cell = { ...base.rows[0].values[fieldId], value: 'Nexus Italian', tier: 'language', language: 'it', requested: 'it',
+      contentAddress: { tier: 'language', language: 'it' }, contentAcknowledgement: { shared: { address: { tier: 'language', language: 'it' } } }, contentVersion: 5 }
+    base.rows[0].values[fieldId] = cell
+    const rows = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].values[fieldId]).toMatchObject(cell)
+    expect(rows[0].values[fieldId].shopifyWrite).toBeUndefined()
+  })
   it.each(['', null, 'Nexus pin'])('keeps addressed title %j and its source facts instead of replacing it with the provider baseline', value => {
     const base = page()
     const cell = { ...base.rows[0].values.title, value, pinned: true, inherited: false,
