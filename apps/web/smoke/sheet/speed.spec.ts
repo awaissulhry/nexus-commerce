@@ -30,10 +30,15 @@ test('@sheet speed · production load, one edit, compact bytes and horizontal sc
   expect(loadedRenders.production, 'speed counts require a production web build').toBe(true)
   expect(loadRequests.filter(r => (r.status === 0 || r.status >= 400) && !OFFLINE_LATENCY.some(path => r.url.includes(path))), 'failed load requests').toEqual([])
 
-  const compact = await page.request.get(`${scope.api}&cells=compact`, { headers: { 'x-nexus-workspace-id': seed.workspace } })
-  expect(compact.status()).toBe(200)
-  const sheetBytes = (await compact.body()).length
-  const decoded = decodeSheetCells(await compact.json())
+  const sheetRequests = load.requests.filter(request => request.url().includes('/studio/sheet?'))
+  expect(sheetRequests, 'one actual browser sheet read').toHaveLength(1)
+  expect(new URL(sheetRequests[0].url()).searchParams.get('cells'), 'the browser asks for compact cells').toBe('compact')
+  const compact = await sheetRequests[0].response()
+  expect(compact, 'the browser sheet read finished').toBeTruthy()
+  expect(compact!.status()).toBe(200)
+  const sheetBytes = (await compact!.body()).length
+  const decoded = decodeSheetCells(await compact!.json())
+  expect(decoded.rows).toHaveLength(seed.families.speed.variations + 1)
   const cellCount = decoded.rows.reduce((sum: number, row: { values: Record<string, unknown> }) => sum + Object.keys(row.values).length, 0)
   const bytesPerCell = sheetBytes / cellCount
   // Independent 151-row fixture: 47.2 B/cell, with 3% headroom. The original target is still 200 B/cell.
