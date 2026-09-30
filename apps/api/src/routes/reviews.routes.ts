@@ -1068,7 +1068,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     const body = request.body
     if (!body?.action) return reply.code(400).send({ error: 'action required' })
 
-    const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+    const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
     const testBaseUrl = `${webBase}/r/__test__`
 
     if (body.action === 'preview-html') {
@@ -1364,7 +1364,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         userAgent: request.headers['user-agent'] ?? null,
       })
       // Redirect the GET to a friendly confirmation page on the web app.
-      const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+      const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
       reply.code(302).header(
         'location',
         `${webBase}/unsubscribed?channel=${encodeURIComponent(ch ?? 'all')}`,

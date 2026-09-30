@@ -66,12 +66,13 @@ export async function colourProductsView(destination: Destination, plan: ColourP
     plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues,
       products: plan.products.map(p => ({ key: p.key, position: p.position, nexusValue: p.nexusValue, colourName: p.colourName, colourNameSource: p.colourNameSource, options: p.options, variants: p.variants.length })) },
     colourProducts: rows.map(r => ({ id: r.id, valueKey: r.valueKey, colourName: r.colourName, state: r.state, shopifyProductId: r.shopifyProductId, remoteStatus: r.remoteStatus,
-      checkedAt: r.checkedAt?.toISOString() ?? null, proposal: r.proposal })),
+      checkedAt: r.checkedAt?.toISOString() ?? null, linkVerifiedAt: r.linkVerifiedAt?.toISOString() ?? null, proposal: r.proposal })),
   }
 }
 
 export async function planFor(destination: Destination) {
-  const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination), select: { valueKey: true, colourName: true, state: true, shopifyProductId: true } })
+  const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination),
+    select: { id: true, valueKey: true, colourName: true, state: true, shopifyProductId: true, createdAt: true, linkVerifiedAt: true } })
   const colourNames = Object.fromEntries(rows.filter(r => r.colourName).map(r => [r.valueKey, r.colourName!]))
   const [settings, { plan }] = await Promise.all([readColourProductSettings(destination.accountId), loadColourPlan(destination.familyId, { colourNames })])
   return { rows, settings, plan }

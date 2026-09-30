@@ -1,4 +1,9 @@
-# Build context of apps/api/Dockerfile and apps/web/Dockerfile (docs/ci-fast-deploys/PLAN-2026-09-29.md).
+# Build context of this directory's Dockerfile (docs/ci-fast-deploys/PLAN-2026-09-29.md). BuildKit reads
+# <Dockerfile>.dockerignore beside the Dockerfile. Keep it the same as apps/api/Dockerfile.dockerignore.
+#
+# Not a root .dockerignore: Railway's builder (Railpack) applies a root .dockerignore to its own builds too. On
+# 2026-09-29 it left apps/api/.release-sha out of the Railway API build (run 36636596664): readiness reported build
+# "unknown", the deploy check failed, and the worker, scheduler and web were not shipped.
 #
 # An allow-list: only what the two images are built from goes to the builder. Everything else stays out — docs/,
 # output/, outputs/, obsidian-vault/, apps/factory, services/ — and so does every .env: on a developer machine the root

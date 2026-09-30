@@ -93,6 +93,8 @@ const GATES = {
   'shadow token use self-test': node('scripts/check-shadow-token-use.mjs', '--self-test'),
   'shadow token use': node('scripts/check-shadow-token-use.mjs'),
   'browser gate runner self-tests': nodeTest('scripts/run-browser-gates.test.mjs', 'scripts/lib/gate-write-guard.test.mjs', 'scripts/lib/gate-aloneness.test.mjs'),
+  // 2026-09-30 — CI runs the real-PostgreSQL suites in two parts; a split that loses or repeats a suite is refused.
+  'real-PostgreSQL split self-test': node('scripts/run-real-postgres-tests.mjs', '--self-test'),
   'DS-GAPS append-only': node('scripts/check-ds-gaps-append-only.mjs', '--check'),
   'DS api guard': node('apps/web/src/design-system/tools/api-guard.mjs'),
 }
