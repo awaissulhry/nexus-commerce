@@ -85,7 +85,7 @@ export function useSheetPreferences<Row, Page>(options: {
     if (!open || !familyProductId) return
     let current = true
     setPlaces('loading')
-    fetch(`${getBackendUrl()}/api/products/${encodeURIComponent(familyProductId)}/studio/family-attributes`, { credentials: 'include', cache: 'no-store' })
+    fetch(`${getBackendUrl()}/api/products/${encodeURIComponent(familyProductId)}/studio/family-attributes`, { cache: 'no-store' })
       .then(res => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((body: FamilyAttributePlaces) => { if (current) setPlaces(body) })
       .catch(() => { if (current) setPlaces('error') })
