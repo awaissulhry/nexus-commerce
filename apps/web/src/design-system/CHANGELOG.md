@@ -1,3 +1,7 @@
+## Batch replies keep newer version numbers — 2026-09-30
+
+**`SheetWriter`** keeps the highest confirmed row version when a save finishes. An older reply cannot undo a newer version learned from another alias, so the next edit uses the right number. Uses the existing seed rule. Mirrored in Factory.
+
 ## Clear is reachable with the arrow keys — 2026-09-30
 
 **`ListboxPanel`** lets ArrowUp reach Clear from the first option. Enter and Tab report an empty value before a grid ends the edit. Focusing Clear also updates the keyboard choice. A missing stored value still stays unchanged until the operator chooses. Mirrored in Factory.
