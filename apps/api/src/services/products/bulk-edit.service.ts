@@ -22,7 +22,7 @@ import { getFieldDefinition } from '../pim/field-registry.service.js'
 import { readStoredChannelValue } from '../pim/channel-inheritance.js'
 import { applyPlatformMutations, channelValueMutation, type ChannelValueMutation } from '../pim/channel-value-mutation.js'
 import { CHANNEL_FIELD_MAP, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '../pim/channel-field-map.js'
-import { checkForStorage, coerceForShape, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
+import { checkForStorage, coerceForShape, isBlankValue, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
 import { isEbayListingLevel, loadEbayListingAxes } from '../pim/ebay-listing-level.js'
 import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from '../pim/master-field-gate.js'
 import { validationMarketplace } from '../pim/validation-marketplace.js'
@@ -249,6 +249,16 @@ async function channelRowContract(
     onlyChannels: [ctx.channel], scopeKind: 'channel',
   })
   const label = channelSet.coordinates.find((c) => c.channel === ctx.channel)?.label
+  // P1 (report 3 I-3.4) — the eBay item specifics the family stores outside its category are columns of the sheet
+  // (`ebay-other-specifics.ts`), so they are columns of the write contract too: editable and clearable.
+  let headers = channelSet.columns
+  if (ctx.channel === 'EBAY' && label) {
+    const roots = [...new Set(owners.map(owner => owner.parentId ?? owner.id))]
+    const listings = await prisma.channelListing.findMany({ where: { channel: 'EBAY', marketplace: ctx.marketplace, channelConnectionId: context.connectionId ?? null,
+      OR: [{ productId: { in: roots } }, { product: { parentId: { in: roots } } }] }, select: { platformAttributes: true } })
+    const { otherItemSpecificColumns } = await import('../pim/channel-specs/ebay-other-specifics.js')
+    headers = [...headers, ...otherItemSpecificColumns({ columns: headers, coordinateLabel: label, listings, category: context.categories[0] ?? null })]
+  }
   const rows = new Map<string, SheetColumnRow>()
   const categories = new Map<string, string | null>()
   for (const id of ids) {
@@ -256,7 +266,7 @@ async function channelRowContract(
     const category = context.byRow.get(`${id}:${aliasKey}`)?.channelCategoryId ?? context.defaults[id]?.channelCategoryId ?? null
     categories.set(id, category)
     const row: SheetColumnRow = new Map()
-    for (const header of channelSet.columns) {
+    for (const header of headers) {
       const col = label ? columnForCategory(header, label, category) : header
       const owner = owners.find(p => p.id === id)
       const shopifyApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !owner?.parentId : !owner?.isParent)
@@ -1580,6 +1590,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // they are saved on the parent listing, where eBay reads it (`buildSharedListingInput`), below. Decided before the
   // no-op pass, which compares such a write with the parent's value.
   const listingLevelParent = new Map<string, string>()
+  /** Every listing-level write on a family row (parent or variation) → its parent; a CLEAR empties the whole listing. */
+  const listingLevelFamily = new Map<string, string>()
+  const familyChildren = new Map<string, string[]>()
   const familyListingBag = new Map<string, unknown>()
   const ebayContext = effectiveContexts.find(ctx => ctx.channel === 'EBAY')
   const itemSpecificWrites = ebayContext ? validated.filter(v => {
@@ -1588,24 +1601,31 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     return store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics'
   }) : []
   if (ebayContext && itemSpecificWrites.length) {
-    const variations = await prisma.product.findMany({ where: { id: { in: [...new Set(itemSpecificWrites.map(v => v.id))] }, parentId: { not: null } },
-      select: { id: true, parentId: true, parent: { select: { variationAxes: true } } } })
-    const parentIds = [...new Set(variations.map(row => row.parentId!))]
+    const written = await prisma.product.findMany({ where: { id: { in: [...new Set(itemSpecificWrites.map(v => v.id))] } },
+      select: { id: true, parentId: true, isParent: true, variationAxes: true, parent: { select: { variationAxes: true } } } })
+    const variations = written.filter(row => row.parentId)
+    const parentIds = [...new Set([...variations.map(row => row.parentId!), ...written.filter(row => row.isParent && !row.parentId).map(row => row.id)])]
+    for (const child of parentIds.length ? await prisma.product.findMany({ where: { parentId: { in: parentIds }, deletedAt: null }, select: { id: true, parentId: true } }) : []) {
+      familyChildren.set(child.parentId!, [...familyChildren.get(child.parentId!) ?? [], child.id])
+    }
     const accountId = connFor.get('EBAY') ?? null, aliasKey = ebayContext.aliasKey ?? ''
     const parentListings = parentIds.length ? await prisma.channelListing.findMany({ where: { productId: { in: parentIds }, channel: 'EBAY',
       marketplace: ebayContext.marketplace, aliasKey, channelConnectionId: accountId }, select: { productId: true, platformAttributes: true } }) : []
     for (const listing of parentListings) familyListingBag.set(listing.productId, listing.platformAttributes)
     // The axes the publisher sends as variation specifics for this listing (its variation projection).
     const axesOf = new Map<string, Set<string>>()
-    for (const parentId of parentIds) axesOf.set(parentId, await loadEbayListingAxes({ parentId, market: ebayContext.marketplace, accountId, aliasKey,
-      familyAxes: variations.find(row => row.parentId === parentId)?.parent?.variationAxes }))
+    for (const parentId of parentIds) if (familyChildren.has(parentId)) axesOf.set(parentId, await loadEbayListingAxes({ parentId, market: ebayContext.marketplace, accountId, aliasKey,
+      familyAxes: written.find(row => row.id === parentId)?.variationAxes ?? variations.find(row => row.parentId === parentId)?.parent?.variationAxes }))
     for (const v of itemSpecificWrites) {
-      const variation = variations.find(row => row.id === v.id)
-      if (!variation?.parentId) continue
-      const axes = axesOf.get(variation.parentId)!
+      const product = written.find(row => row.id === v.id)
+      const parentId = product?.parentId ?? (product?.isParent ? product.id : null)
+      const axes = parentId ? axesOf.get(parentId) : undefined
+      if (!parentId || !axes) continue
       const key = v.field.replace(/^attr_/, '')
       const column = rowContract.get(v.id)?.get(key)
-      if (isEbayListingLevel({ store: storeFor(v.id, key), names: [key, column?.key, column?.label, column?.channelLabel] }, axes)) listingLevelParent.set(`${v.id}\u0000${v.field}`, variation.parentId)
+      if (!isEbayListingLevel({ store: storeFor(v.id, key), names: [key, column?.key, column?.label, column?.channelLabel] }, axes)) continue
+      listingLevelFamily.set(`${v.id}\u0000${v.field}`, parentId)
+      if (parentId !== v.id) listingLevelParent.set(`${v.id}\u0000${v.field}`, parentId)
     }
   }
   const noOpKeys = new Set<string>()
@@ -2327,7 +2347,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       string,
       // `fields`: the changes' own fields (`attr_brand`), so a refusal names the cell that asked, not the JSON path.
       // `reportAs`/`familyWrite`: a variation row's listing-level eBay value written to its parent listing (P1, below).
-      { productId: string; channel: string; marketplace: string; aliasKey: string; fields: string[]; remove: string[]; sets: ChannelValueMutation['platform']; reportAs?: string; familyWrite?: boolean }
+      { productId: string; channel: string; marketplace: string; aliasKey: string; fields: string[]; remove: string[]; sets: ChannelValueMutation['platform']; reportAs?: string; familyWrite?: boolean; optional?: boolean }
     >()
 
     // P1 (report 5 I-1) — eBay takes ONE value per listing for an item specific that is not a variation axis, from the
@@ -2348,13 +2368,17 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
         if (store?.kind === 'platformAttributes') {
           const familyOwner = listingLevelParent.get(`${v.id}\u0000${v.field}`)
+          const family = listingLevelFamily.get(`${v.id}\u0000${v.field}`)
+          // Clearing (or resetting) the listing's one value empties every row's copy too: eBay takes the first variation
+          // that still holds one when the parent holds none, so a copy left behind would be what eBay receives.
+          const clearing = !!family && (v.reset || isBlankValue(v.value))
           for (const ctx of effectiveContexts) {
             const aliasKey = (ctx as { aliasKey?: string }).aliasKey ?? ''
-            const mutate = (productId: string, action: 'SET' | 'INHERIT', family = false) => {
+            const mutate = (productId: string, action: 'SET' | 'INHERIT', family = false, optional = false) => {
               const key = `${productId}|${ctx.channel}|${ctx.marketplace}|${aliasKey}`
               let entry = platformPatchByCoord.get(key)
               if (!entry) {
-                entry = { productId, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey, fields: [], sets: [], remove: [], ...(family ? { reportAs: v.id, familyWrite: true } : {}) }
+                entry = { productId, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey, fields: [], sets: [], remove: [], ...(family ? { reportAs: v.id, familyWrite: true } : {}), ...(optional ? { optional: true } : {}) }
                 platformPatchByCoord.set(key, entry)
               }
               if (!entry.fields.includes(v.field)) entry.fields.push(v.field)
@@ -2368,6 +2392,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
               mutate(familyOwner, v.reset ? 'INHERIT' : 'SET', true)
               familyWrites.set(`${familyOwner}|${ctx.marketplace}|${aliasKey}`, { productId: familyOwner, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey })
             } else mutate(v.id, v.reset ? 'INHERIT' : 'SET')
+            if (clearing && family && ctx.channel === 'EBAY') for (const sibling of familyChildren.get(family) ?? []) {
+              if (sibling === v.id) continue
+              mutate(sibling, 'INHERIT', true, true)
+              familyWrites.set(`${sibling}|${ctx.marketplace}|${aliasKey}`, { productId: sibling, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey })
+            }
           }
           continue
         }
@@ -2682,6 +2711,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       for (const e of entries) {
         const row = rows.find((l) => l.productId === e.productId && l.channel === e.channel && l.marketplace === e.marketplace && l.aliasKey === e.aliasKey)
         if (!row) {
+          // A variation with no listing here holds no copy of a listing-level value: nothing to clear.
+          if (e.optional) continue
           // One refusal per change, under the change's own field: the sheet matches errors by it,
           // and a refusal it cannot match is painted as saved.
           for (const field of e.fields) errors.push({ id: e.reportAs ?? e.productId, field, error: `No ${e.channel} listing on ${e.marketplace} yet — a listing field needs the listing to exist` })
