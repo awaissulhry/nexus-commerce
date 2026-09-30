@@ -159,8 +159,10 @@ read-back found the image in the service's source: check the deployment on Railw
 it. The job fails when the record names another image or a `railway up` build, and when it names
 nothing (or cannot be read) while the read-back failed too: then nothing confirms the image. The log
 also names the deployment Railway started: `✓ Railway started deployment …`. A `::notice::` that
-Railway answered with the deployment that already serves means it started none: report it. A
-deployment that stops being Railway's latest before it succeeds (removed or cancelled) fails the job
+Railway answered with the deployment that already serves means it started none: report it. A returned
+deployment that already existed must have a record that names the image: its source setting alone cannot
+confirm what that deployment runs (review, 2026-09-30).
+A deployment that stops being Railway's latest before it succeeds (removed or cancelled) fails the job
 at once. One that Railway never lists as the latest fails as soon as Railway's list of deployments
 shows it ended, or after 15 minutes (`✗ deployment … was never listed by Railway …`); the previous
 build keeps serving.
@@ -216,13 +218,15 @@ When a step fails, what to do:
   environment or the source change, nothing changed: run the deploy again. For a deployment of the
   image (`serviceInstanceDeployV2`), the source change had already been made: see the next paragraph.
 - `✗ no answer from Railway to the change of the service's source … (serviceInstanceUpdate) … it may
-  still apply` (after a timeout or an HTTP 5xx): the deploy started no deployment, and the service
+  still apply` (after a timeout, an HTTP 5xx or a broken success reply): the deploy started no deployment, and the service
   keeps serving its last build. If the change applied, Railway may have started a deployment itself:
   check the service's deployments too. Then look at Settings → Source. If it names the image, the
   change applied: run Deploy API by hand again, which sets the same image and deploys it. If it
   names the old source, nothing changed: run it again, or remove the name from the variable.
-- `✗ no answer from Railway to a deployment of …` (after a timeout or an HTTP 5xx): a deployment may
+- `✗ no answer from Railway to a deployment of …` (after a timeout, an HTTP 5xx or a broken success reply): a deployment may
   have started. Look at the service's deployments on Railway before running the deploy again.
+- `✗ no usable answer from Railway … its answer holds no result`: treat a source change or deployment as unknown,
+  as above. A missing result does not prove that Railway refused the request.
 
 If the source change works but the image deployment fails (or Railway refuses to start it, or is not
 reached), the service keeps serving its last `railway up` build while Settings → Source already names

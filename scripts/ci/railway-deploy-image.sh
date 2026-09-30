@@ -48,7 +48,8 @@
 #    say: if Railway only staged the new source and the read-back failed, the deployment runs the old build and
 #    reports SUCCESS. A record that names neither is read once more (it may not be complete yet). A record that still
 #    names neither, or cannot be read, gives a warning when the read-back confirmed the
-#    source, and 1 when it did not: then nothing confirms the image (review, 2026-09-30: a first switch, staged, with
+#    source, and 1 when it did not or the returned deployment already existed: a new source setting cannot confirm
+#    what an old deployment runs (review, 2026-09-30). Then nothing confirms the image (a first switch, staged, with
 #    the read-back denied, ended green). Railway's docs do not describe meta; public deploy scripts read meta.image as
 #    the reference the service was pointed at. Only the API has a readiness check of its own commit afterwards.
 #
@@ -126,8 +127,8 @@ listed_status() {
 # One request to Railway's GraphQL API as the project token; $1 is the request body (JSON, built with jq -n). Prints
 # the answer (JSON). Otherwise prints why, on one line, and returns 3 when curl could not reach Railway (nothing was
 # sent: curl exits 5, 6 and 7 for a name or connection, 35, 60 and 77 for TLS), 2 when no answer came within
-# $API_SECONDS s or the answer is a server error (HTTP 5xx): a mutation may still apply. 1 when Railway refused: any
-# other status that is not 2xx, a body that is not JSON, or `errors` in it (Railway denies with HTTP 200: "Not
+# $API_SECONDS s, the answer is a server error (HTTP 5xx), or a 2xx body is not a JSON object: a mutation may still
+# apply. 1 when Railway refused: any other status that is not 2xx, or `errors` in it (Railway denies with HTTP 200: "Not
 # Authorized"; a nested field's path is named). The token reaches curl through a file descriptor, never its
 # arguments; neither it nor any request header is printed.
 graphql() {
@@ -155,7 +156,7 @@ graphql() {
   esac
   if ! jq -e 'type == "object"' <<< "$answer" > /dev/null 2>&1; then
     echo "its answer is not JSON (HTTP $status)"
-    return 1
+    return 2
   fi
   if [ -n "$errors" ]; then
     echo "$errors"
@@ -178,7 +179,7 @@ railway_api() {
   esac
   value=$(jq -r "$2 | strings" <<< "$answer" 2>/dev/null) || value=''
   if [ -z "$value" ]; then
-    echo "✗ Railway refused $1: its answer holds no result — $3" >&2
+    echo "✗ no usable answer from Railway to $1: its answer holds no result — $4" >&2
     return 1
   fi
   printf '%s\n' "$value"
@@ -353,6 +354,10 @@ case "$record" in
 esac
 why='could not be read'
 if [ "$listed" = true ]; then why='names no image'; fi
+if [ "$id" = "$before" ]; then
+  echo "✗ Railway returned the existing deployment $id, but its record $why: the new source setting cannot confirm what that deployment runs — check the deployment on Railway"
+  exit 1
+fi
 if [ "$read_back" != true ]; then
   echo "✗ deployment $id succeeded, but neither the service's source (unread) nor Railway's record of the deployment ($why) confirms $image — check Settings → Source and the deployment on Railway"
   exit 1
