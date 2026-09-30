@@ -27,6 +27,7 @@ describe('replacement rows keep the versions already confirmed for their owners'
     previous.values.title.value = 'older displayed value'
     incoming.values.title.contentVersion = 4
     incoming.values.bullet.contentVersion = 8
+    incoming.values.other.contentAddress.language = 'es'
     incoming.values.other.contentVersion = 12
     expect(preserveContentVersions(previous, incoming, 8)).toBe(incoming)
     expect(incoming.version).toBe(8)
@@ -59,11 +60,31 @@ describe('replacement rows keep the versions already confirmed for their owners'
     expect(incoming.values.title.contentVersion).toBe(1)
     expect(incoming.values.bullet.contentVersion).toBe(1)
   })
-  it('uses the writer version when the previous master row has not been refreshed', () => {
+  it('uses the confirmed save snapshot when the previous master row has not been refreshed', () => {
     const previous = snapshot(7), incoming = snapshot(8)
+    previous.values.title.contentVersion = 4
+    preserveContentVersions(undefined, previous)
+    adoptContentVersions(previous, { currentVersion: 8, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 5 }] })
     incoming.values.title.contentVersion = 4
     preserveContentVersions(previous, incoming, 8)
     expect(incoming.values.title.contentVersion).toBe(5)
+  })
+  it('keeps a recreated token when an older pre-reset read arrives later', () => {
+    const old = snapshot(7), recreated = snapshot(9)
+    recreated.values.title.contentVersion = 1
+    preserveContentVersions(old, recreated)
+    const late = snapshot(7)
+    preserveContentVersions(recreated, late, 9)
+    expect(late.values.title.contentVersion).toBe(1)
+  })
+  it('does not associate a pin conflict owner with the old content token', () => {
+    const old = snapshot(7, 'listing-a', 82)
+    preserveContentVersions(undefined, old)
+    old.listing.version = 84 // The conflict proves only the listing version, not its content.
+    const fresh = snapshot(7, 'listing-a', 84)
+    fresh.values.bullet.contentVersion = 1
+    preserveContentVersions(old, fresh)
+    expect(fresh.values.bullet.contentVersion).toBe(1)
   })
   it('finds the content owner across renamed language columns', () => {
     const previous = snapshot(), incoming = { ...snapshot(7), values: {

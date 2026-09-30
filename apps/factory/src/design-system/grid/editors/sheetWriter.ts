@@ -761,6 +761,7 @@ export class SheetWriter<T> {
     this.inFlightCells.set(rowId, batch.length)
     this.emit()
 
+    const sentRow = this.rows.get(rowId) ?? null
     let result: SheetWriteResult
     let rejected = false
     try {
@@ -803,7 +804,7 @@ export class SheetWriter<T> {
       try {
         result = await this.opts.commit({
           rowId,
-          row: this.rows.get(rowId) ?? null,
+          row: sentRow,
           cells: batch,
           expectedVersion: this.versions.get(rowId),
         })
@@ -822,14 +823,20 @@ export class SheetWriter<T> {
     }
 
     if (generation !== this.generation) return
-    this.settle(rowId, q, batch, result, rejected)
+    this.settle(rowId, q, batch, result, rejected, sentRow)
   }
 
   /**
    * Paint one row's answer — the SAME code for the per-row path and for each row of a batch, so the two cannot drift.
    */
-  private settle(rowId: string, q: RowQueue, batch: SheetWriteCell[], result: SheetWriteResult, rejected: boolean,
+  private settle(rowId: string, q: RowQueue, batch: SheetWriteCell[], result: SheetWriteResult, rejected: boolean, sentRow: T | null,
     refusalSink?: Array<{ rowId: string; colId: string; reason?: string }>): void {
+    // A read may replace the row while commit updates the captured row. Reconcile host metadata
+    // onto the current row before queued edits resume; its current values remain authoritative.
+    const current = this.rows.get(rowId)
+    if (sentRow && current && current !== sentRow && this.opts.mergeRow) {
+      this.rows.set(rowId, this.opts.mergeRow(sentRow, current, this.versions.get(rowId)))
+    }
     // Another alias can confirm a newer shared version before this captured batch result settles.
     if (typeof result.version === 'number') this.seed([{ id: rowId, version: result.version }])
     if (result.conflict) this.opts.onConflict?.(rowId, result.version)
@@ -948,7 +955,7 @@ export class SheetWriter<T> {
       const q = this.queues.get(request.rowId)
       if (!q) continue
       const result = results.get(request.rowId) ?? { ok: false, unreachable: true, reason: 'The save answered without this row. Checking whether it saved…' }
-      this.settle(request.rowId, q, batches.get(request.rowId)!, result, rejected, refused)
+      this.settle(request.rowId, q, batches.get(request.rowId)!, result, rejected, request.row, refused)
     }
     if (refused.length) this.opts.onRefused?.(refused)
     // Cells edited while this call was on the wire go now, as the next call.

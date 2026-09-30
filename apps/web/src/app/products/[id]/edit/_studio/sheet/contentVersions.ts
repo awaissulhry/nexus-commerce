@@ -18,26 +18,46 @@ function tokenKey(row: TokenRow, cell: TokenCell): string | null {
   return address.tier === 'pin' && row.listing?.id ? JSON.stringify(['pin', row.listing.id, address.language]) : null
 }
 
-/** Keep confirmed write tokens, without replacing incoming values or provenance. */
+// A conflict may advance the row's owner version without confirming its content. Keep the
+// pair on the cell object: quiet reads can retain a busy cell while replacing its siblings.
+// Weak keys disappear with the sheet; nothing is added to the wire or to persisted values.
+type ContentSnapshot = { key: string; ownerVersion: number | undefined; version: number }
+const snapshots = new WeakMap<NonNullable<TokenCell>, ContentSnapshot>()
+const ownerVersionOf = (row: TokenRow, cell: NonNullable<TokenCell>) => cell.contentAddress?.tier === 'pin' ? row.listing?.version : row.version
+function snapshotOf(row: TokenRow, cell: TokenCell): ContentSnapshot | undefined {
+  const key = tokenKey(row, cell)
+  if (!key || cell?.contentVersion === undefined) return undefined
+  const previous = snapshots.get(cell)
+  if (previous?.key === key && previous.version === cell.contentVersion) return previous
+  const snapshot = { key, ownerVersion: ownerVersionOf(row, cell), version: cell.contentVersion }
+  snapshots.set(cell, snapshot)
+  return snapshot
+}
+const newer = (a: ContentSnapshot, b: ContentSnapshot) =>
+  a.ownerVersion !== undefined && b.ownerVersion !== undefined && a.ownerVersion !== b.ownerVersion
+    ? a.ownerVersion > b.ownerVersion : a.version > b.version
+
+/** Keep confirmed token/owner pairs, without replacing incoming values or provenance. */
 export function preserveContentVersions<T extends TokenRow>(previous: TokenRow | undefined, incoming: T, knownVersion?: number): T {
-  if (!previous || previous === incoming || previous.id !== incoming.id) return incoming
+  if (previous === incoming) return incoming
+  const known = new Map<string, ContentSnapshot>()
+  if (previous?.id === incoming.id) for (const cell of Object.values(previous.values ?? {})) {
+    const snapshot = snapshotOf(previous, cell)
+    if (snapshot && (!known.has(snapshot.key) || newer(snapshot, known.get(snapshot.key)!))) known.set(snapshot.key, snapshot)
+  }
+  // Capture read ownership BEFORE monotonic owner tokens below can advance it.
+  for (const cell of Object.values(incoming.values ?? {})) {
+    const snapshot = snapshotOf(incoming, cell), confirmed = snapshot && known.get(snapshot.key)
+    if (cell && confirmed && newer(confirmed, snapshot!)) {
+      cell.contentVersion = confirmed.version
+      snapshots.set(cell, confirmed)
+    }
+  }
+  if (!previous || previous.id !== incoming.id) return incoming
   const productVersion = Math.max(previous.version ?? -1, knownVersion ?? -1)
-  // A newer owner snapshot may contain a deleted/recreated translation with a lower counter.
-  const newerProduct = incoming.version !== undefined && incoming.version > productVersion
-  const newerListing = previous.listing?.version !== undefined && incoming.listing?.id === previous.listing.id && incoming.listing.version !== undefined && incoming.listing.version > previous.listing.version
   if (productVersion >= 0 && (incoming.version === undefined || productVersion > incoming.version)) incoming.version = productVersion
   if (previous.listing?.version !== undefined && incoming.listing?.id === previous.listing.id && (incoming.listing.version === undefined || previous.listing.version > incoming.listing.version)) {
     incoming.listing.version = previous.listing.version
-  }
-  const known = new Map<string, number>()
-  for (const cell of Object.values(previous.values ?? {})) {
-    const key = tokenKey(previous, cell)
-    if (key && cell?.contentVersion !== undefined) known.set(key, Math.max(known.get(key) ?? cell.contentVersion, cell.contentVersion))
-  }
-  for (const cell of Object.values(incoming.values ?? {})) {
-    if (cell?.contentAddress?.tier === 'language' ? newerProduct : newerListing) continue
-    const key = tokenKey(incoming, cell), version = key ? known.get(key) : undefined
-    if (cell?.contentVersion !== undefined && version !== undefined && version > cell.contentVersion) cell.contentVersion = version
   }
   return incoming
 }
@@ -58,10 +78,16 @@ export function adoptContentVersions(row: TokenRow | null | undefined, body: unk
     for (const target of entry.tier === 'language' ? new Set([row, ...siblings]) : [row]) {
       if (target.id !== entry.id) continue
       for (const [colId, cell] of Object.entries(target.values ?? {})) {
-        if (!cell || cell.contentVersion === undefined || cell.contentVersion >= entry.version) continue
+        if (!cell || cell.contentVersion === undefined) continue
         if (cell.contentAddress?.tier !== entry.tier || cell.contentAddress.language !== entry.language) continue
+        const current = snapshotOf(target, cell)
+        const reply = body as { currentVersion?: number; versionOf?: string }
+        const ownerVersion = reply.versionOf === (entry.tier === 'pin' ? 'channelListing' : 'product') && typeof reply.currentVersion === 'number' ? reply.currentVersion : undefined
+        const confirmed = { key: tokenKey(target, cell) ?? '', ownerVersion, version: entry.version }
+        if (current && newer(current, confirmed)) continue
+        if (cell.contentVersion !== entry.version) moved.add(colId)
         cell.contentVersion = entry.version
-        moved.add(colId)
+        snapshots.set(cell, confirmed)
       }
     }
   }
