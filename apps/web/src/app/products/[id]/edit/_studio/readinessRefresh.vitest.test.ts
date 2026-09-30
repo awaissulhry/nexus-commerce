@@ -39,16 +39,26 @@ describe('mergeCoordinateReadiness', () => {
     expect(merged.coordinate).toBe('c')
   })
 
-  it('an API that still answers for the whole family changes only the open coordinate too', () => {
+  it('an answer for more than the coordinate: every matrix entry it carries is a fresh verdict, only the saved chip moves', () => {
     const family = { scopes: [scope('master', 71), scope('EBAY', 56), scope('AMAZON', 10)], matrix: [entry(null, null, 71), entry('EBAY', 'IT', 56), entry('AMAZON', 'IT', 10), entry('EBAY', 'DE', 5)] }
     const merged = mergeCoordinateReadiness(previous, family, { channel: 'EBAY', market: 'IT', accountId: 'acc-1' })
-    expect(merged.matrix.map((m) => `${m.channel}:${m.market}:${m.pct}`).sort()).toEqual(['AMAZON:IT:90', 'EBAY:IT:56', 'null:null:70'])
+    expect(merged.matrix.map((m) => `${m.channel}:${m.market}:${m.pct}`).sort()).toEqual(['AMAZON:IT:10', 'EBAY:DE:5', 'EBAY:IT:56', 'null:null:71'])
     expect((merged.byScope as Record<string, { pct: number }>).AMAZON.pct).toBe(90)
+    expect((merged.byScope as Record<string, { pct: number }>).master.pct).toBe(70)
   })
 
   it('an answer without the coordinate leaves everything as it was', () => {
     const merged = mergeCoordinateReadiness(previous, { scopes: [], matrix: [] }, { channel: 'EBAY', market: 'IT', accountId: 'acc-1' })
     expect(merged.byScope).toBe(previous.byScope)
     expect(merged.matrix).toBe(previous.matrix)
+  })
+})
+
+describe('review 8 — a channel without markets (Shopify, WooCommerce, Etsy) answers for GLOBAL', () => {
+  it('the refreshed GLOBAL coordinate replaces its entry although the page market is IT', () => {
+    const previous = { byScope: { SHOPIFY: scope('SHOPIFY', 40) } as never, matrix: [entry('SHOPIFY', 'GLOBAL', 40)] as unknown as ReadinessMatrixEntry[] }
+    const answer = { scopes: [scope('SHOPIFY', 55)], matrix: [entry('SHOPIFY', 'GLOBAL', 55)] }
+    const merged = mergeCoordinateReadiness(previous, answer, { channel: 'SHOPIFY', market: 'IT', accountId: 'acc-1' })
+    expect(merged.matrix.map((m) => `${m.channel}:${m.market}:${m.pct}`)).toEqual(['SHOPIFY:GLOBAL:55'])
   })
 })
