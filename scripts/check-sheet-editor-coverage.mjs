@@ -62,14 +62,25 @@ const parse = (text, file) => ts.createSourceFile(file, text, ts.ScriptTarget.La
 const unwrap = (n) => { while (n && (ts.isAsExpression(n) || ts.isParenthesizedExpression(n) || ts.isSatisfiesExpression?.(n) || ts.isNonNullExpression(n))) n = n.expression; return n }
 const nameOf = (n) => (ts.isIdentifier(n) || ts.isStringLiteral(n) ? n.text : ts.isComputedPropertyName(n) && ts.isStringLiteral(n.expression) ? n.expression.text : null)
 
-/** Editor ids a builder can mount: the value of every `cellEditor:` or `component:` that names one. */
+/** Editor ids a builder can mount, including every arm of a conditional registration. */
 export function editorsIn(text, file) {
   const found = new Set()
+  const record = (node, conditional = false) => {
+    const value = unwrap(node)
+    if (ts.isConditionalExpression(value)) {
+      record(value.whenTrue, true)
+      record(value.whenFalse, true)
+    } else if (ts.isIdentifier(value)) {
+      if (value.text !== 'undefined') found.add(value.text)
+    }
+    else if (ts.isStringLiteral(value) && value.text) found.add(value.text)
+    else if (conditional && value.kind !== ts.SyntaxKind.NullKeyword) {
+      throw new Error(`${file}: unsupported conditional editor expression ${ts.SyntaxKind[value.kind]}; name each editor directly`)
+    }
+  }
   const visit = (n) => {
     if (ts.isPropertyAssignment(n) && ['cellEditor', 'component'].includes(nameOf(n.name) ?? '')) {
-      const value = unwrap(n.initializer)
-      if (ts.isIdentifier(value) && value.text !== 'undefined') found.add(value.text)
-      else if (ts.isStringLiteral(value) && /^ag[A-Z]\w*CellEditor$/.test(value.text)) found.add(value.text)
+      record(n.initializer)
     }
     ts.forEachChild(n, visit)
   }
@@ -204,6 +215,15 @@ function selfTest() {
   // A builder mounts an editor nobody tests → R1 and R2.
   expectNew('a new editor in a builder', (s) => { s[BUILDERS[0]] += '\nconst x = { cellEditor: BrandNewEditor }\n' }, /R1 editor BrandNewEditor/)
   expectNew('a new editor without a driver', (s) => { s[BUILDERS[0]] += '\nconst y = { component: BrandNewEditor as never }\n' }, /R2 editor BrandNewEditor: no driver/)
+  expectNew('a new editor in a conditional branch', (s) => { s[BUILDERS[0]] += '\nconst x = { component: ready ? BrandNewEditor : SelectPanelEditor }\n' }, /R1 editor BrandNewEditor/)
+  expectNew('a new editor in a nested conditional branch', (s) => { s[BUILDERS[0]] += '\nconst x = { cellEditor: ready ? SelectPanelEditor : (busy ? FormulaCellEditor : BrandNewEditor as never) }\n' }, /R2 editor BrandNewEditor: no driver/)
+  expectNew('a named registered editor in a conditional branch', (s) => { s[BUILDERS[0]] += '\nconst x = { component: ready ? "BrandNewEditor" : undefined }\n' }, /R1 editor BrandNewEditor/)
+  for (const expression of ['editors[kind]', 'getEditor()', 'editors.NewEditor']) {
+    let refused = false
+    try { editorsIn(`const x = { component: ready ? SelectPanelEditor : ${expression} }`, 'conditional-control.ts') }
+    catch (error) { refused = /unsupported conditional editor expression/.test(String(error)) }
+    if (!refused) { console.error(`✗ self-test: unsupported conditional editor expression ${expression} was silently ignored`); process.exit(1) }
+  }
   // A driver that drops its paste arm without a reason → R2.
   expectNew('an arm with no gesture and no reason', (s) => { s[SWEEP] = s[SWEEP].replace(/(SelectPanelEditor: \{[\s\S]*?)paste: async/, '$1paste: { na: "" }, _paste: async') }, /R2 editor SelectPanelEditor: the paste arm/)
   // A kind the API adds → R3 (no driver, no mode) and R4 (the web copies lag).
@@ -223,7 +243,7 @@ function selfTest() {
   if (!gaps(abstaining).abstentions.includes('SelectPanelEditor: all gestures') || gaps(real).abstentions.includes('SelectPanelEditor: all gestures')) {
     console.error('✗ self-test: replacing a driven editor with an abstention was not detected'); process.exit(1)
   }
-  console.log(`✓ sheet editor coverage self-test: new editor (R1, R2), missing arm (R2), new kind (R3, R4), an added stub (R5), an added known defect (R6), and a new abstention (R7) caught; a covered editor passes`)
+  console.log(`✓ sheet editor coverage self-test: direct/nested/registered editors (R1, R2), unsupported conditional syntax, missing arm (R2), new kind (R3, R4), an added stub (R5), an added known defect (R6), and a new abstention (R7) caught; a covered editor passes`)
 }
 
 if (process.argv.includes('--self-test')) { selfTest(); process.exit(0) }
