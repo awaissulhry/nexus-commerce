@@ -147,8 +147,9 @@ Then run Deploy API by hand (`gh workflow run deploy-api.yml`). It ships the ser
 deploying changed, and nothing else that is current: `release-changes.sh` sees that the service
 runs a `railway up` build while the variable names it. The deploy points the service at its image
 in the project token's environment and starts a deployment, through Railway's GraphQL API
-(`serviceInstanceUpdate` with `source.image`, then `serviceInstanceDeployV2`, which returns the
-deployment id); Settings → Source then shows the image. The commit each
+(`serviceInstanceUpdate` with `source.image`, a read-back of the source, then
+`serviceInstanceDeployV2`, which returns the deployment id); Settings → Source then shows the
+image. The commit each
 service runs: the API reports it at `/api/health/ready` (`build`); for all four,
 `railway deployment list -s <service> --limit 1 --json` shows `meta.image`
 (`…/nexus-api:<sha>`) or, for a `railway up` build, `meta.cliMessage` (`<role> GitHub <sha>`).
@@ -176,10 +177,14 @@ service keeps running its `railway up` build. Remove its name from the variable 
 needed; later releases ship it with `railway up`), and report it. Do not set the image by hand in
 Settings → Source instead: the workflow sets the image on every deploy, so it fails again there.
 
-Also not yet proven: that Railway applies the source change rather than staging it. If it only
-stages it, the deployment runs the old image and the job fails with `✗ deployment … succeeded, but
-it runs …, not …`; report it. The schema marks the mutation's environment "[Experimental]": for an
-environment that is not a fork, the change reaches every environment that is not a fork.
+Also not yet proven: that Railway applies the source change rather than staging it. The deploy
+reads the service's source back before it deploys. If Railway staged the change, the job stops with
+`✗ Railway staged the image change instead of applying it (Settings → Source) — nothing was
+deployed; …`; report it. If that read fails, a `::warning::` says so and the deploy goes on; a
+deployment that then runs the old image fails the job with `✗ deployment … succeeded, but it runs
+…, not …`. The schema marks the mutation's environment "[Experimental]": for an environment that is
+not a fork, the change reaches every environment that is not a fork. On 2026-09-30 the Railway
+project had one environment, production, so the change reaches production only.
 
 If the source change works but the image deployment fails (or Railway refuses to start it), the
 service keeps serving its last `railway up` build while Settings → Source already names the image.

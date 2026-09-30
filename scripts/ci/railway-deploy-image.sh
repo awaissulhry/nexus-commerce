@@ -8,17 +8,22 @@
 #     scripts/ci/railway-deploy-image.sh --service <id> --image ghcr.io/<owner>/nexus-api:<commit sha>
 #
 # 1. Reads the service's latest deployment with the CLI. When Railway cannot be read, nothing is changed.
-# 2. Points the service at the image in the token's environment and starts a deployment, with three requests to
+# 2. Points the service at the image in the token's environment and starts a deployment, with four requests to
 #    Railway's GraphQL API as the project token (header Project-Access-Token):
 #      projectToken { environmentId }                                        the one environment the token acts on;
 #      serviceInstanceUpdate(serviceId, environmentId, input: {source: {image}})  the service's source there;
+#      serviceInstance(serviceId, environmentId) { source { image } }       the source Railway now has;
 #      serviceInstanceDeployV2(serviceId, environmentId)                     a deployment of it; returns its id.
 #    2026-09-30, run 36697739589: `railway service source connect --image` answered the project token "Unauthorized"
 #    and changed nothing. It sends serviceConnect, which changes the service in every environment, and a project token
 #    acts on one environment of one project (Railway docs, integrations/api). That the token may send the two
 #    mutations above is not proven yet: the next switch proves it. The schema marks serviceInstanceUpdate's
 #    environmentId "[Experimental]": for an environment that is not a fork, the change reaches every environment that
-#    is not a fork (read 2026-09-30).
+#    is not a fork (read 2026-09-30). The project had one environment then, production.
+#    Railway may stage a source change instead of applying it, as its dashboard does when it updates a versioned image
+#    tag (review of PR 2, 2026-09-30); a deployment would then run the old image. So the source is read back first,
+#    and nothing is deployed when it names another image, or none. A read that fails only warns: step 4 still catches
+#    a deployment of the old image.
 #    Railway answers a denial with HTTP 200 and `errors` ("Not Authorized"), so each answer is checked for errors and
 #    for the field asked for. A request is cut after $RAILWAY_API_SECONDS (60 s); a cut mutation may still apply, and
 #    the message says so.
@@ -32,10 +37,10 @@
 #    as the service's latest, the one that served before counts as waiting, not as a replacement.
 # 4. Checks which image that deployment runs, from Railway's record of it (`railway deployment list --json`, the
 #    meta.image field): 0 when it is this image, 1 when it is another. SUCCESS alone does not say: if Railway only
-#    staged the new source, as its dashboard does when it updates a versioned image tag, the deployment runs the old
-#    image and reports SUCCESS (review of PR 2, 2026-09-30). Only the API has a readiness check of its own commit
-#    afterwards. A record that names no image, or cannot be read, gives a warning, not a failure: Railway's docs do
-#    not describe meta, and public deploy scripts read meta.image as the reference the service was pointed at.
+#    staged the new source and the read-back in step 2 failed, the deployment runs the old image and reports SUCCESS.
+#    Only the API has a readiness check of its own commit afterwards. A record that names no image, or cannot be read,
+#    gives a warning, not a failure: Railway's docs do not describe meta, and public deploy scripts read meta.image as
+#    the reference the service was pointed at.
 #
 # Writes deployment_id=<id> to $GITHUB_OUTPUT when it can. The follow loop is a small copy of follow_deployment in
 # railway-up.sh, which stops earlier (at DEPLOYING: its caller watches the rollout). railway-up.sh goes away once every
@@ -45,10 +50,11 @@
 # Polls every 10 s: each `railway service status` costs a few Railway API requests, and Hobby allows 1,000 an hour.
 # The waits are deadlines, not poll counts: one read makes several requests and the CLI allows each 90 s (CLI 5.30.1,
 # DEFAULT_HTTP_TIMEOUT_SECS), so 90 polls could take far longer than 15 minutes (review of PR 2, 2026-09-30). A read is
-# cut at 60 s where `timeout` exists (the runner). Worst case, every read and request hanging to its limit: about 25
-# minutes; usually the follow plus a few seconds. The jobs that run this allow 40 (45 for the API rollback, which then
-# waits for readiness), set for the CLI path's 38. RAILWAY_POLL_SECONDS, RAILWAY_FOLLOW_SECONDS, RAILWAY_READ_SECONDS
-# and RAILWAY_API_SECONDS change the timing; only tests set them.
+# cut at 60 s where `timeout` exists (the runner). Worst case, every read and request hanging to its limit: about 26
+# minutes (first read 3 × 70 s, four API requests 4 × 60 s, follow 900 + 70 s, image check 130 s); usually the follow
+# plus a few seconds. The jobs that run this allow 40 (45 for the API rollback, which then waits for readiness).
+# RAILWAY_POLL_SECONDS, RAILWAY_FOLLOW_SECONDS, RAILWAY_READ_SECONDS and RAILWAY_API_SECONDS change the timing; only
+# tests set them.
 set -euo pipefail
 
 usage() { echo "usage: $0 --service <id> --image <ref>   (RAILWAY_TOKEN: a project token)" >&2; exit 2; }
@@ -94,19 +100,19 @@ deployment_image() {
     jq -er --arg id "$1" 'map(select(.id == $id)) | if length == 0 then error("not listed") else .[0].meta.image // "" end' 2>/dev/null
 }
 
-# One request to Railway's GraphQL API as the project token. Prints what the jq filter $2 picks from the answer: a
-# string, else the answer counts as holding none. $1 names the request in messages, $3 is the ✗ line's end when
-# Railway refuses, $4 its end when no answer comes (a mutation may still apply), $5 the request body (JSON, built
-# with jq -n). Fails, with a ✗ line on stderr, when no answer comes within $API_SECONDS s, the HTTP status is not
-# 2xx, the body is not JSON, it holds `errors`, or the filter picks nothing.
-railway_api() {
-  local what=$1 pick=$2 refused=$3 unanswered=$4 body=$5 out code status answer errors value
-  out=$(printf '%s' "$body" |
+# One request to Railway's GraphQL API as the project token; $1 is the request body (JSON, built with jq -n). Prints
+# the answer (JSON). Otherwise prints why, on one line, and returns 2 when no answer came within $API_SECONDS s (a
+# mutation may still apply), 1 when Railway refused: an HTTP status that is not 2xx, a body that is not JSON, or
+# `errors` in it (Railway denies with HTTP 200: "Not Authorized"). The token reaches curl through a file descriptor,
+# never its arguments; neither it nor any request header is printed.
+graphql() {
+  local out code status answer errors
+  out=$(printf '%s' "$1" |
     curl -sS --max-time "$API_SECONDS" "$API_URL" -H 'Content-Type: application/json' \
       -H @<(printf 'Project-Access-Token: %s\n' "$RAILWAY_TOKEN") --data-binary @- -w '\n%{http_code}') || {
     code=$?
-    echo "✗ no answer from Railway to $what (curl exit $code, limit $API_SECONDS s) — $unanswered" >&2
-    return 1
+    echo "curl exit $code, limit $API_SECONDS s"
+    return 2
   }
   status=${out##*$'\n'} answer=${out%$'\n'*}
   errors=$(jq -r 'if type == "object" and (.errors | type) == "array" and (.errors | length) > 0
@@ -114,19 +120,33 @@ railway_api() {
     <<< "$answer" 2>/dev/null) || errors=''
   case "$status" in
     2[0-9][0-9]) ;;
-    *) echo "✗ Railway refused $what: HTTP $status${errors:+, $errors} — $refused" >&2; return 1 ;;
+    *) echo "HTTP $status${errors:+, $errors}"; return 1 ;;
   esac
   if ! jq -e 'type == "object"' <<< "$answer" > /dev/null 2>&1; then
-    echo "✗ Railway refused $what: its answer is not JSON (HTTP $status) — $refused" >&2
+    echo "its answer is not JSON (HTTP $status)"
     return 1
   fi
   if [ -n "$errors" ]; then
-    echo "✗ Railway refused $what: $errors — $refused" >&2
+    echo "$errors"
     return 1
   fi
-  value=$(jq -r "$pick | strings" <<< "$answer" 2>/dev/null) || value=''
+  printf '%s\n' "$answer"
+}
+
+# A request the deploy needs. Prints what the jq filter $2 picks from the answer: a string, else the answer counts as
+# holding none. $1 names the request in messages, $3 is the ✗ line's end when Railway refuses, $4 its end when no
+# answer comes, $5 the request body. Fails with a ✗ line on stderr.
+railway_api() {
+  local answer value code=0
+  answer=$(graphql "$5") || code=$?
+  case "$code" in
+    0) ;;
+    2) echo "✗ no answer from Railway to $1 ($answer) — $4" >&2; return 1 ;;
+    *) echo "✗ Railway refused $1: $answer — $3" >&2; return 1 ;;
+  esac
+  value=$(jq -r "$2 | strings" <<< "$answer" 2>/dev/null) || value=''
   if [ -z "$value" ]; then
-    echo "✗ Railway refused $what: its answer holds no result (HTTP $status) — $refused" >&2
+    echo "✗ Railway refused $1: its answer holds no result — $3" >&2
     return 1
   fi
   printf '%s\n' "$value"
@@ -186,6 +206,34 @@ railway_api "the change of the service's source to $image (serviceInstanceUpdate
   '.data.serviceInstanceUpdate | select(. == true) | tostring' \
   'the previous build keeps serving' \
   "it may still apply; the previous build keeps serving, and Settings → Source may name $image" "$body" > /dev/null || exit 1
+
+# The source Railway now has (header, step 2). The read succeeds when the answer holds the service instance and its
+# source: null, or an object with an image (null for a service that has none, such as a `railway up` build).
+body=$(jq -n --arg service "$service" --arg environment "$environment" '{
+  query: "query DeployImageApplied($service: String!, $environment: String!) { serviceInstance(serviceId: $service, environmentId: $environment) { source { image } } }",
+  variables: {service: $service, environment: $environment}}')
+applied='' read_back=false
+if answer=$(graphql "$body"); then
+  if jq -e '.data.serviceInstance | type == "object" and has("source")
+      and (.source == null or (.source | type == "object" and has("image")))' <<< "$answer" > /dev/null 2>&1; then
+    read_back=true
+    applied=$(jq -r '.data.serviceInstance.source.image // empty' <<< "$answer")
+  else
+    answer='its answer holds no source'
+  fi
+fi
+if [ "$read_back" != true ]; then
+  echo "::warning::Could not read the service's source back from Railway ($answer): deploying anyway; the image check after the deployment still catches an old image"
+else
+  case "$applied" in
+    "$image" | "$image"@sha256:*) echo "✓ The service's source on Railway is now $image" ;;
+    *)
+      echo "The service's source on Railway: ${applied:-no image}"
+      echo "✗ Railway staged the image change instead of applying it (Settings → Source) — nothing was deployed; the previous build keeps serving"
+      exit 1
+      ;;
+  esac
+fi
 
 body=$(jq -n --arg service "$service" --arg environment "$environment" '{
   query: "mutation DeployImageStart($service: String!, $environment: String!) { serviceInstanceDeployV2(serviceId: $service, environmentId: $environment) }",
