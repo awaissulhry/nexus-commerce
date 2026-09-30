@@ -204,3 +204,30 @@ it.each(['externally_assigned_product_identifier', 'externally_assigned_product_
     expect(reloaded.values[key].mapped?.warnings).toContain(`${key.split('__')[0]} cannot be edited on an existing Amazon listing. You can save a draft here, but cannot publish this change.`)
   }),
 )
+
+it('keeps an immutable companion warning inside its own product type on a mixed-type sheet', () => scoped(async () => {
+  const root = 'externally_assigned_product_identifier', key = root
+  const types = ['E2E_RELATION_LOCKED', 'E2E_RELATION_EDITABLE']
+  for (const [index, productType] of types.entries()) {
+    await prisma.categorySchema.create({ data: { channel: 'AMAZON', marketplace: 'IT', productType, schemaVersion: 'mixed-draft-fixture', expiresAt: new Date('2099-01-01'),
+      schemaDefinition: { type: 'object', properties: { [root]: attribute({ value: { type: 'string', editable: true },
+        ...(index === 0 ? { type: { type: 'string', editable: false } } : {}) }) } } } })
+  }
+  const parent = await prisma.product.create({ data: { sku: 'E2E-MIXED-DRAFT-PARENT', name: 'Mixed draft types', isParent: true, basePrice: 29, productType: types[0] } })
+  const children: string[] = []
+  for (const [index, productType] of types.entries()) {
+    const child = await prisma.product.create({ data: { sku: `E2E-MIXED-DRAFT-${index}`, name: `Mixed type ${index}`, parentId: parent.id, basePrice: 29, productType } })
+    children.push(child.id)
+    await prisma.channelListing.create({ data: { productId: child.id, channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU', channelConnectionId: account,
+      externalListingId: `SYNTHETIC-MIXED-${index}`, overrideData: { [key]: 'Draft parent SKU' } } })
+  }
+  const sheet = await read(parent.id)
+  const locked = sheet.rows.find(row => row.id === children[0])!, editable = sheet.rows.find(row => row.id === children[1])!
+  const message = `${root} cannot be edited on an existing Amazon listing. You can save a draft here, but cannot publish this change.`
+  for (const row of [locked, editable]) expect(row.values[key], JSON.stringify({ type: row.productType, isParent: row.isParent, reason: row.values[key].writeBlockedReason,
+    column: sheet.columns.find(column => column.key === key) })).toMatchObject({ value: 'Draft parent SKU', editable: true, writable: true })
+  expect(locked.values[key].mapped?.warnings).toContain(message)
+  expect(locked.readiness.issues).toContainEqual(expect.objectContaining({ key, message, severity: 'warn' }))
+  expect(editable.values[key].mapped?.warnings ?? []).not.toContain(message)
+  expect(editable.readiness.issues.some(issue => issue.key === key && issue.message === message)).toBe(false)
+}))

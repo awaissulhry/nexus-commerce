@@ -27,27 +27,36 @@ it.each([{ externalListingId: null }, { externalListingId: '' }, { editableOnExi
 })
 
 beforeEach(() => { vi.clearAllMocks() })
-it.each(['brand', 'condition_type', 'externally_assigned_product_identifier', 'child_parent_sku_relationship'])('offline publish refuses the exact immutable %s draft even if explicitly selected', async field => {
+it.each([
+  ...['brand', 'condition_type', 'externally_assigned_product_identifier', 'child_parent_sku_relationship'].map(field => ({ field, immutable: true })),
+  { field: 'child_parent_sku_relationship', immutable: false },
+])('offline publish follows the category for $field (immutable root: $immutable)', async ({ field, immutable }) => {
   const leafKeys = field === 'externally_assigned_product_identifier' ? ['value', 'type']
-    : field === 'child_parent_sku_relationship' ? ['parent_sku', 'child_relationship_type'] : ['value']
-  const entries = (value: string) => [{ ...Object.fromEntries(leafKeys.map(key => [key, value])), marketplace_id: 'SYNTHETIC-MARKET' }]
-  const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
+    : field === 'child_parent_sku_relationship' ? ['parent_sku', ...(immutable ? ['child_relationship_type'] : [])] : ['value']
+  const productType = immutable ? 'COAT' : 'E2E_RELATION_EDITABLE'
+  const entries = (value: string) => [{ ...Object.fromEntries(leafKeys.map(key => [key, key === 'child_relationship_type' ? 'variation' : value])), marketplace_id: 'SYNTHETIC-MARKET' }]
+  const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType, schemaDefinition: { properties: {
     [field]: { type: 'array', maxItems: 1, selectors: ['marketplace_id'], items: { type: 'object', properties: {
-      marketplace_id: { const: 'SYNTHETIC-MARKET' }, ...Object.fromEntries(leafKeys.map(key => [key, { type: 'string', editable: false }])),
+      marketplace_id: { const: 'SYNTHETIC-MARKET' }, ...Object.fromEntries(leafKeys.map(key => [key, { type: 'string', editable: key === 'parent_sku' || !immutable }])),
     } } },
   } } })
   provider.spec.mockResolvedValue(spec)
-  provider.read.mockResolvedValue({ success: true, rawResponse: { sku: 'SELLER-SKU', attributes: { [field]: entries('Before') }, summaries: [{ marketplaceId: 'SYNTHETIC-MARKET', productType: 'COAT' }] } })
+  provider.read.mockResolvedValue({ success: true, rawResponse: { sku: 'SELLER-SKU', attributes: { [field]: entries('Before') }, summaries: [{ marketplaceId: 'SYNTHETIC-MARKET', productType }] } })
   const facts = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'selected-account' }, destination: { aliasKey: '' },
     parent: { id: 'product', sku: 'LOCAL-SKU' }, products: [{ id: 'product', sku: 'LOCAL-SKU' }], listings: [{ id: 'listing', productId: 'product', externalListingId: 'SYNTHETIC-ASIN' }],
   } as unknown as PublicationFacts
   const pub: AmazonPublication = { kind: 'amazon', sellerId: 'SYNTHETIC-SELLER', marketplaceId: 'SYNTHETIC-MARKET', products: [{ productId: 'product', sku: 'SELLER-SKU' }],
-    feed: { header: { sellerId: 'SYNTHETIC-SELLER', version: '2.0' }, messages: [{ messageId: 1, sku: 'SELLER-SKU', operationType: 'PARTIAL_UPDATE', productType: 'COAT', attributes: { [field]: entries('Draft') } }] } }
+    feed: { header: { sellerId: 'SYNTHETIC-SELLER', version: '2.0' }, messages: [{ messageId: 1, sku: 'SELLER-SKU', operationType: 'PARTIAL_UPDATE', productType, attributes: { [field]: entries('Draft') } }] } }
   const id = publicationChangeId('product', field)
   const baseline = new Map<string, StudioPublishValue>([[id, { state: 'value', value: entries('Before') }]])
   const plan = await prepareAmazonChanges(facts, pub, baseline)
-  expect(plan.changes.find(change => change.id === id)).toMatchObject({ selectable: false, selectedByDefault: false, reason: `${field} cannot be edited on an existing Amazon listing.`, current: { state: 'value', value: entries('Draft') } })
-  expect(() => compileAmazonChanges(plan, [id])).toThrow(`${field} cannot be edited on an existing Amazon listing.`)
+  if (immutable) {
+    expect(plan.changes.find(change => change.id === id)).toMatchObject({ selectable: false, selectedByDefault: false, reason: `${field} cannot be edited on an existing Amazon listing.`, current: { state: 'value', value: entries('Draft') } })
+    expect(() => compileAmazonChanges(plan, [id])).toThrow(`${field} cannot be edited on an existing Amazon listing.`)
+  } else {
+    expect(plan.changes.find(change => change.id === id)).toMatchObject({ selectable: true, selectedByDefault: true, current: { state: 'value', value: entries('Draft') } })
+    expect(compileAmazonChanges(plan, [id]).feed.messages[0].patches).toEqual([{ op: 'replace', path: `/attributes/${field}`, value: entries('Draft') }])
+  }
   expect(compileAmazonChanges(plan, []).feed.messages).toEqual([])
   expect(provider.bound).toHaveBeenCalledWith({ id: 'selected-account', region: 'eu' })
   expect(provider.read).toHaveBeenCalledWith({ sellerId: 'SYNTHETIC-SELLER', sku: 'SELLER-SKU', marketplaceId: 'SYNTHETIC-MARKET', includedData: ['summaries', 'attributes'] })

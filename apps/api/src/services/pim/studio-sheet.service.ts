@@ -1286,7 +1286,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       const immutableAmazonRoots = coordinate?.channel === 'AMAZON' && listingRow?.externalListingId
         ? new Set(rowColumns.flatMap(col => {
           const facts = col.channels?.[coordinate.label]
-          return facts?.editableOnExisting === false && facts.attribute ? [facts.attribute] : []
+          const inCategory = facts?.categories?.some(category => category === '*' || category.toUpperCase() === effectiveCategory?.toUpperCase())
+          return inCategory && facts?.editableOnExisting === false && facts.attribute ? [facts.attribute] : []
         })) : null
       for (const col of rowColumns) {
 
