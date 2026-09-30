@@ -264,6 +264,23 @@ it('contains a malformed cell in its own unit and still saves the surrounding ro
   for (const row of rows) expect((row.platformAttributes as { subtitle: string }).subtitle).toBe(row.productId === f.ids[2] ? 'before' : 'after')
 }, 120_000)
 
+it.each([0, 1])('preserves create-only token0 and normal token1 semantics for an existing listing at version%i', async version => {
+  const f = await family(2)
+  await scoped(() => prisma.channelListing.updateMany({ where: { productId: { in: f.ids } }, data: { version } }))
+  const before = await scoped(() => prisma.channelListing.findMany({ where: { productId: { in: f.ids } }, orderBy: { id: 'asc' } }))
+  const result = await save(f.ids.map(id => f.unit(id, 'changed value', version)))
+  expect.soft(result.units.map(unit => unit.status)).toEqual(version === 0 ? [409, 409] : [200, 200])
+  const after = await scoped(() => prisma.channelListing.findMany({ where: { productId: { in: f.ids } }, orderBy: { id: 'asc' } }))
+  if (version === 0) {
+    for (const unit of result.units) expect.soft(unit.body).toMatchObject({ code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 0, versionOf: 'channelListing' })
+    expect.soft(after).toEqual(before)
+    expect.soft(await scoped(() => prisma.auditLog.count({ where: { entityId: { in: f.ids } } }))).toBe(0)
+  } else {
+    for (const row of after) expect(row).toMatchObject({ version: 2, platformAttributes: { subtitle: 'changed value' } })
+    expect(result.units.every(unit => unit.body.currentVersion === 2)).toBe(true)
+  }
+}, 120_000)
+
 it('matches the serial writer when a formula belongs to the family parent, whose inputs a child edit does not change', async () => {
   const serial = await family(2), batch = await family(2)
   const address: ContentAddress = { tier: 'pin', language: 'de', coordinate: { channel: 'EBAY', market: 'DE', accountId: account } }

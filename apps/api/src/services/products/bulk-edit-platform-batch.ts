@@ -32,7 +32,8 @@ export function platformBatchGroup(units: BulkSaveUnit[], start: number): BulkSa
   for (const unit of units.slice(start)) {
     const contexts = unit.marketplaceContexts?.length ? unit.marketplaceContexts : unit.marketplaceContext ? [unit.marketplaceContext] : []
     const id = unit.changes[0]?.id
-    if (unit.dryRun || !Number.isInteger(unit.expectedVersion) || unit.expectedVersion! < 0 || contexts.length !== 1 || typeof id !== 'string' || !id || owners.has(id) ||
+    // Token 0 means create-only, even if a legacy existing listing itself still has version 0.
+    if (unit.dryRun || !Number.isInteger(unit.expectedVersion) || unit.expectedVersion! < 1 || contexts.length !== 1 || typeof id !== 'string' || !id || owners.has(id) ||
       unit.changes.some(change => !change || change.id !== id || change.target !== 'channel' || typeof change.field !== 'string' || !change.field.startsWith('attr_') || change.field.includes('[') || change.cascade)) break
     const key = JSON.stringify(contexts[0])
     if (coordinate !== undefined && coordinate !== key || cells + unit.changes.length > 1000) break

@@ -148,7 +148,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'pending readiness vs a concurrent rebuild (attributes P2)', file: 'src/services/pim/readiness-pending-race.vitest.test.ts', expect: 2 },
   { name: 'transaction commit conflict (real adapter error, fresh snapshot and committed effects)', file: 'src/lib/database-context-postgres.vitest.test.ts', expect: 1 },
   { name: 'one sheet operation = one transaction (250 rows, one readiness rebuild, row savepoints, RLS, two operations at once)', file: 'src/services/products/bulk-save-postgres.vitest.test.ts', expect: 5 },
-  { name: 'platform batch saves (SQL budget, per-unit receipts, rollback, content, formulas, runtime RLS and same-token race)', file: 'src/services/products/bulk-save-platform.vitest.test.ts', expect: 12 },
+  { name: 'platform batch saves (SQL budget, per-unit receipts, rollback, content, formulas, runtime RLS and same-token race)', file: 'src/services/products/bulk-save-platform.vitest.test.ts', expect: 14 },
   { name: 'category tree races (moves, creates, memberships and workspace commands serialize on the tree lock)', file: 'src/services/category-tree-concurrency.vitest.test.ts', expect: 5 },
   { name: 'Amazon Ads drift closes on evidence, per profile (structural reconcile under row security)', file: 'src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts', expect: 1 },
   { name: '"New attribute" race (sheet pop-up A3: two creates of one name leave one attribute and one family link)', file: 'src/services/pim/own-axis-attribute-postgres.vitest.test.ts', expect: 1 },
