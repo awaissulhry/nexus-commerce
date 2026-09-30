@@ -53,9 +53,7 @@
 #    the read-back denied, ended green). Railway's docs do not describe meta; public deploy scripts read meta.image as
 #    the reference the service was pointed at. Only the API has a readiness check of its own commit afterwards.
 #
-# Writes deployment_id=<id> to $GITHUB_OUTPUT when it can. The follow loop is a small copy of follow_deployment in
-# railway-up.sh, which stops earlier (at DEPLOYING: its caller watches the rollout). railway-up.sh goes away once every
-# service deploys by image (plan §6, PR 4), so the two are not shared. The token is never printed and never on a
+# Writes deployment_id=<id> to $GITHUB_OUTPUT when it can. The token is never printed and never on a
 # command line: curl reads its header from a file descriptor, and tracing is switched off (review, 2026-09-30: with
 # SHELLOPTS=xtrace a run printed the token).
 #

@@ -13,18 +13,35 @@
 # deployment records its image, ghcr.io/<owner>/nexus-api:<sha> or nexus-web:<sha> (meta.image). When the commit
 # cannot be read or fetched, that service ships: shipping too much is safe, skipping a change is not. A service that
 # already runs a NEWER commit does not ship: re-running an old run must not roll it back onto a schema that has moved
-# on. A service whose way of deploying changed ships, whatever its files: IMAGE_<ROLE>=true (RAILWAY_IMAGE_SERVICES
-# names it) while it runs a `railway up` build, or false while it runs an image. So after the Owner changes the
-# variable, a hand run (ship=changed) moves exactly that service. SHIP_ALL=true (`-f ship=all`) ships everything.
+# on. A service that still runs a `railway up` build ships by image, whatever its files. SHIP_ALL=true
+# (`-f ship=all`) ships everything, including when a newer commit runs.
 #
 # Needs the history of main (checkout with fetch-depth 0; blob:none is enough).
 #
 #   GITHUB_SHA=<sha> RAILWAY_TOKEN=… API_SERVICE=<id> WORKER_SERVICE=<id> SCHEDULER_SERVICE=<id> WEB_SERVICE=<id> \
-#     [IMAGE_API=… IMAGE_WORKER=… IMAGE_SCHEDULER=… IMAGE_WEB=…] [SHIP_ALL=true] scripts/ci/release-changes.sh
+#     [SHIP_ALL=true] scripts/ci/release-changes.sh
+#
+# Immediately before a forward deploy: SERVICE=<id> scripts/ci/release-changes.sh --only <role> writes ship=true/false
+# and expected_sha (the requested commit when shipping, otherwise the running commit that readiness must check).
+# 2026-09-30, run 36721092871: retrying a deploy job kept the old `changes` outputs. Read the service again so a retry
+# cannot deploy an older release over a newer one, or restart a service whose files already match. Rollback does not
+# use this check: it intentionally selects an older commit.
 #
 # Writes api, worker, scheduler and web (true/false) and background (the JSON list of worker/scheduler to ship) to
 # $GITHUB_OUTPUT when it is set, and prints them either way.
 set -uo pipefail
+
+only=''
+if [ $# -gt 0 ]; then
+  if [ $# != 2 ] || [ "$1" != --only ]; then
+    echo "usage: $0 [--only <api|worker|scheduler|web>]" >&2
+    exit 2
+  fi
+  case "$2" in
+    api | worker | scheduler | web) only=$2 ;;
+    *) echo "unknown service role: $2" >&2; exit 2 ;;
+  esac
+fi
 
 # The files each service is built from. Markdown never ships: CLAUDE.md files and notes live beside the code. BUILD is
 # what Railway's own build reads at the root (2026-09-29: a root .dockerignore broke the API build, run 36636596664).
@@ -60,10 +77,9 @@ have_commit() {
   git cat-file -e "$1^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 -q origin "$1" 2>/dev/null
 }
 
-# Sets ship=true when $1 (the role) must ship, and prints why. $4: true when it deploys by image, false when by
-# `railway up`, empty when unknown.
+# Sets ship=true when $1 (the role) must ship, and prints why.
 must_ship() {
-  local role=$1 service=$2 files_re=$3 by_image=${4:-} all changed
+  local role=$1 service=$2 files_re=$3 all changed
   ship=true
   if [ "${SHIP_ALL:-}" = true ]; then
     echo "$role: ships (ship=all)"
@@ -81,12 +97,8 @@ must_ship() {
     ship=false
     return
   fi
-  if [ "$by_image" = true ] && [ "$kind" = up ]; then
-    echo "$role: ships (it moves to image deploys: RAILWAY_IMAGE_SERVICES names it)"
-    return
-  fi
-  if [ "$by_image" = false ] && [ "$kind" = image ]; then
-    echo "$role: ships (it moves back to railway up: RAILWAY_IMAGE_SERVICES no longer names it)"
+  if [ "$kind" = up ]; then
+    echo "$role: ships (it moves from a source build to image deploys)"
     return
   fi
   if [ -z "$sha" ]; then
@@ -119,10 +131,20 @@ must_ship() {
 }
 
 : "${GITHUB_SHA:?GITHUB_SHA is required}"
-must_ship api "${API_SERVICE:-}" "$API_FILES" "${IMAGE_API:-}"; api=$ship
-must_ship worker "${WORKER_SERVICE:-}" "$API_FILES" "${IMAGE_WORKER:-}"; worker=$ship
-must_ship scheduler "${SCHEDULER_SERVICE:-}" "$API_FILES" "${IMAGE_SCHEDULER:-}"; scheduler=$ship
-must_ship web "${WEB_SERVICE:-}" "$WEB_FILES" "${IMAGE_WEB:-}"; web=$ship
+if [ -n "$only" ]; then
+  files_re=$API_FILES
+  if [ "$only" = web ]; then files_re=$WEB_FILES; fi
+  must_ship "$only" "${SERVICE:-}" "$files_re"
+  expected_sha=$GITHUB_SHA
+  if [ "$ship" = false ]; then expected_sha=$sha; fi
+  printf '%s\n' "ship=$ship" "expected_sha=$expected_sha"
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then printf '%s\n' "ship=$ship" "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"; fi
+  exit 0
+fi
+must_ship api "${API_SERVICE:-}" "$API_FILES"; api=$ship
+must_ship worker "${WORKER_SERVICE:-}" "$API_FILES"; worker=$ship
+must_ship scheduler "${SCHEDULER_SERVICE:-}" "$API_FILES"; scheduler=$ship
+must_ship web "${WEB_SERVICE:-}" "$WEB_FILES"; web=$ship
 background=$(jq -cn --arg w "$worker" --arg s "$scheduler" '[if $w == "true" then "worker" else empty end, if $s == "true" then "scheduler" else empty end]')
 
 echo "api=$api worker=$worker scheduler=$scheduler web=$web background=$background"
