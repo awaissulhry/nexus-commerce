@@ -164,6 +164,13 @@ describe('Confirm — adopt the live Shopify product of each colour', () => {
     expect(state.mutations).toEqual([])
   })
 
+  it('confirming withdraws the family\'s "Linked ✓" (the link writer has not read the change back yet), after every chosen colour is done', async () => {
+    await find()
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { familyId: ids.fam }, data: { linkVerifiedAt: new Date('2026-09-01T00:00:00Z') } }))
+    await confirm(BOTH)
+    expect([await rowOf('color:black'), await rowOf('color:yellow')].map(r => [r.state, r.linkVerifiedAt])).toEqual([['LINKED', null], ['LINKED', null]])
+  })
+
   it('a Draft product: its sizes are linked but not published (stock waits); a size not stocked at the location is named', async () => {
     productOf(BLACK).status = 'DRAFT'
     productOf(BLACK).variants[2].stocked = false
