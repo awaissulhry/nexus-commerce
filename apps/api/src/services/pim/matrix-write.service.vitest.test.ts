@@ -8,7 +8,7 @@ import type { MatrixCells, VerbChange } from '@nexus/shared/matrix-contract'
 
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null }))
-vi.mock('../follow-master.service.js', () => ({ setFollowMasterQuantity: vi.fn(), setStockBuffer: vi.fn() }))
+vi.mock('../follow-master.service.js', () => ({ setFollowMasterQuantity: vi.fn(), setStockBuffer: vi.fn(), amazonManagedListingIds: vi.fn(async () => new Set<string>()) }))
 vi.mock('../stock-movement.service.js', () => ({ recascadeAfterSyncControlChange: vi.fn() }))
 vi.mock('../sync-coalesce.js', () => ({ coalescePendingQuantityRows: vi.fn() }))
 vi.mock('../outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn() }))

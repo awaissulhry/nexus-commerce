@@ -14,7 +14,9 @@
  *   - a `ChannelListingOverride` audit row and a `PriceChangeEvent` timeline row (the PH.1 helper's shape).
  *   - the pending PRICE_UPDATE rows for the listing are cancelled and ONE fresh PRICE_UPDATE row is enqueued through
  *     the existing instant lane with the price AND the sale window in its payload, so a price push never wipes the
- *     sale on Amazon (report 19 §5.9) and a sale push never wipes the price.
+ *     sale on Amazon (report 19 §5.9) and a sale push never wipes the price. An Amazon row that removes Nexus's own
+ *     sale carries `saleRemoved: true`: with NEXUS_AMAZON_OFFER_MERGE on, Amazon's price push leaves any other sale
+ *     alone, so a removal must be named.
  *   - CAS on `ChannelListing.version` (bumped on every applied row); `noop` spends nothing.
  *   - NCF D2 A — Shopify's compare-at price (`compareAt`), kept at `platformAttributes.compareAtPrice`
  *     (`compare-at-price.ts`), through the same CAS and audit. Record-only: it comes from Shopify's own file, and no
@@ -281,6 +283,14 @@ export async function writeChannelPrices(input: {
         }
         let queueId: string | null = null
         if (!input.recordOnly && VALID_SYNC_TARGETS.has(l.channel)) {
+          // Amazon — with NEXUS_AMAZON_OFFER_MERGE on, a price push leaves the sale Amazon holds alone (a merge,
+          // `amazon/purchasable-offer.ts`), so a person REMOVING Nexus's own sale (a value with both dates: the only sale
+          // Nexus sends) must say so on the row, and keep saying so when a later write in the grace window cancels that
+          // row for this one. Written whether the switch is on or not: OFF ignores it (its replace drops the sale anyway),
+          // and a row queued just before the switch goes on still carries the removal. Other channels: unchanged.
+          const saleRemoved = l.channel === 'AMAZON' && effectiveSale.value == null && (
+            (saleChanges && currentSale.value != null && !!currentSale.start && !!currentSale.end)
+            || !!(await tx.outboundSyncQueue.findFirst({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { path: ['saleRemoved'], equals: true } }, select: { id: true } })))
           await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
           const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
           const row = await createOutboundRow(tx, {
@@ -291,6 +301,7 @@ export async function writeChannelPrices(input: {
                 source: 'CHANNEL_PRICE_WRITE', marketplace: l.marketplace, actor: input.actor,
                 price: effectivePrice ?? undefined,
                 salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
+                ...(saleRemoved ? { saleRemoved: true } : {}),
               } as Prisma.InputJsonValue,
             },
             select: { id: true, productId: true, syncType: true, holdUntil: true },
