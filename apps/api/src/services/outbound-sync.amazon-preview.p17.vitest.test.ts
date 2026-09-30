@@ -52,6 +52,9 @@ vi.mock('./pim/market-languages.js', async (original) => ({
 }))
 vi.mock('../clients/amazon-sp-api.client.js', () => ({
   amazonSpApiClient: {
+    // With NEXUS_AMAZON_OFFER_MERGE=1 a price row reads the live offer first (amazon/purchasable-offer.ts). The 404
+    // answer = no live offer yet, so the builder's patch goes out as built — the payload these arms assert on, ON or OFF.
+    getListingsItem: vi.fn(async () => ({ success: true, sku: 'SKU', asin: null, status: null })),
     validateListing: vi.fn(async (options: any) => { m.validate(options); return { ...m.answer, warnings: [] } }),
     submitListingPayload: vi.fn(async (options: any) => { m.submit(options); return { success: true } }),
   },
