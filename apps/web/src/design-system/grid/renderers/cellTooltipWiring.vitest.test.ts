@@ -55,7 +55,9 @@ describe('the cell has ONE tooltip', () => {
   it('🔴 the reason is also TEXT in the studio cell, for anything that cannot hover', () => {
     const src = read('app/products/[id]/edit/_studio/sheet/master/columns.tsx')
     // P1 — `saveNote` is the tracker entry's words: a refusal's reason, or the warning a stored value came back with.
-    expect(src).toContain('<CellSaveReason reason={saveNote(tracker.get(')
+    // P2 — read once per paint and mounted only when the cell has a save state.
+    expect(src).toContain('const save = tracker.get(p.data.id, col.key)')
+    expect(src).toContain('{save && <CellSaveReason reason={saveNote(save)} />}')
   })
 
   it('🔴 the tooltip preserves the paragraph break the composer writes', () => {

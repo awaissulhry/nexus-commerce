@@ -22,6 +22,11 @@ export function TooltipPortalProvider({ children, disabled = false }: { children
   return <DisabledContext.Provider value={inheritedDisabled || disabled}><PortalContext.Provider value>{children}</PortalContext.Provider></DisabledContext.Provider>
 }
 
+/** True inside a host that turned its hints off (a dense grid): a hint there renders only its trigger. */
+export function useTooltipsDisabled(): boolean {
+  return useContext(DisabledContext)
+}
+
 /** Hover/focus tooltip. Scrolling hosts opt into a viewport-positioned portal. */
 export function Tooltip({ label, className, children, portal }: TooltipProps) {
   const inheritedPortal = useContext(PortalContext)

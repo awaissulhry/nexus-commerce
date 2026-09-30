@@ -201,6 +201,8 @@ export function buildMasterColumns(
          refusal that arrives with the formula batch repaints the mark without a column rebuild. */
       const refusedReason = opts.formula?.errorFor?.(p.data.id, col.key) ?? null
       const provenance = provOf(p.data, col.key, draft, !!opts.formula?.exprFor(p.data.id, col.key), refusedReason)
+      // P2 (I4-8) — a cell with no save state mounts no save reason and no save mark.
+      const save = tracker.get(p.data.id, col.key)
       // A drafted cell SHOWS the proposal; the value underneath is untouched and still what saves.
       const shown = draft ? <>{draft.draftValue == null || draft.draftValue === '' ? <EmptyValue /> : String(draft.draftValue)}</> : body
       return (
@@ -220,8 +222,8 @@ export function buildMasterColumns(
           {trail}
           {/* The tooltip's first paragraph, as text — for anything that cannot hover (#662). Same
               source as the getter reads, so the two cannot drift into two wordings. */}
-          <CellSaveReason reason={saveNote(tracker.get(p.data.id, col.key))} />
-          <CellSaveMark state={tracker.get(p.data.id, col.key)?.state} />
+          {save && <CellSaveReason reason={saveNote(save)} />}
+          {save && <CellSaveMark state={save.state} />}
         </span>
       )
     }
