@@ -315,6 +315,16 @@ describe('commitMasterRow — failures and reporting', () => {
     expect(onWriteEnd.mock.calls[0][3]).toBe('p1')
   })
 
+  it('shows the stock refusal of a business with no default warehouse on the Total stock cell (P3 commit sweep)', async () => {
+    // The answer `POST /products/bulk-save` gives for that unit (stock-without-warehouse.vitest.test.ts): a 200 whose
+    // only change was refused on its cell. The sheet must paint the refusal, never "saved".
+    fetchMock.mockResolvedValue(json(200, { success: true, updated: 1, currentVersion: 2, versionOf: 'product',
+      errors: [{ id: 'p1', field: 'totalStock', error: 'Choose a default warehouse in this business before changing stock.' }] }))
+    const r = await commitMasterRow(req([{ colId: 'totalStock', value: 7 }] as never), ctx())
+    expect(r.ok).toBe(false)
+    expect(cellsOf(r).totalStock).toEqual({ ok: false, reason: 'Choose a default warehouse in this business before changing stock.' })
+  })
+
   it('surfaces a localized-field refusal with the server sentence', async () => {
     fetchMock.mockResolvedValue(json(200, { errors: [{ id: 'p1', field: 'description', error: 'description must be under 2000 characters' }] }))
     const r = await commitMasterRow(req([{ colId: 'name', value: 'x' }, { colId: 'description', value: 'y' }] as never), ctx())
