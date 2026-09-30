@@ -21,6 +21,7 @@ import { getInformationSheet } from '../services/pim/information-sheet.js'
  */
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
+import { encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
 import { resolveWorkspaceDestination, resolveWorkspaceListing, WorkspaceScopeError } from '../services/pim/workspace-destination.js'
 import { AmbiguousConnectionError, NoConnectionError } from '../services/connection-resolver.service.js'
@@ -576,7 +577,9 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       // than being felt as "the grid is laggy".
       reply.header('Server-Timing', `studio;dur=${result.meta.tookMs}`)
       reply.header('Cache-Control', 'no-store')
-      return result
+      // P2 — `cells=compact`: each column's shared cell once, each cell as its difference (@nexus/shared/sheet-cell-wire).
+      // Opt-in, so every other reader of this route keeps today's shape.
+      return q.cells === 'compact' ? encodeSheetCells(result) : result
     } catch (err) {
       return sendError(reply, err, request.log, { id, market, scope: rawScope, channel })
     }
