@@ -170,13 +170,17 @@ export function isOperatorEdit(source: string | undefined): boolean {
  * `StudioRow.id` is the Product id, which is NOT unique across the grid: the same child SKU appears
  * under every alias that lists it. AG's `getRowId` and `getDataPath` need something that is.
  */
-export function withRowIdentity(rows: StudioRow[], aliases: AliasGroup[]): ChannelSheetRow[] {
+export function withRowIdentity(rows: StudioRow[], aliases: AliasGroup[], cache?: WeakMap<object, ChannelSheetRow>): ChannelSheetRow[] {
   const positionOf = new Map(aliases.map((a) => [aliasKeyOf(a.id), a.position]))
-  return rows.map((r) => ({
-    ...r,
-    rowId: studioRowId(r.aliasId, r.id),
-    aliasPosition: positionOf.get(aliasKeyOf(r.aliasId)) ?? 0,
-  }))
+  return rows.map((r) => {
+    const aliasPosition = positionOf.get(aliasKeyOf(r.aliasId)) ?? 0
+    // P2 — the same server row keeps its grid row object (and every edit settled on it in place).
+    const known = cache?.get(r)
+    if (known && known.aliasPosition === aliasPosition) return known
+    const row = { ...r, rowId: studioRowId(r.aliasId, r.id), aliasPosition }
+    cache?.set(r, row)
+    return row
+  })
 }
 
 /**

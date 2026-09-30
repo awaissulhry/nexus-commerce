@@ -171,7 +171,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     } | null>(null);
     const surfaceKey = channelSurfaceKey(channel, marketplace);
     const [exportNote, setExportNote] = useState<string | null>(null);
-    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases)) : []), [data]);
+    /* P2 (I4-4) — a server row keeps its grid row object: reference names landing, or a read that returns the row
+       unchanged, never make AG re-render it, and an edit settled in place (`savedCellPatch.ts`) survives them. */
+    const rowObjects = useRef(new WeakMap<object, ChannelSheetRow>());
+    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current)) : []), [data]);
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
@@ -276,6 +279,16 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         writeId: string;
         subject: string;
     }>());
+    /* P2 (I4-4) — a confirmed save the sheet could not settle in place since the last read: the next settled batch reads. */
+    const needsRead = useRef(false);
+    /** Repaint the cells a save settled in place: the saved columns of the saved row, its progress, the theme token. */
+    const repaintSettled = (patched: Set<ChannelSheetRow>, columns: Set<string>) => {
+        const api = getGridApi();
+        if (!api || api.isDestroyed())
+            return;
+        const nodes = [...patched].flatMap((row) => { const node = api.getRowNode(row.rowId); return node ? [node] : []; });
+        api.refreshCells({ rowNodes: nodes, columns: [...columns, SCOPE_PROGRESS_COLUMN], force: true });
+    };
     const writerRef = useRef<SheetWriter<ChannelSheetRow> | null>(null);
     if (writerRef.current === null) {
         /* ONE row's save, with its reporter bookkeeping. `bulkSend` present = this row is one unit of a sheet operation
@@ -290,16 +303,31 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                column and silently disabled the split. Witnessed: a theme pick on Amazon·IT
                reported `set` in the editor's own footer and issued no projection request at all.
                The same ref discipline the formula candidates two hooks above already follow. */
+            /* P2 (I4-4) — how this save settled: patched in place from its answer (`savedCellPatch.ts`), or it needs the
+               one quiet read that follows every settled batch. A save that reports nothing (a variation theme, a Shopify
+               field) needs the read. */
+            let settled: { rows: Set<ChannelSheetRow>; columns: Set<string> } | null = { rows: new Set(), columns: new Set() };
+            let reported = false;
             const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
                 familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend,
-                /* P1 review (2) — the family rows a listing-level eBay save moved: repaint them with their new value and token. */
-                onFamilyChanged: (changed) => {
+                columnOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId),
+                onStored: (outcome) => {
+                    reported = true;
+                    if ('read' in outcome) settled = null;
+                    else if (settled) { for (const row of outcome.patched) settled.rows.add(row); for (const col of outcome.columns) settled.columns.add(col); }
+                },
+                /* P1 review (2) — the family rows a listing-level eBay save moved: repaint them with their new value and token.
+                   P2 — only the saved columns of those rows, never every cell of the family. */
+                onFamilyChanged: (changed, columns) => {
                     const api = getGridApi();
                     if (!api || api.isDestroyed())
                         return;
                     const nodes = changed.flatMap((moved) => { const node = api.getRowNode(moved.rowId); if (node?.data && node.data !== moved) node.data.values = moved.values; return node ? [node] : []; });
-                    api.refreshCells({ rowNodes: nodes, force: true });
+                    api.refreshCells({ rowNodes: nodes, ...(columns?.length ? { columns } : {}), force: true });
                 } });
+            const inPlace = settled as { rows: Set<ChannelSheetRow>; columns: Set<string> } | null;
+            if (result.ok && reported && inPlace) repaintSettled(inPlace.rows, inPlace.columns);
+            else if (result.ok) needsRead.current = true;
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });
             else
@@ -356,6 +384,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 refreshReadinessSoonRef.current();
                 if (writerRef.current?.pending !== 0)
                     return;
+                // P2 (I4-4) — every save since the last read was settled in place from its answer: no read.
+                if (!needsRead.current)
+                    return;
+                needsRead.current = false;
                 const savedSequence = writeSeq.current;
                 void refreshRef.current(() => writeSeq.current === savedSequence && writerRef.current?.pending === 0 &&
                     !tracker.hasUnconfirmedChanges &&
@@ -644,29 +676,43 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         const variants = rows.filter((r) => r.rowKind === 'variant');
         return variants.length > 0 && variants.every((r) => Object.keys(r.axisValues ?? {}).length > 0);
     }, [rows]);
-    const viewCtx = useMemo(() => ({
+    const viewCtxNow = useMemo(() => ({
         variationAxes: data?.family?.variationAxes ?? [],
         locale: data?.scope.locale ?? locale ?? '',
         scopeLabel: data?.scope.label,
         flaggedKeys: flaggedColumnKeys(rows),
         requiredKeys: [...new Set(rows.flatMap(row => Object.entries(row.values).filter(([, cell]) => cell.mapped?.requiredByRule).map(([key]) => key)))],
     }), [data, rows, locale]);
+    /* P2 (I4-4) — the column model is keyed on what it reads, never on a read's object identity: the same columns, scope
+       and view facts keep every column definition, so AG never rebuilds (and re-renders) every cell after a read. */
+    const viewCtx = useMemo(() => viewCtxNow, [JSON.stringify(viewCtxNow)]);
+    const columnsKey = useMemo(() => JSON.stringify(data?.columns ?? []), [data?.columns]);
+    const stableColumns = useMemo(() => data?.columns ?? [], [columnsKey]);
+    const scopePage = useMemo(() => (data ? { scope: data.scope } : null), [JSON.stringify(data?.scope ?? null)]);
+    const openCellDetailsRef = useRef(openCellDetails);
+    openCellDetailsRef.current = openCellDetails;
+    const openCellDetailsLive = useCallback((row: ChannelSheetRow, column: SheetColumn) => openCellDetailsRef.current(row, column), []);
+    const authRef = useRef(auth);
+    authRef.current = auth;
+    const authKey = `${auth.status}:${auth.isOwner}:${[...auth.permissions].sort().join(',')}`;
+    const authLive = useMemo(() => ({ has: (permission: string) => authRef.current.has(permission) }), [authKey]);
     const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi);
     const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
        Customise, in the views; never a server column, never a write field. */
-    const gridColumns = useMemo(() => withSlotListColumns(withProductMediaColumn(data?.columns ?? []).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never))), [data]);
+    const gridColumns = useMemo(() => withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never))), [stableColumns]);
     const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
-        data, gridColumns, formulaWiring, accountId, openCellDetails, productLevelOnly,
-        refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth,
-    })), [data, gridColumns, formulaWiring, accountId, openCellDetails, productLevelOnly, refusedReasonFor,
-        tracker, viewCtx, mediaEditor.open, mediaEditor.actions, shopifyEditor.open, shopifySchema, auth, control.decorate]);
+        data: scopePage, gridColumns, formulaWiring, accountId, openCellDetails: openCellDetailsLive, productLevelOnly,
+        refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth: authLive,
+    })), [scopePage, gridColumns, formulaWiring, accountId, openCellDetailsLive, productLevelOnly, refusedReasonFor,
+        tracker, viewCtx, mediaEditor.open, mediaEditor.actions, shopifyEditor.open, shopifySchema, authLive, control.decorate]);
     /**
      * The scope's PROGRESS COLUMN (2026-09-26) — the bar left the Product cell. The same builder as master
      * (`../progressColumns`), fed by this sheet's own rows: `completeness` is measured against THIS channel's fields.
      */
     const progressColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => {
+        const data = scopePage;
         if (!data) return [];
         const label = data.scope.label;
         const presence = (field: string): ColumnPresence => {
@@ -691,7 +737,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 footerLink: () => ({ label: `All products for ${label}`, href: listingsHref({ channel: data.scope.channel, market: marketplace, language: data.scope.locale }) }),
             },
         })];
-    }, [data, marketplace, getGridApi, revealCell, refreshProgress]);
+    }, [scopePage, marketplace, getGridApi, revealCell, refreshProgress]);
     const allColumnDefs = useMemo(() => [...progressColumns, ...columnDefs], [progressColumns, columnDefs]);
     const searchColumnLabels = useMemo(() => new Map(gridColumns.map(col => [col.key, col.optionLabels])), [gridColumns]);
     const searchTerm = search.trim().toLowerCase();
