@@ -1,3 +1,7 @@
+## A save that answers with a warning says so on its cell — 2026-09-30
+
+Mirrored from web. `CellSaveEntry.warning`, `CellSaveTracker.setSavedWithWarning` / `warnedCount`, `saveNote`, a `SheetWriter` result cell's `warning`, the `nds-cell-is-saved-warned` class and its `grid.css` rule.
+
 ## MediaBoard: a row's mark wraps — 2026-09-29
 
 Mirrored from web. `.nds-media-board-source` keeps to the row head's width; a Tag or Button directly inside it may break its words.

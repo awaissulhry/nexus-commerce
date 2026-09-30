@@ -178,6 +178,9 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
         action: () => { void confirmReset(targets, `Reset ${subject(targets)} to inherited?`) } }]
     }
     const own = offer(rowId, colId)
+    /* P1 review (4) — an eBay listing-level value on a variation row is the listing's: nothing of the row's own to reset. */
+    const level = (row as { values?: Record<string, { mapped?: { listingLevel?: { variation?: boolean } } | null } | undefined> }).values?.[colId]?.mapped?.listingLevel
+    if (!own && level?.variation) return [{ name: 'Reset to inherited', disabled: true, tooltip: 'eBay takes one value for the whole listing: set or clear it here, for every variation. This row holds no value of its own to reset.' }]
     if (!own) return [{ name: 'Reset to inherited', disabled: true, tooltip: 'This cell holds no value of its own: it already shows what it inherits, or nothing sits above it.' }]
     return [{ name: own.label, action: () => {
       if (resetOne?.(row, colId, own)) return

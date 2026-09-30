@@ -36,7 +36,7 @@ export { selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_
 /* Exported so a host can name it as the FALLBACK editor beside `formulaSelector` — `=` opens the
    formula editor on a closed list, anything else opens this one (#775). */
 export { SelectPanelEditor, type SelectPanelEditorParams } from './SelectPanelEditor'
-export { CellSaveTracker, roundTripClassRules, saveCell, SAVED_FADE_MS, type CellSaveState, type CellSaveEntry, type SaveOutcome } from './roundTrip'
+export { CellSaveTracker, roundTripClassRules, saveCell, saveNote, SAVED_FADE_MS, type CellSaveState, type CellSaveEntry, type SaveOutcome } from './roundTrip'
 export { longTextEditor, textLimitFor, NO_TEXT_LIMIT, sheetClassRules, selectValidation, lengthValidation, lengthCapOf, evaluateLengthCaps, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type LengthCaps, type LengthReading, type SheetValidation } from './sheet'
 // PES.2 — the ONE decision about whether a grid change should be written (rulings #53, #63).
 export { writeGate, NON_EDIT_SOURCES, type WriteGateInput, type WriteGateVerdict } from './writeGate'

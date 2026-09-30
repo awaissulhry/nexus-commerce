@@ -1,3 +1,7 @@
+## A save that answers with a warning says so on its cell — 2026-09-30
+
+Product sheet P1 review (3): a save the server accepts with a warning (eBay's 55-character subtitle, a list value the channel may not take) showed as a plain green save and the sentence was lost. **`CellSaveEntry`** carries **`warning`**; **`CellSaveTracker.setSavedWithWarning`** keeps a saved-with-warning cell (it does not fade, **`warnedCount`** counts them); **`saveNote(entry)`** gives the cell's note: the refusal's reason, or "Saved with a warning: <the server's sentence>". **`SheetWriter`**: a result cell may carry **`warning`** (`{ ok: true, warning }`), and settle marks it. **`roundTripClassRules`**: **`nds-cell-is-saved-warned`** (the warning corner and a 1 px `--nds-warning` ring, `grid.css`). **`GridSheetStatus`** takes **`warned`**: "Saved HH:MM with N warnings". Mirrored in Factory: `roundTrip.ts`, `sheetWriter.ts`, `editors/index.ts`, `theme/grid.css` (Factory has no `GridSheet`).
+
 ## Long text is never cut at 200 characters — 2026-09-30
 
 Product sheet P1. **`longTextEditor`** always passes a browser limit far above any channel cap (**`NO_TEXT_LIMIT`**, **`textLimitFor(cap)`**): AG's `agLargeTextCellEditor` sets `maxLength || 200`, so a long-text cell with no limit stopped typing at 200 characters and a capped one at its cap. A channel's cap is a warning (the counter and the cell's tint), never a browser stop. Mirrored in Factory.

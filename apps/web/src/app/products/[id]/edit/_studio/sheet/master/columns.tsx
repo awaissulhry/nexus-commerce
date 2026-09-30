@@ -20,7 +20,7 @@ import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
 import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
 import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
-import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, textLimitFor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { CellSaveReason, saveNote, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, textLimitFor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
 
@@ -220,7 +220,7 @@ export function buildMasterColumns(
           {trail}
           {/* The tooltip's first paragraph, as text — for anything that cannot hover (#662). Same
               source as the getter reads, so the two cannot drift into two wordings. */}
-          <CellSaveReason reason={tracker.get(p.data.id, col.key)?.reason} />
+          <CellSaveReason reason={saveNote(tracker.get(p.data.id, col.key))} />
           <CellSaveMark state={tracker.get(p.data.id, col.key)?.state} />
         </span>
       )
@@ -342,7 +342,7 @@ export function buildMasterColumns(
           )
         }
         return composeCellTooltip(
-          tracker.get(p.data.id, col.key)?.reason,
+          saveNote(tracker.get(p.data.id, col.key)),
           own(),
           /* 🔴 "…and says why in the cell" (#753(b)). A `=` typed on a column the writer refuses
              falls through to the ordinary editor and becomes plain text, which is silent — the
