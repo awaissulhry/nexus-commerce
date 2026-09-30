@@ -237,25 +237,36 @@ export function ParkedRow({
   const effectiveAfter = heldUntil ?? executeAfter
   const deadline = effectiveAfter ? new Date(effectiveAfter).getTime() : 0
   const [left, setLeft] = useState(() => Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
-  const fired = useRef(false)
+  /*
+   * MCP.12 — the deadline this row has already committed, not a yes/no.
+   *
+   * `fired` was a boolean reset at the top of the effect, and the effect listed
+   * `onCommit` in its deps. Both parents pass an inline arrow, so every parent
+   * render — and `post()` itself sets busy, which renders — made a new
+   * `onCommit`, re-ran the effect, reset `fired`, and the next tick at zero
+   * committed AGAIN: two commits per approval, the second answered 409
+   * (measured in a local run on 2026-09-30). A hold still gets its own commit,
+   * because it moves the deadline; nothing else can.
+   */
+  const firedFor = useRef<number | null>(null)
+  const commit = useRef(onCommit)
+  useEffect(() => {
+    commit.current = onCommit
+  }, [onCommit])
 
   useEffect(() => {
     if (!deadline) return
-    /* Reset with the deadline: after a hold this effect re-runs, and a `fired`
-       left true from the previous window would mean the new one never commits
-       at all. */
-    fired.current = false
     setLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
     const t = setInterval(() => {
       const secs = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
       setLeft(secs)
-      if (secs === 0 && !fired.current) {
-        fired.current = true
-        onCommit(id)
+      if (secs === 0 && firedFor.current !== deadline) {
+        firedFor.current = deadline
+        commit.current(id)
       }
     }, 500)
     return () => clearInterval(t)
-  }, [deadline, id, onCommit])
+  }, [deadline, id])
 
   return (
     <div className={`ap-scheduled${stuck ? ' aq-stuck' : ''}`}>
@@ -278,7 +289,9 @@ export function ParkedRow({
           ) : left > 0 ? (
             <>
               Running in {left} second{left === 1 ? '' : 's'} — the{' '}
-              <Term k="undo-window">undo window</Term>. Nothing has reached Amazon yet.
+              {/* MCP.12 — was "Nothing has reached Amazon yet": the request can be for any channel, or for
+                  Nexus only, and until it runs nothing has changed anywhere. */}
+              <Term k="undo-window">undo window</Term>. Nothing has changed yet.
             </>
           ) : (
             'Running now…'

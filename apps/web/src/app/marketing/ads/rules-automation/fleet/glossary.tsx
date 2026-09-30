@@ -144,7 +144,8 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   },
   'undo-window': {
     title: 'The undo window',
-    body: 'Approving does not fire immediately. The action waits 20 seconds, during which nothing has reached Amazon and one click takes it back. If you close the tab, it still runs — the decision is saved the moment you make it, only the execution waits.',
+    // MCP.12 — "nothing has reached Amazon": the Approvals page parks requests for any channel, and Nexus-only ones.
+    body: 'Approving does not fire immediately. The action waits 20 seconds, during which nothing has run — not in Nexus, not on any channel — and one click takes it back. If you close the tab, it still runs — the decision is saved the moment you make it, only the execution waits.',
   },
   staleness: {
     title: 'Stale approval',

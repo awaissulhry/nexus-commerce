@@ -51,6 +51,7 @@ import { FleetPageShell } from '../_shell/FleetPageShell'
 import { HowApprovalsWork } from './HowApprovalsWork'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { ApprovalCard, type FleetLabels } from './ApprovalCard'
+import { outsideHeading } from './approval-words'
 import {
   ParkedRow,
   PrecedentPanel,
@@ -861,8 +862,8 @@ function OutsideQueue({
         <AlertTriangle size={12} aria-hidden />
         <span>
           <strong>Could not check whether anything is waiting from outside the fleet.</strong> These
-          are the only requests that can change something on Amazon, so this is not the same as
-          nothing being there.{' '}
+          are the only requests that can change something — in Nexus or on a sales channel — so
+          this is not the same as nothing being there.{' '}
           <button className="aq-outretry" onClick={onRetry}>
             Try again
           </button>
@@ -880,7 +881,7 @@ function OutsideQueue({
         <ShieldCheck size={12} aria-hidden />
         <span>
           Nothing is waiting from outside the fleet. These would be the only requests on this page
-          that can change something on Amazon — the fleet&apos;s own actions are{' '}
+          that can change something, in Nexus or on a sales channel — the fleet&apos;s own actions are{' '}
           <Term k="preview-only">describes only</Term>.
           {known.length > 0 ? (
             <>
@@ -923,10 +924,9 @@ function OutsideQueue({
       <div className="aq-outhead">
         <AlertTriangle size={14} aria-hidden />
         <div className="aq-outheadbody">
-          <h3 id="aq-out-h">
-            {rows.length} request{rows.length === 1 ? '' : 's'} can actually change something on
-            Amazon
-          </h3>
+          {/* MCP.12 — was "N requests can actually change something on Amazon": wrong for an
+              eBay price change, and a Nexus-only request reaches no channel at all. */}
+          <h3 id="aq-out-h">{outsideHeading(rows.map((r) => r.toolName))}</h3>
           {/* The contrast sentence, and the reason this section exists, in the
               header rather than in a separate tinted box below it. The box was
               a second red surface inside an already-red card, which spent the

@@ -42,6 +42,13 @@ import {
 } from 'lucide-react'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
+import {
+  approveLabelFor,
+  channelEffectOf,
+  moreThanShown,
+  type ChannelEffect,
+  type Delta,
+} from './approval-words'
 
 export interface FleetLabels {
   campaigns: Record<string, { name: string; marketplace: string | null }>
@@ -225,12 +232,6 @@ const EDITABLE: Record<string, Editable> = {
 }
 
 /* ── what it touches, and what it changes ──────────────────────────────── */
-
-interface Delta {
-  field: string
-  from: string | null
-  to: string
-}
 
 interface Described {
   /** The thing being acted on, named. Null when we genuinely cannot say. */
@@ -430,6 +431,38 @@ const ago = (iso: string) => {
   return `${Math.floor(h / 24)}d ago`
 }
 
+/* ── MCP.12 · what each marketplace gets ───────────────────────────────── */
+
+/**
+ * The listing side of a bulk price change, as its preview states it: the listing lines the tool kept (at most 20,
+ * the rest counted) and one clause per count — sent, paused, own price, another currency, already there. The card
+ * used to show the master prices only, so an approver could not see what "eBay IT" would be sent.
+ */
+export function ChannelEffectDetail({ effect }: { effect: ChannelEffect }) {
+  return (
+    <>
+      {effect.lines.length > 0 ? (
+        <ul className="aq-channels">
+          {effect.lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+          {effect.more > 0 ? (
+            <li className="aq-channelsmore">
+              and {effect.more} more listing{effect.more === 1 ? '' : 's'}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+      <p className="aq-channelcounts">{sentenceOf(effect.counts)}</p>
+    </>
+  )
+}
+
+const sentenceOf = (clauses: string[]) => {
+  const text = clauses.join('; ')
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`
+}
+
 /* ── the card ──────────────────────────────────────────────────────────── */
 
 export function ApprovalCard({
@@ -527,12 +560,11 @@ export function ApprovalCard({
     ].filter((o) => now + o.ms < expiry - 5 * 60_000)
   })()
 
-  const primaryDelta = d.deltas[0]
-  const approveLabel = primaryDelta
-    ? primaryDelta.from
-      ? `Apply — ${primaryDelta.field} ${primaryDelta.from} → ${primaryDelta.to}`
-      : `Apply — ${primaryDelta.field}: ${primaryDelta.to}`
-    : vocab.approveLabel
+  /* MCP.12 — one change keeps its own wording; several say what the whole request does. The label used to name
+     `d.deltas[0]` only, so a 3-product price change read as a change to its first product. */
+  const approveLabel = approveLabelFor(approval.toolName, d.deltas, approval.preview, vocab.approveLabel)
+  const more = moreThanShown(approval.toolName, approval.preview)
+  const channels = channelEffectOf(approval.toolName, approval.preview)
 
   return (
     /*
@@ -685,6 +717,8 @@ export function ApprovalCard({
               <span className="aq-dto">{x.to}</span>
             </li>
           ))}
+          {/* MCP.12 — a bulk preview keeps 20 lines; the rest are counted, and the card says so. */}
+          {more ? <li className="aq-dmore">{more}</li> : null}
         </ul>
       ) : (
         /* (h) the honest fallback — it takes the DELTA slot, at delta size,
@@ -751,6 +785,14 @@ export function ApprovalCard({
             <div>
               <dt>What it does</dt>
               <dd>{approval.preview.effect as string}</dd>
+            </div>
+          ) : null}
+          {channels ? (
+            <div>
+              <dt>What each marketplace gets</dt>
+              <dd>
+                <ChannelEffectDetail effect={channels} />
+              </dd>
             </div>
           ) : null}
           {d.evidence.length > 0 ? (

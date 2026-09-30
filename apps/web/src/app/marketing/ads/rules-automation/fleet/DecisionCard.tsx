@@ -63,6 +63,8 @@ export interface ToolCard {
   /** Drives review depth: an irreversible action is never compact. */
   undoable: 'yes' | 'partial' | 'no' | 'unknown'
   wrongCost: string
+  /** MCP.12 — true when running it changes Nexus only: no marketplace is sent anything by it. */
+  nexusOnly?: boolean
 }
 
 export const TOOL_CARDS: Record<string, ToolCard> = {
@@ -123,6 +125,30 @@ export const TOOL_CARDS: Record<string, ToolCard> = {
     undoable: 'partial',
     wrongCost:
       'If this is wrong, an incomplete or incorrect listing is publicly visible until you pull it.',
+  },
+  /* ── MCP.12 · the bulk changes a person asks for through Claude ─────── */
+  'bulk-price-change': {
+    wants: 'wants to change many prices',
+    shortAsk: 'change the master price of many products',
+    approveLabel: 'Apply these prices',
+    reversible:
+      'Partly — each previous master price is recorded, so another change can set them back, but listings already sent to their marketplace sold at the new price in the meantime.',
+    // Not `yes`: nothing puts a bulk change back in one step, and what the marketplaces did with the new prices
+    // (orders at that price) stands. Another change reverses it going forward — that is `partial`.
+    undoable: 'partial',
+    wrongCost:
+      'If this is wrong, every listing that follows the master price sells at the wrong price on its marketplace until it is corrected — and orders placed in the meantime stand at that price.',
+  },
+  'bulk-attribute-change': {
+    wants: 'wants to change attributes on many products',
+    shortAsk: 'change attributes on many products, in Nexus only',
+    approveLabel: 'Apply these values',
+    reversible:
+      'Yes — it changes Nexus only, and each previous value is recorded, so another change can put them back before anything is published.',
+    undoable: 'yes',
+    wrongCost:
+      'If this is wrong, Nexus holds the wrong values on these products until they are corrected. No marketplace changes until someone publishes from Nexus — and then the wrong values go with it.',
+    nexusOnly: true,
   },
   'send-customer-message': {
     wants: 'wants to send a message to a customer',
