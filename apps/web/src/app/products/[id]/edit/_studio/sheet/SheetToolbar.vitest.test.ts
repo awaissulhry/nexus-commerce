@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuItemDef, MenuProps } from '@/design-system/components'
 import { SheetToolbar, type SheetToolbarProps } from './SheetToolbar'
+import { createSheetSaveStatusStore } from './sheetSaveStatusStore'
 
 // Node-only contract: inspect the declarations delivered to the real DS menu; its
 // portal and keyboard behavior belong to the DS/browser checks.
@@ -29,6 +30,22 @@ function render(overrides: Partial<SheetToolbarProps<unknown>> = {}) {
 }
 
 describe('SheetToolbar overflow holds', () => {
+  it('reads the live store when opening a command menu, including a flight with no queued cells', () => {
+    let saving = false
+    const saveStatus = createSheetSaveStatusStore(() => ({
+      pending: 0, saving, refused: 0, refusedRowIds: new Set(), warned: 0, retryable: 0, offline: false,
+    }))
+    const action = { id: 'classification', label: 'Classification', onSelect: vi.fn() }
+    expect(render({ saveStatus, overflow: [action] }).find(item => item.id === action.id)?.disabled).toBeUndefined()
+    saving = true
+    saveStatus.refreshCounts()
+    const held = render({ saveStatus, overflow: [action] }).find(item => item.id === action.id)!
+    expect(held.disabled).toBe(true)
+    expect(held.title).toBe('Wait for the pending write to finish.')
+    saving = false
+    saveStatus.refreshCounts()
+    expect(render({ saveStatus, overflow: [action] }).find(item => item.id === action.id)).toBe(action)
+  })
   it.each([
     [{ loading: true }, 'The sheet is still loading'],
     [{ unavailable: true }, 'This sheet could not be read'],

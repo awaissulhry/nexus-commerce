@@ -18,7 +18,7 @@
  * The default density is COMPACT — a sheet is read like a spreadsheet, and the inventory editor's
  * per-cell states (`.nds-cell-is-pending` / `-saving` / `-saved` / `-refused`) are its states.
  */
-import { memo, useRef, type CSSProperties, type ReactNode } from 'react'
+import { memo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 
 import type { GridDensityName } from '../../tokens/grid'
 import { GridDensityProvider } from '../hooks/useGridDensity'
@@ -124,11 +124,24 @@ export interface GridSheetStatusProps {
   saving?: boolean
   /** ISO string of the last successful save. */
   lastSavedAt?: string | null
+  /** Optional live progress. Its cached snapshot updates this strip without re-rendering the grid host. */
+  source?: GridSheetStatusSource
   children?: ReactNode
 }
 
+export interface GridSheetStatusSource {
+  subscribe: (listener: () => void) => () => void
+  getSnapshot: () => Pick<GridSheetStatusProps, 'pending' | 'refused' | 'warned' | 'saving' | 'lastSavedAt'>
+}
+
+const NO_LIVE_STATUS = {}
+const noStatusSubscription = () => () => undefined
+const noLiveStatus = () => NO_LIVE_STATUS
+
 /** The strip under a sheet: what is on it, what is unsaved, what the server said. */
-export const GridSheetStatus = memo(function GridSheetStatus({ rows, selected = 0, pending = 0, refused = 0, warned = 0, saving = false, lastSavedAt, children }: GridSheetStatusProps) {
+export const GridSheetStatus = memo(function GridSheetStatus({ source, ...props }: GridSheetStatusProps) {
+  const live = useSyncExternalStore(source?.subscribe ?? noStatusSubscription, source?.getSnapshot ?? noLiveStatus, source?.getSnapshot ?? noLiveStatus)
+  const { rows, selected = 0, pending = 0, refused = 0, warned = 0, saving = false, lastSavedAt, children } = { ...props, ...live }
   return (
     <div className="nds-grid-footstrip nds-grid-sheet-status" role="status" aria-live="polite">
       <span>

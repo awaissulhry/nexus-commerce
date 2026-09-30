@@ -43,11 +43,11 @@
  *     switch, that it also narrows the columns (D1 = A, on by default).
  * `docs/product-sheet-toolbar/PLAN-2026-09-27.md`.
  */
-import { useRef, type ReactNode } from 'react'
+import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AlertTriangle, ChevronDown, MoreHorizontal, Search, X } from 'lucide-react'
 
 import { Button, Input } from '@/design-system/primitives'
-import { Menu, type MenuItemDef } from '@/design-system/components'
+import { Menu, type MenuItemDef, type MenuProps } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { GRID_DENSITY_OPTIONS, GridDensityToggle, GridSearchSlot, GridSelectionActions, GridViewsMenu, SheetStatuses, type SheetStatus, useToolbarOverflow, useToolbarOverflowTier, useToolbarStatusCompaction, type GridStateApi, type GridViewPreset, type SavedGridView } from '@/design-system/grid'
 import type { GridDensityName } from '@/design-system/tokens/grid'
@@ -55,6 +55,7 @@ import type { GridDensityName } from '@/design-system/tokens/grid'
 import { viewChipIsAlarm, type ViewChip } from '../contracts'
 import { viewChipCountLabel, viewChipSummary } from '../viewChips'
 import { orderLanguageChips } from './languageChips'
+import type { SheetSaveStatusStore } from './sheetSaveStatusStore'
 
 /** A control this scope does not offer, and why. Both fields are required — that is the point. */
 export interface AbsentControl {
@@ -138,6 +139,8 @@ export interface SheetToolbarProps<TPage> {
   loading?: boolean
   /** A write is pending; hold overflow verbs without hiding the loaded rows. */
   pendingWrite?: boolean
+  /** Live save state. Only the open command menu subscribes to it. */
+  saveStatus?: SheetSaveStatusStore
   /** The current read failed; keep recovery available without authoring an empty layout. */
   unavailable?: boolean
 
@@ -380,7 +383,10 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
                  not a daily one, so it does not spend a bar slot; with no live cells in this build
                  (CH.1 row 19), Reload plus the 409 version check on write is the whole "what changed
                  elsewhere" story. */
-              <Menu
+              <SheetOverflowMenu
+                holdReason={overflowReason}
+                saveStatus={p.saveStatus}
+                scopeItems={p.overflow}
                 label={<MoreHorizontal size={14} aria-hidden />}
                 triggerProps={{ className: 'nds-btn sm', 'aria-label': 'More' }}
                 items={[
@@ -392,12 +398,7 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
                     ? [{ id: 'sep-folded', separator: true } as MenuItemDef]
                     : []),
                   ...(p.absent ?? []).map(a => ({ id: `absent-${a.control}`, label: a.control === 'views' ? 'Saved views — fixed column set on this page' : `${a.control} — unavailable`, description: a.reason, disabled: true })),
-                  ...(p.overflow ?? []).map(item => overflowReason && !item.separator ? {
-                    ...item,
-                    disabled: true,
-                    title: [overflowReason, item.title].filter(Boolean).join(overflowReason.endsWith('.') ? ' ' : '. '),
-                    description: <>{overflowReason}{item.description != null && <>{overflowReason.endsWith('.') ? ' ' : '. '}{item.description}</>}</>,
-                  } : item),
+                  ...(p.overflow ?? []),
                   ...((p.overflow?.length ?? 0) > 0 && !gone('reload') && p.onReload
                     ? [{ id: 'sep-overflow', separator: true } as MenuItemDef]
                     : []),
@@ -443,4 +444,26 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
       )}
     </GridToolbar>
   )
+}
+
+const noSubscription = () => () => undefined
+const noPendingWrite = () => false
+
+/** A closed menu needs no progress renders. Opening it reads the current hold immediately. */
+function SheetOverflowMenu({ holdReason, saveStatus, scopeItems, ...menu }: MenuProps & {
+  holdReason: string | null
+  saveStatus?: SheetSaveStatusStore
+  scopeItems?: readonly MenuItemDef[]
+}) {
+  const [open, setOpen] = useState(false)
+  const pending = useSyncExternalStore(open && saveStatus ? saveStatus.subscribe : noSubscription,
+    saveStatus?.getPendingWrite ?? noPendingWrite, saveStatus?.getPendingWrite ?? noPendingWrite)
+  const reason = holdReason ?? (pending ? 'Wait for the pending write to finish.' : null)
+  return <Menu {...menu} open={open} onOpenChange={setOpen} items={menu.items.map(item =>
+    reason && scopeItems?.includes(item) && !item.separator ? {
+      ...item,
+      disabled: true,
+      title: [reason, item.title].filter(Boolean).join(reason.endsWith('.') ? ' ' : '. '),
+      description: <>{reason}{item.description != null && <>{reason.endsWith('.') ? ' ' : '. '}{item.description}</>}</>,
+    } : item)} />
 }

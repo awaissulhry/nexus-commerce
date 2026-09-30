@@ -102,7 +102,8 @@ const DRAWER_READ_ONLY = 'Edit channel values in the sheet — the drawer is rea
 const SHOPIFY_FIELDS_UNREAD = 'SHOPIFY:*';
 export function useChannelSheetAdapter({ productId, channel, marketplace, locale, accountId, shopifySchema }: ChannelSheetProps): ProductSheetModel<ChannelSheetRow, null, ChannelSheetRow> {
     const record = useStudioRecord();
-    const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastSavedAt, setLastSavedAt, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, rowSelection, selectedRows: selected, setSelectedRows: setSelected, announceRefusals } = useProductSheetInteraction<ChannelSheetRow>('channel');
+    const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, rowSelection, selectedRows: selected, setSelectedRows: setSelected, announceRefusals } = useProductSheetInteraction<ChannelSheetRow>('channel');
+    const savedAtRef = useRef<(at: string) => void>(() => undefined);
     const { toast } = useToast();
     const languageScope = useStudioScope();
     const { accounts, destination, setListing, registerScopeChangeGuard } = languageScope;
@@ -388,7 +389,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 reporterRef.current.resolved(held?.writeId ?? writeId, ok, ok ? undefined : 'Review the highlighted edits against the stored values.', held?.subject ?? subject);
                 unsettledWrites.current.delete(rowId);
                 if (ok) {
-                    setLastSavedAt(savedAt);
+                    savedAtRef.current(savedAt);
                     refreshReadinessSoonRef.current();
                     // A lost answer is always read back, and that read too stays owed until it lands.
                     followUp.owe();
@@ -398,7 +399,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             onSettled: ({ ok, savedAt }) => {
                 if (!ok)
                     return;
-                setLastSavedAt(savedAt);
+                savedAtRef.current(savedAt);
                 refreshReadinessSoonRef.current();
                 if (writerRef.current?.pending !== 0)
                     return;
@@ -409,7 +410,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }
     const writer = writerRef.current;
     useSheetPublicationGuard(writer, tracker, getGridApi);
-    const { pending, refused, warned, retryable, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
+    const { saveStatus, refused, refusedRowIds, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
+    savedAtRef.current = saveStatus.saved;
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
     useEffect(() => {
@@ -930,7 +932,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return {
                 id: `preflight:${a.id}`,
                 label: `${copy.menu} ${mark} (${n})`,
-                disabled: pending > 0 || refused > 0,
+                disabled: refused > 0,
                 description: copy.subtitle,
                 onSelect: () => setPreflightAlias(a),
             };
@@ -938,7 +940,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         items.push({
             id: 'add-alias',
             label: adding ? 'Adding…' : '+ Add listing alias',
-            disabled: adding || pending > 0 || refused > 0 || !auth.has('products.edit'),
+            disabled: adding || refused > 0 || !auth.has('products.edit'),
             ...(addError ? { description: addError } : {}),
             onSelect: () => void onAddAlias(),
         });
@@ -955,7 +957,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             },
         });
         return items;
-    }, [data, rows, adding, addError, onAddAlias, alternateAccount, channel, pending, refused, getGridApi, openCellDetails, toast, auth.has]);
+    }, [data, rows, adding, addError, onAddAlias, alternateAccount, channel, refused, getGridApi, openCellDetails, toast, auth.has]);
     const unavailable = !loading && (backendMissing || !!error || !data);
     const emptyState = sheetEmptyState(rows.length, () => {
         setSearch('');
@@ -979,8 +981,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         errorMessage: error,
         backendMissing: backendMissing, retry: reload,
         columns: sheetColumns,
+        saveStatus,
         toolbar: {
-            pendingWrite: pending > 0 || saving,
             visible: visibleRows.length,
             total: rows.length,
             selected: selected.length,
@@ -1074,19 +1076,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         status: {
             rows: visibleRows.length,
             /* The selection is counted ONCE, on the toolbar, not again here (SHEET-VIEWS, 2026-09-26). */
-            pending: pending,
-            saving: saving,
-            refused: refused,
-            warned: warned,
-            lastSavedAt: lastSavedAt,
         }, footerNote: {
-            offline: offline,
             layoutRecovery: sheetColumns.loadError ? { retry: sheetColumns.reloadSavedPreferences } : null,
-            refused: refused,
             showRefusedOnly: showRefusedOnly,
             onToggleRefused: () => setShowRefusedOnly((v) => !v),
-            lastSavedAt: lastSavedAt,
-            retryable,
             onRetry: () => { writer.retryFailed(); },
         }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the shared master record — every channel sees those edits

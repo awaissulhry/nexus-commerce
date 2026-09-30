@@ -1,3 +1,7 @@
+## Sheet save progress stays in the status strip — 2026-09-30
+
+**`GridSheetStatus`** can read an optional live status source. Save progress updates the existing strip without a host render. Plain props and rendered markup stay the same. This host exists only in the web app; there is no Factory counterpart.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Factory.

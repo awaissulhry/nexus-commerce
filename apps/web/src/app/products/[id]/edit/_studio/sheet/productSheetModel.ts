@@ -6,12 +6,14 @@ import type { StudioDockProps } from '../drawer/StudioDock'
 import type { SheetRow } from '../drawer/types'
 import type { SheetToolbarProps } from './SheetToolbar'
 import type { SheetFooterNoteProps } from './SheetFooterNote'
+import type { SheetSaveStatusStore } from './sheetSaveStatusStore'
 import type { SheetColumnsApi } from './useSheetColumns'
 
 type CommonToolbarProps = 'views' | 'presets' | 'activePresetId' | 'languagesView' | 'onApplyPreset'
   | 'viewsEmptyLabel' | 'onSaveCurrentView' | 'onUpdateCurrentView' | 'describeView'
   | 'chips' | 'activeChipId' | 'onChipToggle' | 'density' | 'onDensity'
   | 'activeCount' | 'myLayout' | 'myLayoutActive' | 'onApplyMyLayout' | 'narrowToMatches' | 'onNarrowToMatches'
+  | 'saveStatus'
 
 /** Scope adapters supply data and domain actions; ProductSheetSurface owns the UI. */
 export interface ProductSheetModel<Row, Page, DrawerRow extends SheetRow = SheetRow> {
@@ -27,8 +29,9 @@ export interface ProductSheetModel<Row, Page, DrawerRow extends SheetRow = Sheet
   columns: SheetColumnsApi<Page>
   toolbar: Omit<SheetToolbarProps<Page>, CommonToolbarProps>
   toolbarExtra?: ReactNode
-  status: GridSheetStatusProps
-  footerNote: SheetFooterNoteProps
+  saveStatus: SheetSaveStatusStore
+  status: Omit<GridSheetStatusProps, 'pending' | 'saving' | 'refused' | 'warned' | 'lastSavedAt' | 'source'>
+  footerNote: Omit<SheetFooterNoteProps, 'offline' | 'refused' | 'retryable' | 'lastSavedAt' | 'source'>
   footerBefore?: ReactNode
   /** Rendered inside the status strip BEFORE the note slot — the channel scope's cross-channel notice sat there. */
   footerLead?: ReactNode

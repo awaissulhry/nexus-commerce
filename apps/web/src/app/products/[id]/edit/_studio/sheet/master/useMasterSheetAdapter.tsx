@@ -97,7 +97,8 @@ const NO_VARIATION_AXES: readonly string[] = [];
 /** What the Shared scope is called on screen (the scope chip, the progress column). */
 const SHARED_SCOPE_LABEL = 'Shared product';
 export function useMasterSheetAdapter({ productId, market, locale, variationAxes = NO_VARIATION_AXES as string[] }: MasterSheetProps): ProductSheetModel<StudioRow, SheetPageState, DrawerSheetRow> {
-    const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastSavedAt, setLastSavedAt, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, clearSelection, rowSelection, selectedRows, setSelectedRows, announceRefusals } = useProductSheetInteraction<StudioRow>('master');
+    const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, clearSelection, rowSelection, selectedRows, setSelectedRows, announceRefusals } = useProductSheetInteraction<StudioRow>('master');
+    const savedAtRef = useRef<(at: string) => void>(() => undefined);
     const languageScope = useStudioScope();
     /* LX.FIN (R-LX-22) — the same readiness read the scope chips use; no second request. */
     const readinessQuery = useScopeReadiness();
@@ -124,7 +125,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         savedAt: string;
     }) => {
         if (ok) {
-            setLastSavedAt(savedAt);
+            savedAtRef.current(savedAt);
             refreshReadinessSoon();
         }
     }, [refreshReadinessSoon]);
@@ -244,7 +245,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         getGridApi()?.refreshCells({ force: true });
     }, [formulas.exprFor, formulas.errorFor, gridReady]);
     const rows = useMemo(() => sheet?.rows ?? [], [sheet]);
-    const { pending, refused, warned, retryable, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
+    const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
+    savedAtRef.current = saveStatus.saved;
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
     const { toast } = useToast();
@@ -596,8 +598,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         errorMessage: error,
         backendMissing: false, retry: reload,
         columns: sheetColumns,
+        saveStatus,
         toolbar: {
-            pendingWrite: pending > 0 || saving,
             visible: visibleRows.length,
             total: rows.length,
             selected: selected,
@@ -637,20 +639,11 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         status: {
             rows: visibleRows.length,
             /* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */
-            pending: pending,
-            refused: refused,
-            warned: warned,
-            saving: saving,
-            lastSavedAt: lastSavedAt,
         }, footerNote: {
             layoutRecovery: sheetColumns.loadError ? { retry: sheetColumns.reloadSavedPreferences } : null,
-            offline: offline,
-            refused: refused,
             showRefusedOnly: showRefusedOnly,
             onToggleRefused: () => setShowRefusedOnly((v) => !v),
-            retryable,
             onRetry: () => { writer.retryFailed(); },
-            lastSavedAt: lastSavedAt,
         }, footerBefore: <>
         {rowPress.problem && <div className="nds-grid-footstrip" role="alert"><span className="nds-cell-stock-out">{rowPress.problem}</span></div>}
         {rowPress.confirmElement}
