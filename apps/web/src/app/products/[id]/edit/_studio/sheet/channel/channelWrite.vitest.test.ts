@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CellSaveTracker, SheetWriter } from '@/design-system/grid'
 import { commitVariationTheme } from '../master/masterWrite'
+import { runBulkOperation, type BulkSavePost, type BulkSend } from '../bulkOperation'
 
 import { addListingAlias, channelSheetResponse, commitChannelRow, createdListingsOf, NO_LISTING_VERSION, updateListingAlias, writeLandsOnListing, type CreatedListing } from './useChannelSheet'
 import { wireAliasKey, type ChannelSheetRow, type StudioCellValue } from './types'
@@ -114,6 +115,50 @@ describe('shared content versions across listing aliases', () => {
       expect(bodies.map(body => body.expectedVersion)).toEqual([7, 8])
       expect(bodies.map(body => body.changes[0].contentVersion)).toEqual([4, 5])
       expect(tracker.get(alias.rowId, 'title')?.state).toBe('saved')
+    } finally { writer.destroy() }
+  })
+  it('keeps a shared batch version after a no-op and an alias change, so the next edit saves', async () => {
+    const make = (aliasId: string | null, value: string) => row({ aliasId, rowId: `${aliasId ?? 'primary'}:p1`, values: {
+      title: cell({ value, writeField: 'name', writeTarget: 'master', writeVerb: 'master', contentAcknowledged: true,
+        contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } as never),
+    } })
+    const primary = make(null, 'Current'), alias = make('alias-2', 'Next'), rows = [primary, alias]
+    let serverVersion = 7, contentVersion = 4, stored = 'Current'
+    const sentVersions: unknown[] = []
+    const post: BulkSavePost = async (_operation, units) => new Response(JSON.stringify({ units: units.map(unit => {
+      sentVersions.push(unit.expectedVersion)
+      const change = (unit.changes as Array<{ value: string; contentVersion: number }>)[0]
+      if (unit.expectedVersion !== serverVersion || change.contentVersion !== contentVersion) {
+        return { key: unit.key, status: 409, body: { currentVersion: serverVersion, versionOf: 'product', error: 'Changed' } }
+      }
+      if (change.value !== stored) { stored = change.value; serverVersion++; contentVersion++ }
+      // applyContentBulk counts accepted plans as updated, including a byte-identical content write.
+      return { key: unit.key, status: 200, body: { updated: 1, currentVersion: serverVersion, versionOf: 'product', errors: [],
+        contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: contentVersion }] } }
+    }) }))
+    const tracker = new CellSaveTracker()
+    const commit = (request: Parameters<typeof commitChannelRow>[0], bulkSend?: BulkSend) => commitChannelRow(request, {
+      ...coord, marketplace: 'DE', locale: 'de', familyRows: () => rows, bulkSend,
+      onProductVersionsChanged: changed => writer.seed(changed.map(r => ({ id: r.rowId, version: r.version }))),
+    })
+    const writer = new SheetWriter<ChannelSheetRow>({ tracker, getApi: () => null, commit,
+      commitBatch: requests => runBulkOperation(requests, commit, { post }) })
+    writer.seed(rows.map(r => ({ id: r.rowId, version: r.version, row: r })))
+    try {
+      writer.beginOperation()
+      writer.set(primary.rowId, 'title', 'Current', { row: primary })
+      writer.set(alias.rowId, 'title', 'Next', { row: alias })
+      writer.endOperation()
+      await writer.flush()
+      expect(stored).toBe('Next')
+      expect(serverVersion).toBe(8)
+      expect(rows.map(r => r.version)).toEqual([8, 8])
+      expect(writer.versionOf(alias.rowId)).toBe(8)
+      expect.soft(writer.versionOf(primary.rowId)).toBe(8)
+      writer.set(primary.rowId, 'title', 'Third', { row: primary })
+      await writer.flush()
+      expect.soft(sentVersions).toEqual([7, 7, 8])
+      expect.soft(tracker.get(primary.rowId, 'title')?.state).toBe('saved')
     } finally { writer.destroy() }
   })
 })

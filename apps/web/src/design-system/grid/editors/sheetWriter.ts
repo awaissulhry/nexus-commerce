@@ -824,7 +824,8 @@ export class SheetWriter<T> {
    */
   private settle(rowId: string, q: RowQueue, batch: SheetWriteCell[], result: SheetWriteResult, rejected: boolean,
     refusalSink?: Array<{ rowId: string; colId: string; reason?: string }>): void {
-    if (typeof result.version === 'number') this.versions.set(rowId, result.version)
+    // Another alias can confirm a newer shared version before this captured batch result settles.
+    if (typeof result.version === 'number') this.seed([{ id: rowId, version: result.version }])
     if (result.conflict) this.opts.onConflict?.(rowId, result.version)
 
 

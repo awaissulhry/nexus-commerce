@@ -117,6 +117,28 @@ describe('SheetWriter — the version round trip', () => {
     await writer.flush()
     expect(seen[0].expectedVersion).toBe(11)
   })
+
+  it.each([false, true])('a late save answer cannot lower a newer confirmed version (conflict=%s)', async conflict => {
+    let finish!: (result: SheetWriteResult) => void
+    const { seen, commit } = recorder((_request, n) => n === 1
+      ? new Promise<SheetWriteResult>(resolve => { finish = resolve })
+      : { ok: true, version: 10 })
+    const { writer } = make(commit)
+    writer.seed([{ id: 'r1', version: 7 }])
+    try {
+      writer.set('r1', 'brand', 'First')
+      const saving = writer.flush()
+      await vi.waitFor(() => expect(seen).toHaveLength(1))
+      writer.seed([{ id: 'r1', version: 9 }])
+      finish({ ok: !conflict, conflict, version: 8, reason: conflict ? 'Changed' : undefined })
+      await saving
+      expect(writer.versionOf('r1')).toBe(9)
+      writer.set('r1', 'brand', 'Next')
+      await writer.flush()
+      expect(seen[1].expectedVersion).toBe(9)
+      expect(writer.versionOf('r1')).toBe(10)
+    } finally { writer.destroy() }
+  })
 })
 
 describe('SheetWriter — batching', () => {
