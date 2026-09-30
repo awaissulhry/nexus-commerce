@@ -154,8 +154,9 @@ export const CascadeCell = memo(function CascadeCell(
         actionLabel={`Show cell details: ${row.sku}, ${column.label}`}
         onAction={() => onDetails(row, column)}
       />
-      <CellSaveReason reason={saveNote(save)} />
-      <CellSaveMark state={save?.state} />
+      {/* P2 (I4-8) — mounted only for a cell with a save state: a horizontal scroll mounted both, empty, in every cell. */}
+      {save && <CellSaveReason reason={saveNote(save)} />}
+      {save && <CellSaveMark state={save.state} />}
     </span>
   )
 })
