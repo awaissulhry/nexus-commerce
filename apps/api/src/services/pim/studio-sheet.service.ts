@@ -2,6 +2,7 @@ import { variationBag } from './shared-variation-values.js'
 import { offerActiveHonoured } from '@nexus/shared/listing-capabilities'
 import { inDatabaseReadTransaction } from '../../lib/database-context.js'
 import { studioContentFacts } from './studio-content-wire.js'
+import { amazonImmutableDraftWarning } from './amazon-draft-policy.js'
 import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
 import type { ContentWriteFacts } from '@nexus/shared/content-language'
 import { marketLanguages } from './market-languages.js'
@@ -1279,8 +1280,15 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       })
 
       const values: Record<string, StudioCellValue> = {}
-      for (const header of columns) {
-        const col = coordinate ? columnForCategory(header, coordinate.label, effectiveCategory) : header
+      const draftWarnings: ReadinessIssue[] = []
+      const rowColumns = coordinate ? columns.map(header => columnForCategory(header, coordinate.label, effectiveCategory)) : columns
+      // Amazon replaces whole roots. A writable leaf still warns when its companion makes that root immutable.
+      const immutableAmazonRoots = coordinate?.channel === 'AMAZON' && listingRow?.externalListingId
+        ? new Set(rowColumns.flatMap(col => {
+          const facts = col.channels?.[coordinate.label]
+          return facts?.editableOnExisting === false && facts.attribute ? [facts.attribute] : []
+        })) : null
+      for (const col of rowColumns) {
 
 
         let base: SheetCellValue | null = null
@@ -1443,8 +1451,12 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         const blockedByAxis = isParent && col.scope === 'per_variant' && !familyHolds
         const shopifyOwnerApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !product.parentId : !isParent)
         const shopifyApplicability = col.shopifyField?.definition ? shopifyDefinitionApplicability(col.shopifyField.definition, rowShape.productType) : null
-        const immutableListingField = !!listingRow?.externalListingId && channelFacts?.editableOnExisting === false
+        const immutableDraftWarning = amazonImmutableDraftWarning({ channel: coordinate?.channel,
+          externalListingId: listingRow?.externalListingId, fieldKey: channelFacts?.key, editableOnExisting: channelFacts?.editableOnExisting,
+          rootImmutable: !!channelFacts?.attribute && immutableAmazonRoots?.has(channelFacts.attribute) })
+        const immutableListingField = !!listingRow?.externalListingId && channelFacts?.editableOnExisting === false && !immutableDraftWarning
         const cellEditable = col.editable && !immutableListingField && shopifyOwnerApplies && !shopifyApplicability && (familyHolds ? columnEditableOnRow(axisColumn, rowShape) : columnApplies(col, rowShape))
+        if (immutableDraftWarning && cellEditable) draftWarnings.push({ key: col.key, label: col.label, message: immutableDraftWarning, severity: 'warn' })
         // The COLUMN's own refusal speaks first, because it applies on every row.
         // Measured while verifying this: `sku` is both per-variant scoped AND
         // read-only, and putting the axis rule first made the parent row say
@@ -1520,7 +1532,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
                 usesExpression: m.rule?.transforms?.some(op => op.type === 'expr') ?? false,
                 legacySource: m.legacySource,
                 appliedTransforms: m.appliedTransforms,
-                warnings: m.warnings,
+                warnings: immutableDraftWarning && cellEditable ? [...m.warnings, immutableDraftWarning] : m.warnings,
                 errors: m.errors,
                 mappingErrors: m.mappingErrors,
                 autoCorrected: m.autoCorrected,
@@ -1622,6 +1634,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         message: i.message,
         severity: i.severity === 'error' ? 'error' : 'warn',
       }))
+      issues.push(...draftWarnings)
       for (const column of columns) {
         if (!columnApplies(column, rowShape)) continue
         const localized = values[column.key]
