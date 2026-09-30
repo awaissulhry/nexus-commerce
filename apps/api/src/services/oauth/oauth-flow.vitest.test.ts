@@ -20,7 +20,8 @@ vi.mock('../../db.js', () => ({
 
 import { __stepUpTest } from '../../lib/auth/step-up.js'
 import { generateToken } from '../../lib/auth/tokens.js'
-import { __clientTest, registerClient, resolveClient } from './oauth-clients.js'
+import { __clientTest, cimdUnreachable, registerClient, resolveClient } from './oauth-clients.js'
+import { logger } from '../../utils/logger.js'
 import {
   checkAuthorize,
   consent,
@@ -145,6 +146,25 @@ describe('MCP.5 — which apps may ask', () => {
     await expect(resolveClient(liar)).rejects.toMatchObject({ code: 'invalid_client_metadata' })
     // Another host is not a metadata document at all: it must be a registered client, and it is not.
     await expect(resolveClient('https://evil.example/metadata')).rejects.toMatchObject({ code: 'invalid_client' })
+  })
+
+  it('MCP.12 — an app host that cannot be reached is said plainly on the page; the network detail goes to the log', async () => {
+    const url = 'https://claude.ai/oauth/mcp12-unreachable-client'
+    __clientTest.useFetcher(async () => { throw new Error('getaddrinfo ENOTFOUND claude.ai (lane guard: claude.ai:443 blocked)') })
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+    try {
+      const work = validateAuthorize({ ...authorizeParams(verifier()), client_id: url, redirect_uri: 'http://localhost:53682/callback' })
+      await expect(work).rejects.toMatchObject({ error: 'invalid_client', description: cimdUnreachable('claude.ai') })
+      await expect(work).rejects.not.toMatchObject({ description: expect.stringMatching(/ENOTFOUND|443|metadata document|blocked/) })
+      expect(cimdUnreachable('claude.ai')).toBe(
+        'Nexus could not reach claude.ai to check which app is asking to connect, so it cannot be connected right now. Start the connection again from Claude in a few minutes.',
+      )
+      expect(warn).toHaveBeenCalledWith('[oauth] could not read a client metadata document', {
+        host: 'claude.ai', error: 'getaddrinfo ENOTFOUND claude.ai (lane guard: claude.ai:443 blocked)',
+      })
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('Claude Code’s loopback redirect matches on any port', async () => {
@@ -277,6 +297,16 @@ describe('MCP.5 — tokens', () => {
       refreshTokens({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId, scope: 'nexus.read nexus.write' }),
       'invalid_scope',
     )
+    // MCP.12 — a scope name the grant does not hold is refused too (RFC 6749 §6), not dropped: it used to answer 200
+    // with the rest. The refusal names what was granted, never the client's own text.
+    const unknown = refreshTokens({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId, scope: 'nexus.read nexus.admin' })
+    await expectOAuthError(unknown, 'invalid_scope')
+    await expect(unknown).rejects.toMatchObject({ description: 'a refresh cannot widen what the person approved (granted: nexus.read)' })
+    // Refused before the token is spent: the same refresh token still works, for what was granted.
+    const next = await refreshTokens({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId, scope: 'nexus.read' })
+    expect(next.scope).toBe('nexus.read')
+    const again = await refreshTokens({ grant_type: 'refresh_token', refresh_token: next.refresh_token, client_id: clientId })
+    expect(again.scope).toBe('nexus.read')
   })
 
   it('connecting again replaces the connection and ends its old tokens', async () => {

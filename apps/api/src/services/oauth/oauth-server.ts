@@ -347,10 +347,16 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
   if (row.revokedAt || row.grant.revokedAt || row.grant.client.disabledAt) throw invalidGrant('connection revoked')
   if (row.expiresAt.getTime() <= Date.now()) throw invalidGrant('refresh token expired')
   if (form.resource && form.resource.replace(/\/+$/, '') !== row.resource) throw new OAuthError('invalid_target', 'resource does not match')
-  const asked = form.scope ? parseScopes(form.scope) : row.scopes
-  if (asked.length === 0 || asked.some((scope) => !row.scopes.includes(scope))) {
-    throw new OAuthError('invalid_scope', 'a refresh cannot widen what the person approved')
+  // MCP.12 — RFC 6749 §6: the requested scope MUST NOT include any scope the person did not grant. A name the grant
+  // does not hold (unknown to Nexus, or not approved) used to be dropped silently and the refresh answered 200 with
+  // the rest; it never widened access, but it answered as if the request were fine. It is refused now.
+  const named = typeof form.scope === 'string' ? form.scope.trim().split(/\s+/).filter(Boolean) : []
+  if (named.some((scope) => !row.scopes.includes(scope))) {
+    // The granted names only: a client's own text is never echoed into error_description.
+    throw new OAuthError('invalid_scope', `a refresh cannot widen what the person approved (granted: ${row.scopes.join(' ')})`)
   }
+  const asked = named.length ? parseScopes(named.join(' ')) : row.scopes
+  if (asked.length === 0) throw new OAuthError('invalid_scope', 'a refresh cannot widen what the person approved')
   if (!(await grantStillValid(row.grant))) throw invalidGrant('the person can no longer connect this business')
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.oAuthToken.updateMany({ where: { id: row.id, usedAt: null, revokedAt: null }, data: { usedAt: new Date() } })
