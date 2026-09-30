@@ -8,11 +8,13 @@
 #
 # 1. Reads the service's latest deployment, then points the service at the image with
 #    `railway service source connect --image` (Railway CLI 5.30.1: the serviceConnect mutation).
-# 2. Waits up to a minute for a NEW deployment. Connecting another image starts one: that is how Railway switches a
-#    service's source. Connecting the image the service already has (a re-run of a failed job) may start none. Then
-#    this asks for one with `railway redeploy --from-source`, which deploys the service's configured source (the
-#    serviceInstanceDeploy mutation with latestCommit). A plain `railway redeploy` would not do: it re-runs the latest
-#    deployment, with that deployment's own image.
+# 2. Waits up to a minute for a NEW deployment. Connecting another image is expected to start one, but that is not
+#    proven: CLI 5.30.1 only sends the serviceConnect mutation and never reads or starts a deployment, and Railway's
+#    docs do not say it for an image. The log says which path ran, so the first switch answers it. Connecting the
+#    image the service already has (a re-run of a failed job) may start none. When none starts, this asks for one
+#    with `railway redeploy --from-source`, which deploys the service's configured source (the serviceInstanceDeploy
+#    mutation with latestCommit). A plain `railway redeploy` would not do: it re-runs the latest deployment, with that
+#    deployment's own image.
 # 3. Follows that deployment to SUCCESS; 1 when it ends FAILED, CRASHED, REMOVED or SKIPPED, when a newer deployment
 #    replaces it, or after 15 minutes. A failed deployment never takes traffic.
 # 4. Checks which image that deployment runs, from Railway's record of it (`railway deployment list --json`, the

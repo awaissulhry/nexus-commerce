@@ -136,6 +136,9 @@ hand run ships every service. After the first switch of each service, read its d
 with `✓ Railway runs ghcr.io/<owner>/nexus-…:<sha>` when Railway's record of the deployment names
 that image. A `::warning::` that the image is not confirmed means the record names none: check the
 deployment on Railway once, and report it. A deployment that runs another image fails the job.
+The log also says what started the deployment: `✓ connecting the image started deployment …` or
+`✓ railway redeploy --from-source started deployment …`. Which one the first switch prints is not
+yet known; report it.
 
 The web image carries the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values that `nexus-web` had
 when the image was built. Once the web deploys by image, a change to one of them on `nexus-web`
