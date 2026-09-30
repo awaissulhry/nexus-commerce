@@ -17,8 +17,43 @@
  * https://developer-docs.amazon/sp-api/docs/manage-purchasable-offer (updated 2026-09-09) and the `PatchOperation` op
  * enum (`add | replace | merge | delete`) in listingsItems_2021-08-01.json. The live read gives the merge its exact
  * selectors, and tells a first offer (no instance yet: the builder's replace goes as before) from an existing one.
+ *
+ * Two senders use it, behind ONE switch: the queue's price push (`outbound-sync.service.ts`) and the pricing-engine push
+ * (`pricing-outbound.service.ts`).
  */
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
+
+/**
+ * 🔴 The switch: `NEXUS_AMAZON_OFFER_MERGE=1` turns the read + merge on; unset or anything else keeps today's
+ * `replace` and makes no live read. Read at send time, so a Railway variable change needs no code change.
+ *
+ * Why it exists (Owner, 2026-09-30): the merge ships OFF, is proven on Amazon without changing anything
+ * (`scripts/amazon-offer-merge-proof.mts`, VALIDATION_PREVIEW only), and is switched on only after that.
+ * When it may go: once it has run ON in production and a price push has been read back with the rest of the offer
+ * intact — then delete this function, its two call sites and the OFF arms of their tests, in one change.
+ */
+export const AMAZON_OFFER_MERGE_ENV = 'NEXUS_AMAZON_OFFER_MERGE'
+export function amazonOfferMergeEnabled(): boolean {
+  return process.env[AMAZON_OFFER_MERGE_ENV] === '1'
+}
+
+/** The reason a price push sent nothing because the live offer could not be read. Each sender adds how it retries. */
+export function amazonOfferReadFailure(sku: string, error: string | undefined): string {
+  return `Amazon's current offer for ${sku} could not be read (${error ?? 'no answer'}), so the price was not sent: sent without it, the push could clear the offer's sale and the other parts Nexus does not set.`
+}
+
+/**
+ * The offer instance the pricing-engine push prices — the one `amazonSpApiClient.patchListingPrice` sends (its
+ * replace is left exactly as it was; `clients/amazon-sp-api.price-offer-parity.vitest.test.ts` pins the two to the same bytes).
+ */
+export function amazonListingPriceOffer(input: { marketplaceId: string; currencyCode: string; price: number; taxInclusive: boolean }): Record<string, unknown> {
+  const { marketplaceId, currencyCode, price, taxInclusive } = input
+  return {
+    marketplace_id: marketplaceId,
+    currency: currencyCode,
+    our_price: taxInclusive ? [{ schedule: [{ value_with_tax: price }] }] : [{ schedule: [{ value: price, currency: currencyCode }] }],
+  }
+}
 
 /** What the live read saw, handed to a caller's `refuse` check before anything is sent. */
 export interface AmazonOfferLiveRead {
@@ -41,12 +76,18 @@ export function offerInstancesFor(attrs: Record<string, unknown> | null | undefi
   return po.filter((x) => x && (x.marketplace_id === marketplaceId || po.length === 1))
 }
 
-/** Read one SKU's live offer in one market. Never throws: a failed read answers `read: 'failed'` with the reason. */
-export async function readAmazonOfferLive(input: { sellerId: string; sku: string; marketplaceId: string }): Promise<AmazonOfferLiveRead> {
+/**
+ * Read one SKU's live offer in one market. Never throws: a failed read answers `read: 'failed'` with the reason.
+ * `client` defaults to the gateway client; the offer-merge proof passes its read-and-preview-only wrapper.
+ */
+export async function readAmazonOfferLive(
+  input: { sellerId: string; sku: string; marketplaceId: string },
+  client: Pick<typeof amazonSpApiClient, 'getListingsItem'> = amazonSpApiClient,
+): Promise<AmazonOfferLiveRead> {
   const { sellerId, sku, marketplaceId } = input
   const live: AmazonOfferLiveRead = { read: 'ok', offers: [], fulfillmentChannels: [], instances: [], productType: null }
   try {
-    const answer = await amazonSpApiClient.getListingsItem({
+    const answer = await client.getListingsItem({
       sellerId, sku, marketplaceId, includedData: ['attributes', 'summaries'],
     } as never)
     const raw = (answer as { rawResponse?: { attributes?: Record<string, unknown>; summaries?: Array<{ productType?: string }> } }).rawResponse

@@ -11,6 +11,9 @@
  * The harness is P1.7's (`outbound-sync.amazon-preview.p17.vitest.test.ts`): live mode, every outside call faked,
  * `submitListingPayload` records what would go out and `getListingsItem` answers the live offer. Nothing reaches Amazon.
  * All SKUs and ASINs are fake; marketplace ids are Amazon's public ones.
+ *
+ * The merge ships behind `NEXUS_AMAZON_OFFER_MERGE=1` (OFF by default, Owner 2026-09-30). Every arm below runs with the
+ * switch ON except "the switch", which pins OFF to exactly what `main` sent: the builder's replace and no live read.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -68,11 +71,10 @@ vi.mock('../clients/amazon-sp-api.client.js', () => ({
 }))
 
 const { OutboundSyncService, buildAmazonListingPatch, computeFailureDisposition } = await import('./outbound-sync.service.js')
+const { IT, applyToOffer, liveOffer, liveRead, sellerCentralSale } = await import('../test-support/amazon-offer-model.js')
 const { amazonPriceOfferPlan } = await import('./amazon/purchasable-offer.js')
 const service: any = new OutboundSyncService()
 
-const IT = 'APJ6JRA9NG5V4'
-const DE = 'A1PA6795UKMFR9'
 const SKU = 'TEST-SKU-1'
 
 const row = (syncType: string, payload: Record<string, unknown>) => ({
@@ -81,51 +83,6 @@ const row = (syncType: string, payload: Record<string, unknown>) => ({
 })
 const masterPrice = (price: number) => row('PRICE_UPDATE', { source: 'MASTER_PRICE_CHANGE', price, oldPrice: 120, masterPrice: price, productType: 'OUTERWEAR' })
 const priceWrite = (extra: Record<string, unknown>) => row('PRICE_UPDATE', { source: 'CHANNEL_PRICE_WRITE', marketplace: 'IT', price: 115, salePrice: null, salePriceStart: null, salePriceEnd: null, productType: 'OUTERWEAR', ...extra })
-
-/** The live offer: this market's standard offer with everything Nexus never sends, its B2B twin, and the DE offer. */
-const sellerCentralSale = [{ schedule: [{ start_at: '2026-09-20', end_at: '2026-10-20', value_with_tax: 99 }] }]
-const liveOffer = (): Array<Record<string, unknown>> => [
-  {
-    audience: 'ALL', currency: 'EUR', marketplace_id: IT,
-    our_price: [{ schedule: [{ value_with_tax: 120 }] }],
-    discounted_price: sellerCentralSale,
-    map_price: [{ schedule: [{ value_with_tax: 110 }] }],
-    minimum_seller_allowed_price: [{ schedule: [{ value_with_tax: 90 }] }],
-    maximum_seller_allowed_price: [{ schedule: [{ value_with_tax: 150 }] }],
-    start_at: { value: '2026-01-01' },
-    end_at: { value: '2027-12-31' },
-  },
-  { audience: 'B2B', currency: 'EUR', marketplace_id: IT, our_price: [{ schedule: [{ value_with_tax: 100 }] }], quantity_discount_plan: [{ schedule: [{ discount_type: 'percent', levels: [{ lower_bound: 5, value: 3 }] }] }] },
-  { audience: 'ALL', currency: 'EUR', marketplace_id: DE, our_price: [{ schedule: [{ value_with_tax: 125 }] }] },
-]
-const liveRead = (instances: unknown) => ({
-  success: true, sku: SKU, asin: 'TEST-ASIN-1', status: 'BUYABLE',
-  rawResponse: { summaries: [{ productType: 'OUTERWEAR' }], attributes: { purchasable_offer: instances, fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT', quantity: 4 }] } },
-})
-
-/**
- * Amazon's documented patch semantics on `purchasable_offer`, as a model to check the RESULT against:
- *   merge   — on the instance its selectors name ({marketplace_id, currency, audience}), only the sub-attributes it
- *             carries change; `null` deletes one; everything else stays (manage-purchasable-offer);
- *   replace — the pessimistic reading of the op table ("adds or replaces the target property"): the attribute becomes
- *             the value sent. That is the behaviour this fix must never depend on.
- */
-function applyToOffer(live: Array<Record<string, unknown>>, patch: { op: string; value: Array<Record<string, unknown>> }) {
-  if (patch.op === 'replace') return structuredClone(patch.value)
-  if (patch.op !== 'merge') throw new Error(`unmodelled op ${patch.op}`)
-  const key = (x: Record<string, unknown>) => `${x.marketplace_id}|${x.currency}|${x.audience ?? 'ALL'}`
-  const out = structuredClone(live)
-  for (const entry of patch.value) {
-    const at = out.find((x) => key(x) === key(entry))
-    if (!at) throw new Error(`the merge names no live instance: ${key(entry)}`)
-    for (const [name, value] of Object.entries(entry)) {
-      if (name === 'marketplace_id' || name === 'currency' || name === 'audience') continue
-      if (value === null) delete at[name]
-      else at[name] = value
-    }
-  }
-  return out
-}
 
 const submitted = () => m.submit.mock.calls[0][0].payload
 const onlyPatch = () => {
@@ -137,6 +94,7 @@ const onlyPatch = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
+  vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1') // the switch ON; the OFF arms unset it
   m.seller.mockResolvedValue('seller')
   m.read.mockResolvedValue({ id: 'l', marketplace: 'IT', platformAttributes: {}, syncPaused: false, productType: 'OUTERWEAR', fulfillmentMethod: 'FBM', salePrice: null })
   m.many.mockResolvedValue([])
@@ -271,14 +229,47 @@ describe('an offer the push cannot name is refused, not overwritten', () => {
   })
 })
 
+describe('the switch (NEXUS_AMAZON_OFFER_MERGE)', () => {
+  it.each([['unset', undefined], ['0', '0'], ['true', 'true'], ['on', 'on']])('%s → OFF: no live read, and the patch is byte-identical to main\'s (the builder\'s replace)', async (_label, value) => {
+    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', value as string)
+    await service.syncToAmazon(masterPrice(115))
+    expect(m.get).not.toHaveBeenCalled()
+    expect(submitted()).toEqual(await buildAmazonListingPatch({ source: 'MASTER_PRICE_CHANGE', price: 115, oldPrice: 120, masterPrice: 115, productType: 'OUTERWEAR' } as never, 'IT', 'OUTERWEAR', 'FBM'))
+    expect(onlyPatch().op).toBe('replace')
+  })
+  it('OFF with a Nexus sale and a removal flag on the row: still exactly the builder\'s replace (the flag is inert)', async () => {
+    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
+    await service.syncToAmazon(priceWrite({ salePrice: 95, salePriceStart: '2026-10-01', salePriceEnd: '2026-10-15', saleRemoved: true }))
+    expect(m.get).not.toHaveBeenCalled()
+    expect(submitted()).toEqual(await buildAmazonListingPatch({ price: 115, salePrice: 95, salePriceStart: '2026-10-01', salePriceEnd: '2026-10-15' } as never, 'IT', 'OUTERWEAR', 'FBM'))
+  })
+  it('OFF, the live read failing does not matter: no read is made, the replace goes as before', async () => {
+    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
+    m.get.mockRejectedValue(new Error('socket hang up'))
+    expect(await service.syncToAmazon(masterPrice(115))).toMatchObject({ success: true, status: 'SUCCESS' })
+    expect(m.get).not.toHaveBeenCalled()
+  })
+  it('is read at send time: the same service turns it on and off between two pushes', async () => {
+    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
+    await service.syncToAmazon(masterPrice(115))
+    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1')
+    await service.syncToAmazon(masterPrice(115))
+    expect(m.submit.mock.calls.map((c: any[]) => c[0].payload.patches[0].op)).toEqual(['replace', 'merge'])
+    expect(m.get).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('what does not change', () => {
-  it.each([['gated', undefined, undefined], ['dry-run', 'true', 'dry-run']])('%s mode: no live read, nothing sent, as before', async (_mode, flag, mode) => {
+  it.each([['gated', undefined, undefined], ['dry-run', 'true', 'dry-run'], ['sandbox', 'true', 'sandbox']])('%s mode, switch ON: no live read, as before', async (_mode, flag, mode) => {
     vi.unstubAllEnvs()
+    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1')
     if (flag) vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', flag)
     if (mode) vi.stubEnv('AMAZON_PUBLISH_MODE', mode)
     await service.syncToAmazon(masterPrice(115))
     expect(m.get).not.toHaveBeenCalled()
-    expect(m.submit).not.toHaveBeenCalled()
+    // Sandbox reaches the (faked) submit, which the real client answers as a dry run; the others never get there.
+    if (mode === 'sandbox') expect(onlyPatch().op).toBe('replace')
+    else expect(m.submit).not.toHaveBeenCalled()
   })
 
   it('a content-only row reads no offer', async () => {
