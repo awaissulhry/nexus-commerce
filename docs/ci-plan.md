@@ -213,13 +213,13 @@ These 20 files take 7.3 of the 8.1 min of total test-body time. **The cost is da
 
 ## 2. Target tiers
 
-Runner: a **public** repo gets free GitHub-hosted `ubuntu-latest` with **4 vCPU and 16 GB**, and no minute limit. A free account can run **20 jobs at once**, so a PR run is kept to ≤ 8 jobs at peak.
+Runner: a **public** repo gets free GitHub-hosted `ubuntu-latest` with **4 vCPU and 16 GB**, and no minute limit. A free account can run **20 jobs at once**, so a PR run was kept to ≤ 8 jobs at peak. Since 2026-09-30 it peaks at 9, to bring verify under 10 min (docs/ci-fast-deploys/PLAN-2026-09-29.md, D1 = A). §7 has the job budget.
 
 | Tier | Runs | Budget | Estimate |
 |---|---|---|---|
 | A pre-commit | lint-staged → the fast gates for the staged file types | < 10 s | 1–5 s |
 | B pre-push | typecheck of the affected workspaces | < 2 min | ~20–60 s (api 17 s and web ~45 s, in parallel) |
-| C PR required | see 2.3 | < 10 min wall | est. 6–7 min critical path (to be measured) |
+| C PR required | see 2.3 | < 10 min wall | measured 12.7 min (median of 15 runs, 2026-09-29); est. 8.25 min since the 2026-09-30 split (§2.3) |
 | D merge to main | verify, deploy, smoke production | — | deploy time + ~2 min |
 | E nightly + manual | everything slow | — | 30–60 min |
 
@@ -269,13 +269,15 @@ A new `.github/workflows/ci.yml`. The jobs run in parallel.
 | Job | When | Does | Est. (4 vCPU) |
 |---|---|---|---|
 | `checks` | always | static gates, typecheck, web tests and small workspace tests (see below) | 3–4 min |
-| `api (1/4)` … `(4/4)` | **always, full suite, never affected-gated** | each shard runs its quarter of the whole API suite twice: profiles **OFF**, then profiles **ON** (see below). Three shards until 2026-09-30. | ~4 min |
-| `postgres (1/2)`, `(2/2)` | **always** | one `pgvector/pgvector:pg17` container per part (see below). The real-PG suites are split in two by measured time; the other real-DB steps run once, in part 1. The part count is the matrix's size. One job until 2026-09-30. | 4–5 min |
+| `api (1/4)` … `(4/4)` | **always, full suite, never affected-gated** | each shard runs its quarter of the whole API suite twice: profiles **OFF**, then profiles **ON** (see below). Three shards until 2026-09-30. | slowest shard est. 6.8–8.7 min (3 shards: 8.4–10.9 min measured) |
+| `postgres (1/2)`, `(2/2)` | **always** | one `pgvector/pgvector:pg17` container per part (see below). The real-PG suites are split in two by measured time; the other real-DB steps run once, in part 1. The part count is the matrix's size. One job until 2026-09-30. | est. 4.4–7.3 min per part (one job: 7.4–12.6 min measured) |
 | `smoke (1/2)`, `(2/2)` | affected web or api | builds and starts the app, runs Playwright `@smoke` (see below) | 5–6 min |
 | `db-security` | always, needs `api` + `postgres` | aggregator with a fixed name, so a branch rule can require it. It counts one profiles-ON report per API shard, and checks that the PostgreSQL parts together passed every real-PG suite once. | seconds |
 | `ci-ok` | always, needs all | fails on any failed or cancelled job. "Skipped" is allowed only for `smoke`. | seconds |
 
-Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: `smoke`, about 6–7 min (estimate).
+Times: the `api` and `postgres` cells come from 15 green runs of 2026-09-29, with each job's measured test steps scaled to the new split. `checks` and `smoke` keep the plan's first estimates; in those runs they took 4–7 min and 3–4 min.
+
+Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: the slowest `api` shard, about 7.8 min (est. median; range 6.8–8.7 min). Before the split it was `postgres`, in 14 of the 15 runs. Verify, from the first job to `ci-ok`: 12.7 min measured (median), about 8.25 min estimated (range 7.1–9.2 min).
 
 **`checks` job**
 - `scripts/ci/run-static-gates.mjs` runs, in parallel, and reports **all** failures, not the first:
@@ -302,7 +304,9 @@ Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: `smoke`, about 6–
 **`api` shards — what each shard does**
 - Excluded, with reasons in `scripts/ci/api-test-plan.mjs`:
   - the 4 catalogue suites (they need the dev database);
-  - the 13 real-PG runner files (they run in `postgres`).
+  - `database-target`, 6 opt-in rehearsals against a local database copy and 2 nightly load tests (13 named files in all, with the catalogue suites);
+  - the real-PG runner's suites (55 on 2026-09-30; they run in the `postgres` parts).
+  - `--summary` prints the live counts: on 2026-09-30, 1208 collected, 1140 in shards, 68 excluded.
   - The script fails if a file is lost or counted twice, or if a list is empty.
 - **OFF pass:** Redis is up and `NEXUS_TEST_REDIS_URL` is set, so the Redis lease test really runs.
 - **ON pass:**
@@ -692,4 +696,10 @@ Changes needed for main:
 - **Timings:** run `gh run list --workflow ci.yml -L 5` and `gh run view <id> --json jobs`. The target is a p50 under 10 min over the last 5 PR runs.
 - **Test count parity:** CI files and tests, per mode, must equal local `vitest run` minus the named exclusions. `api-test-plan.mjs` prints both numbers.
 - **Positive controls:** every gate in §5 must be seen red once (PR-1 list). A gate that has never gone red is not proven.
-- **Concurrency:** 2 PRs at once must not queue past 20 jobs. If they do, lower the shard variables.
+- **Concurrency:** a free account runs at most 20 jobs at once.
+  - Since 2026-09-30 a `ci.yml` run starts 9 jobs at once: `checks`, 4 `api`, 2 `postgres`, 2 `smoke` (7 before).
+  - A push to main starts up to 12: verify's 9, the 2 `images.yml` builds and deploy-api's `changes` (seconds).
+  - So 2 PRs at once fit (18 jobs). A PR during a push to main (21) makes at least one job wait for a runner.
+  - In the 15 green runs of 2026-09-29 (7 jobs per `ci.yml` run) no job waited more than 17 s for a runner.
+  - Check a run's waits: `gh api "repos/{owner}/{repo}/actions/runs/<id>/jobs" --jq '.jobs[] | [.name, .created_at, .started_at] | @tsv'`. `gh run view --json jobs` has no creation time.
+  - If jobs often wait for minutes, lower the matrix sizes in `ci.yml`: the `api` shards (the matrix, `--shard n/4` and db-security's report count change together) or the `postgres` parts (the matrix alone).
