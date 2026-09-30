@@ -229,3 +229,56 @@ describe('SheetWriter batch mode — a fence that never closes', () => {
     expect(calls).toHaveLength(1)
   })
 })
+
+describe('SheetWriter batch mode — a record shared by several rows (audit A03)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+  // Rows `b1:p` and `b2:p` show ONE product `p` in two bands; `title` writes the product, `stock` each row's own record.
+  const sharedRecordOf = (request: SheetWriteRequest<Row>, cell: { colId: string }) => cell.colId === 'title' ? `product:${request.rowId.split(':')[1]}` : null
+
+  it('sends the same edit to a shared record once and settles every row that asked for it with that answer', async () => {
+    const { writer, tracker, calls } = batchWriter(allOk, { sharedRecordOf })
+    writer.beginOperation()
+    for (const id of ['b1:p', 'b2:p', 'b3:p', 'b1:q']) writer.set(id, 'title', 'Neu')
+    writer.set('b2:p', 'stock', 5)
+    writer.endOperation()
+    await vi.advanceTimersByTimeAsync(10)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].map((r) => [r.rowId, r.cells.map((c) => c.colId)])).toEqual([['b1:p', ['title']], ['b2:p', ['stock']], ['b1:q', ['title']]])
+    expect(['b1:p', 'b2:p', 'b3:p', 'b1:q'].map((id) => tracker.get(id, 'title')?.state)).toEqual(['saved', 'saved', 'saved', 'saved'])
+    expect(tracker.get('b2:p', 'stock')?.state).toBe('saved')
+    expect(writer.pending).toBe(0)
+  })
+
+  it('a carried cell takes the writing row\'s refusal, and only the refused cells are retried', async () => {
+    const refuse: Answer = (requests) => new Map(requests.map((r) => [r.rowId, r.rowId === 'b1:p' ? { ok: false, reason: 'Title changed. Reload before saving it.' } : { ok: true }]))
+    const { writer, tracker } = batchWriter(refuse, { sharedRecordOf })
+    writer.beginOperation()
+    writer.set('b1:p', 'title', 'Neu')
+    writer.set('b2:p', 'title', 'Neu')
+    writer.set('b2:p', 'stock', 5)
+    writer.endOperation()
+    await vi.advanceTimersByTimeAsync(10)
+    expect(['b1:p', 'b2:p'].map((id) => tracker.get(id, 'title'))).toEqual([
+      expect.objectContaining({ state: 'refused', reason: 'Title changed. Reload before saving it.' }),
+      expect.objectContaining({ state: 'refused', reason: 'Title changed. Reload before saving it.' }),
+    ])
+    expect(tracker.get('b2:p', 'stock')?.state).toBe('saved')
+    expect(writer.failedCount).toBe(2)
+  })
+
+  it('a different edit to a record another row writes waits for the next call, with the version the first answered', async () => {
+    const { writer, tracker, calls } = batchWriter(allOk, { sharedRecordOf })
+    writer.seed([{ id: 'b1:p', version: 7 }, { id: 'b2:p', version: 7 }])
+    writer.beginOperation()
+    writer.set('b1:p', 'title', 'Erste')
+    writer.set('b2:p', 'title', 'Zweite')
+    writer.endOperation()
+    // The host moves every band of the product when one band's save confirms its new version.
+    await vi.advanceTimersByTimeAsync(1)
+    writer.seed([{ id: 'b2:p', version: 8 }])
+    await vi.advanceTimersByTimeAsync(20)
+    expect(calls.map((call) => call.map((r) => [r.rowId, r.expectedVersion, r.cells[0].value]))).toEqual([[['b1:p', 7, 'Erste']], [['b2:p', 8, 'Zweite']]])
+    expect(['b1:p', 'b2:p'].map((id) => tracker.get(id, 'title')?.state)).toEqual(['saved', 'saved'])
+  })
+})

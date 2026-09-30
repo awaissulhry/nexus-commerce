@@ -1,3 +1,7 @@
+## One save per shared record across alias bands — 2026-09-30
+
+Product sheet audit A03. **`SheetWriter`** batch mode takes an optional **`sharedRecordOf(request, cell)`**: the record, shared with other grid rows, a cell writes. One row per call writes a given shared record. The same edit on another row is settled with that row's answer (its refusal too), and a different edit to the record waits for the next call, which carries the versions the first returned. Before, one fill or "Set every row…" across a product's listing-alias bands was refused on every band after the first ("Title changed. Reload before saving it.") for a value already stored. Without the option nothing changes. Mirrored in Web.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.

@@ -22,7 +22,7 @@ import { useSheetUndo } from '../useSheetUndo';
 import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
 import { withShopifyColumns } from '../../shopify/unlinkedInformationColumns';
-import { channelScopeUrl } from './useChannelSheet';
+import { channelScopeUrl, channelSharedRecord } from './useChannelSheet';
 import { reloadImpact } from '../master/reloadGuard';
 import { ProductRoleChip } from '../ProductRoleChip';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
@@ -54,7 +54,7 @@ import { wholeListWriteField } from './provenance';
 import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
 import { aliasMark, cascadeIntent, cascadeOf, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
-import { FollowUpRead, rowSettle } from './saveSettle';
+import { FollowUpRead, guardedRead, rowSettle, storedSome } from './saveSettle';
 import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
@@ -234,7 +234,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         /* P0 — the rows already say which cells hold a formula, so no editor waits for the formula reads. */
         seedRows: rows,
         channelConnectionId: data?.scope.connectionId ?? accountId,
-        onSettled: () => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
+        onSettled: () => { void quietRead(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
         onValueSaved: (rowId, fieldKey, value) => {
             const node = getGridApi()?.getRowNode(rowId);
             if (!node?.data)
@@ -299,6 +299,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         schedule: (run, ms) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer); },
     }));
     useEffect(() => () => followUp.dispose(), [followUp]);
+    /* Audit A01 — every other quiet read is dropped when a save started or settled while it was on the wire, and is then
+       owed as the follow-up read (`guardedRead`). */
+    const quietRead = useCallback((canApply: () => boolean) => guardedRead({ read: (guarded) => refreshRef.current(guarded), sequence: () => writeSeq.current,
+        owe: () => { followUp.owe(); followUp.settle(); } }, canApply), [followUp]);
     /** Repaint the cells a save settled in place: the saved columns of the saved row, its progress, the theme token. */
     const repaintSettled = (patched: Set<ChannelSheetRow>, columns: Set<string>) => {
         const api = getGridApi();
@@ -325,7 +329,6 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                quiet read. P2 review 1 — only when EVERY cell it sent was reported patched: a part that reports nothing (a
                variation theme, a Shopify field) or asks for a read makes the sheet read (`rowSettle`). */
             const save = rowSettle(req);
-            if (save.touchesMaster()) readinessForFamily.current = true;
             const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
                 familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend,
                 onProductVersionsChanged: (changed) => writerRef.current?.seed(changed.map(row => ({ id: row.rowId, version: row.version }))),
@@ -340,9 +343,18 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                     const nodes = changed.flatMap((moved) => { const node = api.getRowNode(moved.rowId); if (node?.data && node.data !== moved) node.data.values = moved.values; return node ? [node] : []; });
                     api.refreshCells({ rowNodes: nodes, ...(columns?.length ? { columns } : {}), force: true });
                 } });
+            // Audit B05 — flagged when the save SETTLES, not when it leaves: a readiness read an earlier save's timer starts
+            // while this one is on the wire runs before it commits, and must not use up its family read.
+            if (save.touchesMaster()) readinessForFamily.current = true;
+            // Audit A01 — a settled save moves the write sequence too: a quiet read that was on the wire meanwhile may have
+            // read the rows before this save committed, so it must not replace them (`guardedRead`).
+            writeSeq.current++;
             const inPlace = save.inPlace(result.ok);
             if (inPlace) repaintSettled(inPlace.rows, inPlace.columns);
             else if (result.ok) followUp.owe();
+            // Audit A07 — a save the server partly refused stored its other cells: they owe the read too (taken once the
+            // sheet is idle, i.e. after the refused cell is dealt with), and the scope's readiness moved.
+            else if (storedSome(result)) { followUp.owe(); refreshReadinessSoonRef.current(); }
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });
             else
@@ -360,6 +372,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         };
         writerRef.current = new SheetWriter<ChannelSheetRow>({
             mergeRow: preserveContentVersions,
+            // Audit A03 — one product under several alias bands: its shared record is written once per call.
+            sharedRecordOf: (request, cell) => channelSharedRecord(request.row, cell),
             tracker,
             getApi: getGridApi,
             commit: (req: SheetWriteRequest<ChannelSheetRow>) => commitOne(req),
@@ -396,13 +410,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 }
             },
             onSettled: ({ ok, savedAt }) => {
-                if (!ok)
-                    return;
-                setLastSavedAt(savedAt);
-                refreshReadinessSoonRef.current();
+                if (ok) {
+                    setLastSavedAt(savedAt);
+                    refreshReadinessSoonRef.current();
+                }
                 if (writerRef.current?.pending !== 0)
                     return;
-                // P2 (I4-4) — a read only when a save since the last read could not be settled in place.
+                // P2 (I4-4) — a read only when a save since the last read could not be settled in place (audit A07: a
+                // partly refused one too).
                 followUp.settle();
             },
         });
@@ -436,8 +451,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /** "Refresh progress": the rows' bars (a quiet re-read — edits in flight stay) and the scope's readiness. */
     const refreshProgress = useCallback(() => {
         refreshReadiness();
-        void refreshRef.current(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
-    }, [refreshReadiness, tracker, getGridApi]);
+        void quietRead(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
+    }, [refreshReadiness, tracker, getGridApi, quietRead]);
     const aliasLabel = useCallback((aliasId: string | null) => {
         const alias = data?.aliases.find((a) => aliasKeyOf(a.id) === aliasKeyOf(aliasId));
         return alias?.label == null ? 'Listing alias label not reported' : alias.label;
@@ -709,7 +724,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const authKey = `${auth.status}:${auth.isOwner}:${[...auth.permissions].sort().join(',')}`;
     const authLive = useMemo(() => ({ has: (permission: string) => authRef.current.has(permission) }), [authKey]);
     const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi);
-    const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale);
+    const mediaEditor = useProductMediaEditor(() => { void quietRead(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
        Customise, in the views; never a server column, never a write field. */
@@ -1143,7 +1158,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                         if (!reviewBusy)
                             setPreflightAlias(null);
                     }} title={`${reviewCopy(reviewPath != null ? 'synchronize' : 'check').title} · ${data.scope.label} · ${aliasMark(preflightAlias.position)}`} subtitle={reviewCopy(reviewPath != null ? 'synchronize' : 'check').subtitle} size="lg">
-                  <>{reviewPath ? <ShopifySheetReview key={reviewPath} path={reviewPath} schema={shopifySchema} onBusyChange={setReviewBusy} onChanged={() => void refresh(() => !tracker.hasUnconfirmedChanges)}/> : <AliasPublishControl alias={preflightAlias} rows={rows} channel={channel} marketplace={marketplace} autoRun/>}</>
+                  <>{reviewPath ? <ShopifySheetReview key={reviewPath} path={reviewPath} schema={shopifySchema} onBusyChange={setReviewBusy} onChanged={() => void quietRead(() => !tracker.hasUnconfirmedChanges)}/> : <AliasPublishControl alias={preflightAlias} rows={rows} channel={channel} marketplace={marketplace} autoRun/>}</>
                 </Modal>)}
         </>}
         {confirmElement}
@@ -1156,8 +1171,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     {channel === 'SHOPIFY' && data && !loading && data.meta.schemaMissing.includes(SHOPIFY_FIELDS_UNREAD) && <Banner tone="info" title="Loading this store's Shopify fields">
       Metafields and metaobject fields appear here as soon as Shopify answers. The sheet updates by itself.
     </Banner>}
-    {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
-    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
+    {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void quietRead(() => true); }}/>}
+    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void quietRead(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
         {mediaEditor.element}
         {shopifyEditor.element}
     {cellDetails && <Modal open readable size="md" title={cellDetails.title} onClose={closeCellDetails} footer={<><Button size="sm" onClick={closeCellDetails}>Close</Button>

@@ -531,6 +531,15 @@ export interface SheetWriterOptions<T> {
    * the read itself did not answer; a row absent from the map is still unresolved.
    */
   readBackBatch?: (requests: SheetWriteRequest<T>[]) => Promise<Map<string, ReadBackSnapshot<T>> | null>
+  /**
+   * Batch mode — the record, SHARED with other grid rows, that this cell writes (`null`: only its own row's). Audit A03
+   * (2026-09-30): a channel sheet shows one product once per listing-alias band, and every band's shared cell carries
+   * the same tokens, so the second band's unit of one call was refused ("Title changed. Reload before saving it.") for
+   * a value the first band had just stored. One row per call writes a given shared record: the SAME edit on another
+   * row is settled with that row's answer, and any other edit to the record waits for the next call, which carries
+   * the versions this one returns.
+   */
+  sharedRecordOf?: (request: SheetWriteRequest<T>, cell: SheetWriteCell) => string | null
 }
 
 /** What a read-back says about one row: its current values (and, when known, version and row, and per-cell verdicts). */
@@ -911,17 +920,38 @@ export class SheetWriter<T> {
     const generation = this.generation
     const requests: SheetWriteRequest<T>[] = []
     const batches = new Map<string, SheetWriteCell[]>()
+    /* A03 — shared record → the row that writes it in this call, and the cells it sends there; rowId → its cells that
+       another row's identical edit carries (colId → that row). */
+    const writers = new Map<string, { rowId: string; cells: Map<string, SheetWriteCell> }>()
+    const carried = new Map<string, Map<string, string>>()
     for (const [rowId, q] of this.queues) {
       if (q.inFlight || q.cells.size === 0 || this.unreachableRows.has(rowId)) continue
       if (q.timer) { clearTimeout(q.timer); q.timer = null }
-      const batch: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
-      q.cells.clear()
+      const queued: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
+      const request: SheetWriteRequest<T> = { rowId, row: this.rows.get(rowId) ?? null, cells: [], expectedVersion: this.versions.get(rowId) }
+      const batch: SheetWriteCell[] = []
+      for (const cell of queued) {
+        const record = this.opts.sharedRecordOf?.({ ...request, cells: queued }, cell) ?? null
+        const writer = record === null ? undefined : writers.get(record)
+        if (writer && writer.rowId !== rowId) {
+          const twin = writer.cells.get(cell.colId)
+          // Any other edit to a record another row writes in this call stays queued for the next call.
+          if (!twin || twin.intent !== cell.intent || !sheetValuesMatch(twin.value, cell.value)) continue
+          carried.set(rowId, (carried.get(rowId) ?? new Map()).set(cell.colId, writer.rowId))
+        } else {
+          if (record !== null) writers.set(record, { rowId, cells: (writer?.cells ?? new Map()).set(cell.colId, cell) })
+          request.cells.push(cell)
+        }
+        batch.push(cell)
+        q.cells.delete(cell.colId)
+      }
+      if (batch.length === 0) continue
       q.inFlight = true
       this.inFlightCells.set(rowId, batch.length)
       batches.set(rowId, batch)
-      requests.push({ rowId, row: this.rows.get(rowId) ?? null, cells: batch, expectedVersion: this.versions.get(rowId) })
+      if (request.cells.length) requests.push(request)
     }
-    if (requests.length === 0) return
+    if (batches.size === 0) return
     this.batchInFlight = true
     this.emit()
 
@@ -929,16 +959,16 @@ export class SheetWriter<T> {
     // Scaled by the rows in the call: a 500-row save takes ~32 s on a dev database (measured 2026-09-29), and
     // "still waiting" at 30 s would be a false alarm about a save that is simply large.
     const patience = setTimeout(() => {
-      for (const request of requests) {
-        for (const { colId } of request.cells) this.opts.tracker.set(request.rowId, colId, 'waiting', 'Still waiting — the server has not answered. This change is not confirmed.')
-        this.repaint(request.rowId, request.cells.map((c) => c.colId))
+      for (const [rowId, batch] of batches) {
+        for (const { colId } of batch) this.opts.tracker.set(rowId, colId, 'waiting', 'Still waiting — the server has not answered. This change is not confirmed.')
+        this.repaint(rowId, batch.map((c) => c.colId))
       }
       this.emit()
     }, COMMIT_TIMEOUT_MS + requests.length * BATCH_PATIENCE_PER_ROW_MS)
     let results: Map<string, SheetWriteResult>
     let rejected = false
     try {
-      results = await this.opts.commitBatch(requests)
+      results = requests.length ? await this.opts.commitBatch(requests) : new Map()
     } catch (err) {
       rejected = true
       const reason = err instanceof Error ? err.message : String(err)
@@ -951,11 +981,26 @@ export class SheetWriter<T> {
     // Row by row, in order: every other row stays in flight until its own turn, so `pending` reaches 0 — and a
     // host's "saved, now re-read" hook fires — once, after the LAST row, not 250 times.
     const refused: Array<{ rowId: string; colId: string; reason?: string }> = []
-    for (const request of requests) {
-      const q = this.queues.get(request.rowId)
+    const missing: SheetWriteResult = { ok: false, unreachable: true, reason: 'The save answered without this row. Checking whether it saved…' }
+    const sent = new Map(requests.map((request) => [request.rowId, request]))
+    for (const [rowId, batch] of batches) {
+      const q = this.queues.get(rowId)
       if (!q) continue
-      const result = results.get(request.rowId) ?? { ok: false, unreachable: true, reason: 'The save answered without this row. Checking whether it saved…' }
-      this.settle(request.rowId, q, batches.get(request.rowId)!, result, rejected, request.row, refused)
+      const request = sent.get(rowId)
+      const own = request ? results.get(rowId) ?? missing : null
+      const twins = carried.get(rowId)
+      // A03 — a cell another row carried takes that row's verdict on it; the row's own cells keep its own answer.
+      const result: SheetWriteResult = !twins ? own! : (() => {
+        const cells: NonNullable<SheetWriteResult['cells']> = {}
+        for (const { colId } of batch) {
+          const from = twins.get(colId)
+          const answer = from === undefined ? own! : results.get(from) ?? missing
+          cells[colId] = answer.cells?.[colId] ?? { ok: answer.ok, reason: answer.reason, ...(answer.unreachable ? { unreachable: true } : {}) }
+        }
+        const ok = Object.values(cells).every((cell) => cell.ok)
+        return { ...own, ok, cells, reason: own?.reason ?? Object.values(cells).find((cell) => !cell.ok)?.reason, unreachable: Object.values(cells).some((cell) => cell.unreachable) || undefined }
+      })()
+      this.settle(rowId, q, batch, result, rejected, request?.row ?? this.rows.get(rowId) ?? null, refused)
     }
     if (refused.length) this.opts.onRefused?.(refused)
     // Cells edited while this call was on the wire go now, as the next call.

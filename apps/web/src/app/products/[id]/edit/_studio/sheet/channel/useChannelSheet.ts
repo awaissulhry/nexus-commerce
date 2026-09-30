@@ -92,6 +92,35 @@ export function channelSheetResponse(body: unknown): ChannelScopePage {
   return page as ChannelScopePage
 }
 
+/** Plain data equality (the decoded wire: objects, arrays, primitives). Symbol keys are the sheet's own bookkeeping. */
+function sameData(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false
+  const left = Object.keys(a), right = Object.keys(b)
+  return left.length === right.length && left.every((key) => Object.prototype.hasOwnProperty.call(b, key) &&
+    sameData((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+}
+
+/**
+ * Audit B28 — a quiet read keeps every row the server returned unchanged as the SAME object, so the grid keeps its row
+ * (`withRowIdentity` caches by it) and AG re-renders only the rows that moved; before, every read replaced all of them.
+ * Every write moves its row's version, its listing's or its text's, so an unchanged row is one nothing wrote since the
+ * last read. Only for a quiet read: a Reload replaces every row, whatever the grid holds.
+ */
+export function keepUnchangedRows(previous: ChannelScopePage | null | undefined, next: ChannelScopePage): ChannelScopePage {
+  if (!previous?.rows.length) return next
+  const key = (row: { id: string; aliasId?: string | null }) => `${row.aliasId ?? ''}:${row.id}`
+  const known = new Map(previous.rows.map((row) => [key(row), row]))
+  let kept = 0
+  const rows = next.rows.map((row) => {
+    const old = known.get(key(row))
+    if (!old || !sameData(old, row)) return row
+    kept++
+    return old
+  })
+  return kept ? { ...next, rows } : next
+}
+
 export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetState {
   const url = channelScopeUrl(options)
   const activeUrl = useRef(url)
@@ -154,7 +183,10 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
       })
       if (!res.ok) return false
       const body = channelSheetResponse(await res.json())
-      if (mine === requestRef.current && activeUrl.current === url && canApply()) { setResponse({ url, data: body }); return true }
+      if (mine === requestRef.current && activeUrl.current === url && canApply()) {
+        setResponse((previous) => ({ url, data: keepUnchangedRows(previous?.url === url ? previous.data : null, body) }))
+        return true
+      }
       return false
     } catch {
       // Preserve the confirmed edit if the follow-up read is temporarily unavailable (the caller may try again).
@@ -241,6 +273,15 @@ export const NO_LISTING_VERSION = 0
 export function changeTarget(cell: StudioCellValue | undefined, intent?: string): 'channel' | 'master' {
   const address = intent === 'reset' || intent === 'reset-list' ? cell?.contentAcknowledgement?.pin.address ?? cell?.contentAddress : cell?.contentAddress
   return cell?.contentAcknowledgement ? address?.tier === 'pin' ? 'channel' : 'master' : writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb === 'channel' ? 'channel' : 'master'
+}
+
+/**
+ * Audit A03 — the shared record a channel cell writes, for the sheet writer's `sharedRecordOf`: the product's own record
+ * (a Master field, a shared-language text) is ONE record under every listing-alias band that shows the product, and a
+ * unit writing it moves the product's version for every band. A listing's cell (a pin included) is its own row's.
+ */
+export function channelSharedRecord(row: ChannelSheetRow | null, change: { colId: string; intent?: string }): string | null {
+  return row && changeTarget(row.values?.[change.colId], change.intent) !== 'channel' ? `product:${row.id}` : null
 }
 
 /** A family listing a listing-level eBay write moved (`familyListings[]`): its id and the version it holds now. */
@@ -627,6 +668,8 @@ async function commitChannelLanguage(
         const warning = warningOf(colId, change.field)
         cells[colId] = hit ? { ok: false, reason: hit.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
       }
+      // Audit A07 — the cells it did store moved (their source, the row's progress): the sheet reads them once.
+      if (settle) coord.onStored?.({ read: settle.kind === 'read' ? settle.reason : 'the answer refused a cell' })
       return { ok: false, version, cells }
     }
     /**

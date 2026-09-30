@@ -3,8 +3,9 @@ import { sheetValuesMatch, type SheetWriteRequest } from '@/design-system/grid/e
 import { loadReferenceChoices, isReferenceField as isPickerReference } from './referenceOptions'
 import { loadEbayPolicies, policyLists } from './ebayPolicies'
 import { wholeListWriteField } from './channel/provenance'
+import { adoptReadContentVersions } from './contentVersions'
 
-type RecoveryCell = { shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite; value: unknown; pinned?: boolean; follows?: boolean | null; writeTarget?: string; writeField?: string; source?: string | null }
+type RecoveryCell = { contentAddress?: { tier?: string; language?: string } | null; contentVersion?: number; shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite; value: unknown; pinned?: boolean; follows?: boolean | null; writeTarget?: string; writeField?: string; source?: string | null }
 type RecoveryRow = { id: string; version: number; aliasId?: string | null; productType?: string | null; listing?: { id: string; version?: number } | null; values: Record<string, RecoveryCell> }
 export type RecoveryScope = { channel: string; market: string; locale?: string; accountId?: string }
 
@@ -49,5 +50,7 @@ export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, requ
   // Keep local typing visible. Only the concurrency metadata is refreshed here; the host performs
   // a quiet sheet refresh after recovery when no newer edits are queued.
   if (row.listing && request.row.listing && typeof row.listing.version === 'number' && row.listing.version > (request.row.listing.version ?? -1)) request.row.listing.version = row.listing.version
+  // Audit A09 — and the content token of every text found stored, or the next edit there is refused as changed.
+  adoptReadContentVersions(request.row, row, Object.keys(matches).filter(colId => matches[colId] === true), Object.keys(matches).filter(colId => matches[colId] !== true))
   return { values, matches, version: row.version, row: request.row }
 }
