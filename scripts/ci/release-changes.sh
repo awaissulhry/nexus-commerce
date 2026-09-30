@@ -25,16 +25,19 @@ set -uo pipefail
 
 # The files each service is built from. Markdown never ships: CLAUDE.md files and notes live beside the code. BUILD is
 # what Railway's own build reads at the root (2026-09-29: a root .dockerignore broke the API build, run 36636596664).
-BUILD='package(-lock)?\.json$|patches/|\.dockerignore$|\.gitignore$|\.railwayignore$|railway\.(json|toml)$|railpack\.json$|nixpacks\.toml$'
+BUILD='package(-lock)?\.json$|patches/|\.npmrc$|\.dockerignore$|\.gitignore$|\.railwayignore$|railway\.(json|toml)$|railpack\.json$|nixpacks\.toml$|mise\.toml$|\.tool-versions$|Dockerfile$'
 API_FILES="^(apps/api/|packages/(database|shared|events)/|$BUILD)"
 # docs/fixtures/vt1/fixtures.ts: the one file outside the workspaces that the web imports (/design-system).
 WEB_FILES="^(apps/web/|packages/(database|shared)/|docs/fixtures/vt1/fixtures\.ts$|$BUILD)"
 
-# The commit a service runs, or nothing when it cannot be read.
+# The commit a service runs, or nothing when it cannot be read. On the runner a hung call gives up after 60 s and the
+# service ships (macOS has no `timeout`; the check runs without it there).
+LIMIT=()
+if command -v timeout >/dev/null; then LIMIT=(timeout 60); fi
 running_sha() {
   local service=$1
-  railway deployment list --service "$service" --limit 20 --json 2>/dev/null |
-    jq -r 'first(.[] | select(.status == "SUCCESS")) | .meta.cliMessage // empty' 2>/dev/null |
+  ${LIMIT[@]+"${LIMIT[@]}"} railway deployment list --service "$service" --limit 20 --json 2>/dev/null |
+    jq -r 'sort_by(.createdAt) | reverse | first(.[] | select(.status == "SUCCESS")) | .meta.cliMessage // empty' 2>/dev/null |
     grep -oE 'GitHub [0-9a-f]{40}$' | cut -d' ' -f2
 }
 
@@ -69,9 +72,9 @@ must_ship() {
     ship=false
     return
   fi
-  # --no-renames: a file moved out of a service's tree must count for that tree too. quotePath off: a non-ASCII
-  # path would otherwise come quoted and miss the patterns.
-  if ! all=$(git -c core.quotePath=false diff --no-renames --name-only "$sha" "$GITHUB_SHA"); then
+  # --no-renames: a file moved out of a service's tree must count for that tree too. -z: git would otherwise quote a
+  # path with a non-ASCII character, a quote or a tab, and the quoted path would miss the patterns.
+  if ! all=$(git diff -z --no-renames --name-only "$sha" "$GITHUB_SHA" | tr '\0' '\n'); then
     echo "::warning::$role: could not compare $sha with $GITHUB_SHA — it ships"
     return
   fi
