@@ -1,16 +1,20 @@
 # Required PR checks — docs/ci-plan.md §2.3 (Tier C).
 #
 # Target: under 10 minutes of wall time, with EVERY security check on every run:
-#   checks       static gates, typecheck of affected workspaces, the whole web suite, small workspaces
-#   api (1..3)   the WHOLE API suite in three shards, business profiles OFF then ON
-#   postgres     real PostgreSQL 17: runtime-role isolation, the 11 real-PG race suites, RBAC
-#                deny-by-default coverage, database package tests, the migration upgrade check
+#   checks       static gates, typecheck of affected workspaces and always of both apps, the whole web suite,
+#                small workspaces
+#   api (1..4)   the WHOLE API suite in four shards, business profiles OFF then ON (the count lives in the matrix)
+#   postgres (1..2)  real PostgreSQL 17: the real-PG race suites in two parts, split by measured time;
+#                runtime-role isolation, RBAC deny-by-default coverage, database package tests and the
+#                migration upgrade check run once, in part 1
 #   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
 #                database login, seeded disposable database, production hosts fenced off
-#   db-security  the profiles-ON ratchet over all API shards (fixed name, so a branch rule can require it)
+#   db-security  one profiles-ON report per API shard, the profiles-ON ratchet over them, and every real-PG
+#                suite passed in exactly one PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
 #
-# Nothing here is path-filtered except typecheck (turbo --affected) and the small-workspace tests.
+# Nothing here is path-filtered except the typecheck of the other workspaces (turbo --affected; the two apps are always
+# type-checked) and the small-workspace tests.
 # Selecting "security" tests by file name misses real ones, so the API suite always runs whole.
 
 name: CI
@@ -60,6 +64,16 @@ jobs:
       - name: Typecheck affected workspaces
         run: npx turbo run typecheck --affected --cache=local:rw -- --incremental false
 
+      - name: Typecheck both apps (always — each one compiles files of the other)
+        # On 2026-09-30 a review found that `--affected` picks a workspace only by the files changed inside its own
+        # folder or its declared dependencies, while each app type-checks files of the other, which it does not declare:
+        # @nexus/api compiles apps/web/src's presence.ts, registry.ts and tone.ts; @nexus/web compiles
+        # apps/api/src/lib/listing-coordinate.ts and docs/fixtures/vt1/fixtures.ts. A change to only those files did not
+        # type-check the app importing them, a change to fixtures.ts alone type-checked no workspace at all, and Deploy
+        # API's `verify` runs this job before every release. So both apps are type-checked on every run. A task the step
+        # above already ran replays from the local cache: turbo.json puts those outside files into its key.
+        run: npx turbo run typecheck --filter=@nexus/api --filter=@nexus/web --cache=local:rw -- --incremental false
+
       - name: Web tests (whole suite — proxy, workspace paths and permission gates included)
         env:
           # The operators' zone and the developer machines'. Some date tests assert a Rome-local day
@@ -70,14 +84,20 @@ jobs:
       - name: Factory, shared and events tests (affected)
         run: npx turbo run test --affected --filter=@nexus/factory --filter=@nexus/shared --filter=@nexus/events
 
+  # Four shards since 2026-09-30 (three before). In 15 runs of 2026-09-29 a shard took 6–11 min and the
+  # PostgreSQL job 7–12.6 min: verify was the long pole of every deploy (docs/ci-fast-deploys/PLAN-2026-09-29.md,
+  # D1). The split is the same file list, every file once (scripts/ci/api-test-plan.mjs).
+  # The shard count is written once, as the matrix: SHARD and the report's name take it from strategy.job-total,
+  # and db-security reads it back from the reports' names (1..m of m, each once). A shard that never reported
+  # fails there (review of fast-deploys step 6, 2026-09-30).
   api:
-    name: API tests (${{ matrix.shard }}/3, profiles OFF + ON)
+    name: API tests (${{ matrix.shard }}/${{ strategy.job-total }}, profiles OFF + ON)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -94,6 +114,7 @@ jobs:
         options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
+      SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -107,7 +128,7 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379
           NEXUS_TEST_REDIS_URL: redis://127.0.0.1:6379
         run: |
-          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/3 --run -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
+          node scripts/ci/api-test-plan.mjs --shard "$SHARD" --run -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
           node scripts/ci/api-test-plan.mjs --check-skips "$RUNNER_TEMP/off.json"
 
       - name: Profiles ON (judged by the ratchet in db-security)
@@ -117,7 +138,7 @@ jobs:
           REDIS_URL: redis://127.0.0.1:1
         run: |
           set +e
-          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/3 --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
+          node scripts/ci/api-test-plan.mjs --shard "$SHARD" --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
           echo "profiles-ON pass exited $? — known failures are judged against profiles-on-baseline.ci.json"
           set -e
           test -s "$RUNNER_TEMP/on.json" || { echo "✗ no profiles-ON report — could not measure"; exit 1; }
@@ -125,14 +146,33 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: profiles-on-${{ matrix.shard }}
+          # profiles-on-<n>-of-<m>: db-security derives the shard count from these names.
+          name: profiles-on-${{ matrix.shard }}-of-${{ strategy.job-total }}
           path: ${{ runner.temp }}/on.json
+          if-no-files-found: error
+          # A re-run of a leg that already uploaded must not fail on its own name; each name has one writer.
+          overwrite: true
           retention-days: 7
 
+  # Two parts since 2026-09-30 (one job before). In 15 runs of 2026-09-29 the real-PG suites alone took a median
+  # 10.5 min of this job's 12.4 min, and the job was verify's longest in 14 of them. Each part runs its share of the
+  # suites, split by measured time (scripts/run-real-postgres-tests.mjs --part; it refuses a split that loses or
+  # repeats a suite). The steps that run once (RBAC, the migration upgrade check, the database package) stay on
+  # part 1, and the split gives part 1 a head start for their ~32 s (PART_ONE_HEAD_START in the runner), so both
+  # parts end together.
+  # Part 2 uses the service container only for its image: the runner starts its own server and never pulls one.
+  # The part count is the matrix's size (strategy.job-total); no command or check repeats it, so a matrix cut to
+  # [1] runs every suite in part 1/1, not half of them. Each part records the suites it passed, and db-security
+  # checks that together they passed every suite once (review of fast-deploys step 6, 2026-09-30).
   postgres:
-    name: PostgreSQL 17 — isolation, races, RBAC, migrations
+    # Part 1 also runs the one-off steps (RBAC coverage, the migration upgrade check, the database package).
+    name: PostgreSQL 17 — ${{ matrix.part == 1 && 'isolation, races, RBAC, migrations' || 'isolation, races' }} (${{ matrix.part }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -154,27 +194,40 @@ jobs:
           filter: blob:none
       - uses: ./.github/actions/setup
       - name: Base commit
+        if: matrix.part == 1
         run: node scripts/ci/base-commit.mjs >> "$GITHUB_ENV"
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
       - name: Durability off; image for the runtime-role test
+        if: matrix.part == 1
         run: |
           psql postgresql://postgres@127.0.0.1:5432/postgres -qc "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
           docker pull -q postgres:17-alpine
 
       - name: RBAC deny-by-default coverage
+        if: matrix.part == 1
         run: npx tsx apps/api/src/scripts/check-rbac-coverage.ts
 
       - name: Migrations — the PR's, applied as production applies them, equal a fresh database
+        if: matrix.part == 1
         run: node scripts/ci/check-migration-upgrade.mjs --server postgresql://postgres@127.0.0.1:5432
 
       - name: Database package — baseline, applied-but-missing and the other database scripts
+        if: matrix.part == 1
         run: npm run test --workspace=@nexus/database
 
-      - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins)
-        run: node scripts/run-real-postgres-tests.mjs --required
+      - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins), part ${{ matrix.part }} of ${{ strategy.job-total }}
+        run: node scripts/run-real-postgres-tests.mjs --required --part ${{ matrix.part }}/${{ strategy.job-total }} --record "$RUNNER_TEMP/real-pg-part.tsv"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: real-pg-part-${{ matrix.part }}
+          path: ${{ runner.temp }}/real-pg-part.tsv
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
   smoke:
     name: Smoke (${{ matrix.shard }}/2) — production build
@@ -295,9 +348,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: API shards and PostgreSQL job must have passed
+      # A matrix job's result is success only when every leg succeeded: every API shard, every PostgreSQL part.
+      - name: All API shards and every PostgreSQL part must have passed
         run: |
-          echo "api: ${{ needs.api.result }} · postgres: ${{ needs.postgres.result }}"
+          echo "api (every shard): ${{ needs.api.result }} · postgres (every part): ${{ needs.postgres.result }}"
           test "${{ needs.api.result }}" = success && test "${{ needs.postgres.result }}" = success
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -307,11 +361,49 @@ jobs:
         with:
           pattern: profiles-on-*
           path: ${{ runner.temp }}/on
+      # The expected count comes from the reports: every name says n-of-m, all m must agree, and n must run 1..m
+      # with no gap and no repeat. A literal count here could drift from the matrix and stay green.
+      - name: One profiles-ON report per API shard
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/on" 2>/dev/null || { echo "✗ no profiles-ON report was downloaded — could not measure"; exit 1; }
+          got=$(find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | sort)
+          m=$(echo "$got" | sed -nE 's/^profiles-on-[0-9]+-of-([0-9]+)$/\1/p' | sort -u)
+          [ "$(echo "$m" | grep -c .)" = 1 ] || { echo "✗ the reports do not name one shard count (profiles-on-<n>-of-<m>):"; echo "$got"; exit 1; }
+          want=$(seq 1 "$m" | sed "s/.*/profiles-on-&-of-$m/" | sort)
+          if [ "$got" != "$want" ]; then
+            echo "✗ expected one report per shard, 1..$m of $m (< missing, > not expected):"
+            diff <(echo "$want") <(echo "$got") || true
+            exit 1
+          fi
+          for d in $want; do test -s "$d/on.json" || { echo "✗ $d holds no on.json — could not measure"; exit 1; }; done
+          # The ratchet reads every on.json below here, so one more anywhere would count a shard twice.
+          [ "$(find . -name on.json | grep -c .)" = "$m" ] || { echo "✗ more than one on.json per shard:"; find . -name on.json; exit 1; }
+          echo "✓ $m profiles-ON reports: shards 1..$m of $m, each once"
       - name: Profiles-ON ratchet over every shard
         run: |
           reports=$(find "$RUNNER_TEMP/on" -name on.json | sort | paste -sd, -)
-          test "$(echo "$reports" | tr ',' '\n' | grep -c .)" = 3 || { echo "✗ expected 3 shard reports, got: $reports"; exit 1; }
           node apps/api/scripts/profiles-on-ratchet.mjs --report="$reports" --baseline=apps/api/scripts/profiles-on-baseline.ci.json
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: real-pg-part-*
+          path: ${{ runner.temp }}/real-pg
+      # The API side counts one report per shard; this is the same guard for the PostgreSQL parts. A green postgres
+      # result alone does not show that every part was scheduled (review of fast-deploys step 6, 2026-09-30).
+      - name: Every real-PostgreSQL suite passed in exactly one part
+        run: |
+          set -euo pipefail
+          all="$RUNNER_TEMP/real-pg-all.tsv"
+          passed="$RUNNER_TEMP/real-pg-passed.tsv"
+          node scripts/run-real-postgres-tests.mjs --list | sort > "$all"
+          test -s "$all" || { echo "✗ the real-PG suite list is empty — could not measure"; exit 1; }
+          test -d "$RUNNER_TEMP/real-pg" || { echo "✗ no PostgreSQL part recorded its suites"; exit 1; }
+          find "$RUNNER_TEMP/real-pg" -name real-pg-part.tsv -exec cat {} + | sort > "$passed"
+          if ! diff "$all" "$passed"; then
+            echo "✗ the PostgreSQL parts did not pass every real-PG suite exactly once (< never passed, > passed twice or not listed)"
+            exit 1
+          fi
+          echo "✓ the PostgreSQL parts passed all $(grep -c . "$all") real-PG suites, each once"
 
   ci-ok:
     name: ci-ok

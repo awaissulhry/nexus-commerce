@@ -34,12 +34,19 @@ import {
   callTool,
   missingPermissions,
   permissionMessage,
+  requestPrincipal,
   systemPrincipal,
+  ToolAccessError,
   type ToolPrincipal,
+  type UserPrincipal,
 } from '../agents/call-tool.js'
-import { recordControlChange } from './control-audit.service.js'
+import type { FastifyRequest } from 'fastify'
+import { recordControlChange, type ControlAction } from './control-audit.service.js'
 import { mintExemplarFromDecision } from './exemplar.service.js'
 import { logger } from '../../utils/logger.js'
+import { resolvePermissions, type ResolvedPermissions } from '../../lib/auth/rbac.js'
+import { WorkspaceError, type WorkspaceContext } from '../../lib/workspace-context.js'
+import { createWorkspaceService } from '../workspace.service.js'
 
 /** The tools the fleet's own workers may propose. */
 export const FLEET_TOOLS = ['create-negative-keyword', 'graduate-keyword', 'set-target-bid']
@@ -114,6 +121,33 @@ export async function inboxCounts(): Promise<InboxCounts> {
     prisma.agentApproval.count({ where: whereFor('expired') }),
   ])
   return { waiting, decided, expired }
+}
+
+/** The person looking at the Approvals page; null when the caller is not a signed-in person (an API key). */
+export async function inboxViewer(request: FastifyRequest): Promise<ToolPrincipal | null> {
+  try {
+    return await requestPrincipal(request)
+  } catch (error) {
+    if (error instanceof ToolAccessError) return null
+    throw error
+  }
+}
+
+/**
+ * Why this viewer may NOT approve a request of this tool — the very sentence the approve would answer with
+ * (`scheduleApproval`'s refusal) — or null when they may. The page shows it on the card instead of offering an Apply
+ * that can only fail: a person whose permission was taken away while their approval waited, say, sees why it came
+ * back and that it is no longer theirs to approve. Worked out once per request, then per row.
+ */
+export function cannotApproveFor(viewer: ToolPrincipal | null): (toolName: string) => string | null {
+  if (!viewer) return () => 'Only a signed-in person can approve.'
+  const approvable = approvableToolNames(viewer)
+  return (toolName) => {
+    if (approvable === null || approvable.includes(toolName)) return null
+    const tool = getTool(toolName)
+    const missing = tool ? missingPermissions(viewer, tool) : []
+    return missing.length ? permissionMessage(toolName, missing) : `${toolName} is not a tool this workspace knows`
+  }
 }
 
 export async function listInbox(view: InboxView, limit = 100) {
@@ -292,6 +326,8 @@ export async function scheduleApproval(input: {
     data: {
       status: 'scheduled',
       decidedBy: input.actor.label,
+      // The person, not only the name shown: the commit re-checks THEIR permissions when the window ends.
+      decidedByUserId: input.actor.kind === 'user' ? input.actor.userId : null,
       decidedAt: new Date(),
       executeAfter,
       /* Into `operatorNote`, never `reason`: the gate overwrites `reason` with
@@ -332,7 +368,7 @@ export async function undoScheduledApproval(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   const undone = await prisma.agentApproval.updateMany({
     where: { id: input.id, status: 'scheduled' },
-    data: { status: 'pending', decidedBy: null, decidedAt: null, executeAfter: null },
+    data: { status: 'pending', decidedBy: null, decidedByUserId: null, decidedAt: null, executeAfter: null },
   })
   if (undone.count === 0) {
     const cur = await prisma.agentApproval.findUnique({
@@ -358,6 +394,100 @@ export async function undoScheduledApproval(input: {
 }
 
 /**
+ * The person who approved as they are NOW in the approval's business, from the same place a signed-in request reads
+ * them (workspace-hook.ts): with business profiles on, their membership of that business — its permissions and the
+ * business context a request gets; off, their login roles. Null when they can no longer act there at all
+ * (membership, person or business no longer active).
+ */
+const workspaces = createWorkspaceService(prisma)
+async function deciderNow(userId: string, workspaceId: string): Promise<{ permissions: ResolvedPermissions; workspace?: WorkspaceContext } | null> {
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+    try {
+      const access = await workspaces.membership(userId, workspaceId)
+      return { permissions: { isOwner: access.isOwner, permissions: access.permissions }, workspace: access.context }
+    } catch (error) {
+      if (error instanceof WorkspaceError) return null
+      throw error
+    }
+  }
+  const user = await prisma.userProfile.findUnique({
+    where: { id: userId },
+    select: { id: true, status: true, permissionsVersion: true, roleAssignments: { select: { role: { select: { key: true } } } } },
+  })
+  if (!user || user.status !== 'active') return null
+  return { permissions: await resolvePermissions({ id: user.id, permissionsVersion: user.permissionsVersion, roleKeys: user.roleAssignments.map((a) => a.role.key) }) }
+}
+
+/**
+ * The person who approved, as the principal the tool runs AS — their id, their permissions now, their business —
+ * or why they may not run it now, in plain words. The same test the approve itself passed (`missingPermissions`:
+ * `ai.run` and the tool's `requires`), on their permissions as they are at run time. The label stays the name shown.
+ * An approval that does not say which person approved it is not run (fail closed): a person's decision never runs
+ * as the system.
+ */
+async function deciderPrincipal(ap: { toolName: string; decidedBy: string | null; decidedByUserId: string | null; workspaceId: string }): Promise<{ principal: UserPrincipal } | { refusal: string }> {
+  const who = ap.decidedBy ?? 'the person who approved it'
+  if (!ap.decidedByUserId) return { refusal: 'it could not be re-checked — it does not say which person approved it. Approve it again.' }
+  const now = await deciderNow(ap.decidedByUserId, ap.workspaceId)
+  if (!now) return { refusal: `${who} no longer has access to this business profile` }
+  const principal: UserPrincipal = {
+    kind: 'user',
+    userId: ap.decidedByUserId,
+    label: ap.decidedBy ?? 'unattributed',
+    permissions: now.permissions,
+    workspace: now.workspace,
+    via: 'app', // the Approvals page, where the decision was taken
+  }
+  const tool = getTool(ap.toolName)
+  const missing = tool ? missingPermissions(principal, tool) : [] // the gate answers for a tool it does not know
+  if (missing.length) return { refusal: `${who} no longer holds ${missing.join(' and ')}, which ${ap.toolName.replace(/-/g, ' ')} needs` }
+  return { principal }
+}
+
+/** Back to pending with the reason on the row, never run: the operator's decision is handed back, not thrown away. */
+async function handBack(
+  id: string,
+  decidedBy: string | null,
+  why: string,
+  action: Extract<ControlAction, 'stale_refused' | 'permission_refused'>,
+): Promise<{ ok: false; error: string }> {
+  await prisma.agentApproval.updateMany({
+    where: { id, status: 'scheduled' },
+    data: {
+      status: 'pending',
+      decidedBy: null,
+      decidedByUserId: null,
+      decidedAt: null,
+      executeAfter: null,
+      reason: `not run — ${why}`,
+      /*
+       * S9.4 — the clock restarts, because the REQUEST is being asked again.
+       *
+       * Without this the row keeps the deadline it was created with, so one
+       * handed back at hour 23 gives the operator an hour and one handed
+       * back after 24 is expired by the very next sweep — seconds after
+       * being handed to them, with the fresh facts they were meant to judge.
+       *
+       * This does not contradict AP.5's one-clock design (see the comment on
+       * runApprovalMaintenance): it is still ONE column and ONE sweep. The
+       * clock is not duplicated, it is restamped, and the thing it measures
+       * — how long this request has been waiting for an answer — genuinely
+       * restarted when the answer was handed back.
+       */
+      expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
+    },
+  })
+  await recordControlChange({
+    charterKey: await charterKeyOf(id),
+    action,
+    to: { approvalId: id },
+    note: why,
+    actor: decidedBy ?? 'unattributed',
+  }).catch(() => undefined)
+  return { ok: false, error: `not run — ${why}` }
+}
+
+/**
  * Run a parked action whose window has closed. The `executeAfter` guard is
  * enforced HERE, so a client that calls early is refused rather than trusted.
  */
@@ -366,7 +496,7 @@ export async function commitScheduledApproval(
 ): Promise<{ ok: boolean; status?: string; error?: string }> {
   const ap = await prisma.agentApproval.findUnique({
     where: { id },
-    select: { status: true, executeAfter: true, decidedBy: true },
+    select: { status: true, executeAfter: true, decidedBy: true, decidedByUserId: true, toolName: true, workspaceId: true },
   })
   if (!ap) return { ok: false, error: 'approval not found' }
   if (ap.status !== 'scheduled') return { ok: false, error: `not scheduled (${ap.status})` }
@@ -374,47 +504,16 @@ export async function commitScheduledApproval(
     return { ok: false, error: 'still inside the undo window' }
   }
 
+  // The person who approved must still be allowed to do this NOW, in this business: the window, or the sweep that
+  // commits after it, can end after their role changed or their access was removed. Checked before anything runs.
+  const decider = await deciderPrincipal(ap)
+  if ('refusal' in decider) return handBack(id, ap.decidedBy, decider.refusal, 'permission_refused')
+
   // AP.6 — the world may have moved while this sat parked. Re-validate
   // BEFORE releasing it: an approval describes a state of the world, and if
   // that state changed the approval no longer describes anything real.
   const staleness = await checkStaleness(id)
-  if (staleness.stale) {
-    // Back to pending, with the reason on the row. Expiring it would throw
-    // the operator's decision away; this hands it back with fresh facts.
-    await prisma.agentApproval.updateMany({
-      where: { id, status: 'scheduled' },
-      data: {
-        status: 'pending',
-        decidedBy: null,
-        decidedAt: null,
-        executeAfter: null,
-        reason: `not run — ${staleness.why}`,
-        /*
-         * S9.4 — the clock restarts, because the REQUEST is being asked again.
-         *
-         * Without this the row keeps the deadline it was created with, so one
-         * handed back at hour 23 gives the operator an hour and one handed
-         * back after 24 is expired by the very next sweep — seconds after
-         * being handed to them, with the fresh facts they were meant to judge.
-         *
-         * This does not contradict AP.5's one-clock design (see the comment on
-         * runApprovalMaintenance): it is still ONE column and ONE sweep. The
-         * clock is not duplicated, it is restamped, and the thing it measures
-         * — how long this request has been waiting for an answer — genuinely
-         * restarted when the answer was handed back.
-         */
-        expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
-      },
-    })
-    await recordControlChange({
-      charterKey: await charterKeyOf(id),
-      action: 'stale_refused',
-      to: { approvalId: id },
-      note: staleness.why,
-      actor: ap.decidedBy ?? 'unattributed',
-    }).catch(() => undefined)
-    return { ok: false, error: `not run — ${staleness.why}` }
-  }
+  if (staleness.stale) return handBack(id, ap.decidedBy, staleness.why ?? 'it is no longer a valid action', 'stale_refused')
 
   // Hand back to the gate, which owns execution. It expects `pending`, so
   // release the park atomically — if that loses a race, someone else has it.
@@ -424,10 +523,10 @@ export async function commitScheduledApproval(
   })
   if (release.count === 0) return { ok: false, error: 'already taken' }
 
-  // The person's permissions were checked when they approved (scheduleApproval);
-  // the sweep runs that decision under their name.
+  // The tool runs AS the person who approved — the principal just re-checked — in their business, so what it writes
+  // (a price audit row, a queued push) names them by id. The label stays the name shown.
   const decidedBy = ap.decidedBy ?? 'unattributed'
-  const out = await decideApproval(id, 'approve', systemPrincipal(decidedBy))
+  const out = await decideApproval(id, 'approve', decider.principal)
   if (!out.ok) {
     /*
      * S9.4 — a failed execution left the row lying about itself.
@@ -459,6 +558,7 @@ export async function commitScheduledApproval(
       where: { id, status: 'pending' },
       data: {
         decidedBy: null,
+        decidedByUserId: null,
         decidedAt: null,
         expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
       },
