@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { searchOptions } from '../lib/option-search'
 
@@ -58,7 +58,19 @@ export interface OptionListProps {
   minSelected?: number
   /** Text the search field starts with — the key that opened a grid cell by typing (AG's `eventKey`). */
   initialQuery?: string
+  /**
+   * The list is open (an eBay FREE_TEXT aspect with suggestions): a typed value no option spells is offered as an
+   * `Add "…"` row at the top, ticked like any other (the same rule as `ListboxPanel.allowCustom`).
+   */
+  allowCustom?: boolean
+  /**
+   * With `allowCustom`: the typed text a grid's Enter should save — set while NO option matches it (the Add row is then
+   * the only row, as in `ListboxPanel`), `''` otherwise, so a search used to find an option never adds itself.
+   */
+  onCustomDraft?: (text: string) => void
 }
+
+const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
 
 /** The next selection after toggling `v`, never dropping below `minSelected`. PURE. */
 export function nextSelection(value: readonly string[], v: string, minSelected = 0): string[] {
@@ -80,6 +92,8 @@ export function OptionList({
   emptyLabel = 'No matches',
   minSelected = 0,
   initialQuery = '',
+  allowCustom = false,
+  onCustomDraft,
 }: OptionListProps) {
   const [q, setQ] = useState(initialQuery)
 
@@ -94,6 +108,10 @@ export function OptionList({
   const matches = showSearch
     ? searchOptions(q, options, (o) => (typeof o.label === 'string' ? o.label : o.value))
     : options
+  const typed = allowCustom && showSearch ? q.trim() : ''
+  const custom = typed && !value.some((v) => sameText(v, typed)) && !options.some((o) => sameText(o.value, typed) || (typeof o.label === 'string' && sameText(o.label, typed))) ? typed : ''
+  const draft = custom && matches.length === 0 ? custom : ''
+  useEffect(() => { onCustomDraft?.(draft) }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -123,7 +141,13 @@ export function OptionList({
             <span>Select all</span>
           </label>
         )}
-        {matches.length === 0 && <div className="nds-combo-empty">{emptyLabel}</div>}
+        {custom && (
+          <label className="nds-ms-opt">
+            <input type="checkbox" checked={false} onChange={() => { onChange([...value, custom]); setQ('') }} />
+            <span>Add "{custom}"</span>
+          </label>
+        )}
+        {matches.length === 0 && !custom && <div className="nds-combo-empty">{emptyLabel}</div>}
         {matches.map((o) => (
           <label key={o.value} className={['nds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}
             title={locked(o.value) ? `At least ${minSelected} must stay selected` : undefined}>

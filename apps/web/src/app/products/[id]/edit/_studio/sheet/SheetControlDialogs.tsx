@@ -60,7 +60,8 @@ export function SetColumnDialog({ request, onApply, onClose }: { request: SetCol
   const value: Draft | null = choice && own.trim() ? own.trim() : Array.isArray(draft) ? (draft.length ? draft : null) : draft.trim() === '' ? null : draft
   const control = list
     ? options.length
-      ? <OptionList options={options} value={Array.isArray(draft) ? draft : []} onChange={setDraft} searchable selectAll={false} />
+      // An open list takes a value outside it, through the same `Add "…"` row as the cell's editor (audit B12).
+      ? <OptionList options={options} value={Array.isArray(draft) ? draft : []} onChange={setDraft} searchable selectAll={false} allowCustom={column.mode === 'open'} />
       : <TagInput value={Array.isArray(draft) ? draft : []} onChange={setDraft} aria-label={column.label} placeholder="Add a value… (, adds)" />
     : choice
       ? <Listbox options={options} value={typeof draft === 'string' ? draft : ''} onChange={setDraft} searchable emptyLabel="Empty" ariaLabel={column.label} width="100%" />

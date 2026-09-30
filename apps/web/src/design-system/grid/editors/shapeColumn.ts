@@ -35,6 +35,8 @@ export interface ShapedColumnLike {
   options?: string[]
   optionLabels?: Record<string, string>
   cardinality?: { min: number; max: number | null }
+  /** `'open'`: the channel takes a value outside `options` (an eBay FREE_TEXT aspect, an Amazon open enum). */
+  mode?: string
   unitOptions?: string[]
 }
 
@@ -56,6 +58,7 @@ export function shapeEditorSpec(col: ShapedColumnLike): { component: unknown; pa
       popup: true,
       params: {
         options: col.options?.length ? col.options.map((o) => ({ value: o, label: col.optionLabels?.[o] ?? o })) : undefined,
+        allowCustom: col.mode === 'open',
         maxItems: col.cardinality?.max ?? null,
         label: col.label,
       },

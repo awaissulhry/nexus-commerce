@@ -29,6 +29,7 @@ vi.mock('react', async (original) => {
 })
 
 import { ListPanelEditor } from './ListPanelEditor'
+import { shapeEditorSpec } from './shapeColumn'
 import { OptionList } from '../../components'
 import { TagInput } from '../../primitives'
 
@@ -49,6 +50,7 @@ const render = (props: Record<string, unknown>) => {
   return out
 }
 const mount = (extra: Record<string, unknown>) => {
+  runtime.slots = []; runtime.at = 0; runtime.pending = []
   const onValueChange = vi.fn()
   const props = { column: { getActualWidth: () => 180 }, stopEditing: vi.fn(), onValueChange, label: 'Tags', ...extra }
   return { onValueChange, props, tree: render(props) }
@@ -77,7 +79,6 @@ describe('ListPanelEditor — the free-text list keeps the first typed key', () 
     const { tree, onValueChange } = mount({ value: [] })
     ;(tree.props.children[0].props.onInput as Function)({ target: { value: 'Rosso | Nero' } })
     expect(onValueChange).toHaveBeenLastCalledWith(['Rosso', 'Nero'])
-    void tree
   })
   it('a chip made from "a | b" (the "," key) is two chips', () => {
     const { tree, onValueChange } = mount({ value: [] })
@@ -91,5 +92,60 @@ describe('ListPanelEditor — a list with options still searches with the typed 
     const { tree, onValueChange } = mount({ value: [], options: [{ value: 'A', label: 'Alpha' }], eventKey: 'a' })
     expect(optionList(tree).props.initialQuery).toBe('a')
     expect(onValueChange).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Audit B12 (2026-09-30) — an OPEN multi-value list (an eBay MULTI FREE_TEXT aspect with suggestions, e.g. Caratteristiche)
+ * could not take a typed value: `shapeEditorSpec` dropped the column's mode, the list was always closed, a search with no
+ * match said "No matches" and a stored off-list value was labelled as a fault, at the bottom.
+ */
+describe('open multi-value lists take a typed value', () => {
+  const FEATURES = [{ value: 'Impermeabile', label: 'Impermeabile' }, { value: 'Traspirante', label: 'Traspirante' }]
+  const list = (props: Record<string, unknown>) => {
+    runtime.slots = []; runtime.at = 0; runtime.pending = []
+    let out = (OptionList as Function)(props) as El
+    const run = runtime.pending.splice(0)
+    for (const effect of run) effect()
+    if (run.length) { runtime.at = 0; out = (OptionList as Function)(props) as El }
+    return out
+  }
+  const addRow = (tree: El) => flat(tree).find((el) => el.type === 'label' && flat(el).some((c) => c.type === 'span' && [c.props.children].flat().join('').startsWith('Add "')))
+
+  it('shapeEditorSpec passes the open mode to the list editor', () => {
+    expect(shapeEditorSpec({ key: 'f', shape: 'list', options: ['A'], mode: 'open' })!.params.allowCustom).toBe(true)
+    expect(shapeEditorSpec({ key: 'f', shape: 'list', options: ['A'], mode: 'closed' })!.params.allowCustom).toBe(false)
+  })
+  it('the editor hands the open mode to its option list', () => {
+    expect(optionList(mount({ value: [], options: FEATURES, allowCustom: true }).tree).props.allowCustom).toBe(true)
+    expect(optionList(mount({ value: [], options: FEATURES }).tree).props.allowCustom).toBeFalsy()
+  })
+  it('a typed value with no match is offered as Add "…", and ticking it adds it', () => {
+    const onChange = vi.fn()
+    const tree = list({ options: FEATURES, value: ['Traspirante'], onChange, allowCustom: true, initialQuery: 'Protezioni CE', searchable: true })
+    expect(flat(tree).some((el) => el.props.className === 'nds-combo-empty')).toBe(false)
+    ;(flat(addRow(tree)).find((el) => el.type === 'input')!.props.onChange as Function)()
+    expect(onChange).toHaveBeenCalledWith(['Traspirante', 'Protezioni CE'])
+  })
+  it('with no match the typed text is the draft Enter saves; with a match it is not', () => {
+    const onCustomDraft = vi.fn()
+    list({ options: FEATURES, value: [], onChange() {}, allowCustom: true, initialQuery: 'Protezioni CE', searchable: true, onCustomDraft })
+    expect(onCustomDraft).toHaveBeenLastCalledWith('Protezioni CE')
+    list({ options: FEATURES, value: [], onChange() {}, allowCustom: true, initialQuery: 'Imper', searchable: true, onCustomDraft })
+    expect(onCustomDraft).toHaveBeenLastCalledWith('')
+  })
+  it('a closed list offers no Add row', () => {
+    expect(addRow(list({ options: FEATURES, value: [], onChange() {}, initialQuery: 'Protezioni CE', searchable: true }))).toBeUndefined()
+  })
+  it('the editor reports the draft with the ticked values, so Enter adds and saves', () => {
+    const { tree, onValueChange } = mount({ value: ['Traspirante'], options: FEATURES, allowCustom: true })
+    ;(optionList(tree).props.onCustomDraft as Function)('Protezioni CE')
+    expect(onValueChange).toHaveBeenLastCalledWith(['Traspirante', 'Protezioni CE'])
+  })
+  it('a stored value the list does not hold comes FIRST, labelled current (open) or current · not in the list (closed)', () => {
+    const open = optionList(mount({ value: ['Protezioni CE'], options: FEATURES, allowCustom: true }).tree).props.options
+    expect(open[0]).toEqual({ value: 'Protezioni CE', label: 'Protezioni CE (current)' })
+    const closed = optionList(mount({ value: ['Old'], options: FEATURES }).tree).props.options
+    expect(closed[0]).toEqual({ value: 'Old', label: 'Old (current · not in the list)' })
   })
 })

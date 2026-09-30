@@ -20,6 +20,8 @@ import { keepGridOffEnter, typedStart, type EditorStop } from './selectPanelMode
 export interface ListPanelEditorParams {
   /** Closed list → `OptionList`; absent/empty → free-text chips. */
   options?: OptionListItem[]
+  /** The channel leaves this list open (`mode: 'open'`): a typed value is offered as `Add "…"`. */
+  allowCustom?: boolean
   /** `cardinality.max`; `null` = unbounded. */
   maxItems?: number | null
   label?: string
@@ -32,7 +34,7 @@ export interface ListPanelEditorParams {
 }
 
 export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(function ListPanelEditor(props, _ref) {
-  const { options, maxItems, label, value, column, onValueChange } = props
+  const { options, allowCustom, maxItems, label, value, column, onValueChange } = props
   const [items, setItems] = useState<string[]>(() => asList(value))
   /* 🔴 The free-text DRAFT is part of the value. AG's popup owns Enter and its native listener fires
      before React's, so on Enter AG commits whatever was last reported and the `TagInput`'s own Enter
@@ -79,8 +81,11 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
     roomToRight: cellRect ? roomToRightOf(cellRect.left, window.innerWidth) : window.innerWidth,
     kind: 'list',
   })
-  // A stored value the list does not hold stays visible, so it can be seen and unticked (P0, 2026-09-30).
-  const shown = closed ? [...options!, ...items.filter((v) => !options!.some((o) => o.value === v)).map((v) => ({ value: v, label: `${v} (not in the list)` }))] : []
+  /* A stored value the list does not hold stays visible, so it can be seen and unticked (P0, 2026-09-30) — FIRST, and
+     named "current" as `SelectPanelEditor` names it; a closed list adds that it is not in the list (audit B12). */
+  const stored = asList(value)
+  const note = (v: string) => stored.includes(v) ? allowCustom ? 'current' : 'current · not in the list' : 'added'
+  const shown = closed ? [...items.filter((v) => !options!.some((o) => o.value === v)).map((v) => ({ value: v, label: `${v} (${note(v)})` })), ...options!] : []
   /* ↑/↓ walk the search field and the boxes; Space ticks. Inside AG's popup nothing else reaches the boxes: Tab is AG's
      (it saves and moves), so the list had no keyboard path at all (P0, 2026-09-30). */
   const walk = (e: React.KeyboardEvent) => {
@@ -96,7 +101,8 @@ export const ListPanelEditor = forwardRef<unknown, ListPanelEditorParams>(functi
   return (
     <div ref={root} className="nds-list-editor" style={{ width: box.width, maxHeight: box.height }} role="group" aria-label={label ? `${label} — values` : 'Values'} onKeyDownCapture={walk}>
       {closed ? (
-        <OptionList options={shown} value={items} onChange={change} searchable selectAll={false} listClassName="nds-list-editor-list" initialQuery={typedStart(props.eventKey)} />
+        <OptionList options={shown} value={items} onChange={change} searchable selectAll={false} listClassName="nds-list-editor-list" initialQuery={typedStart(props.eventKey)}
+          allowCustom={allowCustom} onCustomDraft={onDraft} />
       ) : (
         <div onInput={(e) => onDraft((e.target as HTMLInputElement).value ?? '')}>
           <TagInput value={items} onChange={change} initialInput={typed} maxTags={maxItems ?? undefined} placeholder="Add a value… (, adds · Enter saves)" aria-label={label ?? 'Values'} />

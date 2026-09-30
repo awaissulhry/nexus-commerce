@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { clearChoiceWords, setColumnWords } from './sheetReset'
 
@@ -23,5 +24,13 @@ describe('Set every row…', () => {
     expect(setColumnWords({ label: 'Brand', rows: 38, locked: 3 }, false)).toEqual({ title: 'Set every row · Brand',
       lead: 'One value for Brand on the 38 rows shown, saved together. 3 locked rows keep their value.', confirm: 'Set 38 rows' })
     expect(setColumnWords({ label: 'Brand', rows: 1, locked: 0 }, true).confirm).toBe('Clear 1 row')
+  })
+})
+
+/** Audit B12 — the Modal portals (SSR shows nothing), so the wiring is read from source: an open LIST column takes its own value. */
+describe('Set every row… on an open list', () => {
+  it('offers the Add row of the cell\'s own editor', () => {
+    const source = readFileSync(new URL('./SheetControlDialogs.tsx', import.meta.url), 'utf8')
+    expect(source).toMatch(/<OptionList [^\n]*allowCustom=\{column\.mode === 'open'\}/)
   })
 })

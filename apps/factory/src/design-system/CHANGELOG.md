@@ -10,6 +10,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **`ListPanelEditor`** (a free-text list: Etsy tags and materials, eBay free-text multi-value specifics) starts its draft with the key that opened the cell and reports it, so "Rosso" no longer saves "osso"; a draft or chip holding "a | b" is two values, as a paste is (B11). **`TagInput`** takes **`initialInput`**. New in `shapeValue.ts`: **`LIST_SEPARATOR`**, **`splitListText`** (the paste's rule, now shared). Mirrored in Web.
 
+- **Open multi-value lists take a typed value** (an eBay MULTI FREE_TEXT aspect with suggestions). **`shapeEditorSpec`** passes the column's **`mode`** to **`ListPanelEditor`** as **`allowCustom`** (it was dropped, so every list with options was closed). **`OptionList`** takes **`allowCustom`** (a typed value no option spells is offered as an `Add "…"` row, ticked like any other) and **`onCustomDraft`** (while nothing matches, the typed text is the draft a grid's Enter saves). **`ListPanelEditor`** lists a stored off-list value FIRST, named "current" (open) or "current · not in the list" (closed), as **`SelectPanelEditor`** does (B12). Mirrored in Web.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.
