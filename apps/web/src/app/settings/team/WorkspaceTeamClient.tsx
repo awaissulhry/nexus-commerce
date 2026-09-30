@@ -9,7 +9,7 @@ import { FEATURES, permissionCatalog } from '@nexus/shared/permissions'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { ConnectedApps } from '@/components/connected-apps/ConnectedApps'
 import { getCsrfToken } from '@/lib/auth/csrf-store'
-import { OWNER_ONLY_TEAM_NOTE, canManageTeam } from './workspaceTeamModel'
+import { OWNER_ONLY_TEAM_NOTE, canManageTeam, roleCardDescription } from './workspaceTeamModel'
 import '../../profiles/profiles.css'
 
 type Role = { id: string; key: string; name: string; description: string; permissions: string[]; isSystem: boolean; version: number }
@@ -79,7 +79,7 @@ export default function WorkspaceTeamClient() {
     {!!roster?.invitations.length && <h2>Pending invitations</h2>}
     {roster?.invitations.map(invitation => <Card key={invitation.id} header={invitation.email} description={`Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`} headerAction={<Button variant="danger-outline" disabled={revoking !== null || !canManage} onClick={() => { void revoke(invitation) }}>{revoking === invitation.id ? 'Revoking…' : 'Revoke invitation'}</Button>} />)}
     {canManageSessions && <ConnectedApps scope="business" />}
-    {roster && <><div className="business-profiles-heading"><h2>Business roles</h2><Button disabled={!canManage} onClick={() => setEditingRole('new')}>Create role</Button></div>{roster.roles.map(role => <Card key={role.id} header={role.name} description={role.isSystem ? 'Built-in role' : role.description || 'Custom role for this business'} headerAction={!role.isSystem && <Button disabled={!canManage} onClick={() => setEditingRole(role)}>Edit permissions</Button>} />)}</>}
+    {roster && <><div className="business-profiles-heading"><h2>Business roles</h2><Button disabled={!canManage} onClick={() => setEditingRole('new')}>Create role</Button></div>{roster.roles.map(role => <Card key={role.id} header={role.name} description={roleCardDescription(role)} headerAction={!role.isSystem && <Button disabled={!canManage} onClick={() => setEditingRole(role)}>Edit permissions</Button>} />)}</>}
     {editingRole && canManage && <RoleEditor role={editingRole} onClose={() => setEditingRole(null)} onSaved={async () => { await load(); setEditingRole(null) }} />}
     {editing && roster && canManage && <MemberEditor member={editing} roles={roster.roles} onClose={() => setEditing(null)} onSaved={async data => { if (data?.token) { setInvitationLink(`${window.location.origin}/accept-workspace-invite#token=${encodeURIComponent(data.token)}`); setCopied(false) } await load(); setEditing(null) }} />}
   </div>

@@ -16,3 +16,14 @@ export const OWNER_ONLY_TEAM_NOTE = 'You can see this team. Only an owner of thi
 export function canManageTeam(roster: { canManage?: unknown } | null | undefined): boolean {
   return !!roster && roster.canManage !== false
 }
+
+/**
+ * A role's line under "Business roles". A built-in role shows what it may do (the registry's description, which the
+ * API keeps in step on every boot); the Admin's says that team changes stay with the owner. A business's own role
+ * shows its own description.
+ */
+export function roleCardDescription(role: { isSystem: boolean; description?: string | null }): string {
+  const described = role.description?.trim()
+  if (role.isSystem) return described ? `Built-in role · ${described}` : 'Built-in role'
+  return described || 'Custom role for this business'
+}

@@ -299,8 +299,11 @@ export const SYSTEM_ROLES: Record<SystemRoleKey, SystemRoleDef> = {
   ADMIN: {
     key: 'ADMIN',
     name: 'Admin',
+    // Team changes are owner-only (the Owner, 2026-09-30): an Admin reads the team on Team & Access
+    // (apps/api/src/services/workspace.service.ts, listMembers) and cannot invite or change roles.
+    // seedSystemRoles converges the stored description to this text on every API boot.
     description:
-      'Everything except granting Owner or deleting/demoting Owners. Full settings + user management.',
+      'Full settings. Sees the team; inviting members and changing roles stay with the owner.',
     permissions: [...ALL_PERMISSIONS], // all; OWNER-only ops blocked in the service layer
     requireMfa: true, // S5
   },
