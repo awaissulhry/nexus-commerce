@@ -101,7 +101,8 @@ export async function beforeDatabaseCommit(key: string, producer: () => Promise<
  *
  * Prisma reports the same conflict several ways: `P2034` from its own queries; `P2010` from raw SQL, with the SQLSTATE
  * in `meta.code` (Prisma 6) or in `meta.driverAdapterError.cause` as `originalCode` and kind `TransactionWriteConflict`
- * (Prisma 7's pg adapter maps 40001 and 40P01 to that kind); and a message carrying the code for a deadlock victim.
+ * (Prisma 7's pg adapter maps 40001 and 40P01 to that kind); an unwrapped `DriverAdapterError` from COMMIT;
+ * and a message carrying the code for a deadlock victim.
  * Before P2 (docs/attributes/PLAN.md §4.7) only `P2034` was retried, so a serialization conflict raised by raw SQL
  * failed a save that a retry would have completed (measured in readiness-pending-race.vitest.test.ts).
  */
@@ -150,9 +151,15 @@ export function transactionMustRestart(error: unknown): boolean {
 
 function isRaceFailure(error: unknown): boolean {
   type Cause = { originalCode?: string; code?: string; kind?: string }
-  const e = error as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: Cause } }; message?: string } | null
+  const e = error as { name?: string; code?: string; cause?: Cause; meta?: { code?: string; driverAdapterError?: { cause?: Cause } }; message?: string } | null
   if (!e) return false
   if (e.code === 'P2034') return true
+  // COMMIT runs outside Prisma's query error wrapper. Only the adapter's known rollback reasons qualify;
+  // a disconnected or timed-out commit has an unknown outcome and must never be replayed here.
+  if (e.name === 'DriverAdapterError') {
+    const sqlstate = e.cause?.originalCode ?? e.cause?.code
+    if (sqlstate === '40001' || sqlstate === '40P01' || e.cause?.kind === 'TransactionWriteConflict') return true
+  }
   if (e.code === 'P2010') {
     const cause = e.meta?.driverAdapterError?.cause
     const sqlstate = e.meta?.code ?? cause?.originalCode ?? cause?.code
