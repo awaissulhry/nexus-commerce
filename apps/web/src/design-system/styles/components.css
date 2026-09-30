@@ -23,6 +23,9 @@
 }
 .nds-source-indicator.nds-source-indicator > svg { flex: 0 0 auto; }
 .nds-source-indicator.nds-source-indicator--label { justify-content: flex-start; }
+/* A routine source: the muted text colour, full colour again on hover and focus. */
+.nds-source-indicator.nds-source-indicator--quiet { color: var(--nds-text-muted); }
+.nds-source-indicator.nds-source-indicator--quiet:focus-visible { color: var(--nds-text); }
 button.nds-source-indicator.nds-source-indicator { cursor: pointer; }
 button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
 .nds-source-indicator.nds-source-indicator:focus-visible {

@@ -1,6 +1,8 @@
 import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldError, nativeFieldKeys, type NativeEdit } from '@nexus/shared/shopify-information'
-import { coerceForShape, isBlankValue } from '../sheet-values.js'
+import { checkForStorage, isBlankValue } from '../sheet-values.js'
+import { finding, type ValueFinding } from '../value-verdict.js'
+import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import type { CatalogueField } from './field-catalogue.service.js'
 
 /**
@@ -14,10 +16,13 @@ export function isOffListError(message: string): boolean {
   return OFF_LIST_ERROR.test(message)
 }
 
-/** Validate the effective value, including each member of a multivalued field. */
+/**
+ * Validate the effective value, including each member of a multivalued field. Every problem is a FINDING with its rule
+ * (`value-verdict.ts`); `errors` keeps the sentences, in the same order, for every reader of the old shape.
+ */
 export function validateChannelValue(field: CatalogueField, input: unknown) {
   let value = input
-  const errors: string[] = []
+  const findings: ValueFinding[] = []
   let autoCorrected: { from: string; to: string } | null = null
   if (!isBlankValue(value) && field.selectionOnly && field.options?.length) {
     const options = [...new Set(field.options)]
@@ -40,7 +45,7 @@ export function validateChannelValue(field: CatalogueField, input: unknown) {
     })
     if (fixed.some(member => member === undefined)) {
       const shown = field.options.slice(0, 6).map(option => field.optionLabels?.[option] ?? option).join(' · ')
-      errors.push(`${field.label} contains an unaccepted value. Allowed values: ${shown}${field.options.length > 6 ? ' …' : ''}.`)
+      findings.push(finding('offList', `${field.label} contains an unaccepted value. Allowed values: ${shown}${field.options.length > 6 ? ' …' : ''}.`))
     } else {
       const corrected = members.map((member, i) => typeof member === 'string' ? fixed[i]! : member)
       if (corrected.some((member, i) => member !== members[i])) {
@@ -48,7 +53,7 @@ export function validateChannelValue(field: CatalogueField, input: unknown) {
         autoCorrected = { from: JSON.stringify(input), to: JSON.stringify(value) }
       }
       for (const member of fixed) if (field.deprecatedOptions?.includes(member!)) {
-        errors.push(`${field.label}: "${member}" is deprecated by the channel.`)
+        findings.push(finding('deprecated', `${field.label}: "${member}" is deprecated by the channel.`))
       }
     }
   }
@@ -61,20 +66,33 @@ export function validateChannelValue(field: CatalogueField, input: unknown) {
         productId: 'gid://shopify/Product/1', ownerLabel: field.label, value: null, nextValue: raw,
       }) : null
     // Optional empty mappings are missing data, not an instruction to erase a required native value.
-    if (error && (!isBlankValue(value) || field.priority === 'required')) errors.push(error)
+    if (error && (!isBlankValue(value) || field.priority === 'required')) findings.push(finding(isOffListError(error) ? 'offList' : 'schema', error))
   }
   // Coercion is used for validation only. Preview never converts structured records to text.
-  const checked = coerceForShape({ key: field.fieldKey, label: field.label, kind: field.kind,
-    shape: field.shape, cardinality: field.cardinality, unitOptions: field.unitOptions, validation: field.validation }, value)
-  if (!info?.definition && checked.ok === false && (!isBlankValue(value) || field.priority === 'required')) errors.push(checked.error)
-  const strings = (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')
+  // A single-value field holding a stored LIST (a legacy `["x"]`) sends its one member; two or more is a count problem
+  // the channel refuses, not a value the store cannot hold.
+  const single = (field.shape ?? 'scalar') === 'scalar' && Array.isArray(value)
+  const members = single ? (value as unknown[]).filter(member => !isBlankValue(member)) : []
+  if (single && members.length > 1) findings.push(finding('count', `${field.label} takes one value; ${members.length} are set.`))
+  const checked = checkForStorage({ key: field.fieldKey, label: field.label, kind: field.kind,
+    shape: field.shape, cardinality: field.cardinality, unitOptions: field.unitOptions, validation: field.validation }, single ? members[0] ?? null : value)
+  // The first shape problem only, as before: a stored value is one sentence, not a list of every rule it misses.
+  const shapeFinding = checked.ok === false ? finding('type', checked.error) : checked.findings[0]
+  if (!info?.definition && shapeFinding && (!isBlankValue(value) || field.priority === 'required')) findings.push(shapeFinding)
+  // An eBay item specific is measured as eBay receives it: each value, a legacy joined list as its parts.
+  const itemSpecific = field.channelStore?.kind === 'platformAttributes' && field.channelStore.path[0] === 'itemSpecifics'
+  const strings = itemSpecific ? ebayAspectValues(value) : (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')
   const chars = Math.max(0, ...strings.map(v => v.length))
   const bytes = Math.max(0, ...strings.map(v => Buffer.byteLength(v, 'utf8')))
   const overLimit = {
     ...(field.maxLength && chars > field.maxLength ? { chars } : {}),
     ...(field.maxBytes && bytes > field.maxBytes ? { bytes } : {}),
   }
-  if (overLimit.chars) errors.push(`${field.label} exceeds ${field.maxLength} characters (${chars}).`)
-  if (overLimit.bytes) errors.push(`${field.label} exceeds ${field.maxBytes} UTF-8 bytes (${bytes}).`)
-  return { value, errors, autoCorrected, overLimit: Object.keys(overLimit).length ? overLimit : null }
+  // A single-value eBay item specific holding a joined list would be sent as its parts: more values than eBay takes.
+  if (itemSpecific && (field.shape ?? 'scalar') === 'scalar' && !single && strings.length > 1) {
+    findings.push(finding('count', `${field.label} takes one value; eBay would receive ${strings.length} (${strings.map(v => JSON.stringify(v)).join(', ')}).`))
+  }
+  if (overLimit.chars) findings.push(finding('length', `${field.label} exceeds ${field.maxLength} characters (${chars}).`))
+  if (overLimit.bytes) findings.push(finding('length', `${field.label} exceeds ${field.maxBytes} UTF-8 bytes (${bytes}).`))
+  return { value, errors: findings.map(f => f.message), findings, autoCorrected, overLimit: Object.keys(overLimit).length ? overLimit : null }
 }

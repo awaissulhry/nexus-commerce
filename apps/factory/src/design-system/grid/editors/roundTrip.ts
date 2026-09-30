@@ -34,7 +34,17 @@ export type CellSaveState = 'saving' | 'waiting' | 'saved' | 'refused' | 'unknow
 export interface CellSaveEntry {
   state: CellSaveState
   reason?: string
+  /**
+   * P1 of fix/product-sheet-editing — `saved`, and the server named a problem with the stored value (over the channel's
+   * limit, off its list, a check that could not run), in its own words. Kept until the cell is edited again.
+   */
+  warning?: string
   at: number
+}
+
+/** What a cell's save says in words: a refusal's reason, or the warning a stored value came back with. */
+export function saveNote(entry: CellSaveEntry | undefined): string | undefined {
+  return entry?.reason ?? (entry?.warning ? `Saved with a warning: ${entry.warning}` : undefined)
 }
 
 export const SAVED_FADE_MS = 1500
@@ -62,6 +72,19 @@ export class CellSaveTracker {
     this.emit()
   }
 
+  /** The value was stored; the server's warning about it stays on the cell (it does not fade). */
+  setSavedWithWarning(rowId: string, colId: string, warning: string, now = Date.now()): void {
+    this.cells.set(CellSaveTracker.key(rowId, colId), { state: 'saved', warning, at: now })
+    this.emit()
+  }
+
+  /** Stored cells that came back with a warning (the status line says how many). */
+  get warnedCount(): number {
+    let n = 0
+    for (const entry of this.cells.values()) if (entry.state === 'saved' && entry.warning) n++
+    return n
+  }
+
   clear(rowId: string, colId: string): void {
     if (this.cells.delete(CellSaveTracker.key(rowId, colId))) this.emit()
   }
@@ -85,7 +108,7 @@ export class CellSaveTracker {
   sweep(now = Date.now()): string[] {
     const dropped: string[] = []
     for (const [k, e] of this.cells) {
-      if (e.state === 'saved' && now - e.at >= SAVED_FADE_MS) {
+      if (e.state === 'saved' && !e.warning && now - e.at >= SAVED_FADE_MS) {
         this.cells.delete(k)
         dropped.push(k)
       }
@@ -115,15 +138,18 @@ export class CellSaveTracker {
 
 /** AG `cellClassRules` that read the tracker. `getRowId` is the page's own. */
 export function roundTripClassRules<T>(tracker: CellSaveTracker, getRowId: (data: T) => string): CellClassRules<T> {
-  const stateOf = (p: { data?: T; colDef: { colId?: string; field?: string } }): CellSaveState | undefined => {
+  const entryOf = (p: { data?: T; colDef: { colId?: string; field?: string } }): CellSaveEntry | undefined => {
     if (!p.data) return undefined
     const colId = p.colDef.colId ?? p.colDef.field
     if (!colId) return undefined
-    return tracker.get(getRowId(p.data), colId)?.state
+    return tracker.get(getRowId(p.data), colId)
   }
+  const stateOf = (p: { data?: T; colDef: { colId?: string; field?: string } }): CellSaveState | undefined => entryOf(p)?.state
   return {
     'nds-cell-is-saving': (p) => stateOf(p) === 'saving',
-    'nds-cell-is-saved': (p) => stateOf(p) === 'saved',
+    'nds-cell-is-saved': (p) => stateOf(p) === 'saved' && !entryOf(p)?.warning,
+    /* Stored, with the server's warning: the warning corner, until the cell is edited again. */
+    'nds-cell-is-saved-warned': (p) => stateOf(p) === 'saved' && !!entryOf(p)?.warning,
     'nds-cell-is-refused': (p) => stateOf(p) === 'refused',
     /* Both of these mean "no answer yet" — a WARNING, never a failure. A cell painted `refused`
        tells the operator to retype; these tell them to wait or to look. The distinction is the

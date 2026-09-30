@@ -99,6 +99,9 @@ export function foldSource(source: ChannelValueSource, kind: StudioRowKind, pres
 export function cascadeOf(cell: StudioCellValue | undefined, kind: StudioRowKind): CascadeLayer {
   if (!cell) return 'unset'
   const present = hasValue(cell.value) || cell.pinned === true
+  /* P1 — an old listing text (`channelSnapshot`) is THIS row's listing's own value: its reset is "Follow Master".
+     Read from the source, not the layer: an older server folded it into `master`, which offered only a pin. */
+  if (cell.source === 'channelSnapshot' && present) return kind === 'parent' ? 'alias' : 'aliasVariant'
   // The server uses `alias` for this row's own named-listing override too.
   if (kind === 'variant' && cell.layer === 'alias' && cell.pinned && !cell.inherited) return 'aliasVariant'
   return cell.layer ? narrowLayer(cell.layer, kind, present) : foldSource(cell.source, kind, present)

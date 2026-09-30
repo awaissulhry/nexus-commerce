@@ -167,22 +167,35 @@ type OptionSource = {
   selectionOnly?: boolean | null
 } | null
 
-function checkOptions(
-  source: OptionSource,
-  value: unknown,
-): { ok: true; value: unknown } | { ok: false; error: string; allowedOptions: string[]; actualValue: unknown } {
+/**
+ * P1 (`value-verdict.ts`) — an off-list result is STORED, like a typed one, and comes back as a `warning` naming the
+ * value and the list: an open list takes any value (`="Xavia Racing"` on Brand), and a closed list's off-list value is
+ * the channel's to refuse at publish. A LIST result is checked member by member (`=split("Uomo,Donna",",")`).
+ */
+type OptionVerdict = { ok: true; value: unknown; warning?: string; allowedOptions?: string[]; actualValue?: unknown }
+  | { ok: false; error: string; allowedOptions: string[]; actualValue: unknown }
+
+function checkOptions(source: OptionSource, value: unknown): OptionVerdict {
   const options = source?.options
   if (!options || options.length === 0) return { ok: true, value }
   if (value === null || value === undefined || value === '') return { ok: true, value }
 
-  const trimmed = String(value).trim()
-  const hit = options.includes(trimmed)
-    ? trimmed
-    : options.find((o) => o.toLowerCase() === trimmed.toLowerCase())
-  // Normalising to the canonical option is deliberate and pre-existing: the
-  // store should hold `true`, not `TRUE`, and refusing on casing alone would
-  // fail a formula that is right about the value and wrong about its spelling.
-  if (hit !== undefined) return { ok: true, value: hit }
+  const off: unknown[] = []
+  const matchOne = (member: unknown) => {
+    if (member === null || member === undefined || member === '') return member
+    const trimmed = String(member).trim()
+    const hit = options.includes(trimmed)
+      ? trimmed
+      : options.find((o) => o.toLowerCase() === trimmed.toLowerCase())
+    // Normalising to the canonical option is deliberate and pre-existing: the
+    // store should hold `true`, not `TRUE`, and refusing on casing alone would
+    // fail a formula that is right about the value and wrong about its spelling.
+    if (hit !== undefined) return hit
+    off.push(member)
+    return typeof member === 'string' ? trimmed : member
+  }
+  const normalised = Array.isArray(value) ? value.map(matchOne) : matchOne(value)
+  if (!off.length) return { ok: true, value: normalised }
 
   const labelled = options.map((o) => source?.optionLabels?.[o] ?? o)
   // A cell tooltip cannot hold 268 country codes, and a truncated list that
@@ -190,9 +203,11 @@ function checkOptions(
   const shown = labelled.length > 8
     ? `${labelled.slice(0, 8).join(', ')} … (${labelled.length} in all)`
     : labelled.join(', ')
+  const named = off.map(member => JSON.stringify(String(member))).join(', ')
   return {
-    ok: false,
-    error: `${JSON.stringify(String(value))} is not an allowed value for ${source?.label ?? 'this column'} — choose one of: ${shown}`,
+    ok: true,
+    value: normalised,
+    warning: `${named} ${off.length === 1 ? 'is' : 'are'} not in the list for ${source?.label ?? 'this column'} (${shown}). Saved as it is${source?.selectionOnly ? '; the channel may refuse it at publish' : ''}.`,
     allowedOptions: options,
     actualValue: value,
   }
@@ -221,7 +236,7 @@ export function optionVerdict(input: {
   /** The channel catalogue entry, when the scope has one. Supplies the option list. */
   catalogueField: OptionSource
   value: unknown
-}): { ok: true; value: unknown } | { ok: false; error: string; allowedOptions: string[]; actualValue: unknown } {
+}): OptionVerdict {
   const optionSource = input.catalogueField ?? input.column
   if (!optionSource) return { ok: true, value: input.value }
   return checkOptions(
@@ -501,26 +516,22 @@ export function evaluateAgainstContext(input: {
     return { value: null, error: res.error, warnings: res.warnings, dependsOn: deep.attributes }
   }
 
-  let value = res.value
+  const value = res.value
 
-  // The same value checks the resolver applies, so a formula cannot smuggle in what a typed
-  // value could not. A refusal stores the formula WITHOUT a value (§1.6(G) clears it).
+  // The same value checks the resolver applies, so a formula gets the verdict a typed value gets (P1,
+  // `value-verdict.ts`): over a limit or required-and-empty is STORED and warned about; publish blocks what the
+  // channel would reject. Only an evaluation that fails keeps the previous value (§1.6(G)).
+  const flagged: string[] = []
   if (field) {
     // #775(2) — the option check moved OUT of here to `checkOptions`, so master
     // and channel scopes cannot disagree about what they accept. It runs once,
     // in the caller, where the sheet column is also available as a source.
-    if (typeof value === 'string') {
-      if (field.maxLength && value.length > field.maxLength) {
-        return { value: null, error: `The result is ${value.length} characters; ${field.label} accepts ${field.maxLength}.`, warnings: res.warnings, dependsOn: deep.attributes }
-      }
-      const bytes = Buffer.byteLength(value, 'utf8')
-      if (field.maxBytes && bytes > field.maxBytes) {
-        return { value: null, error: `The result is ${bytes} UTF-8 bytes; ${field.label} accepts ${field.maxBytes}.`, warnings: res.warnings, dependsOn: deep.attributes }
-      }
+    for (const member of (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')) {
+      if (field.maxLength && member.length > field.maxLength) flagged.push(`The result is ${member.length} characters; ${field.label} accepts ${field.maxLength}.`)
+      const bytes = Buffer.byteLength(member, 'utf8')
+      if (field.maxBytes && bytes > field.maxBytes) flagged.push(`The result is ${bytes} UTF-8 bytes; ${field.label} accepts ${field.maxBytes}.`)
     }
-    if (!isPresent(value) && field.priority === 'required') {
-      return { value: null, error: `${field.label} is required, and the formula resolved to nothing.`, warnings: res.warnings, dependsOn: deep.attributes }
-    }
+    if (!isPresent(value) && field.priority === 'required' && res.warnings.length === 0) flagged.push(`${field.label} is required, and the formula resolved to nothing.`)
   }
 
   // A formula that evaluates cleanly to NOTHING while warning about why is not a success. The
@@ -537,7 +548,7 @@ export function evaluateAgainstContext(input: {
     }
   }
 
-  return { value, error: null, warnings: res.warnings, dependsOn: deep.attributes }
+  return { value, error: null, warnings: [...res.warnings, ...flagged], dependsOn: deep.attributes }
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -694,12 +705,13 @@ async function prepareCellFormula(input: CellCoordinate & { expr: string; expect
   if (Object.prototype.hasOwnProperty.call(input, 'expectedValue') && (effectiveError || JSON.stringify(input.expectedValue) !== JSON.stringify(normalisedValue))) {
     throw new Error('The calculation changed after the preview. Preview again before applying.')
   }
-  return { ctx, expr, outcome, col, writeField, normalisedValue, effectiveError, refusal, existing: siblings.find(row => row.fieldKey === input.fieldKey) }
+  const optionWarning = checked && checked.ok ? checked.warning : undefined
+  return { ctx, expr, outcome, col, writeField, normalisedValue, effectiveError, refusal, optionWarning, existing: siblings.find(row => row.fieldKey === input.fieldKey) }
 }
 
 export async function previewCellFormula(input: CellCoordinate & { expr: string; allowSelfReference?: boolean }) {
   const prepared = await prepareCellFormula(input)
-  const { ctx, outcome, col, writeField, normalisedValue, effectiveError, refusal } = prepared
+  const { ctx, outcome, col, writeField, normalisedValue, effectiveError, refusal, optionWarning } = prepared
   let error = effectiveError
   if (!error) {
     try { await writeValue(input, normalisedValue, col, undefined, undefined, true) }
@@ -707,7 +719,7 @@ export async function previewCellFormula(input: CellCoordinate & { expr: string;
   }
   return { ok: !error, error, value: error ? null : normalisedValue,
     before: ctx.flat[input.fieldKey] ?? null, expectedState: formulaStateToken(ctx, prepared.existing),
-    dependsOn: outcome.dependsOn, warnings: outcome.warnings,
+    dependsOn: outcome.dependsOn, warnings: [...outcome.warnings, ...(optionWarning ? [optionWarning] : [])],
     ...(refusal ? { allowedOptions: refusal.allowedOptions, actualValue: refusal.actualValue } : {}),
     unknownRefs: exprRefPositions(input.expr).filter(ref => !ref.name.includes('.') && !Object.prototype.hasOwnProperty.call(ctx.flat, ref.name)),
     errorPos: exprRefPositions(input.expr).find(ref => !ref.name.includes('.') && !Object.prototype.hasOwnProperty.call(ctx.flat, ref.name))?.pos ?? null,
@@ -733,7 +745,7 @@ export async function setCellFormula(input: CellCoordinate & {
   ip?: string | null
 }): Promise<SetFormulaResult> {
   input = formulaWriteCoordinate(input)
-  const { ctx, expr, outcome, col, writeField, normalisedValue, effectiveError, refusal } = await prepareCellFormula(input)
+  const { ctx, expr, outcome, col, writeField, normalisedValue, effectiveError, refusal, optionWarning } = await prepareCellFormula(input)
   // LX.F F-LX-1 — a CONTENT write needs an address (design §6); a formula on a
   // price, a quantity or a factual attribute does not. Unconditionally this
   // refused `basePrice needs a ContentAddress before it can be saved.` The same
@@ -822,7 +834,7 @@ export async function setCellFormula(input: CellCoordinate & {
     value: effectiveError ? ctx.flat[input.fieldKey] ?? null : normalisedValue,
     error: effectiveError,
     ...(refusal ? { allowedOptions: refusal.allowedOptions, actualValue: refusal.actualValue } : {}),
-    warnings: outcome.warnings,
+    warnings: [...outcome.warnings, ...(optionWarning ? [optionWarning] : [])],
     cascaded,
   }
 }
@@ -935,6 +947,7 @@ export async function setCellLiteral(input: CellCoordinate & {
   if (isLocalizableContent(col.slot?.of ?? col.key, col.storage)) contentAddress(input.contentAddress, col.label)
   const verdict = optionVerdict({ column: col, catalogueField: await catalogueFieldFor(input), value: input.value })
   if (verdict.ok === false) throw new Error(verdict.error)
+  const literalWarning = verdict.warning
   const atomic = () => [
     prisma.cellFormula.deleteMany({ where: existing ? { id: existing.id } : whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey }),
     ...(existing ? [prisma.auditLog.create({ data: {
@@ -949,7 +962,7 @@ export async function setCellLiteral(input: CellCoordinate & {
   const cascaded = await reevaluateDependents({ productId: input.productId, changedFields: [input.fieldKey],
     updatedBy: input.updatedBy, ip: input.ip,
     ...(col.writeTarget === 'channelListing' && input.channel && input.marketplace ? { coordinate: { channel: input.channel, marketplace: input.marketplace, channelConnectionId: input.channelConnectionId, aliasKey: input.aliasKey, locale: input.locale } } : {}) })
-  return { ok: true, value: verdict.value, cascaded }
+  return { ok: true, value: verdict.value, ...(literalWarning ? { warnings: [literalWarning] } : {}), cascaded }
 }
 
 /** Restore an operation snapshot, including a formula that had kept its last valid value. */

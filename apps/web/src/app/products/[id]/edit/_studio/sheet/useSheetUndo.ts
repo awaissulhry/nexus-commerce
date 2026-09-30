@@ -45,6 +45,21 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
     history.record(change)
   }, [history])
 
+  /**
+   * P1 — the sheet's own multi-cell writes (Clear on Delete, Set every row…) as ONE undo step and ONE save, exactly like
+   * the grid's fill and paste: `run` writes through the grid (`setDataValue`), and the fence closes on the next turn,
+   * after AG has reported every change.
+   */
+  const operation = useCallback((run: () => void) => {
+    writer.beginOperation()
+    history.begin()
+    try {
+      run()
+    } finally {
+      setTimeout(() => { history.end(); writer.endOperation() }, 0)
+    }
+  }, [writer, history])
+
   /* The grid's fill / paste / range-delete events open ONE step and ONE save together. AG's own undo is off (it forgets
      everything on each re-read); ⌘Z is handled by `onKeyDown` instead. */
   const gridProps = useMemo(() => ({
@@ -55,5 +70,5 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
     }),
   }), [writer, history])
 
-  return { history, record, onKeyDown, gridProps }
+  return { history, record, onKeyDown, gridProps, operation }
 }

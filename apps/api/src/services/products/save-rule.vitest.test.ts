@@ -1,7 +1,8 @@
 /**
  * P6 (docs/attributes/PLAN.md §4.4) — the save rule for a business attribute's list.
  *
- *   · the business made the list strict (`validation.optionMode: 'strict'`) → an off-list value is REFUSED, named;
+ *   · the business made the list strict (`validation.optionMode: 'strict'`) → an off-list value is STORED and named in a
+ *     warning (P1 of fix/product-sheet-editing, the Owner's full-control rule: validation warns while editing);
  *   · the business did not (the default) → any value is stored: the options are suggestions, the dropdown is open.
  *
  * The other half (a CHANNEL's closed list never blocks a save) is `paste-validity.vitest.test.ts`. Both run the real
@@ -54,15 +55,17 @@ const save = (field: string, value: unknown) => scoped(async () => {
 })
 const stored = (key: string) => scoped(async () => ((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).categoryAttributes as any)?.[key])
 
-it('refuses a value off a list the BUSINESS made strict, and stores nothing', async () => {
+it('P1 — a value off a list the BUSINESS made strict is stored, and the answer names the list as a warning', async () => {
   const result = await save('attr_protection_level', 'level_9')
-  expect(result.refused).toBe(400)
-  expect(result.errors).toEqual([expect.objectContaining({ field: 'attr_protection_level', error: expect.stringContaining('"level_9" is not one of the allowed values') })])
-  expect(await stored('protection_level')).toBeUndefined()
+  expect(result).toMatchObject({ updated: 1 })
+  expect(result.warnings).toEqual([expect.objectContaining({ field: 'attr_protection_level', warning: expect.stringContaining('"level_9" is not one of the allowed values') })])
+  expect(await stored('protection_level')).toBe('level_9')
 })
 
-it('control: a value on the strict list is stored', async () => {
-  expect(await save('attr_protection_level', 'level_1')).toMatchObject({ updated: 1 })
+it('control: a value on the strict list is stored, with no warning', async () => {
+  const result = await save('attr_protection_level', 'level_1')
+  expect(result).toMatchObject({ updated: 1 })
+  expect(result.warnings ?? []).toEqual([])
   expect(await stored('protection_level')).toBe('level_1')
 })
 
