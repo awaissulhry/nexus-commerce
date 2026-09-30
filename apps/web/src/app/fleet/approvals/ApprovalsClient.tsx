@@ -797,6 +797,8 @@ interface OutsideRow {
   originKey: string | null
   canExecute: boolean
   trackRecord: null
+  /** Why this viewer may not approve it (the API's words); null when they may. */
+  cannotApprove?: string | null
 }
 
 function OutsideQueue({
@@ -996,6 +998,7 @@ function OutsideQueue({
                     expiresAt: a.expiresAt,
                     reason: a.reason,
                     trackRecord: null,
+                    cannotApprove: a.cannotApprove ?? null,
                   }}
                   labels={labels}
                   /* One source for the name, so the origin line above the card

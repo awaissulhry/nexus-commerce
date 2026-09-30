@@ -2768,7 +2768,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       for (const [productId, newValue] of dedup) {
         try {
           await masterPriceService.update(productId, newValue, {
-            actor: null,
+            // The person acting, as this write's own audit rows name them (`auditActor` below): the price audit row
+            // named nobody, so "who changed this price" had no answer for a bulk or sheet edit.
+            actor: context.userId ?? currentFormulaWrite(context.formulaWriteToken)?.userId ?? null,
             reason: 'bulk-grid-patch',
             tx: activeDatabaseTransaction(),
             idempotencyKey: `bulk:${startTs}:${productId}:basePrice`,

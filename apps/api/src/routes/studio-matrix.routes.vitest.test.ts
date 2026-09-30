@@ -42,7 +42,7 @@ vi.mock('../db.js', () => ({
 }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('../services/pim/matrix.service.js', () => ({ getMatrixRead: (...a: unknown[]) => mocks.read(...a) }))
-vi.mock('../services/follow-master.service.js', () => ({ setFollowMasterQuantity: (...a: unknown[]) => mocks.follow(...a), setStockBuffer: (...a: unknown[]) => mocks.buffer(...a) }))
+vi.mock('../services/follow-master.service.js', () => ({ setFollowMasterQuantity: (...a: unknown[]) => mocks.follow(...a), setStockBuffer: (...a: unknown[]) => mocks.buffer(...a), amazonManagedListingIds: async () => new Set<string>() }))
 vi.mock('../services/pim/fulfillment-method.service.js', () => ({ setFulfillmentMethod: (...a: unknown[]) => mocks.fulfil(...a) }))
 vi.mock('../services/pim/channel-price-write.service.js', () => ({ writeChannelPrices: (...a: unknown[]) => mocks.prices(...a) }))
 vi.mock('../services/stock-movement.service.js', () => ({ recascadeAfterSyncControlChange: async () => ({ ok: 0, noLedger: 0, failed: 0 }) }))

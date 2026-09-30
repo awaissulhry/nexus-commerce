@@ -36,14 +36,18 @@
  *
  * Outbound push:
  *   When a listing's `price` actually changes, we enqueue an OutboundSyncQueue row
- *   with syncType='PRICE_UPDATE' and a 5-minute holdUntil grace window (matches
- *   the existing PHASE 12a pattern in outbound-sync-phase9.service.ts). The
+ *   with syncType='PRICE_UPDATE' and a holdUntil grace window of DEFAULT_HOLD_MS
+ *   (30 seconds; IS.2b shortened it from the 5 minutes of the PHASE 12a pattern in
+ *   outbound-sync-phase9.service.ts). The
  *   bullmq-sync.worker.ts consumer picks the row up after the grace window and
  *   dispatches to pricing-outbound.service.ts → marketplace API. Listings whose
  *   price didn't change (followMasterPrice=false, or MATCH_AMAZON) get only the
  *   masterPrice snapshot update — no marketplace push needed. A paused listing
  *   (syncPaused) keeps the cascaded price but gets no queue row, as in the stock
- *   cascade: the push lock refused that row at dispatch anyway.
+ *   cascade: the push lock refused that row at dispatch anyway. A still-draft
+ *   (`isStillDraftListing`: DRAFT, never published, no channel id) is treated the
+ *   same even when it is not paused: it is not on the channel, and only Publish
+ *   sends it — with the price stored here.
  *
  * Audit:
  *   AuditLog row written with slim before/after diff (changed fields only — not
@@ -74,11 +78,13 @@ import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { masterCurrency } from './fx-rate.service.js'
 import { marketCurrency, type MarketCurrencyRow } from './pim/market-currency.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
 // should reach channels within ~1 minute. The route layer debounces
 // rapid consecutive edits before calling this service.
-const DEFAULT_HOLD_MS = 30 * 1000
+// Exported so a surface that states the hold (a preview, a note) reads it from here rather than retyping it.
+export const DEFAULT_HOLD_MS = 30 * 1000
 
 export interface MasterPriceUpdateContext {
   /** Who initiated the change. Surfaces in AuditLog.userId; null for system writes. */
@@ -88,7 +94,7 @@ export interface MasterPriceUpdateContext {
   /** Idempotency key from the caller (HTTP request id, job id, etc.). */
   idempotencyKey?: string
   /**
-   * Override the 5-minute push grace window. Defaults to true (apply grace).
+   * Override the push grace window (DEFAULT_HOLD_MS, 30 seconds). Defaults to true (apply grace).
    * Set false for non-interactive callers (imports, scheduled repricing) where
    * an immediate push is the correct behavior.
    */
@@ -129,6 +135,18 @@ interface ChannelListingForCascade {
   priceAdjustmentPercent: Prisma.Decimal | null
   followMasterPrice: boolean
   syncPaused: boolean
+  listingStatus: string | null
+  isPublished: boolean
+}
+
+/**
+ * Whether a cascaded price stays in Nexus instead of being queued for the channel: a paused listing (an operator's
+ * pause, or a draft kept inert by its pause) and a still-draft (`isStillDraftListing`), paused or not. A draft started
+ * before drafts were born paused is not paused, and sending it a price would write to the channel before Publish.
+ * A DRAFT row with a channel id has reached the channel, so it is not a still-draft and is queued.
+ */
+export function holdsCascadedPrice(listing: Pick<ChannelListingForCascade, 'syncPaused' | 'listingStatus' | 'isPublished' | 'externalListingId'>): boolean {
+  return listing.syncPaused || isStillDraftListing(listing)
 }
 
 /**
@@ -228,6 +246,8 @@ export class MasterPriceService {
           priceAdjustmentPercent: true,
           followMasterPrice: true,
           syncPaused: true,
+          listingStatus: true,
+          isPublished: true,
         },
       })) as unknown as ChannelListingForCascade[]
 
@@ -287,7 +307,10 @@ export class MasterPriceService {
           // A paused listing (an operator's pause, or an inert draft) keeps the stored price but is
           // not queued, the way the stock cascade treats it. Dispatch refused its row anyway
           // (PUSH_SYNC_PAUSED, terminal), so nothing sent changes; resume never replayed those rows.
-          if (listing.syncPaused) continue
+          // A still-draft is not queued either, paused or not. An unpaused one passes the push lock, and
+          // only the BullMQ worker skips an unpublished listing: the cron backstop, which dispatches every
+          // row that has no job (each row written inside a caller's transaction), sent its price.
+          if (holdsCascadedPrice(listing)) continue
           queueRowsToCreate.push({
             productId,
             channelListingId: listing.id,
