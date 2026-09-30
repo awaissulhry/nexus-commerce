@@ -38,7 +38,14 @@ vi.mock('../cx/channel-alerts.service.js', async (importOriginal) => ({
 }))
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} } }))
 
+
 import { writeEtsyInventory } from './inventory-write.service.js'
+import { registerEtsyListingLockRedis } from './listing-lock.js'
+import { FakeLeaseRedis } from '../../test-support/fake-lease-redis.js'
+
+// The per-listing lock (listing-lock.ts) takes its lease from the app's Redis; an in-memory stand-in here.
+const leaseRedis = new FakeLeaseRedis()
+registerEtsyListingLockRedis(() => leaseRedis)
 
 const money = (amount: number) => ({ amount, divisor: 100, currency_code: 'EUR' })
 const inventory = () => ({

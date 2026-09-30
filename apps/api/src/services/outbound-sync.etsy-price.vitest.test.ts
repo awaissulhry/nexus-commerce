@@ -39,9 +39,15 @@ vi.mock('./cx/channel-alerts.service.js', async (original) => ({
 
 import { gatewayLedger } from '../test-support/gateway-stubs.js'
 import { __rateTest } from './gateway/rate.js'
-import { toInventoryWrite, type EtsyReadInventory } from './etsy/inventory.js'
+import { toInventoryWrite, type EtsyInventoryWrite, type EtsyReadInventory } from './etsy/inventory.js'
+import { ETSY_LISTING_LOCK_DEFAULTS, etsyListingLockKey, registerEtsyListingLockRedis, RELEASE_SCRIPT } from './etsy/listing-lock.js'
+import { FakeLeaseRedis } from '../test-support/fake-lease-redis.js'
 
-const { OutboundSyncService } = await import('./outbound-sync.service.js')
+// The per-listing Etsy lock takes its lease from the app's Redis (registered by lib/queue.ts): an in-memory stand-in.
+const leaseRedis = new FakeLeaseRedis()
+registerEtsyListingLockRedis(() => leaseRedis)
+
+const { OutboundSyncService, computeFailureDisposition } = await import('./outbound-sync.service.js')
 const service: any = new OutboundSyncService()
 
 const LISTING_ID = '1234567890'
@@ -228,4 +234,96 @@ describe('a Nexus sale on an Etsy listing', () => {
     expect(result.message).toBe('Etsy already holds these values; nothing was sent. Etsy has no per-listing sale price, so the sale price stays in Nexus only.')
     expect(puts()).toEqual([])
   })
+})
+
+/**
+ * A fake Etsy that HOLDS an inventory per listing: a GET answers what it holds now, a PUT replaces it. Both take a
+ * little time, so two writes that are allowed to overlap do overlap. Every request is logged in arrival order.
+ */
+function statefulEtsy(initial: Record<string, EtsyReadInventory>) {
+  const held = new Map(Object.entries(initial).map(([id, inv]) => [id, structuredClone(inv)]))
+  const log: string[] = []
+  const toRead = (body: EtsyInventoryWrite): EtsyReadInventory => ({
+    ...body,
+    products: body.products.map((p, pi) => ({
+      product_id: pi + 1, sku: p.sku, is_deleted: false,
+      property_values: p.property_values?.map((pv) => ({ ...pv, scale_name: null })),
+      offerings: p.offerings.map((o, oi) => ({ offering_id: (pi + 1) * 10 + oi, quantity: o.quantity, is_enabled: o.is_enabled, is_deleted: false,
+        price: money(Math.round(o.price * 100)), ...(o.readiness_state_id !== undefined ? { readiness_state_id: o.readiness_state_id } : {}) })),
+    })),
+  })
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
+    const id = /\/listings\/(\d+)\/inventory$/.exec(String(url))?.[1] ?? ''
+    log.push(`${init.method} ${id}`)
+    await pause(60)
+    if (init.method === 'PUT') { held.set(id, toRead(JSON.parse(String(init.body)))); return new Response('{}', { status: 200 }) }
+    return new Response(JSON.stringify(held.get(id)), { status: 200, headers: { 'content-type': 'application/json' } })
+  }))
+  const offering = (id: string, sku: string) => held.get(id)!.products!.find((p) => p.sku === sku)!.offerings![0]
+  return { log, offering }
+}
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const priceRow = (sku: string, price: number, listingId = LISTING_ID, id = `q-${sku}`) => row({ id, product: { id: `p-${sku}`, sku },
+  channelListing: { ...listing, id: `cl-${sku}`, externalListingId: listingId }, channelListingId: `cl-${sku}`, payload: { price } })
+const stockRow = (sku: string, quantity: number) => row({ id: `q-${sku}-stock`, syncType: 'QUANTITY_UPDATE', product: { id: `p-${sku}`, sku },
+  channelListing: { ...listing, id: `cl-${sku}` }, channelListingId: `cl-${sku}`, payload: { quantity } })
+
+describe('🔴 two rows for ONE Etsy listing never read, change and replace it at the same time', () => {
+  it('a price and a stock change on one listing, sent together: both survive, and the second read comes after the first write', async () => {
+    live(); vi.stubEnv('NEXUS_SYNC_ORDERING_V2', '0')   // the stock row sends its payload number (the lane's own tests do the same)
+    const etsy = statefulEtsy({ [LISTING_ID]: etsyInventory() })
+    const [a, b] = await Promise.all([service.syncToEtsy(priceRow('TEST-GRN', 26)), service.syncToEtsy(stockRow('TEST-RED', 9))])
+    expect([a, b].map((r: any) => `${r.status} ${r.message}`)).toEqual([expect.stringMatching(/^SUCCESS/), expect.stringMatching(/^SUCCESS/)])
+    // Without the lock the second PUT would put back the first one's old value (a lost update Etsy answers 200 to).
+    expect(etsy.offering(LISTING_ID, 'TEST-GRN')).toMatchObject({ price: money(2600), quantity: 17 })
+    expect(etsy.offering(LISTING_ID, 'TEST-RED')).toMatchObject({ price: money(1999), quantity: 9 })
+    // One whole read → write → read-back, then the other: never interleaved.
+    expect(etsy.log).toEqual([`GET ${LISTING_ID}`, `PUT ${LISTING_ID}`, `GET ${LISTING_ID}`, `GET ${LISTING_ID}`, `PUT ${LISTING_ID}`, `GET ${LISTING_ID}`])
+  }, 20_000)
+
+  it('two sibling SKUs of one variation listing, priced together: both prices survive', async () => {
+    live()
+    const etsy = statefulEtsy({ [LISTING_ID]: etsyInventory() })
+    const [a, b] = await Promise.all([service.syncToEtsy(priceRow('TEST-GRN', 26)), service.syncToEtsy(priceRow('TEST-RED', 22))])
+    expect([a.message, b.message]).toEqual([`Etsy listing ${LISTING_ID} updated and confirmed.`, `Etsy listing ${LISTING_ID} updated and confirmed.`])
+    expect(etsy.offering(LISTING_ID, 'TEST-GRN').price).toEqual(money(2600))
+    expect(etsy.offering(LISTING_ID, 'TEST-RED').price).toEqual(money(2200))
+    expect(etsy.offering(LISTING_ID, 'TEST-BLU').price).toEqual(money(2450))
+  }, 20_000)
+
+  it('two DIFFERENT listings are not held up by each other: both are read before either is written', async () => {
+    live()
+    const OTHER = '1234567891'
+    const etsy = statefulEtsy({ [LISTING_ID]: etsyInventory(), [OTHER]: etsyInventory() })
+    await Promise.all([service.syncToEtsy(priceRow('TEST-GRN', 26)), service.syncToEtsy(priceRow('TEST-GRN', 27, OTHER, 'q-other'))])
+    expect(etsy.log.slice(0, 2).sort()).toEqual([`GET ${LISTING_ID}`, `GET ${OTHER}`])
+    expect(etsy.offering(OTHER, 'TEST-GRN').price).toEqual(money(2700))
+  }, 20_000)
+
+  it('🔴 a listing still locked after the wait: nothing read or sent, and the row is DEFERRED with no retry spent', async () => {
+    live()
+    const etsy = statefulEtsy({ [LISTING_ID]: etsyInventory() })
+    leaseRedis.hold(etsyListingLockKey('etsy-acct', LISTING_ID), 'another-worker', 10_000)
+    const saved = ETSY_LISTING_LOCK_DEFAULTS.waitMs
+    ETSY_LISTING_LOCK_DEFAULTS.waitMs = 200
+    try {
+      const item = { ...priceRow('TEST-GRN', 26), retryCount: 2, maxRetries: 3, payload: { price: 26 } }
+      const result = await service.syncToEtsy(item)
+      expect(result).toMatchObject({ success: false, status: 'FAILED', errorCode: 'ETSY_LISTING_BUSY', retryable: true })
+      expect(result.message).toBe('Another change to this Etsy listing is still being sent, so nothing was sent for this one yet. It is retried shortly.')
+      expect(etsy.log).toEqual([])
+      // Both queue paths (the worker and the cron drain) decide with this function: a deferral, not a spent retry —
+      // even on a row with one retry left, which a spent retry would have killed.
+      expect(computeFailureDisposition(item, result.error, { errorCode: result.errorCode, retryable: result.retryable }))
+        .toMatchObject({ kind: 'deferral', errorCode: 'ETSY_LISTING_BUSY' })
+      await service.handleSyncFailure(item, result.error, { errorCode: result.errorCode, retryable: result.retryable })
+      const update = vi.mocked((await import('../db.js')).default.outboundSyncQueue.update).mock.calls.at(-1)![0] as { data: Record<string, unknown> }
+      expect(update.data).toMatchObject({ syncStatus: 'FAILED', errorCode: 'ETSY_LISTING_BUSY', nextRetryAt: expect.any(Date) })
+      expect(update.data).not.toHaveProperty('retryCount')
+      expect(update.data).not.toHaveProperty('isDead')
+    } finally {
+      ETSY_LISTING_LOCK_DEFAULTS.waitMs = saved
+      await leaseRedis.eval(RELEASE_SCRIPT, 1, etsyListingLockKey('etsy-acct', LISTING_ID), 'another-worker')
+    }
+  }, 20_000)
 })

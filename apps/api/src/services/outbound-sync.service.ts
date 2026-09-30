@@ -128,13 +128,16 @@ const AUTH_DEFER_MS = 15 * 60_000;
 // refresh.
 const AUTH_CLASS_RE = /Unauthorized|invalid_grant|Access to requested resource is denied|writes are paused until the operator reconnects|Held, nothing sent:.*(?:needs to be reconnected|no .* token for this account)/i;
 const AUTH_HOLD_CODES = new Set(['AUTH_REQUIRED', 'ACCOUNT_NEEDS_SIGNIN', 'CONNECTION_NEEDS_REAUTH', 'TOKEN_UNAVAILABLE']);
+// 2026-09-30 — another change to the same Etsy listing holds its inventory lock (etsy/listing-lock.ts). Nothing was
+// sent; the row waits its turn and spends no retry.
+const LISTING_BUSY_DEFER_MS = 30_000;
 
 export function withJitter(ms: number): number {
   return Math.round(ms * (1 + Math.random() * 0.2));
 }
 
 export type FailureDisposition =
-  | { kind: "deferral"; nextRetryAt: Date; errorCode: "CIRCUIT_OPEN_DEFERRED" | "AUTH_REQUIRED" }
+  | { kind: "deferral"; nextRetryAt: Date; errorCode: "CIRCUIT_OPEN_DEFERRED" | "AUTH_REQUIRED" | "ETSY_LISTING_BUSY" }
   | { kind: "terminal"; errorCode: string }
   | { kind: "retry"; nextRetryAt: Date; errorCode: "RETRY_SCHEDULED" };
 
@@ -144,6 +147,9 @@ export function computeFailureDisposition(
   opts?: { errorCode?: string; retryable?: boolean },
   now: number = Date.now(),
 ): FailureDisposition {
+  if (opts?.errorCode === "ETSY_LISTING_BUSY") {
+    return { kind: "deferral", nextRetryAt: new Date(now + withJitter(LISTING_BUSY_DEFER_MS)), errorCode: "ETSY_LISTING_BUSY" };
+  }
   const isCircuitOpen =
     opts?.errorCode === "EBAY_CIRCUIT_OPEN" || /circuit open/i.test(errorMessage);
   const isRateLimited =

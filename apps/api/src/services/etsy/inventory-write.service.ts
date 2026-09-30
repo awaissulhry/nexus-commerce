@@ -15,6 +15,7 @@ import {
   type EtsyInventoryWrite, type EtsyReadInventory, type InventoryDrift, type OfferingChange,
 } from './inventory.js'
 import type { GatewayRequest } from '../gateway/gateway.js'
+import { withEtsyListingLock } from './listing-lock.js'
 
 export interface EtsyInventoryWriteInput {
   accountId: string
@@ -53,6 +54,13 @@ export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promis
   const listingId = String(input.listingId)
   if (!/^[1-9]\d*$/.test(listingId)) throw new Error('That is not an Etsy listing id; nothing was sent.')
 
+  // 2026-09-30 — one read → change → replace per listing at a time (`listing-lock.ts`): two overlapping writes to one
+  // listing would each replace the inventory the other had just changed. Held through the read-back, so a sibling
+  // write cannot land between our PUT and the check of it.
+  return withEtsyListingLock({ accountId: input.accountId, listingId }, () => writeHoldingLock(input, listingId))
+}
+
+async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: string): Promise<EtsyInventoryWriteResult> {
   const reader = await etsyReader(input.accountId)
   // A read that fails throws here, before anything is built or sent: the caller retries it.
   const before = await reader.get<EtsyReadInventory>(`/listings/${listingId}/inventory`)
