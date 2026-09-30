@@ -2,7 +2,7 @@
 
 import { Circle, Database, GitBranch, Link2, Pin, Settings2, Sparkles, FunctionSquare, AlertTriangle } from 'lucide-react'
 import { Button } from '../primitives/Button'
-import { Tooltip } from '../primitives/Tooltip'
+import { Tooltip, useTooltipsDisabled } from '../primitives/Tooltip'
 
 export type ValueSourceKind = 'master' | 'override' | 'rule' | 'default' | 'missing' | 'linked' | 'channel' | 'formula' | 'ai' | 'warning'
 
@@ -38,26 +38,25 @@ export function SourceIndicator({ kind, label, description, tooltip, actionLabel
     .filter((part): part is string => !!part).map(part => part.trim().replace(/\.+$/, '')).join('. ')
   const content = <><Icon size={14} strokeWidth={2} aria-hidden="true" />{showLabel && <span>{label}</span>}</>
   const className = `nds-source-indicator${showLabel ? ' nds-source-indicator--label' : ''}${quiet ? ' nds-source-indicator--quiet' : ''}`
-  return (
-    <Tooltip portal label={tooltip ?? explanation}>
-      {actionable ? (
-        <Button
-          inline variant="quiet" className={className} type="button"
-          aria-label={explanation} title={tooltip} tabIndex={tabIndex} data-value-source={kind}
-          onMouseDownCapture={(event) => event.stopPropagation()}
-          onDoubleClickCapture={(event) => event.stopPropagation()}
-          // AG handles native key events before React's bubble handlers; capture keeps Enter/Space on this action.
-          onKeyDownCapture={(event) => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation() }}
-          onClick={(event) => { event.stopPropagation(); onAction() }}
-        >{content}</Button>
-      ) : (
-        <span className={className} role="img" aria-label={explanation} title={tooltip} tabIndex={tabIndex} data-value-source={kind}
-          onKeyDownCapture={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); event.preventDefault() }
-          }}>
-          {content}
-        </span>
-      )}
-    </Tooltip>
+  // In a host without hints (a dense grid: one mark per cell) the Tooltip would render only its trigger: skip mounting it.
+  const hintless = useTooltipsDisabled()
+  const trigger = actionable ? (
+    <Button
+      inline variant="quiet" className={className} type="button"
+      aria-label={explanation} title={tooltip} tabIndex={tabIndex} data-value-source={kind}
+      onMouseDownCapture={(event) => event.stopPropagation()}
+      onDoubleClickCapture={(event) => event.stopPropagation()}
+      // AG handles native key events before React's bubble handlers; capture keeps Enter/Space on this action.
+      onKeyDownCapture={(event) => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation() }}
+      onClick={(event) => { event.stopPropagation(); onAction() }}
+    >{content}</Button>
+  ) : (
+    <span className={className} role="img" aria-label={explanation} title={tooltip} tabIndex={tabIndex} data-value-source={kind}
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); event.preventDefault() }
+      }}>
+      {content}
+    </span>
   )
+  return hintless ? trigger : <Tooltip portal label={tooltip ?? explanation}>{trigger}</Tooltip>
 }

@@ -309,9 +309,11 @@ export function AppNavRail() {
     </>
   )
 
-  // Filter the rail by permission when we have a resolved session. Anonymous
+  // Filter the rail by permission unless the visitor is anonymous. Anonymous
   // (shadow, pre-enforce) shows the full nav so the open app is unchanged;
-  // a signed-in user sees only permitted links.
+  // a signed-in user sees only permitted links, and while the session is still
+  // being read (the product studio draws meanwhile — `rendersBeforeSession`)
+  // only the links that need no permission show.
   const { status } = useAuth()
   // TB.6 — the predicate comes from ProfileScope, not straight from AuthProvider. With no profile
   // selected it IS AuthProvider's union, so this is a no-op by default; with one selected the rail
@@ -320,7 +322,7 @@ export function AppNavRail() {
   const { has } = useProfileScope()
   const builtNav = buildAppNav(counts, conn)
   const navItems = useMemo(
-    () => (status === 'authed' ? filterNavByPermission(builtNav, has) : builtNav),
+    () => (status === 'anon' ? builtNav : filterNavByPermission(builtNav, has)),
     [status, has, builtNav],
   )
 

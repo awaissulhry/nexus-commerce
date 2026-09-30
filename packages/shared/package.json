@@ -46,6 +46,10 @@
       "types": "./dist/cell-provenance.d.ts",
       "default": "./dist/cell-provenance.js"
     },
+    "./sheet-cell-wire": {
+      "types": "./dist/sheet-cell-wire.d.ts",
+      "default": "./dist/sheet-cell-wire.js"
+    },
     "./shopify-information-editing": {
       "types": "./dist/shopify-information-editing.d.ts",
       "default": "./dist/shopify-information-editing.js"

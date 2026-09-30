@@ -1,3 +1,11 @@
+## A short list takes the keyboard before it is painted — 2026-09-30
+
+Mirrored from web. `ListboxPanel` without a search field focuses its container in a layout effect, before the paint.
+
+## A source mark in a grid without hints mounts no tooltip — 2026-09-30
+
+Mirrored from web. `SourceIndicator` skips its `Tooltip` inside a `TooltipPortalProvider disabled` host (same markup); `useTooltipsDisabled()` in `primitives/Tooltip.tsx`.
+
 ## A save that answers with a warning says so on its cell — 2026-09-30
 
 Mirrored from web. `CellSaveEntry.warning`, `CellSaveTracker.setSavedWithWarning` / `warnedCount`, `saveNote`, a `SheetWriter` result cell's `warning`, the `nds-cell-is-saved-warned` class and its `grid.css` rule.

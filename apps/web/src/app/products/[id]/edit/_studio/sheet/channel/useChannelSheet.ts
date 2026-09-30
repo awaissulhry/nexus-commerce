@@ -27,13 +27,16 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
+import { followListingVersion, planSavedCellPatch } from './savedCellPatch'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
+import { channelScopeUrl as buildChannelScopeUrl, compactSheetUrl } from '../../sheetUrls'
+import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
-import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetListing } from './types'
+import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
   schemaRevision?: string
@@ -64,35 +67,22 @@ export interface ChannelSheetState {
    */
   backendMissing: boolean
   reload: () => void
-  /** Reconcile saved values and provenance without replacing the grid with a loading state. */
-  refresh: (canApply: () => boolean) => Promise<void>
+  /** Reconcile saved values and provenance without replacing the grid with a loading state. True when the rows were replaced. */
+  refresh: (canApply: () => boolean) => Promise<boolean>
   applyLocal: (rowId: string, mutate: (row: ChannelSheetRow) => void) => void
 }
 
-/**
- * PES.5 §3.2.
- *
- * 🔴 The market parameter is `market`, NOT `marketplace`. §3.2's prose writes `&marketplace=`, but
- * the shipped route reads `q.market` and answers `400 {"error":"market is required"}` — verified
- * against the running service, not the doc. The RESPONSE still calls it `scope.marketplace`, so the
- * two names genuinely coexist and only the request side takes `market`.
- */
+/** The channel scope's read URL — built in `../../sheetUrls.ts`, shared with the page-load prefetch. */
 export function channelScopeUrl(o: UseChannelSheetOptions): string {
-  const params = new URLSearchParams({
-    scope: 'channel',
-    channel: o.channel,
-    market: o.marketplace,
-  })
-  if (o.accountId) params.set('accountId', o.accountId)
-  if (o.locale) params.set('locale', o.locale)
-  if (o.locales) params.set('locales', o.locales.join(','))
-  if (o.view) params.set('view', o.view)
-  return `${getBackendUrl()}/api/products/${o.productId}/studio/sheet?${params}`
+  return buildChannelScopeUrl(o)
 }
+
+/** The compact wire form (`sheetUrls.ts`); `channelSheetResponse` restores today's shape. `url` stays the read's identity. */
+export { compactSheetUrl }
 
 /** A successful HTTP response must contain a sheet before it can replace the current view. */
 export function channelSheetResponse(body: unknown): ChannelScopePage {
-  const page = body as Partial<ChannelScopePage> | null
+  const page = decodeSheetCells(body) as Partial<ChannelScopePage> | null
   if (!page || !Array.isArray(page.rows) || !Array.isArray(page.columns) || !Array.isArray(page.aliases) ||
       !page.scope || typeof page.scope.channel !== 'string' || typeof page.scope.marketplace !== 'string' ||
       !page.meta || !Array.isArray(page.meta.schemaMissing) || !Array.isArray(page.meta.schemaAge)) {
@@ -125,7 +115,7 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 
     // Keep the current coordinate's schema during reload so AG retains column state.
     // `response.url === url` above already prevents another coordinate's data from showing.
-    fetchStudioRead(url, abort.signal)
+    fetchStudioRead(compactSheetUrl(url), abort.signal)
       .then(async (res) => {
         const body = await res.json().catch(() => null)
         if (!res.ok) throw new StudioReadError(res.status, body)
@@ -154,18 +144,20 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
-  const refresh = useCallback(async (canApply: () => boolean) => {
-    if (activeUrl.current !== url) return
+  const refresh = useCallback(async (canApply: () => boolean): Promise<boolean> => {
+    if (activeUrl.current !== url) return false
     const mine = ++requestRef.current
     try {
-      const res = await fetch(url, {
+      const res = await fetch(compactSheetUrl(url), {
         credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30_000),
       })
-      if (!res.ok) return
+      if (!res.ok) return false
       const body = channelSheetResponse(await res.json())
-      if (mine === requestRef.current && activeUrl.current === url && canApply()) setResponse({ url, data: body })
+      if (mine === requestRef.current && activeUrl.current === url && canApply()) { setResponse({ url, data: body }); return true }
+      return false
     } catch {
-      // Preserve the confirmed edit if the follow-up read is temporarily unavailable.
+      // Preserve the confirmed edit if the follow-up read is temporarily unavailable (the caller may try again).
+      return false
     }
   }, [url])
 
@@ -239,6 +231,16 @@ export const writeLandsOnListing = (cell: { writeTarget?: string } | null | unde
 
 /** "I saw no listing on this coordinate" — a listing's own version is never 0 (the schema starts it at 1). */
 export const NO_LISTING_VERSION = 0
+
+/**
+ * The record a cell's change is written to — `changes[].target` (see the note where the change is built): a content
+ * edit follows the address the operator chose (a pin is the listing's, the shared text is Master's), every other cell
+ * the server's `writeTarget`. One definition, so the readiness refresh (P2 review 4) asks the question the save answered.
+ */
+export function changeTarget(cell: StudioCellValue | undefined, intent?: string): 'channel' | 'master' {
+  const address = intent === 'reset' || intent === 'reset-list' ? cell?.contentAcknowledgement?.pin.address ?? cell?.contentAddress : cell?.contentAddress
+  return cell?.contentAcknowledgement ? address?.tier === 'pin' ? 'channel' : 'master' : writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb === 'channel' ? 'channel' : 'master'
+}
 
 /** A family listing a listing-level eBay write moved (`familyListings[]`): its id and the version it holds now. */
 export interface FamilyListing { productId: string; listingId: string; version: number }
@@ -385,7 +387,19 @@ export interface ChannelWriteCoord {
   /** A save started listings on this coordinate (`adopted`: the rows that now hold one). */
   onListingsCreated?: (created: CreatedListing[], adopted: ChannelSheetRow[]) => void
   /** P1 review (2) — a listing-level eBay save moved other rows of the family (their listing version, their shown value). */
-  onFamilyChanged?: (rows: ChannelSheetRow[]) => void
+  onFamilyChanged?: (rows: ChannelSheetRow[], columns?: string[]) => void
+  /** P2 — the column a cell belongs to, so a confirmed save can be settled in place (`savedCellPatch.ts`). */
+  columnOf?: (colId: string) => SheetColumn | undefined
+  /**
+   * P2 — how this save settled: the rows patched in place from its answer, or why the sheet must read again. A save
+   * that reports nothing (a variation theme, a Shopify field) is read again, as before.
+   */
+  onStored?: (outcome: { patched: ChannelSheetRow[]; columns: string[] } | { read: string }) => void
+  /**
+   * P2 review 2 — the cells this row's save was built from, as the grid held them when the save left (set once, by the
+   * outermost `commitChannelRow`). A cell the operator has edited again since then is not settled from this answer.
+   */
+  sentCells?: ReadonlyMap<string, StudioCellValue | undefined>
   /**
    * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
    * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
@@ -462,7 +476,7 @@ async function commitChannelLanguage(
          * Defaulting to `'master'` when the server sent no cell matches the endpoint's own default
          * — the safe direction is the shared record refusing the edit, not a silent channel write.
          */
-        target: cell?.contentAcknowledgement ? address?.tier === 'pin' ? 'channel' : 'master' : writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb ?? 'master',
+        target: changeTarget(cell, intent),
         intent: intent === 'reset-list' ? 'reset' : intent,
       },
     }
@@ -526,15 +540,20 @@ async function commitChannelLanguage(
     }
     // The drafts this save started: adopted into the saved row and its whole family BEFORE the version write-back
     // below, which then lands on the listing the saved row now holds.
+    const family = [...(coord.familyRows?.() ?? [])]
+    const listingVersions = new Map([row, ...family].map((r) => [r, r.listing?.version]))
+    // P2 — decided against the answer before its other effects land; applied once the save is known to be clean.
+    const settle = res.ok && coord.onStored ? planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId), sent: coord.sentCells,
+      changes: changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value, intent: change.intent, target: change.target })) }) : null
     if (res.ok) {
       reportCreated(req, coord, createdListingsOf(body))
       // Only what the server STORED travels to the family: a cell it refused (a 200 can still refuse single cells) keeps
       // its refusal on this row and never paints its value on the siblings (review 2026-09-30).
       const refused = (Array.isArray(body?.errors) ? body.errors : []) as Array<{ id?: string; field?: string }>
       const stored = changes.filter(({ change }) => change.intent !== 'reset' && !refused.some((e) => e.field === change.field && (e.id === undefined || e.id === row.id)))
-      const moved = adoptFamilyListings([...(coord.familyRows?.() ?? [])], familyListingsOf(body), row,
+      const moved = adoptFamilyListings(family, familyListingsOf(body), row,
         stored.map(({ colId, change }) => ({ colId, value: change.value })))
-      if (moved.length) coord.onFamilyChanged?.(moved)
+      if (moved.length) coord.onFamilyChanged?.(moved, stored.map(({ colId }) => colId))
     }
     const raw = typeof body?.currentVersion === 'number' ? body.currentVersion : undefined
     /**
@@ -621,6 +640,12 @@ async function commitChannelLanguage(
     }
 
     const warned = changes.flatMap(({ colId, change }) => { const warning = warningOf(colId, change.field); return warning ? [[colId, { ok: true, warning }] as const] : [] })
+    if (settle?.kind === 'patch') {
+      const patched = new Set(settle.apply())
+      // The family row's variation theme carries its listing's version as its write token: it moves with the listing.
+      for (const r of [row, ...family]) if (followListingVersion(r, listingVersions.get(r), r.listing?.version)) patched.add(r)
+      coord.onStored?.({ patched: [...patched], columns: changes.map(({ colId }) => colId) })
+    } else if (settle) coord.onStored?.({ read: settle.reason })
     return warned.length ? { ok: true, version, cells: { ...Object.fromEntries(changes.map(({ colId }) => [colId, { ok: true }])), ...Object.fromEntries(warned) } } : { ok: true, version }
   } catch (err) {
     return { ok: false, unreachable: true, reason: `Connection lost — refresh to check whether this saved. ${err instanceof Error ? err.message : String(err)}` }
@@ -698,6 +723,8 @@ export function commitChannelRow(
   req: SheetWriteRequest<ChannelSheetRow>,
   coord: ChannelWriteCoord,
 ): Promise<SheetWriteResult> {
+  // P2 review 2 — remember the cells as they were sent, once, before any part of the save leaves.
+  if (!coord.sentCells) coord = { ...coord, sentCells: new Map(req.cells.map(({ colId }) => [colId, req.row?.values?.[colId]])) }
   /**
    * VT.2 — a `variationTheme` cell leaves by its OWN route, exactly as the master sheet's does.
    *

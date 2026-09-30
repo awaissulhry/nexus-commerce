@@ -1,3 +1,11 @@
+## A short list takes the keyboard before it is painted — 2026-09-30
+
+Product sheet P2 (`fix/product-sheet-editing`). **`ListboxPanel`** without a search field focuses its container in a layout effect (it was a passive effect, after the paint): an Enter-then-↓ on a busy page reached the grid cell under the list, and Tab then committed nothing (the product sheet's list suite failed 2–3 times in 8 runs). The search field's `autoFocus` already took focus in the commit. Mirrored in Factory: `ListboxPanel.tsx`.
+
+## A source mark in a grid without hints mounts no tooltip — 2026-09-30
+
+Product sheet P2 (`fix/product-sheet-editing`, speed: a horizontal scroll of a 209-column channel sheet rendered 254 components per frame). **`SourceIndicator`** no longer mounts its **`Tooltip`** inside a host that turned hints off (`TooltipPortalProvider disabled`, the channel grid): the Tooltip rendered only its trigger there, so the markup is unchanged and one component per cell is gone. **`useTooltipsDisabled()`** (primitives `Tooltip.tsx`) tells a component it sits in such a host. Mirrored in Factory: `SourceIndicator.tsx`, `primitives/Tooltip.tsx`.
+
 ## A save that answers with a warning says so on its cell — 2026-09-30
 
 Product sheet P1 review (3): a save the server accepts with a warning (eBay's 55-character subtitle, a list value the channel may not take) showed as a plain green save and the sentence was lost. **`CellSaveEntry`** carries **`warning`**; **`CellSaveTracker.setSavedWithWarning`** keeps a saved-with-warning cell (it does not fade, **`warnedCount`** counts them); **`saveNote(entry)`** gives the cell's note: the refusal's reason, or "Saved with a warning: <the server's sentence>". **`SheetWriter`**: a result cell may carry **`warning`** (`{ ok: true, warning }`), and settle marks it. **`roundTripClassRules`**: **`nds-cell-is-saved-warned`** (the warning corner and a 1 px `--nds-warning` ring, `grid.css`). **`GridSheetStatus`** takes **`warned`**: "Saved HH:MM with N warnings". Mirrored in Factory: `roundTrip.ts`, `sheetWriter.ts`, `editors/index.ts`, `theme/grid.css` (Factory has no `GridSheet`).

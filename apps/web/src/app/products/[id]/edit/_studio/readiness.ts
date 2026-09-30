@@ -8,6 +8,7 @@
  */
 
 import { SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
+import { getBackendUrl } from '@/lib/backend-url'
 import type { ReadinessMatrixEntry, ScopeReadiness } from './types'
 
 /** The four states the scope vocabulary allows. Anything else is a contract change, not a value. */
@@ -114,4 +115,35 @@ export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
     return [{ ...score, coordinateKey: raw.coordinateKey, channel: raw.channel, market: raw.market, accountId: raw.accountId, aliasId: raw.aliasId,
       language: raw.language, label: raw.label, missing, optionalMissing, byProduct, computedAt: typeof raw.computedAt === 'string' ? raw.computedAt : null }]
   })
+}
+
+/**
+ * P2 (2026-09-30, I4-9) — merge a readiness read of ONE coordinate (`?only=coordinate`, asked after a save) into the
+ * family-wide answer the scope menu shows. The chip taken is the saved channel's only (a Shared chip is never taken from
+ * a coordinate read). Every matrix entry the answer carries replaces the entry with its key: each entry is a complete
+ * verdict for its own coordinate and language, and a channel without markets answers for `GLOBAL` whatever market the
+ * page shows (P2 review 8: Shopify's entry never updated).
+ */
+export function mergeCoordinateReadiness<T extends { byScope: Readonly<Record<string, ScopeReadiness>>; matrix: ReadinessMatrixEntry[] }>(
+  previous: T, json: unknown, coordinate: { channel: string; market: string; accountId?: string | null },
+): T {
+  const scopes = parseReadinessResponse(json)
+  const fresh = parseReadinessMatrix(json)
+  const replaced = new Set(fresh.map((entry) => `${entry.coordinateKey}\u0000${entry.language}`))
+  return {
+    ...previous,
+    byScope: scopes[coordinate.channel] ? { ...previous.byScope, [coordinate.channel]: scopes[coordinate.channel] } : previous.byScope,
+    matrix: fresh.length ? [...previous.matrix.filter((entry) => !replaced.has(`${entry.coordinateKey}\u0000${entry.language}`)), ...fresh] : previous.matrix,
+  }
+}
+
+/** The readiness read. `only: 'coordinate'` asks for the one channel coordinate a save moved (P2, I4-9). */
+export function readinessUrl(productId: string, q: { market: string; locale?: string | null; channel?: string; listingId?: string; accountId?: string; only?: 'coordinate' }): string {
+  const params = new URLSearchParams({ market: q.market })
+  if (q.locale) params.set('locale', q.locale)
+  if (q.channel) params.set('channel', q.channel)
+  if (q.listingId) params.set('listingId', q.listingId)
+  if (q.accountId) params.set('accountId', q.accountId)
+  if (q.only) params.set('only', q.only)
+  return `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/readiness?${params}`
 }

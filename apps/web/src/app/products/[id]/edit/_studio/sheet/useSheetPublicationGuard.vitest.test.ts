@@ -10,7 +10,7 @@ vi.mock('react', () => ({
 }))
 
 vi.mock('../contracts', () => ({
-  usePublicationSave: () => ({ registerPublicationBarrier: () => vi.fn() }),
+  usePublicationBarrier: () => () => vi.fn(),
   useStudioScope: () => ({
     registerScopeChangeGuard: (guard: () => boolean) => {
       lifecycle.scopeGuard = guard

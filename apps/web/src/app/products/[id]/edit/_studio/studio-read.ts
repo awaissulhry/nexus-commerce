@@ -1,7 +1,16 @@
+import { adoptPrefetch } from './prefetchStore'
+
 /** Bounded GETs for the editor. Only transient transport/server failures are retried. */
 export async function fetchStudioRead(url: string, signal?: AbortSignal): Promise<Response> {
   const deadline = AbortSignal.timeout(30_000)
   const combined = signal ? AbortSignal.any([signal, deadline]) : deadline
+  // P2 — the page may have started this exact read from its URL already (`studioPrefetch.ts`). A failed or transient
+  // answer there falls through to the normal read below.
+  const prefetched = adoptPrefetch(url, combined)
+  if (prefetched) {
+    const response = await untilAborted(prefetched, combined)
+    if (response && ![502, 503, 504].includes(response.status)) return response
+  }
   for (let attempt = 0; ; attempt++) {
     combined.throwIfAborted()
     try {
@@ -19,6 +28,16 @@ export async function fetchStudioRead(url: string, signal?: AbortSignal): Promis
       if (combined.aborted) abort()
     })
   }
+}
+
+/** The prefetched answer, `null` if it failed; the caller's cancellation still wins. */
+function untilAborted(response: Promise<Response>, signal: AbortSignal): Promise<Response | null> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) { reject(signal.reason); return }
+    const abort = () => reject(signal.reason)
+    signal.addEventListener('abort', abort, { once: true })
+    response.then(resolve, () => resolve(null)).finally(() => signal.removeEventListener('abort', abort))
+  })
 }
 
 export class StudioReadError extends Error {

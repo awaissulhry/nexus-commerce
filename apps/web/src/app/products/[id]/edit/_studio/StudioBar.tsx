@@ -34,7 +34,9 @@ export function StudioBar() {
   const languageChoice = scope === MASTER_SCOPE || available.length !== 1
   const languageOptions = options.locales.map(language => ({ value: language.code,
     label: `${languageLabel(language.code)}${scope === MASTER_SCOPE && language.code === primaryLanguage ? ' · source' : ''}` }))
-  return <ScopeBar variant="menu" className="nds-workspace-scope" label="Editing" items={items} active={scope} onChange={setScope} right={
+  /* P2 (I4-4) — the account, market and language controls do not depend on the save state: kept as one element so a
+     save (pending, saved) redraws the scope menu's items and not every control beside it. */
+  const right = useMemo(() => (
     <>
       {scope !== MASTER_SCOPE && <>
       {accounts.length > 1 && <Listbox size="sm" width="auto" value={accountId} options={accounts.map(a => ({ value: a.id, label: a.label + (a.primary ? ' · primary' : '') + (connectionScopePolicy(a.health, scope, false).needsReconnect ? ' · needs reconnecting' : '') }))} onChange={setAccount} ariaLabel="Account" placeholder="Choose account" />}
@@ -57,6 +59,7 @@ export function StudioBar() {
           else setLocales(ordered)
         }} />}
     </>
-  } />
+  ), [scope, accounts, accountId, setAccount, options, marketplaces, market, setMarket, listingId, destination, setListing, primaryLanguage, locales, locale, setLanguages, setLocales, setLocale]) // everything the controls (and `languagesOf`, `available`, `languageOptions`) read
+  return <ScopeBar variant="menu" className="nds-workspace-scope" label="Editing" items={items} active={scope} onChange={setScope} right={right} />
 }
 

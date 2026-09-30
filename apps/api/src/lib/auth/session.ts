@@ -88,6 +88,24 @@ import {
   dropCachedSessions,
 } from './session-cache.js'
 
+/** One row of the session read: the session, its user, and the user's global role keys. */
+interface SessionRow {
+  id: string
+  revokedAt: Date | null
+  idleExpiry: Date | null
+  absoluteExpiry: Date | null
+  lastSeenAt: Date | null
+  mfaSatisfied: boolean
+  userId: string
+  email: string
+  displayName: string
+  status: string
+  mfaRequired: boolean
+  twoFactorEnabledAt: Date | null
+  permissionsVersion: number
+  roleKeys: string[] | null
+}
+
 export interface ValidatedSession {
   sessionId: string
   user: SessionUser
@@ -112,36 +130,21 @@ export async function validateSession(
   const cached = process.env.NEXUS_WORKSPACES_ENABLED === '1' ? null : await getCachedSession(hash)
   if (cached) return cached
 
-  const row = await (prisma as any).userSession.findUnique({
-    where: { sessionTokenHash: hash },
-    select: {
-      id: true,
-      revokedAt: true,
-      idleExpiry: true,
-      absoluteExpiry: true,
-      lastSeenAt: true,
-      mfaSatisfied: true,
-      user: {
-        select: {
-          id: true,
-          email: true,
-          displayName: true,
-          status: true,
-          mfaRequired: true,
-          twoFactorEnabledAt: true,
-          permissionsVersion: true,
-          roleAssignments: { select: { role: { select: { key: true } } } },
-        },
-      },
-    },
-  })
-  if (!row || !row.user) return null
+  // P2 (2026-09-30) — ONE statement. The nested Prisma read was four (UserSession, UserProfile, UserRole, Role), and
+  // with profiles on this runs uncached on every request. Same rows and fields; role keys in a stable order.
+  const [row] = await prisma.$queryRaw<SessionRow[]>`
+    SELECT s.id, s."revokedAt", s."idleExpiry", s."absoluteExpiry", s."lastSeenAt", s."mfaSatisfied",
+      u.id AS "userId", u.email, u."displayName", u.status, u."mfaRequired", u."twoFactorEnabledAt", u."permissionsVersion",
+      ARRAY(SELECT r.key FROM "public"."UserRole" ur JOIN "public"."Role" r ON r.id = ur."roleId" WHERE ur."userId" = u.id ORDER BY r.key) AS "roleKeys"
+    FROM "public"."UserSession" s JOIN "public"."UserProfile" u ON u.id = s."userId"
+    WHERE s."sessionTokenHash" = ${hash}`
+  if (!row) return null
 
   const now = Date.now()
   if (row.revokedAt) return null
   if (row.idleExpiry && row.idleExpiry.getTime() <= now) return null
   if (row.absoluteExpiry && row.absoluteExpiry.getTime() <= now) return null
-  if (row.user.status !== 'active') return null
+  if (row.status !== 'active') return null
 
   // Slide the idle window forward — but only write if the last touch
   // was >60s ago, to avoid a DB write on every single request.
@@ -165,14 +168,14 @@ export async function validateSession(
     sessionId: row.id,
     mfaSatisfied: !!row.mfaSatisfied,
     user: {
-      id: row.user.id,
-      email: row.user.email,
-      displayName: row.user.displayName,
-      status: row.user.status,
-      mfaRequired: !!row.user.mfaRequired,
-      twoFactorEnabledAt: row.user.twoFactorEnabledAt,
-      permissionsVersion: row.user.permissionsVersion,
-      roleKeys: (row.user.roleAssignments ?? []).map((a: any) => a.role.key),
+      id: row.userId,
+      email: row.email,
+      displayName: row.displayName,
+      status: row.status,
+      mfaRequired: !!row.mfaRequired,
+      twoFactorEnabledAt: row.twoFactorEnabledAt,
+      permissionsVersion: row.permissionsVersion,
+      roleKeys: row.roleKeys ?? [],
     },
   }
 

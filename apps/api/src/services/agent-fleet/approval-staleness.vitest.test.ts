@@ -21,7 +21,7 @@ vi.mock('../../db.js', () => ({
     agentExemplar: { findMany: vi.fn() },
     // The person who approved, looked up again at commit (login roles with business profiles off, the membership on).
     userProfile: { findUnique: vi.fn() },
-    workspaceMembership: { findUnique: vi.fn() },
+    $queryRaw: vi.fn(),
   },
 }))
 /* S9.4 — commitScheduledApproval now restamps `expiresAt` when it hands a
@@ -204,11 +204,11 @@ describe('AP.6 — commit refuses a stale action', () => {
     } as never)
     // The person who approved still owns the business: these tests are about the facts, not the person.
     db.userProfile.findUnique.mockResolvedValue({ id: 'u1', status: 'active', permissionsVersion: 1, roleAssignments: [{ role: { key: 'OWNER' } }] } as never)
-    db.workspaceMembership.findUnique.mockResolvedValue({
+    db.$queryRaw.mockResolvedValue([{
       id: 'm1', status: 'active', version: 1, userId: 'u1', createdAt: new Date(), user: { status: 'active' },
       workspace: { id: 'ws_alpha_0001', name: 'Alpha', status: 'active', version: 1 },
       roles: [{ role: { id: 'r1', key: 'OWNER', name: 'Owner', permissions: [] } }],
-    } as never)
+    }] as never)
   })
 
   it('an approval that does not say which person approved it is not run (fail closed)', async () => {
@@ -218,6 +218,15 @@ describe('AP.6 — commit refuses a stale action', () => {
     } as never)
     const out = await commitScheduledApproval('a1')
     expect(out).toEqual({ ok: false, error: 'not run — it could not be re-checked — it does not say which person approved it. Approve it again.' })
+    expect(gate).not.toHaveBeenCalled()
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'permission_refused' }))
+  })
+
+  it('does not run when the person no longer has access to the business', async () => {
+    db.userProfile.findUnique.mockResolvedValue(null as never)
+    db.$queryRaw.mockResolvedValue([] as never)
+    const out = await commitScheduledApproval('a1')
+    expect(out).toEqual({ ok: false, error: 'not run — Awais no longer has access to this business profile' })
     expect(gate).not.toHaveBeenCalled()
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'permission_refused' }))
   })
@@ -278,6 +287,9 @@ describe('AP.6 — commit refuses a stale action', () => {
       'approve',
       expect.objectContaining({ kind: 'user', userId: 'u1', label: 'Awais' }),
     )
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+      expect(db.$queryRaw).toHaveBeenCalledWith(expect.anything(), 'ws_alpha_0001', 'u1')
+    } else expect(db.$queryRaw).not.toHaveBeenCalled()
   })
 })
 

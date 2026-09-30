@@ -15,6 +15,8 @@ import { EmptyState } from '@/design-system/components'
 
 import { StudioClient } from './StudioClient'
 import { loadStudioData, type StudioData } from './studio-data'
+import { prefetchStudio } from './studioPrefetch'
+import { preloadStudioTab } from './studioTabs'
 import Loading from '../studio/loading'
 import styles from './studio.module.css'
 
@@ -23,6 +25,16 @@ export function StudioLoader({ id }: { id: string }) {
     { kind: 'loading' } | { kind: 'ok'; data: StudioData } | { kind: 'failed'; message: string }
   >({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
+
+  // P2 (I4-2) — the destination check and the sheet read need only the URL: start them now, beside the frame's own
+  // reads, instead of after them. The hooks adopt them only if they resolve exactly the same reads. The tab the URL
+  // opens loads its code meanwhile too (I4-7: every tab is its own chunk). The URL is read once, here, from the
+  // location: subscribing to it (`useSearchParams`) would re-render the whole studio on every cell the URL records.
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search)
+    prefetchStudio(id, search)
+    preloadStudioTab(search.get('tab'))
+  }, [id])
 
   useEffect(() => {
     let cancelled = false
