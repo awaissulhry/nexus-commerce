@@ -211,7 +211,7 @@ jobs:
     name: Ship the API to Railway
     runs-on: ubuntu-latest
     # railway up (~11 min measured) + up to 12 min for pre-deploy and healthcheck; the image path: railway-deploy-image.sh
-    # (about 26 minutes when every Railway request hangs to its limit) + the readiness loop (review of PR 2, 2026-09-30).
+    # (about 27 minutes when every Railway request hangs to its limit) + the readiness loop (review of PR 2, 2026-09-30).
     timeout-minutes: 45
 
     steps:
@@ -297,7 +297,7 @@ jobs:
   # (2026-09-26): the job was cancelled while the scheduler's build was still running.
   # Only the roles in `changes.background` ship. When the API ships too, they wait for it and never follow a failed
   # or skipped API deploy (the eBay check included); otherwise they go on their own.
-  # 40 minutes: railway-deploy-image.sh can take about 26 when every Railway request hangs to its limit, and it should
+  # 40 minutes: railway-deploy-image.sh can take about 27 when every Railway request hangs to its limit, and it should
   # still print its own "✗ …" line before GitHub ends the job (review of PR 2, 2026-09-30).
   deploy-background:
     needs: [changes, verify, images, deploy]

@@ -161,7 +161,9 @@ nothing (or cannot be read) while the read-back failed too: then nothing confirm
 also names the deployment Railway started: `✓ Railway started deployment …`. A `::notice::` that
 Railway answered with the deployment that already serves means it started none: report it. A
 deployment that stops being Railway's latest before it succeeds (removed or cancelled) fails the job
-at once.
+at once. One that Railway never lists as the latest fails as soon as Railway's list of deployments
+shows it ended, or after 15 minutes (`✗ deployment … was never listed by Railway …`); the previous
+build keeps serving.
 
 The web image carries the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values that `nexus-web` had
 when the image was built. Once the web deploys by image, a change to one of them on `nexus-web`
@@ -174,10 +176,12 @@ Not yet proven: that the project token may change a service's source and deploy 
 changes the service in every environment. Railway answered the project token "Unauthorized" and
 nothing changed: a project token acts on one environment. The deploy now sends the per-environment
 mutations above; the next switch proves whether Railway lets the token send them. If Railway refuses
-the source change (`✗ Railway refused the change of the service's source …`), nothing changed: the
-service keeps running its `railway up` build. Remove its name from the variable (no deploy is
-needed; later releases ship it with `railway up`), and report it. Do not set the image by hand in
-Settings → Source instead: the workflow sets the image on every deploy, so it fails again there.
+the source change (`✗ Railway refused the change of the service's source …`: an HTTP 4xx status or a
+GraphQL error), nothing changed: the service keeps running its `railway up` build. Remove its name
+from the variable (no deploy is needed; later releases ship it with `railway up`), and report it. Do
+not set the image by hand in Settings → Source instead: the workflow sets the image on every deploy,
+so it fails again there. An HTTP 5xx is not a refusal: the change may have applied, and the job says
+`✗ no answer from Railway …` (see "When a step fails" below).
 
 Also not yet proven:
 
@@ -195,10 +199,11 @@ Also not yet proven:
 
 The schema marks `serviceInstanceUpdate`'s environment "[Experimental]": for an environment that is
 not a fork, the change reaches every environment that is not a fork. So the deploy first reads the
-project's environments and changes nothing unless exactly one is not a fork (`✗ the Railway project
-has N environments that are not forks …`, or `✗ could not read all of the Railway project's
-environments …`). On 2026-09-30 the project had one environment, production. If this refusal
-appears, another environment was added: remove the service's name from the variable and report it.
+project's environments and changes nothing unless exactly one is not a fork. On 2026-09-30 the
+project had one environment, production. After `✗ the Railway project has N environments that are
+not forks …`, another environment was added: remove the service's name from the variable and report
+it. After `✗ every environment of the Railway project is a fork …` or `✗ could not read all of the
+Railway project's environments …`, nothing changed either: remove the name and report the message.
 
 When a step fails, what to do:
 
@@ -207,17 +212,21 @@ When a step fails, what to do:
   production environment. If the message names `project.environments`, the token may not read the
   environments, and the deploy does not go on without them. Remove the service's name from the
   variable and report it.
-- `✗ could not reach Railway for …: nothing was sent`: nothing changed. Run the deploy again.
+- `✗ could not reach Railway for …: nothing was sent`: that request never left. For the token's
+  environment or the source change, nothing changed: run the deploy again. For a deployment of the
+  image (`serviceInstanceDeployV2`), the source change had already been made: see the next paragraph.
 - `✗ no answer from Railway to the change of the service's source … (serviceInstanceUpdate) … it may
-  still apply`: no deployment was started, and the service keeps serving its last build. Look at
-  Settings → Source. If it names the image, the change applied: run Deploy API by hand again, which
-  sets the same image and deploys it. If it names the old source, nothing changed: run it again, or
-  remove the name from the variable.
-- `✗ no answer from Railway to a deployment of …`: a deployment may have started. Look at the
-  service's deployments on Railway before running the deploy again.
+  still apply` (after a timeout or an HTTP 5xx): the deploy started no deployment, and the service
+  keeps serving its last build. If the change applied, Railway may have started a deployment itself:
+  check the service's deployments too. Then look at Settings → Source. If it names the image, the
+  change applied: run Deploy API by hand again, which sets the same image and deploys it. If it
+  names the old source, nothing changed: run it again, or remove the name from the variable.
+- `✗ no answer from Railway to a deployment of …` (after a timeout or an HTTP 5xx): a deployment may
+  have started. Look at the service's deployments on Railway before running the deploy again.
 
-If the source change works but the image deployment fails (or Railway refuses to start it), the
-service keeps serving its last `railway up` build while Settings → Source already names the image.
+If the source change works but the image deployment fails (or Railway refuses to start it, or is not
+reached), the service keeps serving its last `railway up` build while Settings → Source already names
+the image. When the read-back failed, the ✗ line says Settings → Source may name it: look first.
 Before the next deploy of that service, either fix the cause and run Deploy API by hand again (the
 name still in the variable), or remove the name and disconnect the image in Settings → Source: a
 hand run would not ship it then, because it already runs a current `railway up` build.

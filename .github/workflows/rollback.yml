@@ -214,7 +214,7 @@ jobs:
     if: needs.check.outputs.api == 'true'
     name: Roll the API back
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # railway-deploy-image.sh: about 26 minutes when every Railway request hangs; then readiness
+    timeout-minutes: 45  # railway-deploy-image.sh: about 27 minutes when every Railway request hangs; then readiness
     steps:
       - uses: actions/checkout@v4
       - name: Install Railway CLI (pinned)
@@ -268,7 +268,7 @@ jobs:
       (needs.api.result == 'success' || needs.api.result == 'skipped')
     name: Roll ${{ matrix.role }} back
     runs-on: ubuntu-latest
-    timeout-minutes: 40  # railway-deploy-image.sh: about 26 minutes when every Railway request hangs
+    timeout-minutes: 40  # railway-deploy-image.sh: about 27 minutes when every Railway request hangs
     strategy:
       fail-fast: false
       matrix:
@@ -319,7 +319,7 @@ jobs:
       (needs.api.result == 'success' || needs.api.result == 'skipped')
     name: Roll the web back
     runs-on: ubuntu-latest
-    timeout-minutes: 40  # railway-deploy-image.sh: about 26 minutes when every Railway request hangs
+    timeout-minutes: 40  # railway-deploy-image.sh: about 27 minutes when every Railway request hangs
     steps:
       - uses: actions/checkout@v4
       - name: Install Railway CLI (pinned)

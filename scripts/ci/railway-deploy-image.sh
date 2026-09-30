@@ -28,8 +28,8 @@
 #    Railway's record of the deployment to name this image.
 #    Railway answers a denial with HTTP 200 and `errors` ("Not Authorized"), so each answer is checked for errors and
 #    for the field asked for. A request is cut after $RAILWAY_API_SECONDS (60 s). When curl could not reach Railway
-#    (name, connection, TLS), nothing was sent; when no answer came in time, a mutation may still apply. The messages
-#    say which.
+#    (name, connection, TLS), nothing was sent; when no answer came in time, or the answer is a server error (HTTP
+#    5xx), a mutation may still apply. The messages say which.
 #    The deployment id comes back from the mutation, so nothing waits for one to appear. The CLI path waited up to a
 #    minute, then ran `railway redeploy --from-source`: connecting an image was not proven to start a deployment, and
 #    a plain `railway redeploy` re-runs the latest deployment with that deployment's own image. The schema describes
@@ -40,11 +40,14 @@
 # 3. Follows that deployment to SUCCESS; 1 when it ends FAILED, CRASHED, REMOVED or SKIPPED, when a newer deployment
 #    replaces it, when it stops being the latest after Railway listed it (the latest goes back to the one that served
 #    before: removed or cancelled), or after 15 minutes. A failed deployment never takes traffic. Until Railway lists
-#    the new deployment as the service's latest, the one that served before counts as waiting.
+#    the new deployment as the service's latest, the one that served before counts as waiting; after a minute of
+#    that, Railway's list of deployments (which keeps removed ones) is read once a minute, and a deployment it lists
+#    as ended ends the wait.
 # 4. Checks what that deployment runs, from Railway's record of it (`railway deployment list --json`): meta.image is
 #    this image → 0; another image, or meta.cliMessage and no image (a `railway up` build) → 1. SUCCESS alone does not
 #    say: if Railway only staged the new source and the read-back failed, the deployment runs the old build and
-#    reports SUCCESS. A record that names neither, or cannot be read, gives a warning when the read-back confirmed the
+#    reports SUCCESS. A record that names neither is read once more (it may not be complete yet). A record that still
+#    names neither, or cannot be read, gives a warning when the read-back confirmed the
 #    source, and 1 when it did not: then nothing confirms the image (review, 2026-09-30: a first switch, staged, with
 #    the read-back denied, ended green). Railway's docs do not describe meta; public deploy scripts read meta.image as
 #    the reference the service was pointed at. Only the API has a readiness check of its own commit afterwards.
@@ -58,11 +61,11 @@
 # Polls every 10 s: each `railway service status` costs a few Railway API requests, and Hobby allows 1,000 an hour.
 # The waits are deadlines, not poll counts: one read makes several requests and the CLI allows each 90 s (CLI 5.30.1,
 # DEFAULT_HTTP_TIMEOUT_SECS), so 90 polls could take far longer than 15 minutes (review of PR 2, 2026-09-30). A read is
-# cut at 60 s where `timeout` exists (the runner). Worst case, every read and request hanging to its limit: about 26
-# minutes (first read 3 × 70 s, four API requests 4 × 60 s, follow 900 + 70 s, image check 130 s); usually the follow
-# plus a few seconds. The jobs that run this allow 40 (45 for the API rollback, which then waits for readiness).
-# RAILWAY_POLL_SECONDS, RAILWAY_FOLLOW_SECONDS, RAILWAY_READ_SECONDS and RAILWAY_API_SECONDS change the timing; only
-# tests set them.
+# cut at 60 s where `timeout` exists (the runner). Worst case, every read and request hanging to its limit: about 27
+# minutes (first read 3 × 70 s, four API requests 4 × 60 s, follow 900 + 130 s, record check 130 s); usually the
+# follow plus a few seconds. The jobs that run this allow 40 (45 for the API rollback, which then waits for readiness).
+# RAILWAY_POLL_SECONDS, RAILWAY_FOLLOW_SECONDS, RAILWAY_READ_SECONDS, RAILWAY_API_SECONDS and RAILWAY_LIST_SECONDS
+# change the timing; only tests set them.
 set -euo pipefail
 set +x
 
@@ -86,6 +89,7 @@ POLL_SECONDS=${RAILWAY_POLL_SECONDS:-10}
 FOLLOW_SECONDS=${RAILWAY_FOLLOW_SECONDS:-900}
 READ_SECONDS=${RAILWAY_READ_SECONDS:-60}
 API_SECONDS=${RAILWAY_API_SECONDS:-60}
+LIST_SECONDS=${RAILWAY_LIST_SECONDS:-60}
 API_URL=https://backboard.railway.com/graphql/v2
 
 # Runs a Railway read, cut at $READ_SECONDS where `timeout` exists. Its errors are dropped: callers retry or report.
@@ -112,12 +116,20 @@ deployment_image() {
       end' 2>/dev/null
 }
 
+# The status of deployment $1 in Railway's list of the service's deployments, which keeps removed ones. Fails when
+# Railway cannot be read or does not list it.
+listed_status() {
+  railway_read deployment list --service "$service" --json --limit 10 |
+    jq -er --arg id "$1" 'map(select(.id == $id)) | if length == 0 then error("not listed") else .[0].status // "" end' 2>/dev/null
+}
+
 # One request to Railway's GraphQL API as the project token; $1 is the request body (JSON, built with jq -n). Prints
 # the answer (JSON). Otherwise prints why, on one line, and returns 3 when curl could not reach Railway (nothing was
 # sent: curl exits 5, 6 and 7 for a name or connection, 35, 60 and 77 for TLS), 2 when no answer came within
-# $API_SECONDS s (a mutation may still apply), 1 when Railway refused: an HTTP status that is not 2xx, a body that is
-# not JSON, or `errors` in it (Railway denies with HTTP 200: "Not Authorized"; a nested field's path is named). The
-# token reaches curl through a file descriptor, never its arguments; neither it nor any request header is printed.
+# $API_SECONDS s or the answer is a server error (HTTP 5xx): a mutation may still apply. 1 when Railway refused: any
+# other status that is not 2xx, a body that is not JSON, or `errors` in it (Railway denies with HTTP 200: "Not
+# Authorized"; a nested field's path is named). The token reaches curl through a file descriptor, never its
+# arguments; neither it nor any request header is printed.
 graphql() {
   local out code status answer errors
   out=$(printf '%s' "$1" |
@@ -138,6 +150,7 @@ graphql() {
     <<< "$answer" 2>/dev/null) || errors=''
   case "$status" in
     2[0-9][0-9]) ;;
+    5[0-9][0-9]) echo "HTTP $status, a server error${errors:+: $errors}"; return 2 ;;
     *) echo "HTTP $status${errors:+, $errors}"; return 1 ;;
   esac
   if ! jq -e 'type == "object"' <<< "$answer" > /dev/null 2>&1; then
@@ -175,8 +188,8 @@ railway_api() {
 # While the service's latest deployment is still the one that served before ($before), the new one is not listed yet;
 # once it was listed, going back to that one means it was removed or cancelled (GONE).
 follow_deployment() {
-  local id=$1 status='' last='' start=$SECONDS seen=false
-  local deadline=$((start + FOLLOW_SECONDS))
+  local id=$1 status='' last='' start=$SECONDS seen=false ended=''
+  local deadline=$((start + FOLLOW_SECONDS)) next_list=$((start + LIST_SECONDS))
   while :; do
     status=$(service_status |
       jq -r --arg id "$id" --arg before "$before" --argjson seen "$seen" '
@@ -193,11 +206,27 @@ follow_deployment() {
       FAILED | CRASHED | REMOVED | SKIPPED) echo "✗ deployment $id ended $status — the previous build keeps serving"; return 1 ;;
       GONE) echo "✗ deployment $id is no longer Railway's latest (removed or cancelled) — the previous build keeps serving"; return 1 ;;
       REPLACED:*) echo "✗ deployment $id was replaced by deployment ${status#REPLACED:} before it succeeded"; return 1 ;;
+      'NOT LISTED YET')
+        if [ "$SECONDS" -ge "$next_list" ]; then
+          next_list=$((SECONDS + LIST_SECONDS))
+          ended=$(listed_status "$id") || ended=''
+          case "$ended" in
+            REMOVED | FAILED | CRASHED | SKIPPED)
+              echo "✗ deployment $id ended $ended before Railway listed it as the service's latest — the previous build keeps serving"
+              return 1
+              ;;
+          esac
+        fi
+        ;;
     esac
     [ "$SECONDS" -lt "$deadline" ] || break
     sleep "$POLL_SECONDS"
   done
-  echo "✗ deployment $id was still ${status:-unknown} after $((SECONDS - start)) s — the previous build keeps serving until it succeeds"
+  if [ "$status" = 'NOT LISTED YET' ]; then
+    echo "✗ deployment $id was never listed by Railway as the service's latest within $((SECONDS - start)) s — it may have been removed; the previous build keeps serving"
+  else
+    echo "✗ deployment $id was still ${status:-unknown} after $((SECONDS - start)) s — the previous build keeps serving until it succeeds"
+  fi
   return 1
 }
 
@@ -229,9 +258,13 @@ roots=$(jq -r '.project.environments // {} | if (.edges | type) != "array" or (.
   roots=unread
 case "$roots" in
   1) ;;
-  unread | more | 0 | '')
-    why='its answer lists none'
-    if [ "$roots" = more ]; then why='more than 100'; elif [ "$roots" = 0 ]; then why='all of them are forks'; fi
+  0)
+    echo "✗ every environment of the Railway project is a fork (each names a source environment), so what serviceInstanceUpdate would change is not clear — nothing was changed"
+    exit 1
+    ;;
+  unread | more | '')
+    why='its answer holds no list'
+    if [ "$roots" = more ]; then why='more than 100'; fi
     echo "✗ could not read all of the Railway project's environments ($why) — nothing was changed: serviceInstanceUpdate changes the service in every environment that is not a fork, so it is sent only when there is one"
     exit 1
     ;;
@@ -281,11 +314,13 @@ fi
 body=$(jq -n --arg service "$service" --arg environment "$environment" '{
   query: "mutation DeployImageStart($service: String!, $environment: String!) { serviceInstanceDeployV2(serviceId: $service, environmentId: $environment) }",
   variables: {service: $service, environment: $environment}}')
+source_names="Settings → Source already names $image"
+if [ "$read_back" != true ]; then source_names="Settings → Source may name $image (the read-back failed)"; fi
 # The id goes into $GITHUB_OUTPUT: only letters, digits and dashes, so an answer cannot add a line there.
 id=$(railway_api "a deployment of $image (serviceInstanceDeployV2)" \
   '.data.serviceInstanceDeployV2 | strings | select(test("\\A[A-Za-z0-9-]+\\z"))' \
-  "the previous build keeps serving, while Settings → Source already names $image" \
-  'a deployment may still start: check the service on Railway' "$body") || exit 1
+  "the previous build keeps serving, while $source_names" \
+  "a deployment may still start: check the service on Railway; $source_names" "$body") || exit 1
 if [ "$id" = "$before" ]; then
   echo "::notice::Railway answered with the deployment that already serves ($id): it started no new one"
 else
@@ -295,10 +330,14 @@ if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "deployment_id=$id" >> "$GITHUB_OUTPUT
 
 follow_deployment "$id"
 
-# What the deployment runs, from Railway's record of it: two reads, $POLL_SECONDS apart.
+# What the deployment runs, from Railway's record of it: read again, $POLL_SECONDS later, when the first read fails or
+# names nothing (the record may not be complete yet).
 record='' listed=false
 for attempt in 1 2; do
-  if record=$(deployment_image "$id"); then listed=true; break; fi
+  if read_record=$(deployment_image "$id"); then
+    record=$read_record listed=true
+    [ "$record" = none ] || break
+  fi
   if [ "$attempt" = 1 ]; then sleep "$POLL_SECONDS"; fi
 done
 case "$record" in
