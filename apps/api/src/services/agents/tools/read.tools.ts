@@ -44,8 +44,9 @@ const productSnapshot: AgentTool = {
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findUnique({
-      where: { id },
+    // MCP.12 — a deleted product (soft delete, `deletedAt`) is not found, as everywhere else in the app.
+    const p = await prisma.product.findFirst({
+      where: { id, deletedAt: null },
       select: {
         sku: true,
         name: true,
@@ -124,9 +125,10 @@ const productSearch: AgentTool = {
   async handler(args) {
     const q = String(args.query ?? '').trim()
     const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 50)
+    // MCP.12 — deleted products (soft delete) are never results, as in every other catalogue read.
     const where = q
-      ? { OR: [{ name: ci(q) }, { sku: ci(q) }, { brand: ci(q) }] }
-      : {}
+      ? { deletedAt: null, OR: [{ name: ci(q) }, { sku: ci(q) }, { brand: ci(q) }] }
+      : { deletedAt: null }
     const rows = await prisma.product.findMany({
       where,
       take: limit,
@@ -319,7 +321,8 @@ const listingHealth: AgentTool = {
   riskTier: 'low',
   readOnly: true,
   description:
-    'Per-channel listing readiness for a product (what is blocking a clean publish).',
+    'Per-channel listing readiness for a product (what is blocking a clean publish). Each listing says draft (Nexus '
+    + 'has not sent it yet) and linked (it carries the channel\'s own item id; a draft can be linked).',
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
@@ -332,6 +335,7 @@ const listingHealth: AgentTool = {
         price: true,
         quantity: true,
         externalListingId: true,
+        listingStatus: true,
       },
     })
     const channels = rows.map((r) => {
@@ -342,7 +346,10 @@ const listingHealth: AgentTool = {
       return {
         channel: r.channel,
         marketplace: r.marketplace,
-        published: !!r.externalListingId,
+        // MCP.12 — was `published: !!externalListingId`, which read a linked draft as published. Nothing reads the
+        // old field (web, API, scheduled agents: grepped), so the honest pair replaces it, as in product-snapshot.
+        draft: r.listingStatus === 'DRAFT',
+        linked: !!r.externalListingId,
         missing,
         ready: missing.length === 0,
       }

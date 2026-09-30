@@ -354,7 +354,8 @@ const listingIssues: AgentTool = {
     + 'suppressed status, a failed last push, Nexus validation warnings, and publishing readiness (blocked = '
     + 'required values missing or invalid). A readiness issue names the empty REQUIRED fields in missing, other '
     + 'readiness findings in otherIssues, and optional fields shown in another language in untranslated; a list cut '
-    + 'short says how many it left out (moreMissing, moreOtherIssues, moreUntranslated). Filter by channel, market, sku, productId or severity '
+    + 'short says how many it left out (moreMissing, moreOtherIssues, moreUntranslated). Each item says draft (Nexus has '
+    + 'not sent it yet) and linked (it carries the channel\'s own item id; a draft can be linked). Filter by channel, market, sku, productId or severity '
     + '(error | warning | info). Returns { items, nextCursor, total }: one item per listing, at most '
     + `${NESTED_CAP} issues each (errors first). Reads Nexus's saved state only; nothing is fetched from a channel.${PAGING}`,
   handler: (args) => listTool('listing-issues', async () => {
@@ -453,7 +454,10 @@ const listingIssues: AgentTool = {
         channel: l.channel,
         market: l.marketplace,
         status: l.listingStatus,
-        published: !!l.externalListingId,
+        // MCP.12 — was `published: !!externalListingId`, which read a linked draft (46 of 102 drafts in the development
+        // data carry an eBay item number) as published. Nothing reads the old field, so the honest pair replaces it.
+        draft: l.listingStatus === 'DRAFT',
+        linked: !!l.externalListingId,
         issues: issues.slice(0, NESTED_CAP),
         ...(count > NESTED_CAP ? { moreIssues: count - NESTED_CAP } : {}),
       }

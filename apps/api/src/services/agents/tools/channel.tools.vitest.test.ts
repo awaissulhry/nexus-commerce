@@ -334,6 +334,10 @@ describe('MCP.9 — listing-issues', () => {
     expect(at('MCP9-P10', 'EBAY', 'IT').issues.find((i: Row) => i.from === 'readiness')).toEqual({
       from: 'readiness', severity: 'warning', message: 'Warnings for EBAY · IT (it): 5 of 5 required values filled.', untranslated: ['Colour'],
     })
+    // MCP.12 — draft and linked, never "published": P07 is a Woo draft with no channel id, P01 an eBay listing with one.
+    expect(at('MCP9-P07', 'WOOCOMMERCE', 'GLOBAL')).toMatchObject({ status: 'DRAFT', draft: true, linked: false })
+    expect(at('MCP9-P01', 'EBAY', 'IT')).toMatchObject({ status: 'ACTIVE', draft: false, linked: true })
+    for (const item of items) expect(item).not.toHaveProperty('published')
     // Errors first, whatever order the sources were read in.
     expect(at('MCP9-P07', 'WOOCOMMERCE', 'GLOBAL').issues.map((i: Row) => i.from).sort()).toEqual(['channel', 'sync'])
     expect(at('MCP9-P10', 'EBAY', 'IT').issues.map((i: Row) => i.severity)).toEqual(['error', 'warning'])
