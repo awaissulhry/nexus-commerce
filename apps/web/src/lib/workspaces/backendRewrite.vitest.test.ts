@@ -3,13 +3,12 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 
 const require = createRequire(import.meta.url)
-const { apiTarget, backendRewrites, backendHeaders } = require('./backendRewrite.cjs') as {
+const { apiTarget, backendRewrites } = require('./backendRewrite.cjs') as {
   apiTarget(env: Record<string, string | undefined>): string
   backendRewrites(env: Record<string, string | undefined>): Array<{ source: string; destination: string }>
-  backendHeaders(env: Record<string, string | undefined>): Array<{ source: string; headers: Array<{ key: string; value: string }> }>
 }
 
-describe('the /backend API calls are a Vercel external rewrite, not a function (paused-site incident 2026-09-27)', () => {
+describe('the /backend API calls are an external rewrite that next start proxies, not a route handler (paused-site incident 2026-09-27)', () => {
   const on = { NEXT_PUBLIC_WORKSPACES_ENABLED: '1', NEXUS_API_PROXY_TARGET: 'https://api.example.test/' }
   it('rewrites every API path to the API origin, except the channel-connect callback that keeps its cookie-path fix', () => {
     const [rule] = backendRewrites(on)
@@ -21,21 +20,17 @@ describe('the /backend API calls are a Vercel external rewrite, not a function (
     for (const path of ['/backend/api/cx', '/backend/api/cx/callback/ebay', '/backend/api/cx/start'])
       expect(pattern.test(path), path).toBe(false)
   })
-  it('turns off upstream caching for API answers', () => {
-    expect(backendHeaders(on)).toEqual([{ source: '/backend/api/:path*', headers: [{ key: 'x-vercel-enable-rewrite-caching', value: '0' }] }])
-  })
   it('does nothing without business profiles (the browser then calls the API directly)', () => {
     expect(backendRewrites({ NEXUS_API_PROXY_TARGET: 'https://api.example.test' })).toEqual([])
-    expect(backendHeaders({})).toEqual([])
   })
-  it('finds the API the way the function proxy did', () => {
+  it('finds the API the way the route handler does', () => {
     expect(apiTarget({ NEXUS_API_PROXY_TARGET: 'api.example.test' })).toBe('https://api.example.test')
     expect(apiTarget({ NEXT_PUBLIC_API_URL: 'http://127.0.0.1:8095' })).toBe('http://127.0.0.1:8095')
     expect(apiTarget({})).toBe('https://nexusapi-production-b7bb.up.railway.app')
   })
 })
 
-describe('nothing puts a Vercel function back in front of the API', () => {
+describe('nothing puts the route handler back in front of the API', () => {
   it('next.config.js installs the rewrite ahead of the route handler, and the middleware skips /backend', () => {
     const config = readFileSync(new URL('../../../next.config.js', import.meta.url), 'utf8')
     expect(config).toMatch(/beforeFiles:\s*backendRewrites\(process\.env\)/)

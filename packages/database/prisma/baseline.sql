@@ -9683,6 +9683,7 @@ CREATE TABLE "ShopifyColourProduct" (
     "proposal" JSONB,
     "remoteStatus" TEXT,
     "checkedAt" TIMESTAMP(3),
+    "linkVerifiedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

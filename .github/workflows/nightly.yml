@@ -28,7 +28,6 @@ env:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
 
   api-whole:
     name: Whole API suite, one job, no snapshot

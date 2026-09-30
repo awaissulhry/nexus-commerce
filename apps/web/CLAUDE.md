@@ -49,12 +49,13 @@ its rules apply to all UI here.
 - With `NEXT_PUBLIC_WORKSPACES_ENABLED=1`, the browser base is `<origin>/backend`, so calls go to `/backend/api/…`.
   `src/app/backend/[...path]/route.ts` forwards them to `NEXUS_API_PROXY_TARGET`. With the flag off, the browser
   calls `NEXT_PUBLIC_API_URL` directly.
-- **`/backend/api/*` is a Vercel external rewrite, not a function** (`next.config.js` → `src/lib/workspaces/backendRewrite.cjs`).
-  On 2026-09-27 Vercel paused the site: the `/backend` route handler (a Node function) carried every API call and every
-  live stream, and the Hobby team used 331% of its Fluid Provisioned Memory. Keep long-lived work (streams, polling,
-  proxies) off Vercel functions: call the API through `getBackendUrl()`. The route handler serves only
-  `/backend/api/cx/*` (it fixes that cookie's path); `src/proxy.ts` skips `/backend`. A rewrite is cut after 120 s;
-  `EventSource` reconnects by itself.
+- **`/backend/api/*` is an external rewrite, not a route handler** (`next.config.js` → `src/lib/workspaces/backendRewrite.cjs`).
+  The web runs on Railway with `next start`, which proxies it to `NEXUS_API_PROXY_TARGET` over Railway's private
+  network. `proxyTimeout` cuts a proxied call after 300 s without bytes (live streams ping every ≤ 25 s; `EventSource`
+  reconnects by itself); `proxyClientMaxBodySize` passes bodies up to 512 MB. The route handler serves only
+  `/backend/api/cx/*` (it fixes that cookie's path); `src/proxy.ts` skips `/backend`.
+- Behind Railway's edge, `request.url` in `src/proxy.ts` is `https://localhost:3000`, not the browser's address. To know
+  the browser's site, compare the `Host` / `x-forwarded-host` header.
 - `src/lib/auth/install-fetch.ts` patches the browser `fetch`. It adds credentials, `x-nexus-csrf` on writes, and
   `x-nexus-workspace-id` from the `/w/<id>` URL. Never add these by hand.
 - Navigate with `Link` from `@/lib/workspaces/Link` and `useRouter`/`usePathname` from
