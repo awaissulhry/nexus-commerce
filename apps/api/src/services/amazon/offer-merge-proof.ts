@@ -1,6 +1,7 @@
 /**
  * The read-only proof of the Amazon offer merge (NEXUS_AMAZON_OFFER_MERGE; Owner, 2026-09-30): the logic of
- * `scripts/amazon-offer-merge-proof.mts`, kept here so tests can prove it cannot send a real patch.
+ * `src/scripts/amazon-offer-merge-proof.ts` (compiled to dist/scripts/), kept here so tests can prove it cannot send a
+ * real patch.
  *
  * For ONE listing it prints what Nexus stores, the live `purchasable_offer` verbatim, the exact merge each price sender
  * would send with the switch ON for the CURRENT live price (a no-op price), and Amazon's VALIDATION_PREVIEW answer to

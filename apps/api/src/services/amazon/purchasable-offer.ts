@@ -28,7 +28,7 @@ import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
  * `replace` and makes no live read. Read at send time, so a Railway variable change needs no code change.
  *
  * Why it exists (Owner, 2026-09-30): the merge ships OFF, is proven on Amazon without changing anything
- * (`scripts/amazon-offer-merge-proof.mts`, VALIDATION_PREVIEW only), and is switched on only after that.
+ * (`node apps/api/dist/scripts/amazon-offer-merge-proof.js`, VALIDATION_PREVIEW only), and is switched on only after that.
  * When it may go: once it has run ON in production and a price push has been read back with the rest of the offer
  * intact — then delete this function, its two call sites and the OFF arms of their tests, in one change.
  */
