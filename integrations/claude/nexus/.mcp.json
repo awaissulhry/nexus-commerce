@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nexus": {
+      "type": "http",
+      "url": "https://nexusapi-production-b7bb.up.railway.app/mcp"
+    }
+  }
+}
