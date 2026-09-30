@@ -33,8 +33,6 @@ permissions:
 
 env:
   TURBO_TELEMETRY_DISABLED: '1'
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   NEXUS_DISABLE_BACKGROUND_JOBS: '1'
   ENABLE_QUEUE_WORKERS: '0'
 
@@ -60,7 +58,7 @@ jobs:
         run: node scripts/ci/run-static-gates.mjs
 
       - name: Typecheck affected workspaces
-        run: npx turbo run typecheck --affected --cache=local:rw,remote:r -- --incremental false
+        run: npx turbo run typecheck --affected --cache=local:rw -- --incremental false
 
       - name: Web tests (whole suite — proxy, workspace paths and permission gates included)
         env:
