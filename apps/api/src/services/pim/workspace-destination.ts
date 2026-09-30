@@ -2,7 +2,7 @@ import prisma from '../../db.js'
 import { resolveChannelConnectionId } from '../connection-resolver.service.js'
 
 export class WorkspaceScopeError extends Error {
-  readonly code = 'WORKSPACE_SCOPE_MISMATCH'
+  readonly code: string = 'WORKSPACE_SCOPE_MISMATCH'
   constructor(message: string, readonly statusCode = 409) { super(message) }
 }
 
@@ -17,14 +17,14 @@ export interface WorkspaceDestinationInput {
 
 /** Resolve an explicit workspace destination. A listing's missing attribution is never
  * repaired by choosing today's primary account. No credentials leave this boundary. */
-export async function resolveWorkspaceDestination(input: WorkspaceDestinationInput) {
+export async function resolveWorkspaceDestination(input: WorkspaceDestinationInput, options: { includeDeleted?: boolean } = {}) {
   if (!input.channel || !input.marketplace || !input.productId)
     throw new WorkspaceScopeError('Choose a product, channel and market.', 400)
   if (input.accountId !== undefined && !input.accountId.trim())
     throw new WorkspaceScopeError('Choose a connected account.', 400)
   if (input.listingId !== undefined && !input.listingId.trim())
     throw new WorkspaceScopeError('Choose an attributed listing or clear the listing selection.', 400)
-  const product = await prisma.product.findFirst({ where: { id: input.productId, deletedAt: null }, select: { id: true, parentId: true } })
+  const product = await prisma.product.findFirst({ where: { id: input.productId, ...(options.includeDeleted ? {} : { deletedAt: null }) }, select: { id: true, parentId: true } })
   if (!product) throw new WorkspaceScopeError('This product is unavailable.', 404)
   const familyId = product.parentId ?? product.id
   const market = await prisma.marketplace.findFirst({ where: { channel: input.channel, code: input.marketplace, isActive: true }, select: { id: true, currency: true } })
@@ -43,7 +43,7 @@ export async function resolveWorkspaceDestination(input: WorkspaceDestinationInp
   }
   if (input.listingId && !listing) throw new WorkspaceScopeError('The selected listing is unavailable in this product, account and market.', 404)
   if (listing) {
-    const owner = await prisma.product.findFirst({ where: { id: listing.productId, deletedAt: null }, select: { id: true, parentId: true } })
+    const owner = await prisma.product.findFirst({ where: { id: listing.productId, ...(options.includeDeleted ? {} : { deletedAt: null }) }, select: { id: true, parentId: true } })
     if (!owner || (owner.parentId ?? owner.id) !== familyId || listing.channel !== input.channel || listing.marketplace !== input.marketplace
       || (input.accountId !== undefined && listing.channelConnectionId !== input.accountId)
       || (input.aliasKey !== undefined && listing.aliasKey !== input.aliasKey))
