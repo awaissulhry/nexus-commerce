@@ -96,6 +96,9 @@ const GATES = {
   // 2026-09-30 — CI runs the real-PostgreSQL suites in two parts; a split that loses or repeats a suite is refused.
   'real-PostgreSQL split self-test': node('scripts/run-real-postgres-tests.mjs', '--self-test'),
   'DS-GAPS append-only': node('scripts/check-ds-gaps-append-only.mjs', '--check'),
+  // P3 (2026-09-30) — every editor the product sheet can mount is named by the Enter/Tab node test and the commit sweep.
+  'sheet editor coverage': node('scripts/check-sheet-editor-coverage.mjs', '--check'),
+  'sheet editor coverage self-test': node('scripts/check-sheet-editor-coverage.mjs', '--self-test'),
   'DS api guard': node('apps/web/src/design-system/tools/api-guard.mjs'),
 }
 
