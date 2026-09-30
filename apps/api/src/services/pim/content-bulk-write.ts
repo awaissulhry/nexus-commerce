@@ -23,7 +23,9 @@ const addressKey = (value: unknown, label: string) => {
     : ['pin', address.language, address.coordinate.channel, address.coordinate.market, address.coordinate.accountId ?? '', address.coordinate.aliasId ?? ''])
 }
 export interface ContentEdit { change: Change; column: SheetColumn }
-export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: () => Promise<any>,
+/** Only owners whose content write checked the caller's token may advance the next write's token. */
+export type ContentOwnerVersion = (productId: string, versionOf: 'product' | 'channelListing') => Promise<number | undefined>
+export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: (readContentOwner?: ContentOwnerVersion) => Promise<any>,
   priorErrors: Array<{ id: string; field: string; error: string }> = [], priorWarnings: Array<{ id: string; field: string; warning: string }> = []) {
   const errors: Array<{ id: string; field: string; error: string }> = [...priorErrors]
   /** P1 (`value-verdict.ts`) — a stored value with a problem (a title over the channel's limit), and its reason. */
@@ -159,7 +161,11 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       formulaWrite.results = []
       for (const operation of formulaWrite.operations?.() ?? []) formulaWrite.results.push(await operation)
     }
-    const rest = await facts()
+    const rest = await facts(async (productId, owner) => {
+      const pin = owner === 'channelListing' ? plans.find(plan => plan.edit.change.id === productId && plan.address.tier === 'pin') : undefined
+      const key = owner === 'product' ? `product:${productId}` : `listing:${pin?.listingId}`
+      return ownerVersions.get(key)?.()
+    })
     let contentMayHaveMoved = groups.size > 1 || (rest.updated ?? 0) > 0
     if (!context.formulaCascade) {
       const { reevaluateDependents } = await import('./mapping/cell-formula.service.js')
