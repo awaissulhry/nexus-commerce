@@ -6402,6 +6402,14 @@
       }
     ]
   },
+  "ShopifyColourSync": {
+    "scalar": {},
+    "compound": { "colour_sync": ["familyId", "channelConnectionId", "marketplace", "aliasKey"] },
+    "relations": [
+      { "field": "family", "model": "Product", "from": ["familyId"], "to": ["id"] },
+      { "field": "channelConnection", "model": "ChannelConnection", "from": ["channelConnectionId"], "to": ["id"] }
+    ]
+  },
   "ShopifyColourProduct": {
     "scalar": {},
     "compound": {

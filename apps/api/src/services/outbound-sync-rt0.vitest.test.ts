@@ -78,8 +78,14 @@ import {
   OutboundSyncService,
   __ebayTrading,
 } from './outbound-sync.service.js'
+import { ColourSyncBusyError } from './shopify/colour-products/sync-work.js'
 
 describe('RT.0 — computeFailureDisposition', () => {
+  it('defers a busy Shopify colour family even when the stock job has used its normal retry budget', () => {
+    const busy = new ColourSyncBusyError()
+    const disposition = computeFailureDisposition({ retryCount: 3, maxRetries: 3 }, busy.message, { errorCode: busy.code }, NOW)
+    expect(disposition.kind).toBe('deferral')
+  })
   const NOW = 1_700_000_000_000
   const item = (retryCount: number, maxRetries = 3) => ({ retryCount, maxRetries })
 

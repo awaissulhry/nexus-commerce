@@ -42,6 +42,7 @@ const AXIS_ATTRS = new Set([
  */
 const LISTING_IDENTITY_KEYS = new Set([
   'shopifyProductId', 'variantId', 'inventoryItemId', 'inventoryLocationId', 'nexusFamilyId', // Shopify native mapping (content-sync)
+  'shopifyColourProductId', 'shopifyColourStockPending', 'shopifyColourRetired',
   '__offerIds', '__lastPublishedAxes', // eBay Inventory offers and the axes last published
   PUBLISH_KEY,
 ])
