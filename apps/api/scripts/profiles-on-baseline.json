@@ -12,7 +12,6 @@
     "src/routes/amazon-ads-auth.vitest.test.ts": 3,
     "src/routes/auth-routes.vitest.test.ts": 2,
     "src/routes/cx-connect.vitest.test.ts": 2,
-    "src/routes/studio-matrix.routes.vitest.test.ts": 4,
     "src/services/__tests__/bulk-action-sse.test.ts": 3,
     "src/services/__tests__/product-event-sse.test.ts": 7,
     "src/services/advertising/ads-report-shares.vitest.test.ts": 8,
