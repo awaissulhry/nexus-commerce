@@ -880,7 +880,11 @@ function layerFor(source: string | null, hasAlias: boolean): CellLayer {
   // intent.
   if (source === null) return 'default'
   switch (source) {
+    // P1 — the listing's own stored text (an old eBay title), not Master's: it differs from Master
+    // on 80 of 82 REGAL eBay IT cells. It is the LISTING layer's value, so its reset is the
+    // listing's "Follow Master". `follows`/`pinned` keep the resolver's intent (not an operator pin).
     case 'channelSnapshot':
+      return hasAlias ? 'alias' : 'channel'
     case 'master':
     case 'masterLocale':
     case 'masterColumn':

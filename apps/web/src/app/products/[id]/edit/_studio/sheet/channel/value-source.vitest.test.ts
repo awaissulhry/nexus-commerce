@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resetSourceLabel } from './value-source'
+import { resetActionWords, resetSourceLabel } from './value-source'
 import type { MappedCell, StudioCellValue } from './types'
 
 const mapping = (over: Partial<MappedCell> = {}): MappedCell => ({
@@ -17,5 +17,18 @@ describe('channel reset destination', () => {
     expect(resetSourceLabel(cell())).toBe('follow Master')
     expect(resetSourceLabel(cell({ mapped: mapping({ sourcePath: null }) }))).toContain('may become empty')
     expect(resetSourceLabel(cell({ mapped: mapping({ usesExpression: true }) }))).toContain('configured mapping')
+  })
+})
+
+describe('reset words (P1)', () => {
+  const subject = { sku: 'REGAL-JACKET-L-BLACK-MEN', listing: 'Primary' }
+  it('calls the reset of an old listing text "Follow Master"', () => {
+    const words = resetActionWords(cell({ source: 'channelSnapshot', writeField: 'ebay_title', mapped: mapping({ sourcePath: 'title' }) }), subject)
+    expect(words.label).toBe('Follow Master')
+    expect(words.description).toBe('Stop using this listing’s own text for REGAL-JACKET-L-BLACK-MEN · Primary and follow Master.')
+  })
+  it('keeps the override words for an override and for a whole list', () => {
+    expect(resetActionWords(cell({ layer: 'channel', pinned: true }), subject).label).toBe('Remove listing override')
+    expect(resetActionWords(cell({ writeField: 'imageUrls[2]' }), subject).label).toBe('Review removing list override…')
   })
 })
