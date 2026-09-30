@@ -39,7 +39,7 @@ const B = 'mcp_money_business_bravo'
 /** Written into every business-B row a tool could return. It must never come back for A. */
 const B_MARK = 'BRAVO'
 
-interface Seeded { productId: string; orderId: string }
+interface Seeded { productId: string; orderId: string; approvalId: string }
 const seeded: Record<string, Seeded> = {}
 
 const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
@@ -92,6 +92,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'create-negative-keyword': () => ({ externalCampaignId: 'none', keywordText: 'free', matchType: 'NEGATIVE_EXACT' }),
   'graduate-keyword': () => ({ query: 'jacket', sourceExternalCampaignId: 'none', destExternalCampaignId: 'none' }),
   'set-target-bid': () => ({ targetId: 'none', proposedBidCents: 55 }),
+  'approval-status': (ids) => ({ approvalId: ids.approvalId }),
 }
 
 async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> {
@@ -178,7 +179,19 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       data: { name: `${mark} queue rule`, metric: 'queueDepth', operator: 'gt', threshold: 100, notificationChannels: [] },
     })
     await db.alertEvent.create({ data: { ruleId: rule.id, value: 250 } })
-    return { productId: product.id, orderId: order.id }
+    // A queued change whose stored preview carries money the reader may not see.
+    const run = await db.agentRun.create({ data: { agentKey: 'manual-action', trigger: 'manual', status: 'done' } })
+    const approval = await db.agentApproval.create({
+      data: {
+        agentRunId: run.id,
+        toolName: 'apply-content',
+        riskTier: 'medium',
+        args: { productId: product.id, title: `${mark} title` },
+        preview: { action: 'apply-content', changes: { title: { from: product.name, to: `${mark} title` } }, costPrice: '4242.42' },
+        status: 'pending',
+      },
+    })
+    return { productId: product.id, orderId: order.id, approvalId: approval.id }
   })
 }
 

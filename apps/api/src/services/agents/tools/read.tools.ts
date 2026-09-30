@@ -25,6 +25,7 @@ function orderStatus(o: {
 
 const productSnapshot: AgentTool = {
   name: 'product-snapshot',
+  title: 'Product snapshot',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.productsView],
   category: 'products',
@@ -81,6 +82,7 @@ const productSnapshot: AgentTool = {
 
 const productSearch: AgentTool = {
   name: 'product-search',
+  title: 'Search products',
   input: z.object({
     query: z.string().optional().describe('name, SKU or brand fragment'),
     limit: z.coerce.number().int().min(1).max(50).optional().describe('max products (default 10)'),
@@ -117,6 +119,7 @@ const productSearch: AgentTool = {
 
 const orderSearch: AgentTool = {
   name: 'order-search',
+  title: 'Search orders',
   input: z.object({
     marketplace: z.string().optional().describe('marketplace code, e.g. IT'),
     buyer: z.string().optional().describe('buyer name or email fragment'),
@@ -165,6 +168,7 @@ const orderSearch: AgentTool = {
 
 const orderDetail: AgentTool = {
   name: 'order-detail',
+  title: 'Order details',
   input: z.object({ orderId: z.string().min(1).describe('Nexus order id') }),
   requires: [F.ordersView],
   category: 'orders',
@@ -202,6 +206,7 @@ const orderDetail: AgentTool = {
 
 const stockLevels: AgentTool = {
   name: 'stock-levels',
+  title: 'Stock levels',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.inventoryView],
   category: 'fulfillment',
@@ -239,6 +244,7 @@ const stockLevels: AgentTool = {
 
 const priceStatus: AgentTool = {
   name: 'price-status',
+  title: 'Price status',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.pricingView],
   category: 'pricing',
@@ -277,6 +283,7 @@ const priceStatus: AgentTool = {
 
 const listingHealth: AgentTool = {
   name: 'listing-health',
+  title: 'Listing health',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.listingsView],
   category: 'listings',

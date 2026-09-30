@@ -44,6 +44,7 @@ function publishModeFor(channel: string): string {
 
 const setPrice: AgentTool = {
   name: 'set-price',
+  title: 'Set master price',
   input: z.object({
     productId: z.string().min(1).describe('Nexus product id'),
     price: z.coerce.number().min(0).describe('new master price, in the product currency'),
@@ -53,6 +54,7 @@ const setPrice: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  openWorld: true,
   description:
     'Change a product master price (cascades to channels per their pricing rules; channel push is gated). Requires approval.',
   async handler(args) {
@@ -117,6 +119,7 @@ const setPrice: AgentTool = {
 
 const publishListing: AgentTool = {
   name: 'publish-listing',
+  title: 'Publish a listing',
   input: z.object({
     productId: z.string().min(1).describe('Nexus product id'),
     channel: z.string().min(1).describe('AMAZON, EBAY, SHOPIFY or ETSY'),
@@ -126,6 +129,7 @@ const publishListing: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  openWorld: true,
   description:
     'Publish / re-sync a channel listing through the gated publish pipeline (default non-live). Requires approval.',
   async handler(args) {
@@ -206,6 +210,7 @@ const publishListing: AgentTool = {
 
 const sendCustomerMessage: AgentTool = {
   name: 'send-customer-message',
+  title: 'Email a customer',
   input: z.object({
     orderId: z.string().min(1).describe('Nexus order id'),
     message: z.string().trim().min(1).describe('the message to send to the buyer'),
@@ -215,6 +220,7 @@ const sendCustomerMessage: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  openWorld: true,
   description:
     'Email a customer about their order (dry-run unless outbound email is enabled; GDPR-suppression honored). Requires approval.',
   async handler(args) {
@@ -331,6 +337,7 @@ function escapeHtml(s: string): string {
 // (requiresApprovalDefault) so the loop is proven on a safe action.
 const applyContent: AgentTool = {
   name: 'apply-content',
+  title: 'Apply product content',
   input: z.object({
     productId: z.string().min(1).describe('Nexus product id'),
     title: z.string().optional().describe('new title'),

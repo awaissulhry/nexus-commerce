@@ -14,6 +14,12 @@ import {
 } from '../../ai/model-resolver.service.js'
 import { logUsage } from '../../ai/usage-logger.service.js'
 
+/**
+ * MCP.7 — the drafts call OUR AI provider and spend OUR AI budget. Claude writes its own
+ * drafts, so over MCP they would only add cost: they are offered in the app alone.
+ */
+export const AI_DRAFT_SURFACES = ['app'] as const
+
 export async function aiDraft(
   feature: string,
   prompt: string,
@@ -63,8 +69,10 @@ async function loadProduct(id: string) {
 
 const draftListingContent: AgentTool = {
   name: 'draft-listing-content',
+  title: 'Draft listing content',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.productsView],
+  surfaces: AI_DRAFT_SURFACES,
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -93,8 +101,10 @@ const draftListingContent: AgentTool = {
 
 const draftSeo: AgentTool = {
   name: 'draft-seo',
+  title: 'Draft SEO keywords',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
   requires: [F.productsView],
+  surfaces: AI_DRAFT_SURFACES,
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -116,11 +126,13 @@ const draftSeo: AgentTool = {
 
 const translateContent: AgentTool = {
   name: 'translate-content',
+  title: 'Translate product content',
   input: z.object({
     productId: z.string().min(1).describe('Nexus product id'),
     target: z.string().trim().min(1).describe('target market language, e.g. de'),
   }),
   requires: [F.productsView],
+  surfaces: AI_DRAFT_SURFACES,
   category: 'products',
   riskTier: 'low',
   readOnly: true,
@@ -145,11 +157,13 @@ const translateContent: AgentTool = {
 
 const draftCustomerMessage: AgentTool = {
   name: 'draft-customer-message',
+  title: 'Draft a customer message',
   input: z.object({
     intent: z.string().trim().min(1).describe('what the message should say'),
     orderId: z.string().min(1).optional().describe('the order it is about'),
   }),
   requires: [F.ordersView],
+  surfaces: AI_DRAFT_SURFACES,
   category: 'comms',
   riskTier: 'low',
   readOnly: true,

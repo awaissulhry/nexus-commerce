@@ -15,8 +15,17 @@ export type ToolPermission =
 
 export type FieldPermission = (typeof FIELDS)[keyof typeof FIELDS]
 
+/** MCP.7 — the front doors a tool can be offered on: the assistant in Nexus, and Claude over MCP. */
+export type ToolSurface = 'app' | 'mcp'
+
 export interface ToolContext {
   userId?: string | null
+  /**
+   * MCP.7 — what the caller may see of output another tool stored (approval-status reads an
+   * approval's preview): that tool's money filter for this caller, or null when the caller may
+   * not use that tool. Set by call-tool.ts; absent means nothing stored may be shown.
+   */
+  storedOutput?: (toolName: string, value: unknown) => unknown | null
 }
 
 export interface ToolResult {
@@ -30,8 +39,23 @@ export interface ToolResult {
 
 export interface AgentTool {
   name: string
+  /**
+   * MCP.7 — a short name a person reads (Claude shows it next to every call). Required, so a
+   * tool without one does not compile.
+   */
+  title: string
   category: string // 'products' | 'orders' | 'fulfillment' | 'pricing' | 'listings' | 'insights' | 'comms'
   description: string
+  /**
+   * MCP.7 — where the tool is offered. Absent = everywhere. A tool that spends OUR AI budget
+   * (the drafts) is 'app' only: Claude writes its own drafts.
+   */
+  surfaces?: readonly ToolSurface[]
+  /**
+   * MCP.7 — its preview or its real action reaches someone outside Nexus: a marketplace, or a
+   * buyer's inbox. Claude is told so (openWorldHint).
+   */
+  openWorld?: boolean
   riskTier: RiskTier // code default; AgentTool DB row may override (stricter only for alwaysAsk)
   readOnly: boolean
   /**

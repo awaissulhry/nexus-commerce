@@ -45,6 +45,8 @@ export interface GateOutcome {
   ok: boolean
   mode: 'executed' | 'queued' | 'preview' | 'error'
   approvalId?: string
+  /** MCP.7 — when a queued approval stops waiting (the row's own clock, EXPIRY_HOURS). */
+  expiresAt?: Date | null
   preview?: unknown
   data?: unknown
   error?: string
@@ -116,6 +118,7 @@ export async function runOrQueueTool(
     ok: true,
     mode: 'queued',
     approvalId: ap.id,
+    expiresAt: ap.expiresAt,
     preview: visible.preview ?? visible.data,
   }
 }

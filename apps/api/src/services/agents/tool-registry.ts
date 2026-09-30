@@ -10,6 +10,7 @@ import { ANALYTICS_TOOLS } from './tools/analytics.tools.js'
 import { DRAFT_TOOLS } from './tools/draft.tools.js'
 import { MUTATE_TOOLS } from './tools/mutate.tools.js'
 import { ADS_PROPOSE_TOOLS } from './tools/ads-propose.tools.js'
+import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 
 export type {
   RiskTier,
@@ -25,6 +26,8 @@ const ALL: AgentTool[] = [
   ...MUTATE_TOOLS,
   // NAF.C — preview-only ads propose tools (no execute until Phase F).
   ...ADS_PROPOSE_TOOLS,
+  // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
+  ...APPROVAL_TOOLS,
 ]
 const REGISTRY = new Map<string, AgentTool>(ALL.map((t) => [t.name, t]))
 
