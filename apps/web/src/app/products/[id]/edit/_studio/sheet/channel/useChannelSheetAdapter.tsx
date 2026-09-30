@@ -366,7 +366,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             commit: (req: SheetWriteRequest<ChannelSheetRow>) => commitOne(req),
             // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29: one request per
             // row made 224 of 250 rows fail or go unconfirmed).
-            commitBatch: (requests) => runBulkOperation(requests, commitOne),
+            commitBatch: (requests) => runBulkOperation(requests, commitOne, { retrySignal: writerRef.current!.retrySignal }),
             readBackBatch: async (requests) => {
                 const reads = await readScope(requests);
                 if (!reads)

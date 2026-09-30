@@ -124,7 +124,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     [locale, market],
   )
 
-  const writer = useMemo(
+  const writer: SheetWriter<StudioRow> = useMemo(
     () =>
       new SheetWriter<StudioRow>({
         mergeRow: preserveContentVersions,
@@ -132,7 +132,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
         commit,
         // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29 on the channel
         // scope: one request per row made 224 of 250 rows fail or go unconfirmed; this scope sent the same shape).
-        commitBatch: (requests) => runBulkOperation(requests, commit),
+        commitBatch: (requests) => runBulkOperation(requests, commit, { retrySignal: writer.retrySignal }),
         // ONE read for every row a lost answer left unknown, for the reason `readBack` below reads quietly.
         readBackBatch: async (requests) => {
           const url = `${getBackendUrl()}/api/products/${productIdRef.current}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`

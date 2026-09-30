@@ -8,6 +8,10 @@ The pinned AG React patch checks that its cell is alive and still owns the same 
 
 ## Saved views can share one initial read — 2026-09-30
 
+## 2026-09-30 — Cancel pending save retries on discard or exit
+
+SheetWriter exposes a retry-only signal tied to its lifetime. Discard and exit cancel pending retry waits. Re-arming starts a fresh lifetime without reviving old retries or canceling an in-flight save.
+
 ## 2026-09-30 — Preserve unsafe whole-number input
 
 Numeric cells and lists keep unsafe whole-number text intact so the API can refuse it by name without storing a rounded value. Safe values and text IDs keep their existing types.

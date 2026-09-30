@@ -20,6 +20,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 export interface BulkAnswer {
   status: number
   ok: boolean
+  retryAfter?: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors `Response.json()`
   json(): Promise<any>
 }
@@ -38,7 +39,7 @@ export const directBulkSend: BulkSend = (body) => fetch(`${getBackendUrl()}/api/
 
 export interface BulkSaveUnitWire extends Record<string, unknown> { key: string }
 
-const answer = (status: number, body: unknown): BulkAnswer => ({ status, ok: status >= 200 && status < 300, json: async () => body })
+const answer = (status: number, body: unknown, retryAfter?: string | null): BulkAnswer => ({ status, ok: status >= 200 && status < 300, retryAfter, json: async () => body })
 
 /**
  * POST one operation. No client timeout on purpose: a 500-row save can take longer than one row's 30 s, and a slow
@@ -54,7 +55,45 @@ export const postBulkSave: BulkSavePost = async (operationId, units) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ operationId, units }),
   })
-  return answer(response.status, body)
+  return answer(response.status, body, response.headers.get('Retry-After'))
+}
+
+/** Only the API's explicit whole-operation rollback contract permits an automatic replay. */
+function busyRetryDelay(response: BulkAnswer, payload: unknown): number | null {
+  if (response.status !== 503 || !payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const body = payload as Record<string, unknown>
+  if (body.retryable !== true || body.nothingSaved !== true || 'units' in body || (body.saved !== undefined && body.saved !== 0)) return null
+  const header = response.retryAfter?.trim()
+  if (!header) return null
+  const date = Date.parse(header)
+  const delay = /^\d+$/.test(header) ? Number(header) * 1000
+    : Number.isFinite(date) && new Date(date).toUTCString() === header ? Math.max(0, date - Date.now()) : NaN
+  // Never shorten Retry-After. A longer or malformed delay leaves the edit for manual Retry.
+  return Number.isFinite(delay) && delay <= 30_000 ? delay : null
+}
+
+/** Cancel only the wait. An in-flight request must keep its own authoritative answer. */
+function waitForRetry(delay: number, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false)
+  return new Promise(resolve => {
+    const finish = (retry: boolean) => { clearTimeout(timer); signal?.removeEventListener('abort', cancel); resolve(retry) }
+    const cancel = () => finish(false)
+    const timer = setTimeout(() => finish(true), delay)
+    signal?.addEventListener('abort', cancel, { once: true })
+  })
+}
+
+type OperationPayload = { units?: Array<{ key: string; status: number; body: unknown }> } | null
+
+async function postWithBusyRetry(post: BulkSavePost, id: string, units: BulkSaveUnitWire[], retrySignal?: AbortSignal) {
+  // Freeze the wire values for this intent, even if a later edit changes an object held by the row.
+  const snapshot = JSON.parse(JSON.stringify(units)) as BulkSaveUnitWire[]
+  for (let attempt = 0; ; attempt++) {
+    const res = await post(id, snapshot)
+    const payload = await res.json().catch(() => null) as OperationPayload
+    const delay = busyRetryDelay(res, payload)
+    if (attempt >= 2 || delay === null || !(await waitForRetry(delay, retrySignal)) || retrySignal?.aborted) return { res, payload }
+  }
 }
 
 /** The server's bounds (`bulk-save.service.ts`); an operation beyond them is sent as consecutive requests. */
@@ -84,7 +123,7 @@ export const newOperationId = () => (globalThis.crypto?.randomUUID?.() ?? `op-${
 export async function runBulkOperation<T>(
   requests: SheetWriteRequest<T>[],
   commitRow: (request: SheetWriteRequest<T>, send: BulkSend) => Promise<SheetWriteResult>,
-  options: { post?: BulkSavePost; operationId?: string } = {},
+  options: { post?: BulkSavePost; operationId?: string; retrySignal?: AbortSignal } = {},
 ): Promise<Map<string, SheetWriteResult>> {
   const post = options.post ?? postBulkSave
   const operationId = options.operationId ?? newOperationId()
@@ -113,8 +152,7 @@ export async function runBulkOperation<T>(
     try {
       for (const [index, part] of chunk(batch).entries()) {
         try {
-          const res = await post(`${operationId}:${round}:${index}`, part.map((w) => w.unit))
-          const payload = await res.json().catch(() => null) as { units?: Array<{ key: string; status: number; body: unknown }> } | null
+          const { res, payload } = await postWithBusyRetry(post, `${operationId}:${round}:${index}`, part.map((w) => w.unit), options.retrySignal)
           if (res.ok && Array.isArray(payload?.units)) {
             const byKey = new Map(payload.units.map((u) => [u.key, u]))
             for (const w of part) {
