@@ -43,7 +43,7 @@ import { Banner, EmptyState, Modal, useToast, type MenuItemDef } from '@/design-
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
 import { AliasBandCell, BandExpander } from './AliasBandCell';
 import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
-import { resetSourceLabel } from './value-source';
+import { resetActionWords } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { useCellFormulas } from '../../useCellFormulas';
 import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
@@ -566,10 +566,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             rowId: row.rowId,
             colKey: column.key,
             action: intent && cell ? {
-                label: intent.action === 'pin' ? 'Keep as listing override' : wholeListWriteField(cell.writeField) ? 'Review removing list override…' : 'Remove listing override',
+                label: intent.action === 'pin' ? 'Keep as listing override' : resetActionWords(cell, { sku: row.sku, listing: aliasLabel(row.aliasId) }).label,
                 description: intent.action === 'pin'
                     ? `Keep the current value for ${row.sku} · ${aliasLabel(row.aliasId)} on this channel and market.`
-                    : `Remove this ${wholeListWriteField(cell.writeField) ? 'whole list’s' : 'listing'} override and ${resetSourceLabel(cell)}.`,
+                    : resetActionWords(cell, { sku: row.sku, listing: aliasLabel(row.aliasId) }).description,
                 run: () => { void onCascade(row, cell, intent); },
             } : undefined,
             value: value == null || value === '' ? 'Empty' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value),

@@ -16,6 +16,20 @@ interface LegacyLanguageFacts {
   translationState?: string | null
 }
 
+/** The label of a listing's own stored text (not an operator pin, not Master). */
+export const LISTING_VALUE_LABEL = 'Listing value'
+
+/** Sources that follow somewhere else: drawn quieter so the cells that hold their own value stand out. Never hidden. */
+export function isRoutineSource(kind: ValueSourceKind): boolean {
+  return kind === 'master' || kind === 'linked' || kind === 'default' || kind === 'rule' || kind === 'missing'
+}
+
+/** What hovering the mark says: the source by name and why, or a formula refusal in the server's own words. */
+export function sourceHoverText(source: ValueSourceDescription, description: string, refusedReason?: string | null): string {
+  if (refusedReason) return refusedReason
+  return [source.label, description].filter(Boolean).map(part => part.trim().replace(/\.+$/, '')).join('. ')
+}
+
 /** Explain the resolver's winner. A master-layer pin is not a listing override. */
 export function describeValueSource(cell: StudioCellValue | undefined, provenance: CellProvenance, refusedReason?: string | null): ValueSourceDescription {
   const source = (kind: ValueSourceKind, label: string, description: string): ValueSourceDescription => ({ kind, label, description })
@@ -31,6 +45,10 @@ export function describeValueSource(cell: StudioCellValue | undefined, provenanc
     localized.translationState === 'outdated' ? 'Outdated translation' : 'Language fallback',
     `Showing ${localized.effectiveLocale ?? 'source'} content. ${localized.requestedLocale ?? 'Selected language'} ${localized.translationState === 'outdated' ? 'needs review after a source change' : 'content is missing'}. This value does not count as translated content`)
   if (cell.nexusDraft) return source('override', 'Saved Nexus draft', 'Saved for this account, listing and field owner. Review synchronization to send these changes to Shopify')
+  /* P1 (report 2 I-3) — an old listing text (the eBay title the listing was imported with). The mapping reads it
+     through `title`, which made it say "Follows Master" while 80 of 82 REGAL eBay IT titles differ from Master. */
+  if (cell.source === 'channelSnapshot') return source('channel', LISTING_VALUE_LABEL,
+    'This listing still holds its own text, not Master’s. The next change to Master replaces it; Follow Master uses Master’s text now')
   if (localized.translationState === 'draft' || localized.translationState === 'reviewed') return source('master',
     localized.translationState === 'draft' ? 'Translation draft' : 'Reviewed translation',
     `${localized.effectiveLocale} content${localized.translationState === 'draft' ? ' is saved and awaiting review' : ' has been reviewed'}`)

@@ -845,6 +845,7 @@ export function TokenCatalog() {
           <div style={{ marginTop: 18, color: 'var(--nds-text)', fontWeight: 600 }}>Value sources · compact container</div>
           <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 16px', maxWidth: 320 }} aria-label="Value source indicators">
             <SourceIndicator showLabel kind="master" label="Follows Master" description="Uses the resolved Master value through the channel mapping" />
+            <SourceIndicator showLabel quiet kind="master" label="Follows Master · quiet" description="A routine source on a dense sheet: muted, never hidden" />
             <SourceIndicator showLabel kind="override" label="Listing override" description="This listing stores its own value" />
             <SourceIndicator showLabel kind="rule" label="Mapping rule" description="Calculated by the configured rule" />
             <SourceIndicator showLabel kind="default" label="Channel default" description="Supplied by a configured default" />
