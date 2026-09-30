@@ -57,6 +57,7 @@ import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
 import { amazonDiscountedPrice } from './amazon/discounted-price.js'
+import { amazonPriceOfferPlan, readAmazonOfferLive } from './amazon/purchasable-offer.js'
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -357,6 +358,8 @@ export async function buildAmazonListingPatch(
     // Listings-Items JSON schema (`discounted_price[].schedule[]{ start_at, end_at, value_with_tax }`, all three
     // REQUIRED; measured on IT/UK/DE, MX.1 phase 0(c)) — NOT the feed's `sale_price` with `start_at:[{value}]`. A sale
     // without both dates is never emitted: Amazon would reject the schedule entry.
+    // At send time `syncToAmazon` turns this replace into a MERGE on the live offer instance
+    // (amazon/purchasable-offer.ts); the replace goes out as built only for a first offer.
     const sale = amazonDiscountedPrice(payload.salePrice != null ? Number(payload.salePrice) : null, payload.salePriceStart, payload.salePriceEnd);
     if (sale) offer.discounted_price = sale;
     attrs.purchasable_offer = [offer];
@@ -1351,6 +1354,16 @@ export class OutboundSyncService {
       };
     }
 
+    // The price goes as a MERGE into the live offer instance it prices (amazon/purchasable-offer.ts), so a price push
+    // changes our_price — and the sale only as far as Nexus owns it — and leaves the rest of Amazon's offer as it is:
+    // a Seller Central sale, map_price, the min/max seller-allowed prices, the offer dates, the B2B instance. The
+    // builder's replace stands only for a first offer. Read INSIDE `execute`, i.e. only when something is really sent
+    // (gated and dry-run stay exactly as they were), right before the write; a failed read sends nothing.
+    const offerPatchAt = payload.price !== undefined
+      ? amazonPayload.patches.findIndex((p: { op?: string; path?: string }) => p?.op === 'replace' && p?.path === '/attributes/purchasable_offer')
+      : -1;
+    let offerFailure: { errorCode: string; retryable: boolean } | null = null;
+
     // P0.7 → P1.3 — the row goes to its own account; this stays as a consistency check (the listing or
     // SKU must belong to that account), refused and terminal if not.
     if (sellerId) {
@@ -1382,6 +1395,26 @@ export class OutboundSyncService {
           ? { id: sellerId }
           : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
       execute: async ({ sellerId: sid }) => {
+        if (offerPatchAt >= 0) {
+          const offerMarketplaceId = resolveAmazonMarketplaceId(marketplaceId);
+          const live = await readAmazonOfferLive({ sellerId: sid, sku, marketplaceId: offerMarketplaceId });
+          if (live.read === 'failed') {
+            // Never the blind replace: without the live offer it could clear the sale and every part Nexus does not set.
+            offerFailure = { errorCode: 'AMAZON_OFFER_READ_FAILED', retryable: true };
+            return { ok: false, error: `Amazon's current offer for ${sku} could not be read (${live.error ?? 'no answer'}), so the price was not sent: sent without it, the push could clear the offer's sale and the other parts Nexus does not set. It will be retried.` };
+          }
+          const plan = amazonPriceOfferPlan({
+            built: amazonPayload.patches[offerPatchAt].value[0],
+            live: live.instances,
+            marketplaceId: offerMarketplaceId,
+            saleRemoved: payload.saleRemoved === true,
+          });
+          if (plan.kind === 'refused') {
+            offerFailure = { errorCode: 'AMAZON_OFFER_NOT_MATCHED', retryable: false };
+            return { ok: false, error: plan.reason };
+          }
+          if (plan.kind === 'merge') amazonPayload.patches[offerPatchAt] = plan.patch;
+        }
         // P1.7 — Amazon's own dry run before any CONTENT write (it was run for the mapping source only).
         // A price- or stock-only patch set needs no preview; anything else does.
         if (payload.source === 'FM_CATALOG_CASCADE' || isAmazonContentPatchSet(amazonPayload.patches)) {
@@ -1407,6 +1440,7 @@ export class OutboundSyncService {
       message: r.message,
       error: r.error,
       dryRun: r.mode !== "live", // PD.3 — a non-live "success" published nothing.
+      ...(offerFailure ?? {}),
     };
   }
 
