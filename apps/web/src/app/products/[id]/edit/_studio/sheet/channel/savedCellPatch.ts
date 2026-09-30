@@ -77,6 +77,8 @@ interface PlanInput {
   column: (colId: string) => SheetColumn | undefined
   /** The save's answer (a 200). */
   body: unknown
+  /** The cells as the save was sent (`ChannelWriteCoord.sentCells`). */
+  sent?: ReadonlyMap<string, StudioCellValue | undefined>
 }
 
 const read = (reason: string): PatchPlan => ({ kind: 'read', reason })
@@ -86,7 +88,7 @@ const read = (reason: string): PatchPlan => ({ kind: 'read', reason })
  * patches the saved row (and returns every row it changed). The listing versions, the family's listing-level values
  * (`adoptFamilyListings`) and the answer's warnings are applied by the writer as before.
  */
-export function planSavedCellPatch({ row, changes, column, body }: PlanInput): PatchPlan {
+export function planSavedCellPatch({ row, changes, column, body, sent }: PlanInput): PatchPlan {
   const answer = (body ?? {}) as Record<string, unknown>
   if (Array.isArray(answer.errors) && answer.errors.length) return read('the answer refused a cell')
   // A value equal to the stored one is not stored again: the cell keeps the source it had.
@@ -102,6 +104,9 @@ export function planSavedCellPatch({ row, changes, column, body }: PlanInput): P
     const col = column(change.colId)
     const cell = row.values[change.colId]
     if (!col || !cell) return read(`${change.colId}: no column or cell`)
+    // P2 review 2 — the operator edited this cell again while this save was on the wire: its newer value is queued, and
+    // this older answer must not paint over it. The read that follows the last save settles it.
+    if (sent && sent.get(change.colId) !== cell) return read(`${change.colId}: a newer edit to this cell is on its way`)
     const before = pristineOf(cell)
     if (change.intent !== 'set' || change.target !== 'channel') return read(`${change.colId}: not an explicit listing value`)
     if (saveWarningFor(body, row.id, [change.field, change.colId])) return read(`${change.colId}: stored with a warning`)

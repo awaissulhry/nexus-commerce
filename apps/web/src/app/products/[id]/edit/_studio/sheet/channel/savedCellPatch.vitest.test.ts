@@ -55,6 +55,9 @@ describe('a save settled in place equals the full read that follows it (recorded
         expect(row.listing?.price, `${after.sku} listing price`).toBe(after.listing?.price)
         expect(row.listing?.follows, `${after.sku} listing follows`).toEqual(after.listing?.follows)
         if ('completeness' in after) expect(row.completeness, `${after.sku} completeness`).toEqual(after.completeness)
+        // P2 review 9 — the row's readiness issues (the view's flagged columns) are what the read returns: a patched save
+        // never moves them, so the column model has nothing to recompute.
+        expect(row.readiness, `${after.sku} readiness`).toEqual(after.readiness)
         // The family row's variation theme carries its listing's version as its write token.
         if (after.values[THEME]) expect((row.values[THEME]?.value as { write?: unknown }).write).toEqual((after.values[THEME].value as { write?: unknown }).write)
       }
@@ -111,5 +114,28 @@ describe('presentValue', () => {
   it('reads presence by shape', () => {
     expect([null, '', [], [''], { value: null, unit: 'KILOGRAM' }].map(presentValue)).toEqual([false, false, false, false, false])
     expect([0, false, 'x', ['a'], { value: 0, unit: 'KILOGRAM' }].map(presentValue)).toEqual([true, true, true, true, true])
+  })
+})
+
+describe('review 2 — an older answer never paints over a newer edit to the same cell', () => {
+  it('the operator types again while the first value is on the wire: the save reads, the newer value stays', async () => {
+    const c = CASES.find((x) => x.name === 'handling-variant')!
+    const rows = withRowIdentity(structuredClone(c.before), [])
+    const row = rows.find((r) => r.sku === c.sku)!
+    row.values = { ...row.values, [c.key]: optimisticCell(row.values[c.key], c.value, row.rowKind) }
+    let outcome: { patched: ChannelSheetRow[]; columns: string[] } | { read: string } | undefined
+    const result = await commitChannelRow({ rowId: row.rowId, row, cells: [{ colId: c.key, value: c.value, intent: 'set' }], expectedVersion: row.version }, {
+      channel: 'EBAY', marketplace: 'IT', accountId: 'acc-1', locale: 'it', familyRows: () => rows,
+      columnOf: (colId) => (colId === c.key ? c.column : undefined),
+      onStored: (o) => { outcome = o },
+      bulkSend: async () => {
+        // The next value is typed (the grid's value setter) before the first answer lands.
+        row.values = { ...row.values, [c.key]: optimisticCell(row.values[c.key], 9, row.rowKind) }
+        return { status: 200, ok: true, json: async () => c.body }
+      },
+    })
+    expect(result.ok).toBe(true)
+    expect(outcome && 'read' in outcome, JSON.stringify(outcome)).toBe(true)
+    expect(row.values[c.key].value).toBe(9)
   })
 })
