@@ -2,13 +2,14 @@
 import { REFERENCE_FIELDS } from '@nexus/shared/reference-values'
 import { useEffect, useState } from 'react'
 import { AsyncListboxPanel } from '@/design-system/components'
-import { cellValueOf, isUnchanged } from '@/design-system/grid/editors/selectPanelModel'
+import { cellValueOf, isUnchanged, typedStart } from '@/design-system/grid'
 import { loadReferenceChoices, type ReferenceChoices, type ReferenceField, type ReferenceScope } from './referenceOptions'
 
-export function ReferenceSelectEditor({ fieldKey, market, productType, connectionId, value, onValueChange, stopEditing }: ReferenceScope & {
-  fieldKey: ReferenceField; value: unknown; onValueChange: (value: unknown) => void; stopEditing: (cancel?: boolean) => void
+export function ReferenceSelectEditor({ fieldKey, market, productType, connectionId, value, onValueChange, stopEditing, eventKey }: ReferenceScope & {
+  fieldKey: ReferenceField; value: unknown; onValueChange: (value: unknown) => void; stopEditing: (cancel?: boolean) => void; eventKey?: string | null
 }) {
-  const [query, setQuery] = useState('')
+  // The key that opened the cell by typing starts the search; the grid consumed it (P0, 2026-09-30).
+  const [query, setQuery] = useState(() => typedStart(eventKey))
   const [revision, setRevision] = useState(0)
   const key = JSON.stringify([fieldKey, market, productType, connectionId, revision])
   const [result, setResult] = useState<{ key: string; choices?: ReferenceChoices; error?: string } | null>(null)
@@ -29,6 +30,7 @@ export function ReferenceSelectEditor({ fieldKey, market, productType, connectio
     options={(choices?.options ?? []).filter(option => `${option.searchText ?? option.label}`.toLowerCase().includes(query.trim().toLowerCase()))}
     message={missingCurrent ? `The current selection (${choices.labels[text] ?? text}) is unavailable. Choose an available option to replace it.` : undefined}
     onRetry={() => setRevision(value => value + 1)} onCancel={() => stopEditing(true)}
+    onKeyChoice={chosen => { if (chosen !== null && choices?.options.some(option => option.value === chosen) && !isUnchanged(value, chosen)) onValueChange(cellValueOf(chosen)) }}
     onCommit={chosen => {
       if (!choices?.options.some(option => option.value === chosen) || isUnchanged(value, chosen)) return stopEditing(true)
       onValueChange(cellValueOf(chosen)); stopEditing()

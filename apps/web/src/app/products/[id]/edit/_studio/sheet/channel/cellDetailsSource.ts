@@ -16,6 +16,22 @@ interface LegacyLanguageFacts {
   translationState?: string | null
 }
 
+/** The label of a listing's own stored text (not an operator pin, not Master). */
+export const LISTING_VALUE_LABEL = 'Listing value'
+/** P1 review (4) — an eBay item specific that is not a variation axis, on a variation row. */
+export const LISTING_LEVEL_LABEL = 'eBay listing value — one for all variations'
+
+/** Sources that follow somewhere else: drawn quieter so the cells that hold their own value stand out. Never hidden. */
+export function isRoutineSource(kind: ValueSourceKind): boolean {
+  return kind === 'master' || kind === 'linked' || kind === 'default' || kind === 'rule' || kind === 'missing'
+}
+
+/** What hovering the mark says: the source by name and why, or a formula refusal in the server's own words. */
+export function sourceHoverText(source: ValueSourceDescription, description: string, refusedReason?: string | null): string {
+  if (refusedReason) return refusedReason
+  return [source.label, description].filter(Boolean).map(part => part.trim().replace(/\.+$/, '')).join('. ')
+}
+
 /** Explain the resolver's winner. A master-layer pin is not a listing override. */
 export function describeValueSource(cell: StudioCellValue | undefined, provenance: CellProvenance, refusedReason?: string | null): ValueSourceDescription {
   const source = (kind: ValueSourceKind, label: string, description: string): ValueSourceDescription => ({ kind, label, description })
@@ -23,6 +39,14 @@ export function describeValueSource(cell: StudioCellValue | undefined, provenanc
   if (provenance === 'formula') return source('formula', 'Cell formula', 'Calculated by this cell’s formula; edit the formula to change how it works')
   if (provenance === 'ai' || provenance === 'aiStale') return source('ai', provenance === 'aiStale' ? 'Outdated AI draft' : 'AI draft', 'Review this suggestion before accepting it')
   if (!cell) return source('missing', 'No value', 'No source information is available')
+  /* P1 review (4) — eBay takes one value per listing for an item specific that is not a variation axis: on a variation
+     row the value is the LISTING's, not the row's, and a set or a clear here writes it for every variation. */
+  const level = cell.mapped?.listingLevel
+  if (level?.variation) return source('channel', LISTING_LEVEL_LABEL, [
+    `eBay takes one value for the whole listing; this one comes from ${level.sku}`,
+    'Setting or clearing it here sets it for every variation of this listing',
+    level.ownValue !== undefined ? `This row also stores ${JSON.stringify(level.ownValue)}, which eBay does not receive` : null,
+  ].filter(Boolean).join('. '))
   // Older sheet responses attached language facts to the mapping result. Keep their dialog
   // explanation while the current wire contract carries these facts on the cell itself.
   const mappedLocale = cell.mapped as (NonNullable<StudioCellValue['mapped']> & LegacyLanguageFacts) | null | undefined
@@ -31,6 +55,10 @@ export function describeValueSource(cell: StudioCellValue | undefined, provenanc
     localized.translationState === 'outdated' ? 'Outdated translation' : 'Language fallback',
     `Showing ${localized.effectiveLocale ?? 'source'} content. ${localized.requestedLocale ?? 'Selected language'} ${localized.translationState === 'outdated' ? 'needs review after a source change' : 'content is missing'}. This value does not count as translated content`)
   if (cell.nexusDraft) return source('override', 'Saved Nexus draft', 'Saved for this account, listing and field owner. Review synchronization to send these changes to Shopify')
+  /* P1 (report 2 I-3) — an old listing text (the eBay title the listing was imported with). The mapping reads it
+     through `title`, which made it say "Follows Master" while 80 of 82 REGAL eBay IT titles differ from Master. */
+  if (cell.source === 'channelSnapshot') return source('channel', LISTING_VALUE_LABEL,
+    'This listing still holds its own text, not Master’s. The next change to Master replaces it; Follow Master uses Master’s text now')
   if (localized.translationState === 'draft' || localized.translationState === 'reviewed') return source('master',
     localized.translationState === 'draft' ? 'Translation draft' : 'Reviewed translation',
     `${localized.effectiveLocale} content${localized.translationState === 'draft' ? ' is saved and awaiting review' : ' has been reviewed'}`)

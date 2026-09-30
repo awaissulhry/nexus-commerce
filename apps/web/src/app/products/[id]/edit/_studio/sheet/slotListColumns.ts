@@ -189,6 +189,28 @@ export function queuePendingEdit<E extends { rowId: string; colId: string; previ
   return existing ? prior.map((edit) => (edit === existing ? { ...next, previous: existing.previous } : edit)) : [...prior, next]
 }
 
+/**
+ * P1 (report 2 I-7) — ONE answer for the whole operation. A paste or fill over 40 cells that follow shared text asked 40
+ * times ("3 edits await a choice", then 2, then 1). The answer now applies to every queued edit: each takes its OWN
+ * cell's address for the chosen tier (`contentAcknowledgement.shared` / `.pin`), so a paste across Title and
+ * Description lands each field where that field's choice points. An edit that has no such address — a write to the
+ * shared record, which has no pin — is kept for its own question when the answer was "pin"; under "shared" it goes
+ * (the host records that the shared write was acknowledged). Mutates the rows' cells, like the adapter's accept did.
+ */
+export function acknowledgePendingEdits<E extends { row: { values: Record<string, unknown> }; colId: string }>(pending: readonly E[], tier: 'shared' | 'pin'): { apply: E[]; keep: E[] } {
+  const apply: E[] = [], keep: E[] = []
+  for (const edit of pending) {
+    const cell = edit.row.values[edit.colId] as { contentAcknowledgement?: { shared?: { address?: unknown }; pin?: { address?: unknown } } | null } | undefined
+    const choices = cell?.contentAcknowledgement
+    if (!choices) { (tier === 'shared' ? apply : keep).push(edit); continue }
+    const address = choices[tier]?.address
+    if (!address) { keep.push(edit); continue }
+    edit.row.values = { ...edit.row.values, [edit.colId]: { ...cell, contentAddress: address, contentAcknowledged: true } }
+    apply.push(edit)
+  }
+  return { apply, keep }
+}
+
 /** Declining one queued edit puts THAT cell back to its previous value — only that cell (unchanged from the adapter). */
 export function revertPendingEdit(pm: { row: { values: Record<string, unknown> }; colId: string; previous: unknown }): void {
   const cell = pm.row.values[pm.colId] as Record<string, unknown> | undefined

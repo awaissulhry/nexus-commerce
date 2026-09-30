@@ -31,7 +31,6 @@ import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 
-import { getBackendUrl } from '@/lib/backend-url'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
@@ -47,7 +46,7 @@ import { closeStudioRecord } from './recordClose'
 import { createWorkspaceSaveStore } from './workspaceSave'
 import { useInFlightGuard } from './useInFlightGuard'
 import { studioChannelViewPatch } from './navigationHref'
-import { parseReadinessResponse, parseReadinessMatrix } from './readiness'
+import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness, readinessUrl } from './readiness'
 import { isViewChipVisible } from './viewChips'
 import { marketGate, marketGateReason } from './marketGate'
 import {
@@ -282,8 +281,15 @@ interface SaveCtxValue {
 }
 
 const SaveCtx = createContext<SaveCtxValue | null>(null)
+/**
+ * P2 (2026-09-30, I4-4) — the parts of the save machine that never change for a scope: the reporter, the manual message
+ * setter and the publication barriers. The sheet reports through these on every edit; reading them from `SaveCtx` made
+ * every save state change (pending, saved, a readiness read) re-render the whole sheet, ~60 components each time.
+ */
+type SaveActions = Pick<SaveCtxValue, 'reporter' | 'setManualMessage'> & { publication: Omit<SaveCtxValue['publication'], 'state'> }
+const SaveActionsCtx = createContext<SaveActions | null>(null)
 export function useManualSaveMessage(message: string | null) {
-  const setter = useContext(SaveCtx)?.setManualMessage
+  const setter = useContext(SaveActionsCtx)?.setManualMessage
   useEffect(() => { setter?.(message); return () => setter?.(null) }, [setter, message])
 }
 export function useStudioSaveMessage() { return useContext(SaveCtx)?.manualMessage ?? null }
@@ -295,6 +301,13 @@ export function useStudioSave(): StudioSaveState {
   return v.state
 }
 
+/** Register a publication barrier (a sheet's unsaved edits) without re-rendering on every save state change. */
+export function usePublicationBarrier(): SaveActions['publication']['registerPublicationBarrier'] {
+  const v = useContext(SaveActionsCtx)
+  if (!v) throw new Error('usePublicationBarrier() outside <StudioStateProvider>')
+  return v.publication.registerPublicationBarrier
+}
+
 /** Publication considers every destination edited in this product workspace. */
 export function usePublicationSave() {
   const value = useContext(SaveCtx)
@@ -304,19 +317,27 @@ export function usePublicationSave() {
 
 /** What PES.2 / PES.3 call as each cell write leaves and lands. */
 export function useSaveReporter(): SaveReporter {
-  const v = useContext(SaveCtx)
+  const v = useContext(SaveActionsCtx)
   if (!v) throw new Error('useSaveReporter() outside <StudioStateProvider>')
   return v.reporter
 }
 
-function useSaveMachine(scopeKey: string): SaveCtxValue {
-  const [, redraw] = useState(0)
+function useSaveMachine(scopeKey: string): { value: SaveCtxValue; actions: SaveActions } {
+  const [drawn, redraw] = useState(0)
   const [manualMessage, setManualMessage] = useState<string | null>(null)
   const store = useRef<ReturnType<typeof createWorkspaceSaveStore> | undefined>(undefined)
   if (!store.current) store.current = createWorkspaceSaveStore(() => redraw(n => n + 1))
-  return { ...store.current.forScope(scopeKey), manualMessage, setManualMessage,
-    publication: { preparePublication: store.current.preparePublication, publicationBlocker: store.current.publicationBlocker,
-      registerPublicationBarrier: store.current.registerPublicationBarrier, state: store.current.publicationState() } }
+  const machine = store.current
+  // The reporter is the scope's own object (`forScope`), so these stay the same until the scope changes.
+  const { reporter } = machine.forScope(scopeKey)
+  const actions = useMemo<SaveActions>(() => ({ reporter, setManualMessage,
+    publication: { preparePublication: machine.preparePublication, publicationBlocker: machine.publicationBlocker, registerPublicationBarrier: machine.registerPublicationBarrier } }),
+  [reporter, machine])
+  // A new value only when the ledger was redrawn, the message changed or the scope changed.
+  const value = useMemo<SaveCtxValue>(() => ({ ...machine.forScope(scopeKey), manualMessage, setManualMessage,
+    publication: { ...actions.publication, state: machine.publicationState() } }),
+  [drawn, manualMessage, scopeKey, machine, actions]) // `drawn` is the redraw signal
+  return { value, actions }
 }
 
 /* ── readiness ───────────────────────────────────────────────────────────────────────────── */
@@ -369,7 +390,9 @@ export function useScopeReadiness(): ScopeReadinessQuery {
   return useContext(ReadinessCtx)
 }
 
-const ReadinessRefreshCtx = createContext<() => void>(() => {})
+/** `coordinate: true` — only the open channel coordinate moved (a save on it): read that one and keep the rest. */
+export type ReadinessRefresh = (options?: { coordinate?: boolean }) => void
+const ReadinessRefreshCtx = createContext<ReadinessRefresh>(() => {})
 
 /**
  * Read the progress bars again (TOOLBAR REBUILD, Owner 2026-09-27: "I'm not able to reload them at all").
@@ -379,13 +402,36 @@ const ReadinessRefreshCtx = createContext<() => void>(() => {})
  * sheets call this after a confirmed save, from ⋯ → Reload and from "Refresh progress". The last good answer stays
  * on screen while it reads.
  */
-export function useReadinessRefresh(): () => void {
+export function useReadinessRefresh(): ReadinessRefresh {
   return useContext(ReadinessRefreshCtx)
 }
 
-function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null, noMarketReason?: string | null): ScopeReadinessQuery {
+function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null, noMarketReason?: string | null, coordinateNonce = 0): ScopeReadinessQuery {
   const [query, setQuery] = useState<ScopeReadinessQuery>({ status: 'loading' })
   const queryCoordinate = JSON.stringify([productId, market, channel, accountId, listingId, locale])
+
+  /*
+   * P2 (2026-09-30, I4-9) — after a save on a channel coordinate, read THAT coordinate (`only=coordinate`) and merge it
+   * into the answer on screen; the family-wide read (every scope, every coordinate: 11 MB raw on GALE eBay IT) stays for
+   * the page load, a Reload and "Refresh progress". It never blocks anything: the last answer stays until this lands,
+   * and a failure keeps it.
+   */
+  useEffect(() => {
+    if (!coordinateNonce || !market || !channel) return
+    const abort = new AbortController()
+    const coordinate = queryCoordinate
+    void fetch(readinessUrl(productId, { market, locale, channel, listingId, accountId, only: 'coordinate' }), { cache: 'no-store', signal: abort.signal })
+      .then(async (res) => {
+        if (!res.ok) return
+        const json: unknown = await res.json()
+        if (abort.signal.aborted) return
+        setQuery((prev) => (prev.status === 'ready' && prev.coordinate === coordinate
+          ? { ...mergeCoordinateReadiness(prev, json, { channel, market, accountId }), at: Date.now(), refreshError: undefined }
+          : prev))
+      })
+      .catch(() => { /* the last answer stays on screen */ })
+    return () => abort.abort()
+  }, [coordinateNonce]) // only a coordinate refresh asks; the coordinate itself is read by the effect below
 
   useEffect(() => {
     if (!market) {
@@ -415,13 +461,8 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
 
     // Client-side on purpose: under RBAC enforce the Next server cannot read the API-origin
     // session cookie, so a server fetch comes back 401 (reference_rbac_enforce_ssr).
-    const params = new URLSearchParams({ market })
-    if (locale) params.set('locale', locale)
-    if (channel) params.set('channel', channel)
     // Read every unambiguous account/market coordinate so scope chips and projection columns agree.
-    if (listingId) params.set('listingId', listingId)
-    if (accountId) params.set('accountId', accountId)
-    const url = `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/readiness?${params}`
+    const url = readinessUrl(productId, { market, locale, channel, listingId, accountId })
 
     /*
      * 🔴 A DEADLINE IS NOT A FAILURE BOUNDARY (UX.1 §3.6, ruling #243).
@@ -1030,22 +1071,35 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
     [chips, chipParam, activeChip, setActiveChip],
   )
 
-  const save = useSaveMachine(JSON.stringify([product.id, scope, market, locale, accountId, listingId]))
+  const { value: save, actions: saveActions } = useSaveMachine(JSON.stringify([product.id, scope, market, locale, accountId, listingId]))
   useInFlightGuard(save.state, save.publication.publicationBlocker, canChangeEditor)
   const liveNonce = useLiveRefresh(product.id)
   const [askedNonce, setAskedNonce] = useState(0)
-  const refreshReadiness = useCallback(() => setAskedNonce((n) => n + 1), [])
+  const [coordinateNonce, setCoordinateNonce] = useState(0)
+  const scopeRef = useRef(scope)
+  scopeRef.current = scope
+  const refreshReadiness = useCallback<ReadinessRefresh>((options) => {
+    // A coordinate refresh only makes sense on a channel scope; Shared's saves move every coordinate.
+    if (options?.coordinate && scopeRef.current !== MASTER_SCOPE) setCoordinateNonce((n) => n + 1)
+    else setAskedNonce((n) => n + 1)
+  }, [])
   // Only the resolved market being ABSENT has a gate reason; a scope error or an unready destination keeps "No market selected."
   const noMarketReason = market ? null : marketGateReason(marketGate({ market, locale, marketCount: baseOptions.markets.length, discoveryFailed: marketplacesFailed === true }))
-  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce + askedNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason)
+  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce + askedNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason, coordinateNonce)
+
+  // P2 — one object per change of what it says, not per render: every reader re-rendered on every provider render.
+  const accountHealth = accounts.find(a => a.id === accountId)?.health
+  const discovery = useMemo(() => ({ failed: marketplacesFailed ?? null, retry: discoveryRetry, retrying: discoveryRetrying === true,
+    note: connectionScopePolicy(accountHealth, channelLabel(scope), marketplacesFailed === true).note }),
+  [marketplacesFailed, discoveryRetry, discoveryRetrying, accountHealth, scope])
 
   return (
     <ProductCtx.Provider value={product}>
-      <DiscoveryCtx.Provider value={{ failed: marketplacesFailed ?? null, retry: discoveryRetry, retrying: discoveryRetrying === true,
-        note: connectionScopePolicy(accounts.find(a => a.id === accountId)?.health, channelLabel(scope), marketplacesFailed === true).note }}>
+      <DiscoveryCtx.Provider value={discovery}>
       <FamilyCtx.Provider value={family}>
       <ScopeCtx.Provider value={scopeValue}>
         <RecordCtx.Provider value={recordValue}>
+          <SaveActionsCtx.Provider value={saveActions}>
           <SaveCtx.Provider value={save}>
             <ReadinessCtx.Provider value={readiness}>
             <ReadinessRefreshCtx.Provider value={refreshReadiness}>
@@ -1055,6 +1109,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
             </ReadinessRefreshCtx.Provider>
           </ReadinessCtx.Provider>
           </SaveCtx.Provider>
+          </SaveActionsCtx.Provider>
         </RecordCtx.Provider>
       </ScopeCtx.Provider>
       </FamilyCtx.Provider>

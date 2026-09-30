@@ -21,6 +21,9 @@
 import { commitLanguageGroups } from '../languageWrites'
 import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
+import { wireCellValue } from '../sheetReset'
+import { saveWarningFor } from '../saveWarnings'
+import { adoptContentVersions } from '../contentVersions'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -143,7 +146,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           // channel scope resets by clearing `*Override` and restoring `followMaster*`, which
           // is a different route entirely (PES.3 owns that `commit`). The intent is honoured
           // here rather than in the writer precisely so the two can differ.
-          value: c.intent === 'reset' ? null : c.value === '' ? null : c.value,
+          value: c.intent === 'reset' ? null : c.value === '' ? null : wireCellValue(c.value),
           ...(c.intent === 'reset' ? { intent: 'reset' } : {}),
         })),
         /* 🔴 THE MARKETPLACE CONTEXT. Without it every `attr_*` write on the master scope was
@@ -197,7 +200,9 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         for (const c of bulk) {
           const field = byKey.get(c.colId)?.writeField ?? c.colId
           const mine = errors.find((e) => e.id === req.rowId && (e.field === field || e.field === c.colId))
-          cells[c.colId] = mine ? { ok: false, reason: mine.error || 'Refused' } : { ok: true }
+          /* P1 — a value stored WITH a problem the server names keeps that sentence on its cell (`warnings[]`). */
+          const warning = mine ? undefined : saveWarningFor(body, req.rowId, [field, c.colId])
+          cells[c.colId] = mine ? { ok: false, reason: mine.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
           if (!mine) anyOk = true
         }
         /*
@@ -211,6 +216,8 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
          * the version it read from the sheet. A guessed version loses a race it should have won.
          */
         version = versionFromBody(body) ?? version
+        // The translation the save moved hands its new token to every cell writing to it.
+        adoptContentVersions(req.row, body)
       }
     }
 

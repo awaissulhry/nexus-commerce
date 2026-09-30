@@ -7,6 +7,7 @@ import { ChannelCategoryEditor } from '../ChannelCategoryEditor'
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
 import { CascadeCell } from '../channel/CascadeCell'
 import { isCellEditable, withMappingRun } from '../channel/rows'
+import { optimisticCell } from '../channel/savedCellPatch'
 import { chipHasCell } from '../channel/viewChips'
 import { parseReferenceOrScalarValue, referenceColumnDef } from '../referenceLabels'
 import { isReferenceField } from '../referenceOptions'
@@ -26,7 +27,7 @@ const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({
 import {
   classifyProvenance, provenanceClassRules, roundTripClassRules, type CellSaveTracker,
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
-  longTextEditor, selectEditor, SELECT_CELL_CLASS, formulaCellEditorSelector, numericColumn,
+  longTextEditor, textLimitFor, selectEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, formulaCellEditorSelector, numericColumn,
   sheetValidationFor, composeSheetCellClassRules, shapeColumnDef, shapeEditorSpec, isShaped,
   suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef,
 } from '@/design-system/grid'
@@ -34,7 +35,8 @@ import {
 export const channelValidation = (col: SheetColumn) => sheetValidationFor<ChannelSheetRow>(col, row => columnApplies(col, row))
 
 export interface BuildChannelColumnsOptions {
-  data: ChannelScopePage | null
+  /** Only the scope is read (P2: the column model must not depend on a read's rows). */
+  data: Pick<ChannelScopePage, 'scope'> | null
   gridColumns: SheetColumn[]
   formulaWiring: FormulaWiring<ChannelSheetRow>
   accountId?: string
@@ -63,7 +65,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     width: col.width ?? 180,
     suppressKeyboardEvent: suppressFormulaKeys,
     ...(col.kind === 'longtext'
-      ? longTextEditor(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {})
+      ? longTextEditor()
       : col.kind === 'select'
         ? selectEditor((col.options ?? []).map((o) => ({ value: o, label: col.optionLabels?.[o] ?? o })))
         : col.kind === 'boolean'
@@ -94,12 +96,17 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
         ? {
             component: 'agLargeTextCellEditor',
             popup: true,
-            params: { ...(colForRow.maxLength ? { maxLength: Math.max(colForRow.maxLength, 200) } : {}) },
+            params: { maxLength: textLimitFor(colForRow.maxLength) },
           }
         : colForRow.kind === 'select'
           ? {
               component: SelectPanelEditor,
-              params: { options: (colForRow.options ?? []).map((o) => ({ value: o, label: colForRow.optionLabels?.[o] ?? o })) },
+              params: {
+                options: (colForRow.options ?? []).map((o) => ({ value: o, label: colForRow.optionLabels?.[o] ?? o })),
+                // An open channel list (eBay FREE_TEXT, an Amazon open enum) takes a typed value (#27).
+                allowCustom: colForRow.mode === 'open',
+                emptyLabel: SELECT_CLEAR_LABEL,
+              },
             }
           : colForRow.kind === 'boolean'
             ? {
@@ -129,23 +136,16 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
       const prev = p.data?.values?.[col.key]
       if (!p.data || !prev) return false
       // reference_ag_value_setter_must_mutate_params_data — AG reads the row back off params.data.
-      // Typing into a cell pins it at this row's layer, which is what the server will report back.
-      p.data.values = {
-        ...p.data.values,
-        [col.key]: {
-          ...prev,
-          value: parseReferenceOrScalarValue(columnForCategory(col, data?.scope.label ?? '', p.data.productType ?? null), p.newValue),
-          layer: p.data.rowKind === 'parent' ? 'alias' : 'aliasVariant',
-          pinned: true,
-          inherited: false,
-        },
-      }
+      // Typing into a cell pins it at this row's layer, which is what the server will report back (`optimisticCell`:
+      // an eBay listing-level value keeps its source; the server's cell is remembered for the in-place settle).
+      const value = parseReferenceOrScalarValue(columnForCategory(col, data?.scope.label ?? '', p.data.productType ?? null), p.newValue)
+      p.data.values = { ...p.data.values, [col.key]: optimisticCell(prev, value, p.data.rowKind) }
       return true
     },
     ...(Array.isArray(col.validation?.recordFields) ? { valueParser: (p: { newValue: unknown }) => parseRecordValue(p.newValue), valueFormatter: (p: { value: unknown }) => recordSummary(p.value, col.validation!.recordFields as any) } : {}),
     cellRenderer: CascadeCell,
-    cellRendererParams: { column: col, onDetails: openCellDetails, productLevelOnly, refusedReasonFor, tracker,
-      hideRoutineSourceIndicators: ['EBAY', 'AMAZON', 'SHOPIFY'].includes(data.scope.channel) },
+    // P1 — every cell names its source at rest, on every channel (eBay, Amazon and Shopify hid it: report 2 I-4).
+    cellRendererParams: { column: col, onDetails: openCellDetails, productLevelOnly, refusedReasonFor, tracker },
     cellClassRules: composeSheetCellClassRules<ChannelSheetRow>({
       validation: channelValidation(col),
       // The tint is PES.2's too (hub ruling #11) — one definition of what "inherited" looks like.

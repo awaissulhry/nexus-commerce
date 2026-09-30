@@ -20,7 +20,7 @@ import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
 import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
 import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
-import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, SELECT_CELL_CLASS, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { CellSaveReason, saveNote, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, textLimitFor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
 
@@ -28,7 +28,7 @@ import { variationThemeColumnDef } from '@/design-system/grid'
 import { scalarColumnDef, booleanLabel, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
-import { cellIsEditable, cellOf, sourceLabel, validationApplies, widthFor } from './columnRules'
+import { cellIsEditable, cellOf, holdsFamilyValue, sourceLabel, validationApplies, widthFor } from './columnRules'
 import { optionLabel } from '../optionLabel'
 import { languageColumn } from '../languages'
 import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } from '../referenceLabels'
@@ -201,6 +201,8 @@ export function buildMasterColumns(
          refusal that arrives with the formula batch repaints the mark without a column rebuild. */
       const refusedReason = opts.formula?.errorFor?.(p.data.id, col.key) ?? null
       const provenance = provOf(p.data, col.key, draft, !!opts.formula?.exprFor(p.data.id, col.key), refusedReason)
+      // P2 (I4-8) — a cell with no save state mounts no save reason and no save mark.
+      const save = tracker.get(p.data.id, col.key)
       // A drafted cell SHOWS the proposal; the value underneath is untouched and still what saves.
       const shown = draft ? <>{draft.draftValue == null || draft.draftValue === '' ? <EmptyValue /> : String(draft.draftValue)}</> : body
       return (
@@ -220,8 +222,8 @@ export function buildMasterColumns(
           {trail}
           {/* The tooltip's first paragraph, as text — for anything that cannot hover (#662). Same
               source as the getter reads, so the two cannot drift into two wordings. */}
-          <CellSaveReason reason={tracker.get(p.data.id, col.key)?.reason} />
-          <CellSaveMark state={tracker.get(p.data.id, col.key)?.state} />
+          {save && <CellSaveReason reason={saveNote(save)} />}
+          {save && <CellSaveMark state={save.state} />}
         </span>
       )
     }
@@ -251,7 +253,8 @@ export function buildMasterColumns(
       // cannot be built without its options, and a union argument would defeat exactly that check.
       valueGetter: (p: ValueGetterParams<StudioRow>) => (p.data ? cellOf(p.data, col.key)?.value ?? null : null),
       valueSetter: (p: ValueSetterParams<StudioRow>) => {
-        if (!p.data || !applies(p.data, col)) return false
+        // P1 — the family row also takes the value its variations inherit for a per-variant column (not an axis).
+        if (!p.data || !(applies(p.data, col) || holdsFamilyValue(col, p.data))) return false
         // 🔴 AG rebuilds `newValue` by re-running the value getter on `params.data` the moment this
         // returns, so the row object must be MUTATED here — scheduling React state hands the save
         // path the OLD value (reference_ag_value_setter_must_mutate_params_data).
@@ -307,7 +310,7 @@ export function buildMasterColumns(
              field outside this product type or family, a slot past the category's cardinality): the
              engine's hatch. `applies`, not `editable` — a read-only value that DOES apply is not
              "not for this row", and the tooltip below already says which of the two it is. */
-          'nds-cell-na': (p) => !!p.data && !applies(p.data, col),
+          'nds-cell-na': (p) => !!p.data && !applies(p.data, col) && !holdsFamilyValue(col, p.data),
         },
       }),
       /*
@@ -321,8 +324,9 @@ export function buildMasterColumns(
         const own = (): string => {
           const v = validation.validate(p.value, p.data!, col.key)
           if (v.message) return v.message
+          if (holdsFamilyValue(col, p.data!)) return 'The family value: each variation without its own value inherits it'
           if (!applies(p.data!, col)) {
-            return p.data!.isParent ? 'Belongs to each variation, not to the parent' : `Not part of ${p.data!.productType ?? 'this product type'}`
+            return p.data!.isParent ? col.axis ? 'A variation axis: each variation has its own value' : 'Belongs to each variation, not to the parent' : `Not part of ${p.data!.productType ?? 'this product type'}`
           }
           const draft = draftFor?.(p.data!.id, col.key) ?? null
           if (draft) {
@@ -340,7 +344,7 @@ export function buildMasterColumns(
           )
         }
         return composeCellTooltip(
-          tracker.get(p.data.id, col.key)?.reason,
+          saveNote(tracker.get(p.data.id, col.key)),
           own(),
           /* 🔴 "…and says why in the cell" (#753(b)). A `=` typed on a column the writer refuses
              falls through to the ordinary editor and becomes plain text, which is silent — the
@@ -468,16 +472,19 @@ export function buildMasterColumns(
        */
       // One definition, shared with IO.1's import diff — see `optionLabel` for why (#501).
       const label = (v: unknown) => optionLabel(v, col.optionLabels)
+      // An open list takes a typed value (#27); every list can be cleared from the editor.
+      const selectParams = { options, allowCustom: col.mode === 'open', emptyLabel: SELECT_CLEAR_LABEL }
       return {
         ...def,
         ...selectEditor(options),
+        cellEditorParams: selectParams,
         ...(reference ? { cellEditor: ReferenceSelectEditor, cellEditorPopup: true, cellEditorParams: (p: { data?: StudioRow }) => referenceParams(p.data) } : {}),
         /* `=` opens the formula editor on a closed list too (Owner, #775). The option list is still
            the rule: the server refuses a result that is not one of them, naming them, and the cell
            shows that refusal with the formula kept for correction. */
         ...(opts.formula ? formulaCellEditorSelector<StudioRow>(opts.formula, col, row => reference
           ? { component: ReferenceSelectEditor, popup: true, params: referenceParams(row) }
-          : { component: SelectPanelEditor, params: { options } }, row => row.id) : {}),
+          : { component: SelectPanelEditor, params: selectParams }, row => row.id) : {}),
         editable,
         valueFormatter: (p) => label(p.value),
         /* D13 — the closed-list affordance, from the ENGINE and applied by KIND, never per column:
@@ -492,7 +499,7 @@ export function buildMasterColumns(
           withMark(
             p,
             p.value != null && p.value !== '' ? label(p.value) : emptyOrRequired(p),
-            <SelectChevron />,
+            <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key)} />,
           ),
       }
     }
@@ -501,7 +508,7 @@ export function buildMasterColumns(
         ...def,
         /* Uncapped when the server declares no cap — see the note above. The editor simply does
            not limit what can be typed; the server remains the authority on what it will accept. */
-        ...longTextEditor(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {}),
+        ...longTextEditor(),
         /* `=` opens the formula editor here too — `item_name` and `product_description` are long-text
            and are exactly the fields D16's worked example is about. The large-text box stays the
            editor for ordinary edits. */
@@ -513,7 +520,7 @@ export function buildMasterColumns(
                  and a constant 8×60 silently overrode the per-cell size `longTextEditor()` computes
                  — the same 488×158 the sizing rule exists to remove, back through a second door.
                  The size is the ColDef's; the selector only names the component. */
-              params: { ...(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {}) },
+              params: { maxLength: textLimitFor(col.maxLength) },
             })
           : {}),
         editable,
@@ -569,7 +576,7 @@ export function buildMasterColumns(
         editable,
         valueFormatter: (p) => booleanLabel(p.value),
         cellRenderer: (p: ICellRendererParams<StudioRow>) =>
-          withMark(p, p.value == null || p.value === '' ? emptyOrRequired(p) : <>{booleanLabel(p.value)}</>, <SelectChevron />),
+          withMark(p, p.value == null || p.value === '' ? emptyOrRequired(p) : <>{booleanLabel(p.value)}</>, <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key)} />),
       }
     }
     return {

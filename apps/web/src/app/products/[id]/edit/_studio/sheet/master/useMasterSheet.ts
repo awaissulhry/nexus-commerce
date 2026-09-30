@@ -19,11 +19,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CellSaveTracker, SheetWriter, type GridApi, type SheetWriteRequest, type SheetWriteResult } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
+import { compactSheetUrl, masterSheetUrl } from '../../sheetUrls'
+import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 
 import { adaptLegacySheet, type LegacySheetPage } from './adaptLegacy'
 import { recoverSheetRow } from '../sheetRecovery'
 import { commitMasterRow } from './masterWrite'
 import { runBulkOperation, type BulkSend } from '../bulkOperation'
+import { preserveContentVersions } from '../contentVersions'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
 
 export interface UseMasterSheetOptions {
@@ -124,6 +127,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const writer = useMemo(
     () =>
       new SheetWriter<StudioRow>({
+        mergeRow: preserveContentVersions,
         tracker,
         commit,
         // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29 on the channel
@@ -223,13 +227,14 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
      * lost debugging time to exactly this, and then so did I. The scope is derived server-side
      * from the presence of `channel`, so master sends neither `scope` nor `channel`.
      */
-    const studioUrl = `${backend}/api/products/${productId}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
+    const studioUrl = masterSheetUrl(productId, market, locale, opts.locales)
     const legacyUrl = `${backend}/api/products/sheet?market=${encodeURIComponent(market)}&parentIds=${encodeURIComponent(productId)}&limit=1`
 
     const load = async (): Promise<StudioSheet> => {
-      const studio = await fetchStudioRead(studioUrl, signal)
+      // P2 — the compact wire form (each column's shared cell once); decoded here to today's shape.
+      const studio = await fetchStudioRead(compactSheetUrl(studioUrl), signal)
       if (studio && studio.ok) {
-        const body = (await studio.json()) as StudioSheet
+        const body = decodeSheetCells((await studio.json()) as StudioSheet)
         return { ...body, meta: { ...body.meta, source: 'studio' } }
       }
       const failureBody: unknown = await studio?.json().catch(() => null)

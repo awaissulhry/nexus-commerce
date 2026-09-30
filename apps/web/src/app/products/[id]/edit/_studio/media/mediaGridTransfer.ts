@@ -6,8 +6,12 @@ import type { MediaCellActions, MediaRow } from './useMediaCellActions'
 export function mediaGridTransfer<Row extends MediaRow>(base: ReturnType<typeof formulaTransfer<Row>>, actions: MediaCellActions) {
   return {
     processCellForClipboard: (p: Parameters<typeof base.processCellForClipboard>[0]) => p.column.getColId() === 'productMedia' ? p.value : base.processCellForClipboard(p),
-    processCellFromClipboard: (p: Parameters<typeof base.processCellForClipboard>[0]) => p.column.getColId() !== 'productMedia' && readMediaClipboard(p.value)
-      ? p.node ? p.api.getCellValue({ rowNode: p.node, colKey: p.column }) : null : p.value,
+    // Once this callback exists AG no longer runs the column's valueParser on a paste, so every other column parses here:
+    // a list, measure or number cell must store what its editor would ("9 OUNCE" → { value: 9, unit: 'OUNCE' }), not the
+    // clipboard text (the P3 commit sweep, 2026-09-30).
+    processCellFromClipboard: (p: Parameters<typeof base.processCellForClipboard>[0]) => p.column.getColId() === 'productMedia' ? p.value
+      : readMediaClipboard(p.value) ? p.node ? p.api.getCellValue({ rowNode: p.node, colKey: p.column }) : null
+      : p.parseValue(p.value),
     cellSelection: { handle: { ...base.cellSelection.handle, suppressClearOnFillReduction: true, setFillValue: (p: Parameters<typeof base.cellSelection.handle.setFillValue>[0]) => {
       const count = p.initialValues.length, vertical = p.direction === 'up' || p.direction === 'down'
       const columns = p.api.getAllDisplayedColumns(), index = vertical ? p.rowNode.rowIndex : columns.indexOf(p.column)

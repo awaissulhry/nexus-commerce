@@ -54,7 +54,7 @@ import { linkForCoordinate, type FieldLinkGroupLike } from './resolve-channel-fi
 import type { ResolvedCell } from './mapping/resolve-batch.service.js'
 import type { ResolvedCategory } from './mapping/category-mapping.service.js'
 import { buildCoordinateValidators, evaluateRow, type FlatRow } from './readiness.service.js'
-import { columnApplies, columnRequiredByAny, columnRequiredHere, columnForCategory, productRoleOf } from '@nexus/shared/master-sheet'
+import { columnApplies, columnEditableOnRow, columnRequiredByAny, columnRequiredHere, columnForCategory, familyRowHoldsValue, productRoleOf } from '@nexus/shared/master-sheet'
 import { relationshipColumns, relationshipValues, RELATIONSHIP_GROUP } from './studio-relationships.js'
 import { storedChannelState } from './channel-value-mutation.js'
 import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
@@ -137,6 +137,13 @@ export interface MappedCell {
   autoCorrected: { from: string; to: string } | null
   requiredByRule: boolean
   overLimit: { chars?: number; bytes?: number } | null
+  /**
+   * P1 (report 5 I-1) — an eBay item specific that is not an axis has one value per listing: this row shows the value
+   * eBay receives, from the row `productId`/`sku` (the parent, or the first variation that holds one). A write on any row
+   * lands on the parent listing. `variation`: this row is a variation, so the value is the listing's (no reset of its own).
+   * `ownValue`: this row's own different value, which eBay does not receive.
+   */
+  listingLevel?: import('./ebay-listing-level.js').ListingLevelMark
 }
 
 export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' | 'effectiveLocale' | 'translationState' | 'needsTranslation'>, ContentWriteFacts {
@@ -235,11 +242,14 @@ export interface StudioCategorySource {
   label: string
   fromMarkets?: string[]
   otherMarketConflicts?: string[]
+  /** The variation has no product type of its own; the row uses its parent's. */
+  fromParent?: true
 }
 function categorySourceOf(category: ResolvedCategory): StudioCategorySource {
   return { source: category.source, label: categorySourceLabel(category),
     ...(category.fromMarkets ? { fromMarkets: category.fromMarkets } : {}),
-    ...(category.otherMarketConflicts ? { otherMarketConflicts: category.otherMarketConflicts } : {}) }
+    ...(category.otherMarketConflicts ? { otherMarketConflicts: category.otherMarketConflicts } : {}),
+    ...(category.fromParent ? { fromParent: true as const } : {}) }
 }
 
 export interface StudioRow {
@@ -455,6 +465,11 @@ export interface GetStudioSheetInput {
   market: string
   channel?: string
   locale?: string
+  /**
+   * P1 — each row's OWN stored value of an eBay listing-level item specific, for the readers that judge rows one by one
+   * (the variation projection's candidate axes). The operator's sheet shows the listing's one value on every row.
+   */
+  rowOwnValues?: boolean
 }
 
 export class UnknownProductError extends Error {
@@ -866,7 +881,11 @@ function layerFor(source: string | null, hasAlias: boolean): CellLayer {
   // intent.
   if (source === null) return 'default'
   switch (source) {
+    // P1 — the listing's own stored text (an old eBay title), not Master's: it differs from Master
+    // on 80 of 82 REGAL eBay IT cells. It is the LISTING layer's value, so its reset is the
+    // listing's "Follow Master". `follows`/`pinned` keep the resolver's intent (not an operator pin).
     case 'channelSnapshot':
+      return hasAlias ? 'alias' : 'channel'
     case 'master':
     case 'masterLocale':
     case 'masterColumn':
@@ -1034,7 +1053,9 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     ...(wantChannel ? { onlyChannels: [wantChannel], includeEmptyChannels: true } : {}),
   })
   mark('columns')
-  const { columns, coordinates, locale: marketLocale, droppedKeys, schemaMissing, schemaAge, availableMarkets, groups: columnGroups, coverage } = columnSet
+  const { coordinates, locale: marketLocale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coverage } = columnSet
+  // P1 — widened below by the eBay item specifics the family stores outside its category (a copy: the set is cached).
+  let columns = columnSet.columns, columnGroups = columnSet.groups
   const locale = normalizeLanguage(input.locale ?? marketLocale)
 
   let coordinate: SheetCoordinate | null = null
@@ -1115,6 +1136,17 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } }),
   ]) : [[], []]
   mark('related')
+
+  // P1 (report 3 I-3.4, report 6 I-8b) — item specifics the family's listings store that are not in eBay's list for the
+  // category still publish; they are served as editable, clearable columns ("Other item specifics").
+  if (coordinate?.channel === 'EBAY') {
+    const { otherItemSpecificColumns, OTHER_SPECIFICS_GROUP } = await import('./channel-specs/ebay-other-specifics.js')
+    const other = otherItemSpecificColumns({ columns, coordinateLabel: coordinate.label, listings: listingRows, category: context?.categories[0] ?? null })
+    if (other.length) {
+      columns = [...columns, ...other]
+      columnGroups = [...(columnGroups ?? []), OTHER_SPECIFICS_GROUP]
+    }
+  }
 
   // ── 3b. what the MAPPING ENGINE would ship for these cells ────────
   // Composed IN-PROCESS (hub ruling #15.2 / #20.1): one payload, no second HTTP
@@ -1214,6 +1246,10 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
   }
 
   const linkGroupLikes: FieldLinkGroupLike[] = linkGroups as unknown as FieldLinkGroupLike[]
+  /* P1 (report 2 I-11) — which per-variant columns the FAMILY row holds for its variations: the axis wording only for
+     real axes, and a family value (`familyRowHoldsValue`) editable on the family row of the Shared sheet. */
+  const variationAxisKeys = new Set((Array.isArray(root.variationAxes) ? root.variationAxes : []).map((a) => canonicalVariantAxis(String(a))))
+  const withAxis = <C extends { key: string; scope: string }>(col: C) => ({ ...col, axis: col.scope === 'per_variant' && variationAxisKeys.has(canonicalVariantAxis(col.key)) })
   const rows: StudioRow[] = []
   // A family on the photo plan: the "Product media" cell reads the plan (P3c), never the older gallery store.
   const mediaPlan = await sheetMediaPlan(rootId)
@@ -1313,7 +1349,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
               value: raw,
               source: fromColumn ? 'masterColumn' : hit.source,
               inheritedFrom: fromColumn ? null : hit.inheritedFrom,
-              inherited: !fromColumn && !isParent && col.scope === 'global' && isBlank(own) && hit.inheritedFrom !== null,
+              inherited: !fromColumn && !isParent && (col.scope === 'global' || familyRowHoldsValue(withAxis(col))) && isBlank(own) && hit.inheritedFrom !== null,
             }
           }
         }
@@ -1399,11 +1435,15 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         // The two live refusal rules, each with the sentence it owes an operator.
         // Order matters: the parent-row rule is the more specific one, so it
         // speaks first when both apply.
-        const blockedByAxis = isParent && col.scope === 'per_variant'
+        const axisColumn = col.scope === 'per_variant' ? withAxis(col) : col
+        // The family row holds this per-variant column's value for its variations (Shared sheet only: a channel's
+        // family-row cell writes that listing, which its variations do not read).
+        const familyHolds = !coordinate && isParent && familyRowHoldsValue(axisColumn)
+        const blockedByAxis = isParent && col.scope === 'per_variant' && !familyHolds
         const shopifyOwnerApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !product.parentId : !isParent)
         const shopifyApplicability = col.shopifyField?.definition ? shopifyDefinitionApplicability(col.shopifyField.definition, rowShape.productType) : null
         const immutableListingField = !!listingRow?.externalListingId && channelFacts?.editableOnExisting === false
-        const cellEditable = col.editable && !immutableListingField && shopifyOwnerApplies && !shopifyApplicability && columnApplies(col, rowShape)
+        const cellEditable = col.editable && !immutableListingField && shopifyOwnerApplies && !shopifyApplicability && (familyHolds ? columnEditableOnRow(axisColumn, rowShape) : columnApplies(col, rowShape))
         // The COLUMN's own refusal speaks first, because it applies on every row.
         // Measured while verifying this: `sku` is both per-variant scoped AND
         // read-only, and putting the axis rule first made the parent row say
@@ -1424,12 +1464,16 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           : immutableListingField ? 'The channel marks this field read-only on an existing listing.'
           : !shopifyOwnerApplies ? `This Shopify field belongs to ${col.shopifyField?.owner === 'PRODUCT' ? 'the product row' : 'a variant row'}.`
           : shopifyApplicability ? shopifyApplicability
-          : !columnApplies(col, rowShape) && !blockedByAxis
+          : !(familyHolds ? columnEditableOnRow(axisColumn, rowShape) : columnApplies(col, rowShape)) && !blockedByAxis
             ? 'Not applicable to this category.'
           : blockedByAxis
             ? IDENTITY_CODE_KEYS.has(col.key)
               ? 'Set on each variant — an identity code belongs to the individual product, not the family.'
-              : 'Set on each variant — this is a variation axis, so the family row has no single value.'
+              : axisColumn.axis
+              ? 'Set on each variant — this is a variation axis, so the family row has no single value.'
+              : coordinate && familyRowHoldsValue(axisColumn)
+              ? 'Set on each variant here. The family value every variation inherits is edited on the Shared product sheet.'
+              : `Set on each variant — ${col.label} is stored on each variation, and the family row holds no value they inherit.`
             : null
 
         // The mapping engine is keyed by the CHANNEL's field name (`bullet_point`, not the merged
@@ -1796,6 +1840,14 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         if (row.readiness.issues.some((i) => i.severity === 'error')) row.readiness.state = 'errors'
         else if (row.readiness.state === 'ready' && row.readiness.issues.length > 0) row.readiness.state = 'missing'
       }
+    }
+
+    // P1 (report 5 I-1) — eBay takes one value per listing for an item specific that is not an axis: every row shows the
+    // value eBay receives (`ebay-listing-level.ts`). After the theme cells, which read the rows' own values as candidates.
+    if (coordinate?.channel === 'EBAY' && exclusionKnown && !input.rowOwnValues) {
+      const { showEbayListingLevel } = await import('./ebay-listing-level.js')
+      showEbayListingLevel({ rows, columns, label: coordinate.label, groups: projections.map(group => ({ aliasKey: group.id ?? '', axes: cells.get(group.id ?? '')?.axes,
+        familyAxes: root.variationAxes, includedIds: new Set(children.filter(child => { const own = listingByRow.get(`${child.id}:${group.id ?? ''}`); return !!own && !excluded.has(own.id) }).map(child => child.id)) })) })
     }
   }
 

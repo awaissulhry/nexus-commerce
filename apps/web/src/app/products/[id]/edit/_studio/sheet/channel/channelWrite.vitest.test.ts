@@ -5,8 +5,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { SheetWriter } from '@/design-system/grid'
+import { CellSaveTracker, SheetWriter } from '@/design-system/grid'
 import { commitVariationTheme } from '../master/masterWrite'
+import { runBulkOperation, type BulkSavePost, type BulkSend } from '../bulkOperation'
+import { preserveContentVersions } from '../contentVersions'
 
 import { addListingAlias, channelSheetResponse, commitChannelRow, createdListingsOf, NO_LISTING_VERSION, updateListingAlias, writeLandsOnListing, type CreatedListing } from './useChannelSheet'
 import { wireAliasKey, type ChannelSheetRow, type StudioCellValue } from './types'
@@ -48,6 +50,162 @@ function captureBody(response: Record<string, unknown> = { updated: 1 }) {
 afterEach(() => vi.unstubAllGlobals())
 
 const coord = { channel: 'EBAY' as const, marketplace: 'IT' }
+
+describe('shared content versions across listing aliases', () => {
+  it.each([['language', 'seed'], ['language', 'edit'], ['pin', 'seed'], ['pin', 'edit']] as const)('an older %s row supplied by %s keeps confirmed versions', async (tier, through) => {
+    const make = () => row({ values: { title: cell({ writeField: 'name',
+      writeTarget: tier === 'language' ? 'master' : 'channelListing', writeVerb: tier === 'language' ? 'master' : 'channel',
+      contentAcknowledged: true, contentAddress: { tier, language: 'de',
+        ...(tier === 'pin' ? { coordinate: { channel: 'EBAY', market: 'DE', accountId: 'account-a' } } : {}) }, contentVersion: 4 } as never) } })
+    const initial = make(), stale = make()
+    let ownerVersion = tier === 'language' ? 7 : 82, contentVersion = 4
+    const sent: Array<{ owner: unknown; content: number }> = []
+    const tracker = new CellSaveTracker()
+    const writer = new SheetWriter<ChannelSheetRow>({ tracker, getApi: () => null, mergeRow: preserveContentVersions, commit: req => commitChannelRow(req, {
+      ...coord, marketplace: 'DE', locale: 'de', accountId: 'account-a', familyRows: () => req.row ? [req.row] : [],
+      onProductVersionsChanged: rows => writer.seed(rows.map(r => ({ id: r.rowId, version: r.version }))),
+      bulkSend: async body => {
+        const token = (body.changes as Array<{ contentVersion: number }>)[0].contentVersion
+        sent.push({ owner: body.expectedVersion, content: token })
+        const ok = body.expectedVersion === ownerVersion && token === contentVersion
+        if (ok) { ownerVersion++; contentVersion++ }
+        return new Response(JSON.stringify(ok ? { updated: 1, currentVersion: ownerVersion,
+          versionOf: tier === 'language' ? 'product' : 'channelListing', contentVersions: [{ id: 'p1', tier, language: 'de', version: contentVersion }] }
+          : { error: 'Changed' }), { status: ok ? 200 : 409 })
+      },
+    }) })
+    writer.seed([{ id: initial.rowId, version: initial.version, row: initial }])
+    try {
+      writer.set(initial.rowId, 'title', 'First'); await writer.flush()
+      expect(initial.values.title.contentVersion).toBe(5)
+      if (through === 'seed') writer.seed([{ id: stale.rowId, version: stale.version, row: stale }])
+      writer.set(initial.rowId, 'title', 'Second', through === 'edit' ? { row: stale } : {}); await writer.flush()
+      expect(sent).toEqual(tier === 'language' ? [{ owner: 7, content: 4 }, { owner: 8, content: 5 }]
+        : [{ owner: 82, content: 4 }, { owner: 83, content: 5 }])
+      expect(tracker.get(initial.rowId, 'title')?.state).toBe('saved')
+      // A later external delete/recreate is a fresh snapshot, not a stale content counter to keep.
+      ownerVersion++; contentVersion = 1
+      const fresh = make()
+      if (tier === 'language') fresh.version = ownerVersion
+      else fresh.listing!.version = ownerVersion
+      fresh.values.title.contentVersion = 1
+      writer.seed([{ id: fresh.rowId, version: fresh.version, row: fresh }])
+      writer.set(fresh.rowId, 'title', 'After reset'); await writer.flush()
+      expect(sent.at(-1)).toEqual({ owner: ownerVersion - 1, content: 1 })
+      expect(tracker.get(fresh.rowId, 'title')?.state).toBe('saved')
+    } finally { writer.destroy() }
+  })
+  it.each(['language', 'pin'] as const)('chains an immediate sibling save with the correct %s token before any read', async tier => {
+    const makeRow = (aliasId: string | null, listingId: string) => row({ aliasId, rowId: `${aliasId ?? 'primary'}:p1`,
+      listing: { id: listingId, version: 82 } as ChannelSheetRow['listing'],
+      values: { title_de: cell({ writeField: 'title', writeTarget: tier === 'language' ? 'master' : 'channelListing', writeVerb: tier === 'language' ? 'master' : 'channel',
+        contentAddress: { tier, language: 'de', coordinate: { channel: 'EBAY', market: 'IT', accountId: 'account-a', aliasKey: aliasId ?? '' } }, contentVersion: 4 } as never) },
+    })
+    const primary = makeRow(null, 'listing-primary')
+    const alias = makeRow('alias-2', 'listing-alias')
+    const anotherProduct = { ...makeRow(null, 'listing-other'), id: 'p2', rowId: 'primary:p2' }
+    const bodies: any[] = []
+    const bulkSend = vi.fn(async (body: unknown) => {
+      bodies.push(body)
+      return new Response(JSON.stringify({ updated: 1, currentVersion: (tier === 'language' ? 7 : 82) + bodies.length,
+        versionOf: tier === 'language' ? 'product' : 'channelListing', contentVersions: [{ id: 'p1', tier, language: 'de', version: 4 + bodies.length }] }))
+    })
+    const options = { ...coord, accountId: 'account-a', familyRows: () => [primary, alias, anotherProduct], bulkSend }
+    const save = (r: ChannelSheetRow) => commitChannelRow({ rowId: r.rowId, row: r, expectedVersion: r.version,
+      cells: [{ colId: 'title_de', value: 'A new title', intent: 'set' }] } as never, options)
+
+    expect((await save(primary)).ok).toBe(true)
+    expect((await save(alias)).ok).toBe(true)
+    expect(bodies.map(body => body.changes[0].contentVersion)).toEqual([4, tier === 'language' ? 5 : 4])
+    expect(bodies.map(body => body.expectedVersion)).toEqual(tier === 'language' ? [7, 8] : [82, 82])
+    expect(anotherProduct.version).toBe(7)
+    expect(anotherProduct.values.title_de.contentVersion).toBe(4)
+    expect(primary.values.title_de.contentVersion).toBe(tier === 'language' ? 6 : 5)
+    expect(bulkSend).toHaveBeenCalledTimes(2)
+  })
+  it('a late answer never puts sibling content tokens behind a newer confirmed save', async () => {
+    const r = row({ version: 9, values: { title: cell({ writeField: 'title', contentAddress: { tier: 'language', language: 'de' }, contentVersion: 6 } as never) } })
+    const changed = vi.fn()
+    const result = await commitChannelRow({ rowId: r.rowId, row: r, expectedVersion: 7, cells: [{ colId: 'title', value: 'Old response', intent: 'set' }] } as never,
+      { ...coord, familyRows: () => [r], onProductVersionsChanged: changed,
+        bulkSend: async () => new Response(JSON.stringify({ updated: 1, currentVersion: 8, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 5 }] })) })
+    expect(r.version).toBe(9)
+    expect(r.values.title.contentVersion).toBe(6)
+    expect(result.version).toBe(9)
+    expect(changed).not.toHaveBeenCalled()
+  })
+  it('seeds the writer token of the sibling alias before its next queued edit', async () => {
+    const make = (aliasId: string | null) => row({ aliasId, rowId: `${aliasId ?? 'primary'}:p1`, values: {
+      title: cell({ writeField: 'title', writeTarget: 'master', writeVerb: 'master', contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } as never),
+    } })
+    const primary = make(null), alias = make('alias-2'), rows = [primary, alias]
+    const bodies: any[] = []
+    const tracker = new CellSaveTracker()
+    const writer = new SheetWriter<ChannelSheetRow>({ tracker, getApi: () => null, commit: req => commitChannelRow(req, {
+      ...coord, familyRows: () => rows,
+      onProductVersionsChanged: changed => writer.seed(changed.map(r => ({ id: r.rowId, version: r.version }))),
+      bulkSend: async body => {
+        bodies.push(body)
+        const number = bodies.length
+        const correct = body.expectedVersion === 6 + number && (body.changes as any[])[0].contentVersion === 3 + number
+        return new Response(JSON.stringify(correct ? { updated: 1, versionOf: 'product', currentVersion: 7 + number,
+          contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 4 + number }] } : { error: 'Stale product or content version' }), { status: correct ? 200 : 409 })
+      },
+    }) })
+    writer.seed(rows.map(r => ({ id: r.rowId, version: r.version, row: r })))
+    try {
+      writer.set(primary.rowId, 'title', 'First', { row: primary }); await writer.flush()
+      writer.set(alias.rowId, 'title', 'Second', { row: alias }); await writer.flush()
+      expect(bodies.map(body => body.expectedVersion)).toEqual([7, 8])
+      expect(bodies.map(body => body.changes[0].contentVersion)).toEqual([4, 5])
+      expect(tracker.get(alias.rowId, 'title')?.state).toBe('saved')
+    } finally { writer.destroy() }
+  })
+  it('keeps a shared batch version after a no-op and an alias change, so the next edit saves', async () => {
+    const make = (aliasId: string | null, value: string) => row({ aliasId, rowId: `${aliasId ?? 'primary'}:p1`, values: {
+      title: cell({ value, writeField: 'name', writeTarget: 'master', writeVerb: 'master', contentAcknowledged: true,
+        contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } as never),
+    } })
+    const primary = make(null, 'Current'), alias = make('alias-2', 'Next'), rows = [primary, alias]
+    let serverVersion = 7, contentVersion = 4, stored = 'Current'
+    const sentVersions: unknown[] = []
+    const post: BulkSavePost = async (_operation, units) => new Response(JSON.stringify({ units: units.map(unit => {
+      sentVersions.push(unit.expectedVersion)
+      const change = (unit.changes as Array<{ value: string; contentVersion: number }>)[0]
+      if (unit.expectedVersion !== serverVersion || change.contentVersion !== contentVersion) {
+        return { key: unit.key, status: 409, body: { currentVersion: serverVersion, versionOf: 'product', error: 'Changed' } }
+      }
+      if (change.value !== stored) { stored = change.value; serverVersion++; contentVersion++ }
+      // applyContentBulk counts accepted plans as updated, including a byte-identical content write.
+      return { key: unit.key, status: 200, body: { updated: 1, currentVersion: serverVersion, versionOf: 'product', errors: [],
+        contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: contentVersion }] } }
+    }) }))
+    const tracker = new CellSaveTracker()
+    const commit = (request: Parameters<typeof commitChannelRow>[0], bulkSend?: BulkSend) => commitChannelRow(request, {
+      ...coord, marketplace: 'DE', locale: 'de', familyRows: () => rows, bulkSend,
+      onProductVersionsChanged: changed => writer.seed(changed.map(r => ({ id: r.rowId, version: r.version }))),
+    })
+    const writer = new SheetWriter<ChannelSheetRow>({ tracker, getApi: () => null, commit,
+      commitBatch: requests => runBulkOperation(requests, commit, { post }) })
+    writer.seed(rows.map(r => ({ id: r.rowId, version: r.version, row: r })))
+    try {
+      writer.beginOperation()
+      writer.set(primary.rowId, 'title', 'Current', { row: primary })
+      writer.set(alias.rowId, 'title', 'Next', { row: alias })
+      writer.endOperation()
+      await writer.flush()
+      expect(stored).toBe('Next')
+      expect(serverVersion).toBe(8)
+      expect(rows.map(r => r.version)).toEqual([8, 8])
+      expect(writer.versionOf(alias.rowId)).toBe(8)
+      expect.soft(writer.versionOf(primary.rowId)).toBe(8)
+      writer.set(primary.rowId, 'title', 'Third', { row: primary })
+      await writer.flush()
+      expect.soft(sentVersions).toEqual([7, 7, 8])
+      expect.soft(tracker.get(primary.rowId, 'title')?.state).toBe('saved')
+    } finally { writer.destroy() }
+  })
+})
 
 describe('channel information reads', () => {
   const empty = { rows: [], columns: [], aliases: [], scope: { channel: 'EBAY', marketplace: 'IT' }, meta: { schemaMissing: [], schemaAge: [] } }
@@ -612,5 +770,37 @@ describe('a variation-theme save keeps the listing version and the product versi
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ version: 83, product: { version: 9 } }))))
     const result = await commitVariationTheme({ rowId: 'root', row: null, cells: [{ colId: 'variation_theme', value: { ...live, theme: { code: 'SIZE/COLOR' }, baseline: live }, intent: 'set' }] }, 'root')
     expect(result).toMatchObject({ ok: true, version: 9 })
+  })
+})
+
+describe('P1 — an emptied list is a clear (report 1 I-10)', () => {
+  it('sends null, which the write path takes for every shape, instead of [] (refused: "0 values — needs at least 1")', async () => {
+    const seen = captureBody()
+    await commitChannelRow({ rowId: 'primary:p1', row: row(), cells: [{ colId: 'material', value: [], intent: 'set' }] } as never, coord)
+    expect(seen.body.changes[0]).toMatchObject({ field: 'material', value: null, intent: 'set' })
+  })
+})
+
+describe('the next content edit on a row chains on the version the last save answered (P3 commit sweep)', () => {
+  it('a second bullet save sends the version the first save moved the pin to, with no read in between', async () => {
+    const bodies: any[] = []
+    const answers = [
+      { updated: 1, currentVersion: 83, versionOf: 'channelListing', contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: 5 }] },
+      { updated: 1, currentVersion: 84, versionOf: 'channelListing', contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: 6 }] },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: any) => {
+      bodies.push(JSON.parse(init.body))
+      return { ok: true, status: 200, json: async () => answers[bodies.length - 1] } as unknown as Response
+    }))
+    const address = { tier: 'pin', language: 'it', coordinate: { channel: 'AMAZON', market: 'IT' } }
+    const r = row({ values: {
+      bulletPoints_1: cell({ writeField: 'bulletPoints[1]', contentAddress: address, contentVersion: 4 } as never),
+      bulletPoints_2: cell({ writeField: 'bulletPoints[2]', contentAddress: address, contentVersion: 4 } as never),
+    } } as never)
+    await commitChannelRow({ rowId: 'primary:p1', row: r, cells: [{ colId: 'bulletPoints_1', value: 'One', intent: 'set' }] } as never, { channel: 'AMAZON', marketplace: 'IT' })
+    await commitChannelRow({ rowId: 'primary:p1', row: r, cells: [{ colId: 'bulletPoints_2', value: 'Two', intent: 'set' }] } as never, { channel: 'AMAZON', marketplace: 'IT' })
+    expect(bodies.map(body => body.changes[0].contentVersion)).toEqual([4, 5])
+    expect(bodies.map(body => body.expectedVersion)).toEqual([82, 83])
+    expect(r.values.bulletPoints_1.contentVersion).toBe(6)
   })
 })

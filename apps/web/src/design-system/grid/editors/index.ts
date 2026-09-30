@@ -32,12 +32,12 @@ export const textEditor = (): Pick<ColDef, 'editable' | 'cellEditor' | 'cellEdit
   ...scalarValueEditor('text'),
 })
 
-export { selectEditor, SelectChevron, SELECT_CELL_CLASS, type SelectEditorParams } from './SelectCellEditor'
+export { selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, type SelectEditorParams } from './SelectCellEditor'
 /* Exported so a host can name it as the FALLBACK editor beside `formulaSelector` — `=` opens the
    formula editor on a closed list, anything else opens this one (#775). */
 export { SelectPanelEditor, type SelectPanelEditorParams } from './SelectPanelEditor'
-export { CellSaveTracker, roundTripClassRules, saveCell, SAVED_FADE_MS, type CellSaveState, type CellSaveEntry, type SaveOutcome } from './roundTrip'
-export { longTextEditor, sheetClassRules, selectValidation, lengthValidation, lengthCapOf, evaluateLengthCaps, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type LengthCaps, type LengthReading, type SheetValidation } from './sheet'
+export { CellSaveTracker, roundTripClassRules, saveCell, saveNote, SAVED_FADE_MS, type CellSaveState, type CellSaveEntry, type SaveOutcome } from './roundTrip'
+export { longTextEditor, textLimitFor, NO_TEXT_LIMIT, sheetClassRules, selectValidation, lengthValidation, lengthCapOf, evaluateLengthCaps, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type LengthCaps, type LengthReading, type SheetValidation } from './sheet'
 // PES.2 — the ONE decision about whether a grid change should be written (rulings #53, #63).
 export { writeGate, NON_EDIT_SOURCES, type WriteGateInput, type WriteGateVerdict } from './writeGate'
 // PES.2 — the sheet's ONE write path: per-row version, per-row batching, per-cell outcomes.
@@ -91,3 +91,4 @@ export { matrixWrite, MATRIX_NOT_A_COLUMN, MATRIX_NO_LISTING, MATRIX_FULFILMENT_
 export { SlotListEditor, SlotListValue, slotListMoveFact, slotListSaveState, slotListProvenance, slotListSummary, type SlotListEditorParams, type SlotListSettings, type SlotCellLike, type SlotListValueParams } from './SlotListEditor'
 export { slotListColumnDef, slotListEditable, type SlotListColumnOptions } from './slotListColumn'
 export { SLOT_LIST_PREFIX, SLOT_LIST_EDITOR_CLASS, slotListKey, isSlotListKey, slotListValue, slotListChanges, moveSlot, moveByKey, listModeItems, withTrailingEmpty, listModeCommit, slotListText, bulletsEditorKey, slotPositionOf, suppressSlotListKeys, type SlotGroup, type SlotChange, type BulletsKeyAction, type KeyLike } from './slotList'
+export { cellValueOf, isUnchanged, panelValueOf, typedStart, withStoredValue } from './selectPanelModel'

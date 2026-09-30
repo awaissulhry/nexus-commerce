@@ -1,15 +1,16 @@
+import { ProductBulkError } from '../../lib/product-bulk-error.js'
 import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { isLocalizableContent, contentField } from '../pim/content-resolver.js'
-import { applyContentBulk, type ContentEdit } from '../pim/content-bulk-write.js'
+import { applyContentBulk, type ContentEdit, type ContentOwnerVersion } from '../pim/content-bulk-write.js'
 import { variationAttributePatch } from '../pim/shared-variation-values.js'
 import { optionModeFrom } from '@nexus/shared/attributes'
 import type { SheetChannel } from '../pim/sheet-columns.service.js'
 import type { FastifyBaseLogger } from 'fastify'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
-import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction } from '../../lib/database-context.js'
+import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
@@ -22,7 +23,8 @@ import { getFieldDefinition } from '../pim/field-registry.service.js'
 import { readStoredChannelValue } from '../pim/channel-inheritance.js'
 import { applyPlatformMutations, channelValueMutation, type ChannelValueMutation } from '../pim/channel-value-mutation.js'
 import { CHANNEL_FIELD_MAP, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '../pim/channel-field-map.js'
-import { coerceForShape, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
+import { checkForStorage, coerceForShape, isBlankValue, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
+import { isEbayListingLevel, loadEbayListingAxes } from '../pim/ebay-listing-level.js'
 import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from '../pim/master-field-gate.js'
 import { validationMarketplace } from '../pim/validation-marketplace.js'
 import { auditLogService } from '../audit-log.service.js'
@@ -180,6 +182,13 @@ export interface ProductBulkChangeError {
   error: string
 }
 
+/** P1 (`pim/value-verdict.ts`) — a value that was STORED with a problem the channel or Nexus flags, and its reason. */
+export interface ProductBulkChangeWarning {
+  id: string
+  field: string
+  warning: string
+}
+
 export interface ProductBulkContext {
   ifMatch?: string | string[]
   formulaWriteToken?: string | string[]
@@ -194,15 +203,11 @@ export interface ProductBulkContext {
    * all-or-nothing: they answer "failed" on any error and would otherwise hide a partial save.
    */
   contentPerRow?: boolean
+  /** Internal continuation after content checked this request's precondition; never supplied by HTTP. */
+  readContentOwner?: ContentOwnerVersion
 }
 
-export class ProductBulkError extends Error {
-  /** `cause` keeps the original failure, so a lost race wrapped as a 500 is still retried (`retryableConflict`). */
-  constructor(readonly statusCode: number, readonly details: Record<string, unknown>, cause?: unknown) {
-    super(typeof details.error === 'string' ? details.error : 'Product edit failed')
-    if (cause !== undefined) (this as { cause?: unknown }).cause = cause
-  }
-}
+export { ProductBulkError } from '../../lib/product-bulk-error.js'
 
 type SheetColumnRow = Map<string, import('../pim/sheet-columns.service.js').SheetColumn>
 
@@ -231,6 +236,19 @@ async function channelRowContract(
     onlyChannels: [ctx.channel], scopeKind: 'channel',
   })
   const label = channelSet.coordinates.find((c) => c.channel === ctx.channel)?.label
+  // P1 (report 3 I-3.4) — the eBay item specifics the family stores outside its category are columns of the sheet
+  // (`ebay-other-specifics.ts`), so they are columns of the write contract too: editable and clearable.
+  let headers = channelSet.columns
+  /** eBay: the family's listings on this coordinate (every alias), read once — the listing-level writes reuse them. */
+  let familyListings: Array<{ productId: string; aliasKey: string; parentId: string | null; platformAttributes: unknown }> = []
+  if (ctx.channel === 'EBAY' && label) {
+    const roots = [...new Set(owners.map(owner => owner.parentId ?? owner.id))]
+    familyListings = (await prisma.channelListing.findMany({ where: { channel: 'EBAY', marketplace: ctx.marketplace, channelConnectionId: context.connectionId ?? null,
+      OR: [{ productId: { in: roots } }, { product: { parentId: { in: roots } } }] }, select: { productId: true, aliasKey: true, platformAttributes: true, product: { select: { parentId: true } } } }))
+      .map(row => ({ productId: row.productId, aliasKey: row.aliasKey, parentId: row.product?.parentId ?? null, platformAttributes: row.platformAttributes }))
+    const { otherItemSpecificColumns } = await import('../pim/channel-specs/ebay-other-specifics.js')
+    headers = [...headers, ...otherItemSpecificColumns({ columns: headers, coordinateLabel: label, listings: familyListings, category: context.categories[0] ?? null })]
+  }
   const rows = new Map<string, SheetColumnRow>()
   const categories = new Map<string, string | null>()
   for (const id of ids) {
@@ -238,7 +256,7 @@ async function channelRowContract(
     const category = context.byRow.get(`${id}:${aliasKey}`)?.channelCategoryId ?? context.defaults[id]?.channelCategoryId ?? null
     categories.set(id, category)
     const row: SheetColumnRow = new Map()
-    for (const header of channelSet.columns) {
+    for (const header of headers) {
       const col = label ? columnForCategory(header, label, category) : header
       const owner = owners.find(p => p.id === id)
       const shopifyApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !owner?.parentId : !owner?.isParent)
@@ -247,17 +265,17 @@ async function channelRowContract(
     }
     rows.set(id, row)
   }
-  return { channelSet, label, rows, categories }
+  return { channelSet, label, rows, categories, familyListings }
 }
 
 /**
- * R-58 (A-47) — a MASTER bullet may not be longer than the TIGHTEST bullet cap of the channels the product (or a child that
+ * R-58 (A-47) — a MASTER bullet longer than the TIGHTEST bullet cap of the channels the product (or a child that
  * inherits it) is listed on. The caps are read from each listed coordinate's own column contract (`channelRowContract`, the
  * same facts the channel sheet and its slot writes use) — never a number kept here. A product listed nowhere has no cap.
- * A coordinate whose facts cannot be read refuses the bullet by name (fail closed): "tightest" is unknown without it.
- * Returns one refusal per over-cap bullet change, naming the bullet's own number.
+ * P1 — the bullet is stored either way: one warning per over-cap bullet change, naming the bullet's own number and the
+ * coordinate whose cap it passes (or the coordinate whose facts could not be read). That channel's publish blocks it.
  */
-async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBulkChangeError[]> {
+async function masterBulletCapWarnings(edits: ContentEdit[]): Promise<ProductBulkChangeWarning[]> {
   const bulletEdits = edits.filter(edit => contentField(edit.column.slot?.of ?? edit.column.key) === 'bulletPoints')
   if (!bulletEdits.length) return []
   const editIds = [...new Set(bulletEdits.map(edit => edit.change.id))]
@@ -293,7 +311,7 @@ async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBul
       for (const id of ids) if (!unreadable.has(id)) unreadable.set(id, where)
     }
   }
-  const refusals: ProductBulkChangeError[] = []
+  const refusals: ProductBulkChangeWarning[] = []
   for (const { change, column } of bulletEdits) {
     const family = familyOf.get(change.id) ?? [change.id]
     const blind = family.map(id => unreadable.get(id)).find(Boolean)
@@ -306,14 +324,14 @@ async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBul
     }
     if (!items.some(item => item.text.length > 0)) continue
     if (blind) {
-      refusals.push({ id: change.id, field: change.field, error: `Could not read the bullet limit for ${blind}. Reload before saving bullets.` })
+      refusals.push({ id: change.id, field: change.field, warning: `Could not read the bullet limit for ${blind}; the bullets are saved and checked again at publish.` })
       continue
     }
     const all = family.flatMap(id => capsOf.get(id) ?? [])
     if (!all.length) continue // listed nowhere that declares bullets: no cap
     const tightest = all.reduce((a, b) => (b.cap < a.cap ? b : a))
     const over = items.find(item => item.text.length > tightest.cap)
-    if (over) refusals.push({ id: change.id, field: change.field, error: `Bullet ${over.n} takes at most ${tightest.cap} characters — the ${tightest.where} cap (it has ${over.text.length})` })
+    if (over) refusals.push({ id: change.id, field: change.field, warning: `Bullet ${over.n} takes at most ${tightest.cap} characters — the ${tightest.where} cap (it has ${over.text.length})` })
   }
   return refusals
 }
@@ -504,7 +522,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       received: String(rawBodyExpectedVersion).slice(0, 80),
     })
   }
-  const expectedVersion = headerVersion ?? bodyExpectedVersion
+  let expectedVersion = headerVersion ?? bodyExpectedVersion
   if (expectedVersion !== undefined) {
     const ids = new Set(changes.map((c) => c?.id).filter(Boolean))
     if (ids.size !== 1) {
@@ -606,6 +624,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
 
   const validated: Validated[] = []
   const errors: ProductBulkChangeError[] = []
+  const warnings: ProductBulkChangeWarning[] = []
+  const warnFrom = (id: string, field: string, found: Array<{ message: string }>) => { for (const f of found) warnings.push({ id, field, warning: f.message }) }
 
   // ── #489 — the server enforces the caps the SHEET shows ──────────────
   // Measured 2026-09-02: this path enforced closed lists and NO length cap at
@@ -651,9 +671,12 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
    * landed in the bag as `"a,b"`, a measure as `"[object Object]"`.
    */
   const columnFactsByKey = new Map<string, ShapeWriteFacts>()
-  const variationOwners = new Map<string, { categoryAttributes: unknown; variantAttributes: unknown; variationAxes: string[] }>()
+  const variationOwners = new Map<string, { parentId?: string | null; categoryAttributes: unknown; variantAttributes: unknown; variationAxes: string[] }>()
   const rowContract = new Map<string, Map<string, import('../pim/sheet-columns.service.js').SheetColumn>>()
   const rowCategoryById = new Map<string, string | null>()
+  /** P1 — eBay: the family listings the write contract read, and each written product's place in its family. */
+  let ebayFamilyListings: Array<{ productId: string; aliasKey: string; parentId: string | null; platformAttributes: unknown }> = []
+  const familyPlace = new Map<string, { parentId: string | null; isParent: boolean }>()
   const masterRowContract = new Map<string, Map<string, import('../pim/sheet-columns.service.js').SheetColumn>>()
   const storeFor = (id: string, key: string) => {
     const col = rowContract.get(id)?.get(key)
@@ -699,8 +722,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       if (ptRows.length > 0) {
         const { getSheetColumns } = await import('../pim/sheet-columns.service.js')
         if (primaryContext) {
-          const { channelSet, label, rows, categories } = await channelRowContract({ channel: primaryContext.channel, marketplace: primaryContext.marketplace,
+          const { channelSet, label, rows, categories, familyListings } = await channelRowContract({ channel: primaryContext.channel, marketplace: primaryContext.marketplace,
             locale: primaryContext.locale, accountId: connFor.get(primaryContext.channel) ?? null, aliasKey: (primaryContext as { aliasKey?: string }).aliasKey }, changeIds, ptRows)
+          ebayFamilyListings = familyListings
+          for (const row of ptRows) familyPlace.set(row.id, { parentId: row.parentId, isParent: !!row.isParent })
           for (const id of changeIds) {
             rowCategoryById.set(id, categories.get(id) ?? null)
             rowContract.set(id, rows.get(id)!)
@@ -715,11 +740,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
         for (const mk of marketFree ? ['GLOBAL'] : markets) {
           const set = await getSheetColumns({ market: mk, ...(marketFree ? { allowUnknownMarket: true } : {}), productTypes, familyIds, savedFields: (await import('../pim/family-sheet-schema.js')).savedAttributeFields(schemaFamilyRows.map(r => r.categoryAttributes)), savedFieldsFor: 'shared', includeEmptyChannels: true })
-          const { columnApplies } = await import('@nexus/shared/master-sheet')
+          const { columnEditableOnRow } = await import('@nexus/shared/master-sheet')
+          const { canonicalVariantAxis } = await import('../pim/variant-attribute-keys.js')
           for (const product of ptRows) {
             const row = new Map<string, import('../pim/sheet-columns.service.js').SheetColumn>()
             const shape = { isParent: product.isParent, productType: product.productType, familyId: product.familyId ?? product.parent?.familyId }
-            for (const col of set.columns) row.set(col.key, { ...col, editable: col.editable && columnApplies(col, shape) })
+            // P1 (report 2 I-11) — the family row holds a per-variant column's value for its variations unless it is a
+            // variation axis (the studio sheet's own rule, `columnEditableOnRow`); `axis` from this family's axes.
+            const axes = new Set((variationOwners.get(product.id)?.variationAxes ?? []).map(axis => canonicalVariantAxis(String(axis))))
+            for (const col of set.columns) row.set(col.key, { ...col, editable: col.editable && columnEditableOnRow({ ...col, axis: col.scope === 'per_variant' && axes.has(canonicalVariantAxis(col.key)) }, shape) })
             masterRowContract.set(product.id, row)
           }
           for (const col of set.columns) {
@@ -740,6 +769,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
       }
     } catch (error) {
+      // A lost race (40001, deadlock, or a statement the race already aborted) kills the whole transaction: it must
+      // restart it, not refuse this row and carry on in a transaction every next statement fails (measured 2026-09-30:
+      // a 41-row save answered 503 after its restarts all met 25P02).
+      if (transactionMustRestart(error)) throw error
       context.logger.warn({ err: error }, 'Attribute write contract unavailable')
       if (changes.some(c => isCategoryAttrField(c.field))) {
         throw new ProductBulkError(503, { error: 'Could not load attribute requirements. Reload the sheet before saving attributes.' })
@@ -785,17 +818,17 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
   }
   if (contentEdits.length && !primaryContext) {
-    for (const refusal of await masterBulletCapRefusals(contentEdits)) errors.push(refusal)
+    // P1 — a master bullet over a listed channel's cap is stored and flagged; that channel's publish blocks it.
+    for (const warning of await masterBulletCapWarnings(contentEdits)) warnings.push(warning)
   }
   if (errors.length && !context.contentPerRow) return { success: false, updated: 0, errors }
   // R-60 — per row (the sheet's opt-in only): a refused content row leaves BOTH paths below; the other rows go on.
   const refusedRows = errors.length ? new Set(changes.filter(change => errors.some(e => e.id === change.id && e.field === change.field))) : null
   const contentToWrite = refusedRows ? contentEdits.filter(edit => !refusedRows.has(edit.change)) : contentEdits
-  const otherRows = async (remaining: typeof changes) => {
+  const otherRows = async (remaining: typeof changes, readContentOwner?: ContentOwnerVersion) => {
     if (!remaining.length) return { updated: 0, errors: [] }
-    const product = expectedVersion !== undefined ? await prisma.product.findUnique({ where: { id: remaining[0].id }, select: { version: true } }) : null
     try {
-      return await applyProductBulkEdits({ ...input, changes: remaining, expectedVersion: product?.version }, { ...context, ifMatch: undefined })
+      return await applyProductBulkEdits({ ...input, changes: remaining, expectedVersion }, { ...context, ifMatch: undefined, readContentOwner })
     } catch (error) {
       // Per row, "every other row was refused" is a set of row errors, not a failure of the rows that were saved.
       if (context.contentPerRow && error instanceof ProductBulkError && error.statusCode === 400 && Array.isArray(error.details.errors)) {
@@ -807,13 +840,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (contentToWrite.length) {
     const addressed = new Set(contentEdits.map(edit => edit.change))
     const remaining = changes.filter(change => !addressed.has(change) && !refusedRows?.has(change))
-    return applyContentBulk(input, context, contentToWrite, () => otherRows(remaining), refusedRows ? errors : [])
+    return applyContentBulk({ ...input, expectedVersion }, context, contentToWrite, readContentOwner => otherRows(remaining, readContentOwner), refusedRows ? errors : [], warnings)
   }
   if (refusedRows) {
     const addressed = new Set(contentEdits.map(edit => edit.change))
     const rest = await otherRows(changes.filter(change => !addressed.has(change) && !refusedRows.has(change)))
     const all = [...errors, ...((rest as { errors?: ProductBulkChangeError[] }).errors ?? [])]
-    return { ...rest, success: (rest.updated ?? 0) > 0, updated: rest.updated ?? 0, errors: all }
+    const allWarnings = [...warnings, ...((rest as { warnings?: ProductBulkChangeWarning[] }).warnings ?? [])]
+    return { ...rest, success: (rest.updated ?? 0) > 0, updated: rest.updated ?? 0, errors: all, ...(allWarnings.length ? { warnings: allWarnings } : {}) }
   }
   /** `n > cap` is over; a value exactly AT the cap is accepted. */
   const capViolation = (field: string, value: unknown, id?: string): string | null => {
@@ -989,11 +1023,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
       // #489 — the cap of the SLOT column the sheet shows (`bulletPoints_3` → 700), not of the list.
       const slotColumnKey = `${c.field.replace(/^attr_/, '').replace(/^(amazon|ebay)_/, '')}_${slotOf.index}`
+      // P1 — over the cap is stored and flagged; the channel's own limit blocks only at publish.
       const slotCapErr = capViolation(slotColumnKey, slotValue, c.target === 'channel' ? c.id : undefined)
-      if (slotCapErr) {
-        errors.push({ id: c.id, field: raw.field, error: slotCapErr })
-        continue
-      }
+      if (slotCapErr) warnings.push({ id: c.id, field: raw.field, warning: slotCapErr })
       validated.push({ id: c.id, field: c.field, value: slotValue, cascade: !!c.cascade, target: c.target, slot: slotOf.index })
       continue
     }
@@ -1027,24 +1059,28 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         validated.push({ id: c.id, field: c.field, value: stored, cascade: !!c.cascade, target: c.target })
         continue
       }
-      const facts = rowColumn ? factsOf(rowColumn) : columnFactsByKey.get(c.field.replace(/^attr_/, ''))
+      // An eBay item specific's length is judged as eBay receives it (each value; a joined list as its parts) by the
+      // channel check below (`ebayAspectValues`), not by the raw text here.
+      const itemSpecific = c.target === 'channel' && (() => { const store = storeFor(c.id, c.field.replace(/^attr_/, '')); return store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' })()
+      const facts = rowColumn ? { ...factsOf(rowColumn), ...(itemSpecific ? { maxLength: undefined } : {}) } : columnFactsByKey.get(c.field.replace(/^attr_/, ''))
       // A display name can exceed the ID's cap. Resolve it before validating the stored form.
       const reference = isReferenceField(c.field.slice(5))
-      const shaped = coerceForShape(reference ? { key: c.field, shape: 'scalar', kind: 'text' } : facts, value)
+      // P1 (`pim/value-verdict.ts`) — only what the field's type cannot hold is refused; every other rule (the list, a
+      // length, a count, a format) stores the value and answers a warning with the same sentence.
+      const shaped = checkForStorage(reference ? { key: c.field, shape: 'scalar', kind: 'text' } : facts, value)
       if (shaped.ok === false) {
         // (`strictNullChecks` is off here, so the discriminated union does not narrow by itself.)
         errors.push({ id: c.id, field: c.field, error: (shaped as { error: string }).error })
         continue
       }
       value = (shaped as { value: unknown }).value
-      // #489 — refuse an over-cap value with the SAME sentence the sheet shows; per item for a list.
-      const capErr = reference ? null : Array.isArray(value)
+      const shapeFindings = (shaped as { findings: Array<{ rule: string; message: string }> }).findings
+      warnFrom(c.id, c.field, shapeFindings)
+      // #489 — an over-cap value carries the SAME sentence the sheet shows; per item for a list (once per cell).
+      const capErr = reference || itemSpecific || shapeFindings.some(f => f.rule === 'length') ? null : Array.isArray(value)
         ? value.map((item, i) => { const e = capViolation(c.field, item, c.target === 'channel' ? c.id : undefined); return e ? `value ${i + 1}: ${e}` : null }).find((e) => e) ?? null
         : capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
-      if (capErr) {
-        errors.push({ id: c.id, field: c.field, error: capErr })
-        continue
-      }
+      if (capErr) warnings.push({ id: c.id, field: c.field, warning: capErr })
       validated.push({
         id: c.id,
         field: c.field,
@@ -1089,36 +1125,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         const trimmed = value.trim()
         value = trimmed === '' ? null : trimmed
       }
-      // Length validation (lightweight — frontend already enforces)
-      if (
-        typeof value === 'string' &&
-        c.field === 'amazon_title' &&
-        value.length > 200
-      ) {
-        errors.push({
-          id: c.id,
-          field: c.field,
-          error: 'Amazon title max 200 characters',
-        })
-        continue
-      }
-      if (
-        typeof value === 'string' &&
-        c.field === 'ebay_title' &&
-        value.length > 80
-      ) {
-        errors.push({
-          id: c.id,
-          field: c.field,
-          error: 'eBay title max 80 characters',
-        })
-        continue
-      }
-      // #489 — refuse an over-cap value with the SAME sentence the sheet shows.
-      const capErr = capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
-      if (capErr) {
-        errors.push({ id: c.id, field: c.field, error: capErr })
-        continue
+      // P1 — a title over the channel's limit is stored and flagged; publish blocks it with the channel's rule.
+      if (typeof value === 'string' && c.field === 'amazon_title' && value.length > 200) {
+        warnings.push({ id: c.id, field: c.field, warning: 'Amazon title max 200 characters' })
+      } else if (typeof value === 'string' && c.field === 'ebay_title' && value.length > 80) {
+        warnings.push({ id: c.id, field: c.field, warning: 'eBay title max 80 characters' })
+      } else {
+        // #489 — the SAME sentence the sheet shows.
+        const capErr = capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
+        if (capErr) warnings.push({ id: c.id, field: c.field, warning: capErr })
       }
       validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade, target: c.target })
       continue
@@ -1384,12 +1399,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
-    // #489 — refuse an over-cap value with the SAME sentence the sheet shows.
+    // #489 — the SAME sentence the sheet shows; P1 — stored and flagged, not refused.
     const capErr = capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
-    if (capErr) {
-      errors.push({ id: c.id, field: c.field, error: capErr })
-      continue
-    }
+    if (capErr) warnings.push({ id: c.id, field: c.field, warning: capErr })
     validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade, target: c.target })
   }
 
@@ -1564,6 +1576,49 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
     for (let index = validated.length - 1; index >= 0; index--) if (refused.has(validated[index])) validated.splice(index, 1)
   }
+  // P1 (report 5 I-1) — which writes are a variation row's LISTING-LEVEL eBay value (an item specific that is not an axis):
+  // they are saved on the parent listing, where eBay reads it (`buildSharedListingInput`), below. Decided before the
+  // no-op pass, which compares such a write with the parent's value.
+  const listingLevelParent = new Map<string, string>()
+  /** Every listing-level write on a family row (parent or variation) → its parent; a CLEAR empties the whole listing. */
+  const listingLevelFamily = new Map<string, string>()
+  const familyChildren = new Map<string, string[]>()
+  /** Per family (parent id): its listings on this coordinate's alias, with the stored bags this request read. */
+  const familyListingsOf = new Map<string, Array<{ productId: string; platformAttributes: unknown }>>()
+  const ebayContext = effectiveContexts.find(ctx => ctx.channel === 'EBAY')
+  const itemSpecificWrites = ebayContext ? validated.filter(v => {
+    if (v.target !== 'channel' || !isCategoryAttrField(v.field) || isFulfilmentChange(v)) return false
+    const store = storeFor(v.id, v.field.replace(/^attr_/, ''))
+    return store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics'
+  }) : []
+  if (ebayContext && itemSpecificWrites.length) {
+    const accountId = connFor.get('EBAY') ?? null, aliasKey = ebayContext.aliasKey ?? ''
+    // P1 review (10) — the listings the write contract already read (no second read), and the projections in parallel.
+    const listings = ebayFamilyListings.filter(listing => listing.aliasKey === aliasKey)
+    const parentOf = (id: string) => { const place = familyPlace.get(id); return place?.parentId ?? (place?.isParent ? id : null) }
+    const parentIds = [...new Set(itemSpecificWrites.map(v => parentOf(v.id)).filter((id): id is string => !!id))]
+    for (const [id, owner] of variationOwners) if (owner.parentId && parentIds.includes(owner.parentId)) familyChildren.set(owner.parentId, [...familyChildren.get(owner.parentId) ?? [], id])
+    for (const parentId of parentIds) familyListingsOf.set(parentId, listings.filter(listing => listing.productId === parentId || listing.parentId === parentId))
+    // The axes the publisher sends as variation specifics for this listing (its variation projection).
+    const axesOf = new Map(await Promise.all(parentIds.filter(parentId => familyChildren.has(parentId)).map(async parentId =>
+      [parentId, await loadEbayListingAxes({ parentId, market: ebayContext.marketplace, accountId, aliasKey, familyAxes: variationOwners.get(parentId)?.variationAxes })] as const)))
+    for (const v of itemSpecificWrites) {
+      const parentId = parentOf(v.id)
+      const axes = parentId ? axesOf.get(parentId) : undefined
+      if (!parentId || !axes) continue
+      const key = v.field.replace(/^attr_/, '')
+      const column = rowContract.get(v.id)?.get(key)
+      if (!isEbayListingLevel({ store: storeFor(v.id, key), names: [key, column?.key, column?.label, column?.channelLabel] }, axes)) continue
+      listingLevelFamily.set(`${v.id}\u0000${v.field}`, parentId)
+      if (parentId === v.id) continue
+      // P1 review (1) — moved to the parent only where eBay then reads it: the parent has a listing here, or this save
+      // starts the family's draft (the row has none either, on the primary listing). Otherwise the value stays on the
+      // row's own listing, where eBay reads it when the parent holds none: never removed without being written.
+      const parentListed = listings.some(listing => listing.productId === parentId)
+      const ownListed = listings.some(listing => listing.productId === v.id)
+      if (parentListed || (!ownListed && aliasKey === '')) listingLevelParent.set(`${v.id}\u0000${v.field}`, parentId)
+    }
+  }
   const noOpKeys = new Set<string>()
   // #689(1) — a request that changes nothing still answers with the row's
   // CURRENT version, so a caller holding a stale token learns it is behind
@@ -1655,6 +1710,16 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
               current = store.unitPath && v.value && typeof v.value === 'object' && !Array.isArray(v.value)
                 ? { value: val ?? null, unit: readPath(bag, store.unitPath) ?? null }
                 : val
+              // P1 — a listing-level eBay value on a variation row lands on the parent listing: unchanged only when the
+              // row holds no copy of its own (which the write removes) and the parent already holds this value.
+              const familyOwner = listingLevelParent.get(`${v.id}\u0000${v.field}`)
+              const family = listingLevelFamily.get(`${v.id}\u0000${v.field}`)
+              // P1 review (5) — a clear empties every copy on the listing: unchanged only when NO row of the family holds
+              // a value (the parent may hold '' while a variation supplies what eBay gets).
+              // No copy anywhere is NOT "unchanged": the shown value may come from a mapping, and a stored clear/reset is what
+              // stops it (undefined skips the no-op test below, as for the empty bag of 2026-09-05; review 2026-09-30).
+              if (family && (v.reset || isBlankValue(v.value))) current = (familyListingsOf.get(family) ?? []).some(listing => !isBlankValue(readPath(listing.platformAttributes, store.path))) ? { copies: true } : undefined
+              else if (familyOwner) current = val !== undefined ? { ownCopy: val } : readPath((familyListingsOf.get(familyOwner) ?? []).find(listing => listing.productId === familyOwner)?.platformAttributes, store.path)
             } else {
               current = bagFor(v.id)[stripped]
             }
@@ -1720,12 +1785,17 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         const listings = await prisma.channelListing.findMany({ where: { productId: { in: [...new Set(candidates.map(c => c.id))] },
           channel: primaryContext.channel, marketplace: primaryContext.marketplace, channelConnectionId: connFor.get(primaryContext.channel) ?? null, aliasKey: primaryContext.aliasKey ?? '' } })
         const issues = await informationChangeErrors({ ...primaryContext, accountId: connFor.get(primaryContext.channel), changes: candidates, listings, columns: rowContract })
-        errors.push(...issues)
-        const refused = new Set(issues.map(issue => issue.id))
-        for (let i = validated.length - 1; i >= 0; i--) if (isChannelChange(validated[i]) && refused.has(validated[i].id)) validated.splice(i, 1)
+        errors.push(...issues.errors)
+        // The channel's own verdict on a cell replaces the column contract's sentence for it (one reason, not two).
+        const judged = new Set(issues.warnings.map(issue => `${issue.id}\u0000${issue.field}`))
+        for (let i = warnings.length - 1; i >= 0; i--) if (judged.has(`${warnings[i].id}\u0000${warnings[i].field}`)) warnings.splice(i, 1)
+        warnings.push(...issues.warnings)
+        // P1 — only the refused CELL leaves the save; the product's other changes are stored.
+        const refused = new Set(issues.errors.map(issue => `${issue.id}\u0000${issue.field}`))
+        for (let i = validated.length - 1; i >= 0; i--) if (isChannelChange(validated[i]) && refused.has(`${validated[i].id}\u0000${validated[i].field}`)) validated.splice(i, 1)
       } catch (error) {
-        for (const candidate of candidates) errors.push({ id: candidate.id, field: candidate.field, error: `Information validation is unavailable: ${error instanceof Error ? error.message : String(error)}` })
-        for (let i = validated.length - 1; i >= 0; i--) if (candidates.includes(validated[i])) validated.splice(i, 1)
+        // The values were shape-checked above; the channel check runs again at publish. Stored, and said so.
+        for (const candidate of candidates) warnings.push({ id: candidate.id, field: candidate.field, warning: `The channel check is unavailable (${error instanceof Error ? error.message : String(error)}); the value is saved and checked again at publish.` })
       }
     }
   }
@@ -1738,8 +1808,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       dryRun: true,
       wouldUpdate: validated.length,
       errors,
+      ...(warnings.length ? { warnings } : {}),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
     }
+  }
+
+  // Refused/no-op facts no longer choose the owner. Advance a token only if content already checked
+  // this same owner inside the transaction; otherwise preserve the caller's original precondition.
+  if (expectedVersion !== undefined && validated.length && context.readContentOwner) {
+    expectedVersion = await context.readContentOwner(validated[0].id, validated.every(isChannelChange) ? 'channelListing' : 'product') ?? expectedVersion
   }
 
   // A listing a door already moved in this request → the version it holds now. Every later guard on that listing
@@ -1890,6 +1967,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       success: true,
       updated: 0,
       unchanged: noOpKeys.size,
+      ...(warnings.length ? { warnings } : {}),
       ...(await createdListingsReadBack()),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
       cascadeCount: 0,
@@ -2271,8 +2349,16 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const platformPatchByCoord = new Map<
       string,
       // `fields`: the changes' own fields (`attr_brand`), so a refusal names the cell that asked, not the JSON path.
-      { productId: string; channel: string; marketplace: string; aliasKey: string; fields: string[]; remove: string[]; sets: ChannelValueMutation['platform'] }
+      // `reportAs`/`familyWrite`: a variation row's listing-level eBay value written to its parent listing (P1, below).
+      { productId: string; channel: string; marketplace: string; aliasKey: string; fields: string[]; remove: string[]; sets: ChannelValueMutation['platform']; reportAs?: string; familyWrite?: boolean; optional?: boolean
+        /** P1 review (1) — a variation's own copy removed because its value moves to the parent listing (keyed): dropped when that listing is missing. */
+        needs?: Array<{ entryKey: string; remove: string[]; sets: ChannelValueMutation['platform'] }> }
     >()
+
+    // P1 (report 5 I-1) — eBay takes ONE value per listing for an item specific that is not a variation axis, from the
+    // parent listing (`buildSharedListingInput`). Written on a VARIATION row it is saved where eBay reads it: on the
+    // parent's listing, and the row's own copy is removed, so the sheet shows on every row the value eBay receives.
+    const familyWrites = new Map<string, { productId: string; channel: string; marketplace: string; aliasKey: string }>()
 
     for (const v of validated) {
       if (!isCategoryAttrField(v.field)) continue
@@ -2286,18 +2372,38 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           continue
         }
         if (store?.kind === 'platformAttributes') {
+          const familyOwner = listingLevelParent.get(`${v.id}\u0000${v.field}`)
+          const family = listingLevelFamily.get(`${v.id}\u0000${v.field}`)
+          // Clearing (or resetting) the listing's one value empties every row's copy too: eBay takes the first variation
+          // that still holds one when the parent holds none, so a copy left behind would be what eBay receives.
+          const clearing = !!family && (v.reset || isBlankValue(v.value))
           for (const ctx of effectiveContexts) {
             const aliasKey = (ctx as { aliasKey?: string }).aliasKey ?? ''
-            const key = `${v.id}|${ctx.channel}|${ctx.marketplace}|${aliasKey}`
-            let entry = platformPatchByCoord.get(key)
-            if (!entry) {
-              entry = { productId: v.id, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey, fields: [], sets: [], remove: [] }
-              platformPatchByCoord.set(key, entry)
+            const entryKey = (productId: string) => `${productId}|${ctx.channel}|${ctx.marketplace}|${aliasKey}`
+            const mutate = (productId: string, action: 'SET' | 'INHERIT', family = false, optional = false, needs?: string) => {
+              const key = entryKey(productId)
+              let entry = platformPatchByCoord.get(key)
+              if (!entry) {
+                entry = { productId, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey, fields: [], sets: [], remove: [], ...(family ? { reportAs: v.id, familyWrite: true } : {}), ...(optional ? { optional: true } : {}) }
+                platformPatchByCoord.set(key, entry)
+              }
+              if (!entry.fields.includes(v.field)) entry.fields.push(v.field)
+              const mutation = channelValueMutation(store, [stripped, v.field], action, v.value)
+              if (needs) (entry.needs ??= []).push({ entryKey: needs, remove: mutation.overrideRemove, sets: mutation.platform })
+              else { entry.remove.push(...mutation.overrideRemove); entry.sets.push(...mutation.platform) }
             }
-            if (!entry.fields.includes(v.field)) entry.fields.push(v.field)
-            const mutation = channelValueMutation(store, [stripped, v.field], v.reset ? 'INHERIT' : 'SET', v.value)
-            entry.remove.push(...mutation.overrideRemove)
-            entry.sets.push(...mutation.platform)
+            if (familyOwner && ctx.channel === 'EBAY') {
+              // The row's own entry first: it is the listing this request's token and answer belong to. Its copy is
+              // removed only if the parent's write lands (`needs`), so the value is never lost.
+              mutate(v.id, 'INHERIT', false, false, entryKey(familyOwner))
+              mutate(familyOwner, v.reset ? 'INHERIT' : 'SET', true)
+              familyWrites.set(`${familyOwner}|${ctx.marketplace}|${aliasKey}`, { productId: familyOwner, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey })
+            } else mutate(v.id, v.reset ? 'INHERIT' : 'SET')
+            if (clearing && family && ctx.channel === 'EBAY') for (const sibling of familyChildren.get(family) ?? []) {
+              if (sibling === v.id) continue
+              mutate(sibling, 'INHERIT', true, true)
+              familyWrites.set(`${sibling}|${ctx.marketplace}|${aliasKey}`, { productId: sibling, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey })
+            }
           }
           continue
         }
@@ -2591,6 +2697,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // ── AM.1 — platformAttributes path writes (eBay item specifics, listing settings) ──
     if (platformPatchByCoord.size > 0) {
       const entries = [...platformPatchByCoord.values()]
+      const entryKeyOf = (e: (typeof entries)[number]) => `${e.productId}|${e.channel}|${e.marketplace}|${e.aliasKey}`
       const rows = await prisma.channelListing.findMany({
         where: {
           productId: { in: [...new Set(entries.map((e) => e.productId))] },
@@ -2598,17 +2705,25 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         },
         select: { id: true, productId: true, channel: true, marketplace: true, aliasKey: true, version: true, updatedAt: true, platformAttributes: true },
       })
+      const rowOf = (e: (typeof entries)[number]) => rows.find((l) => l.productId === e.productId && l.channel === e.channel && l.marketplace === e.marketplace && l.aliasKey === e.aliasKey)
+      /** The parent listings a variation's listing-level value was to move to and that are missing: its copy stays. */
+      const missingTargets = new Set(entries.filter(e => e.familyWrite && !e.optional && !rowOf(e)).map(entryKeyOf))
       for (const e of entries) {
-        const row = rows.find((l) => l.productId === e.productId && l.channel === e.channel && l.marketplace === e.marketplace && l.aliasKey === e.aliasKey)
+        for (const part of e.needs ?? []) if (!missingTargets.has(part.entryKey)) { e.remove.push(...part.remove); e.sets.push(...part.sets) }
+        if (!e.sets.length && !e.remove.length && e.needs?.length) continue
+        const row = rowOf(e)
         if (!row) {
+          // A variation with no listing here holds no copy of a listing-level value: nothing to clear.
+          if (e.optional) continue
           // One refusal per change, under the change's own field: the sheet matches errors by it,
           // and a refusal it cannot match is painted as saved.
-          for (const field of e.fields) errors.push({ id: e.productId, field, error: `No ${e.channel} listing on ${e.marketplace} yet — a listing field needs the listing to exist` })
+          for (const field of e.fields) errors.push({ id: e.reportAs ?? e.productId, field, error: `No ${e.channel} listing on ${e.marketplace} yet — a listing field needs the listing to exist` })
           continue
         }
-        // Replacing a JSON bag must guard the snapshot even for callers without a token.
+        // Replacing a JSON bag must guard the snapshot even for callers without a token. The parent listing a variation
+        // row's listing-level value lands on is guarded by the snapshot this request read: the token is the row's own.
         listingGuards.set(row.id, prisma.channelListing.update({
-          where: { id: row.id, version: priceWrittenIds.has(row.id) ? row.version : expectedVersion ?? row.version, ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}) },
+          where: { id: row.id, version: priceWrittenIds.has(row.id) || e.familyWrite ? row.version : expectedVersion ?? row.version, ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}) },
           data: { updatedAt: new Date() },
         }))
         const bag = applyPlatformMutations(row.platformAttributes, e.sets)
@@ -2622,7 +2737,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             WHERE id = ${row.id}
           `,
         )
-        channelListingIdsTouched.push(row.id)
+        // The answer's version is the edited row's own listing, never the parent a listing-level value moved to.
+        if (!e.familyWrite) channelListingIdsTouched.push(row.id)
       }
     }
 
@@ -2823,32 +2939,6 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
-    // PES.5 — the version the caller should hold NEXT, read from the row that
-    // actually changed. Only for a channel-only write; a master write keeps
-    // the existing `expectedVersion + 1`, which its single CAS bump makes true.
-    const freshChannelVersion =
-      expectedVersion !== undefined && channelListingIdsTouched.length > 0 && !hasMasterTargetedChange
-        ? (await prisma.channelListing
-            .findUnique({ where: { id: channelListingIdsTouched[0] }, select: { version: true } })
-            .catch(() => null))?.version
-        : undefined
-
-    // #600(6) — the MASTER token, read back from the row rather than computed.
-    //
-    // It was `expectedVersion + 1`, under a comment of my own explaining why
-    // computing is wrong: I fixed the channel half and left this one. The
-    // arithmetic holds only while the CAS bump is the only bump — which is
-    // precisely the case a concurrency token exists to detect the absence of.
-    // When a second writer lands between the CAS and the response, the
-    // computed number is the one value guaranteed to be wrong, and the client
-    // stores it as truth.
-    const freshMasterVersion =
-      expectedVersion !== undefined && targetId && hasMasterTargetedChange
-        ? (await prisma.product
-            .findUnique({ where: { id: targetId }, select: { version: true } })
-            .catch(() => null))?.version
-        : undefined
-
     const elapsedMs = Date.now() - startTs
 
     const overallStatus =
@@ -2953,7 +3043,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // cascades (price/stock/content) so the cache captures their writes.
     // Every product whose draft this request started, too: the grid reads its listings from the cache.
     const cacheRefreshIds = Array.from(
-      new Set<string>([...productIds, ...allAffectedChildIds, ...createdListings.map((row) => row.productId)]),
+      new Set<string>([...productIds, ...allAffectedChildIds, ...createdListings.map((row) => row.productId), ...[...familyWrites.values()].map(write => write.productId)]),
     )
     // Listing-only edits cannot affect another destination. Keep shared/mixed writes broad,
     // and use the same routing predicate and resolved account as the mutation above.
@@ -3065,6 +3155,22 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
+    // Read the next token only after all synchronous writes, including dependent formulas.
+    // These are the same owners guarded by CAS above; a formula may have moved them again.
+    const freshChannelVersion =
+      expectedVersion !== undefined && channelListingIdsTouched.length > 0 && !hasMasterTargetedChange
+        ? (await prisma.channelListing
+            .findUnique({ where: { id: channelListingIdsTouched[0] }, select: { version: true } })
+            .catch(() => null))?.version
+        : undefined
+
+    const freshMasterVersion =
+      expectedVersion !== undefined && targetId && hasMasterTargetedChange
+        ? (await prisma.product
+            .findUnique({ where: { id: targetId }, select: { version: true } })
+            .catch(() => null))?.version
+        : undefined
+
     return {
       success: true,
       // NN.7 — surface the BulkOperation row id so the client can
@@ -3078,6 +3184,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       cascadeCount: cascadingParents.length,
       affectedChildren: totalAffectedChildren,
       errors: errors.length ? errors : undefined,
+      // P1 — the stored values that carry a problem, each with its exact reason (`pim/value-verdict.ts`).
+      ...(warnings.length ? { warnings } : {}),
       elapsedMs,
       // W1.2 — when the caller participated in optimistic
       // concurrency, surface the freshly-incremented version so
@@ -3105,6 +3213,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // Product-sheet create path — the drafts this save started (`{ productId, listingId, version }`), so the sheet
       // adopts each listing at once instead of waiting for its next read.
       ...(await createdListingsReadBack()),
+      // P1 — the parent listings a variation row's listing-level eBay value was written to, with the version each holds
+      // now, so the sheet can adopt the parent row's new token without a reload.
+      ...(familyWrites.size ? { familyListings: await prisma.channelListing.findMany({ where: { OR: [...familyWrites.values()].map(write => ({ productId: write.productId, channel: write.channel as never,
+        marketplace: write.marketplace, aliasKey: write.aliasKey, channelConnectionId: connFor.get(write.channel) ?? null })) }, select: { id: true, productId: true, version: true } })
+        .then(rows => rows.map(row => ({ productId: row.productId, listingId: row.id, version: row.version }))) } : {}),
       currentVersion: freshChannelVersion ?? freshMasterVersion ?? undefined,
       versionOf: freshChannelVersion !== undefined ? 'channelListing' : expectedVersion !== undefined ? 'product' : undefined,
     }

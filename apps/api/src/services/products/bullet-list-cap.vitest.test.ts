@@ -83,18 +83,21 @@ const channelBullets = () => scoped(async () => {
 })
 const masterBullets = (productId = id) => scoped(async () => (await prisma.product.findUniqueOrThrow({ where: { id: productId } })).bulletPoints)
 
-it('channel: a bullet over the schema cap is refused, named, and nothing is stored', async () => {
-  const before = await channelBullets()
+// P1 (`pim/value-verdict.ts`, the Owner's full-control rule) — a bullet over a cap is STORED, and the answer names the cap
+// as a warning; the channel's own limit blocks only at publish. The facts these tests pinned (which cap, which bullet) now
+// travel in `warnings`.
+it('channel: a bullet over the schema cap is stored, and the warning names the cap', async () => {
   const result = await channelSave('bulletPoints[2]', LONG)
-  expect(result.updated).toBe(0)
-  expect(result.errors).toEqual([expect.objectContaining({ id, field: 'bulletPoints[2]', error: expect.stringContaining(`at most ${CAP} characters`) })])
-  expect(await channelBullets()).toEqual(before)
+  expect(result.updated).toBe(1)
+  expect(result.errors ?? []).toEqual([])
+  expect(result.warnings).toEqual([expect.objectContaining({ id, field: 'bulletPoints[2]', warning: expect.stringContaining(`at most ${CAP} characters`) })])
+  expect((await channelBullets()).translated).toContain(LONG)
 })
 
-it('channel: the refusal names the slot that was written (Bullet 4, not Bullet 1)', async () => {
+it('channel: the warning names the slot that was written (Bullet 4, not Bullet 1)', async () => {
   const result = await channelSave('bulletPoints[4]', LONG)
-  expect(result.updated).toBe(0)
-  expect(result.errors).toEqual([expect.objectContaining({ field: 'bulletPoints[4]', error: expect.stringMatching(/^Bullet 4 takes at most 20 characters/) })])
+  expect(result.updated).toBe(1)
+  expect(result.warnings).toEqual([expect.objectContaining({ field: 'bulletPoints[4]', warning: expect.stringMatching(/^Bullet 4 takes at most 20 characters/) })])
 })
 
 it('channel: a whole list cannot bypass the cap — it is refused as a shape, and nothing is stored', async () => {
@@ -112,52 +115,55 @@ it('control: a channel bullet AT the cap is stored', async () => {
   expect((await channelBullets()).translated).toContain(atCap)
 })
 
-it('R-58: a master whole list over the listed channel cap is refused, naming the right bullet, and nothing is stored', async () => {
-  const before = await masterBullets()
+it('R-58: a master whole list over the listed channel cap is stored, and the warning names the right bullet', async () => {
   const result = await masterSave('bulletPoints', ['ok', LONG])
-  expect(result.updated).toBe(0)
-  expect(result.errors).toEqual([expect.objectContaining({ id, field: 'bulletPoints', error: expect.stringMatching(/^Bullet 2 takes at most 20 characters/) })])
-  expect(await masterBullets()).toEqual(before)
+  expect(result.updated).toBe(1)
+  expect(result.warnings).toEqual([expect.objectContaining({ id, field: 'bulletPoints', warning: expect.stringMatching(/^Bullet 2 takes at most 20 characters/) })])
+  expect(await masterBullets()).toEqual(['ok', LONG])
 })
 
-it('R-58: a master bullet slot over the cap is refused and names its own number', async () => {
-  const before = await masterBullets()
+it('R-58: a master bullet slot over the cap is stored, and the warning names its own number', async () => {
   const result = await masterSave('bulletPoints[4]', LONG)
-  expect(result.updated).toBe(0)
-  expect(result.errors).toEqual([expect.objectContaining({ field: 'bulletPoints[4]', error: expect.stringMatching(/^Bullet 4 takes at most 20 characters/) })])
-  expect(await masterBullets()).toEqual(before)
+  expect(result.updated).toBe(1)
+  expect(result.warnings).toEqual([expect.objectContaining({ field: 'bulletPoints[4]', warning: expect.stringMatching(/^Bullet 4 takes at most 20 characters/) })])
+  expect((await masterBullets())[3]).toBe(LONG)
 })
 
-it('R-58: listed on IT (20) and DE (30), the TIGHTER cap wins — 25 characters are refused, and the message names Amazon IT', async () => {
+it('R-58: listed on IT (20) and DE (30), the TIGHTER cap wins — 25 characters are stored, and the warning names Amazon IT', async () => {
   const result = await masterSave('bulletPoints', ['x'.repeat(25)], other.two)
-  expect(result.updated).toBe(0)
-  expect(result.errors[0].error).toMatch(/takes at most 20 characters — the .*IT.* cap/)
-  expect(await masterBullets(other.two)).not.toContain('x'.repeat(25))
+  expect(result.updated).toBe(1)
+  expect(result.warnings[0].warning).toMatch(/takes at most 20 characters — the .*IT.* cap/)
+  expect(await masterBullets(other.two)).toContain('x'.repeat(25))
 })
 
-it('R-58 control: at the tightest cap the master bullet is stored', async () => {
+it('R-58 control: at the tightest cap the master bullet is stored, with no warning', async () => {
   const atCap = 'y'.repeat(CAP)
   const result = await masterSave('bulletPoints', [atCap], other.two)
   expect(result.errors).toEqual([])
+  expect(result.warnings ?? []).toEqual([])
   expect(await masterBullets(other.two)).toEqual([atCap])
 })
 
-it('R-58: listed on DE only, the DE cap (30) is read — 25 stored, 31 refused', async () => {
-  expect((await masterSave('bulletPoints', ['z'.repeat(25)], other.de)).errors).toEqual([])
+it('R-58: listed on DE only, the DE cap (30) is read — 25 stored silently, 31 stored with a warning', async () => {
+  const within = await masterSave('bulletPoints', ['z'.repeat(25)], other.de)
+  expect(within.errors).toEqual([])
+  expect(within.warnings ?? []).toEqual([])
   const over = await masterSave('bulletPoints', ['z'.repeat(DE_CAP + 1)], other.de)
-  expect(over.errors[0].error).toMatch(/^Bullet 1 takes at most 30 characters/)
-  expect(await masterBullets(other.de)).toEqual(['z'.repeat(25)])
+  expect(over.warnings[0].warning).toMatch(/^Bullet 1 takes at most 30 characters/)
+  expect(await masterBullets(other.de)).toEqual(['z'.repeat(DE_CAP + 1)])
 })
 
 it('R-58: a parent listed nowhere takes the cap of the child that inherits its bullets (child on Amazon·IT, 20)', async () => {
   const result = await masterSave('bulletPoints', [LONG], other.parent)
-  expect(result.updated).toBe(0)
-  expect(result.errors[0].error).toMatch(/^Bullet 1 takes at most 20 characters/)
-  expect(await masterBullets(other.parent)).toEqual([])
+  expect(result.updated).toBe(1)
+  expect(result.warnings[0].warning).toMatch(/^Bullet 1 takes at most 20 characters/)
+  expect(await masterBullets(other.parent)).toEqual([LONG])
 })
 
 it('R-58: a product listed nowhere keeps no cap', async () => {
   const long = 'n'.repeat(900)
-  expect((await masterSave('bulletPoints', [long], other.none)).errors).toEqual([])
+  const result = await masterSave('bulletPoints', [long], other.none)
+  expect(result.errors).toEqual([])
+  expect(result.warnings ?? []).toEqual([])
   expect(await masterBullets(other.none)).toEqual([long])
 })

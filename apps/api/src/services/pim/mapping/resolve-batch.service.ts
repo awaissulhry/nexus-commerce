@@ -9,7 +9,9 @@ import { primaryConnectionIds } from '../../connection-resolver.service.js'
 import { isBlankValue, projectCellValue } from '../sheet-values.js'
 import { normalizeEbayListingValue } from '../ebay-listing-values.js'
 import { storedChannelState } from '../channel-value-mutation.js'
-import { validateChannelValue } from './validate-channel-value.js'
+import { isOffListError, validateChannelValue } from './validate-channel-value.js'
+import { finding, type ValueFinding } from '../value-verdict.js'
+import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import { masterDefaultRule } from './master-default-rule.js'
 import { exprDependenciesDeep } from './expr.js'
 import { evaluateSchemaRequirements } from './schema-requirements.js'
@@ -78,6 +80,11 @@ export interface ResolvedCell {
    *  list. Distinct from `warnings`, and distinct from `status` — Rithum shows a field that is
    *  Mapped AND errored, and so do we. */
   errors: string[]
+  /**
+   * P1 (`value-verdict.ts`) — the rule behind each sentence in `errors`, in the same order: publish blocks only on what
+   * the channel itself would reject, and warns on the rest.
+   */
+  findings?: ValueFinding[]
   /** Errors in an authored rule or its populated result; missing data is separate. */
   mappingErrors?: string[]
   /** Set when a closed-list value was normalised to the schema's own spelling. */
@@ -148,6 +155,25 @@ async function loadLinkGroupsForProducts(
     })
   }
   return out
+}
+
+/** A problem found after a cell was built: the sentence in `errors`, its rule in `findings`. */
+function flag(cell: ResolvedCell, rule: ValueFinding['rule'], message: string) {
+  cell.errors.push(message)
+  ;(cell.findings ??= []).push(finding(rule, message))
+}
+
+/** Which rule an Ajv sentence of the channel's schema states (they all block at publish; the rule names the problem once). */
+function schemaIssueRule(message: string): ValueFinding['rule'] {
+  if (isOffListError(message)) return 'offList'
+  if (/(more|fewer) than \d+ characters/.test(message)) return 'length'
+  if (/(more|fewer) than \d+ items/.test(message)) return 'count'
+  return 'schema'
+}
+
+/** A requirement the channel's schema makes blocks; one only a mapping rule's flag claims is Nexus's own. */
+function requiredFinding(field: CatalogueField, message: string): ValueFinding {
+  return finding(field.prioritySource === 'ruleFlag' || field.prioritySource === 'unknown' ? 'nexus' : 'required', message)
 }
 
 export async function resolveBatch(input: {
@@ -325,7 +351,14 @@ export async function resolveBatch(input: {
         key: field.fieldKey, masterKey: field.sheetKey, channelStore: field.channelStore,
       }, attrsView.keys))
       const store = field.channelStore
-      const contentHit = content[contentField(field.sheetKey ?? field.fieldKey)]
+      let contentHit = content[contentField(field.sheetKey ?? field.fieldKey)]
+      // P1 (report 3 I-3.3) — a value the LISTING stores in its own channel bag (an eBay item specific, "Stile") is never
+      // hidden by language content that only follows the shared text: it is the listing's value, it is what the sheet
+      // edits (and resets), and it is what publish sends. A content PIN on this listing still wins.
+      if (contentHit && contentHit.tier !== 'pin' && store?.kind === 'platformAttributes') {
+        const own = storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
+        if (own.state === 'stored' && !isBlankValue(own.value)) contentHit = undefined
+      }
       const storedState = contentHit ? { state: 'inherited' as const } : storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
       const stored = !contentHit && storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
         ? storedState.value : undefined
@@ -345,15 +378,17 @@ export async function resolveBatch(input: {
 
       if (!contentHit && !hasStored && !rule) {
         const errors: string[] = []
+        const findings: ValueFinding[] = []
         if (!deferred(field) && (field.priority === 'required' && field.requiredInParent !== false)) {
           errors.push(`Field '${field.label}' is required.`)
+          findings.push(requiredFinding(field, `Field '${field.label}' is required.`))
           requiredMissing++
           errorCount++
         }
         cells[field.fieldKey] = {
           fieldKey: field.fieldKey, label: field.label, sourceOwner: field.sourceOwner, value: null, status: 'unmapped', provenance: null,
           rule, raw: null, legacySource: 'missing', needsTranslation: false,
-          appliedTransforms: [], warnings: [], errors, mappingErrors: [], autoCorrected: null,
+          appliedTransforms: [], warnings: [], errors, findings, mappingErrors: [], autoCorrected: null,
           required: !deferred(field) && (field.priority === 'required' && field.requiredInParent !== false), overLimit: null,
         }
         unmapped++
@@ -382,15 +417,24 @@ export async function resolveBatch(input: {
         },
       })
 
-      const projected = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape, contentField(field.sheetKey ?? field.fieldKey))
-      const { value, errors, autoCorrected, overLimit } = validateChannelValue(field, projected)
-      errors.push(...r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning)))
+      const wire = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape, contentField(field.sheetKey ?? field.fieldKey))
+      // P1 (report 3 I-3.8) — a multi-value eBay item specific shows the values eBay receives: a legacy joined list
+      // ("Ventilato, Impermeabile, …", over 65 characters) is its parts, as the publisher sends it.
+      const projected = channel === 'EBAY' && field.shape === 'list' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' && Array.isArray(wire)
+        ? ebayAspectValues(wire) : wire
+      const { value, errors, findings, autoCorrected, overLimit } = validateChannelValue(field, projected)
+      // A mapping that failed or was skipped: the value that would ship is unknown, so nothing was checked.
+      for (const warning of r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning))) {
+        errors.push(warning); findings.push(finding('unchecked', warning))
+      }
       const mappingErrors = !hasStored && rule ? [...errors] : []
 
       // Required-but-empty is the error the whole editor exists to surface.
       const isRequired = !deferred(field) && ((field.priority === 'required' && field.requiredInParent !== false) || rule?.required === true)
       if (!isPresent(value) && isRequired) {
         errors.push(`Field '${field.label}' is required.`)
+        // Required by the channel's schema, or only by a Nexus rule's own flag (which warns at publish).
+        findings.push(field.priority === 'required' && field.requiredInParent !== false ? requiredFinding(field, `Field '${field.label}' is required.`) : finding('nexus', `Field '${field.label}' is required.`))
         requiredMissing++
       }
       if (r.requested && translationMissing(r, r.requested)) {
@@ -398,7 +442,7 @@ export async function resolveBatch(input: {
           ? `Showing ${r.effectiveLocale} fallback; ${locale} content ${r.translationState === 'outdated' ? 'is outdated' : 'is missing'}.`
           : `Translation into ${locale} is pending.`
         r.warnings.push(message)
-        if (isRequired) errors.push(message)
+        if (isRequired) { errors.push(message); findings.push(finding('nexus', message)) }
       }
 
       if (errors.length > 0) errorCount++
@@ -420,6 +464,7 @@ export async function resolveBatch(input: {
         appliedTransforms: r.appliedTransforms,
         warnings: r.warnings,
         errors,
+        findings,
         mappingErrors,
         autoCorrected,
         required: isRequired,
@@ -440,11 +485,14 @@ export async function resolveBatch(input: {
       cell.required ||= issue.required
       cell.requirementReasons ??= []
       cell.requirementReasons.push({ message: issue.message, schemaPath: issue.schemaPath })
-      if (!(issue.required && !isPresent(cell.value) && cell.errors.some(e => e.includes('is required.'))) && !cell.errors.includes(issue.message)) cell.errors.push(issue.message)
+      // The channel's own schema (Amazon's product-type JSON schema), in its own words.
+      if (!(issue.required && !isPresent(cell.value) && cell.errors.some(e => e.includes('is required.'))) && !cell.errors.includes(issue.message)) {
+        flag(cell, issue.required && !isPresent(cell.value) ? 'required' : schemaIssueRule(issue.message), issue.message)
+      }
       if (!issue.required && isPresent(cell.value) && cell.rule && !['override', 'locked'].includes(cell.provenance ?? '')) cell.mappingErrors?.push(issue.message)
     }
     if (requirements.unavailable) {
-      for (const cell of Object.values(cells)) cell.errors.push(`Category requirement validation is unavailable: ${requirements.unavailable}`)
+      for (const cell of Object.values(cells)) flag(cell, 'unchecked', `Category requirement validation is unavailable: ${requirements.unavailable}`)
     }
 
     const context = presentation?.get(p.id)
@@ -454,17 +502,19 @@ export async function resolveBatch(input: {
       if (theme.rule) {
         themeCell.value = theme.value ?? null; themeCell.provenance = 'catalogRule'; themeCell.status = 'mapped'
         themeCell.raw = themeCell.value
-        themeCell.errors = validateChannelValue(fields.find(f => f.fieldKey === 'descriptionThemeId')!, themeCell.value).errors
+        const checked = validateChannelValue(fields.find(f => f.fieldKey === 'descriptionThemeId')!, themeCell.value)
+        themeCell.errors = checked.errors
+        themeCell.findings = checked.findings
         themeCell.supplyingRule = { id: theme.rule.id, name: theme.rule.name, version: theme.rule.version, href: `/channels/ebay/variation-order-rules?market=${encodeURIComponent(marketplace)}&rule=${encodeURIComponent(theme.rule.id)}` }
       }
-      if (theme.conflicts.length) themeCell.errors.push(`Conflicting presentation rules: ${theme.conflicts.join('; ')}`)
+      if (theme.conflicts.length) flag(themeCell, 'unchecked', `Conflicting presentation rules: ${theme.conflicts.join('; ')}`)
     }
     if (categories[p.id]?.conflicts?.length) {
-      for (const cell of Object.values(cells)) cell.errors.push(`Conflicting shared categories: ${categories[p.id].conflicts!.join('; ')}. Choose a primary shared category or an explicit listing category.`)
+      for (const cell of Object.values(cells)) flag(cell, 'unchecked', `Conflicting shared categories: ${categories[p.id].conflicts!.join('; ')}. Choose a primary shared category or an explicit listing category.`)
     }
     for (const field of fields) if (field.schemaKnown === false && cells[field.fieldKey]?.rule) {
       const message = 'This rule targets a field absent from the selected category schema. Review the rule or refresh the schema.'
-      cells[field.fieldKey].errors.push(message)
+      flag(cells[field.fieldKey], 'nexus', message)
       cells[field.fieldKey].mappingErrors?.push(message)
     }
     const completeCells = Object.values(cells)

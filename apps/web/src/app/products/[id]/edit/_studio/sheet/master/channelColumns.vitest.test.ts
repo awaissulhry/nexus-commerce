@@ -40,14 +40,14 @@ describe('LX.11 hoisted channel column factory', () => {
   })
 })
 
-it.each(['saving', 'waiting', 'unknown', 'refused', 'saved'] as const)('renders the actual channel cell save state %s without a routine source icon', state => {
+it.each(['saving', 'waiting', 'unknown', 'refused', 'saved'] as const)('renders the actual channel cell save state %s beside its source', state => {
   const tracker = new CellSaveTracker()
   tracker.set('alias:gale', 'title', state, 'The server has not confirmed this value.')
   const [definition] = setup([{ ...base, kind: 'text' }], tracker)
   const data = { id: 'gale', rowId: 'alias:gale', sku: 'GALE-JACKET', rowKind: 'variant', isParent: false,
     values: { title: { value: 'Visible title', mapped: { status: 'mapped', derived: false, errors: [], warnings: [] } } } }
   const html = renderToStaticMarkup(createElement(definition.cellRenderer, { ...definition.cellRendererParams, data, value: 'Visible title', node: {} }))
-  expect(html).not.toContain('nds-source-indicator')
+  expect(html).toContain('nds-source-indicator')
   expect(html).toContain('The server has not confirmed this value.')
   if (state === 'saving' || state === 'waiting' || state === 'unknown') {
     expect(html).toContain(`data-state="${state}"`)
@@ -63,27 +63,42 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY'])('%s scope indicators', channel => {
     ['inherited', 'Dutch · Amazon · BE · following snapshot', true],
     ['outdated', 'Italian · source', true],
     ['aiStale', 'French · shared', true],
-  ])('keeps the %s value without a routine source icon', (member, from, follows) => {
+  ])('names the source of the %s value at rest and on hover (P1: it was hidden here)', (member, from, follows) => {
     const [definition] = setup([{...base, kind:'text'}], undefined, scope)
     const data = { id:'gale', rowId:'primary:gale', sku:'GALE-JACKET', rowKind:'variant', isParent:false,
       values:{title:{value:'Visible title', provenance:{member,from}, follows, mapped:{status:'mapped',derived:false,errors:[],warnings:[]}}} }
     const html = renderToStaticMarkup(createElement(definition.cellRenderer, { ...definition.cellRendererParams, data, value:'Visible title', node:{} }))
-    expect(html).not.toContain('nds-source-indicator')
+    expect(html).toContain('nds-source-indicator')
+    // The channel grid turns portal hints off, so the mark's own native title is its hover text.
+    expect(html).toMatch(/class="[^"]*nds-source-indicator[^"]*"[^>]*title="[^"]+"|title="[^"]+"[^>]*class="[^"]*nds-source-indicator/)
     expect(html).toContain('Visible title')
     expect(html).not.toContain('nds-cell-prov-')
   })
 
   it.each([
-    { layer: 'master' },
-    { layer: 'aliasVariant', pinned: true, inherited: false },
-    { layer: 'linked', linkGroupId: 'shared-title' },
-    { layer: 'channel', nexusDraft: true },
-  ])('hides routine source icons for $layer values', cell => {
+    [{ layer: 'master' }, 'master', true],
+    [{ layer: 'aliasVariant', pinned: true, inherited: false }, 'override', false],
+    [{ layer: 'linked', linkGroupId: 'shared-title' }, 'linked', true],
+    [{ layer: 'channel', nexusDraft: true }, 'override', false],
+  ] as const)('shows the source of %o, quieter only where it follows somewhere else', (cell, kind, quiet) => {
     const [definition] = setup([{ ...base, kind: 'text' }], undefined, scope)
     const data = { rowId: 'primary:gale', sku: 'GALE-JACKET', values: { title: { value: 'Visible title', ...cell } } }
     const html = renderToStaticMarkup(createElement(definition.cellRenderer, { ...definition.cellRendererParams, data, value: 'Visible title', node: {} }))
     expect(html).toContain('Visible title')
-    expect(html).not.toContain('nds-source-indicator')
+    expect(html).toContain(`data-value-source="${kind}"`)
+    expect(html.includes('nds-source-indicator--quiet')).toBe(quiet)
+    expect(html).toContain('Show cell details: GALE-JACKET, German title')
+  })
+
+  it('says an old listing text is the listing’s own value, not "Follows Master" (report 2 I-3)', () => {
+    const [definition] = setup([{ ...base, kind: 'text' }], undefined, scope)
+    const data = { rowId: 'primary:gale', sku: 'GALE-JACKET', rowKind: 'variant', values: { title: { value: 'Old eBay title',
+      source: 'channelSnapshot', layer: 'channel', pinned: false, follows: true, provenance: { member: 'inherited', from: 'Italian · eBay · IT · following snapshot' },
+      mapped: { status: 'mapped', provenance: 'catalogRule', sourcePath: 'title', derived: false, usesExpression: false, errors: [], warnings: [], appliedTransforms: [] } } } }
+    const html = renderToStaticMarkup(createElement(definition.cellRenderer, { ...definition.cellRendererParams, data, value: 'Old eBay title', node: {} }))
+    expect(html).toContain('title="Listing value. This listing still holds its own text, not Master’s')
+    expect(html).not.toContain('Follows Master')
+    expect(html).not.toContain('nds-source-indicator--quiet')
   })
 
   it.each([

@@ -44,7 +44,7 @@ import type { ICellEditorParams } from 'ag-grid-community'
 
 import { ListboxPanel, type ListboxOption } from '../../components'
 import { editorBox, roomToRightOf } from './editorBox'
-import { cellValueOf, isUnchanged, panelValueOf } from './selectPanelModel'
+import { cellValueOf, isUnchanged, panelValueOf, typedStart, withStoredValue } from './selectPanelModel'
 
 export interface SelectPanelEditorParams extends ICellEditorParams {
   /**
@@ -55,10 +55,12 @@ export interface SelectPanelEditorParams extends ICellEditorParams {
   placeholder?: string
   /** A "nothing selected" row. Absent ⇒ the list cannot be cleared from the editor. */
   emptyLabel?: string
+  /** The channel leaves this list open (`mode: 'open'`), so a typed value is offered as `Use "…"`. */
+  allowCustom?: boolean
 }
 
 export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(function SelectPanelEditor(props, _ref) {
-  const { options, emptyLabel, value, column, stopEditing, onValueChange, parseValue } = props
+  const { options, emptyLabel, allowCustom, value, column, stopEditing, onValueChange, parseValue, eventKey } = props
 
   /**
    * 🔴 THE VALUE IS REPORTED WITH `onValueChange`. It used to be held in a ref for AG to read back,
@@ -105,6 +107,22 @@ export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(fu
 
   const onCancel = useCallback(() => stopEditing(true), [stopEditing])
 
+  /**
+   * Enter and Tab: REPORT the choice and let AG finish. AG's popup listener runs before the panel's bubble handler and ends
+   * the edit with whatever was last reported, so a choice made in the bubble phase was always too late — Enter and Tab
+   * closed every list with its old value (P0, measured in production 2026-09-29). Reported in the capture phase, AG then
+   * commits it and moves as it does for every other cell: Enter down, Tab right. An unchanged or empty choice reports
+   * nothing, so AG ends the edit with the stored value and no write.
+   */
+  const onKeyChoice = useCallback(
+    (chosen: string | null) => {
+      if (chosen === null || isUnchanged(value, chosen)) return
+      const selected = cellValueOf(chosen)
+      onValueChange?.(selected !== null && parseValue ? parseValue(selected) : selected)
+    },
+    [value, onValueChange, parseValue],
+  )
+
   /* The shared box. Measured from the cell's own rect where AG gives one — the column's WIDTH is not
      its POSITION, and position is what decides the room to the right. */
   const cellRect = (props as { eGridCell?: HTMLElement }).eGridCell?.getBoundingClientRect()
@@ -117,10 +135,13 @@ export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(fu
 
   return (
     <ListboxPanel
-      options={options}
+      options={withStoredValue(options, value, allowCustom ? 'current' : 'current · not in the list')}
       value={panelValueOf(value)}
       onCommit={onCommit}
       onCancel={onCancel}
+      onKeyChoice={onKeyChoice}
+      initialQuery={typedStart(eventKey)}
+      allowCustom={allowCustom}
       emptyLabel={emptyLabel}
       /**
        * The anchor floor, and nothing else. DS.2's CSS resolves the rest as

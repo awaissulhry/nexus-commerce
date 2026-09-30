@@ -21,6 +21,7 @@ import { getInformationSheet } from '../services/pim/information-sheet.js'
  */
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
+import { encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
 import { resolveWorkspaceDestination, resolveWorkspaceListing, WorkspaceScopeError } from '../services/pim/workspace-destination.js'
 import { AmbiguousConnectionError, NoConnectionError } from '../services/connection-resolver.service.js'
@@ -536,6 +537,20 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * P1 (issue #15) — every attribute of the product's family and where it lives (Shared, a channel, archived), plus the
+   * channels the business has an account for. The sheet's Customise dialog lists the ones with no column in view.
+   */
+  fastify.get('/products/:id/studio/family-attributes', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const { familyAttributePlaces } = await import('../services/pim/family-attribute-places.service.js')
+      return await familyAttributePlaces(id)
+    } catch (err) {
+      return sendError(reply, err, request.log, { id })
+    }
+  })
+
   /** One family, one scope: rows + alias groups + per-cell provenance. */
   fastify.get('/products/:id/studio/sheet', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -562,7 +577,9 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       // than being felt as "the grid is laggy".
       reply.header('Server-Timing', `studio;dur=${result.meta.tookMs}`)
       reply.header('Cache-Control', 'no-store')
-      return result
+      // P2 — `cells=compact`: each column's shared cell once, each cell as its difference (@nexus/shared/sheet-cell-wire).
+      // Opt-in, so every other reader of this route keeps today's shape.
+      return q.cells === 'compact' ? encodeSheetCells(result) : result
     } catch (err) {
       return sendError(reply, err, request.log, { id, market, scope: rawScope, channel })
     }
@@ -584,7 +601,10 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       const channel = q.channel ? String(q.channel).toUpperCase() : undefined
       const accountId = q.accountId ? String(q.accountId) : undefined
       if (accountId && !channel) return reply.code(400).send({ error: 'channel is required when accountId is provided' })
-      const result = await getProductReadiness({ productId: id, market, channel, accountId, ...(q.locale ? { locale: String(q.locale) } : {}), ...(q.workspace === '1' ? { selectedOnly: true } : {}), ...(q.listingId ? { listingId: String(q.listingId) } : {}) })
+      // P2 — `only=coordinate`: just the named channel coordinate (scope-readiness.service.ts). Any other value is refused
+      // rather than read as "everything", which is a different, much larger answer.
+      if (q.only !== undefined && q.only !== 'coordinate') return reply.code(400).send({ error: 'bad_only', message: 'only must be "coordinate", or be omitted.' })
+      const result = await getProductReadiness({ productId: id, market, channel, accountId, ...(q.locale ? { locale: String(q.locale) } : {}), ...(q.workspace === '1' ? { selectedOnly: true } : {}), ...(q.listingId ? { listingId: String(q.listingId) } : {}), ...(q.only === 'coordinate' ? { onlyCoordinate: true } : {}) })
       reply.header('Server-Timing', `readiness;dur=${Date.now() - t0}`)
       return result
     } catch (err) {

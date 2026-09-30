@@ -74,10 +74,12 @@ describe('formula writes follow the ordinary field contract', () => {
     expect(formulaUpsert).not.toHaveBeenCalled()
   })
 
-  it('keeps option validation for text formulas', async () => {
+  // P1 (`pim/value-verdict.ts`) — the option check still runs, and names the list; the value is stored like a typed one.
+  it('keeps option validation for text formulas as a warning, and stores the value', async () => {
     const result = await save('skip_offer', '"maybe"')
-    expect(result.error).toContain('allowed')
-    expect(writer).not.toHaveBeenCalled()
+    expect(result.error).toBeNull()
+    expect(result.warnings.join(' ')).toContain('"maybe" is not in the list')
+    expect(writer.mock.calls[0][0].value).toBe('maybe')
   })
 
   it('saves numeric prices through the ordinary writer and records the actual value', async () => {

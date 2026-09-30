@@ -1,5 +1,6 @@
 'use client';
 import { useSheetPreferences } from '../useSheetPreferences';
+import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
 import { useSheetPublicationGuard } from '../useSheetPublicationGuard';
 import { buildCompareTargets } from '../compareTargets';
 import { channelLabel, languageLabel } from '../../scopes';
@@ -42,6 +43,7 @@ import { familyOps } from './familyOps';
 import { FamilySelectionVerbs } from './FamilySelectionBar';
 import { useFamily } from './useFamily';
 import { useCellFormulas } from '../../useCellFormulas';
+import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { cellOf, editRefusalReason } from './columnRules';
 import type { SheetColumn, StudioRow } from './types';
 import { useMasterSheet } from './useMasterSheet';
@@ -53,6 +55,9 @@ import { flaggedColumnKeys, IDENTITY_COLUMN, orderColumnKeys, rankOfColumn, RESE
 import { useLanguageChips } from '../useLanguageChips';
 import { useSheetColumns } from '../useSheetColumns';
 import { exportGridCsv } from '@/design-system/grid/export/exportGrid';
+import { useSheetControl } from '../useSheetControl';
+import { controlColumnFacts, masterResetOffer } from '../sheetReset';
+import { useToast } from '@/design-system/components';
 import type { SheetExportMode } from '../sheetExport';
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
 /* A coordinate's progress column keeps ONE id whatever language is pressed (the trailing `:<language>` is dropped), so a
@@ -89,6 +94,8 @@ interface SheetPageState {
     search: string;
 }
 const NO_VARIATION_AXES: readonly string[] = [];
+/** What the Shared scope is called on screen (the scope chip, the progress column). */
+const SHARED_SCOPE_LABEL = 'Shared product';
 export function useMasterSheetAdapter({ productId, market, locale, variationAxes = NO_VARIATION_AXES as string[] }: MasterSheetProps): ProductSheetModel<StudioRow, SheetPageState, DrawerSheetRow> {
     const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastSavedAt, setLastSavedAt, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, clearSelection, rowSelection, selectedRows, setSelectedRows, announceRefusals } = useProductSheetInteraction<StudioRow>('master');
     const languageScope = useStudioScope();
@@ -137,7 +144,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const sheet = useReferenceNames(loadedSheet, 'MASTER', market);
     useSheetPublicationGuard(writer, tracker, getGridApi);
     const formulaRowIds = useMemo(() => (sheet?.rows ?? []).map((r) => r.id), [sheet]);
-    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, onSettled: refresh, onValueSaved: (rowId, fieldKey, value) => {
+    /* P0 — the studio read's rows already say which cells hold a formula. Not a legacy read (it carries none) and not the
+       previous language's sheet, which stays on screen while the next one loads. */
+    const formulaSeedRows = useMemo(() => sheet?.meta.source === 'studio' && sheet.scope.locale === locale ? sheet.rows.map(row => ({ rowId: row.id, values: row.values })) : undefined, [sheet, locale]);
+    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, seedRows: formulaSeedRows, onSettled: refresh, onValueSaved: (rowId, fieldKey, value) => {
             const node = getGridApi()?.getRowNode(rowId);
             if (!node?.data)
                 return;
@@ -167,7 +177,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         preview: (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal) => formulaLive.current.formulas.preview(rowId, fieldKey, expr, signal),
         functions: () => formulaLive.current.formulas.functions,
         replaceFormula: (rowId: string, fieldKey: string, value: unknown) => formulaLive.current.formulas.replace(rowId, fieldKey, value),
-        unavailableReason: () => formulaLive.current.formulas.loadError ?? (formulaLive.current.formulas.ready ? null : 'Loading formulas…'),
+        unavailableReason: (rowId: string | undefined, fieldKey: string) => formulaLive.current.formulas.unavailableFor(rowId, fieldKey),
         retry: () => formulaLive.current.formulas.reload(),
         sourceLabel: (fieldKey?: string) => formulaLive.current.formulas.sourceLabelFor(fieldKey),
         exprFor: (rowId: string, fieldKey: string) => formulaLive.current.formulas.exprFor(rowId, fieldKey),
@@ -212,7 +222,13 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }), [famActions, rowPress.press]);
     const contextMenuRef = useRef(getContextMenuItems);
     contextMenuRef.current = getContextMenuItems;
-    const stableContextMenu = useCallback<typeof getContextMenuItems>((p) => contextMenuRef.current(p), []);
+    const cellMenuRef = useRef<(p: Parameters<typeof getContextMenuItems>[0]) => ReturnType<typeof getContextMenuItems>>(() => []);
+    /* The cell's own verbs first (P1: Reset to inherited — the master menu had none), then the family verbs and the clipboard. */
+    const stableContextMenu = useCallback<typeof getContextMenuItems>((p) => {
+        const own = cellMenuRef.current(p);
+        const rest = contextMenuRef.current(p);
+        return own.length ? [...own, 'separator', ...rest] : rest;
+    }, []);
     const onFamilyChanged = useCallback(() => { familyQuery.reload(); reload(); refreshReadinessSoon(); }, [familyQuery, reload, refreshReadinessSoon]);
     onFamilyChangedRef.current = onFamilyChanged;
     const [classificationOpen, setClassificationOpen] = useState(false);
@@ -228,9 +244,22 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         getGridApi()?.refreshCells({ force: true });
     }, [formulas.exprFor, formulas.errorFor, gridReady]);
     const rows = useMemo(() => sheet?.rows ?? [], [sheet]);
-    const { pending, refused, retryable, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
+    const { pending, refused, warned, retryable, refusedRowIds, offline, saving } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
+    const { toast } = useToast();
+    /* P1 — full control, the channel sheet's same hook: Reset to inherited (a variation's own value, a row's own
+       translation), on a selection and on a whole column; Set every row…; Delete asks Clear or Reset; Shift+F10. */
+    const control = useSheetControl<StudioRow>({
+        getGridApi, writer, operation: undo.operation,
+        rowIdOf: row => row.id, skuOf: row => row.sku,
+        offerOf: (row, colId) => { const column = columnByKeyRef.current.get(colId); return column ? masterResetOffer(row, column, !!formulas.exprFor(row.id, colId)) : null; },
+        columnFacts: colId => controlColumnFacts(columnByKeyRef.current.get(colId)),
+        hidesInherited: row => !!row.parentId,
+        removeFormula: (rowId, colId) => formulas.pinOver(rowId, colId),
+        say: message => toast(message, 'danger'),
+    });
+    cellMenuRef.current = control.cellMenuItems;
     refusalReason.current = (key, row) => {
         if (key === PRODUCT_MEDIA_COLUMN)
             return null;
@@ -274,6 +303,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const viewCtx = useMemo(() => ({
         variationAxes: sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes,
         locale,
+        scopeLabel: SHARED_SCOPE_LABEL,
         flaggedKeys: flaggedColumnKeys(sheet?.rows),
     }), [sheet, locale, variationAxes]);
     columnByKeyRef.current = useMemo(() => new Map(schemaColumns.map((c) => [c.key, c])), [schemaColumns]);
@@ -330,7 +360,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             api.refreshCells({ force: true });
     }, [activeChip]);
     const visibleRows = useMemo(() => activeChip ? filterProductSheetRows(scopeRows, row => (activeChip.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, activeChip]);
-    const attributeColumns = useMemo(() => (sheet ? buildSheetColumns('master', { columns: withoutProgressColumns(schemaColumns).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring]);
+    const attributeColumns = useMemo(() => (sheet ? control.decorate(buildSheetColumns('master', { columns: withoutProgressColumns(schemaColumns).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef)) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring, control.decorate]);
     const identityColumns = useMemo<ColDef<StudioRow>[]>(() => [], []);
     /* Progress columns (2026-09-26) — what the card's actions call. Read through refs: the column set is built before
        the grid exists, and a card is opened long after either is current. */
@@ -407,6 +437,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const getDataPath = useCallback((d: StudioRow) => (d.parentId ? [d.parentId, d.id] : [d.id]), []);
     const secondaryRef = useRef<SecondaryPlan>({ mode: 'none', axisKeys: [] });
     secondaryRef.current = useMemo(() => secondaryPlan(rows, schemaColumns), [rows, schemaColumns]);
+    useUnpinOnNarrowSheet(getGridApi, gridReady);
     const autoGroupColumnDef = useMemo<ColDef<StudioRow>>(() => ({
         headerName: 'Product', colId: 'product', width: bandWidth, minWidth: BAND_WIDTH_FLOOR,
         pinned: 'left',
@@ -430,12 +461,15 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const colId = e.colDef.colId;
         if (!writeGate({ colId, source: e.source, selfInflicted: false, oldValue: e.oldValue, newValue: e.newValue }).write)
             return;
-        if (!formulas.ready) {
-            const reason = formulas.loadError ?? 'Formulas are still loading. Retry this edit once they are ready.';
-            tracker.set(e.data.id, colId!, 'refused', reason);
-            const writeId = `${e.data.id}:${colId}:${Date.now()}`;
-            onWriteStart(writeId, e.data.id);
-            onWriteEnd(writeId, false, reason, e.data.id);
+        /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
+           the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
+        if (!formulas.knownFor(e.data.id, colId!)) {
+            const rowId = e.data.id;
+            tracker.set(rowId, colId!, 'saving', HELD_FOR_FORMULAS);
+            formulas.whenKnown(rowId, colId!, () => {
+                if (tracker.get(rowId, colId!)?.reason === HELD_FOR_FORMULAS)
+                    latestValueChanged.current(e);
+            }, (reason) => tracker.set(rowId, colId!, 'refused', reason ?? HELD_EDIT_DROPPED));
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
@@ -474,6 +508,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         undo.record({ rowId: e.data.id, colId: colId!, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.id, colId!, e.newValue, { row: e.data });
     }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record]);
+    /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
+    const latestValueChanged = useRef(onCellValueChanged);
+    latestValueChanged.current = onCellValueChanged;
     const [importOpen, setImportOpen] = useState(false);
     const [transferIntent, setTransferIntent] = useState<'import' | 'export'>('import');
     const familyVerbs = useFamilyVerbs({
@@ -484,7 +521,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onDone: onFamilyChanged,
         onCollectVariation: setNewVariation,
     });
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
+        family: { productId, channel: null, columns: () => [...columnByKeyRef.current.values()] } });
     const [exportNote, setExportNote] = useState<string | null>(null);
     const onExport = useCallback((mode: SheetExportMode) => {
         const api = getGridApi();
@@ -601,6 +639,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             /* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */
             pending: pending,
             refused: refused,
+            warned: warned,
             saving: saving,
             lastSavedAt: lastSavedAt,
         }, footerNote: {
@@ -616,7 +655,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         {rowPress.problem && <div className="nds-grid-footstrip" role="alert"><span className="nds-cell-stock-out">{rowPress.problem}</span></div>}
         {rowPress.confirmElement}
         {familyVerbs.dialogs}
-        {reloadConfirm.element}</>, footerExtra: <>{exportNote && <span className="nds-cell-muted">{exportNote}</span>}
+        {reloadConfirm.element}
+        {control.element}</>, footerExtra: <>{exportNote && <span className="nds-cell-muted">{exportNote}</span>}
     {sheet?.meta.source === 'legacy' && (<InfoTip tip="The studio sheet route is not deployed yet, so this is the catalogue read adapted to the same shape. Cell values and versions are real; the layer each value came from is INFERRED here rather than stated by the server.">
                 <Pill tone="neutral" size="sm">adapted read</Pill>
               </InfoTip>)}
@@ -653,7 +693,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             onCellFocused: onCellFocused,
         },
         gridOverlay: null,

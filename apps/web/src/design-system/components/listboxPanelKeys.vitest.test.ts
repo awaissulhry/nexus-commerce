@@ -119,3 +119,159 @@ describe('ListboxPanel — Enter commits what the operator is on', () => {
     expect(onCommit).toHaveBeenCalledWith('d')
   })
 })
+
+/**
+ * P0 (2026-09-30) — Enter and Tab in a grid list. AG's popup listener runs before this panel's bubble `onKeyDown` and ends the
+ * edit with the last reported value, so the panel reports the choice in the CAPTURE phase (`onKeyChoice`) and leaves the
+ * commit and the move to the grid. Measured in production: Enter and Tab closed every list with its old value.
+ */
+describe('ListboxPanel — onKeyChoice reports Enter and Tab before the grid ends the edit', () => {
+  const capture = (root: El, key: string) => (root.props.onKeyDownCapture as (e: unknown) => void)({ key, nativeEvent: { isComposing: false }, preventDefault() {} })
+  const arrow = (root: El, key: 'ArrowDown' | 'ArrowUp') => (root.props.onKeyDown as (e: unknown) => void)({ key, preventDefault() {} })
+  const search = (root: El) => flat(root).find((el) => el.type === 'input')
+  const labels = (root: El) => optionEls(root).map((o) => [o.props.children].flat().filter((c) => typeof c === 'string').join(''))
+
+  it.each(['Enter', 'Tab'])('↑ from the first option reaches Clear, and %s reports an empty value', (key) => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'a', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), key)
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('Clear stays reachable at the top and ↓ returns to the first option', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'a', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('a')
+  })
+
+  it('focusing Clear makes it the choice for both the grid and standalone panel', () => {
+    const onKeyChoice = vi.fn()
+    const onCommit = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'b', emptyLabel: 'Clear', onCommit, onCancel() {} }
+    ;(optionEls(render(props))[0].props.onFocus as (() => void) | undefined)?.()
+    enter(render(props))
+    expect(onCommit).toHaveBeenLastCalledWith('')
+    capture(render({ ...props, onKeyChoice }), 'Tab')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('a stored value outside the list is kept until ↑ explicitly chooses Clear', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'zz', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(null)
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('a searching list highlights Clear and reports an empty value', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'a', emptyLabel: 'Clear', searchable: true, onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    const root = render(props)
+    expect(optionEls(root)[0].props.className).toContain('active')
+    capture(root, 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('Clear remains the choice when an empty list has no option below it', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options: [], value: 'unavailable', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('an explicit empty option is not duplicated, and ↑ can choose it', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options: [{ value: '', label: 'None' }, ...options], value: 'a', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    expect(optionEls(render(props))).toHaveLength(options.length + 1)
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('Enter reports the highlighted row, and the panel does not also commit it', () => {
+    const onCommit = vi.fn()
+    const onKeyChoice = vi.fn()
+    const root = render({ options, value: 'b', onCommit, onCancel() {}, onKeyChoice })
+    capture(root, 'Enter')
+    enter(root)
+    expect(onKeyChoice).toHaveBeenCalledWith('b')
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+
+  it('Tab reports the row ↓ moved to', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'b', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Tab')
+    expect(onKeyChoice).toHaveBeenCalledWith('c')
+  })
+
+  it('a stored value the list does not hold highlights nothing: Enter reports null, and ↓ reaches row 1', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'zz', onCommit() {}, onCancel() {}, onKeyChoice }
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(null)
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('a')
+  })
+
+  it('without onKeyChoice, Enter on a value the list does not hold commits nothing (it committed row 1)', () => {
+    const onCommit = vi.fn()
+    enter(render({ options, value: 'zz', onCommit, onCancel() {} }))
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+
+  it('initialQuery starts the search with the key that opened the cell, on the best match', () => {
+    const onKeyChoice = vi.fn()
+    const root = render({ options, onCommit() {}, onCancel() {}, onKeyChoice, initialQuery: 'Ch' })
+    expect(search(root)?.props.value).toBe('Ch')
+    capture(root, 'Enter')
+    expect(onKeyChoice).toHaveBeenCalledWith('c')
+  })
+
+  it('allowCustom offers the typed text as the only row when nothing matches, and Enter takes it', () => {
+    const onKeyChoice = vi.fn()
+    const root = render({ options, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: 'Xavia Racing' })
+    expect(labels(root)).toEqual(['Use "Xavia Racing"'])
+    capture(root, 'Enter')
+    expect(onKeyChoice).toHaveBeenCalledWith('Xavia Racing')
+  })
+
+  it('allowCustom shows the typed text FIRST, but Enter takes the best match and ↑ takes the typed text', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: 'lt' }
+    const rows = labels(render(props))
+    expect(rows[0]).toBe('Use "lt"')
+    expect(rows.length).toBeGreaterThan(1)
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(options.find((o) => o.label === rows[1])!.value)
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('lt')
+  })
+
+  it('Enter is not also a click on a focused option (the capture handler takes the default)', () => {
+    const root = render({ options, value: 'b', onCommit() {}, onCancel() {}, onKeyChoice: vi.fn() })
+    const preventDefault = vi.fn()
+    ;(root.props.onKeyDownCapture as (e: unknown) => void)({ key: 'Enter', nativeEvent: { isComposing: false }, preventDefault })
+    expect(preventDefault).toHaveBeenCalled()
+  })
+
+  it('allowCustom adds nothing for an exact match, whatever the case', () => {
+    const root = render({ options, onCommit() {}, onCancel() {}, allowCustom: true, initialQuery: 'bravo' })
+    expect(labels(root).some((l) => l.startsWith('Use '))).toBe(false)
+  })
+})

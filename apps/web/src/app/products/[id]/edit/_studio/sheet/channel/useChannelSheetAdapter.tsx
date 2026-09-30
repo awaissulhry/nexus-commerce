@@ -1,5 +1,6 @@
 'use client';
 import { describeValueSource } from './cellDetailsSource';
+import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
 import { reviewCopy } from './reviewCopy';
 import { classifyProvenance } from '@/design-system/grid/renderers/provenance';
 import { useSheetPreferences } from '../useSheetPreferences';
@@ -16,6 +17,7 @@ import { columnLanguages } from '../languages';
 import { ShopifySheetReview } from '../../shopify/ShopifySheetReview';
 import { recoverSheetRow } from '../sheetRecovery';
 import { runBulkOperation, type BulkSend } from '../bulkOperation';
+import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo } from '../useSheetUndo';
 import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
@@ -26,6 +28,7 @@ import { ProductRoleChip } from '../ProductRoleChip';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
 import { historyLoaderFor, inheritedContextOf } from '../cellEditorContext';
 import { SchemaStatus } from './SchemaStatus';
+import { LOAD_FIELDS_PERMISSION, useMissingFieldsBanner } from './MissingFieldsBanner';
 import { rulesStatus } from './rulesStatus';
 import { channelLabel, languageLabel } from '../../scopes';
 import { buildCompareTargets } from '../compareTargets';
@@ -34,22 +37,24 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
-import { expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
-import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
+import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
+import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, saveNote, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { SkuTag } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
 import { Banner, EmptyState, Modal, useToast, type MenuItemDef } from '@/design-system/components';
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
 import { AliasBandCell, BandExpander } from './AliasBandCell';
 import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
-import { resetSourceLabel } from './value-source';
+import { resetActionWords } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { useCellFormulas } from '../../useCellFormulas';
+import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
 import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
 import { aliasMark, cascadeIntent, cascadeOf, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
+import { FollowUpRead, rowSettle } from './saveSettle';
 import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
@@ -82,6 +87,8 @@ import { aliasKeyOf, type ChannelScopeChannel, type ChannelSheetRow, type SheetC
 import './channel-sheet.css';
 import { channelValidation } from '../master/channelColumns';
 import { buildSheetColumns } from '../buildSheetColumns';
+import { useSheetControl } from '../useSheetControl';
+import { channelResetOffer, controlColumnFacts } from '../sheetReset';
 export interface ChannelSheetProps {
     shopifySchema?: import('@nexus/shared/shopify-linked-products').ShopifyStoreSchema | null;
     accountId?: string;
@@ -123,10 +130,19 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const refreshReadiness = useReadinessRefresh();
     const readinessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (readinessTimer.current) clearTimeout(readinessTimer.current); }, []);
+    /* P2 review 4 — a save since the last readiness read wrote the shared record (a master field, content saved to every
+       channel): the Shared chip and every channel that follows it moved, so the whole family is read. */
+    const readinessForFamily = useRef(false);
     const refreshReadinessSoonRef = useRef(() => { });
     refreshReadinessSoonRef.current = () => {
         if (readinessTimer.current) clearTimeout(readinessTimer.current);
-        readinessTimer.current = setTimeout(() => { readinessTimer.current = null; refreshReadiness(); }, 800);
+        // P2 (I4-9) — a save that moved this coordinate only reads it, not the family's every coordinate.
+        readinessTimer.current = setTimeout(() => {
+            readinessTimer.current = null;
+            const family = readinessForFamily.current;
+            readinessForFamily.current = false;
+            refreshReadiness(family ? undefined : { coordinate: true });
+        }, 800);
     };
     /* When the rows (and so this scope's progress bars) were last read — "Refresh progress · read 12:04". */
     const [progressReadAt, setProgressReadAt] = useState<number | null>(null);
@@ -166,7 +182,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     } | null>(null);
     const surfaceKey = channelSurfaceKey(channel, marketplace);
     const [exportNote, setExportNote] = useState<string | null>(null);
-    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases)) : []), [data]);
+    /* P2 (I4-4) — a server row keeps its grid row object: reference names landing, or a read that returns the row
+       unchanged, never make AG re-render it, and an edit settled in place (`savedCellPatch.ts`) survives them. */
+    const rowObjects = useRef(new WeakMap<object, ChannelSheetRow>());
+    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current)) : []), [data]);
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
@@ -212,6 +231,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         rowIds: formulaRowIds,
         columnKeys: data?.columns.map(column => column.key),
         rowScopes: formulaRowScopes,
+        /* P0 — the rows already say which cells hold a formula, so no editor waits for the formula reads. */
+        seedRows: rows,
         channelConnectionId: data?.scope.connectionId ?? accountId,
         onSettled: () => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
         onValueSaved: (rowId, fieldKey, value) => {
@@ -253,7 +274,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         preview: (rowId, fieldKey, expr, signal) => formulaLive.current.formulas.preview(rowId, fieldKey, expr, signal),
         functions: () => formulaLive.current.formulas.functions,
         replaceFormula: (rowId: string, fieldKey: string, value: unknown) => formulaLive.current.formulas.replace(rowId, fieldKey, value),
-        unavailableReason: () => formulaLive.current.formulas.loadError ?? (formulaLive.current.formulas.ready ? null : 'Loading formulas…'),
+        unavailableReason: (rowId, fieldKey) => formulaLive.current.formulas.unavailableFor(rowId, fieldKey),
         retry: () => formulaLive.current.formulas.reload(),
         sourceLabel: fieldKey => formulaLive.current.formulas.sourceLabelFor(fieldKey),
         exprFor: (rowId, fieldKey) => formulaLive.current.formulas.exprFor(rowId, fieldKey),
@@ -269,6 +290,23 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         writeId: string;
         subject: string;
     }>());
+    /* P2 (I4-4) — a confirmed save the sheet could not settle in place owes ONE quiet read, taken when the sheet is idle;
+       P2 review 3 — a read that is dropped (an editor open, a newer write, a failed fetch) stays owed and is tried again. */
+    const [followUp] = useState(() => new FollowUpRead({
+        idle: () => writerRef.current?.pending === 0 && !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0,
+        read: (canApply) => refreshRef.current(canApply),
+        sequence: () => writeSeq.current,
+        schedule: (run, ms) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer); },
+    }));
+    useEffect(() => () => followUp.dispose(), [followUp]);
+    /** Repaint the cells a save settled in place: the saved columns of the saved row, its progress, the theme token. */
+    const repaintSettled = (patched: Set<ChannelSheetRow>, columns: Set<string>) => {
+        const api = getGridApi();
+        if (!api || api.isDestroyed())
+            return;
+        const nodes = [...patched].flatMap((row) => { const node = api.getRowNode(row.rowId); return node ? [node] : []; });
+        api.refreshCells({ rowNodes: nodes, columns: [...columns, SCOPE_PROGRESS_COLUMN], force: true });
+    };
     const writerRef = useRef<SheetWriter<ChannelSheetRow> | null>(null);
     if (writerRef.current === null) {
         /* ONE row's save, with its reporter bookkeeping. `bulkSend` present = this row is one unit of a sheet operation
@@ -283,8 +321,28 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                column and silently disabled the split. Witnessed: a theme pick on Amazon·IT
                reported `set` in the editor's own footer and issued no projection request at all.
                The same ref discipline the formula candidates two hooks above already follow. */
+            /* P2 (I4-4) — how this save settled: patched in place from its answer (`savedCellPatch.ts`), or it owes the one
+               quiet read. P2 review 1 — only when EVERY cell it sent was reported patched: a part that reports nothing (a
+               variation theme, a Shopify field) or asks for a read makes the sheet read (`rowSettle`). */
+            const save = rowSettle(req);
+            if (save.touchesMaster()) readinessForFamily.current = true;
             const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
-                familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend });
+                familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend,
+                onProductVersionsChanged: (changed) => writerRef.current?.seed(changed.map(row => ({ id: row.rowId, version: row.version }))),
+                columnOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId),
+                onStored: (outcome) => save.onStored(outcome),
+                /* P1 review (2) — the family rows a listing-level eBay save moved: repaint them with their new value and token.
+                   P2 — only the saved columns of those rows, never every cell of the family. */
+                onFamilyChanged: (changed, columns) => {
+                    const api = getGridApi();
+                    if (!api || api.isDestroyed())
+                        return;
+                    const nodes = changed.flatMap((moved) => { const node = api.getRowNode(moved.rowId); if (node?.data && node.data !== moved) node.data.values = moved.values; return node ? [node] : []; });
+                    api.refreshCells({ rowNodes: nodes, ...(columns?.length ? { columns } : {}), force: true });
+                } });
+            const inPlace = save.inPlace(result.ok);
+            if (inPlace) repaintSettled(inPlace.rows, inPlace.columns);
+            else if (result.ok) followUp.owe();
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });
             else
@@ -301,6 +359,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return Promise.all(requests.map(request => recoverSheetRow(page, request, { channel, market: marketplace, accountId, locale })));
         };
         writerRef.current = new SheetWriter<ChannelSheetRow>({
+            mergeRow: preserveContentVersions,
             tracker,
             getApi: getGridApi,
             commit: (req: SheetWriteRequest<ChannelSheetRow>) => commitOne(req),
@@ -331,7 +390,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 if (ok) {
                     setLastSavedAt(savedAt);
                     refreshReadinessSoonRef.current();
-                    void refreshRef.current(() => writerRef.current?.pending === 0 && !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
+                    // A lost answer is always read back, and that read too stays owed until it lands.
+                    followUp.owe();
+                    followUp.settle();
                 }
             },
             onSettled: ({ ok, savedAt }) => {
@@ -341,16 +402,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 refreshReadinessSoonRef.current();
                 if (writerRef.current?.pending !== 0)
                     return;
-                const savedSequence = writeSeq.current;
-                void refreshRef.current(() => writeSeq.current === savedSequence && writerRef.current?.pending === 0 &&
-                    !tracker.hasUnconfirmedChanges &&
-                    (getGridApi()?.getEditingCells().length ?? 0) === 0);
+                // P2 (I4-4) — a read only when a save since the last read could not be settled in place.
+                followUp.settle();
             },
         });
     }
     const writer = writerRef.current;
     useSheetPublicationGuard(writer, tracker, getGridApi);
-    const { pending, refused, retryable, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
+    const { pending, refused, warned, retryable, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
     useEffect(() => {
@@ -407,6 +466,25 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }
         writer.set(row.rowId, colKey, intent.value, { row, intent: intent.action });
     }, [writer, data, channel, marketplace, aliasLabel, listResetConfirm.ask]);
+    /* P1 — full control: Reset to inherited in the cell menu, on a selection and on a whole column; Set every row…;
+       Delete asks Clear or Reset; Shift+F10 opens a cell's menu. The same hook serves the Master sheet. */
+    const control = useSheetControl<ChannelSheetRow>({
+        getGridApi, writer, operation: undo.operation,
+        rowIdOf, skuOf: row => row.sku,
+        offerOf: (row, colId) => channelResetOffer(row, colId, !!formulaLive.current.formulas.exprFor(row.rowId, colId)),
+        listOf: (row, colId) => wholeListWriteField(row.values?.[colId]?.writeField ?? ''),
+        columnFacts: colId => controlColumnFacts(dataRef.current?.columns.find(column => column.key === colId)),
+        hidesInherited: () => true,
+        removeFormula: (rowId, colId) => formulaLive.current.formulas.pinOver(rowId, colId),
+        // A whole list keeps its review of the positions it replaces (`onCascade`).
+        resetOne: (row, colId, offer) => {
+            const cell = row.values?.[colId];
+            if (offer.intent !== 'reset-list' || offer.formula || !cell) return false;
+            void onCascade(row, cell, { action: 'reset', target: row.rowKind === 'parent' ? 'alias' : 'aliasVariant', value: null });
+            return true;
+        },
+        say: message => toast(message, 'danger'),
+    });
     type PendingContentEdit = {
         rowId: string;
         colId: string;
@@ -471,12 +549,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return;
         }
         const shopifyValue = !!data?.columns.find(column => column.key === colId)?.shopifyField;
-        if (!shopifyValue && !formulas.ready) {
-            const reason = formulas.loadError ?? 'Formulas are still loading. Retry this edit once they are ready.';
-            tracker.set(e.data.rowId, colId, 'refused', reason);
-            const { writeId, subject } = channelWriteIdentity(e.data.rowId, ++writeSeq.current, { channel, marketplace, accountId, locale, instanceId: writeInstanceId });
-            reporterRef.current.pending(writeId, subject);
-            reporterRef.current.resolved(writeId, false, reason, subject);
+        /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
+           the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
+        if (!shopifyValue && !formulas.knownFor(e.data.rowId, colId)) {
+            const rowId = e.data.rowId;
+            tracker.set(rowId, colId, 'saving', HELD_FOR_FORMULAS);
+            formulas.whenKnown(rowId, colId, () => {
+                if (tracker.get(rowId, colId)?.reason === HELD_FOR_FORMULAS)
+                    latestValueChanged.current(e);
+            }, (reason) => tracker.set(rowId, colId, 'refused', reason ?? HELD_EDIT_DROPPED));
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
@@ -515,6 +596,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         undo.record({ rowId: e.data.rowId, colId, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.rowId, colId, e.newValue, { row: e.data, intent: 'set' });
     }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record]);
+    /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
+    const latestValueChanged = useRef(onCellValueChanged);
+    latestValueChanged.current = onCellValueChanged;
     /* The band stops before the progress column (2026-09-26): the listing row keeps its own progress cell there, as
        master's parent row does. */
     const bandSpan = useMemo(() => bandColSpan<ChannelSheetRow>({ isBand: (d) => d?.rowKind === 'parent', stopBefore: isProgressColumn }), []);
@@ -523,6 +607,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         : auth.status === 'anon' ? 'no-session'
             : auth.has(CHANNEL_VERB_PERMISSION) ? 'granted'
                 : 'denied';
+    const fieldsBanner = useMissingFieldsBanner({ channel, market: marketplace, missing: data?.meta.schemaMissing ?? [], ready: !!data && !loading && auth.status !== 'loading',
+        canLoad: auth.has(LOAD_FIELDS_PERMISSION), onLoaded: reload });
     const verbs = useMemo(() => data
         ? channelActions({
             accountSpecific: alternateAccount,
@@ -547,23 +633,29 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         const formulaReason = refusedReasonFor(row.rowId, column.key);
         const source = describeValueSource(cell, classifyProvenance({ ...withMappingRun(cell, data?.meta?.mapping?.productLevelOnly ?? false), refusedReason: formulaReason }, 'channel'), formulaReason);
         const layer = cascadeOf(cell, row.rowKind);
-        const intent = cell && offersCascade(cell) && cell.editable && layer !== 'unset' && !['formula', 'warning', 'ai'].includes(source.kind)
+        /* P1 — a reset is offered wherever one exists (the cell menu's rule, `channelResetOffer`): formula, translation and
+           AI cells included. A pin is offered only on a plain inherited value. */
+        const reset = channelResetOffer(row, column.key, !!formulaReason || !!formulaLive.current.formulas.exprFor(row.rowId, column.key));
+        const intent = cell && offersCascade(cell) && cell.editable && layer !== 'unset' && (reset || !['formula', 'warning', 'ai'].includes(source.kind))
             ? cascadeIntent(layer, row.rowKind, value ?? null) : null;
         setCellDetails({
             title: `${column.label}: ${row.sku}`,
             rowId: row.rowId,
             colKey: column.key,
             action: intent && cell ? {
-                label: intent.action === 'pin' ? 'Keep as listing override' : wholeListWriteField(cell.writeField) ? 'Review removing list override…' : 'Remove listing override',
+                label: intent.action === 'pin' ? 'Keep as listing override' : reset?.formula ? reset.label : resetActionWords(cell, { sku: row.sku, listing: aliasLabel(row.aliasId) }).label,
                 description: intent.action === 'pin'
                     ? `Keep the current value for ${row.sku} · ${aliasLabel(row.aliasId)} on this channel and market.`
-                    : `Remove this ${wholeListWriteField(cell.writeField) ? 'whole list’s' : 'listing'} override and ${resetSourceLabel(cell)}.`,
-                run: () => { void onCascade(row, cell, intent); },
+                    : `${reset?.formula ? 'Remove this cell’s formula (its last value is kept), then: ' : ''}${resetActionWords(cell, { sku: row.sku, listing: aliasLabel(row.aliasId) }).description}`,
+                run: () => {
+                    if (intent.action === 'reset' && reset?.formula) void control.reset([{ rowId: row.rowId, colId: column.key, intent: reset.intent, formula: true }]);
+                    else void onCascade(row, cell, intent);
+                },
             } : undefined,
             value: value == null || value === '' ? 'Empty' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value),
-            notes: composeCellTooltip(tracker.get(row.rowId, column.key)?.reason, channelValidation(column).validate(value, row, column.key).message, cell?.mapped?.errors.join('\n'), cell?.mapped?.warnings.join('\n'), `${source.label}. ${source.description}`, column.kind === 'longtext' ? longTextTooltipLine(value, column) : null, shapeTooltipLine(column, value), referenceTooltip(value, column.optionLabels), cellHoverNote(cell, data?.scope.label ?? ''), column.helpText),
+            notes: composeCellTooltip(saveNote(tracker.get(row.rowId, column.key)), channelValidation(column).validate(value, row, column.key).message, cell?.mapped?.errors.join('\n'), cell?.mapped?.warnings.join('\n'), `${source.label}. ${source.description}`, column.kind === 'longtext' ? longTextTooltipLine(value, column) : null, shapeTooltipLine(column, value), referenceTooltip(value, column.optionLabels), cellHoverNote(cell, data?.scope.label ?? ''), column.helpText),
         });
-    }, [data, tracker, refusedReasonFor, onCascade, aliasLabel]);
+    }, [data, tracker, refusedReasonFor, onCascade, aliasLabel, control.reset]);
     const closeCellDetails = useCallback(() => {
         const previous = cellDetails;
         setCellDetails(null);
@@ -581,7 +673,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             const row = params.node?.data;
             const column = data?.columns.find(c => c.key === params.column?.getColId());
             if (row && column)
-                items.unshift({ name: 'Cell details…', action: () => openCellDetails(row, column) });
+                items.unshift(...control.cellMenuItems(params), { name: 'Cell details…', action: () => openCellDetails(row, column) });
             const mapping = data && column?.channels?.[data.scope.label];
             const field = mapping?.key ?? mapping?.attribute;
             if (!row || !field)
@@ -590,34 +682,49 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return [{ name: 'Open reusable mapping for this field', tooltip: 'This rule can affect other matching products. Opens separately to preserve your edits.',
                     action: () => window.open(supplyingRule?.href ?? mappingHref({ channel, market: marketplace, category: row.productType, field, productId: row.id }), '_blank', 'noopener') }, ...items];
         };
-    }, [verbs, press, isRecordRow, data, channel, marketplace, openCellDetails]);
+    }, [verbs, press, isRecordRow, data, channel, marketplace, openCellDetails, control.cellMenuItems]);
     const productLevelOnly = data?.meta?.mapping?.productLevelOnly ?? false;
     const familyShowsAxes = useMemo(() => {
         const variants = rows.filter((r) => r.rowKind === 'variant');
         return variants.length > 0 && variants.every((r) => Object.keys(r.axisValues ?? {}).length > 0);
     }, [rows]);
-    const viewCtx = useMemo(() => ({
+    const viewCtxNow = useMemo(() => ({
         variationAxes: data?.family?.variationAxes ?? [],
         locale: data?.scope.locale ?? locale ?? '',
+        scopeLabel: data?.scope.label,
         flaggedKeys: flaggedColumnKeys(rows),
         requiredKeys: [...new Set(rows.flatMap(row => Object.entries(row.values).filter(([, cell]) => cell.mapped?.requiredByRule).map(([key]) => key)))],
     }), [data, rows, locale]);
+    /* P2 (I4-4) — the column model is keyed on what it reads, never on a read's object identity: the same columns, scope
+       and view facts keep every column definition, so AG never rebuilds (and re-renders) every cell after a read. */
+    const viewCtx = useMemo(() => viewCtxNow, [JSON.stringify(viewCtxNow)]);
+    const columnsKey = useMemo(() => JSON.stringify(data?.columns ?? []), [data?.columns]);
+    const stableColumns = useMemo(() => data?.columns ?? [], [columnsKey]);
+    const scopePage = useMemo(() => (data ? { scope: data.scope } : null), [JSON.stringify(data?.scope ?? null)]);
+    const openCellDetailsRef = useRef(openCellDetails);
+    openCellDetailsRef.current = openCellDetails;
+    const openCellDetailsLive = useCallback((row: ChannelSheetRow, column: SheetColumn) => openCellDetailsRef.current(row, column), []);
+    const authRef = useRef(auth);
+    authRef.current = auth;
+    const authKey = `${auth.status}:${auth.isOwner}:${[...auth.permissions].sort().join(',')}`;
+    const authLive = useMemo(() => ({ has: (permission: string) => authRef.current.has(permission) }), [authKey]);
     const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi);
     const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
        Customise, in the views; never a server column, never a write field. */
-    const gridColumns = useMemo(() => withSlotListColumns(withProductMediaColumn(data?.columns ?? []).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never))), [data]);
-    const columnDefs = useMemo(() => buildSheetColumns('channel', {
-        data, gridColumns, formulaWiring, accountId, openCellDetails, productLevelOnly,
-        refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth,
-    }), [data, gridColumns, formulaWiring, accountId, openCellDetails, productLevelOnly, refusedReasonFor,
-        tracker, viewCtx, mediaEditor.open, mediaEditor.actions, shopifyEditor.open, shopifySchema, auth]);
+    const gridColumns = useMemo(() => withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never))), [stableColumns]);
+    const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
+        data: scopePage, gridColumns, formulaWiring, accountId, openCellDetails: openCellDetailsLive, productLevelOnly,
+        refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth: authLive,
+    })), [scopePage, gridColumns, formulaWiring, accountId, openCellDetailsLive, productLevelOnly, refusedReasonFor,
+        tracker, viewCtx, mediaEditor.open, mediaEditor.actions, shopifyEditor.open, shopifySchema, authLive, control.decorate]);
     /**
      * The scope's PROGRESS COLUMN (2026-09-26) — the bar left the Product cell. The same builder as master
      * (`../progressColumns`), fed by this sheet's own rows: `completeness` is measured against THIS channel's fields.
      */
     const progressColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => {
+        const data = scopePage;
         if (!data) return [];
         const label = data.scope.label;
         const presence = (field: string): ColumnPresence => {
@@ -642,7 +749,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 footerLink: () => ({ label: `All products for ${label}`, href: listingsHref({ channel: data.scope.channel, market: marketplace, language: data.scope.locale }) }),
             },
         })];
-    }, [data, marketplace, getGridApi, revealCell, refreshProgress]);
+    }, [scopePage, marketplace, getGridApi, revealCell, refreshProgress]);
     const allColumnDefs = useMemo(() => [...progressColumns, ...columnDefs], [progressColumns, columnDefs]);
     const searchColumnLabels = useMemo(() => new Map(gridColumns.map(col => [col.key, col.optionLabels])), [gridColumns]);
     const searchTerm = search.trim().toLowerCase();
@@ -747,7 +854,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             setExportNote(e instanceof GridExportRefused ? e.message : 'Could not build the file.');
         }
     }, [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns]);
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
+        family: { productId, channel: channel.toUpperCase(), columns: () => dataRef.current?.columns ?? [] } });
     const getDataPath = useCallback((d: ChannelSheetRow) => dataPathFor(d), []);
     const getRowId = useCallback((p: {
         data: ChannelSheetRow;
@@ -756,6 +864,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     familyShowsAxesRef.current = familyShowsAxes;
     const menuItemsRef = useRef(menuItems);
     menuItemsRef.current = menuItems;
+    useUnpinOnNarrowSheet(getGridApi, gridReady);
     const autoGroupColumnDef = useMemo<ColDef<ChannelSheetRow>>(() => ({
         colSpan: bandSpan,
         valueGetter: (p: ValueGetterParams<ChannelSheetRow>) => p.data?.sku ?? null,
@@ -910,23 +1019,31 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         toolbarExtra: <>    {liveRead.element}{pendingMasterWrite && (() => {
                 const pm = pendingMasterWrite;
                 const choices = pm.row.values[pm.colId]?.contentAcknowledgement;
-                const accept = (address?: import('@nexus/shared/content-language').ContentAddress) => {
-                    if (address) {
-                        const cell = pm.row.values[pm.colId];
-                        pm.row.values = { ...pm.row.values, [pm.colId]: { ...cell, contentAddress: address, contentAcknowledged: true } };
-                    }
-                    else
+                /* P1 (report 2 I-7) — ONE answer for the whole paste or fill: every queued edit takes it, each with its own
+                   cell's address, and they leave as ONE save. */
+                const accept = (tier: 'shared' | 'pin') => {
+                    const { apply, keep } = acknowledgePendingEdits(pendingWrites, tier);
+                    if (tier === 'shared' && apply.some(edit => !edit.row.values[edit.colId]?.contentAcknowledgement))
                         acknowledgedRef.current = true;
-                    setPendingMasterWrite(null);
-                    onCellValueChanged({ data: pm.row, colDef: { colId: pm.colId }, newValue: pm.value, oldValue: pm.previous, source: 'edit' });
+                    setPendingWrites(keep);
+                    writer.beginOperation();
+                    try {
+                        for (const edit of apply)
+                            onCellValueChanged({ data: edit.row, colDef: { colId: edit.colId }, newValue: edit.value, oldValue: edit.previous, source: 'edit' });
+                    }
+                    finally {
+                        writer.endOperation();
+                    }
                 };
                 const decline = () => {
-                    setPendingMasterWrite(null);
+                    const all = pendingWrites;
+                    setPendingWrites([]);
                     revertingRef.current = true;
                     try {
-                        revertPendingEdit(pm);
-                        const oneCell = slotListKeyOfSlot(pm.colId, data?.columns ?? []);
-                        getGridApi()?.refreshCells({ force: true, columns: oneCell ? [pm.colId, oneCell] : [pm.colId] });
+                        for (const edit of all)
+                            revertPendingEdit(edit);
+                        const columns = [...new Set(all.flatMap(edit => { const oneCell = slotListKeyOfSlot(edit.colId, data?.columns ?? []); return oneCell ? [edit.colId, oneCell] : [edit.colId]; }))];
+                        getGridApi()?.refreshCells({ force: true, columns });
                         const node = getGridApi()?.getRowNode(pm.rowId);
                         if (node?.rowIndex != null)
                             getGridApi()?.setFocusedCell(node.rowIndex, pm.colId);
@@ -935,19 +1052,6 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                         revertingRef.current = false;
                     }
                 };
-                /**
-                 * LX.14 — the acknowledgement, worded for the TIER, with both answers on it and the
-                 * reach NAMED (design §8 LX.14; copy from the mock's S3,
-                 * `/design/language-axis`). The old wording ("Choose where to save this text ·
-                 * Shared text reaches …") named neither the language nor what declining does, so
-                 * the operator could not tell a shared-language write from a coordinate pin without
-                 * reading the two button labels.
-                 *
-                 * Every part is DERIVED: the language from the cell's own requested language through
-                 * the ONE web label helper (`_studio/scopes.ts#languageLabel`), the reach and both
-                 * button labels from the server's `contentAcknowledgement` — no local language map,
-                 * no second copy of the reach sentence.
-                 */
                 const cell = pm.row.values[pm.colId];
                 const fieldLabel = data?.columns.find(column => column.key === pm.colId)?.label ?? pm.colId;
                 const language = languageLabel(cell?.requested ?? cell?.language ?? data?.scope.locale ?? '');
@@ -955,15 +1059,16 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 const reach = choices?.reach.length
                     ? choices.reach.length > 1 ? `${choices.reach.slice(0, -1).join(', ')} and ${choices.reach[choices.reach.length - 1]}` : choices.reach[0]
                     : data?.scope.label ?? '';
-                return <Banner tone="warning" title={choices ? `${fieldLabel} follows the shared ${language} text` : `${fieldLabel} changes the shared product`} action={<div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--nds-space-2)' }}>
-                    <Button autoFocus variant="primary" size="sm" onClick={() => accept(choices?.shared.address)}>{choices?.shared.label ?? 'Save to all channels'}</Button>
-                    {choices && <Button variant="secondary" size="sm" onClick={() => accept(choices.pin.address)}>{choices.pin.label}</Button>}
+                const many = pendingWrites.length > 1;
+                return <Banner tone="warning" title={choices ? `${many ? `${pendingWrites.length} edits: ` : ''}${fieldLabel} follows the shared ${language} text` : `${many ? `${pendingWrites.length} edits: ` : ''}${fieldLabel} changes the shared product`} action={<div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--nds-space-2)' }}>
+                    <Button autoFocus variant="primary" size="sm" onClick={() => accept('shared')}>{choices?.shared.label ?? 'Save to all channels'}</Button>
+                    {choices && <Button variant="secondary" size="sm" onClick={() => accept('pin')}>{choices.pin.label}</Button>}
                     <Button variant="secondary" size="sm" onClick={decline}>Cancel</Button>
                   </div>}>
                   {choices
-                    ? `Editing it here changes ${language} on every listing that follows it: ${reach}. Pin it on this listing to change only this listing. Declining reverts the cell.`
-                    : 'Every channel that follows this field receives the change. Declining reverts the cell.'}
-                  {pendingWrites.length > 1 && ` ${pendingWrites.length} edits await a choice.`}
+                    ? `Editing it here changes ${language} on every listing that follows it: ${reach}. Pin it on this listing to change only this listing. Declining reverts the ${many ? 'cells' : 'cell'}.`
+                    : `Every channel that follows this field receives the change. Declining reverts the ${many ? 'cells' : 'cell'}.`}
+                  {many && ` Your answer applies to all ${pendingWrites.length} edits of this change, saved together.`}
                 </Banner>;
             })()}</>,
         status: {
@@ -972,6 +1077,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             pending: pending,
             saving: saving,
             refused: refused,
+            warned: warned,
             lastSavedAt: lastSavedAt,
         }, footerNote: {
             offline: offline,
@@ -985,9 +1091,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the shared master record — every channel sees those edits
             </span>)}</>,
-        notice: startsDraftHere
-            ? <Banner tone={noAccount ? 'warning' : 'info'}>{noAccount ? connectAccountSentence(channel, marketplace) : notListedSentence(channel, marketplace)}</Banner>
-            : null,
+        notice: <>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'}>{noAccount ? connectAccountSentence(channel, marketplace) : notListedSentence(channel, marketplace)}</Banner>}
+            {fieldsBanner}</>,
         grid: {
             loading: loading,
             noRowsOverlayComponentParams: emptyState,
@@ -1008,7 +1113,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             onSelectionChanged: onSelectionChanged,
             onCellFocused: onCellFocused,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             getContextMenuItems: contextMenu,
             columnDialog: columnDialog,
         },
@@ -1043,6 +1148,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         </>}
         {confirmElement}
             {listResetConfirm.element}
+            {control.element}
             {reloadConfirm.element}</>, afterPreferences: <>
     {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
     {/* 2026-09-24 — never a silent short sheet: while the store's field list is not available, say so. The sheet reloads

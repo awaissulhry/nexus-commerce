@@ -23,6 +23,9 @@
 }
 .nds-source-indicator.nds-source-indicator > svg { flex: 0 0 auto; }
 .nds-source-indicator.nds-source-indicator--label { justify-content: flex-start; }
+/* A routine source: the muted text colour, full colour again on hover and focus. */
+.nds-source-indicator.nds-source-indicator--quiet { color: var(--nds-text-muted); }
+.nds-source-indicator.nds-source-indicator--quiet:focus-visible { color: var(--nds-text); }
 button.nds-source-indicator.nds-source-indicator { cursor: pointer; }
 button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
 .nds-source-indicator.nds-source-indicator:focus-visible {
@@ -1036,6 +1039,16 @@ body.nds-drawer-resizing * {
   border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-md);
   color: var(--nds-text-3);
+}
+/* Sticky, so the search stays in view while the list scrolls: the grid opens a long list scrolled to its value, which left
+   the field above the fold with the caret still in it (P0, 2026-09-30). `top: -5px` covers the panel's own padding. */
+.nds-combo-pop > .nds-combo-search {
+  position: sticky;
+  top: -5px;
+  z-index: 1;
+  background: var(--nds-surface);
+  /* paints its 5px bottom margin too, so a half-scrolled row does not show through the gap */
+  box-shadow: 0 5px 0 var(--nds-surface);
 }
 .nds-combo-search svg {
   flex-shrink: 0;

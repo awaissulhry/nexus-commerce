@@ -308,16 +308,20 @@ describe('eBay channel-file requests (L3-1, L3-2)', () => {
     const operator = await plan([{ ...ebay({ field: 'itemSpecifics.Tipo di giacca', value: 'Giacca da moto' }), origin: undefined }])
     expect(operator.issues[0].message).toBe('This attribute is not declared by the listing category')
   })
-  it('keeps an eBay value outside the listed choices as a named warning; Amazon stays strict', async () => {
+  // P1 (`value-verdict.ts`) — every edit path, imports included, stores an off-list value and names it; the channel's
+  // publish decides (eBay warns, Amazon blocks). CFI-5's eBay exception is now the rule on every channel.
+  it('keeps a value outside the listed choices as a named warning, on eBay and on Amazon', async () => {
     const choice = { ...fields[2], selectionOnly: true, options: ['Nero', 'Blu'] }
     fields.push({ ...choice, fieldKey: 'season', sheetKey: 'season', label: 'Stagione', options: ['Tutte le stagione', 'Estate'], channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Stagione'] } } as never)
     try {
       const kept = await plan([ebay({ field: 'season', value: 'Tutte le stagioni' })])
       expect(kept.issues).toEqual([])
-      expect(kept.warnings.join(' ')).toContain('Stagione "Tutte le stagioni" is not one of eBay\'s listed choices')
+      expect(kept.warnings.join(' ')).toContain('Stagione contains an unaccepted value')
+      expect(kept.warnings.join(' ')).toContain('Imported as written')
       expect(kept.targets[0].patch.platformAttributes).toMatchObject({ itemSpecifics: { Stagione: 'Tutte le stagioni' } })
       const amazon = await plan([cf({ field: 'season', value: 'Tutte le stagioni' })])
-      expect(amazon.issues[0].message).toContain('contains an unaccepted value')
+      expect(amazon.issues).toEqual([])
+      expect(amazon.warnings.join(' ')).toContain('contains an unaccepted value')
     } finally { fields.pop() }
   })
 })

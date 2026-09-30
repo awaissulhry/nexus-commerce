@@ -446,14 +446,19 @@ export interface SheetWriteResult {
    * instead of stuck one version behind for the rest of the session.
    */
   version?: number
-  /** Per-cell outcomes, when the server answers per field. Absent ⇒ `ok` applies to every cell. */
-  cells?: Record<string, { ok: boolean; reason?: string; unreachable?: boolean }>
+  /**
+   * Per-cell outcomes, when the server answers per field. Absent ⇒ `ok` applies to every cell. `warning`: the value
+   * was STORED and the server named a problem with it (P1: validation warns while editing) — kept on the cell.
+   */
+  cells?: Record<string, { ok: boolean; reason?: string; unreachable?: boolean; warning?: string }>
   /** True when the server's answer means the grid's copy of this row is stale. */
   conflict?: boolean
 }
 
 export interface SheetWriterOptions<T> {
   tracker: CellSaveTracker
+  /** Keep host-owned write metadata when a read or an edit supplies a replacement row. */
+  mergeRow?: (previous: T | undefined, incoming: T, knownVersion: number | undefined) => T
   /** Send one row's batch. Never throws for a refusal. */
   commit: (req: SheetWriteRequest<T>) => Promise<SheetWriteResult>
   /** The live grid, for repainting cells. May return null before the grid is ready. */
@@ -618,8 +623,8 @@ export class SheetWriter<T> {
       // Guarding only "a write is in flight" is not enough: the damaging order is the refetch
       // resolving AFTER the save completes, when nothing is in flight at all.
       const known = this.versions.get(r.id)
+      if (r.row !== undefined) this.rememberRow(r.id, r.row)
       if (typeof r.version === 'number' && (known === undefined || r.version > known)) this.versions.set(r.id, r.version)
-      if (r.row !== undefined) this.rows.set(r.id, r.row)
     }
   }
 
@@ -628,13 +633,17 @@ export class SheetWriter<T> {
     return this.versions.get(rowId)
   }
 
+  private rememberRow(rowId: string, row: T): void {
+    this.rows.set(rowId, this.opts.mergeRow ? this.opts.mergeRow(this.rows.get(rowId) ?? undefined, row, this.versions.get(rowId)) : row)
+  }
+
   /**
    * Queue one cell. Paints it `saving` immediately, so a burst of 100 pasted cells reads as work in
    * progress from the first frame rather than after the first response.
    */
   set(rowId: string, colId: string, value: unknown, opts: { row?: T; intent?: SheetWriteIntent } = {}): void {
     if (this.destroyed) return
-    if (opts.row !== undefined) this.rows.set(rowId, opts.row)
+    if (opts.row !== undefined) this.rememberRow(rowId, opts.row)
     const q = this.queues.get(rowId) ?? { cells: new Map<string, { value: unknown; intent: SheetWriteIntent }>(), timer: null, inFlight: false }
     // The LAST edit to a cell inside the window wins — its intent along with its value, so a
     // reset following a set is a reset and not a set carrying a stale null.
@@ -752,6 +761,7 @@ export class SheetWriter<T> {
     this.inFlightCells.set(rowId, batch.length)
     this.emit()
 
+    const sentRow = this.rows.get(rowId) ?? null
     let result: SheetWriteResult
     let rejected = false
     try {
@@ -794,7 +804,7 @@ export class SheetWriter<T> {
       try {
         result = await this.opts.commit({
           rowId,
-          row: this.rows.get(rowId) ?? null,
+          row: sentRow,
           cells: batch,
           expectedVersion: this.versions.get(rowId),
         })
@@ -813,15 +823,22 @@ export class SheetWriter<T> {
     }
 
     if (generation !== this.generation) return
-    this.settle(rowId, q, batch, result, rejected)
+    this.settle(rowId, q, batch, result, rejected, sentRow)
   }
 
   /**
    * Paint one row's answer — the SAME code for the per-row path and for each row of a batch, so the two cannot drift.
    */
-  private settle(rowId: string, q: RowQueue, batch: SheetWriteCell[], result: SheetWriteResult, rejected: boolean,
+  private settle(rowId: string, q: RowQueue, batch: SheetWriteCell[], result: SheetWriteResult, rejected: boolean, sentRow: T | null,
     refusalSink?: Array<{ rowId: string; colId: string; reason?: string }>): void {
-    if (typeof result.version === 'number') this.versions.set(rowId, result.version)
+    // A read may replace the row while commit updates the captured row. Reconcile host metadata
+    // onto the current row before queued edits resume; its current values remain authoritative.
+    const current = this.rows.get(rowId)
+    if (sentRow && current && current !== sentRow && this.opts.mergeRow) {
+      this.rows.set(rowId, this.opts.mergeRow(sentRow, current, this.versions.get(rowId)))
+    }
+    // Another alias can confirm a newer shared version before this captured batch result settles.
+    if (typeof result.version === 'number') this.seed([{ id: rowId, version: result.version }])
     if (result.conflict) this.opts.onConflict?.(rowId, result.version)
 
 
@@ -838,7 +855,11 @@ export class SheetWriter<T> {
       // network error and said so. Both mean the same thing: no answer, so no verdict.
       const noAnswer = rejected || (own?.unreachable ?? result.unreachable) === true
       const state = ok ? 'saved' : noAnswer ? 'unknown' : 'refused'
-      if (!q.cells.has(colId)) this.opts.tracker.set(rowId, colId, state, noAnswer ? 'Connection lost — refresh to see whether this saved.' : reason)
+      const warning = ok ? own?.warning : undefined
+      if (!q.cells.has(colId)) {
+        if (warning) this.opts.tracker.setSavedWithWarning(rowId, colId, warning)
+        else this.opts.tracker.set(rowId, colId, state, noAnswer ? 'Connection lost — refresh to see whether this saved.' : reason)
+      }
       // The cell the operator has already re-edited (`q.cells.has(colId)`) keeps no mark, so it gets
       // no announcement either: the refusal is about a value that is no longer on screen.
       if (state === 'refused' && !q.cells.has(colId)) refused.push({ rowId, colId, reason })
@@ -862,11 +883,11 @@ export class SheetWriter<T> {
       void this.reconcile(rowId, Object.fromEntries(batch.filter(b => result.cells?.[b.colId]?.unreachable ?? (rejected || result.unreachable === true)).map(b => [b.colId, b])))
     }
 
-    // A `saved` mark fades; a `refused` one stays until the operator edits the cell again.
-    const fading = settledCols.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved')
+    // A `saved` mark fades; a `refused` one — and a saved one with the server's warning — stays until the cell is edited again.
+    const fading = settledCols.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved' && !this.opts.tracker.get(rowId, c)?.warning)
     if (fading.length) {
       setTimeout(() => {
-        const cleared = fading.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved')
+        const cleared = fading.filter((c) => this.opts.tracker.get(rowId, c)?.state === 'saved' && !this.opts.tracker.get(rowId, c)?.warning)
         for (const c of cleared) this.opts.tracker.clear(rowId, c)
         if (cleared.length) {
           this.repaint(rowId, cleared)
@@ -934,7 +955,7 @@ export class SheetWriter<T> {
       const q = this.queues.get(request.rowId)
       if (!q) continue
       const result = results.get(request.rowId) ?? { ok: false, unreachable: true, reason: 'The save answered without this row. Checking whether it saved…' }
-      this.settle(request.rowId, q, batches.get(request.rowId)!, result, rejected, refused)
+      this.settle(request.rowId, q, batches.get(request.rowId)!, result, rejected, request.row, refused)
     }
     if (refused.length) this.opts.onRefused?.(refused)
     // Cells edited while this call was on the wire go now, as the next call.

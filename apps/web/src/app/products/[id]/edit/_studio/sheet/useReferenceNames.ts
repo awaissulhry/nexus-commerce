@@ -29,7 +29,10 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
     const raw = row.values[column.key]?.value
     try { return (column.shopifyField!.type.startsWith('list.') && typeof raw === 'string' ? JSON.parse(raw) : [raw]).filter((id: unknown): id is string => typeof id === 'string' && id.startsWith('gid://shopify/')) } catch { return [] }
   })))].sort().join(',') : ''
-  const coordinate = JSON.stringify([channel, market, connectionId, categoryIds, productTypes, browseNodeIds, keys, shopifyIds, sheet?.family?.id, sheet?.scope.locale])
+  const shopifyReferenceKeys = shopifyFields.map(column => column.key).sort().join(',')
+  // P2 (I4-4) — everything the lookups read, and nothing else: a read of the same sheet (new objects, same facts) or an
+  // edit to a value that is not a reference asks for no name again.
+  const coordinate = JSON.stringify([channel, market, connectionId, categoryIds, productTypes, browseNodeIds, keys, shopifyIds, shopifyReferenceKeys, sheet?.family?.id, sheet?.scope.locale])
   const [resolved, setResolved] = useState<{ coordinate: string; labels: ReferenceLabels } | null>(null)
   /* 2026-09-24 — pictures for Shopify references (files, video posters, products), from the same lookup as their
      names, so a file cell can show the image itself. Display only; never a value. */
@@ -109,7 +112,7 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
     // Each lookup settles independently. Unavailable names keep the original ID visible.
     void Promise.allSettled(tasks)
     return () => abort.abort()
-  }, [coordinate, channel, market, connectionId, categoryIds, productTypes, browseNodeIds, keys, shopifyIds, sheet?.family?.id, sheet?.scope.locale, sheet?.columns])
+  }, [coordinate]) // every value the lookups read is in `coordinate`; the sheet's object identity is not
 
   return useMemo(() => {
     if (!sheet) return null

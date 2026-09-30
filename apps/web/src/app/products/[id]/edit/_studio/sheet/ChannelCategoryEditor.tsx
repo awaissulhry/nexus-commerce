@@ -4,12 +4,14 @@ import Link from '@/lib/workspaces/Link'
 import { Button } from '@/design-system/primitives'
 import { categoryHref } from '@/app/catalog/categories/api'
 import { AsyncListboxPanel } from '@/design-system/components'
+import { typedStart } from '@/design-system/grid'
 import { loadCategoryOptions, type CategoryOption } from './categoryOptions'
 
-export function ChannelCategoryEditor({ value, onValueChange, channel, market, accountId, stopEditing }: {
-  value: unknown; onValueChange: (value: unknown) => void; channel: 'AMAZON' | 'EBAY' | 'ETSY'; market: string; accountId?: string; stopEditing: (cancel?: boolean) => void
+export function ChannelCategoryEditor({ value, onValueChange, channel, market, accountId, stopEditing, eventKey }: {
+  value: unknown; onValueChange: (value: unknown) => void; channel: 'AMAZON' | 'EBAY' | 'ETSY'; market: string; accountId?: string; stopEditing: (cancel?: boolean) => void; eventKey?: string | null
 }) {
-  const [query, setQuery] = useState('')
+  // The key that opened the cell by typing starts the search; the grid consumed it (P0, 2026-09-30).
+  const [query, setQuery] = useState(() => typedStart(eventKey))
   const [revision, setRevision] = useState(0)
   const remoteQuery = query.trim()
   const key = JSON.stringify([channel, market, accountId, remoteQuery, revision])
@@ -32,9 +34,10 @@ export function ChannelCategoryEditor({ value, onValueChange, channel, market, a
   }, [channel, market, accountId, remoteQuery, revision, key, needsSearch])
 
   const cancel = () => stopEditing(true)
+  const toCell = (chosen: string) => channel === 'ETSY' ? Number(chosen) : chosen
   const commit = (chosen: string) => {
     if (chosen === String(value ?? '')) return cancel()
-    onValueChange(channel === 'ETSY' ? Number(chosen) : chosen)
+    onValueChange(toCell(chosen))
     stopEditing()
   }
   return <div><AsyncListboxPanel label={channel === 'EBAY' ? 'Search eBay categories' : channel === 'ETSY' ? 'Search Etsy categories' : 'Search Amazon product types'}
@@ -43,5 +46,7 @@ export function ChannelCategoryEditor({ value, onValueChange, channel, market, a
     message={matches.length === 50 ? 'Showing the first 50 matches. Refine your search to narrow the list.' : undefined}
     emptyMessage={needsSearch ? 'Enter at least 2 characters to find a category.' : 'No categories match your search.'}
     onRetry={error ? () => setRevision(value => value + 1) : undefined} onCancel={cancel} onCommit={commit}
+    onKeyChoice={chosen => { if (chosen !== null && chosen !== String(value ?? '')) onValueChange(toCell(chosen)) }}
+    currentLabel={value == null || value === '' ? undefined : String(value)}
     style={{ width: 'min(480px, 85vw)' }} /><Button asChild size="xs" variant="link"><Link href={categoryHref('assignments', { channel, market })} onClick={cancel}>Manage categories</Link></Button></div>
 }

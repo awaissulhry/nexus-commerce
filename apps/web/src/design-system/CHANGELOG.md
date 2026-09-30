@@ -1,3 +1,47 @@
+## Save replies reconcile replacement rows — 2026-09-30
+
+**`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Factory.
+
+## Replacement rows keep confirmed write versions — 2026-09-30
+
+**`SheetWriter`** accepts an optional `mergeRow(previous, incoming, knownVersion)` function on row seeds and edits. Product sheets use it to retain confirmed content and listing versions without replacing edited values. Ownership rules stay in the sheet. Mirrored in Factory.
+
+## Batch replies keep newer version numbers — 2026-09-30
+
+**`SheetWriter`** keeps the highest confirmed row version when a save finishes. An older reply cannot undo a newer version learned from another alias, so the next edit uses the right number. Uses the existing seed rule. Mirrored in Factory.
+
+## Clear is reachable with the arrow keys — 2026-09-30
+
+**`ListboxPanel`** lets ArrowUp reach Clear from the first option. Enter and Tab report an empty value before a grid ends the edit. Focusing Clear also updates the keyboard choice. A missing stored value still stays unchanged until the operator chooses. Mirrored in Factory.
+
+## A short list takes the keyboard before it is painted — 2026-09-30
+
+Product sheet P2 (`fix/product-sheet-editing`). **`ListboxPanel`** without a search field focuses its container in a layout effect (it was a passive effect, after the paint): an Enter-then-↓ on a busy page reached the grid cell under the list, and Tab then committed nothing (the product sheet's list suite failed 2–3 times in 8 runs). The search field's `autoFocus` already took focus in the commit. Mirrored in Factory: `ListboxPanel.tsx`.
+
+## A source mark in a grid without hints mounts no tooltip — 2026-09-30
+
+Product sheet P2 (`fix/product-sheet-editing`, speed: a horizontal scroll of a 209-column channel sheet rendered 254 components per frame). **`SourceIndicator`** no longer mounts its **`Tooltip`** inside a host that turned hints off (`TooltipPortalProvider disabled`, the channel grid): the Tooltip rendered only its trigger there, so the markup is unchanged and one component per cell is gone. **`useTooltipsDisabled()`** (primitives `Tooltip.tsx`) tells a component it sits in such a host. Mirrored in Factory: `SourceIndicator.tsx`, `primitives/Tooltip.tsx`.
+
+## A save that answers with a warning says so on its cell — 2026-09-30
+
+Product sheet P1 review (3): a save the server accepts with a warning (eBay's 55-character subtitle, a list value the channel may not take) showed as a plain green save and the sentence was lost. **`CellSaveEntry`** carries **`warning`**; **`CellSaveTracker.setSavedWithWarning`** keeps a saved-with-warning cell (it does not fade, **`warnedCount`** counts them); **`saveNote(entry)`** gives the cell's note: the refusal's reason, or "Saved with a warning: <the server's sentence>". **`SheetWriter`**: a result cell may carry **`warning`** (`{ ok: true, warning }`), and settle marks it. **`roundTripClassRules`**: **`nds-cell-is-saved-warned`** (the warning corner and a 1 px `--nds-warning` ring, `grid.css`). **`GridSheetStatus`** takes **`warned`**: "Saved HH:MM with N warnings". Mirrored in Factory: `roundTrip.ts`, `sheetWriter.ts`, `editors/index.ts`, `theme/grid.css` (Factory has no `GridSheet`).
+
+## Long text is never cut at 200 characters — 2026-09-30
+
+Product sheet P1. **`longTextEditor`** always passes a browser limit far above any channel cap (**`NO_TEXT_LIMIT`**, **`textLimitFor(cap)`**): AG's `agLargeTextCellEditor` sets `maxLength || 200`, so a long-text cell with no limit stopped typing at 200 characters and a capped one at its cap. A channel's cap is a warning (the counter and the cell's tint), never a browser stop. Mirrored in Factory.
+
+## refusalWords: a variation axis says so — 2026-09-30
+
+Product sheet P1 (`fix/product-sheet-editing`, report 2 I-11: the family row was locked on every per-variant column with the claim "this is a variation axis"). **`refusalWords`**' `per-variant-on-parent` takes **`axis`**: a real axis reads "… is a variation axis — each variation has its own value, so the parent has none. Open a variation row to edit it."; any other per-variant column keeps "… is set per variation — open a variation row to edit it, not the parent." (Not in Factory.)
+
+## SourceIndicator `quiet` — 2026-09-30
+
+Product sheet P1 (`fix/product-sheet-editing`: the source of every cell is visible on every channel; eBay, Amazon and Shopify hid it). **`SourceIndicator`** takes **`quiet`**: a routine source (a value that follows somewhere else) is drawn in `--nds-text-muted`, full colour on hover and keyboard focus (`.nds-source-indicator--quiet`, `components.css`). The icon, its name and its action stay; nothing is hidden. Catalog: the value-source row shows it. Mirrored in Factory: `SourceIndicator.tsx`, `styles/components.css`.
+
+## Lists in the grid: Enter and Tab choose, one click opens, the first typed key counts — 2026-09-30
+
+Product sheet P0 (`fix/product-sheet-editing`; measured in production 2026-09-29: Enter and Tab closed every list with its old value). **`ListboxPanel`** gains **`onKeyChoice`** (Enter/Tab report the highlighted option in the CAPTURE phase, before AG's popup listener ends the edit; the owner then lets the grid commit and move, and the panel does not also commit Enter), **`initialQuery`** (the search starts with AG's `eventKey`, so the key that opened the cell by typing is not lost), and **`allowCustom`** (the typed text is offered LAST as `Use "…"`, the only row when nothing matches). A stored value the list does not hold now highlights NOTHING until the operator moves or types, so Enter keeps it instead of committing row 1. A searching panel keeps its keyboard highlight in view; its search field is sticky (`components.css`). **`AsyncListboxPanel`**: the same rule (no highlight on a stored value the loaded page lacks; Enter keeps it), **`onKeyChoice`** for Tab, **`currentLabel`** ("Current: …"). **`OptionList`**: **`initialQuery`**. Grid: **`SelectPanelEditor`** reports on Enter/Tab, shows a stored off-list value first ("current"), takes **`allowCustom`** and the typed key; **`SelectChevron`** takes **`onOpen`** (one click opens the list; `.nds-ag-chev.is-action`) with **`openCellEditor`**; **`SELECT_CLEAR_LABEL`**; **`ListPanelEditor`** walks its boxes with ↑/↓ and shows stored off-list values; **`MeasureEditor`** keeps a typed digit and Tabs from the number to the units. New helpers in `selectPanelModel.ts`: **`withStoredValue`**, **`typedStart`**. Mirrored in Factory: the same files, and the sticky search rule in its `components.css`.
+
 ## Sheet writer batch mode: one operation, one save — 2026-09-29
 
 Sheet bulk autosave (`fix/sheet-bulk-autosave`). **`SheetWriter`** gains an opt-in batch mode: **`commitBatch`** sends every queued row of one operation (a fill, a paste, an undo) as ONE call and keeps one call in flight for the whole sheet (edits made meanwhile go next, with the versions the first call returned); **`readBackBatch`** resolves every unknown row with ONE read; **`beginOperation` / `endOperation`** fence an operation (a fence holds an edit at most `FENCE_MAX_MS`, counted from the first held edit); **`failedCount` / `retryFailed()`** resend exactly the refused cells. Without `commitBatch` a writer is unchanged (one call per row). `pending` now counts cells in flight, not rows. **`GridSheetStatus`** says "Saving N cells…" while a multi-cell save is on the wire. `grid.css`: a note slot's action keeps its size, and **`.nds-grid-sheet-noteslot.is-urgent`** (a refusal with its Retry) never shrinks, so the footer stays readable at phone width.

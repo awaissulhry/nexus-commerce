@@ -297,7 +297,7 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   shared.country = String(settings.itemLocationCountry ?? origin.country ?? process.env.EBAY_ITEM_COUNTRY ?? '')
   shared.location = String(settings.itemLocation ?? origin.city ?? process.env.EBAY_ITEM_LOCATION ?? '')
   shared.postalCode = String(settings.itemPostalCode ?? origin.postalCode ?? process.env.EBAY_ITEM_POSTAL_CODE ?? '')
-  if (!itemId && (!shared.country || !shared.location)) throw new Error('Configure the item origin country and city for this eBay account before creating a listing.')
+  if (!itemId && (!shared.country || !shared.location)) throw new Error('eBay needs the item location city and country to create a listing. Set "Item location (city)" and "Item location country" on this listing in the sheet, or give the eBay account a default location.')
   if (built.media) await ebayPicturesFromPlan(facts, shared, built.media.channelValues)
   else shared.pictureUrls = galleries.get(parent.id) ?? []
   if (!built.media && shared.variationPictures) {

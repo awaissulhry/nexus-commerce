@@ -6,21 +6,19 @@ import { CellAction } from '@/design-system/components'
 import { SourceIndicator } from '@/design-system/components/SourceIndicator'
 
 import type { CellSaveTracker, ICellRendererParams } from '@/design-system/grid'
-import { CellSaveReason, EmptyValue, LongTextCell, MetafieldValue, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron } from '@/design-system/grid'
+import { CellSaveReason, EmptyValue, LongTextCell, MetafieldValue, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron, openCellEditor, saveNote } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 
 import { hasValue } from './provenance'
 import { withMappingRun } from './rows'
 import { isReferenceField } from '../referenceOptions'
-import { describeValueSource } from './cellDetailsSource'
+import { describeValueSource, isRoutineSource, sourceHoverText } from './cellDetailsSource'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 import type { ChannelSheetRow, SheetColumn } from './types'
 
 export interface CascadeCellParams {
   tracker?: CellSaveTracker
   formattedPreview?: boolean
-  /** Dense marketplace sheets keep only source warnings visible; details retain every source. */
-  hideRoutineSourceIndicators?: boolean
   openEditor?: (row: ChannelSheetRow, column: SheetColumn, anchor: HTMLElement | null) => void
   column: SheetColumn
   /**
@@ -138,23 +136,27 @@ export const CascadeCell = memo(function CascadeCell(
         * item, and falls to a second line. `.nds-cascade` is `inline-flex` with `gap: 6px` and the
         * value is `flex: 1 1 auto`, so as a sibling the value truncates before the glyph moves.
         */}
-      {(column.kind === 'select' || column.kind === 'boolean' || isReferenceField(column.key)) && !isShaped(column) && <SelectChevron />}
+      {(column.kind === 'select' || column.kind === 'boolean' || isReferenceField(column.key)) && !isShaped(column) && <SelectChevron onOpen={openCellEditor(p.api, p.node, column.key)} />}
       {mapped && mapped.errors.length > 0 && (
         <span className="nds-cascade-maperr" aria-label={mappingNote ?? 'Mapping error'}>!</span>
       )}
       {p.openEditor && <CellAction label={`${p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Edit' : 'Details'}: ${row.sku}, ${column.label}`} description={cell?.writeBlockedReason != null ? cell.writeBlockedReason : p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Enter or F2 opens the editor.' : 'Read-only cell. The reason was not reported.'}
         onFocusCell={() => { if (p.node.rowIndex != null) { p.api.setFocusedCell(p.node.rowIndex, column.key); p.api.clearCellSelection(); p.api.addCellRange({ rowStartIndex: p.node.rowIndex, rowEndIndex: p.node.rowIndex, columns: [column.key] }) } }}
         onActivate={anchor => p.openEditor?.(row, column, anchor)} />}
-      {(!p.hideRoutineSourceIndicators || source.kind === 'warning') && <SourceIndicator
+      {/* P1 — the source is always visible, on every channel. The channel grid turns the portal hints off
+          (`TooltipPortalProvider disabled`), so the mark carries its own native hover text naming the source. */}
+      <SourceIndicator
         kind={source.kind}
         label={source.label}
         description={description}
-        tooltip={provenance === 'refused' ? refusedReason ?? undefined : undefined}
+        tooltip={sourceHoverText(source, description, provenance === 'refused' ? refusedReason : null)}
+        quiet={isRoutineSource(source.kind)}
         actionLabel={`Show cell details: ${row.sku}, ${column.label}`}
         onAction={() => onDetails(row, column)}
-      />}
-      <CellSaveReason reason={save?.reason} />
-      <CellSaveMark state={save?.state} />
+      />
+      {/* P2 (I4-8) — mounted only for a cell with a save state: a horizontal scroll mounted both, empty, in every cell. */}
+      {save && <CellSaveReason reason={saveNote(save)} />}
+      {save && <CellSaveMark state={save.state} />}
     </span>
   )
 })
