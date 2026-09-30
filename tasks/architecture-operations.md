@@ -141,9 +141,9 @@ There is no mode variable or `railway up` fallback in these workflows.
 
 The four switches completed on 2026-09-30. Evidence and timings are in
 [the fast-deploy plan](../docs/ci-fast-deploys/PLAN-2026-09-29.md#10-switches-measured-2026-09-30).
-Keep the old `RAILWAY_IMAGE_SERVICES` variable set to all four names until this workflow change is
-merged and any older queued or running release/rollback workflows have finished. Then delete it.
-It is unused by the new workflows, but an old workflow can still read it.
+PR #221 removed mode-variable routing. The old `RAILWAY_IMAGE_SERVICES` variable was deleted on
+2026-09-30 after older queued and running release/rollback workflows finished. The full release test
+then passed without it. Do not replay pre-cutover workflows; start a fresh run from main.
 
 ### What a successful image deploy proves
 
