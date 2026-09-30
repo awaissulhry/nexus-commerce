@@ -98,6 +98,30 @@ describe('a paused draft is inert to every cascade', () => {
     }
   }))
 
+  it('a master price change queues nothing for an UNPAUSED still-draft either, and still queues a DRAFT row with a channel id', () => scoped(async () => {
+    // eBay IT: a still-draft started before drafts were born paused (DRAFT, unpublished, no ItemID, not paused).
+    // Amazon DE: a row whose status says DRAFT but which has a channel id and is published — it reached the channel.
+    const { product, rows } = await seed('DRAFT-SAFETY-PRICE-UNPAUSED', [
+      { marketplace: 'IT', live: true, paused: false },
+      { channel: 'EBAY', marketplace: 'IT', live: false, paused: false },
+      { marketplace: 'DE', live: true, paused: false, status: 'DRAFT' },
+    ])
+    const result = await new MasterPriceService(prisma as never).update(product.id, 13.5, { reason: 'draft-safety' })
+    expect(result.currencyRefused).toEqual([])
+    expect(result.cascadedListingIds.sort()).toEqual([rows.AMAZON_IT.id, rows.EBAY_IT.id, rows.AMAZON_DE.id].sort())
+    expect(await queueFor(rows.EBAY_IT.id, 'PRICE_UPDATE')).toEqual([])
+    expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: rows.EBAY_IT.id } })).toBe(0)
+    // The draft keeps following the master, so Publish sends the current price.
+    expect(await stored(rows.EBAY_IT.id)).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, externalListingId: null, syncPaused: false })
+    expect(Number((await stored(rows.EBAY_IT.id)).price)).toBe(13.5)
+    const queued = [...await queueFor(rows.AMAZON_IT.id, 'PRICE_UPDATE'), ...await queueFor(rows.AMAZON_DE.id, 'PRICE_UPDATE')]
+    expect(queued).toEqual([
+      expect.objectContaining({ channelListingId: rows.AMAZON_IT.id, payload: expect.objectContaining({ price: 13.5 }) }),
+      expect.objectContaining({ channelListingId: rows.AMAZON_DE.id, payload: expect.objectContaining({ price: 13.5 }) }),
+    ])
+    expect(result.queuedSyncIds.sort()).toEqual(queued.map((row) => row.id).sort())
+  }))
+
   it('a master content change queues nothing for a paused row, and queues the live row', () => scoped(async () => {
     const { product, rows } = await seed('DRAFT-SAFETY-CONTENT', [
       { channel: 'AMAZON', marketplace: 'IT', live: true, paused: false },

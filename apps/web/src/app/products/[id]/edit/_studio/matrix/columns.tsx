@@ -31,6 +31,7 @@ import { sharedProgressColumn } from '../sheet/progressColumns'
 import type { AxisSummary } from '../variants/family/coverage'
 
 import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixRowRead } from './contract'
+import { refusedTooltip } from './refusals'
 
 /**
  * The identity column's id — `identity`, the same id the Variants page uses and the one
@@ -259,7 +260,17 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
           /* The app's copy table, verbatim (Appendix A) — the engine asks, the page supplies. */
           copy: MATRIX_COPY,
         }
-        children.push(matrixColumnDef<StudioRow>(kind, o))
+        const def = matrixColumnDef<StudioRow>(kind, o)
+        const cellTooltip = def.tooltipValueGetter
+        const colId = matrixColId(coord.key, kind)
+        /* A refused cell's hover leads with WHY (`refusals.ts`); the footer note is the view, this elaborates. */
+        children.push({
+          ...def,
+          tooltipValueGetter: (p) => {
+            const mark = p.data ? tracker.get(rowId(p.data), colId) : undefined
+            return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, cellTooltip?.(p) as string | undefined)
+          },
+        })
       }
     }
     groups.push({
