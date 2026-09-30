@@ -120,6 +120,48 @@ export interface FollowMasterOpts {
   actor?: string
 }
 
+/**
+ * Invariant B's evidence and verdict, in ONE place for the two primitives below and for any caller that must refuse an
+ * Amazon-managed listing BEFORE it writes (the Studio matrix stages a typed quantity first). FBA exists only on
+ * Amazon; eBay/Shopify/Woo are always merchant-fulfilled, so a product's Amazon-FBA status never makes a non-Amazon
+ * listing Amazon-managed. Fail-closed: any FBA signal counts. READ-ONLY — StockLevel is never written here.
+ */
+async function fbaStockByProduct(productIds: readonly string[]): Promise<Map<string, number>> {
+  const stockRows = await prisma.stockLevel.findMany({
+    where: { productId: { in: [...productIds] }, location: { type: 'AMAZON_FBA' } },
+    select: { productId: true, quantity: true },
+  })
+  const byProduct = new Map<string, number>()
+  for (const s of stockRows) byProduct.set(s.productId, (byProduct.get(s.productId) ?? 0) + s.quantity)
+  return byProduct
+}
+
+type ManagedCandidate = {
+  productId: string
+  channel: string
+  fulfillmentMethod: string | null
+  platformAttributes: unknown
+  product?: { fulfillmentMethod: string | null } | null
+}
+function isAmazonManaged(cl: ManagedCandidate, fbaQtyByProduct: Map<string, number>): boolean {
+  return cl.channel === 'AMAZON' && isFbaListing(
+    { fulfillmentMethod: cl.fulfillmentMethod, platformAttributes: cl.platformAttributes },
+    { fulfillmentMethod: cl.product?.fulfillmentMethod },
+    { fbaStockQty: fbaQtyByProduct.get(cl.productId) ?? 0 },
+  )
+}
+
+/** The listings among `listingIds` that the primitives below would skip as Amazon-managed (FBA) — same evidence. */
+export async function amazonManagedListingIds(listingIds: readonly string[]): Promise<Set<string>> {
+  if (listingIds.length === 0) return new Set()
+  const rows = await prisma.channelListing.findMany({
+    where: { id: { in: [...listingIds] } },
+    select: { id: true, productId: true, channel: true, fulfillmentMethod: true, platformAttributes: true, product: { select: { fulfillmentMethod: true } } },
+  })
+  const fba = await fbaStockByProduct([...new Set(rows.map((r) => r.productId))])
+  return new Set(rows.filter((r) => isAmazonManaged(r, fba)).map((r) => r.id))
+}
+
 export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<FollowMasterResult> {
   const { productIds, channel, follow, actor } = opts
   const result: FollowMasterResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
@@ -147,22 +189,11 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
 
   // FBA stock (fail-closed FBA evidence). READ-ONLY — StockLevel is never written here. The FOLLOW
   // number is read per chunk, inside its transaction, from the product's ledger (below).
-  const stockRows = await prisma.stockLevel.findMany({
-    where: { productId: { in: productIds }, location: { type: 'AMAZON_FBA' } },
-    select: { productId: true, quantity: true },
-  })
-  const fbaQtyByProduct = new Map<string, number>()
-  for (const s of stockRows) fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
+  const fbaQtyByProduct = await fbaStockByProduct(productIds)
 
   const applicable = listings.filter((cl) => {
-    // Invariant B: skip FBA (fail-closed — any FBA signal ⇒ leave it alone).
-    // FBA only exists on AMAZON; eBay/Shopify/Woo are always merchant-fulfilled
-    // (FBM), so the product's Amazon-FBA status must NOT skip a non-Amazon listing.
-    const fba = cl.channel === 'AMAZON' && isFbaListing(
-      { fulfillmentMethod: cl.fulfillmentMethod, platformAttributes: cl.platformAttributes },
-      { fulfillmentMethod: cl.product?.fulfillmentMethod },
-      { fbaStockQty: fbaQtyByProduct.get(cl.productId) ?? 0 },
-    )
+    // Invariant B: skip FBA (fail-closed — any FBA signal ⇒ leave it alone; `isAmazonManaged`).
+    const fba = isAmazonManaged(cl, fbaQtyByProduct)
     if (fba) {
       result.skippedFba++
       result.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'SKIPPED_FBA', quantity: null })
@@ -443,20 +474,11 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
   if (listings.length === 0) return result
 
   // FBA stock (fail-closed FBA evidence); the buffer write reads the ledger per chunk, below.
-  const stockRows = await prisma.stockLevel.findMany({
-    where: { productId: { in: productIds }, location: { type: 'AMAZON_FBA' } },
-    select: { productId: true, quantity: true },
-  })
-  const fbaQtyByProduct = new Map<string, number>()
-  for (const s of stockRows) fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
+  const fbaQtyByProduct = await fbaStockByProduct(productIds)
 
   const applicable = listings.filter((cl) => {
-    // Invariant B: skip FBA fail-closed (FBA only exists on AMAZON).
-    const fba = cl.channel === 'AMAZON' && isFbaListing(
-      { fulfillmentMethod: cl.fulfillmentMethod, platformAttributes: cl.platformAttributes },
-      { fulfillmentMethod: cl.product?.fulfillmentMethod },
-      { fbaStockQty: fbaQtyByProduct.get(cl.productId) ?? 0 },
-    )
+    // Invariant B: skip FBA fail-closed (`isAmazonManaged`).
+    const fba = isAmazonManaged(cl, fbaQtyByProduct)
     if (fba) {
       result.skippedFba++
       result.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'SKIPPED_FBA', buffer: cl.stockBuffer ?? 0, quantity: null })

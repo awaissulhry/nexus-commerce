@@ -51,7 +51,7 @@ import {
 } from '@nexus/shared/matrix-contract'
 import { logger } from '../../utils/logger.js'
 import { outboundSyncQueue, addJobSafely } from '../../lib/queue.js'
-import { setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
+import { setFollowMasterQuantity, setStockBuffer, amazonManagedListingIds } from '../follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
 import { coalescePendingQuantityRows } from '../sync-coalesce.js'
 import { fireOutboundJobs } from '../outbound-enqueue.js'
@@ -141,6 +141,12 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
   const applied = (version = cells.version + 1): MatrixWriteOutcome => ({ ...base, outcome: 'applied', version, ...(expandedTo ? { expandedTo } : {}) })
   const channel = coord.channel as 'AMAZON' | 'EBAY'
   const markets = targets.map((t) => t.marketplace)
+  /* Owner rule: FBA quantity is untouchable. An inventory cell lands on every target — on Amazon EU, every open EU row
+     of the SKU — and the staging below writes them BEFORE the primitive skips an FBA row. So an Amazon-managed target
+     refuses the cell here, with the primitive's own verdict (`amazonManagedListingIds`) and the pin step's sentence,
+     and nothing is written: not the FBA row, and not half of the group either. */
+  const amazonManaged = async () => channel === 'AMAZON' && (await amazonManagedListingIds(targets.map((t) => t.id))).size > 0
+  const managedRefusal = (): MatrixWriteOutcome => ({ ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version })
 
   try {
     switch (w.cell) {
@@ -149,6 +155,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const mode = w.value === 'PINNED' ? 'PINNED' : w.value === 'FOLLOW' ? 'FOLLOW' : null
         if (!mode) return refuse('Mode is Follow or Pinned')
         if (s.mode === mode) return noop()
+        if (await amazonManaged()) return managedRefusal()
         await bumpTx(targets)
         const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: mode === 'FOLLOW', actor: ctx.actor })
         if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version + 1 }
@@ -161,6 +168,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         /* A pinned row's value is `intended` when the resolver speaks and `held` (the lockstep-written quantity) under a
            pause — measured in the rehearsal: comparing `intended` alone spent a version on a re-pin of a paused row. */
         if (s.mode === 'PINNED' && (s.intended ?? s.held) === n) return noop()
+        if (await amazonManaged()) return managedRefusal()
         /* D-MX3: the typed value is staged into `quantity` under CAS; the PIN primitive snapshots exactly that. */
         await bumpTx(targets, { quantity: n })
         const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: false, actor: ctx.actor })
@@ -172,6 +180,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const n = asInt(w.value)
         if (n == null || n < 0) return refuse('A buffer is a whole number, zero or more')
         if (s.buffer === n) return noop()
+        if (await amazonManaged()) return managedRefusal()
         await bumpTx(targets)
         const r = await setStockBuffer({ productIds: [row.id], channel, markets, buffer: n, actor: ctx.actor })
         if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version + 1 }
