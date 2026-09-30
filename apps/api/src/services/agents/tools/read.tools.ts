@@ -7,8 +7,10 @@ import prisma from '../../../db.js'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
+import { likeEscaped } from '../../../lib/like-pattern.js'
 
-const ci = (q: string) => ({ contains: q, mode: 'insensitive' as const })
+// MCP.12 — the caller's text is matched as typed: `_` and `%` in a SKU, a name or an email are characters, not wildcards.
+const ci = (q: string) => ({ contains: likeEscaped(q), mode: 'insensitive' as const })
 
 function orderStatus(o: {
   cancelledAt: Date | null
@@ -23,6 +25,9 @@ function orderStatus(o: {
   return 'pending'
 }
 
+/** MCP.12 — listings a snapshot names; the rest are counted. */
+const SNAPSHOT_LISTINGS = 20
+
 const productSnapshot: AgentTool = {
   name: 'product-snapshot',
   title: 'Product snapshot',
@@ -31,7 +36,11 @@ const productSnapshot: AgentTool = {
   category: 'products',
   riskTier: 'low',
   readOnly: true,
-  description: 'Read a product and summarise its catalog completeness.',
+  description:
+    'Read a product and summarise its catalog completeness, and the channel listings Nexus holds for it and its '
+    + 'variations: each one\'s channel, market and status; draft = Nexus has not sent it yet; linked = it carries the '
+    + 'channel\'s own item id (an ASIN, an eBay item number), so the channel has an item it points at — a draft can be '
+    + 'linked. hasAmazon / hasEbay are true when Nexus holds any listing on that channel, a draft included.',
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
@@ -46,12 +55,18 @@ const productSnapshot: AgentTool = {
         bulletPoints: true,
         keywords: true,
         status: true,
-        amazonAsin: true,
-        ebayItemId: true,
         _count: { select: { images: true, variations: true } },
       },
     })
     if (!p) return { ok: false, error: 'Product not found' }
+    // MCP.12 — the listings themselves, not Product.amazonAsin / ebayItemId: those older columns are not written for
+    // a listing made in Nexus, so the snapshot said "no eBay" while an eBay draft existed. A parent's listings are
+    // usually its variations', so theirs count too.
+    const listings = await prisma.channelListing.findMany({
+      where: { OR: [{ productId: id }, { product: { parentId: id, deletedAt: null } }] },
+      select: { channel: true, marketplace: true, listingStatus: true, externalListingId: true, product: { select: { sku: true } } },
+      orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { product: { sku: 'asc' } }, { id: 'asc' }],
+    })
     const gaps: string[] = []
     if (!p.brand) gaps.push('brand')
     if (!p.productType) gaps.push('productType')
@@ -59,6 +74,8 @@ const productSnapshot: AgentTool = {
     if (!p.bulletPoints?.length) gaps.push('bulletPoints')
     if (!p.keywords?.length) gaps.push('keywords')
     if (!p._count.images) gaps.push('images')
+    const on = (channel: string) => listings.some((l) => l.channel === channel)
+    const drafts = listings.filter((l) => l.listingStatus === 'DRAFT').length
     return {
       ok: true,
       data: {
@@ -67,8 +84,20 @@ const productSnapshot: AgentTool = {
         brand: p.brand,
         productType: p.productType,
         status: p.status,
-        hasAmazon: !!p.amazonAsin,
-        hasEbay: !!p.ebayItemId,
+        hasAmazon: on('AMAZON'),
+        hasEbay: on('EBAY'),
+        listings: listings.slice(0, SNAPSHOT_LISTINGS).map((l) => ({
+          sku: l.product.sku,
+          channel: l.channel,
+          market: l.marketplace,
+          status: l.listingStatus,
+          draft: l.listingStatus === 'DRAFT',
+          // Not "published": 46 of 102 drafts in the development data carry an eBay item number (linked to an
+          // existing item, not yet sent from Nexus), and "draft, published" read as a contradiction.
+          linked: !!l.externalListingId,
+        })),
+        ...(listings.length > SNAPSHOT_LISTINGS ? { moreListings: listings.length - SNAPSHOT_LISTINGS } : {}),
+        listingCounts: { total: listings.length, drafts, linked: listings.filter((l) => !!l.externalListingId).length },
         imageCount: p._count.images,
         variationCount: p._count.variations,
         bulletCount: p.bulletPoints?.length ?? 0,
@@ -91,7 +120,7 @@ const productSearch: AgentTool = {
   category: 'products',
   riskTier: 'low',
   readOnly: true,
-  description: 'Search the catalog by name / SKU / brand.',
+  description: 'Search the catalog by name / SKU / brand. The text is matched as typed: _ and % are characters, not wildcards.',
   async handler(args) {
     const q = String(args.query ?? '').trim()
     const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 50)
@@ -131,7 +160,7 @@ const orderSearch: AgentTool = {
   riskTier: 'low',
   readOnly: true,
   description:
-    'Find recent orders, optionally filtered by marketplace / buyer / status.',
+    'Find recent orders, optionally filtered by marketplace / buyer / status. The buyer text is matched as typed: _ and % are characters, not wildcards.',
   async handler(args) {
     const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100)
     const where: Record<string, unknown> = {}

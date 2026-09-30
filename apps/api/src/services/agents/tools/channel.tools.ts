@@ -15,6 +15,8 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import { CHANNEL_LABELS, channelLabel } from '@nexus/shared/channel-label'
 import prisma from '../../../db.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
+// A SKU prefix as a LIKE pattern's start: `_`, `%` and `\` stand for themselves (Prisma's startsWith does not escape).
+import { likeEscaped } from '../../../lib/like-pattern.js'
 import { isFbaCoordinate } from '../../../lib/amazon-fulfillment.js'
 import {
   DEFAULT_PAGE_SIZE,
@@ -54,8 +56,6 @@ const lower = (value: unknown) => (typeof value === 'string' ? value.trim().toLo
 const clip = (text: string, cap = TEXT_CAP) => (text.length > cap ? `${text.slice(0, cap - 1)}…` : text)
 const iso = (at: Date | null | undefined) => (at ? at.toISOString() : null)
 const money = (value: Prisma.Decimal | null | undefined) => (value == null ? null : Number(value))
-/** A SKU prefix as a LIKE pattern's start: `_`, `%` and `\` stand for themselves (Prisma's startsWith does not escape). */
-const likeEscaped = (text: string) => text.replace(/[\\%_]/g, '\\$&')
 
 // ── Arguments every list shares ─────────────────────────────────────────────────────────────────────
 
