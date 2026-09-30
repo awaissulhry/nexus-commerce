@@ -14,7 +14,7 @@ If no Nexus tools are available, Nexus is not connected, or its server is not sw
 Make sure you know, and ask only for what is missing:
 
 - **Which products**: a SKU or the start of one (a parent SKU also matches its variants), a brand or name, a list of SKUs, or a channel and market.
-- **The change**: a percentage, an amount, or a new price; and any rounding the person wants (to .90 or .99, say). Without one, round to the cent.
+- **The change**: ONE of: a new price for every product (`set`), a percentage (`percent`, e.g. -10), or an amount in the master currency (`amount`, e.g. 2.5). `bulk-price-change` applies the same change to every product and rounds each result to the cent. Other rounding (to .90 or .99, say) cannot be done in one request: say so, and offer the nearest the tool can do.
 - **The price it changes**: `bulk-price-change` sets the **master price** only. Channel listings that follow the master price move with it; listings with their own price do not. A price for one channel only cannot be set from here: say so, and point the person to the listing in Nexus.
 
 ## 2. Gather the products and their current prices
@@ -28,7 +28,7 @@ Make sure you know, and ask only for what is missing:
 
 Keep it short:
 
-- How many products, and the change in one line ("raise the master price 5%, rounded to .90").
+- How many products, and the change in one line ("raise the master price 5%, rounded to the cent").
 - A table of up to 15 rows: SKU, current master price, new master price, change in %. Then "and N more", with the smallest and largest change.
 - Which channel listings will follow: those with `followsMaster: true` and no `override`, under rule `FIXED` (they take the master price) or `PERCENT_OF_MASTER` (master adjusted by their `adjustPercent`). Those with an `override`, `followsMaster: false` or rule `MATCH_AMAZON` keep their price. Give counts per channel, not every row.
 - Ask about anything odd before going on: a new price of 0, a change bigger than 20%, a new price below a listing's sale price, products left out.
