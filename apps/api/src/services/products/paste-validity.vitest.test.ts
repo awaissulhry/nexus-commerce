@@ -54,11 +54,19 @@ const save = (changes: Array<{ id: string; field: string; value: unknown }>) => 
 })
 const stored = (id: string, key: string) => scoped(async () => ((await prisma.channelListing.findFirstOrThrow({ where: { productId: id } })).overrideData as any)?.[key])
 
-it('🔴 a value over the column\'s cap is refused, named per row, and not stored', async () => {
+it('🔴 P1 — a value over the column\'s cap is STORED, and the answer names the cap per row (publish blocks it)', async () => {
   const result = await save([{ id: ids[0], field: 'attr_color', value: 'TOOLONG' }])
+  expect(result).toMatchObject({ updated: 1 })
+  expect(result.errors ?? []).toEqual([])
+  expect(result.warnings).toEqual([expect.objectContaining({ id: ids[0], field: 'attr_color', warning: expect.stringContaining('exceeds 5 characters') })])
+  expect(await stored(ids[0], 'color')).toBe('TOOLONG')
+})
+
+it('🔴 P1 — a value the field\'s type cannot hold (a list sent to one value) is refused, named, and not stored', async () => {
+  const result = await save([{ id: ids[0], field: 'attr_color', value: ['Nero', 'Rosso'] }])
   expect(result.refused).toBe(400)
-  expect(result.errors).toEqual([expect.objectContaining({ id: ids[0], field: 'attr_color', error: expect.stringContaining('at most 5 characters') })])
-  expect(await stored(ids[0], 'color')).toBeUndefined()
+  expect(result.errors).toEqual([expect.objectContaining({ id: ids[0], field: 'attr_color', error: expect.stringContaining('takes ONE value') })])
+  expect(await stored(ids[0], 'color')).toBe('TOOLONG')
 })
 
 it('🔴 P6 — a value off a CHANNEL\'s closed list is stored (the channel flags it; it is never refused on save)', async () => {
@@ -74,8 +82,8 @@ it('control: a valid value is stored', async () => {
 })
 
 it('🔴 a paste across rows is judged PER ROW: the valid row is stored, the bad row is refused by name and not stored', async () => {
-  const result = await save([{ id: ids[1], field: 'attr_voltage', value: 'A' }, { id: ids[1], field: 'attr_color', value: 'TOOLONG' }])
-  expect(result).toMatchObject({ updated: 1, errors: [expect.objectContaining({ id: ids[1], field: 'attr_color', error: expect.stringContaining('at most 5 characters') })] })
+  const result = await save([{ id: ids[1], field: 'attr_voltage', value: 'A' }, { id: ids[1], field: 'attr_color', value: ['Nero', 'Rosso'] }])
+  expect(result).toMatchObject({ updated: 1, errors: [expect.objectContaining({ id: ids[1], field: 'attr_color', error: expect.stringContaining('takes ONE value') })] })
   expect(await stored(ids[1], 'voltage')).toBe('A')
   expect(await stored(ids[1], 'color')).toBeUndefined()
 })

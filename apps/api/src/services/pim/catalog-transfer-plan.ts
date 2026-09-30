@@ -11,7 +11,8 @@ import { getFieldCatalogue, type CatalogueField } from './mapping/field-catalogu
 import { withCachedSchemas } from './cached-schema-context.js'
 import { validateChannelValue } from './mapping/validate-channel-value.js'
 import { contentWireValue } from './content-read.js'
-import { coerceForShape } from './sheet-values.js'
+import { checkForStorage, coerceForShape } from './sheet-values.js'
+import { editVerdict } from './value-verdict.js'
 import { channelValuePatch, jsonRecord, storedChannelState, type ValueRecord } from './channel-value-mutation.js'
 import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
@@ -496,9 +497,12 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             // Only the shape is adjusted here, never the value.
             const wrap = options?.sharedCopy && col.shape === 'list' && value !== null && value !== undefined
               && !Array.isArray(value) && !(typeof value === 'string' && value.trim().startsWith('['))
-            const checked = coerceForShape(col, wrap ? [value] : value)
+            // P1 (`value-verdict.ts`) — the verdict every edit path uses: only what the field's type cannot hold is
+            // refused; an off-list or over-limit value is imported and named in the review.
+            const checked = checkForStorage(col, wrap ? [value] : value)
             if (checked.ok === false) { error(row, checked.error); continue }
             value = checked.value
+            for (const found of checked.findings) warnings.add(`${row.sku} ${col.label}: ${found.message} (row ${row.row}; imported as written).`)
           }
           if (!row.locale && col.storage !== 'categoryAttributes') {
             // PSIE — a variant's INHERIT carries no value of its own: its parent's is used (for `name`, the content
@@ -706,18 +710,13 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
               try { value = await resolveReference({ field: field.fieldKey, value, channel: first.channel, marketplace: first.marketplace, accountId: first.accountId, productType: category }) }
               catch (e) { error(row, e instanceof Error ? e.message : 'This reference could not be verified. Try again.'); continue }
             }
+            // P1 (`value-verdict.ts`) — the verdict every edit path uses: a value the field's type cannot hold is refused;
+            // every other problem (off the channel's list, over a limit) is imported as written and named in the review.
+            // Publish blocks what the channel itself would reject. (CFI-5's eBay-choices exception is now the rule.)
             const checked = validateChannelValue(field, value)
-            let problems = checked.errors
-            // CFI-5 (lane request L3-2) — eBay holds a value outside its own listed choices on a live listing: from the channel's
-            // file that is the channel's fact, kept as written and named in the review. Amazon choices stay strict.
-            if (fromChannelFile(row) && first.channel === 'EBAY') {
-              const choice = problems.filter(e => e.includes('contains an unaccepted value') || e.includes('is deprecated by the channel'))
-              if (choice.length) {
-                warnings.add(`EBAY ${first.marketplace}: ${field.label} ${JSON.stringify(value)} is not one of eBay's listed choices; it is kept exactly as the channel file holds it.`)
-                problems = problems.filter(e => !choice.includes(e))
-              }
-            }
-            if (problems.length) { error(row, problems.join(' ')); continue }
+            const refused = checked.findings.filter(found => editVerdict(found) === 'refuse')
+            if (refused.length) { error(row, refused.map(found => found.message).join(' ')); continue }
+            for (const found of checked.findings) warnings.add(`${first.channel} ${first.marketplace}: ${row.sku} ${field.label}: ${found.message} Imported as written.`)
             value = checked.value
           }
           const changed = cell(row, old, value, state)

@@ -45,8 +45,11 @@ beforeAll(() => scoped(async () => {
 afterAll(async () => { await state.db?.close() })
 
 const source = { tier: 'source' } as const
-/** Two rows of one product: a valid title, and a bullet list over the Amazon·IT cap (R-58 refuses it at the content step). */
-const mixedCap = (id: string) => [{ id, field: 'name', value: `Nuovo ${id.slice(-4)}`, contentAddress: source }, { id, field: 'bulletPoints', value: ['ok', LONG], contentAddress: source }]
+/** Two rows of one product: a valid title, and bullets sent as ONE text where the field takes a list — a value its type
+ *  cannot hold, which P1 (`pim/value-verdict.ts`) still refuses at the content step. */
+const mixedCap = (id: string) => [{ id, field: 'name', value: `Nuovo ${id.slice(-4)}`, contentAddress: source }, { id, field: 'bulletPoints', value: 'one bullet, not a list', contentAddress: source }]
+/** A valid title, and a bullet list over the Amazon·IT cap: P1 stores both and names the cap in a warning. */
+const overCap = (id: string) => [{ id, field: 'name', value: `Nuovo ${id.slice(-4)}`, contentAddress: source }, { id, field: 'bulletPoints', value: ['ok', LONG], contentAddress: source }]
 /** A valid title, and a description sent under the wrong content language (refused INSIDE `applyContentBulk`). */
 const mixedAddress = (id: string) => [{ id, field: 'name', value: `Nuovo ${id.slice(-4)}`, contentAddress: source }, { id, field: 'description', value: 'Beschreibung', contentAddress: { tier: 'language', language: 'de' } }]
 const save = (id: string, changes: unknown[], perRow: boolean) => scoped(async () => {
@@ -57,10 +60,10 @@ const save = (id: string, changes: unknown[], perRow: boolean) => scoped(async (
 const row = (id: string) => scoped(() => prisma.product.findUniqueOrThrow({ where: { id }, select: { name: true, description: true, bulletPoints: true } }))
 const auditFields = (id: string) => scoped(async () => (await prisma.auditLog.findMany({ where: { entityId: id } })).flatMap(a => ((a.metadata as any)?.fields ?? []) as string[]))
 
-it('C1 opt-in: the valid title is stored, the over-cap bullets are refused by name and not stored; the audit names the title only', async () => {
+it('C1 opt-in: the valid title is stored, the bullets its type cannot hold are refused by name and not stored; the audit names the title only', async () => {
   const result = await save(ids.a, mixedCap(ids.a), true)
   expect(result).toMatchObject({ success: true, updated: 1 })
-  expect(result.errors).toEqual([expect.objectContaining({ id: ids.a, field: 'bulletPoints', error: expect.stringMatching(/^Bullet 2 takes at most 20 characters/) })])
+  expect(result.errors).toEqual([expect.objectContaining({ id: ids.a, field: 'bulletPoints', error: expect.stringContaining('takes a LIST of values') })])
   expect(await row(ids.a)).toMatchObject({ name: `Nuovo ${ids.a.slice(-4)}`, bulletPoints: [] })
   const fields = await auditFields(ids.a)
   expect(fields.some(f => f === 'title' || f === 'name')).toBe(true)
@@ -83,6 +86,14 @@ it('C3 without the opt-in (the translation form, restore, the AI writes): the sa
   expect(await row(ids.d)).toMatchObject({ name: 'Vecchio d', description: 'Descrizione d' })
   expect(await auditFields(ids.c)).toEqual([])
   expect(await auditFields(ids.d)).toEqual([])
+})
+
+it('C6 P1: bullets over the channel cap are STORED with the title, and the answer names the cap as a warning', async () => {
+  const result = await save(ids.c, overCap(ids.c), true)
+  expect(result).toMatchObject({ success: true, updated: 2 })
+  expect(result.errors ?? []).toEqual([])
+  expect(result.warnings).toEqual([expect.objectContaining({ id: ids.c, field: 'bulletPoints', warning: expect.stringMatching(/^Bullet 2 takes at most 20 characters/) })])
+  expect(await row(ids.c)).toMatchObject({ name: `Nuovo ${ids.c.slice(-4)}`, bulletPoints: ['ok', LONG] })
 })
 
 it('C4 (source read): only the sheet route passes the opt-in; the three all-or-nothing callers do not', () => {

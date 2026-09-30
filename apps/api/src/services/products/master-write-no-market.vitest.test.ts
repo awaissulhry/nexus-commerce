@@ -77,11 +77,11 @@ it('stores a family attribute with no market, for a product listed on a market',
   expect(await stored(listed, 'fit')).toBe('slim')
 })
 
-it('keeps the business-strict rule with no market: an off-list value is refused and nothing is stored', async () => {
+it('keeps the business-strict rule with no market: an off-list value is stored and named in a warning (P1)', async () => {
   const result = await save(listed, 'attr_protection_level', 'level_9')
-  expect(result.refused).toBe(400)
-  expect(result.errors).toEqual([expect.objectContaining({ field: 'attr_protection_level', error: expect.stringContaining('"level_9" is not one of the allowed values') })])
-  expect(await stored(listed, 'protection_level')).toBeUndefined()
+  expect(result).toMatchObject({ updated: 1 })
+  expect(result.warnings).toEqual([expect.objectContaining({ field: 'attr_protection_level', warning: expect.stringContaining('"level_9" is not one of the allowed values') })])
+  expect(await stored(listed, 'protection_level')).toBe('level_9')
 })
 
 it('keeps the open-list rule with no market: any value on a non-strict list is stored', async () => {
