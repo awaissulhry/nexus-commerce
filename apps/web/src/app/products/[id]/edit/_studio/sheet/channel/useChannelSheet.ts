@@ -406,6 +406,8 @@ export interface ChannelWriteCoord {
    * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
    */
   bulkSend?: BulkSend
+  /** Keep the writer's separate row tokens in step when aliases share one product. */
+  onProductVersionsChanged?: (rows: ChannelSheetRow[]) => void
 }
 
 function reportCreated(req: SheetWriteRequest<ChannelSheetRow>, coord: ChannelWriteCoord, created: CreatedListing[]): void {
@@ -573,8 +575,16 @@ async function commitChannelLanguage(
     const versionOf: 'channelListing' | 'product' | undefined = body?.versionOf
     if (versionOf === 'channelListing' && raw !== undefined && row.listing) row.listing.version = raw
     // The content row the save moved hands its new token to every cell writing to it (bullets, title, …).
-    adoptContentVersions(row, body)
-    const version = versionOf === 'product' ? raw : undefined
+    adoptContentVersions(row, body, family)
+    let version = versionOf === 'product' ? raw : undefined
+    if (res.ok && version !== undefined) {
+      const confirmedVersion = version
+      const moved = [...new Set([row, ...family])].filter(r => r.id === row.id && (r.version === undefined || r.version < confirmedVersion))
+      for (const sibling of moved) sibling.version = confirmedVersion
+      if (moved.length) coord.onProductVersionsChanged?.(moved)
+      // An older answer may arrive after another alias already advanced the shared product.
+      version = Math.max(version, row.version ?? version)
+    }
 
     if (res.status === 404 || res.status === 501) {
       return { ok: false, reason: 'The channel write path is not deployed yet (PES.5)' }
