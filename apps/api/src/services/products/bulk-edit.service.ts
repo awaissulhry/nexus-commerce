@@ -1,6 +1,5 @@
 import { ProductBulkError } from '../../lib/product-bulk-error.js'
 import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
-import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { isLocalizableContent, contentField } from '../pim/content-resolver.js'
 import { applyContentBulk, type ContentEdit, type ContentOwnerVersion } from '../pim/content-bulk-write.js'
@@ -27,11 +26,10 @@ import { checkForStorage, coerceForShape, isBlankValue, parseSlotField, readList
 import { isEbayListingLevel, loadEbayListingAxes } from '../pim/ebay-listing-level.js'
 import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from '../pim/master-field-gate.js'
 import { validationMarketplace } from '../pim/validation-marketplace.js'
-import { auditLogService } from '../audit-log.service.js'
+import { writeBulkEditReceipts } from './bulk-edit-receipts.js'
 import { reevaluateDependents } from '../pim/mapping/cell-formula.service.js'
 import { masterPriceService } from '../master-price.service.js'
 import { applyStockMovement } from '../stock-movement.service.js'
-import { productEventService } from '../product-event.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { isPrimaryChannelConnection, primaryConnectionIds, resolveConnection } from '../connection-resolver.service.js'
 import { normalizeEbayListingValue } from '../pim/ebay-listing-values.js'
@@ -39,6 +37,7 @@ import { numericStorageError } from '../pim/numeric-storage.js'
 import { writeChannelPrices } from '../pim/channel-price-write.service.js'
 import { AMAZON_FULFILMENT_KEY } from '../pim/channel-specs/amazon.js'
 import { setFulfillmentMethod } from '../pim/fulfillment-method.service.js'
+import { UnsupportedPlatformBatch, type PlatformBulkPlan } from './bulk-edit-platform-batch.js'
 
 export interface ProductBulkInput {
   changes: Array<{
@@ -433,9 +432,10 @@ export function setBasedCascadedFields(fieldsByProduct: Map<string, string[]>, m
 }
 
 /** Validate, preview or atomically apply product edits, including their formula dependencies. */
-export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext) {
+export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext,
+  prepareBatch?: (plan: PlatformBulkPlan) => Promise<{ success: boolean; updated: number }>) {
   // Bind mutation promises before constructing them, including facts and formula cascades.
-  if (!activeDatabaseTransaction()) return inDatabaseTransaction(prisma, () => applyProductBulkEdits(input, context))
+  if (!activeDatabaseTransaction()) return inDatabaseTransaction(prisma, () => applyProductBulkEdits(input, context, prepareBatch))
   const { changes, marketplaceContext, marketplaceContexts } =
     input ?? {}
   // Effective context list: prefer the new array, fall back to the
@@ -839,6 +839,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       else contentEdits.push({ change, column: col })
     }
   }
+  // A batch preparation is read-only until its explicit callback below. Content keeps its own ordered writer.
+  if (prepareBatch && (contentEdits.length || errors.length || changes.some(change =>
+    storeFor(change.id, change.field.replace(/^attr_/, ''))?.kind !== 'platformAttributes'))) throw new UnsupportedPlatformBatch('This edit needs the row writer.')
   if (contentEdits.length && !primaryContext) {
     // P1 — a master bullet over a listed channel's cap is stored and flagged; that channel's publish blocks it.
     for (const warning of await masterBulletCapWarnings(contentEdits)) warnings.push(warning)
@@ -1650,7 +1653,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   let noOpVersionOf: 'product' | 'channelListing' | null = null
   let noOpMasterCount = 0
   let noOpChannelCount = 0
-  if (expectedVersion !== undefined && validated.length > 0) {
+  const batchListings: PlatformBulkPlan['listings'] = new Map()
+  if ((expectedVersion !== undefined || prepareBatch) && validated.length > 0) {
     try {
       const ids = [...new Set(validated.map((v) => v.id))]
       const [prodRows, listingRows] = await Promise.all([
@@ -1672,6 +1676,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             })
           : Promise.resolve([]),
       ])
+      if (prepareBatch) for (const listing of listingRows) if (listing.productId) batchListings.set(listing.productId, listing)
       const prodById = new Map(prodRows.map((p) => [p.id, p as unknown as Record<string, unknown>]))
       const listingFor = (pid: string) =>
         (listingRows.find((r) => r.productId === pid) ?? null) as Record<string, unknown> | null
@@ -1820,6 +1825,26 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         for (const candidate of candidates) warnings.push({ id: candidate.id, field: candidate.field, warning: `The channel check is unavailable (${error instanceof Error ? error.message : String(error)}); the value is saved and checked again at publish.` })
       }
     }
+  }
+
+  if (prepareBatch) {
+    // Only independent children of one family. A parent, draft, listing-level value, or dependent formula must keep
+    // the ordered row semantics. Validation above is shared with that path, including partial cells and no-ops.
+    const families = new Set(changeIds.map(id => familyPlace.get(id)?.parentId))
+    if (effectiveContexts.length !== 1 || families.size !== 1 || families.has(undefined) || families.has(null) ||
+      listingLevelFamily.size || validated.some(change => isFulfilmentChange(change) || change.slot !== undefined)) throw new UnsupportedPlatformBatch('This edit is not independent.')
+    const formulas = await prisma.cellFormula.findFirst({ where: { OR: [{ productId: { in: changeIds } }, { product: { parentId: { in: changeIds } } }] }, select: { id: true } })
+    if (formulas) throw new UnsupportedPlatformBatch('Dependent formulas use the synchronous row writer.')
+    const mutations: PlatformBulkPlan['mutations'] = new Map()
+    for (const change of validated) {
+      const key = change.field.replace(/^attr_/, '')
+      const store = storeFor(change.id, key)
+      if (store?.kind !== 'platformAttributes') throw new UnsupportedPlatformBatch('This storage needs the row writer.')
+      const mutation = channelValueMutation(store, [key, change.field], change.reset ? 'INHERIT' : 'SET', change.value)
+      mutations.set(change.id, [...(mutations.get(change.id) ?? []), mutation])
+    }
+    return prepareBatch({ changes: validated, errors, warnings, normalizedChanges, noOpKeys, listings: batchListings, mutations,
+      coordinate: effectiveContexts[0], accountId: connFor.get(effectiveContexts[0].channel) ?? null })
   }
 
   // ── DRY RUN — validation is done; nothing below this point may run ──
@@ -3006,68 +3031,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // from a master one). Approved 2026-09-01 as PES.5 §8 decision 2; the
     // endpoint's request/response contract is unchanged.
     const auditActor = context.userId ?? currentFormulaWrite(context.formulaWriteToken)?.userId ?? null
-    const auditRows = validated.map((c: any) => {
-      const prior = priorById.get(c.id)
-      // `attr_x` writes into categoryAttributes; a bare key is a column. This
-      // mirrors how the change itself is applied, so the recorded `before` is
-      // the value the write actually replaced.
-      const previous = c.target === 'channel' || !capturePrevious || !prior
-        ? undefined
-        : typeof c.field === 'string' && c.field.startsWith('attr_')
-          ? (prior.categoryAttributes as Record<string, unknown> | null)?.[c.field.slice(5)]
-          : prior[c.field]
-      return {
-        userId: auditActor,
-        ip: context.ip ?? null,
-        entityType: 'Product',
-        entityId: c.id,
-        action: 'update',
-        // Written ONLY when actually captured. A `before` of `{ value: null }`
-        // means "it was empty"; omitting the key means "we did not record it".
-        // Collapsing those two into one shape is what makes a history panel lie.
-        ...(previous !== undefined ? { before: { field: c.field, value: previous ?? null } } : {}),
-        after: { field: c.field, value: c.value },
-        metadata: {
-          bulkOperationId: bulkOp.id,
-          cascade: !!c.cascade,
-          source: 'bulk-patch',
-          language: effectiveContexts[0]?.locale ?? PRIMARY_CONTENT_LOCALE,
-          // `effectiveContexts`, NOT the raw body field: that one is optional,
-          // and this tsconfig is not strict, so `.length` on an absent array
-          // would compile clean and then crash the autosave at runtime
-          // (reference_api_tsconfig_not_strict).
-          //
-          // PES.5 / #169 — the layer is now the change's OWN target, not
-          // merely "a context was supplied". A master-targeted change sent
-          // alongside channel contexts still lands on the product, and the
-          // history pane must say which it was.
-          layer: c.target === 'channel' ? 'channel' : 'master',
-          channel: c.target === 'channel' ? effectiveContexts[0]?.channel ?? null : null,
-          marketplace: c.target === 'channel' ? effectiveContexts[0]?.marketplace ?? null : null,
-          aliasKey: c.target === 'channel' ? (effectiveContexts[0] as { aliasKey?: string })?.aliasKey ?? '' : null,
-          accountId: c.target === 'channel' && effectiveContexts.length === 1 ? connFor.get(effectiveContexts[0].channel) ?? null : null,
-        },
-      }
+    await writeBulkEditReceipts([{ operationId: bulkOp.id, changes: validated }], {
+      userId: auditActor, ip: context.ip, capturePrevious, priorById, contexts: effectiveContexts, accounts: connFor,
     })
-    await auditLogService.writeMany(auditRows)
-
-    // Activity consumes the same scoped receipts as field history. Mixed shared/channel
-    // requests must never put another destination's fields in a scoped event.
-    const eventGroups = new Map<string, typeof auditRows>()
-    for (const row of auditRows) {
-      const key = JSON.stringify([row.entityId, row.metadata.layer, row.metadata.channel, row.metadata.marketplace, row.metadata.accountId, row.metadata.aliasKey])
-      eventGroups.set(key, [...(eventGroups.get(key) ?? []), row])
-    }
-    const activityEvents = [...eventGroups.values()].map(rows => ({
-      aggregateId: rows[0].entityId,
-      aggregateType: 'Product' as const,
-      eventType: 'BULK_OP_APPLIED' as const,
-      data: { fields: rows.map(row => row.after), bulkOperationId: bulkOp.id },
-      metadata: { ...rows[0].metadata, source: 'OPERATOR' as const, userId: auditActor },
-    }))
-    const activeTx = activeDatabaseTransaction()
-    if (activeTx) await productEventService.emitManyTx(activeTx, activityEvents)
-    else await productEventService.emitMany(activityEvents)
 
     // Phase 1 — refresh ProductReadCache synchronously for every product
     // this PATCH touched, so the /products grid (which reads the cache)

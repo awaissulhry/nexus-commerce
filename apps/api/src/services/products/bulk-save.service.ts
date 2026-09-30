@@ -10,8 +10,9 @@
  * Here the same rows are ONE transaction:
  *   - each UNIT is exactly what one `PATCH /api/products/bulk` carried (its changes, its destination, its own version
  *     token), and runs through the SAME writer (`applyProductBulkEdits`) — no second implementation of a cell write;
- *   - each unit runs in its own SAVEPOINT (`inSavepoint`): a unit that is refused (a stale version, an invalid value,
- *     a product this business cannot see) is undone alone and reported; every other unit stays saved;
+ *   - independent platform values share the row writer's validation and one guarded set write; each unit keeps its
+ *     original token and receipt. An unsupported or failed batch rolls back before the original units run separately;
+ *   - other units run in their own SAVEPOINT (`inSavepoint`): a refused unit is undone alone and reported;
  *   - work the units share happens ONCE at commit: the family readiness rebuild (the producers are keyed by family)
  *     and the read-cache refresh (`afterDatabaseCommitBatch`);
  *   - a lost race with ANOTHER writer restarts the whole transaction (`inDatabaseTransaction`), never half of it.
@@ -24,6 +25,7 @@
 import prisma from '../../db.js'
 import { inDatabaseTransaction, inSavepoint } from '../../lib/database-context.js'
 import { applyProductBulkEdits, ProductBulkError, type ProductBulkContext, type ProductBulkInput } from './bulk-edit.service.js'
+import { platformBatchGroup, UnsupportedPlatformBatch, writePlatformBatch } from './bulk-edit-platform-batch.js'
 
 /** A 500-row fill of 2 languages is 1,000 units; anything far beyond a sheet's page is not a sheet operation. */
 export const BULK_SAVE_MAX_UNITS = 2_000
@@ -101,21 +103,49 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
   const units = await inDatabaseTransaction(prisma, async () => {
     // Built inside the transaction: a restarted attempt starts from an empty list.
     const results: BulkSaveUnitResult[] = []
-    for (const { key, ...unit } of input.units) {
+    for (let index = 0; index < input.units.length; index++) {
+      const group = platformBatchGroup(input.units, index)
+      if (group.length) {
+        const batch = await inSavepoint(async () => {
+          let prepared: BulkSaveUnitResult[] | undefined
+          await applyProductBulkEdits({ ...group[0], expectedVersion: undefined, changes: group.flatMap(unit => unit.changes) },
+            { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false }, async plan => {
+              prepared = await writePlatformBatch(group, plan, context)
+              return { success: true, updated: plan.changes.length }
+            })
+          if (!prepared) throw new UnsupportedPlatformBatch('The row writer did not prepare this group.')
+          return prepared
+        })
+        if ('value' in batch) {
+          results.push(...batch.value)
+          index += group.length - 1
+          continue
+        }
+        if (!(batch.error instanceof UnsupportedPlatformBatch) && !(batch.error instanceof ProductBulkError && batch.error.statusCode < 500)) {
+          context.logger.warn({ err: batch.error }, '[products/bulk-save] batch rolled back; retrying its original units separately')
+        }
+        // Savepoint rollback restores reads and commit effects too. Preserve every original unit/token for fallback.
+        // Do not retry an unsupported suffix on every row of the same group.
+        for (const { key, ...unit } of group) results.push(await saveUnit(key, unit))
+        index += group.length - 1
+        continue
+      }
+      const { key, ...unit } = input.units[index]
+      results.push(await saveUnit(key, unit))
+    }
+    async function saveUnit(key: string, unit: ProductBulkInput): Promise<BulkSaveUnitResult> {
       const outcome = await inSavepoint(() => applyProductBulkEdits(unit, { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false }))
       if ('value' in outcome) {
-        results.push({ key, status: 200, body: outcome.value as Record<string, unknown> })
-        continue
+        return { key, status: 200, body: outcome.value as Record<string, unknown> }
       }
       const error = outcome.error
       if (error instanceof ProductBulkError && error.statusCode < 500) {
-        results.push({ key, status: error.statusCode, body: error.details })
-        continue
+        return { key, status: error.statusCode, body: error.details }
       }
       // Rolled back to its savepoint, so the client may say "not saved" (never "unknown"); the raw text stays in `detail`.
       context.logger.error({ err: error, unit: key }, '[products/bulk-save] a unit failed unexpectedly and was rolled back')
       const detail = error instanceof ProductBulkError ? String(error.details.message ?? error.message) : error instanceof Error ? error.message : String(error)
-      results.push({ key, status: 500, body: { error: UNEXPECTED, detail, nothingSaved: true } })
+      return { key, status: 500, body: { error: UNEXPECTED, detail, nothingSaved: true } }
     }
     return results
   }, { timeoutMs: BULK_SAVE_TIMEOUT_MS, memoReads: true })
