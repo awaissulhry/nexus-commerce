@@ -35,7 +35,7 @@ Only these fixes can be prepared from Claude. Each one queues a request that a p
 | Title, bullet points or description missing, too long or not allowed | `apply-content` | New text on the master product in Nexus. Draft it, show it, and let the person edit it first. A channel gets the new text only when the listing is sent again, and not where that listing has its own text in Nexus. |
 | The last push failed, or the listing must be sent again after a fix | `publish-listing` | Sends the listing to that channel again through Nexus's normal publishing checks. It takes a product and a channel, not a market. Its preview shows the publish mode: if it is not `live` (for example `gated` or `dry-run`), say that approving it may send nothing to the channel. |
 | Master price missing or wrong | `set-price` for one product; `bulk-price-change` for several | A new master price. A channel listing follows it only if it follows the master price. |
-| Required attribute values missing or wrong | `bulk-attribute-change`, if this connection offers it | The same attribute change for one or more products. It reaches the channels once approved. |
+| Required attribute values missing or wrong | `bulk-attribute-change`, if this connection offers it | The same master attribute change for one or more products in Nexus only. Approval does not send it to a channel; a person must publish from Nexus afterwards. |
 
 Everything else has no tool here: images, category or product type, variations, stock, shipping and returns, brand approval, documents a channel asks for. Say where to fix it (the product in Nexus, or the channel's own seller account) and move on.
 
