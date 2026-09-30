@@ -31,4 +31,16 @@ describe('a save moves the write token of every cell on the content row it wrote
     expect(contentVersionsOf({ contentVersions: 'x' })).toEqual([])
     expect(r.values.bulletPoints_1.contentVersion).toBe(4)
   })
+  it('moves a shared language across aliases, keeping other products, languages and pins separate', () => {
+    const primary = row(), alias = row(), other = { ...row(), id: 'p2' }
+    alias.values.shared_de = { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 9 }
+    expect(adoptContentVersions(primary, { contentVersions: [{ id: 'p1', tier: 'language', language: 'it', version: 3 }] }, [primary, alias, other])).toEqual(['shared'])
+    expect(primary.values.shared.contentVersion).toBe(3)
+    expect(alias.values.shared.contentVersion).toBe(3)
+    expect(alias.values.shared_de.contentVersion).toBe(9)
+    expect(other.values.shared.contentVersion).toBe(2)
+    adoptContentVersions(primary, { contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: 5 }] }, [alias])
+    expect(alias.values.bulletPoints_1.contentVersion).toBe(4)
+    expect(primary.values.bulletPoints_1.contentVersion).toBe(5)
+  })
 })

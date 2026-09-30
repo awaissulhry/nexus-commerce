@@ -327,6 +327,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             if (save.touchesMaster()) readinessForFamily.current = true;
             const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
                 familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend,
+                onProductVersionsChanged: (changed) => writerRef.current?.seed(changed.map(row => ({ id: row.rowId, version: row.version }))),
                 columnOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId),
                 onStored: (outcome) => save.onStored(outcome),
                 /* P1 review (2) — the family rows a listing-level eBay save moved: repaint them with their new value and token.
