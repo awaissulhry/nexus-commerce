@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { lengthValidation, matchPasteToHeaders, selectValidation } from './sheet'
+import { lengthValidation, longTextEditor, matchPasteToHeaders, NO_TEXT_LIMIT, selectValidation, textLimitFor } from './sheet'
 
 const COLS = [
   { colId: 'sku', headerName: 'SKU' },
@@ -62,5 +62,15 @@ describe('validations — warn, never block, on an off-list value', () => {
     expect(lengthValidation(chars(5)).validate('123456', {}, 'c').level).toBe('error')
     expect(lengthValidation(bytes(4)).validate('éé', {}, 'c').level).toBeNull() // 4 bytes
     expect(lengthValidation(bytes(3)).validate('éé', {}, 'c').level).toBe('error')
+  })
+})
+
+describe('the long-text editor never cuts text (P1, 2026-09-30)', () => {
+  // AG's agLargeTextCellEditor sets `maxLength || 200`: with no limit given, every long-text cell stopped typing at 200.
+  const limitOf = (cap?: number) => (longTextEditor(cap ? { maxLength: cap } : {}).cellEditorParams as (p: object) => { maxLength?: number })({}).maxLength
+  it('passes a limit far above any channel cap, with or without a cap', () => {
+    expect(limitOf()).toBeGreaterThanOrEqual(NO_TEXT_LIMIT)
+    expect(limitOf(80)).toBeGreaterThanOrEqual(NO_TEXT_LIMIT)
+    expect(textLimitFor(2_000_000)).toBe(2_000_000)
   })
 })

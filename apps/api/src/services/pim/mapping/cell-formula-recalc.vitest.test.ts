@@ -125,15 +125,14 @@ describe('rule 1 — a write to a source field triggers the dependants', () => {
 })
 
 describe('rule 5 — a FAILED recalculation keeps the last value', () => {
-  it('an option refusal writes NOTHING and stores lastError', async () => {
+  // P1 (`pim/value-verdict.ts`) — an off-list result is a value, not a failure: it is written like a typed one.
+  it('an off-list recalculated value is WRITTEN, and the formula carries no error', async () => {
     formulaFindMany.mockResolvedValue([
       row({ id: 'f-b', fieldKey: 'batteries_included', expr: '"maybe"', dependsOn: ['brand'] }),
     ])
     const out = await run(['brand'])
-    // The cell keeps whatever it held: no write at all, rather than a write of null.
-    expect(writer).not.toHaveBeenCalled()
-    expect(String(out[0].error)).toContain('not an allowed value')
-    expect(formulaUpdate.mock.calls[0][0].data.lastError).toBe(out[0].error)
+    expect(writer).toHaveBeenCalledWith(expect.objectContaining({ writeField: 'attr_batteries_included', value: 'maybe' }))
+    expect(out[0].error).toBeNull()
   })
 
   it('an evaluation error writes NOTHING and stores lastError', async () => {
@@ -144,9 +143,9 @@ describe('rule 5 — a FAILED recalculation keeps the last value', () => {
     expect(formulaUpdate.mock.calls[0][0].data.lastError).toBe(out[0].error)
   })
 
-  it('a refusal marks dependent formulas without writing an invalid value', async () => {
+  it('a failure marks dependent formulas without writing an invalid value', async () => {
     formulaFindMany.mockResolvedValue([
-      row({ id: 'f-b', fieldKey: 'batteries_included', expr: '"maybe"', dependsOn: ['brand'] }),
+      row({ id: 'f-b', fieldKey: 'batteries_included', expr: 'upper($athlete_typo)', dependsOn: ['brand'] }),
       row({ id: 'f-w', fieldKey: 'weave_type', expr: 'lower($brand)', dependsOn: ['batteries_included'] }),
     ])
     const out = await run(['brand'])
@@ -222,13 +221,12 @@ describe('rule 8 — every cascaded write records a formula.recalc audit row', (
 
   it('a REFUSED recalculation still records a row, marked refused with no value', async () => {
     formulaFindMany.mockResolvedValue([
-      row({ id: 'f-b', fieldKey: 'batteries_included', expr: '"maybe"', dependsOn: ['brand'] }),
+      row({ id: 'f-b', fieldKey: 'batteries_included', expr: 'upper($athlete_typo)', dependsOn: ['brand'] }),
     ])
     await run(['brand'])
     const a = auditWrite.mock.calls[0][0]
     expect(a.metadata.refused).toBe(true)
     expect(a.metadata.value).toBeNull()
-    expect(a.metadata.allowedOptions).toEqual(['true', 'false'])
     // Nothing was written, so the version cannot have moved.
     expect(a.after).toEqual({ version: 3 })
   })

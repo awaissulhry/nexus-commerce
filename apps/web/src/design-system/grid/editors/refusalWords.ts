@@ -36,8 +36,8 @@ export type RefusalReason =
   | { kind: 'cell-locked' }
   /** The column does not apply to this row's product type. Master only. */
   | { kind: 'not-applicable'; productType?: string | null }
-  /** A per-variation column on the parent row. Master only. */
-  | { kind: 'per-variant-on-parent' }
+  /** A per-variation column on the parent row. Master only. `axis`: the family varies by it. */
+  | { kind: 'per-variant-on-parent'; axis?: boolean }
   /** The channel says this cell is not writable here (`cell.writable === false`). Channel only. */
   | { kind: 'channel-not-writable' }
 
@@ -58,7 +58,9 @@ export function refusalWords(label: string, reason: RefusalReason): string {
     case 'column-read-only':
       return `${label} is read-only on this sheet — it cannot be edited here.`
     case 'per-variant-on-parent':
-      return `${label} is set per variation — open a variation row to edit it, not the parent.`
+      return reason.axis
+        ? `${label} is a variation axis — each variation has its own value, so the parent has none. Open a variation row to edit it.`
+        : `${label} is set per variation — open a variation row to edit it, not the parent.`
     case 'not-applicable':
       return reason.productType
         ? `${label} does not apply to ${reason.productType} products.`

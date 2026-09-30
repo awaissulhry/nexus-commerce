@@ -31,6 +31,12 @@ export interface SheetColumnRule {
    * variation and is LOCKED on the parent row (a parent has no colour, size or EAN of its own).
    */
   scope: 'global' | 'per_variant'
+  /** P1 — the family varies BY this column (a variation axis). Absent = not known, which keeps a per-variant column
+   *  per variation. */
+  axis?: boolean
+  /** Where the value is stored (`categoryAttributes`, `localizedContent`, `column`, …). */
+  storage?: string
+  key?: string
   /** Product types that define this column. Empty/absent = every type. */
   applicableProductTypes?: string[]
   /** Coordinates that require it, by label (`Amazon · IT`). */
@@ -79,6 +85,30 @@ export function columnApplies(column: SheetColumnRule, row: SheetRowRule): boole
     }
   }
   return matchesType(column.applicableProductTypes, row.productType)
+}
+
+/** Identity codes belong to each product; a family has none to hand down. */
+const IDENTITY_KEYS: ReadonlySet<string> = new Set(['sku', 'gtin', 'ean', 'upc', 'asin', 'barcode'])
+
+/**
+ * P1 (report 2 I-11) — a per-variant column whose FAMILY value the variations inherit, so the family row may hold it:
+ * not a variation axis, not an identity code, and stored where a variation reads its family's value when it has none
+ * of its own (the attribute resolver lays the parent's `categoryAttributes` under the variation's; the content
+ * resolver falls back to the parent's text). A column whose `axis` is not stated stays per-variation.
+ */
+export function familyRowHoldsValue(column: Pick<SheetColumnRule, 'scope' | 'axis' | 'storage' | 'key'>): boolean {
+  return column.scope === 'per_variant' && column.axis === false && !IDENTITY_KEYS.has(column.key ?? '')
+    && (column.storage === 'categoryAttributes' || column.storage === 'localizedContent')
+}
+
+/**
+ * Can this row hold a value for this column? Where the column applies — and, on the family row, a per-variant column
+ * the family holds for its variations (`familyRowHoldsValue`). Validation and "required" still follow `columnApplies`:
+ * the family value is optional, and a variation that holds its own value wins.
+ */
+export function columnEditableOnRow(column: SheetColumnRule, row: SheetRowRule): boolean {
+  if (columnApplies(column, row)) return true
+  return row.isParent && familyRowHoldsValue(column) && columnApplies(column, { ...row, isParent: false })
 }
 
 /**

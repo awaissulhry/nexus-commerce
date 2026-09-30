@@ -168,6 +168,24 @@ test.describe('product sheet — lists by keyboard and by one click', () => {
     await page.keyboard.press('Escape')
   })
 
+  test('on a phone no column is pinned, so a list cell can be reached and opened with one tap', async () => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    try {
+      // The pinned Product column was wider than the screen: no other cell could be reached or tapped.
+      await expect.poll(() => page.locator('.ag-pinned-left-header .ag-header-cell').count(), { timeout: 10_000 }).toBe(0)
+      const target = cell(page, 5, STRICT)
+      for (let i = 0; i < 60 && !(await target.isVisible() && (await target.boundingBox())!.x + (await target.boundingBox())!.width <= 390); i++) {
+        await page.mouse.move(250, 700)
+        await page.mouse.wheel(250, 0)
+      }
+      await target.locator('.nds-ag-chev').click()
+      await expect(popup(page).locator('[role="option"]').first()).toBeVisible()
+      await page.keyboard.press('Escape')
+    } finally {
+      await page.setViewportSize({ width: 1680, height: 1000 })
+    }
+  })
+
   test('typing into a selected list cell keeps the first letter', async () => {
     await focusCell(page, 5, OPEN)
     await page.keyboard.type('B')

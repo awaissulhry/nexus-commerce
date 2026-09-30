@@ -1250,7 +1250,8 @@ async function readProjection(input: ProjectionInput, proposed?: MappingWriteInp
   const [channelSheet, masterSheet] = await Promise.all([
       getStudioSheet({
         productId: root.id, scope: 'channel', channel, market, locale: input.locale,
-        ...(input.accountId ? { accountId: input.accountId } : {}), includeMapping: true,
+        // P1 — candidate axes and collisions are read per row: each row's own value, not eBay's one listing value.
+        ...(input.accountId ? { accountId: input.accountId } : {}), includeMapping: true, rowOwnValues: true,
       }),
       getStudioSheet({ productId: root.id, scope: 'master', market, locale: input.locale, includeMapping: false }),
     ])

@@ -119,6 +119,8 @@ export interface GridSheetStatusProps {
   pending?: number
   /** Cells the server refused. */
   refused?: number
+  /** Cells the server stored with a warning about the value (P1: validation warns while editing). */
+  warned?: number
   saving?: boolean
   /** ISO string of the last successful save. */
   lastSavedAt?: string | null
@@ -126,7 +128,7 @@ export interface GridSheetStatusProps {
 }
 
 /** The strip under a sheet: what is on it, what is unsaved, what the server said. */
-export const GridSheetStatus = memo(function GridSheetStatus({ rows, selected = 0, pending = 0, refused = 0, saving = false, lastSavedAt, children }: GridSheetStatusProps) {
+export const GridSheetStatus = memo(function GridSheetStatus({ rows, selected = 0, pending = 0, refused = 0, warned = 0, saving = false, lastSavedAt, children }: GridSheetStatusProps) {
   return (
     <div className="nds-grid-footstrip nds-grid-sheet-status" role="status" aria-live="polite">
       <span>
@@ -164,7 +166,7 @@ export const GridSheetStatus = memo(function GridSheetStatus({ rows, selected = 
       )}
       <span className="nds-grid-footstrip-grow" />
       {children}
-      {lastSavedAt && !saving && pending === 0 && <span className="nds-cell-muted">Saved {new Date(lastSavedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
+      {lastSavedAt && !saving && pending === 0 && <span className="nds-cell-muted">Saved {new Date(lastSavedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}{warned > 0 && <> with <b>{warned}</b> {warned === 1 ? 'warning' : 'warnings'}</>}</span>}
     </div>
   )
 })
