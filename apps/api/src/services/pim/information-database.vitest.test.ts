@@ -286,8 +286,8 @@ it('writes Etsy stable value IDs and explicit empty lists on one alias, then rel
   // NEEDS (R-LX-16's second branch), not just the language.
   const refused = await request('PATCH', '/api/products/bulk', { ...payload, changes: [{ id: 'row-one', field: tagsCell.writeField, value: [], target: 'channel', contentAddress: { tier: 'pin', language: 'de', coordinate: { channel: 'ETSY', market: 'GLOBAL', accountId: 'etsy-b', aliasId: 'etsy-b-2' } }, contentAcknowledged: true }] })
   expect(refused.statusCode, refused.body).toBe(400)
-  expect(refused.json().message, refused.body).toContain('tier "language"')
-  expect(refused.json().message, refused.body).toContain('carries en')
+  expect(refused.json().error, refused.body).toContain('tier "language"')
+  expect(refused.json().error, refused.body).toContain('carries en')
 })
 
 it('validates and saves eBay category options on an additional-account alias without changing siblings', async () => {
