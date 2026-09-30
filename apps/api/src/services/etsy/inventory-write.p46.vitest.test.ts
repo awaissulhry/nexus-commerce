@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   readBack: null as unknown,
   alerts: [] as Array<Record<string, unknown>>,
   getThrows: null as Error | null,
+  afterRead: null as (() => void | Promise<void>) | null,
 }))
 
 vi.mock('./read-client.js', () => ({
@@ -21,6 +22,7 @@ vi.mock('./read-client.js', () => ({
     shopId: '42',
     get: vi.fn(async (path: string) => {
       h.gets.push(path)
+      if (h.gets.length === 1) await h.afterRead?.()
       if (h.getThrows && h.gets.length > 1) throw h.getThrows
       return h.gets.length === 1 ? h.inventory : (h.readBack ?? h.inventory)
     }),
@@ -40,11 +42,11 @@ vi.mock('../../utils/logger.js', () => ({ logger: { warn: () => {}, info: () => 
 
 
 import { writeEtsyInventory } from './inventory-write.service.js'
-import { registerEtsyListingLockRedis } from './listing-lock.js'
+import { etsyListingLockKey, registerEtsyListingLockRedis } from './listing-lock.js'
 import { FakeLeaseRedis } from '../../test-support/fake-lease-redis.js'
 
 // The per-listing lock (listing-lock.ts) takes its lease from the app's Redis; an in-memory stand-in here.
-const leaseRedis = new FakeLeaseRedis()
+let leaseRedis = new FakeLeaseRedis()
 registerEtsyListingLockRedis(() => leaseRedis)
 
 const money = (amount: number) => ({ amount, divisor: 100, currency_code: 'EUR' })
@@ -57,6 +59,7 @@ const inventory = () => ({
 })
 
 beforeEach(() => {
+  leaseRedis = new FakeLeaseRedis(); h.afterRead = null
   h.gets = []; h.puts = []; h.alerts = []; h.getThrows = null
   h.inventory = inventory(); h.readBack = null
 })
@@ -68,6 +71,11 @@ const write = (changes: Array<Record<string, unknown>>, readBack?: unknown) => {
 }
 
 describe('P4.6c — the happy path', () => {
+  it('does not send stale inventory when its lease was lost during the read', async () => {
+    h.afterRead = () => leaseRedis.hold(etsyListingLockKey('etsy-1', 7), 'another-holder', 30_000)
+    await expect(write([{ sku: 'RED-S', quantity: 12 }])).rejects.toMatchObject({ code: 'ETSY_LISTING_BUSY' })
+    expect(h.puts).toEqual([])
+  })
   it('reads, sends the WHOLE inventory with one quantity changed, and reads back', async () => {
     const after = inventory(); after.products[0].offerings[0].quantity = 12
     const result = await write([{ sku: 'RED-S', quantity: 12 }], after)

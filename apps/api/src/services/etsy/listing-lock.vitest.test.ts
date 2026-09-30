@@ -34,6 +34,27 @@ describe.each(stores)('the Etsy listing lock on the %s', (_name, makeStore) => {
   /** A fresh account per arm, so arms (and a real Redis shared between runs) never see each other's keys. */
   const account = () => `test-acct-${randomUUID()}`
 
+  it('refuses a new send after another holder has taken the lease', async () => {
+    const store = await makeStore(); const accountId = account()
+    await withEtsyListingLock({ accountId, listingId: '1000000001', store, ...FAST }, async (lease) => {
+      await store.hold(etsyListingLockKey(accountId, '1000000001'), 'replacement', 5_000)
+      await expect(lease.assertHeld()).rejects.toBeInstanceOf(EtsyListingBusy)
+      expect(lease.signal.aborted).toBe(true)
+    })
+  })
+
+  it('aborts the active request signal when renewal finds a different holder', async () => {
+    const store = await makeStore(); const accountId = account()
+    await withEtsyListingLock({ accountId, listingId: '1000000001', store, ...FAST }, async (lease) => {
+      await store.hold(etsyListingLockKey(accountId, '1000000001'), 'replacement', 5_000)
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Lease loss was not signalled')), 2_000)
+        lease.signal.addEventListener('abort', () => { clearTimeout(timeout); resolve() }, { once: true })
+      })
+      expect(lease.signal.aborted).toBe(true)
+    })
+  })
+
   it('🔴 two writes to ONE listing never overlap: the second starts after the first has finished', async () => {
     const store = await makeStore(); const accountId = account()
     const events: string[] = []

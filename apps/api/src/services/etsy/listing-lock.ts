@@ -36,7 +36,7 @@ export const RELEASE_SCRIPT = `if redis.call('get', KEYS[1]) == ARGV[1] then ret
 
 export const ETSY_LISTING_LOCK_DEFAULTS = { ttlMs: 30_000, waitMs: 20_000, pollMs: 250, commandTimeoutMs: 3_000 }
 
-/** Another change to the same Etsy listing holds its inventory, or the lock could not be taken. Nothing was read or sent. */
+/** The listing lease is unavailable or lost. A writer checks it before sending; an interrupted HTTP write has an unknown outcome. */
 export class EtsyListingBusy extends Error {
   readonly code = 'ETSY_LISTING_BUSY'
   constructor(message: string) { super(message); this.name = 'EtsyListingBusy' }
@@ -80,8 +80,15 @@ export interface EtsyListingLockOptions {
   commandTimeoutMs?: number
 }
 
-/** Run `work` holding the listing's inventory lock; wait for it, or throw `EtsyListingBusy` without running `work`. */
-export async function withEtsyListingLock<T>(options: EtsyListingLockOptions, work: () => Promise<T>): Promise<T> {
+export interface EtsyListingLease {
+  /** Re-check ownership after reads and immediately before starting a write. */
+  assertHeld: () => Promise<void>
+  /** Stop a pending HTTP request if renewal fails. A started write can then have an unknown outcome. */
+  signal: AbortSignal
+}
+
+/** Take the listing lease, then give the writer an ownership check and cancellation signal. */
+export async function withEtsyListingLock<T>(options: EtsyListingLockOptions, work: (lease: EtsyListingLease) => Promise<T>): Promise<T> {
   const { ttlMs, waitMs, pollMs, commandTimeoutMs } = { ...ETSY_LISTING_LOCK_DEFAULTS, ...definedOnly(options) }
   const store = options.store === undefined ? await defaultStore() : options.store
   const key = etsyListingLockKey(options.accountId, options.listingId)
@@ -105,20 +112,34 @@ export async function withEtsyListingLock<T>(options: EtsyListingLockOptions, wo
     await new Promise((resolve) => setTimeout(resolve, pollMs + Math.floor(Math.random() * pollMs)))
   }
 
-  let renewing = false
-  const timer = setInterval(async () => {
-    if (renewing) return
-    renewing = true
+  const abort = new AbortController()
+  let lost: EtsyListingBusy | null = null
+  const assertHeld = async () => {
+    if (lost) throw lost
     try {
       if (await withTimeout(store!.eval(RENEW_SCRIPT, 1, key, token, ttlMs), commandTimeoutMs) !== 1) throw new Error('lease lost')
+    } catch {
+      lost ??= new EtsyListingBusy('The Etsy listing lock was lost. Retry this change after a fresh inventory read.')
+      abort.abort(lost)
+      throw lost
+    }
+  }
+  let renewing = false
+  let finished = false
+  const timer = setInterval(async () => {
+    if (renewing || lost) return
+    renewing = true
+    try {
+      await assertHeld()
     } catch (error) {
-      logger.error('[etsy] listing lock lost while an inventory write was in progress', { key, error: error instanceof Error ? error.message : String(error) })
+      if (!finished) logger.error('[etsy] listing lock lost while an inventory write was in progress', { key, error: error instanceof Error ? error.message : String(error) })
     } finally { renewing = false }
   }, Math.max(50, Math.floor(ttlMs / 3)))
   timer.unref?.()
   try {
-    return await work()
+    return await work({ assertHeld, signal: abort.signal })
   } finally {
+    finished = true
     clearInterval(timer)
     try { await withTimeout(store!.eval(RELEASE_SCRIPT, 1, key, token), commandTimeoutMs) }
     catch (error) { logger.warn('[etsy] listing lock release failed; it expires on its own', { key, error: error instanceof Error ? error.message : String(error) }) }

@@ -15,7 +15,7 @@ import {
   type EtsyInventoryWrite, type EtsyReadInventory, type InventoryDrift, type OfferingChange,
 } from './inventory.js'
 import type { GatewayRequest } from '../gateway/gateway.js'
-import { withEtsyListingLock } from './listing-lock.js'
+import { withEtsyListingLock, type EtsyListingLease } from './listing-lock.js'
 
 export interface EtsyInventoryWriteInput {
   accountId: string
@@ -57,10 +57,10 @@ export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promis
   // 2026-09-30 — one read → change → replace per listing at a time (`listing-lock.ts`): two overlapping writes to one
   // listing would each replace the inventory the other had just changed. Held through the read-back, so a sibling
   // write cannot land between our PUT and the check of it.
-  return withEtsyListingLock({ accountId: input.accountId, listingId }, () => writeHoldingLock(input, listingId))
+  return withEtsyListingLock({ accountId: input.accountId, listingId }, (lease) => writeHoldingLock(input, listingId, lease))
 }
 
-async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: string): Promise<EtsyInventoryWriteResult> {
+async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: string, lease: EtsyListingLease): Promise<EtsyInventoryWriteResult> {
   const reader = await etsyReader(input.accountId)
   // A read that fails throws here, before anything is built or sent: the caller retries it.
   const before = await reader.get<EtsyReadInventory>(`/listings/${listingId}/inventory`)
@@ -87,6 +87,7 @@ async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: strin
   }
 
   const writer = await etsyWriter(input.accountId)
+  await lease.assertHeld()
   await writer.send({
     path: `/listings/${listingId}/inventory`,
     method: 'PUT',
@@ -95,6 +96,7 @@ async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: strin
     pushLock: input.pushLock,
     ledger: input.ledger,
     operation: 'PUT /listings/:id/inventory',
+    signal: lease.signal,
   })
 
   /**
