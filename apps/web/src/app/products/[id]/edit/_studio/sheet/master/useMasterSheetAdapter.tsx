@@ -1,5 +1,6 @@
 'use client';
 import { useSheetPreferences } from '../useSheetPreferences';
+import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
 import { useSheetPublicationGuard } from '../useSheetPublicationGuard';
 import { buildCompareTargets } from '../compareTargets';
 import { channelLabel, languageLabel } from '../../scopes';
@@ -436,6 +437,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const getDataPath = useCallback((d: StudioRow) => (d.parentId ? [d.parentId, d.id] : [d.id]), []);
     const secondaryRef = useRef<SecondaryPlan>({ mode: 'none', axisKeys: [] });
     secondaryRef.current = useMemo(() => secondaryPlan(rows, schemaColumns), [rows, schemaColumns]);
+    useUnpinOnNarrowSheet(getGridApi, gridReady);
     const autoGroupColumnDef = useMemo<ColDef<StudioRow>>(() => ({
         headerName: 'Product', colId: 'product', width: bandWidth, minWidth: BAND_WIDTH_FLOOR,
         pinned: 'left',
