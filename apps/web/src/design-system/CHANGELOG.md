@@ -1,3 +1,7 @@
+## Card: no blank band under a head with an empty body — 2026-09-30
+
+Team & Access (`fix/team-access-phone-width`). A headed **`Card`** with nothing in its body (a list row: title, sub-line, `headerAction`) now ends at its head: `.nds-card-body:empty` is not drawn and the head drops its bottom border. The empty body kept its 16 px padding, so every such card showed a blank band (Team & Access members, invitations and roles; the studio's Readiness loading card). A body with content is unchanged. Specimen: "Card with a long sub-line" has a body; the new "Card without a body" under Components on `/design-system` has none. Mirrored between Web and Factory (styles).
+
 ## Card: a long word in the head breaks; at phone width the action moves under the text — 2026-09-30
 
 Team & Access at 390 px (`fix/team-access-phone-width`). **`Card`**'s title and description (`.nds-card-head .t`, `.d`) break a long unbreakable word (an email, a URL, a SKU) at the card's edge instead of running past it; `overflow-wrap: break-word` keeps each card's min-content width, so no layout that fits today moves. Under 600 px a **stacked** head (a card with a `description`) wraps its `headerAction` onto its own line when the title and sub-line cannot keep 12rem beside it. Specimen: "Card with a long sub-line" under Components on `/design-system`. Mirrored between Web and Factory (styles).

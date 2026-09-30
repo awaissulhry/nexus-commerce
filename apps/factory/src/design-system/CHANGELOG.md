@@ -1,3 +1,7 @@
+## Card: no blank band under a head with an empty body — 2026-09-30
+
+Mirrored from web. `.nds-card-body:empty` is not drawn and the head drops its bottom border, so a headed card with nothing in its body ends at its head.
+
 ## Card: a long word in the head breaks; at phone width the action moves under the text — 2026-09-30
 
 Mirrored from web. `.nds-card-head .t` and `.d` break a long unbreakable word at the card's edge (`overflow-wrap: break-word`); under 600 px a stacked head wraps its action under the title and sub-line when they cannot keep 12rem beside it.

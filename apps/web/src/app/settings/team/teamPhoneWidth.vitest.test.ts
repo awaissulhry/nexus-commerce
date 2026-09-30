@@ -28,6 +28,12 @@ describe('Team & Access fits a phone', () => {
     expect(rules(phone, '.nds-card-head.stacked > .nds-card-headmain')).toMatch(/flex: 1 1 12rem;/)
   })
 
+  it('a headed card with an empty body ends at its head: no blank band, no border under the head', () => {
+    const css = read('../../../design-system/styles/components.css')
+    expect(rules(css, '.nds-card-body:empty')).toMatch(/display: none;/)
+    expect(rules(css, '.nds-card-head:has(+ .nds-card-body:empty)')).toMatch(/border-bottom: 0;/)
+  })
+
   it('the Factory copy of the card rules says the same', () => {
     const web = read('../../../design-system/styles/components.css')
     const factory = read('../../../../../factory/src/design-system/styles/components.css')
