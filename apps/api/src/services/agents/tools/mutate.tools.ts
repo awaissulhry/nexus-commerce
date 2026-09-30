@@ -137,6 +137,10 @@ const publishListing: AgentTool = {
     const channel = String(args.channel ?? '').toUpperCase()
     if (!id || !channel)
       return { ok: false, error: 'productId and channel are required' }
+    // MCP.8 — a product this business does not have is refused here, as the other change tools do, so
+    // nothing is queued for a person to approve.
+    const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
+    if (!product) return { ok: false, error: 'Product not found' }
     const cl = await prisma.channelListing.findFirst({
       where: { productId: id, channel },
       select: { title: true, externalListingId: true },
