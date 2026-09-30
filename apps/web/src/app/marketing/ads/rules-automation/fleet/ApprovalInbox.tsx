@@ -219,7 +219,8 @@ function ScheduledRow({
           {left > 0 ? (
             <>
               Running in {left} second{left === 1 ? '' : 's'} — the{' '}
-              <Term k="undo-window">undo window</Term>. Nothing has reached Amazon yet.
+              {/* MCP.12 — as on the Approvals page: until it runs, nothing has changed anywhere. */}
+              <Term k="undo-window">undo window</Term>. Nothing has changed yet.
             </>
           ) : (
             'Running now…'

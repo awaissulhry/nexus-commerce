@@ -15,6 +15,8 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import { CHANNEL_LABELS, channelLabel } from '@nexus/shared/channel-label'
 import prisma from '../../../db.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
+// A SKU prefix as a LIKE pattern's start: `_`, `%` and `\` stand for themselves (Prisma's startsWith does not escape).
+import { likeEscaped } from '../../../lib/like-pattern.js'
 import { isFbaCoordinate } from '../../../lib/amazon-fulfillment.js'
 import {
   DEFAULT_PAGE_SIZE,
@@ -54,8 +56,6 @@ const lower = (value: unknown) => (typeof value === 'string' ? value.trim().toLo
 const clip = (text: string, cap = TEXT_CAP) => (text.length > cap ? `${text.slice(0, cap - 1)}…` : text)
 const iso = (at: Date | null | undefined) => (at ? at.toISOString() : null)
 const money = (value: Prisma.Decimal | null | undefined) => (value == null ? null : Number(value))
-/** A SKU prefix as a LIKE pattern's start: `_`, `%` and `\` stand for themselves (Prisma's startsWith does not escape). */
-const likeEscaped = (text: string) => text.replace(/[\\%_]/g, '\\$&')
 
 // ── Arguments every list shares ─────────────────────────────────────────────────────────────────────
 
@@ -225,8 +225,63 @@ interface Issue {
   code?: string
   attributes?: string[]
   missing?: string[]
+  moreMissing?: number
+  otherIssues?: string[]
+  moreOtherIssues?: number
+  untranslated?: string[]
+  moreUntranslated?: number
   since?: string | null
   pending?: string
+}
+
+/** MCP.12 — readiness names at most this many fields per list; the rest are counted. */
+const READINESS_NAMES = 8
+const READINESS_OTHER = 5
+
+type MissingEntry = { field?: string; label?: string; reason?: string; kind?: string; requiredEmpty?: boolean }
+
+/**
+ * MCP.12 — one readiness row as an issue. `missing[]` in the index holds the REQUIRED-and-empty fields (flagged
+ * `requiredEmpty`, exactly `requiredTotal − requiredFilled` of them) and every other readiness finding: an optional
+ * field shown in another language, a GPSR gap, a variation rule. Listing the first eight of all of them under
+ * "missing" contradicted the count beside it ("7 of 10 required values filled", then eight names). The required ones
+ * are `missing` now, the rest are named apart, and every cut list says how many it left out.
+ */
+export function readinessIssue(r: {
+  state: string
+  label: string
+  language: string
+  requiredFilled: number
+  requiredTotal: number
+  missing: unknown
+  pendingSince?: Date | null
+}): Issue {
+  const entries = (Array.isArray(r.missing) ? r.missing : []) as MissingEntry[]
+  const name = (m: MissingEntry) => String(m.label ?? m.field ?? '?')
+  const required = entries.filter((m) => m.requiredEmpty === true)
+  const rest = entries.filter((m) => m.requiredEmpty !== true)
+  const untranslated = rest.filter((m) => m.kind === 'language-fallback')
+  const other = rest.filter((m) => m.kind !== 'language-fallback')
+  const empty = Math.max(0, r.requiredTotal - r.requiredFilled)
+  const cut = <T>(list: T[], cap: number) => ({ shown: list.slice(0, cap), more: Math.max(0, list.length - cap) })
+  const req = cut(required.map(name), READINESS_NAMES)
+  const oth = cut(other.map((m) => clip(m.reason ? `${name(m)}: ${m.reason}` : name(m), VALUE_CAP)), READINESS_OTHER)
+  const unt = cut(untranslated.map(name), READINESS_NAMES)
+  // A row written before the `requiredEmpty` flag names none of its empty required fields: say so, never guess.
+  const unnamedCount = empty - required.length
+  const unnamed = unnamedCount <= 0 ? ''
+    : required.length === 0 ? ` Which ${empty === 1 ? 'one is' : 'ones are'} empty is not recorded on this row yet.`
+    : ` ${unnamedCount} of them ${unnamedCount === 1 ? 'is' : 'are'} not named: this row does not record which.`
+  return {
+    from: 'readiness',
+    severity: r.state === 'blocked' ? 'error' : 'warning',
+    message: `${r.state === 'blocked' ? 'Blocked' : 'Warnings'} for ${r.label} (${r.language}): ${r.requiredFilled} of ${r.requiredTotal} required values filled`
+      + (empty ? `; ${empty} required ${empty === 1 ? 'value is' : 'values are'} empty.` : '.') + unnamed,
+    ...(req.shown.length ? { missing: req.shown, ...(req.more ? { moreMissing: req.more } : {}) } : {}),
+    ...(oth.shown.length ? { otherIssues: oth.shown, ...(oth.more ? { moreOtherIssues: oth.more } : {}) } : {}),
+    ...(unt.shown.length ? { untranslated: unt.shown, ...(unt.more ? { moreUntranslated: unt.more } : {}) } : {}),
+    ...(r.pendingSince ? { pending: 'being rebuilt after an edit: this is the previous answer' } : {}),
+  }
 }
 
 const ISSUE_SELECT = {
@@ -297,7 +352,10 @@ const listingIssues: AgentTool = {
     'Listings that have a problem, across every channel, with what is wrong. Sources: issues the channel reported '
     + '(Amazon listing issues, eBay and Shopify write errors), open Amazon suppressions, the listing\'s error or '
     + 'suppressed status, a failed last push, Nexus validation warnings, and publishing readiness (blocked = '
-    + 'required values missing or invalid). Filter by channel, market, sku, productId or severity '
+    + 'required values missing or invalid). A readiness issue names the empty REQUIRED fields in missing, other '
+    + 'readiness findings in otherIssues, and optional fields shown in another language in untranslated; a list cut '
+    + 'short says how many it left out (moreMissing, moreOtherIssues, moreUntranslated). Each item says draft (Nexus has '
+    + 'not sent it yet) and linked (it carries the channel\'s own item id; a draft can be linked). Filter by channel, market, sku, productId or severity '
     + '(error | warning | info). Returns { items, nextCursor, total }: one item per listing, at most '
     + `${NESTED_CAP} issues each (errors first). Reads Nexus's saved state only; nothing is fetched from a channel.${PAGING}`,
   handler: (args) => listTool('listing-issues', async () => {
@@ -384,16 +442,7 @@ const listingIssues: AgentTool = {
       }
       const own = readiness.filter((r) => r.productId === l.productId && r.channel === l.channel && r.market === l.marketplace
         && r.accountId === l.channelConnectionId && r.aliasId === (l.aliasKey || null))
-      for (const r of own) {
-        const missing = Array.isArray(r.missing) ? (r.missing as Array<{ field?: string; label?: string }>) : []
-        issues.push({
-          from: 'readiness',
-          severity: r.state === 'blocked' ? 'error' : 'warning',
-          message: `${r.state === 'blocked' ? 'Blocked' : 'Warnings'} for ${r.label} (${r.language}): ${r.requiredFilled} of ${r.requiredTotal} required values filled.`,
-          ...(missing.length ? { missing: missing.slice(0, 8).map((m) => String(m.label ?? m.field ?? '?')) } : {}),
-          ...(r.pendingSince ? { pending: 'being rebuilt after an edit: this is the previous answer' } : {}),
-        })
-      }
+      for (const r of own) issues.push(readinessIssue(r))
       issues.sort((x, y) => (SEVERITY_RANK[x.severity] ?? 3) - (SEVERITY_RANK[y.severity] ?? 3))
       const count = issues.length
         + Math.max(0, l._count.listingIssues - l.listingIssues.length)
@@ -405,7 +454,10 @@ const listingIssues: AgentTool = {
         channel: l.channel,
         market: l.marketplace,
         status: l.listingStatus,
-        published: !!l.externalListingId,
+        // MCP.12 — was `published: !!externalListingId`, which read a linked draft (46 of 102 drafts in the development
+        // data carry an eBay item number) as published. Nothing reads the old field, so the honest pair replaces it.
+        draft: l.listingStatus === 'DRAFT',
+        linked: !!l.externalListingId,
         issues: issues.slice(0, NESTED_CAP),
         ...(count > NESTED_CAP ? { moreIssues: count - NESTED_CAP } : {}),
       }
@@ -682,6 +734,21 @@ const LIVE: Prisma.ChannelListingWhereInput = {
   NOT: { listingStatus: 'DRAFT', externalListingId: null },
 }
 
+/**
+ * MCP.12 — what an empty page means. Measured on a copy of the development data: `items: []` with no word of how many
+ * listings were looked at, or that not one of them had ever been read back — which a reader takes for "all in sync".
+ */
+export function emptySyncSummary(checked: number, neverRead: number, more: boolean, reason?: string): string {
+  if (checked === 0) return 'No live listing matches these filters, so none was checked.'
+  const listings = `${checked} live listing${checked === 1 ? '' : 's'}`
+  const found = `Checked ${listings}${more ? ' from where this call started' : ''}: none is out of sync${reason ? ` for ${reason}` : ''} by what Nexus has recorded.`
+  if (neverRead === 0) return `${found} Every one of them has been read back from its channel at least once (see neverChecked for what no read-back covers).`
+  if (neverRead === checked) {
+    return `${found} Not one of them has ever been read back from its channel, so no channel value was compared: this proves nothing about what the channels show.`
+  }
+  return `${found} ${neverRead} of them ${neverRead === 1 ? 'has' : 'have'} never been read back from ${neverRead === 1 ? 'its' : 'their'} channel, so no channel value was compared for ${neverRead === 1 ? 'it' : 'them'}.`
+}
+
 /** Listings read per batch, and at most this many per call before the tool hands back a cursor to go on. */
 const SYNC_SCAN_BATCH = 250
 export const SYNC_SCAN_BUDGET = 1000
@@ -705,7 +772,8 @@ const outOfSyncListings: AgentTool = {
     + 'quantity (never FBA stock) and price from the merchant listings report, Amazon content; eBay quantity and '
     + 'content; Shopify quantity and price. NOT read back, so never reported as differing: eBay price per listing, '
     + 'Shopify content, anything on Etsy or WooCommerce. Each item lists readBack (what looked, when) and notChecked '
-    + '(what nobody compared, and why): a listing absent from this list is not proven in sync. Filter by channel, '
+    + '(what nobody compared, and why): a listing absent from this list is not proven in sync. An empty page carries a '
+    + 'summary: how many listings were checked and how many of them no read-back has ever looked at. Filter by channel, '
     + 'market, sku, productId or reason. Returns { items, nextCursor }; a call checks at most '
     + `${SYNC_SCAN_BUDGET} listings, so a short page with a nextCursor means "keep going".${PAGING}`,
   handler: (args) => listTool('out-of-sync-listings', async () => {
@@ -724,6 +792,8 @@ const outOfSyncListings: AgentTool = {
     // read in order, batch by batch, until one listing more than a page is found, the list ends, or the budget is spent.
     const found: Array<{ row: SyncRow; view: ReturnType<typeof syncView> }> = []
     let scanned = 0
+    // MCP.12 — listings no read-back has ever looked at: an empty page says how many, so it cannot pass for "in sync".
+    let neverRead = 0
     let ended = false
     while (found.length <= size && scanned < SYNC_SCAN_BUDGET) {
       const take = Math.min(SYNC_SCAN_BATCH, SYNC_SCAN_BUDGET - scanned)
@@ -733,6 +803,7 @@ const outOfSyncListings: AgentTool = {
         scanned++
         position = positionOf(row)
         const view = syncView(row, ledgers.get(row.productId), policies)
+        if (view.readBack.length === 0) neverRead++
         if (view.reasons.length && (!a.reason || view.reasons.includes(a.reason))) found.push({ row, view })
         if (found.length > size) break
       }
@@ -776,6 +847,7 @@ const outOfSyncListings: AgentTool = {
           ? { more: full || fitted.cut ? moreHint(fitted.items.length, null, fitted.cut, 'channel, market, sku or reason')
             : `Checked ${scanned} listings from where this call started; more remain. Call again with cursor set to nextCursor to keep looking.` }
           : {}),
+        ...(fitted.items.length === 0 ? { summary: emptySyncSummary(scanned, neverRead, !!fitted.nextCursor, a.reason) } : {}),
         neverChecked: neverChecked(channels),
         caveat: 'A read-back compares a field only when both Nexus and the channel hold a value, and records when it '
           + 'last looked. No difference listed is what the last read found, never a guarantee about the channel now.',

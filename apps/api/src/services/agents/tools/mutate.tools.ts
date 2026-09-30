@@ -31,6 +31,7 @@ import { sendEmail } from '../../email/transport.js'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
+import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
 const SUPPRESSION_CHANNEL = 'agent-customer-message'
 
@@ -63,8 +64,8 @@ const setPrice: AgentTool = {
     if (!id || !Number.isFinite(proposed))
       return { ok: false, error: 'productId and numeric price are required' }
     if (proposed < 0) return { ok: false, error: 'price must be non-negative' }
-    const p = await prisma.product.findUnique({
-      where: { id },
+    const p = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: { sku: true, basePrice: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }
@@ -92,8 +93,8 @@ const setPrice: AgentTool = {
     const proposed = Number(args.price)
     if (!id || !Number.isFinite(proposed) || proposed < 0)
       return { ok: false, error: 'productId and a non-negative numeric price are required' }
-    const before = await prisma.product.findUnique({
-      where: { id },
+    const before = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: { sku: true, basePrice: true },
     })
     if (!before) return { ok: false, error: 'Product not found' }
@@ -139,7 +140,7 @@ const publishListing: AgentTool = {
       return { ok: false, error: 'productId and channel are required' }
     // MCP.8 — a product this business does not have is refused here, as the other change tools do, so
     // nothing is queued for a person to approve.
-    const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
+    const product = await prisma.product.findFirst({ where: liveProduct(id), select: { id: true } })
     if (!product) return { ok: false, error: 'Product not found' }
     const cl = await prisma.channelListing.findFirst({
       where: { productId: id, channel },
@@ -167,6 +168,8 @@ const publishListing: AgentTool = {
     const channel = String(args.channel ?? '').toUpperCase()
     if (!id || !channel)
       return { ok: false, error: 'productId and channel are required' }
+    // MCP.12 — deleted after the request was queued: nothing is published for it.
+    if (!(await isLiveProduct(id))) return { ok: false, error: PRODUCT_NOT_FOUND }
     const cl = await prisma.channelListing.findFirst({
       where: { productId: id, channel },
       select: { id: true, region: true, marketplace: true, externalListingId: true },
@@ -358,8 +361,8 @@ const applyContent: AgentTool = {
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findUnique({
-      where: { id },
+    const p = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: { name: true, bulletPoints: true, description: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }
@@ -390,8 +393,8 @@ const applyContent: AgentTool = {
   async execute(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findUnique({
-      where: { id },
+    const p = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: { name: true, bulletPoints: true, description: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }

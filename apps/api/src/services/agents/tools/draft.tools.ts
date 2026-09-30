@@ -13,6 +13,7 @@ import {
   resolveModelForFeature,
 } from '../../ai/model-resolver.service.js'
 import { logUsage } from '../../ai/usage-logger.service.js'
+import { liveProduct } from './live-product.js'
 
 /**
  * MCP.7 — the drafts call OUR AI provider and spend OUR AI budget. Claude writes its own
@@ -53,8 +54,8 @@ export async function aiDraft(
 }
 
 async function loadProduct(id: string) {
-  return prisma.product.findUnique({
-    where: { id },
+  return prisma.product.findFirst({
+    where: liveProduct(id),
     select: {
       sku: true,
       name: true,

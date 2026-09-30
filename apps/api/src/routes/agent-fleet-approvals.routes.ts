@@ -54,6 +54,8 @@ import {
   listAutonomousAgents,
 } from '../services/agents/autonomous-agent.service.js'
 import { resolveToolPolicy } from '../services/agents/tool-policy.service.js'
+import { claudeConnectionState } from '../services/oauth/oauth-grants.js'
+import { workspaceIdForQuery } from '../lib/workspace-context.js'
 
 /** The cadence `jobs/approval-maintenance.job.ts` runs at. */
 const MAINTENANCE_SECONDS = 30
@@ -134,7 +136,7 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
    * (Controls), the schedule (Overview) and executability (nowhere at all) —
    * into the one answer an empty queue needs.
    */
-  fastify.get('/agent/fleet/approvals/gate-state', async () => {
+  fastify.get('/agent/fleet/approvals/gate-state', async (request) => {
     const [state, charters, schedule] = await Promise.all([
       prisma.agentFleetState.findUnique({ where: { id: 'singleton' } }),
       listCharters(),
@@ -331,6 +333,12 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
             enabled: await isAgentScheduleEnabled(a.key),
           })),
         ),
+        /**
+         * MCP.12 — the other door into that list: a person asking for a change in Claude, over a Nexus connection.
+         * Whether it is open (MCP on for this business) and how many live connections there are, so the empty
+         * line can name it without asserting it.
+         */
+        claude: await claudeConnectionState(request.workspace?.workspaceId ?? workspaceIdForQuery()),
       },
     }
   })
