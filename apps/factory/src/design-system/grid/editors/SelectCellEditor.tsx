@@ -99,14 +99,14 @@ export function SelectChevron({ onOpen }: { onOpen?: () => void } = {}) {
     : <ChevronDown className="nds-ag-chev" size={13} strokeWidth={2} aria-hidden />
 }
 
+type StartsEditing = { startEditingCell(params: { rowIndex: number; colKey: string; rowPinned?: 'top' | 'bottom' | null }): void }
+type EditedNode = { rowIndex: number | null; rowPinned?: 'top' | 'bottom' | null }
 /**
  * `onOpen` for a cell's chevron: start editing that cell, exactly as a double-click would. `undefined` for a cell AG
  * will not edit (`column.isCellEditable`), so a locked cell wears the passive glyph: the action chevron showed a pointer
  * there, `startEditingCell` silently did nothing and no reason was given (audit B21). A click then selects the cell, as
  * on any locked cell, and a double-click or Enter explains why.
  */
-type StartsEditing = { startEditingCell(params: { rowIndex: number; colKey: string; rowPinned?: 'top' | 'bottom' | null }): void }
-type EditedNode = { rowIndex: number | null; rowPinned?: 'top' | 'bottom' | null }
 export function openCellEditor(api: StartsEditing, node: EditedNode, colKey: string): () => void
 export function openCellEditor<N extends EditedNode>(api: StartsEditing, node: N, colKey: string, column: { isCellEditable(node: N): boolean } | null | undefined): (() => void) | undefined
 export function openCellEditor<N extends EditedNode>(

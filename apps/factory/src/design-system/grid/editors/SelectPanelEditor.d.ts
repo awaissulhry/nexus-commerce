@@ -9,5 +9,7 @@ export interface SelectPanelEditorParams extends ICellEditorParams {
     placeholder?: string;
     /** A "nothing selected" row. Absent ⇒ the list cannot be cleared from the editor. */
     emptyLabel?: string;
+    /** The channel leaves this list open (`mode: 'open'`), so a typed value is offered as `Use "…"`. */
+    allowCustom?: boolean;
 }
 export declare const SelectPanelEditor: import("react").ForwardRefExoticComponent<SelectPanelEditorParams & import("react").RefAttributes<unknown>>;

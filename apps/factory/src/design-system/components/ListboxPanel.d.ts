@@ -44,8 +44,16 @@ import type { ListboxOption } from './Listbox';
  * appears when there are MORE than 8). Below it the list is short enough to read.
  */
 export declare const LISTBOX_SEARCH_THRESHOLD = 8;
+/**
+ * A panel option may be HELD: reachable and announced, never committed (Step 4.3 #2). The scope menu
+ * uses it for a channel the operator cannot open yet — the same rule as a held ScopeBar chip, whose
+ * refusal must stay readable. `disabled` would take it out of the keyboard's reach instead.
+ */
+export type ListboxPanelOption = ListboxOption & {
+    heldReason?: string;
+};
 export interface ListboxPanelProps {
-    options: ListboxOption[];
+    options: ListboxPanelOption[];
     /** the currently selected value; highlighted and scrolled into view on mount */
     value?: string;
     /** the operator chose an option */
@@ -92,7 +100,7 @@ export interface ListboxPanelProps {
      * counting its own array would be counting a different one.
      */
     activeIndex?: number;
-    /** The panel's own ↑/↓ moved the highlight. Fires in both modes; controlled callers store it. */
+    /** The panel's own ↑/↓ moved the highlight. Clear is -2; -1 means no choice. Fires in both modes. */
     onActiveIndexChange?: (index: number) => void;
     /** The flat, ranked, grouped list this panel is actually showing — index space for `activeIndex`. */
     onMatchesChange?: (matches: readonly ListboxOption[]) => void;
@@ -106,5 +114,35 @@ export interface ListboxPanelProps {
     ariaLabel?: string;
     /** A combobox input can own keyboard focus while its options stay out of the Tab order. */
     optionTabIndex?: number;
+    /**
+     * Text the panel's own search field starts with: the key that opened a grid cell by typing (AG's `eventKey`). The grid
+     * consumed that keystroke to start the edit, so without this the first character was lost ("Cin" searched "in").
+     */
+    initialQuery?: string;
+    /**
+     * Offer the typed text as a value of its own — `Use "…"` — for a list the channel leaves open (an eBay FREE_TEXT aspect,
+     * an Amazon open enum). It is the FIRST row, so it is always in view, but the best match stays highlighted: Enter takes
+     * "Nero" for "Ner", ↑ takes the typed text. When every typed word is a WHOLE word of that match ("Cotone" for "Cotone
+     * biologico") the typed text is highlighted instead: it is a value, not the start of one (audit B23). With no match it
+     * is the only row, and Enter takes it.
+     */
+    allowCustom?: boolean;
+    /**
+     * Enter or Tab chose the highlighted option, reported in the CAPTURE phase, before a grid ends the edit. AG's popup
+     * listener runs before this panel's bubble `onKeyDown` and commits whatever the editor last reported, so a grid editor
+     * reports the value here and lets the grid commit and move (Enter down, Tab right). `null` = nothing is highlighted:
+     * keep the stored value. When supplied, Enter is the owner's, and the panel does not also commit it.
+     *
+     * `end` is set for Ctrl/Cmd+Enter only: the panel keeps that key from the grid, whose Ctrl+Enter writes the value into
+     * EVERY cell of the selected ranges with no fence and no question (audit B14). The owner ends the edit itself with
+     * `stopEditing(false, end)`, so it saves this one cell and moves down, as Enter does. An Enter that confirms an IME
+     * composition never reaches the grid and reports nothing (audit B18).
+     */
+    onKeyChoice?: (value: string | null, end?: KeyboardEvent) => void;
 }
-export declare function ListboxPanel({ options, value, onCommit, onCancel, query, searchable, searchPlaceholder, emptyLabel, autoFocus, style, className, panelRef, activeIndex, onActiveIndexChange, onMatchesChange, idPrefix, ariaLabel, optionTabIndex, }: ListboxPanelProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * How many rows PageUp / PageDown move: the rows in view, less one kept for context. 8 (the panel's `--nds-combo-rows`)
+ * when nothing can be measured.
+ */
+export declare function listboxPageSize(host: HTMLElement | null | undefined): number;
+export declare function ListboxPanel({ options, value, onCommit, onCancel, query, searchable, searchPlaceholder, emptyLabel, autoFocus, style, className, panelRef, activeIndex, onActiveIndexChange, onMatchesChange, idPrefix, ariaLabel, optionTabIndex, initialQuery, allowCustom, onKeyChoice, }: ListboxPanelProps): import("react/jsx-runtime").JSX.Element;

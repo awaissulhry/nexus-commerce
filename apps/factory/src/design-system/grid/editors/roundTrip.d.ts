@@ -32,8 +32,15 @@ export type CellSaveState = 'saving' | 'waiting' | 'saved' | 'refused' | 'unknow
 export interface CellSaveEntry {
     state: CellSaveState;
     reason?: string;
+    /**
+     * P1 of fix/product-sheet-editing — `saved`, and the server named a problem with the stored value (over the channel's
+     * limit, off its list, a check that could not run), in its own words. Kept until the cell is edited again.
+     */
+    warning?: string;
     at: number;
 }
+/** What a cell's save says in words: a refusal's reason, or the warning a stored value came back with. */
+export declare function saveNote(entry: CellSaveEntry | undefined): string | undefined;
 export declare const SAVED_FADE_MS = 1500;
 export declare class CellSaveTracker {
     private readonly cells;
@@ -41,6 +48,10 @@ export declare class CellSaveTracker {
     static key(rowId: string, colId: string): string;
     get(rowId: string, colId: string): CellSaveEntry | undefined;
     set(rowId: string, colId: string, state: CellSaveState, reason?: string, now?: number): void;
+    /** The value was stored; the server's warning about it stays on the cell (it does not fade). */
+    setSavedWithWarning(rowId: string, colId: string, warning: string, now?: number): void;
+    /** Stored cells that came back with a warning (the status line says how many). */
+    get warnedCount(): number;
     clear(rowId: string, colId: string): void;
     /**
      * Drop EVERY mark. For a reload that discards the edits the marks were about (#663).

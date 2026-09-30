@@ -30,6 +30,8 @@ export interface ShapedColumnLike {
         min: number;
         max: number | null;
     };
+    /** `'open'`: the channel takes a value outside `options` (an eBay FREE_TEXT aspect, an Amazon open enum). */
+    mode?: string;
     unitOptions?: string[];
 }
 export declare function shapeEditorSpec(col: ShapedColumnLike): {

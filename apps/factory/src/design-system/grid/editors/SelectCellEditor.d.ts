@@ -34,8 +34,39 @@ export interface SelectEditorParams {
  * at full strength — an informative glyph is not dimmed).
  */
 export declare const SELECT_CELL_CLASS = "nds-cell-is-select";
-/** The same lucide `ChevronDown` every other DS select uses — one glyph convention, not a new one. */
-export declare function SelectChevron(): import("react/jsx-runtime").JSX.Element;
+/** The row that empties a list from its editor — one label for every list (`selectPanelModel.ts`). */
+export { SELECT_CLEAR_LABEL } from './selectPanelModel';
+/**
+ * The same lucide `ChevronDown` every other DS select uses — one glyph convention, not a new one.
+ *
+ * With `onOpen` it is the list's button: one click opens the editor. It was a picture that looked like one (and the
+ * cell wears `cursor: pointer`), so a click only selected the cell and the list needed a double-click (P0, measured in
+ * production 2026-09-29). It stays `aria-hidden`: the keyboard opens the list with Enter or F2 on the focused cell.
+ */
+export declare function SelectChevron({ onOpen }?: {
+    onOpen?: () => void;
+}): import("react/jsx-runtime").JSX.Element;
+type StartsEditing = {
+    startEditingCell(params: {
+        rowIndex: number;
+        colKey: string;
+        rowPinned?: 'top' | 'bottom' | null;
+    }): void;
+};
+type EditedNode = {
+    rowIndex: number | null;
+    rowPinned?: 'top' | 'bottom' | null;
+};
+/**
+ * `onOpen` for a cell's chevron: start editing that cell, exactly as a double-click would. `undefined` for a cell AG
+ * will not edit (`column.isCellEditable`), so a locked cell wears the passive glyph: the action chevron showed a pointer
+ * there, `startEditingCell` silently did nothing and no reason was given (audit B21). A click then selects the cell, as
+ * on any locked cell, and a double-click or Enter explains why.
+ */
+export declare function openCellEditor(api: StartsEditing, node: EditedNode, colKey: string): () => void;
+export declare function openCellEditor<N extends EditedNode>(api: StartsEditing, node: N, colKey: string, column: {
+    isCellEditable(node: N): boolean;
+} | null | undefined): (() => void) | undefined;
 /**
  * 🔴 AG.1-f — this now mounts the DS `ListboxPanel` inside AG's popup, NOT `agRichSelectCellEditor`.
  *

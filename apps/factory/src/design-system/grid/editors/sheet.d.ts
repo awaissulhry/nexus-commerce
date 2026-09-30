@@ -18,6 +18,14 @@ export declare const longTextEditor: (opts?: {
     cols?: number;
 }) => Pick<ColDef, "editable" | "cellEditor" | "cellEditorParams" | "cellEditorPopup">;
 /**
+ * The browser limit a long-text editor gets: never below the text the field may hold, and NEVER AG's default. 🔴 "Absent
+ * means no attribute at all" (above) was not true: `agLargeTextCellEditor` sets `maxLength || 200`, so every long-text cell
+ * without a cap stopped typing at 200 characters, and a capped one at the cap (P1, 2026-09-30). A channel's cap is the
+ * Owner's rule's WARNING — the counter and the cell's tint say it — so it is never enforced by the browser.
+ */
+export declare const NO_TEXT_LIMIT = 1000000;
+export declare const textLimitFor: (cap?: number | null) => number;
+/**
  * Compute the box for THIS cell and publish it where CSS can reach it.
  *
  * 🔴 The properties go on `document.documentElement`, not on the popup: AG's editor popups are

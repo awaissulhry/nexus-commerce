@@ -10,7 +10,12 @@ export interface SourceIndicatorProps {
     onAction?: () => void;
     /** Labels stay visible in legends; dense cells use the same icon with a tooltip. */
     showLabel?: boolean;
+    /**
+     * A routine source (a value that follows somewhere else) drawn in the muted text colour, so the cells that hold
+     * their own value stand out on a dense sheet. Quieter, never hidden: the icon, its name and its action stay.
+     */
+    quiet?: boolean;
     tabIndex?: number;
 }
 /** A value's origin, with a hover/focus explanation that escapes scrolling grids. */
-export declare function SourceIndicator({ kind, label, description, tooltip, actionLabel, onAction, showLabel, tabIndex }: SourceIndicatorProps): import("react/jsx-runtime").JSX.Element;
+export declare function SourceIndicator({ kind, label, description, tooltip, actionLabel, onAction, showLabel, quiet, tabIndex }: SourceIndicatorProps): import("react/jsx-runtime").JSX.Element;

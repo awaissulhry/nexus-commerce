@@ -199,17 +199,23 @@ export interface SheetWriteResult {
      * instead of stuck one version behind for the rest of the session.
      */
     version?: number;
-    /** Per-cell outcomes, when the server answers per field. Absent ⇒ `ok` applies to every cell. */
+    /**
+     * Per-cell outcomes, when the server answers per field. Absent ⇒ `ok` applies to every cell. `warning`: the value
+     * was STORED and the server named a problem with it (P1: validation warns while editing) — kept on the cell.
+     */
     cells?: Record<string, {
         ok: boolean;
         reason?: string;
         unreachable?: boolean;
+        warning?: string;
     }>;
     /** True when the server's answer means the grid's copy of this row is stale. */
     conflict?: boolean;
 }
 export interface SheetWriterOptions<T> {
     tracker: CellSaveTracker;
+    /** Keep host-owned write metadata when a read or an edit supplies a replacement row. */
+    mergeRow?: (previous: T | undefined, incoming: T, knownVersion: number | undefined) => T;
     /** Send one row's batch. Never throws for a refusal. */
     commit: (req: SheetWriteRequest<T>) => Promise<SheetWriteResult>;
     /** The live grid, for repainting cells. May return null before the grid is ready. */
@@ -278,8 +284,38 @@ export interface SheetWriterOptions<T> {
         colId: string;
         reason?: string;
     }>) => void;
+    /**
+     * BATCH MODE (opt-in) — send every row of one OPERATION (a fill, a paste, an undo) as ONE call.
+     *
+     * 🔴 Why: per-row `commit` sends a 250-row fill as 250 requests at once. Measured 2026-09-29 on the product sheet
+     * (eBay · IT, "Description theme"): each of those requests rebuilt the whole family on the server in its own
+     * transaction; 26 of 250 rows were confirmed, and 15 were saved while the sheet said they had failed.
+     *
+     * With `commitBatch` the writer keeps its per-row queues, versions and marks, but it sends ALL queued rows in one
+     * call and keeps ONE call in flight for the whole sheet: cells edited while a save is on the wire wait for the next
+     * call, which carries the versions the first one returned — so nothing is sent twice, out of order, or with a
+     * version the server has already moved past. The answer names each row's own `SheetWriteResult`, painted exactly as
+     * the per-row path paints it. A row missing from the answer is `unknown`, never `saved`.
+     *
+     * A rejected promise is an unknown outcome for every row in it (the connection dropped), never a refusal.
+     */
+    commitBatch?: (requests: SheetWriteRequest<T>[]) => Promise<Map<string, SheetWriteResult>>;
+    /**
+     * Batch mode's reconcile: ONE read for every row whose save got no answer, instead of one read per row. `null` =
+     * the read itself did not answer; a row absent from the map is still unresolved.
+     */
+    readBackBatch?: (requests: SheetWriteRequest<T>[]) => Promise<Map<string, ReadBackSnapshot<T>> | null>;
+}
+/** What a read-back says about one row: its current values (and, when known, version and row, and per-cell verdicts). */
+export interface ReadBackSnapshot<T> {
+    values: Record<string, unknown>;
+    version?: number;
+    row?: T;
+    matches?: Record<string, boolean | null>;
 }
 export declare const DEFAULT_SHEET_FLUSH_MS = 40;
+/** The longest an operation fence may hold edits before it opens itself (batch mode). */
+export declare const FENCE_MAX_MS = 2000;
 /**
  * Did the write land? Compares what the operator typed against what the row now holds.
  *
@@ -306,6 +342,15 @@ export declare class SheetWriter<T> {
     private listeners;
     private destroyed;
     private generation;
+    /** rowId → cells in the row's CURRENT flight, so `pending` counts cells, not rows. */
+    private readonly inFlightCells;
+    /** rowId → colId → the edit the server REFUSED, kept so `retryFailed()` can send it again. */
+    private readonly failed;
+    private batchTimer;
+    private batchInFlight;
+    private operationDepth;
+    private fenceTimer;
+    private reconcilingBatch;
     constructor(options: SheetWriterOptions<T>);
     /**
      * Record what the server last told us about these rows. Called after every page load and after
@@ -319,6 +364,7 @@ export declare class SheetWriter<T> {
     }>): void;
     /** What this writer believes a row's version to be — the number the next write will send. */
     versionOf(rowId: string): number | undefined;
+    private rememberRow;
     /**
      * Queue one cell. Paints it `saving` immediately, so a burst of 100 pasted cells reads as work in
      * progress from the first frame rather than after the first response.
@@ -328,9 +374,48 @@ export declare class SheetWriter<T> {
         intent?: SheetWriteIntent;
     }): void;
     private schedule;
+    /** Batch mode: one sheet-wide window. Inside an operation fence nothing is sent until the fence closes. */
+    private scheduleBatch;
+    /**
+     * Batch mode — an OPERATION starts (the grid's fill, paste, undo, redo or range delete begins). Every cell it
+     * changes is held until `endOperation()`, then sent as one call. Fences nest; a writer without `commitBatch` ignores
+     * them, because its per-row window already groups a row's cells.
+     */
+    beginOperation(): void;
+    /**
+     * 🔴 A fence that never closes would hold every edit forever — saving on screen, nothing sent. The grid's end events
+     * are not a promise this writer can rely on, so an edit is held at most FENCE_MAX_MS; then the fence opens itself.
+     *
+     * Counted from the first HELD EDIT, never from `beginOperation()`: a fill fences from the moment the drag starts,
+     * and the cells only change when the button is released. Measured 2026-09-29 (a 500-row drag, ~6 s): a timer started
+     * at the drag's start expired mid-drag, and the operation left as two requests (493 + 6).
+     */
+    private holdForFence;
+    /** The operation ended: send what it changed now, as one call (or after the call already in flight). */
+    endOperation(): void;
     /** Send every queued cell now, and resolve when the sheet is quiet. Used by tests and by Publish. */
     flush(): Promise<void>;
     private flushRow;
+    /**
+     * Paint one row's answer — the SAME code for the per-row path and for each row of a batch, so the two cannot drift.
+     */
+    private settle;
+    /**
+     * Batch mode — send EVERY queued row as one call (`commitBatch`), one call at a time for the whole sheet.
+     *
+     * A row already in flight is skipped (its new cells wait for the next call, with the version this one returns); an
+     * unreachable row is held for its reconcile, exactly as `schedule` holds it.
+     */
+    private flushBatch;
+    /** Cells the server REFUSED and that were not edited since — what the sheet offers to retry. */
+    get failedCount(): number;
+    /**
+     * Send the refused cells again (all, or those of `rowIds`), as one new operation. Each goes back through `set()`,
+     * so it is queued, painted `saving` and sent with the row's CURRENT version — a 409 taught the writer that version.
+     */
+    retryFailed(rowIds?: Iterable<string>): number;
+    private rememberFailed;
+    private forgetFailed;
     /**
      * Repaint exactly the cells that changed state.
      *
@@ -355,6 +440,13 @@ export declare class SheetWriter<T> {
      * a closed port neither speeds it up nor tells us anything new.
      */
     private reconcile;
+    /**
+     * Batch mode's reconcile: ONE loop and ONE read for every unreachable row (`readBackBatch`), with the per-row
+     * verdicts `reconcile` gives. A 250-row operation whose answer was lost is one read every 2 s, 4 s, 8 s… — not 250.
+     */
+    private reconcileBatch;
+    /** Apply one row's read to its unresolved cells. True when the row is resolved (and released for new saves). */
+    private resolveRead;
     /**
      * Is any row currently unreachable? The sheet's header states the outage ONCE from this — a
      * page-level fact, not a per-cell one, and it clears as soon as a read answers.
