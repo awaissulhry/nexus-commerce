@@ -2935,32 +2935,6 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
-    // PES.5 — the version the caller should hold NEXT, read from the row that
-    // actually changed. Only for a channel-only write; a master write keeps
-    // the existing `expectedVersion + 1`, which its single CAS bump makes true.
-    const freshChannelVersion =
-      expectedVersion !== undefined && channelListingIdsTouched.length > 0 && !hasMasterTargetedChange
-        ? (await prisma.channelListing
-            .findUnique({ where: { id: channelListingIdsTouched[0] }, select: { version: true } })
-            .catch(() => null))?.version
-        : undefined
-
-    // #600(6) — the MASTER token, read back from the row rather than computed.
-    //
-    // It was `expectedVersion + 1`, under a comment of my own explaining why
-    // computing is wrong: I fixed the channel half and left this one. The
-    // arithmetic holds only while the CAS bump is the only bump — which is
-    // precisely the case a concurrency token exists to detect the absence of.
-    // When a second writer lands between the CAS and the response, the
-    // computed number is the one value guaranteed to be wrong, and the client
-    // stores it as truth.
-    const freshMasterVersion =
-      expectedVersion !== undefined && targetId && hasMasterTargetedChange
-        ? (await prisma.product
-            .findUnique({ where: { id: targetId }, select: { version: true } })
-            .catch(() => null))?.version
-        : undefined
-
     const elapsedMs = Date.now() - startTs
 
     const overallStatus =
@@ -3176,6 +3150,22 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         context.logger.error({ err }, '[products/bulk] formula recalculation pass failed')
       }
     }
+
+    // Read the next token only after all synchronous writes, including dependent formulas.
+    // These are the same owners guarded by CAS above; a formula may have moved them again.
+    const freshChannelVersion =
+      expectedVersion !== undefined && channelListingIdsTouched.length > 0 && !hasMasterTargetedChange
+        ? (await prisma.channelListing
+            .findUnique({ where: { id: channelListingIdsTouched[0] }, select: { version: true } })
+            .catch(() => null))?.version
+        : undefined
+
+    const freshMasterVersion =
+      expectedVersion !== undefined && targetId && hasMasterTargetedChange
+        ? (await prisma.product
+            .findUnique({ where: { id: targetId }, select: { version: true } })
+            .catch(() => null))?.version
+        : undefined
 
     return {
       success: true,
