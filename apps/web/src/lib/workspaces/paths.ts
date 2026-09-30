@@ -53,3 +53,19 @@ export function workspaceSwitchPath(path: string): string {
   const sections = ['/settings/channels', '/settings/account', '/settings/company', '/settings/team', '/settings/terminology', '/settings/sharing', '/settings/profiles', '/fulfillment/stock', '/fulfillment/inbound', '/fulfillment/outbound', '/fulfillment/purchase-orders', '/products', '/listings', '/orders', '/pricing', '/insights', '/sync-logs']
   return sections.find(section => current === section || current.startsWith(`${section}/`)) ?? '/dashboard/overview'
 }
+
+/**
+ * Where "Open profile" on the picker goes: the page the person asked for (`next`, which the proxy sets when a page
+ * without a business in its URL sends them here) inside the chosen business, else that business's dashboard. Only a
+ * same-site path is followed (never another site, never a backslash trick), a business already in `next` is replaced
+ * by the chosen one, and a page that belongs to no business (the picker itself, sign-in, personal settings) is not.
+ */
+export function profileEntryHref(profileId: string, next: string | null | undefined): string {
+  const dashboard = `/w/${profileId}/dashboard/overview`
+  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return dashboard
+  next = withoutNextInternals(next)
+  const at = next.search(/[?#]/)
+  const path = withoutWorkspace(at < 0 ? next : next.slice(0, at))
+  if (path === '/' || isIdentityPath(path) || /^\/(?:api|backend|_next)(?:\/|$)/.test(path)) return dashboard
+  return `/w/${profileId}${path}${at < 0 ? '' : next.slice(at)}`
+}

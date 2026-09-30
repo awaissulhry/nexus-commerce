@@ -8,7 +8,7 @@ import { Banner, Card, Field, Modal } from '@/design-system/components'
 import { Button, Input, Select } from '@/design-system/primitives'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { getBackendUrl } from '@/lib/backend-url'
-import { WORKSPACES_ENABLED } from '@/lib/workspaces/paths'
+import { WORKSPACES_ENABLED, profileEntryHref } from '@/lib/workspaces/paths'
 import { useTheme } from '@/lib/theme/use-theme'
 import { useProfileScope, type BusinessProfile } from '../_shared/ProfileScope'
 import { useProfileDirectory } from '@/lib/workspaces/profile-directory'
@@ -45,7 +45,7 @@ export default function ProfilesClient() {
       {profiles.map(profile => <Card key={profile.id} header={<><Building2 size={17} aria-hidden /> {profile.name}</>} description={`${showArchived ? 'Archived · ' : ''}${profile.roleNames.join(' · ')}${profile.id === activeProfile?.id ? ' · Current profile' : ''}`}>
         <div className="business-profile-actions">
           {showArchived ? <Button onClick={() => setChangingStatus(profile)}>Restore profile</Button> : <>
-          <Button variant="primary" asChild><a href={`/w/${profile.id}/dashboard/overview`}>Open profile</a></Button>
+          <Button variant="primary" asChild><a href={profileEntryHref(profile.id, search.get('next'))}>Open profile</a></Button>
           {(profile.isOwner || profile.canConnectAccounts) && <Button asChild><a href={`/w/${profile.id}/settings/channels`}>Connected accounts</a></Button>}
           {profile.isOwner && <Button asChild><a href={`/w/${profile.id}/settings/sharing`}>Shared products</a></Button>}
           {profile.isOwner && <><Button variant="quiet" onClick={() => setRenaming(profile)}>Rename</Button><Button variant="quiet" onClick={() => setChangingStatus(profile)}>Archive</Button></>}
