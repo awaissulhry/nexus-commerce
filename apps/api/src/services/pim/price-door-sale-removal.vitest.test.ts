@@ -95,8 +95,9 @@ it('clearing a sale Nexus never sent (no window) is not a removal to send', () =
   expect('saleRemoved' in payload).toBe(false)
 }))
 
-it('eBay: the same removal leaves the payload exactly as before (no saleRemoved key)', () => scoped(async () => {
+it('eBay: removal includes the product SKU but no Amazon saleRemoved key', () => scoped(async () => {
   const listing = await seed('removal-ebay', 'EBAY', { value: 95, start: '2026-10-01', end: '2026-10-15' })
   const payload = await payloadOf(await write(listing.id, { sale: NO_SALE }))
-  expect(Object.keys(payload).sort()).toEqual(['actor', 'marketplace', 'price', 'salePrice', 'salePriceEnd', 'salePriceStart', 'source'])
+  expect(Object.keys(payload).sort()).toEqual(['actor', 'marketplace', 'price', 'productSku', 'salePrice', 'salePriceEnd', 'salePriceStart', 'source'])
+  expect(payload.productSku).toBe('removal-ebay')
 }))

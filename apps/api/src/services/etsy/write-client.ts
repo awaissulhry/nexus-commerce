@@ -62,6 +62,8 @@ export interface EtsyWriteInput {
   /** Override the ledger operation name when the path alone does not say what the call means. */
   operation?: string
   timeoutMs?: number
+  /** Inventory writes abort when their listing lease is lost. */
+  signal?: AbortSignal
 }
 
 export class EtsyWriteError extends Error {
@@ -114,6 +116,7 @@ export async function etsyWriter(accountId: string): Promise<{
       pushLock: input.pushLock,
       ledger: input.ledger,
       timeoutMs: input.timeoutMs ?? 30_000,
+      signal: input.signal,
     })
     // `gatewayCall` reports "no answer at all" as status 0. For a WRITE that is not a failure — the
     // change may have landed — so it is raised as its own error rather than read as a refusal.
