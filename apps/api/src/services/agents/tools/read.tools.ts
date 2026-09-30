@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import { likeEscaped } from '../../../lib/like-pattern.js'
+import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
 // MCP.12 — the caller's text is matched as typed: `_` and `%` in a SKU, a name or an email are characters, not wildcards.
 const ci = (q: string) => ({ contains: likeEscaped(q), mode: 'insensitive' as const })
@@ -46,7 +47,7 @@ const productSnapshot: AgentTool = {
     if (!id) return { ok: false, error: 'productId is required' }
     // MCP.12 — a deleted product (soft delete, `deletedAt`) is not found, as everywhere else in the app.
     const p = await prisma.product.findFirst({
-      where: { id, deletedAt: null },
+      where: liveProduct(id),
       select: {
         sku: true,
         name: true,
@@ -247,8 +248,8 @@ const stockLevels: AgentTool = {
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findUnique({
-      where: { id },
+    const p = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: {
         sku: true,
         name: true,
@@ -285,8 +286,8 @@ const priceStatus: AgentTool = {
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findUnique({
-      where: { id },
+    const p = await prisma.product.findFirst({
+      where: liveProduct(id),
       select: {
         sku: true,
         basePrice: true,
@@ -326,6 +327,8 @@ const listingHealth: AgentTool = {
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
+    // MCP.12 — a deleted product is not found; its listings are not read.
+    if (!(await isLiveProduct(id))) return { ok: false, error: PRODUCT_NOT_FOUND }
     const rows = await prisma.channelListing.findMany({
       where: { productId: id },
       select: {
