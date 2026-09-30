@@ -1048,7 +1048,9 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     ...(wantChannel ? { onlyChannels: [wantChannel], includeEmptyChannels: true } : {}),
   })
   mark('columns')
-  const { columns, coordinates, locale: marketLocale, droppedKeys, schemaMissing, schemaAge, availableMarkets, groups: columnGroups, coverage } = columnSet
+  const { coordinates, locale: marketLocale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coverage } = columnSet
+  // P1 — widened below by the eBay item specifics the family stores outside its category (a copy: the set is cached).
+  let columns = columnSet.columns, columnGroups = columnSet.groups
   const locale = normalizeLanguage(input.locale ?? marketLocale)
 
   let coordinate: SheetCoordinate | null = null
@@ -1129,6 +1131,17 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } }),
   ]) : [[], []]
   mark('related')
+
+  // P1 (report 3 I-3.4, report 6 I-8b) — item specifics the family's listings store that are not in eBay's list for the
+  // category still publish; they are served as editable, clearable columns ("Other item specifics").
+  if (coordinate?.channel === 'EBAY') {
+    const { otherItemSpecificColumns, OTHER_SPECIFICS_GROUP } = await import('./channel-specs/ebay-other-specifics.js')
+    const other = otherItemSpecificColumns({ columns, coordinateLabel: coordinate.label, listings: listingRows, category: context?.categories[0] ?? null })
+    if (other.length) {
+      columns = [...columns, ...other]
+      columnGroups = [...(columnGroups ?? []), OTHER_SPECIFICS_GROUP]
+    }
+  }
 
   // ── 3b. what the MAPPING ENGINE would ship for these cells ────────
   // Composed IN-PROCESS (hub ruling #15.2 / #20.1): one payload, no second HTTP

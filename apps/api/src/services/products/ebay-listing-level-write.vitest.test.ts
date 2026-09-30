@@ -54,9 +54,9 @@ beforeAll(() => scoped(async () => {
   for (const key of ['A', 'B']) ids[key] = (await prisma.product.create({ data: { sku: `LL-FAM-${key}`, name: key, basePrice: 10, parentId: ids.parent } as never })).id
   const create = (productId: string, itemSpecifics: Record<string, unknown>) => prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', channelMarket: 'EBAY_IT', region: 'IT',
     channelConnectionId: account, platformAttributes: { categoryId: '177104', itemSpecifics } as never } })
-  await create(ids.parent, { 'Paese di origine': 'Pakistan' })
-  await create(ids.A, { 'Paese di origine': 'Cina', Colore: 'Rosso' })
-  await create(ids.B, { Colore: 'Giallo' })
+  await create(ids.parent, { 'Paese di origine': 'Pakistan', 'Team name': 'Giacca' })
+  await create(ids.A, { 'Paese di origine': 'Cina', Colore: 'Rosso', Genere: 'Uomo' })
+  await create(ids.B, { Colore: 'Giallo', Genere: 'Donna' })
 }), 120_000)
 afterAll(async () => { await state.db?.close() }, 30_000)
 
@@ -105,5 +105,24 @@ describe('a listing-level eBay value written on a variation row', () => {
     expect(result, JSON.stringify(result)).toMatchObject({ success: true, updated: 1 })
     expect(result.familyListings).toBeUndefined()
     expect(await specifics(ids.parent)).toMatchObject({ 'Paese di origine': 'Pakistan' })
+  })
+})
+
+// P1 item 3 (report 3 I-3.4) — a stored item specific that is not in the category (Genere, Team name) is published; it is a
+// column now, so it can be edited and removed. eBay takes one value per listing for it too.
+describe('a stored item specific with no category column', () => {
+  it('is editable: written on the parent row it lands on the parent listing', async () => {
+    const result = await save(ids.parent, { field: 'attr_other_specific_team_name', value: 'Giubbotto' })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true, updated: 1 })
+    expect(await specifics(ids.parent)).toMatchObject({ 'Team name': 'Giubbotto' })
+  })
+  it('is removable: a clear on a variation row empties the listing\'s value on every row, so eBay no longer receives it', async () => {
+    const result = await save(ids.B, { field: 'attr_other_specific_genere', value: null })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+    for (const id of [ids.parent, ids.A, ids.B]) expect((await specifics(id)).Genere ?? null).toBeNull()
+    expect(result.familyListings.map((row: { productId: string }) => row.productId).sort()).toEqual([ids.parent, ids.A].sort())
+  })
+  it('control: an axis value on the other rows survives the clear', async () => {
+    expect(await specifics(ids.A)).toMatchObject({ Colore: 'Rosso' })
   })
 })
