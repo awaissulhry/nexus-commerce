@@ -11,6 +11,7 @@ import { normalizeEbayListingValue } from '../ebay-listing-values.js'
 import { storedChannelState } from '../channel-value-mutation.js'
 import { isOffListError, validateChannelValue } from './validate-channel-value.js'
 import { finding, type ValueFinding } from '../value-verdict.js'
+import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import { masterDefaultRule } from './master-default-rule.js'
 import { exprDependenciesDeep } from './expr.js'
 import { evaluateSchemaRequirements } from './schema-requirements.js'
@@ -350,7 +351,14 @@ export async function resolveBatch(input: {
         key: field.fieldKey, masterKey: field.sheetKey, channelStore: field.channelStore,
       }, attrsView.keys))
       const store = field.channelStore
-      const contentHit = content[contentField(field.sheetKey ?? field.fieldKey)]
+      let contentHit = content[contentField(field.sheetKey ?? field.fieldKey)]
+      // P1 (report 3 I-3.3) — a value the LISTING stores in its own channel bag (an eBay item specific, "Stile") is never
+      // hidden by language content that only follows the shared text: it is the listing's value, it is what the sheet
+      // edits (and resets), and it is what publish sends. A content PIN on this listing still wins.
+      if (contentHit && contentHit.tier !== 'pin' && store?.kind === 'platformAttributes') {
+        const own = storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
+        if (own.state === 'stored' && !isBlankValue(own.value)) contentHit = undefined
+      }
       const storedState = contentHit ? { state: 'inherited' as const } : storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
       const stored = !contentHit && storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
         ? storedState.value : undefined
@@ -409,7 +417,11 @@ export async function resolveBatch(input: {
         },
       })
 
-      const projected = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape, contentField(field.sheetKey ?? field.fieldKey))
+      const wire = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape, contentField(field.sheetKey ?? field.fieldKey))
+      // P1 (report 3 I-3.8) — a multi-value eBay item specific shows the values eBay receives: a legacy joined list
+      // ("Ventilato, Impermeabile, …", over 65 characters) is its parts, as the publisher sends it.
+      const projected = channel === 'EBAY' && field.shape === 'list' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' && Array.isArray(wire)
+        ? ebayAspectValues(wire) : wire
       const { value, errors, findings, autoCorrected, overLimit } = validateChannelValue(field, projected)
       for (const warning of r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning))) {
         errors.push(warning); findings.push(finding('nexus', warning))

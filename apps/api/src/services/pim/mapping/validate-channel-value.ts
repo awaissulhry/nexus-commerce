@@ -2,6 +2,7 @@ import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldError, nativeFieldKeys, type NativeEdit } from '@nexus/shared/shopify-information'
 import { checkForStorage, isBlankValue } from '../sheet-values.js'
 import { finding, type ValueFinding } from '../value-verdict.js'
+import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import type { CatalogueField } from './field-catalogue.service.js'
 
 /**
@@ -78,12 +79,18 @@ export function validateChannelValue(field: CatalogueField, input: unknown) {
   // The first shape problem only, as before: a stored value is one sentence, not a list of every rule it misses.
   const shapeFinding = checked.ok === false ? finding('type', checked.error) : checked.findings[0]
   if (!info?.definition && shapeFinding && (!isBlankValue(value) || field.priority === 'required')) findings.push(shapeFinding)
-  const strings = (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')
+  // An eBay item specific is measured as eBay receives it: each value, a legacy joined list as its parts.
+  const itemSpecific = field.channelStore?.kind === 'platformAttributes' && field.channelStore.path[0] === 'itemSpecifics'
+  const strings = itemSpecific ? ebayAspectValues(value) : (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')
   const chars = Math.max(0, ...strings.map(v => v.length))
   const bytes = Math.max(0, ...strings.map(v => Buffer.byteLength(v, 'utf8')))
   const overLimit = {
     ...(field.maxLength && chars > field.maxLength ? { chars } : {}),
     ...(field.maxBytes && bytes > field.maxBytes ? { bytes } : {}),
+  }
+  // A single-value eBay item specific holding a joined list would be sent as its parts: more values than eBay takes.
+  if (itemSpecific && (field.shape ?? 'scalar') === 'scalar' && !single && strings.length > 1) {
+    findings.push(finding('count', `${field.label} takes one value; eBay would receive ${strings.length} (${strings.map(v => JSON.stringify(v)).join(', ')}).`))
   }
   if (overLimit.chars) findings.push(finding('length', `${field.label} exceeds ${field.maxLength} characters (${chars}).`))
   if (overLimit.bytes) findings.push(finding('length', `${field.label} exceeds ${field.maxBytes} UTF-8 bytes (${bytes}).`))

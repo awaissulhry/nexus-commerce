@@ -336,3 +336,14 @@ describe('the mapped category fills only the channel category field', () => {
       .toMatchObject({ value: 0, errors: [expect.stringMatching(/at least 1|minimum|greater/i)] })
   })
 })
+
+// P1 (report 3 I-3.3) — "Stile" stored on the listing was hidden by language content that only follows the shared text:
+// the cell showed nothing and publish sent nothing. The listing's own stored value wins; a content PIN still wins over it.
+describe('a stored item specific is never hidden by language content', () => {
+  it('shows and sends the listing\'s own "Stile" over a computed shared value', async () => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, masterLocalizableKeys: ['style'], fields: [field('style', { label: 'Style', rule: { source: 'style' },
+      channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Stile'] } })] })
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', platformAttributes: { itemSpecifics: { Stile: 'Da motociclista' } } }])
+    expect((await resolveBatch(input)).products[0].cells.style).toMatchObject({ value: 'Da motociclista', provenance: 'override' })
+  })
+})

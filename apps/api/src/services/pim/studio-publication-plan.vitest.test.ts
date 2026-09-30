@@ -188,3 +188,50 @@ describe('the publish verdict per cell', () => {
     expect(facts.issues).toContainEqual(expect.objectContaining({ field: 'title', severity: 'error', message: 'Title: Title exceeds 80 characters (94).' }))
   })
 })
+
+// P1 (report 5 I-1/I-2/I-3, report 3 I-3.4/I-3.9) — eBay takes one value per listing for an item specific that is not an
+// axis, parent first, then the first variation in SKU order. The review judges that value once, on the row it comes
+// from, and names the rows whose own value is not sent.
+describe('eBay listing-level item specifics in the publish review', () => {
+  const store = (name: string) => ({ kind: 'platformAttributes', path: ['itemSpecifics', name] })
+  const fields = [{ fieldKey: 'colore_specifico', sheetKey: 'colore_specifico', label: 'Specific color', channelStore: store('Colore specifico') },
+    { fieldKey: 'season', sheetKey: 'season', label: 'Season', channelStore: store('Stagione') }]
+  const offList = { rule: 'offList', message: 'Season contains an unaccepted value. Allowed values: Estate.' }
+  const cell = (value: unknown, findings: Array<{ rule: string; message: string }> = []) => ({ label: 'x', value, errors: findings.map(f => f.message), findings })
+  const run = async (cells: Record<string, Record<string, unknown>>) => {
+    m.languages.mockResolvedValue(['it'])
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: cells[productId] ?? {} })),
+      missingProductIds: [], catalogue: { fields } }))
+    return (await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues
+  }
+  it('a variation\'s own value that is not sent does not block, and is named once with the value eBay gets (report 5 I-2, I-3)', async () => {
+    const issues = await run({
+      parent: { season: cell('Tutte le stagioni', [offList]) },
+      child: { colore_specifico: cell('Giallo'), season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) },
+    })
+    // the child's over-length season is not sent (the parent's is): no block for it; the parent's off-list one warns once
+    expect(issues.filter(i => i.field === 'season')).toEqual([
+      expect.objectContaining({ productId: 'parent', severity: 'warning', message: 'x: Season contains an unaccepted value. Allowed values: Estate.' }),
+      expect.objectContaining({ productId: 'parent', severity: 'warning', message: expect.stringContaining('will get "Tutte le stagioni" (from PARENT). 1 row holds another value that is not sent: CHILD') }),
+    ])
+    // no parent value: the first variation supplies it, and it is judged there
+    expect(issues.filter(i => i.field === 'colore_specifico')).toEqual([])
+  })
+  it('a problem on the value eBay receives still blocks, on the row it comes from', async () => {
+    const issues = await run({ parent: {}, child: { season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) } })
+    expect(issues.filter(i => i.field === 'season')).toEqual([expect.objectContaining({ productId: 'child', severity: 'error' })])
+  })
+  it('a stored item specific with no column (Genere): the rows whose own value is not sent are named; a value over 65 blocks', async () => {
+    const { ebayStoredSpecificIssues } = await import('./studio-publication-plan.js')
+    const { ebayAxisIdentities } = await import('./ebay-listing-level.js')
+    const rows = [{ productId: 'p', sku: 'VENTRA', isParent: true }, { productId: 'a', sku: 'VENTRA-RED-MEN', isParent: false }, { productId: 'b', sku: 'VENTRA-YELLOW-WOMEN', isParent: false }]
+    const listing = (productId: string, itemSpecifics: Record<string, unknown>) => ({ productId, platformAttributes: { itemSpecifics } })
+    const issues = ebayStoredSpecificIssues({ parentId: 'p', rows, axes: ebayAxisIdentities(['Colore', 'Taglia']), fields: [],
+      listings: [listing('p', { 'Body type': 'x'.repeat(70) }), listing('a', { Genere: 'Uomo', Colore: 'Rosso' }), listing('b', { Genere: 'Donna', Colore: 'Giallo' })] })
+    expect(issues).toEqual([
+      expect.objectContaining({ productId: 'p', field: 'itemSpecifics.Body type', severity: 'error', message: expect.stringContaining('eBay takes at most 65 characters per value') }),
+      expect.objectContaining({ productId: 'a', field: 'itemSpecifics.Genere', severity: 'warning',
+        message: 'Genere: eBay takes one value for the whole listing and will get "Uomo" (from VENTRA-RED-MEN). 1 row holds another value that is not sent: VENTRA-YELLOW-WOMEN ("Donna").' }),
+    ])
+  })
+})
