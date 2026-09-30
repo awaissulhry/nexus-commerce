@@ -9,12 +9,14 @@ import { FEATURES, permissionCatalog } from '@nexus/shared/permissions'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { ConnectedApps } from '@/components/connected-apps/ConnectedApps'
 import { getCsrfToken } from '@/lib/auth/csrf-store'
+import { OWNER_ONLY_TEAM_NOTE, canManageTeam } from './workspaceTeamModel'
 import '../../profiles/profiles.css'
 
 type Role = { id: string; key: string; name: string; description: string; permissions: string[]; isSystem: boolean; version: number }
 type Member = { id: string; status: 'active' | 'revoked'; version: number; user: { displayName: string; email: string }; roles: { role: Role }[] }
 type Invitation = { id: string; email: string; roleIds: string[]; expiresAt: string }
-type Roster = { members: Member[]; roles: Role[]; invitations: Invitation[] }
+/** `canManage`: only an owner may change the team; a member with `users.manage` reads it (workspaceTeamModel.ts). */
+type Roster = { members: Member[]; roles: Role[]; invitations: Invitation[]; canManage?: boolean }
 type AccountRow = { id: string; label: string; channel: string }
 type AccountAccess = { membershipId: string; restricted: boolean; connectionIds: string[] }
 
@@ -53,6 +55,7 @@ export default function WorkspaceTeamClient() {
   const [editingRole, setEditingRole] = useState<Role | 'new' | null>(null)
   // MCP.6 — the business's Claude connections, for whoever manages its sessions.
   const canManageSessions = usePermission(FEATURES.sessionsManage)
+  const canManage = canManageTeam(roster)
   const load = useCallback(async () => {
     setError(null)
     try { setRoster(await requestTeam('/members')) }
@@ -67,17 +70,18 @@ export default function WorkspaceTeamClient() {
     finally { setRevoking(null) }
   }
   return <div className="business-profiles">
-    <header className="business-profiles-heading"><div><h2>{activeProfile?.name ?? 'Business team'}</h2><p>Roles apply within this business.</p></div><Button variant="primary" disabled={!roster} onClick={() => setEditing('invite')}>Invite member</Button></header>
+    <header className="business-profiles-heading"><div><h2>{activeProfile?.name ?? 'Business team'}</h2><p>Roles apply within this business.</p></div><Button variant="primary" disabled={!canManage} onClick={() => setEditing('invite')}>Invite member</Button></header>
     {error && <Banner tone="danger" action={<Button onClick={() => { void load() }}>Retry</Button>}>{error}</Banner>}
     {invitationLink && <Card header="Invitation ready" description="Share this private link with the invited person. It expires in 7 days."><div className="business-profile-form"><Field label="Invitation link"><Input readOnly value={invitationLink} onFocus={event => event.target.select()} /></Field><Button onClick={async () => { try { await navigator.clipboard.writeText(invitationLink); setCopied(true) } catch { setError('Select and copy the invitation link above.') } }}>{copied ? 'Copied' : 'Copy invitation link'}</Button></div></Card>}
+    {roster && !canManage && <Banner tone="info">{OWNER_ONLY_TEAM_NOTE}</Banner>}
     {!roster && !error && <p role="status">Loading team…</p>}
-    {roster?.members.map(member => <Card key={member.id} header={member.user.displayName || member.user.email} description={`${member.user.email} · ${member.status === 'active' ? member.roles.map(({ role }) => role.name).join(' · ') : 'Access removed'}`} headerAction={<Button onClick={() => setEditing(member)}>Manage access</Button>} />)}
+    {roster?.members.map(member => <Card key={member.id} header={member.user.displayName || member.user.email} description={`${member.user.email} · ${member.status === 'active' ? member.roles.map(({ role }) => role.name).join(' · ') : 'Access removed'}`} headerAction={<Button disabled={!canManage} onClick={() => setEditing(member)}>Manage access</Button>} />)}
     {!!roster?.invitations.length && <h2>Pending invitations</h2>}
-    {roster?.invitations.map(invitation => <Card key={invitation.id} header={invitation.email} description={`Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`} headerAction={<Button variant="danger-outline" disabled={revoking !== null} onClick={() => { void revoke(invitation) }}>{revoking === invitation.id ? 'Revoking…' : 'Revoke invitation'}</Button>} />)}
+    {roster?.invitations.map(invitation => <Card key={invitation.id} header={invitation.email} description={`Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`} headerAction={<Button variant="danger-outline" disabled={revoking !== null || !canManage} onClick={() => { void revoke(invitation) }}>{revoking === invitation.id ? 'Revoking…' : 'Revoke invitation'}</Button>} />)}
     {canManageSessions && <ConnectedApps scope="business" />}
-    {roster && <><div className="business-profiles-heading"><h2>Business roles</h2><Button onClick={() => setEditingRole('new')}>Create role</Button></div>{roster.roles.map(role => <Card key={role.id} header={role.name} description={role.isSystem ? 'Built-in role' : role.description || 'Custom role for this business'} headerAction={!role.isSystem && <Button onClick={() => setEditingRole(role)}>Edit permissions</Button>} />)}</>}
-    {editingRole && <RoleEditor role={editingRole} onClose={() => setEditingRole(null)} onSaved={async () => { await load(); setEditingRole(null) }} />}
-    {editing && roster && <MemberEditor member={editing} roles={roster.roles} onClose={() => setEditing(null)} onSaved={async data => { if (data?.token) { setInvitationLink(`${window.location.origin}/accept-workspace-invite#token=${encodeURIComponent(data.token)}`); setCopied(false) } await load(); setEditing(null) }} />}
+    {roster && <><div className="business-profiles-heading"><h2>Business roles</h2><Button disabled={!canManage} onClick={() => setEditingRole('new')}>Create role</Button></div>{roster.roles.map(role => <Card key={role.id} header={role.name} description={role.isSystem ? 'Built-in role' : role.description || 'Custom role for this business'} headerAction={!role.isSystem && <Button disabled={!canManage} onClick={() => setEditingRole(role)}>Edit permissions</Button>} />)}</>}
+    {editingRole && canManage && <RoleEditor role={editingRole} onClose={() => setEditingRole(null)} onSaved={async () => { await load(); setEditingRole(null) }} />}
+    {editing && roster && canManage && <MemberEditor member={editing} roles={roster.roles} onClose={() => setEditing(null)} onSaved={async data => { if (data?.token) { setInvitationLink(`${window.location.origin}/accept-workspace-invite#token=${encodeURIComponent(data.token)}`); setCopied(false) } await load(); setEditing(null) }} />}
   </div>
 }
 

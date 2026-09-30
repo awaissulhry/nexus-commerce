@@ -210,15 +210,23 @@ export function createWorkspaceService(db: PrismaClient) {
     })
   }
 
+  /**
+   * The team, for whoever may open Team & Access: an owner, or a member whose roles here grant `users.manage` (the
+   * permission the web asks before it opens the page). Every change to the team stays owner-only, so `canManage` tells
+   * the page whether to offer those changes; a non-owner reads the team as it is.
+   */
   async function listMembers(userId: string, workspaceId: string) {
-    await requireOwner(userId, workspaceId)
+    const access = await membership(userId, workspaceId)
+    if (!access.isOwner && !access.permissions.has(FEATURES.usersManage)) {
+      throw new WorkspaceError('team_view_forbidden', 'Your role in this business profile does not include Team & access.')
+    }
     const members = await db.workspaceMembership.findMany({
       where: { workspaceId: workspaceId }, orderBy: { createdAt: 'asc' },
       select: { id: true, status: true, version: true, user: { select: { displayName: true, email: true } }, roles: { select: { role: { select: { id: true, name: true, key: true } } } } },
     })
     const roles = await db.role.findMany({ where: { OR: [{ isSystem: true, workspaceId: null }, { workspaceId }] }, select: { id: true, name: true, key: true, permissions: true, isSystem: true, version: true, description: true }, orderBy: { name: 'asc' } })
     const invitations = await db.workspaceInvitation.findMany({ where: { workspaceId, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true, email: true, roleIds: true, expiresAt: true }, orderBy: { createdAt: 'desc' } })
-    return { members, roles, invitations }
+    return { members, roles, invitations, canManage: access.isOwner }
   }
 
   async function invite(userId: string, workspaceId: string, raw: unknown) {
