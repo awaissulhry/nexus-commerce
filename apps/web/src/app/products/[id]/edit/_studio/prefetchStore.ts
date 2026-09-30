@@ -13,7 +13,7 @@
 export const PREFETCH_TTL_MS = 15_000
 
 type Kind = 'sheet' | 'destination'
-interface Entry { url: string; response: Promise<Response>; controller: AbortController; timer: ReturnType<typeof setTimeout> }
+interface Entry { url: string; response: Promise<Response>; controller: AbortController; timer: ReturnType<typeof setTimeout>; adopted?: boolean }
 
 const entries = new Map<Kind, Entry>()
 
@@ -39,7 +39,8 @@ export function startPrefetch(url: string, doFetch: typeof fetch = (...args) => 
   if (entries.get(kind)?.url === url) return
   drop(kind, true)
   const controller = new AbortController()
-  const response = doFetch(url, { credentials: 'include', cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) })
+  // No credentials or headers here: the patched fetch (`install-fetch.ts`) adds them to every API read, this one included.
+  const response = doFetch(url, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) })
   // A failure is the adopter's to handle (it reads for itself); never an unhandled rejection here.
   response.catch(() => {})
   entries.set(kind, { url, response, controller, timer: setTimeout(() => drop(kind, true), PREFETCH_TTL_MS) })
@@ -55,6 +56,13 @@ export function adoptPrefetch(url: string, signal?: AbortSignal): Promise<Respon
   const entry = kind ? entries.get(kind) : undefined
   if (!kind || !entry) return null
   if (entry.url !== url) { drop(kind, true); return null }
+  // Adopted: the read is wanted now, however long it takes (its own 30 s bound still holds). The expiry only forgets it
+  // (a cancelled adopter that never comes back), it no longer aborts it (P2 review 5).
+  if (!entry.adopted) {
+    entry.adopted = true
+    clearTimeout(entry.timer)
+    entry.timer = setTimeout(() => drop(kind, false), PREFETCH_TTL_MS)
+  }
   return entry.response.then((response) => {
     if (!signal?.aborted && entries.get(kind) === entry) drop(kind, false)
     return response.clone()
