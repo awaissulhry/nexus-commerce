@@ -63,3 +63,12 @@ export function withStoredValue<T extends { value: string; label: unknown }>(opt
 export function typedStart(eventKey: string | null | undefined): string {
   return eventKey?.length === 1 && eventKey.trim() !== '' ? eventKey : ''
 }
+
+/**
+ * AG's editor `stopEditing(suppressNavigateAfterEdit?, event?)`. It never cancels: it ENDS the edit with the value last
+ * reported. `stopEditing(true)` read as "cancel" saved the abandoned edit — a measure's Escape saved it (audit B09,
+ * 2026-09-30). A cancel is the grid API's `api.stopEditing(true)` (`GridCancel`).
+ */
+export type EditorStop = (suppressNavigateAfterEdit?: boolean, event?: KeyboardEvent) => void
+/** The grid API's own stop: `stopEditing(true)` is a real cancel, and no value is written. */
+export type GridCancel = { stopEditing(cancel?: boolean): void }

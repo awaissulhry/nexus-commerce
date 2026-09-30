@@ -2,11 +2,11 @@
 import { REFERENCE_FIELDS } from '@nexus/shared/reference-values'
 import { useEffect, useState } from 'react'
 import { AsyncListboxPanel } from '@/design-system/components'
-import { cellValueOf, isUnchanged, typedStart } from '@/design-system/grid'
+import { cellValueOf, isUnchanged, typedStart, type EditorStop, type GridCancel } from '@/design-system/grid'
 import { loadReferenceChoices, type ReferenceChoices, type ReferenceField, type ReferenceScope } from './referenceOptions'
 
-export function ReferenceSelectEditor({ fieldKey, market, productType, connectionId, value, onValueChange, stopEditing, eventKey }: ReferenceScope & {
-  fieldKey: ReferenceField; value: unknown; onValueChange: (value: unknown) => void; stopEditing: (cancel?: boolean) => void; eventKey?: string | null
+export function ReferenceSelectEditor({ fieldKey, market, productType, connectionId, value, onValueChange, stopEditing, api, eventKey }: ReferenceScope & {
+  fieldKey: ReferenceField; value: unknown; onValueChange: (value: unknown) => void; stopEditing: EditorStop; api: GridCancel; eventKey?: string | null
 }) {
   // The key that opened the cell by typing starts the search; the grid consumed it (P0, 2026-09-30).
   const [query, setQuery] = useState(() => typedStart(eventKey))
@@ -29,10 +29,10 @@ export function ReferenceSelectEditor({ fieldKey, market, productType, connectio
     query={query} onQueryChange={setQuery} value={text} loading={!current} error={current?.error}
     options={(choices?.options ?? []).filter(option => `${option.searchText ?? option.label}`.toLowerCase().includes(query.trim().toLowerCase()))}
     message={missingCurrent ? `The current selection (${choices.labels[text] ?? text}) is unavailable. Choose an available option to replace it.` : undefined}
-    onRetry={() => setRevision(value => value + 1)} onCancel={() => stopEditing(true)}
+    onRetry={() => setRevision(value => value + 1)} onCancel={() => api.stopEditing(true)}
     onKeyChoice={chosen => { if (chosen !== null && choices?.options.some(option => option.value === chosen) && !isUnchanged(value, chosen)) onValueChange(cellValueOf(chosen)) }}
     onCommit={chosen => {
-      if (!choices?.options.some(option => option.value === chosen) || isUnchanged(value, chosen)) return stopEditing(true)
+      if (!choices?.options.some(option => option.value === chosen) || isUnchanged(value, chosen)) return api.stopEditing(true)
       onValueChange(cellValueOf(chosen)); stopEditing()
     }} style={{ width: 'min(480px, 85vw)' }} />
 }

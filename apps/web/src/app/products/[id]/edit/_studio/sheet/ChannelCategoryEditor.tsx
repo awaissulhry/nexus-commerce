@@ -4,11 +4,11 @@ import Link from '@/lib/workspaces/Link'
 import { Button } from '@/design-system/primitives'
 import { categoryHref } from '@/app/catalog/categories/api'
 import { AsyncListboxPanel } from '@/design-system/components'
-import { typedStart } from '@/design-system/grid'
+import { typedStart, type EditorStop, type GridCancel } from '@/design-system/grid'
 import { loadCategoryOptions, type CategoryOption } from './categoryOptions'
 
-export function ChannelCategoryEditor({ value, onValueChange, channel, market, accountId, stopEditing, eventKey }: {
-  value: unknown; onValueChange: (value: unknown) => void; channel: 'AMAZON' | 'EBAY' | 'ETSY'; market: string; accountId?: string; stopEditing: (cancel?: boolean) => void; eventKey?: string | null
+export function ChannelCategoryEditor({ value, onValueChange, channel, market, accountId, stopEditing, api, eventKey }: {
+  value: unknown; onValueChange: (value: unknown) => void; channel: 'AMAZON' | 'EBAY' | 'ETSY'; market: string; accountId?: string; stopEditing: EditorStop; api: GridCancel; eventKey?: string | null
 }) {
   // The key that opened the cell by typing starts the search; the grid consumed it (P0, 2026-09-30).
   const [query, setQuery] = useState(() => typedStart(eventKey))
@@ -33,7 +33,7 @@ export function ChannelCategoryEditor({ value, onValueChange, channel, market, a
     return () => { clearTimeout(timer); abort.abort() }
   }, [channel, market, accountId, remoteQuery, revision, key, needsSearch])
 
-  const cancel = () => stopEditing(true)
+  const cancel = () => api.stopEditing(true)
   const toCell = (chosen: string) => channel === 'ETSY' ? Number(chosen) : chosen
   const commit = (chosen: string) => {
     if (chosen === String(value ?? '')) return cancel()

@@ -32,6 +32,7 @@ import { CellSaveReason, EmptyValue, RequiredValue } from '../renderers/cells'
 import { ProvenanceMark } from '../renderers/provenanceMark'
 import type { CellProvenance } from '../renderers/provenance'
 import type { CellSaveState, CellSaveTracker } from './roundTrip'
+import type { EditorStop } from './selectPanelModel'
 import { editorBox, roomToRightOf } from './editorBox'
 import { EDITOR_KEY_HINT_FORM } from './editorHint'
 import {
@@ -56,7 +57,7 @@ export interface SlotListEditorParams extends Partial<ICellEditorParams> {
   slotList: SlotListSettings
   value?: unknown
   onValueChange?: (value: unknown) => void
-  stopEditing?: (cancel?: boolean) => void
+  stopEditing?: EditorStop
 }
 
 /** The field fact under the key line — the editor's own keyboard reorder, stated where it is available. */

@@ -4,6 +4,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **`MeasureEditor`** reads its number field as a paste reads the same text: "1.5 kg", "12kg" and "9 OUNCES" keep their unit, and text that is still not a number is reported as typed, so the server refuses it by name. It used to report `value: null`, which saved an empty weight with no warning (B08). New in `shapeValue.ts`: **`measureFromText`**, **`MeasureDraft`**. Mirrored in Web.
 
+- **`MeasureEditor`**, **`ListPanelEditor`** and **`SlotListEditor`** type AG's editor stop as it is: **`EditorStop`** = `(suppressNavigateAfterEdit?, event?)`, which ENDS the edit with the last reported value. A cancel is the grid API's `stopEditing(true)` (**`GridCancel`**, both in `selectPanelModel.ts`). Escape in the measure editor's unit list saved the abandoned edit; it now cancels (B09). Mirrored in Web.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.

@@ -13,7 +13,7 @@ import { ListboxPanel } from '../../components'
 import { Input } from '../../primitives'
 import { asMeasure } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
-import { typedStart } from './selectPanelModel'
+import { typedStart, type EditorStop, type GridCancel } from './selectPanelModel'
 import { measureFromText, type MeasureDraft } from './shapeValue'
 
 export interface MeasureEditorParams {
@@ -21,14 +21,15 @@ export interface MeasureEditorParams {
   label?: string
   value?: unknown
   column: { getActualWidth(): number }
-  stopEditing: (cancel?: boolean) => void
+  stopEditing: EditorStop
+  api: GridCancel
   onValueChange?: (value: unknown) => void
   eGridCell?: HTMLElement
   eventKey?: string | null
 }
 
 export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function MeasureEditor(props, _ref) {
-  const { unitOptions = [], label, value, column, stopEditing, onValueChange } = props
+  const { unitOptions = [], label, value, column, api, onValueChange } = props
   const [m, setM] = useState<MeasureDraft>(() => asMeasure(value))
   /* A digit, point, comma or minus that opened the cell by typing starts the number; the grid consumed that keystroke
      (P0, 2026-09-30). The field is text with a decimal keypad, not `type="number"`: a number field clears "." and "-",
@@ -82,7 +83,7 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
           value={m.unit ?? undefined}
           onCommit={(u) => report({ value: m.value, unit: u })}
           onKeyChoice={(u) => { if (u !== null && u !== m.unit) report({ value: m.value, unit: u }) }}
-          onCancel={() => stopEditing(true)}
+          onCancel={() => api.stopEditing(true)}
           emptyLabel="No units"
         />
       )}

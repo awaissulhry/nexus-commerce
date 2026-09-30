@@ -58,3 +58,18 @@ describe('MeasureEditor — the typed text is read as a paste reads it, never as
     }
   })
 })
+
+/**
+ * Audit B09 (2026-09-30) — AG's editor `stopEditing(true)` is `suppressNavigateAfterEdit`, not cancel: it ends the edit
+ * with the value last reported. Escape in the unit list after typing 3 and arrowing to grams saved {3, grams}.
+ */
+describe('MeasureEditor — Escape in the unit list cancels the edit', () => {
+  it('cancels through the grid API, never through the editor stop that commits', () => {
+    const { stopEditing, api } = mount({ value: 12, unit: 'kilograms' })
+    capture.input.onChange({ target: { value: '3' } })
+    capture.units.onKeyChoice('grams')
+    capture.units.onCancel()
+    expect(api.stopEditing).toHaveBeenCalledWith(true)
+    expect(stopEditing).not.toHaveBeenCalled()
+  })
+})

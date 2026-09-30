@@ -91,4 +91,4 @@ export { matrixWrite, MATRIX_NOT_A_COLUMN, MATRIX_NO_LISTING, MATRIX_FULFILMENT_
 export { SlotListEditor, SlotListValue, slotListMoveFact, slotListSaveState, slotListProvenance, slotListSummary, type SlotListEditorParams, type SlotListSettings, type SlotCellLike, type SlotListValueParams } from './SlotListEditor'
 export { slotListColumnDef, slotListEditable, type SlotListColumnOptions } from './slotListColumn'
 export { SLOT_LIST_PREFIX, SLOT_LIST_EDITOR_CLASS, slotListKey, isSlotListKey, slotListValue, slotListChanges, moveSlot, moveByKey, listModeItems, withTrailingEmpty, listModeCommit, slotListText, bulletsEditorKey, slotPositionOf, suppressSlotListKeys, type SlotGroup, type SlotChange, type BulletsKeyAction, type KeyLike } from './slotList'
-export { cellValueOf, isUnchanged, panelValueOf, typedStart, withStoredValue } from './selectPanelModel'
+export { cellValueOf, isUnchanged, panelValueOf, typedStart, withStoredValue, type EditorStop, type GridCancel } from './selectPanelModel'

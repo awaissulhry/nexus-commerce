@@ -14,7 +14,7 @@ import { OptionList, type OptionListItem } from '../../components'
 import { TagInput } from '../../primitives'
 import { asList } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
-import { typedStart } from './selectPanelModel'
+import { typedStart, type EditorStop } from './selectPanelModel'
 
 export interface ListPanelEditorParams {
   /** Closed list → `OptionList`; absent/empty → free-text chips. */
@@ -24,7 +24,7 @@ export interface ListPanelEditorParams {
   label?: string
   value?: unknown
   column: { getActualWidth(): number }
-  stopEditing: (cancel?: boolean) => void
+  stopEditing: EditorStop
   onValueChange?: (value: unknown) => void
   eGridCell?: HTMLElement
   eventKey?: string | null
