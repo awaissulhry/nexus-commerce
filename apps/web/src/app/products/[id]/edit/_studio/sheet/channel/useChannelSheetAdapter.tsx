@@ -53,6 +53,7 @@ import { wholeListWriteField } from './provenance';
 import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
 import { aliasMark, cascadeIntent, cascadeOf, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
+import { FollowUpRead, rowSettle } from './saveSettle';
 import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
@@ -128,11 +129,19 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const refreshReadiness = useReadinessRefresh();
     const readinessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (readinessTimer.current) clearTimeout(readinessTimer.current); }, []);
+    /* P2 review 4 — a save since the last readiness read wrote the shared record (a master field, content saved to every
+       channel): the Shared chip and every channel that follows it moved, so the whole family is read. */
+    const readinessForFamily = useRef(false);
     const refreshReadinessSoonRef = useRef(() => { });
     refreshReadinessSoonRef.current = () => {
         if (readinessTimer.current) clearTimeout(readinessTimer.current);
-        // P2 (I4-9) — a save moved this coordinate only: read it, not the family's every coordinate.
-        readinessTimer.current = setTimeout(() => { readinessTimer.current = null; refreshReadiness({ coordinate: true }); }, 800);
+        // P2 (I4-9) — a save that moved this coordinate only reads it, not the family's every coordinate.
+        readinessTimer.current = setTimeout(() => {
+            readinessTimer.current = null;
+            const family = readinessForFamily.current;
+            readinessForFamily.current = false;
+            refreshReadiness(family ? undefined : { coordinate: true });
+        }, 800);
     };
     /* When the rows (and so this scope's progress bars) were last read — "Refresh progress · read 12:04". */
     const [progressReadAt, setProgressReadAt] = useState<number | null>(null);
@@ -280,8 +289,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         writeId: string;
         subject: string;
     }>());
-    /* P2 (I4-4) — a confirmed save the sheet could not settle in place since the last read: the next settled batch reads. */
-    const needsRead = useRef(false);
+    /* P2 (I4-4) — a confirmed save the sheet could not settle in place owes ONE quiet read, taken when the sheet is idle;
+       P2 review 3 — a read that is dropped (an editor open, a newer write, a failed fetch) stays owed and is tried again. */
+    const [followUp] = useState(() => new FollowUpRead({
+        idle: () => writerRef.current?.pending === 0 && !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0,
+        read: (canApply) => refreshRef.current(canApply),
+        sequence: () => writeSeq.current,
+        schedule: (run, ms) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer); },
+    }));
+    useEffect(() => () => followUp.dispose(), [followUp]);
     /** Repaint the cells a save settled in place: the saved columns of the saved row, its progress, the theme token. */
     const repaintSettled = (patched: Set<ChannelSheetRow>, columns: Set<string>) => {
         const api = getGridApi();
@@ -304,19 +320,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                column and silently disabled the split. Witnessed: a theme pick on Amazon·IT
                reported `set` in the editor's own footer and issued no projection request at all.
                The same ref discipline the formula candidates two hooks above already follow. */
-            /* P2 (I4-4) — how this save settled: patched in place from its answer (`savedCellPatch.ts`), or it needs the
-               one quiet read that follows every settled batch. A save that reports nothing (a variation theme, a Shopify
-               field) needs the read. */
-            let settled: { rows: Set<ChannelSheetRow>; columns: Set<string> } | null = { rows: new Set(), columns: new Set() };
-            let reported = false;
+            /* P2 (I4-4) — how this save settled: patched in place from its answer (`savedCellPatch.ts`), or it owes the one
+               quiet read. P2 review 1 — only when EVERY cell it sent was reported patched: a part that reports nothing (a
+               variation theme, a Shopify field) or asks for a read makes the sheet read (`rowSettle`). */
+            const save = rowSettle(req);
+            if (save.touchesMaster()) readinessForFamily.current = true;
             const result = await commitChannelRow(req, { channel, marketplace, accountId, locale, kindOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId)?.kind,
                 familyRows: () => rowsRef.current, onListingsCreated: (created) => onListingsCreatedRef.current(created), bulkSend,
                 columnOf: (colId) => dataRef.current?.columns?.find((c) => c.key === colId),
-                onStored: (outcome) => {
-                    reported = true;
-                    if ('read' in outcome) settled = null;
-                    else if (settled) { for (const row of outcome.patched) settled.rows.add(row); for (const col of outcome.columns) settled.columns.add(col); }
-                },
+                onStored: (outcome) => save.onStored(outcome),
                 /* P1 review (2) — the family rows a listing-level eBay save moved: repaint them with their new value and token.
                    P2 — only the saved columns of those rows, never every cell of the family. */
                 onFamilyChanged: (changed, columns) => {
@@ -326,9 +338,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                     const nodes = changed.flatMap((moved) => { const node = api.getRowNode(moved.rowId); if (node?.data && node.data !== moved) node.data.values = moved.values; return node ? [node] : []; });
                     api.refreshCells({ rowNodes: nodes, ...(columns?.length ? { columns } : {}), force: true });
                 } });
-            const inPlace = settled as { rows: Set<ChannelSheetRow>; columns: Set<string> } | null;
-            if (result.ok && reported && inPlace) repaintSettled(inPlace.rows, inPlace.columns);
-            else if (result.ok) needsRead.current = true;
+            const inPlace = save.inPlace(result.ok);
+            if (inPlace) repaintSettled(inPlace.rows, inPlace.columns);
+            else if (result.ok) followUp.owe();
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });
             else
@@ -375,7 +387,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 if (ok) {
                     setLastSavedAt(savedAt);
                     refreshReadinessSoonRef.current();
-                    void refreshRef.current(() => writerRef.current?.pending === 0 && !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
+                    // A lost answer is always read back, and that read too stays owed until it lands.
+                    followUp.owe();
+                    followUp.settle();
                 }
             },
             onSettled: ({ ok, savedAt }) => {
@@ -385,14 +399,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 refreshReadinessSoonRef.current();
                 if (writerRef.current?.pending !== 0)
                     return;
-                // P2 (I4-4) — every save since the last read was settled in place from its answer: no read.
-                if (!needsRead.current)
-                    return;
-                needsRead.current = false;
-                const savedSequence = writeSeq.current;
-                void refreshRef.current(() => writeSeq.current === savedSequence && writerRef.current?.pending === 0 &&
-                    !tracker.hasUnconfirmedChanges &&
-                    (getGridApi()?.getEditingCells().length ?? 0) === 0);
+                // P2 (I4-4) — a read only when a save since the last read could not be settled in place.
+                followUp.settle();
             },
         });
     }
