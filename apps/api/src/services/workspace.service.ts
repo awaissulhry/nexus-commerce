@@ -54,9 +54,18 @@ export function validateWorkspaceInput(input: unknown): WorkspaceInput {
 /** All access is re-read from membership. Global login roles never grant business access. */
 export function createWorkspaceService(db: PrismaClient) {
   async function membership(userId: string, workspaceId: string) {
-    const row = await db.workspaceMembership.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } }, select: membershipSelect,
-    })
+    // P2 (2026-09-30) — ONE statement for the `membershipSelect` shape. The nested Prisma read was five (membership,
+    // user, workspace, member roles, roles) and runs on every request. Roles in a stable order.
+    const [row] = await db.$queryRaw<MembershipRow[]>`
+      SELECT m.id, m.status, m.version, m."userId", m."createdAt",
+        json_build_object('status', u.status) AS "user",
+        json_build_object('id', w.id, 'name', w.name, 'status', w.status, 'version', w.version) AS workspace,
+        COALESCE((SELECT json_agg(json_build_object('role', json_build_object('id', r.id, 'key', r.key, 'name', r.name, 'permissions', r.permissions)) ORDER BY r.key)
+          FROM "public"."WorkspaceMemberRole" mr JOIN "public"."Role" r ON r.id = mr."roleId" WHERE mr."membershipId" = m.id), '[]'::json) AS roles
+      FROM "public"."WorkspaceMembership" m
+      JOIN "public"."UserProfile" u ON u.id = m."userId"
+      JOIN "public"."Workspace" w ON w.id = m."workspaceId"
+      WHERE m."workspaceId" = ${workspaceId} AND m."userId" = ${userId}`
     if (!row || row.status !== 'active' || row.user.status !== 'active' || row.workspace.status !== 'active') {
       throw new WorkspaceError('workspace_unavailable', 'This business profile is unavailable or you no longer have access.')
     }

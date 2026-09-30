@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg'
-import type { Pool } from 'pg'
+import pg, { type Pool, type PoolClient } from 'pg'
 import { LEGACY_WORKSPACE_ID, WorkspaceError, workspaceContext, type WorkspaceContext } from './workspace-context.js'
 
 type Adapter = Awaited<ReturnType<PrismaPg['connect']>>
@@ -14,14 +14,21 @@ export async function resolveWorkspaceContext(): Promise<WorkspaceContext | unde
   return workspaceContext() ?? await resolver?.()
 }
 
+/**
+ * The role and the business in ONE statement. `set_config('role', …, true)` is `SET LOCAL ROLE` (the same GUC and the
+ * same membership check); `true` keeps all three settings local to the current transaction, so they end with it,
+ * including when PgBouncer hands the connection to another client afterwards.
+ */
+const SCOPE_SQL = "SELECT set_config('role', 'nexus_workspace_runtime', true), set_config('nexus.workspace_id', $1, true), set_config('nexus.actor_id', $2, true)"
+
+function scopeValues(scope: WorkspaceContext | undefined): [string, string] {
+  return [scope?.workspaceId ?? (process.env.NEXUS_WORKSPACES_ENABLED === '1' ? '' : LEGACY_WORKSPACE_ID), scope?.actorUserId ?? '']
+}
+
 async function configure(tx: Transaction, scope: WorkspaceContext | undefined) {
-  const id = scope?.workspaceId ?? (process.env.NEXUS_WORKSPACES_ENABLED === '1' ? '' : LEGACY_WORKSPACE_ID)
-  // SET LOCAL belongs to this transaction, including when PgBouncer reuses connections.
-  await tx.executeRaw({ sql: 'SET LOCAL ROLE nexus_workspace_runtime', args: [], argTypes: [] })
-  await tx.queryRaw({
-    sql: "SELECT set_config('nexus.workspace_id', $1, true), set_config('nexus.actor_id', $2, true)",
-    args: [id, scope?.actorUserId ?? ''], argTypes: [{ scalarType: 'string', dbType: 'TEXT', arity: 'scalar' }, { scalarType: 'string', dbType: 'TEXT', arity: 'scalar' }],
-  })
+  const [workspaceId, actorId] = scopeValues(scope)
+  const text = { scalarType: 'string', dbType: 'TEXT', arity: 'scalar' } as const
+  await tx.queryRaw({ sql: SCOPE_SQL, args: [workspaceId, actorId], argTypes: [text, text] })
 }
 
 function prohibitScopeMutation(query: Query) {
@@ -48,13 +55,117 @@ function wrapTransaction(tx: Transaction): Transaction {
   })
 }
 
+type Callback = (error: Error | null | undefined, result?: unknown) => void
+type Wire = {
+  stream: { cork?: () => void; uncork?: () => void }
+  parse(config: { text: string; name: string; types: unknown[] }): void
+  bind(config: { portal: string; statement: string; values: unknown[] }): void
+  execute(config: { portal: string; rows: number }): void
+  once(event: 'readyForQuery', listener: (message: { status: string }) => void): void
+}
+type PgQuery = {
+  text?: string; name?: string; rows?: number; values?: unknown[]
+  submit(connection: Wire): Error | null
+  handleDataRow(message: unknown): void
+  handleCommandComplete(message: unknown, connection: Wire): void
+  handleError(error: Error, connection: Wire): void
+}
+const BaseQuery = pg.Query as unknown as new (config: object, values: undefined, callback: Callback) => PgQuery
+// Exported by pg at runtime (`pg.utils`), not in its type declarations.
+const prepareValue = (pg as unknown as { utils: { prepareValue(value: unknown): unknown } }).utils.prepareValue
+
+/**
+ * One statement outside a transaction, in ONE round trip: the scope statement and the statement itself go to the server
+ * as one extended-protocol batch with a single Sync. PostgreSQL runs everything before a Sync as one implicit
+ * transaction, so the role and business set by the first statement hold for the second and end at the Sync — the same
+ * boundary the explicit BEGIN … COMMIT gave, without its three extra round trips. If the scope statement fails, the
+ * server skips the rest up to the Sync: the statement never runs unscoped.
+ */
+class ScopedQuery extends BaseQuery {
+  private scopeAnswered = false
+  /** The server's transaction status after the Sync ('I' = idle). */
+  transactionStatus: string | undefined
+  /** The statement failed with the server's own error: the batch ended at the Sync and the connection is sound. */
+  serverRefused = false
+
+  constructor(private readonly scope: [string, string], config: object, callback: Callback) {
+    // Always the extended protocol: the simple protocol cannot carry the scope's bound values in the same batch.
+    super({ ...config, queryMode: 'extended' }, undefined, callback)
+  }
+
+  override submit(connection: Wire): Error | null {
+    if (typeof this.text !== 'string' || this.name || this.rows) return new Error('A workspace-scoped statement needs query text, no statement name and no row limit.')
+    if (this.values !== undefined && !Array.isArray(this.values)) return new Error('Query values must be an array')
+    // Serialise the values before anything is sent, so a value that cannot be sent fails here and never leaves an
+    // unsynced batch on the connection (pg's own bind failure would). prepareValue is idempotent on its output.
+    try { this.values = this.values?.map(value => prepareValue(value)) } catch (error) { return error as Error }
+    connection.once('readyForQuery', message => { this.transactionStatus = message.status })
+    connection.stream.cork?.()
+    try {
+      connection.parse({ text: SCOPE_SQL, name: '', types: [] })
+      connection.bind({ portal: '', statement: '', values: this.scope })
+      connection.execute({ portal: '', rows: 0 })
+      return super.submit(connection)
+    } finally { connection.stream.uncork?.() }
+  }
+
+  // The scope statement answers first with one row and its CommandComplete; neither belongs to the caller's result.
+  override handleDataRow(message: unknown) { if (this.scopeAnswered) super.handleDataRow(message) }
+  override handleCommandComplete(message: unknown, connection: Wire) {
+    if (!this.scopeAnswered) { this.scopeAnswered = true; return }
+    super.handleCommandComplete(message, connection)
+  }
+  override handleError(error: Error, connection: Wire) {
+    this.serverRefused = error instanceof pg.DatabaseError
+    super.handleError(error, connection)
+  }
+}
+
+async function scopedStatement<T>(pool: Pool, scope: [string, string], run: (client: { query: (config: object) => Promise<unknown> }) => Promise<T>): Promise<T> {
+  const connection: PoolClient = await pool.connect()
+  // A connection error while checked out must not become an unhandled 'error' event; the statement's callback reports it.
+  const onError = () => {}
+  connection.on('error', onError)
+  let last: ScopedQuery | undefined
+  let released = false
+  const release = (error?: Error) => {
+    if (released) return
+    released = true
+    connection.removeListener('error', onError)
+    connection.release(error)
+  }
+  try {
+    const result = await run({
+      query: config => new Promise((resolve, reject) => {
+        last = new ScopedQuery(scope, config, (error, value) => error ? reject(error) : resolve(value))
+        connection.query(last as never)
+      }),
+    })
+    if (last && last.transactionStatus !== 'I') {
+      // Tripwire: a statement that left a transaction open would hand its scope to the next borrower. Discard the
+      // connection (the server rolls the transaction back) instead of returning it to the pool.
+      release(new Error('A workspace-scoped statement left a transaction open.'))
+      throw new WorkspaceError('workspace_scope_immutable', 'Database workspace context cannot be changed by a query.')
+    }
+    release()
+    return result
+  } catch (error) {
+    // The server's own refusal (a constraint, a policy, a bad value) ends the implicit transaction at the Sync, rolled
+    // back: the connection is clean and goes back to the pool, as the ROLLBACK path did before. Anything else (a broken
+    // socket, a read timeout, a refused submit) discards it.
+    release(last?.serverRefused ? undefined : error instanceof Error ? error : new Error(String(error)))
+    throw error
+  }
+}
+
 /** The same transaction boundary covers ORM queries, nested relations and raw SQL. */
 export class WorkspacePg extends PrismaPg {
-  constructor(pool: Pool, private readonly scope?: WorkspaceContext) { super(pool) }
+  constructor(private readonly pool: Pool, private readonly scope?: WorkspaceContext) { super(pool) }
 
   override async connect(): Promise<Adapter> {
     const adapter = await super.connect()
     const captured = this.scope
+    const pool = this.pool
     return new Proxy(adapter, {
       get(target, property) {
         if (property === 'startTransaction') return async (isolation?: Parameters<Adapter['startTransaction']>[0]) => {
@@ -68,20 +179,12 @@ export class WorkspacePg extends PrismaPg {
         }
         if (property === 'queryRaw' || property === 'executeRaw') return async (query: Query) => {
           prohibitScopeMutation(query)
-          const tx = await target.startTransaction()
-          try {
-            await configure(tx, captured)
-            const result = await tx[property](query)
-            // Prisma's adapter commit()/rollback() release the connection. Its engine
-            // normally sends the SQL; these short transactions are owned by this adapter.
-            await tx.executeRaw({ sql: 'COMMIT', args: [], argTypes: [] })
-            await tx.commit()
-            return result
-          } catch (error) {
-            try { await tx.executeRaw({ sql: 'ROLLBACK', args: [], argTypes: [] }) }
-            finally { await tx.rollback() }
-            throw error
-          }
+          // The pg adapter's own statement path (argument mapping, result types), over a checked-out connection whose
+          // every statement carries the scope. Only `client` differs from the adapter it reads through.
+          return scopedStatement(pool, scopeValues(captured), client => {
+            const view = Object.create(target, { client: { value: client } }) as Adapter
+            return view[property](query) as Promise<never>
+          })
         }
         const value = Reflect.get(target, property, target)
         return typeof value === 'function' ? value.bind(target) : value
