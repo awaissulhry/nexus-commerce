@@ -1,6 +1,38 @@
-# VTR hand-off — 2026-09-26 late (read this first in a new session)
+# VTR hand-off — updated 2026-09-27 ~02:50 CEST (read this first in a new session)
 
-## Where we are
+## NOW — step 1b is DONE in production (2026-09-27 00:43–00:45 UTC)
+
+**Done:** step 0 (#45) + 0b · step 1a (#56) · step 1b (#62, 069e697c8) · "Read live" route (PE #61/#64) + sheet UI (#67, merged by the
+Owner 23:20 UTC) · **the step-1b backfill WRITE** (Owner's word; the Owner ran `vtr-2-write.sh` himself because the auto-mode classifier
+blocks remote file writes for Claude): Xavia Racing 32 written / 0 failed / 0 skipped, second dry run = nothing planned, digest matched
+`859e7e9d…`. Verified read-only afterwards: 32/32 roots carry `variationAxisCodes`; values under the codes, legacy axis copies gone;
+28 new options (color +18 → 31, size +9 `v_44`…`v_60` → 20, fit_type +1); 0 outbound rows since the write. Left alone on purpose (not
+axes): `variantAttributes` "Body Type" (AIRMESH-JACKET, 12 children) and "Style Name" (IT-MOSS-JACKET, 9). Motovento: nothing to do.
+The tool file stays in `/app/docs/…` on the API box until the next deploy (a rerun plans nothing).
+
+**Next VTR work:** step 1c (re-route the 50+ writers to the one writer, STEP1-PLAN.md), then steps 2–5 of PLAN.md §3. PE's next
+session re-prepares its eBay Trading proof on GALE-JACKET fresh (versions moved tonight). Uncommitted here: HANDOFF.md, STEP1-PLAN.md edits.
+
+**The dry run (production data, 2026-09-26 22:56 UTC, code 069e697c8):** Xavia Racing (`nexus_legacy_workspace`) 32 families planned,
+635 value moves, 0 skipped, 0 conflicts, 28 new business options (size 44–60 → codes `v_44`…; fit_type Regular; 18 mixed colours such as
+"Nero | Donna", "Bianco x Nero"), digest `859e7e9d016b55edaffcf7da07d172c1b910e8f655a26dd4f52516815bef9596`. Motovento: 0 families
+(its GALE-JACKET copy has no axes, theme or values). The attributes lane plans no option change there (digest stays valid).
+How it ran (the server copy was BLOCKED by the auto-mode classifier as a remote file write, before the Owner's word): production read
+once in a READ ONLY transaction (a write attempt got 25006), then the merged `applyFamilyVariationsBackfill({ write: false })` planned
+against a no-connection stand-in client. Scratchpad of the old session: `vtr/prod-dry-run.mts`, `fake-db*.mjs`, `out-prod-dry-run.json`.
+
+**How the write was run (history):**
+1. `/api/health` build must be current and no "Deploy API" run in progress (`gh run list --branch main`): a deploy restarts the box mid-write.
+2. Copy `docs/variation-theme/tools/vtr-backfill.mts` from origin/main to `/app/docs/variation-theme/tools/` on `@nexus/api`
+   (`railway ssh`; the image has no `docs/`); check its sha256 equals the local file from origin/main.
+3. Dry run on the server (`cd /app && node --import tsx docs/variation-theme/tools/vtr-backfill.mts`): the digest must equal the one
+   above (or show the Owner the new plan). Then `--write --digest <digest>`. The tool prints written/failed/skipped and a SECOND dry run
+   (must list nothing). Each family is its own Serializable transaction; a failed family is rolled back and reported.
+4. Tell the attributes lane the result (PE's session is closed; note it in `docs/pes-claims.md` for PE's next session).
+The write sends nothing to channels (the service and its imports never reach the outbound queue); it bumps family listing versions and
+emits PRODUCT_UPDATED (cache/SSE/readiness only).
+
+## Where we are (history below; the block above is current)
 
 - Worktree `/private/tmp/nexus-variation-theme`, branch `feat/variation-theme-rebuild`, **rebased onto origin/main `417f61e3e`**.
 - Research: `RESEARCH-1-shared.md`, `RESEARCH-2-channels.md`, `RESEARCH-3-categories.md` (file:line for every finding).
@@ -98,4 +130,9 @@ census record; VTR checked: no channel ids, only `nexus_legacy_workspace`). P3.0
 
 **~20:55 UTC:** step 0 is LIVE on all three services (build 98d6b4ce: API 20:19, worker 20:26, scheduler 20:33; scheduler jobs run,
 0 errors). PR #56 (step 1a) — every check green; waiting for the Owner's merge word.
+
+**~21:40 UTC — order of the production steps (agreed):** (1) the deploy that carries #56 + #59 goes live; (2) the attributes lane
+runs #59 on both businesses (colour 13 + size 11 options each) and messages VTR the counts; (3) PR #62 merges (Owner's word) and
+deploys; (4) VTR runs `vtr-backfill.mts` DRY RUN on the server per business and shows the Owner the plan + digest; (5) write on his
+word; (6) second dry run = nothing planned.
 
