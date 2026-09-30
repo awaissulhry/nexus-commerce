@@ -90,6 +90,16 @@ commit's image, see below), executes
 `npm run db:migrate:deploy` as pre-deploy, starts the API, and waits for the readiness
 endpoint and expected build SHA. Ordinary restart/replica scale-up does not migrate.
 
+A push ships only the services whose files differ from the commit each one runs now
+(read from its latest successful Railway deployment, `scripts/ci/release-changes.sh`).
+CI-only and docs-only pushes start no deploy. A hand run (`gh workflow run
+deploy-api.yml`) compares the same way, so it ships what a failed or skipped release
+left behind; `-f ship=all` ships every service. A service whose way of deploying changed
+(`RAILWAY_IMAGE_SERVICES`, next section) ships too. A service that already runs a newer
+commit is not rolled back when an older run is re-run in full ("Re-run all jobs").
+"Re-run failed jobs" reuses the old run's decision and CAN roll back, so after a
+newer release shipped, start a hand run instead.
+
 Disable/restrict any parallel native Railway autodeploy path before relying on the
 GitHub gate. Verify branch protection separately; local YAML cannot establish it.
 The history check has 10-second connection and 30-second query deadlines. The Prisma
@@ -123,16 +133,22 @@ Empty means none. An unknown name fails the run.
 ### Move a service to image deploys
 
 The Owner sets the variable (GitHub → Settings → Secrets and variables → Actions → Variables).
-One service per deploy, in this order. Check each deploy's logs and timings before the next step.
+One service per deploy, in this order (the Owner, 2026-09-30: the web has users, so it goes last).
+Before the next step, check that the service is healthy on the right commit, and its logs and timings.
 
-1. `web`
-2. `web,worker`
-3. `web,worker,scheduler`
-4. `web,worker,scheduler,api`
+1. `scheduler`
+2. `scheduler,worker`
+3. `scheduler,worker,api`
+4. `scheduler,worker,api,web`
 
-The next deploy that ships the service points it at its image (`railway service source connect
---image`); Settings → Source then shows the image. To switch it at once, run Deploy API by hand: a
-hand run ships every service. After the first switch of each service, read its deploy log. It ends
+Then run Deploy API by hand (`gh workflow run deploy-api.yml`). It ships the service whose way of
+deploying changed, and nothing else that is current: `release-changes.sh` sees that the service
+runs a `railway up` build while the variable names it. The deploy points the service at its image
+(`railway service source connect --image`); Settings → Source then shows the image. The commit each
+service runs: the API reports it at `/api/health/ready` (`build`); for all four,
+`railway deployment list -s <service> --limit 1 --json` shows `meta.image`
+(`…/nexus-api:<sha>`) or, for a `railway up` build, `meta.cliMessage` (`<role> GitHub <sha>`).
+After the first switch of each service, read its deploy log. It ends
 with `✓ Railway runs ghcr.io/<owner>/nexus-…:<sha>` when Railway's record of the deployment names
 that image. A `::warning::` that the image is not confirmed means the record names none: check the
 deployment on Railway once, and report it. A deployment that runs another image fails the job.
@@ -153,17 +169,19 @@ Settings → Source instead: the workflow connects the image on every deploy, so
 
 Check first that the service's start command works in the image:
 
-- web: `node apps/web/scripts/start.mjs`, or none (the image starts it). The web image has no root
-  `package.json`, so a root `npm run …` start command fails.
-- worker, scheduler: `npm run start:worker` and `npm run start:scheduler` work. `node
+- web: `node apps/web/scripts/start.mjs` (set so, read 2026-09-30), or none (the image starts it).
+  The web image has no root `package.json`, so a root `npm run …` start command would fail.
+- worker, scheduler: `npm run start:worker` and `npm run start:scheduler` (set so, read 2026-09-30)
+  work. `node
   apps/api/dist/background.js worker` (or `scheduler`) also stops with exit 0 instead of 1.
 - API: start `node apps/api/dist/index.js`, pre-deploy `npm run db:migrate:deploy`, health check
   `/api/health/ready`. These stay.
 
 Railway ignores the build command, watch paths and `RAILPACK_`/`NIXPACKS_` node versions for an image
 source. A failed image deployment never takes traffic: the previous build keeps serving.
-To move a service back, remove its name. Not yet tried: `railway up` on a service whose source is an
-image. If Railway refuses it, disconnect the image in Settings → Source first.
+To move a service back, remove its name and run Deploy API by hand: that service ships with `railway
+up`. Not yet tried: `railway up` on a service whose source is an image. If Railway refuses it,
+disconnect the image in Settings → Source first.
 
 ### Roll back
 
@@ -192,10 +210,11 @@ Railway variables stay as they are now: the workflow changes only the image. One
 image carries the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values of its own build, so rolling
 the web back past a change of those values brings the old ones back.
 
-The next Deploy API run ships every service again, so no service stays on the old commit once main
-moves on. To put main back without a new commit, run Deploy API by hand. Re-running the failed jobs
-of a Deploy API run that began before the rollback ships only what that run chose back then: the
-other services wait for the next deploy. Run Deploy API by hand to move them at once.
+The next Deploy API run compares each service with the commit it runs, so it ships every moved
+service whose files differ on main: **the code you rolled back from comes back with it.** Land the
+fix (or a revert) before anything else merges. To put main back without a new commit, run Deploy API
+by hand. Re-running the failed jobs of a Deploy API run that began before the rollback ships only
+what that run chose back then; run Deploy API by hand instead.
 
 A rollback waits in the same queue as deploys (`deploy-api`). GitHub keeps one waiting run per queue: a
 push that lands while the rollback waits cancels it, and a rollback cancels a deploy that is still
@@ -206,9 +225,9 @@ time. The button also puts back that deployment's variables (Railway's docs: "Bo
 and custom variables are restored"). After a rotated secret or any changed variable, it brings the
 old value back: use rollback.yml, which changes only the image. For the API the same migration limit
 applies: Railway's docs do not say that a rollback skips the pre-deploy command, so expect it to
-fail when main has a migration the old deployment lacks. The deploy workflow cannot see such a
-rollback: after it, run Deploy API by hand once main is fixed, or a later push leaves the services
-it does not change on the old build.
+fail when main has a migration the old deployment lacks. The deploy workflow sees such a rollback too
+(it reads what each service runs), so the next release ships that service again when its files
+differ on main.
 
 ## Remaining rollout evidence
 

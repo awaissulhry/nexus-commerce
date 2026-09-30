@@ -12,8 +12,9 @@
 # Migrations do NOT roll back. The API moves only to a commit with the same migration folders as main: its pre-deploy
 # (`npm run db:migrate:deploy`) refuses to run when the database holds a migration its image has no folder for. The
 # worker, scheduler and web have no pre-deploy and can go further back; their old code then runs on today's schema,
-# which is safe only when every migration since that commit is additive. The next Deploy API run ships every service
-# again (its `changes` job sees this run, and a re-run of it), so nothing stays on the old commit once main moves on.
+# which is safe only when every migration since that commit is additive. The next Deploy API run compares each service
+# with the commit it runs (scripts/ci/release-changes.sh), so it ships every moved service whose files differ on main:
+# the code rolled back from comes back with it. Land the fix (or a revert) first.
 #
 # Only the image changes: Railway variables stay as they are now. Railway's own Rollback button also restores the old
 # deployment's variables, so after a rotated secret it brings the revoked value back (Railway docs, deployment
@@ -205,7 +206,7 @@ jobs:
             echo
             echo "Each deploy job adds ✓ or ✗ below. A service with no line did not start: the API before it failed, or the run was cancelled."
             echo
-            echo "The next Deploy API run ships every service again."
+            echo "The next Deploy API run ships every moved service again whose files differ on main: the code rolled back from comes back with it. Land the fix (or a revert) first."
           } >> "$GITHUB_STEP_SUMMARY"
 
   api:
@@ -274,13 +275,26 @@ jobs:
         role: ${{ fromJSON(needs.check.outputs.background) }}
     steps:
       - uses: actions/checkout@v4
+      # As in deploy-api.yml: an empty or shared ID must not move the wrong service.
+      - name: Require prepared worker and scheduler services
+        env:
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          WORKER_SERVICE: ${{ secrets.RAILWAY_WORKER_SERVICE }}
+          SCHEDULER_SERVICE: ${{ secrets.RAILWAY_SCHEDULER_SERVICE }}
+        run: |
+          test -n "$API_SERVICE" && test -n "$WORKER_SERVICE" && test -n "$SCHEDULER_SERVICE" &&
+          test "$API_SERVICE" != "$WORKER_SERVICE" && test "$API_SERVICE" != "$SCHEDULER_SERVICE" && test "$WORKER_SERVICE" != "$SCHEDULER_SERVICE" || {
+            echo "Configure three distinct API, worker and scheduler services before deploying. See tasks/architecture-operations.md."
+            exit 1
+          }
       - name: Install Railway CLI (pinned)
         run: npm install -g @railway/cli@5.30.1
       - name: Deploy the API image of that commit
         id: image
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
+          # No fall-through: an empty worker ID must not move the scheduler service.
+          SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || matrix.role == 'scheduler' && secrets.RAILWAY_SCHEDULER_SERVICE || '' }}
           IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-api:${{ needs.check.outputs.sha }}
         run: scripts/ci/railway-deploy-image.sh --service "$SERVICE" --image "$IMAGE"
       # always(): this step only writes the job summary, and a failed or cancelled job must say so too.
