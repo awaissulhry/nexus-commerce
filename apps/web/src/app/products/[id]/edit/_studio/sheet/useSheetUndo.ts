@@ -1,8 +1,12 @@
 import { useCallback, useMemo } from 'react'
-import type { GridApi, SheetWriter } from '@/design-system/grid'
+import type { GridApi, IRowNode, SheetWriter } from '@/design-system/grid'
 
 import { operationFence } from './bulkOperation'
-import { SheetUndoHistory, undoShortcut, type ApplyCellValues, type SheetCellChange } from './sheetUndo'
+import { wholeListWriteField } from './channel/provenance'
+import { SheetUndoHistory, undoShortcut, withPriorProvenance, type ApplyCellValues, type CellWriteBack, type SheetCellChange } from './sheetUndo'
+
+type CellRow = { values?: Record<string, unknown> }
+const listField = (writeField: string) => !!wholeListWriteField(writeField)
 
 /**
  * The sheet's undo, wired: a history that survives the sheet's re-reads (`sheetUndo.ts`), ⌘Z / ⌘⇧Z on a focused cell,
@@ -21,11 +25,28 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
     if (!api || api.isDestroyed()) return
     writer.beginOperation()
     try {
-      for (const { rowId, colId, value } of values) api.getRowNode(rowId)?.setDataValue(colId, value, direction)
+      for (const change of values) {
+        const node = api.getRowNode(change.rowId)
+        if (!node) continue
+        if (change.reset) resetCell(api, node, change as Required<Pick<CellWriteBack, 'reset'>> & CellWriteBack)
+        else node.setDataValue(change.colId, change.value, direction)
+      }
     } finally {
       setTimeout(() => writer.endOperation(), 0)
     }
   }, [writer, getGridApi])
+
+  /* A5/A8 — back to the inherited value: the cell as it was painted at once when the history kept it (the read after the
+     save settles it either way), and a reset through the writer — the same intent the cell menu's reset sends. */
+  const resetCell = (api: GridApi<Row>, node: IRowNode<Row>, change: CellWriteBack & Required<Pick<CellWriteBack, 'reset'>>) => {
+    const row = node.data as (Row & CellRow) | undefined
+    if (!row) return
+    if (change.reset.cell && row.values) {
+      row.values = { ...row.values, [change.colId]: change.reset.cell }
+      api.refreshCells({ rowNodes: [node], columns: [change.colId], force: true })
+    }
+    if (!change.reset.covered) writer.set(change.rowId, change.colId, null, { row, intent: change.reset.intent })
+  }
 
   /** True when the key was an undo/redo and was handled. An open editor keeps its own text undo. */
   const onKeyDown = useCallback((event: Event | null | undefined): boolean => {
@@ -42,19 +63,22 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
   /** An operator's edit (never the undo's or redo's own write-back, which AG reports later with that source). */
   const record = useCallback((change: SheetCellChange, source?: string) => {
     if (source === 'undo' || source === 'redo') return
-    history.record(change)
-  }, [history])
+    // A05 — the cell's value setter remembered the cell it replaced: an inherited one makes this step's undo a reset.
+    const current = (getGridApi()?.getRowNode(change.rowId)?.data as CellRow | undefined)?.values?.[change.colId]
+    history.record(withPriorProvenance(change, current, listField))
+  }, [history, getGridApi])
 
   /**
    * P1 — the sheet's own multi-cell writes (Clear on Delete, Set every row…) as ONE undo step and ONE save, exactly like
    * the grid's fill and paste: `run` writes through the grid (`setDataValue`), and the fence closes on the next turn,
-   * after AG has reported every change.
+   * after AG has reported every change. `run` records what the grid does not report itself (A08: a reset writes through
+   * the writer, not the grid).
    */
-  const operation = useCallback((run: () => void) => {
+  const operation = useCallback((run: (recordChange: (change: SheetCellChange) => void) => void) => {
     writer.beginOperation()
     history.begin()
     try {
-      run()
+      run(change => history.record(change))
     } finally {
       setTimeout(() => { history.end(); writer.endOperation() }, 0)
     }

@@ -17,6 +17,7 @@
  *    no normalised reference.
  */
 import { saveWarningFor } from '../saveWarnings'
+import { rememberPriorCell } from '../sheetUndo'
 import type { ChannelSheetRow, SheetColumn, StudioCellValue } from './types'
 
 /** The server's fold of an explicit listing value (`studio-sheet.service.ts` `layerFor`). */
@@ -45,6 +46,7 @@ export function optimisticCell(previous: StudioCellValue, value: unknown, rowKin
   const next: StudioCellValue = previous.mapped?.listingLevel ? { ...previous, value }
     : { ...previous, value, layer: rowKind === 'parent' ? 'alias' : 'aliasVariant', pinned: true, inherited: false }
   rememberPristine(next, previous)
+  rememberPriorCell(next, previous)
   return next
 }
 

@@ -34,7 +34,8 @@ import { languageColumn } from '../languages'
 import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } from '../referenceLabels'
 import { isReferenceField } from '../referenceOptions'
 import { ReferenceSelectEditor } from '../ReferenceSelectEditor'
-import type { SheetColumn, StudioRow } from './types'
+import type { SheetColumn, StudioCellValue, StudioRow } from './types'
+import { rememberPriorCell } from '../sheetUndo'
 import { loadVariationFamily } from './variationFamilyLoader'
 
 /** P2 — the master variation-theme editor's params: one frozen object for the life of the module (see the column below). */
@@ -259,25 +260,25 @@ export function buildMasterColumns(
         // returns, so the row object must be MUTATED here — scheduling React state hands the save
         // path the OLD value (reference_ag_value_setter_must_mutate_params_data).
         const previous = cellOf(p.data, col.key)
-        p.data.values = {
-          ...p.data.values,
-          [col.key]: {
-            ...previous,
-            // The row keeps a real `source` after an edit: this row now stores the value, so the
-            // resolver would report it as the row's own on the next read.
-            source: p.data.isParent ? 'master' : 'variant',
-            value: parseReferenceOrScalarValue(col, p.newValue),
-            // Editing a cell gives THIS row the value: it is no longer inherited, and on a child
-            // that is exactly the layout's "edit to pin".
-            inherited: false,
-            inheritedFrom: null,
-            layer: p.data.isParent ? 'master' : 'variant',
-            pinned: !p.data.isParent,
-            editable: previous?.editable ?? true,
-            writeField: previous?.writeField ?? col.writeField,
-            writeTarget: previous?.writeTarget ?? 'master',
-          },
+        const next: StudioCellValue = {
+          ...previous,
+          // The row keeps a real `source` after an edit: this row now stores the value, so the
+          // resolver would report it as the row's own on the next read.
+          source: p.data.isParent ? 'master' : 'variant',
+          value: parseReferenceOrScalarValue(col, p.newValue),
+          // Editing a cell gives THIS row the value: it is no longer inherited, and on a child
+          // that is exactly the layout's "edit to pin".
+          inherited: false,
+          inheritedFrom: null,
+          layer: p.data.isParent ? 'master' : 'variant',
+          pinned: !p.data.isParent,
+          editable: previous?.editable ?? true,
+          writeField: previous?.writeField ?? col.writeField,
+          writeTarget: previous?.writeTarget ?? 'master',
         }
+        // Audit A05 — the undo reads the cell this edit replaced: an inherited one is reset on ⌘Z, never pinned.
+        rememberPriorCell(next, previous)
+        p.data.values = { ...p.data.values, [col.key]: next }
         return true
       },
       /* 🔴 `editable`, NOT `applies` — the same predicate AG is given above, and that is the whole

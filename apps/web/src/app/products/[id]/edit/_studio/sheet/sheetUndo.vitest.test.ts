@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { SheetUndoHistory, undoShortcut, type ApplyCellValues } from './sheetUndo'
+import { SheetUndoHistory, inheritedReset, rememberPriorCell, undoShortcut, withPriorProvenance, type ApplyCellValues } from './sheetUndo'
+import { resetChanges } from './sheetReset'
 
 /**
  * The sheet's own undo (`sheetUndo.ts`): one operation = one step, kept across the sheet's re-reads (AG's own history is
@@ -93,5 +94,75 @@ describe('undoShortcut', () => {
     expect(key('z', { metaKey: true, altKey: true })).toBeNull()
     expect(key('y', { metaKey: true })).toBeNull()
     expect(key('c', { metaKey: true })).toBeNull()
+  })
+})
+
+/**
+ * Audit A05 — undoing an edit to an INHERITED cell stored the inherited value as the row's own (a set pins it: an eBay
+ * listing that followed Master's €49 kept €49 after Master moved to €55). Audit A08 — "Reset to inherited" was not an
+ * undo step, so ⌘Z after it undid an older step and pinned that step's "before" value over the reset.
+ */
+describe('undo keeps inheritance (audit A05, A08)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const inherited = { value: 49, inherited: true, pinned: false, layer: 'master', writeField: 'price' }
+  const typed = (previous: object, value: unknown) => {
+    const next = { ...previous, value, inherited: false, pinned: true, layer: 'aliasVariant' }
+    rememberPriorCell(next, previous)
+    return next
+  }
+
+  it('undo of an edit over an inherited value is a reset (with the inherited cell), not a set of that value', () => {
+    const history = new SheetUndoHistory()
+    const current = typed(inherited, 45)
+    history.record(withPriorProvenance({ rowId: 'r1', colId: 'price', before: 49, after: 45 }, current))
+    const calls: Parameters<ApplyCellValues>[0][] = []
+    history.undo((values) => { calls.push(values) })
+    expect(calls[0]).toEqual([{ rowId: 'r1', colId: 'price', value: 49, reset: { intent: 'reset', cell: inherited } }])
+    // Redo types the value again.
+    history.redo((values) => { calls.push(values) })
+    expect(calls[1]).toEqual([{ rowId: 'r1', colId: 'price', value: 45 }])
+  })
+
+  it('a second edit’s undo sets the first edit’s own value back (its "before" was not inherited)', () => {
+    const first = typed(inherited, 45)
+    const second = typed(first, 40)
+    expect(withPriorProvenance({ rowId: 'r1', colId: 'price', before: 45, after: 40 }, second).beforeReset).toBeUndefined()
+  })
+
+  it('an own value, an eBay listing-level value on a variation, and an untracked cell undo as a set', () => {
+    const own = typed({ value: 'A', inherited: false, pinned: true }, 'B')
+    expect(withPriorProvenance({ rowId: 'r1', colId: 'c', before: 'A', after: 'B' }, own).beforeReset).toBeUndefined()
+    const level = typed({ value: 'Pelle', inherited: true, pinned: false, mapped: { listingLevel: { productId: 'p0', sku: 'P', variation: true } } }, 'Tela')
+    expect(withPriorProvenance({ rowId: 'r1', colId: 'c', before: 'Pelle', after: 'Tela' }, level).beforeReset).toBeUndefined()
+    expect(withPriorProvenance({ rowId: 'r1', colId: 'c', before: 'A', after: 'B' }, { value: 'B' }).beforeReset).toBeUndefined()
+  })
+
+  it('a whole-list field resets its list', () => {
+    expect(inheritedReset({ inherited: true, pinned: false, writeField: 'bullet_point' }, (f) => f === 'bullet_point')?.intent).toBe('reset-list')
+  })
+
+  it('a reset is a step: ⌘Z sets the own value back, redo resets again — never the older step', () => {
+    const history = new SheetUndoHistory()
+    history.record({ rowId: 'r1', colId: 'title', before: 'A', after: 'B', beforeReset: { intent: 'reset' } })
+    vi.advanceTimersByTime(0)
+    history.begin()
+    for (const change of resetChanges({ values: { title: { value: 'B' } } }, { rowId: 'r1', colId: 'title', intent: 'reset', formula: false })) history.record(change)
+    history.end()
+    const calls: Parameters<ApplyCellValues>[0][] = []
+    history.undo((values) => { calls.push(values) })
+    expect(calls[0]).toEqual([{ rowId: 'r1', colId: 'title', value: 'B' }])
+    history.redo((values) => { calls.push(values) })
+    expect(calls[1]).toEqual([{ rowId: 'r1', colId: 'title', value: null, reset: { intent: 'reset' } }])
+  })
+
+  it('a list reset records every position and sends the list’s reset once', () => {
+    const row = { values: { 'bp:1': { value: 'a' }, 'bp:2': { value: 'b' }, title: { value: 't' } } }
+    const changes = resetChanges(row, { rowId: 'r1', colId: 'bp:1', intent: 'reset-list', formula: false }, (_r, colId) => colId.startsWith('bp:') ? 'bp' : null)
+    expect(changes).toEqual([
+      { rowId: 'r1', colId: 'bp:1', before: 'a', after: null, afterReset: { intent: 'reset-list' } },
+      { rowId: 'r1', colId: 'bp:2', before: 'b', after: null, afterReset: { intent: 'reset-list', covered: true } },
+    ])
   })
 })

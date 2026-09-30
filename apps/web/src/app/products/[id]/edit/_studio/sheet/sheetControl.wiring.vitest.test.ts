@@ -19,3 +19,22 @@ describe.each([['channel', read('channel', 'useChannelSheetAdapter.tsx')], ['mas
     expect(src).toContain('{control.element}')
   })
 })
+
+/** Audit A08 — a reset leaves as one undo step: through the undo's `operation`, recording each cell (`resetChanges`). */
+describe('useSheetControl — a reset is an undo step', () => {
+  const src = read('useSheetControl.tsx')
+  it('writes its resets inside `operation`, recording them', () => {
+    const at = src.indexOf('const reset = useCallback(')
+    const body = src.slice(at, src.indexOf('}, [])', at))
+    expect(body).toMatch(/operation\(record => \{/)
+    expect(body).toMatch(/record\(change\)/)
+    expect(body).not.toMatch(/writer\.beginOperation\(\)/)
+  })
+})
+
+/** Audit A05 — both value setters remember the cell they replace, so the undo can tell an inherited value from an own one. */
+describe('the value setters remember the cell they replace', () => {
+  it.each([['master', read('master', 'columns.tsx')], ['channel', read('channel', 'savedCellPatch.ts')]])('%s', (_scope, src) => {
+    expect(src).toMatch(/rememberPriorCell\(next, previous\)/)
+  })
+})

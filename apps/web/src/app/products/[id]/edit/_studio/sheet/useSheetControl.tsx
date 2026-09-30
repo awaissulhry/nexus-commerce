@@ -11,18 +11,19 @@
  *
  * Every write takes the existing roads: a reset is `writer.set(…, { intent })` (the intent the bulk-save path already
  * honours), a clear or a set is `setDataValue` through the grid (the typed-edit road: write gate, acknowledgement,
- * formula check) — each whole operation fenced into ONE save.
+ * formula check) — each whole operation fenced into ONE save and ONE undo step.
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useActionConfirm, type AgMenuItemDef, type ColDef, type ColGroupDef, type GetContextMenuItemsParams, type GridApi, type IRowNode, type SheetWriter } from '@/design-system/grid'
 import { ClearOrResetDialog, SetColumnDialog, type ClearChoiceRequest, type SetColumnRequest } from './SheetControlDialogs'
-import { clearChoiceCounts, deleteAsks, isClearKey, isMenuKey, resetTargets, selectedCells, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
+import { clearChoiceCounts, deleteAsks, isClearKey, isMenuKey, resetChanges, resetTargets, selectedCells, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
+import type { SheetCellChange } from './sheetUndo'
 
 export interface SheetControlOptions<Row> {
   getGridApi: () => GridApi<Row> | null
   writer: SheetWriter<Row>
-  /** Value writes as ONE undo step and ONE save — `useSheetUndo().operation`. */
-  operation: (run: () => void) => void
+  /** Value writes as ONE undo step and ONE save — `useSheetUndo().operation`; `record` adds what the grid does not report. */
+  operation: (run: (record: (change: SheetCellChange) => void) => void) => void
   rowIdOf: (row: Row) => string
   skuOf: (row: Row) => string
   offerOf: (row: Row, colId: string) => ResetOffer | null
@@ -69,23 +70,27 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
     return columns.length === 1 ? `${n} ${n === 1 ? 'cell' : 'cells'} of ${live.current.columnFacts(columns[0])?.label ?? columns[0]}` : `${n} cells in ${columns.length} columns`
   }
 
-  /** Resets as ONE save; formulas first (each keeps its last value, which the reset then removes). */
+  /**
+   * Resets as ONE save and ONE undo step (audit A08: ⌘Z after a reset undid an OLDER step and pinned its value); formulas
+   * first (each keeps its last value, which the reset then removes). Undo sets each cell's own value back; a list's
+   * positions are all recorded, and the list's reset is sent once.
+   */
   const reset = useCallback(async (targets: ResetTarget[]) => {
-    const { writer, removeFormula, say } = live.current
+    const { writer, removeFormula, say, operation } = live.current
     const formulas = targets.filter(t => t.formula)
     const refused = (await Promise.all(formulas.map(async t => ({ t, r: await removeFormula(t.rowId, t.colId) })))).filter(x => !x.r.ok)
     if (refused.length) say(`${refused.length} formula ${refused.length === 1 ? 'cell was' : 'cells were'} not reset: ${refused[0].r.error ?? 'the formula could not be removed.'}`)
     const skip = new Set(refused.map(x => `${x.t.rowId}\u0000${x.t.colId}`))
-    writer.beginOperation()
-    try {
-      for (const t of targets) {
-        if (skip.has(`${t.rowId}\u0000${t.colId}`)) continue
+    const kept = targets.filter(t => !skip.has(`${t.rowId}\u0000${t.colId}`))
+    if (!kept.length) return
+    operation(record => {
+      for (const t of kept) {
         const row = rowOf(t.rowId)
-        if (row) writer.set(t.rowId, t.colId, null, { row, intent: t.intent })
+        if (!row) continue
+        for (const change of resetChanges(row, t, listOf)) record(change)
+        writer.set(t.rowId, t.colId, null, { row, intent: t.intent })
       }
-    } finally {
-      writer.endOperation()
-    }
+    })
   }, [])
 
   /** A bulk reset says what it will do first: which cells, and that their own values go. */

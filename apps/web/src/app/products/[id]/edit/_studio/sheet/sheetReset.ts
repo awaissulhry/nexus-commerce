@@ -14,6 +14,7 @@ import { isCellEditable, offersCascade } from './channel/rows'
 import type { ChannelSheetRow } from './channel/types'
 import type { ColDef, ColGroupDef } from '@/design-system/grid'
 import type { SheetColumn as MasterColumn, StudioRow } from './master/types'
+import type { SheetCellChange } from './sheetUndo'
 
 export type ResetIntent = 'reset' | 'reset-list'
 
@@ -92,6 +93,21 @@ export function resetTargets(cells: Array<{ rowId: string; colId: string }>, off
     out.push({ rowId, colId, intent: offer.intent, formula: offer.formula })
   }
   return out
+}
+
+/**
+ * Audit A08 — the undo step a reset leaves: each cell's own value before, a reset after. A list resets as a whole, so
+ * every position of it is recorded (undo puts each one back) and only the reset target carries the reset to send again
+ * (the others are `covered` by it).
+ */
+export function resetChanges(row: unknown, target: ResetTarget, listOf?: (rowId: string, colId: string) => string | null): SheetCellChange[] {
+  const values = (row as { values?: Record<string, { value?: unknown } | null | undefined> } | null)?.values ?? {}
+  const change = (colId: string, covered: boolean): SheetCellChange =>
+    ({ rowId: target.rowId, colId, before: values[colId]?.value ?? null, after: null, afterReset: { intent: target.intent, ...(covered ? { covered: true } : {}) } })
+  if (target.intent !== 'reset-list' || !listOf) return [change(target.colId, false)]
+  const list = listOf(target.rowId, target.colId)
+  const positions = list === null ? [] : Object.keys(values).filter(colId => colId !== target.colId && listOf(target.rowId, colId) === list)
+  return [change(target.colId, false), ...positions.map(colId => change(colId, true))]
 }
 
 /** The minimal slice of AG's API a selection read needs — so the rule is testable without a grid. */
