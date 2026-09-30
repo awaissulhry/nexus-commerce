@@ -1,4 +1,4 @@
-import { ProductBulkError } from '../../lib/product-bulk-error.js'
+import { productWriteRefusal } from '../../lib/product-bulk-error.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import prisma from '../../db.js'
 import { inDatabaseTransaction } from '../../lib/database-context.js'
@@ -16,22 +16,22 @@ export interface TranslationWrite {
   /** PSIE — `false`: cascade without queueing a channel update (see master-content). */
   queueOutbound?: boolean
 }
-const conflict = (label: string) => new ProductBulkError(409, { error: `${label} changed. Reload before saving it.` })
+const conflict = (label: string) => productWriteRefusal(409, `${label} changed. Reload before saving it.`)
 
 /** The only authoring boundary for non-primary shared text. No legacy JSON write. */
 export async function writeTranslation(input: TranslationWrite) {
   const label = input.label ?? 'Translation'
   const address = contentAddress(input.address, label), language = normalizeLanguage(input.locale)
   if (address.tier !== 'language' || address.language !== language || language === PRIMARY_CONTENT_LOCALE) {
-    throw new ProductBulkError(400, { error: `${label} needs the shared ${language} language address.` })
+    throw productWriteRefusal(400, `${label} needs the shared ${language} language address.`)
   }
   return inDatabaseTransaction(prisma, async () => {
     const product = await prisma.product.findUnique({ where: { id: input.productId }, include: { parent: true } })
-    if (!product) throw new ProductBulkError(404, { error: 'Product not found' })
+    if (!product) throw productWriteRefusal(404, 'Product not found')
     const where = { productId_language: workspaceKey({ productId: product.id, language }) }
     const prior = await prisma.productTranslation.findUnique({ where })
     if (input.expectedVersion !== undefined && input.expectedVersion !== product.version || input.expectedTranslationVersion !== undefined && input.expectedTranslationVersion !== (prior?.version ?? 0)) throw conflict(label)
-    if (!prior && !Object.keys(input.values).length) throw new ProductBulkError(404, { error: `${label} has no ${language} translation to ${input.remove ? 'remove' : 'review'}.` })
+    if (!prior && !Object.keys(input.values).length) throw productWriteRefusal(404, `${label} has no ${language} translation to ${input.remove ? 'remove' : 'review'}.`)
     const attributes = { ...(prior?.attributes as Record<string, unknown> ?? {}) }
     const data: Record<string, any> = {}
     const changed: Record<string, unknown> = {}

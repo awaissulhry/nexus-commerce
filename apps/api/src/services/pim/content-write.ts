@@ -1,4 +1,4 @@
-import { ProductBulkError } from '../../lib/product-bulk-error.js'
+import { productWriteRefusal } from '../../lib/product-bulk-error.js'
 import { produceReadiness } from './readiness-index.service.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -17,7 +17,7 @@ export interface ContentWrite {
   /** PSIE — `false`: a shared write cascades to following listings but queues no channel update (see master-content). */
   queueOutbound?: boolean
 }
-const refuse = (label: string) => new ProductBulkError(409, { error: `${label} changed. Reload before saving it.` })
+const refuse = (label: string) => productWriteRefusal(409, `${label} changed. Reload before saving it.`)
 
 /** Persist a validated, explicitly addressed edit; all shared writes cascade in this transaction. */
 export async function writeContent(input: ContentWrite) {
@@ -60,10 +60,10 @@ export async function writeContent(input: ContentWrite) {
     // shared/language tier is the destination that IS available for this language
     // (it is not coordinate-bound), so the sentence names that tier and the
     // coordinate's real languages.
-    if (!languages.includes(address.language)) throw new ProductBulkError(400, { error: `${input.label} is unavailable in ${address.language} on ${c.channel} · ${c.market} — that coordinate carries ${languages.join(', ')}. Save it as the shared ${address.language} text instead (tier "language", language "${address.language}").` })
+    if (!languages.includes(address.language)) throw productWriteRefusal(400, `${input.label} is unavailable in ${address.language} on ${c.channel} · ${c.market} — that coordinate carries ${languages.join(', ')}. Save it as the shared ${address.language} text instead (tier "language", language "${address.language}").`)
     const listings = await prisma.channelListing.findMany({ where: { productId: product.id, channel: c.channel as any, marketplace: c.market,
       ...(c.accountId ? { channelConnectionId: c.accountId } : {}), aliasKey: c.aliasId ?? '' }, include: { translations: true } })
-    if (listings.length !== 1) throw new ProductBulkError(409, { error: `${input.label} needs one existing listing and account before a pin can be saved.` })
+    if (listings.length !== 1) throw productWriteRefusal(409, `${input.label} needs one existing listing and account before a pin can be saved.`)
     const listing = listings[0], prior = listing.translations.find(row => row.language === address.language)
     if (input.expectedVersion !== undefined && listing.version !== input.expectedVersion || input.expectedContentVersion !== undefined && (prior?.version ?? 0) !== input.expectedContentVersion) throw refuse(input.label)
     const attributes = { ...(prior?.attributes as Record<string, unknown> ?? {}) }, data: Record<string, any> = {}
