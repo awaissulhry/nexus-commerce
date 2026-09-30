@@ -34,9 +34,9 @@ export function otherItemSpecificColumns(input: {
     if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue
     for (const [name, value] of Object.entries(bag as Record<string, unknown>)) {
       const identity = aspectCanonicalName(name)
-      // eBay renders the condition structurally; the publisher never sends a "Condizione" specific. A cleared value
-      // (stored blank) is not sent either, so it is not shown.
-      if (!name.trim() || identity === 'condizione' || covered.has(identity) || isBlankValue(value)) continue
+      // A stored JSON null is an explicit clear: retain its known name so a later edit/undo can set it again.
+      // Reset removes the key. The condition and legacy empty values still do not create custom columns.
+      if (!name.trim() || identity === 'condizione' || covered.has(identity) || value !== null && isBlankValue(value)) continue
       const seen = found.get(identity)
       found.set(identity, { name: seen?.name ?? name, list: (seen?.list ?? false) || Array.isArray(value) })
     }

@@ -13,6 +13,7 @@ import { resolveWriteRouting } from './studio-sheet.service.js'
 import { checkForStorage, parseSlotField, withSlotValue } from './sheet-values.js'
 import { writeContent } from './content-write.js'
 import { DraftListingError, ensureDraftListings } from './draft-listing.service.js'
+import { productWriteRefusal } from '../../lib/product-bulk-error.js'
 import type { SheetColumn } from './sheet-columns.service.js'
 import type { ProductBulkInput, ProductBulkContext } from '../products/bulk-edit.service.js'
 
@@ -109,6 +110,13 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     const groups = new Map<string, typeof plans>()
     for (const plan of plans) { const key = `${plan.edit.change.id}:${JSON.stringify(plan.address)}`; groups.set(key, [...(groups.get(key) ?? []), plan]) }
     const ownerVersions = new Map<string, () => Promise<number>>()
+    // Eligibility stays tied to the caller's parsed token. A draft's own 0→1 continuation is not an external token.
+    const familyOperation = input.expectedVersion !== undefined && input.expectedVersion > 0 ? context.ebayFamilyOperation : undefined
+    const pinOrigins = new Map<string, { listingId: string; before: number }>()
+    const rememberPin = (key: string, after: number | undefined) => {
+      const origin = pinOrigins.get(key)
+      if (origin && after !== undefined) familyOperation?.rememberPinSpan(origin.listingId, origin.before, after)
+    }
     const createdListings: Array<{ productId: string; listingId: string }> = []
     const refused = new Set<typeof plans>()
     let readFinalOwner: (() => Promise<number>) | undefined, versionOf: 'product' | 'channelListing' = 'product'
@@ -140,8 +148,19 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       for (const plan of group.filter(p => p.edit.change.intent !== 'reset')) values[plan.field] = plan.slot ? withSlotValue(values[plan.field] ?? plan.baseValue, plan.slot, plan.value) : plan.value
       const reset = group.filter(p => p.edit.change.intent === 'reset').map(p => p.field)
       const ownerKey = first.address.tier === 'pin' ? `listing:${first.listingId}` : `product:${change.id}`
+      const continued = await ownerVersions.get(ownerKey)?.()
+      let guardVersion = continued ?? input.expectedVersion ?? first.ownerVersion
+      if (familyOperation && first.address.tier === 'pin' && first.listingId && !first.draft && continued === undefined) {
+        const own = familyOperation.expectedVersion({ id: first.listingId, version: first.ownerVersion }, input.expectedVersion!)
+        if (own === 'conflict') throw productWriteRefusal(409, `${first.edit.column.label} changed. Reload before saving it.`)
+        if (own !== undefined) guardVersion = own
+      }
       const written = await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
-        expectedVersion: await ownerVersions.get(ownerKey)?.() ?? input.expectedVersion ?? first.ownerVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined })
+        expectedVersion: guardVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined })
+      // Only a successful canonical pin write grants an own continuation. Keep the first CAS origin across groups.
+      if (familyOperation && first.address.tier === 'pin' && first.listingId && !first.draft && !pinOrigins.has(ownerKey)) {
+        pinOrigins.set(ownerKey, { listingId: first.listingId, before: guardVersion })
+      }
       if (first.address.tier !== 'source' && 'version' in written && 'id' in written) {
         const token = { id: change.id, tier: first.address.tier, language: first.address.language, version: written.version }
         contentVersions.push(token)
@@ -164,7 +183,9 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     const rest = await facts(async (productId, owner) => {
       const pin = owner === 'channelListing' ? plans.find(plan => plan.edit.change.id === productId && plan.address.tier === 'pin') : undefined
       const key = owner === 'product' ? `product:${productId}` : `listing:${pin?.listingId}`
-      return ownerVersions.get(key)?.()
+      const version = await ownerVersions.get(key)?.()
+      if (owner === 'channelListing') rememberPin(key, version)
+      return version
     })
     let contentMayHaveMoved = groups.size > 1 || (rest.updated ?? 0) > 0
     if (!context.formulaCascade) {
@@ -205,6 +226,15 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       versionOf = rest.versionOf
     }
     const currentVersion = await readFinalOwner?.()
+    for (const [key, origin] of pinOrigins) {
+      const reader = ownerVersions.get(key)
+      // A pin-only unit has no factual callback to identify its reply owner. Use the actual final pin reader.
+      if (familyOperation && versionOf === 'channelListing' && reader === readFinalOwner) familyOperation.answerListingId = origin.listingId
+      // Reuse the reply read. A different owner's read is needed only when this pin already has clear evidence.
+      const version = reader === readFinalOwner ? currentVersion
+        : familyOperation?.needsPinSpan(origin.listingId) ? await reader?.() : undefined
+      rememberPin(key, version)
+    }
     const ids = [...new Set([...edits.map(edit => edit.change.id), ...createdListings.map(row => row.productId)])]
     await afterDatabaseCommit(`product-cache:${ids.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(ids))
     // Include the rest writer's draft/family receipts: content formulas can advance those listings too.

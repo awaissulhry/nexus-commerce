@@ -26,6 +26,7 @@ import prisma from '../../db.js'
 import { inDatabaseTransaction, inSavepoint } from '../../lib/database-context.js'
 import { applyProductBulkEdits, ProductBulkError, type ProductBulkContext, type ProductBulkInput } from './bulk-edit.service.js'
 import { platformBatchGroup, UnsupportedPlatformBatch, writePlatformBatch } from './bulk-edit-platform-batch.js'
+import { EbayFamilyClearOperation } from './ebay-family-clear.js'
 
 /** A 500-row fill of 2 languages is 1,000 units; anything far beyond a sheet's page is not a sheet operation. */
 export const BULK_SAVE_MAX_UNITS = 2_000
@@ -103,8 +104,12 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
   const units = await inDatabaseTransaction(prisma, async () => {
     // Built inside the transaction: a restarted attempt starts from an empty list.
     const results: BulkSaveUnitResult[] = []
+    const familyOperation = new EbayFamilyClearOperation()
+    const replyOwners = new Map<string, string>()
     for (let index = 0; index < input.units.length; index++) {
-      const group = platformBatchGroup(input.units, index)
+      // Once a family clear has moved sibling owners, later units need their original per-owner proof.
+      // The no-clear path retains its existing independent set-write batch.
+      const group = familyOperation.hasEffects ? [] : platformBatchGroup(input.units, index)
       if (group.length) {
         const batch = await inSavepoint(async () => {
           let prepared: BulkSaveUnitResult[] | undefined
@@ -134,8 +139,14 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
       results.push(await saveUnit(key, unit))
     }
     async function saveUnit(key: string, unit: ProductBulkInput): Promise<BulkSaveUnitResult> {
-      const outcome = await inSavepoint(() => applyProductBulkEdits(unit, { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false }))
+      const pendingFamily = familyOperation.fork()
+      const outcome = await inSavepoint(() => applyProductBulkEdits(unit, { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false,
+        ebayFamilyOperation: pendingFamily }))
       if ('value' in outcome) {
+        if (!unit.dryRun) {
+          familyOperation.commit(pendingFamily)
+          if (pendingFamily.answerListingId) replyOwners.set(key, pendingFamily.answerListingId)
+        }
         return { key, status: 200, body: outcome.value as Record<string, unknown> }
       }
       const error = outcome.error
@@ -146,6 +157,18 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
       context.logger.error({ err: error, unit: key }, '[products/bulk-save] a unit failed unexpectedly and was rolled back')
       const detail = error instanceof ProductBulkError ? String(error.details.message ?? error.message) : error instanceof Error ? error.message : String(error)
       return { key, status: 500, body: { error: UNEXPECTED, detail, nothingSaved: true } }
+    }
+    if (familyOperation.hasEffects) {
+      const versions = new Map((await prisma.channelListing.findMany({ where: { id: { in: familyOperation.affectedListingIds() } }, select: { id: true, version: true } }))
+        .map(row => [row.id, row.version]))
+      for (const result of results) if (result.status === 200) {
+        const owner = replyOwners.get(result.key), version = owner ? versions.get(owner) : undefined
+        if (version !== undefined && result.body.versionOf === 'channelListing') result.body.currentVersion = version
+        if (Array.isArray(result.body.familyListings)) result.body.familyListings = result.body.familyListings.map(row => {
+          const receipt = row as { listingId: string; version: number }
+          return versions.has(receipt.listingId) ? { ...receipt, version: versions.get(receipt.listingId) } : receipt
+        })
+      }
     }
     return results
   }, { timeoutMs: BULK_SAVE_TIMEOUT_MS, memoReads: true })

@@ -259,13 +259,15 @@ export async function resolveBatch(input: {
       ? prisma.product.findMany({ where: { id: { in: parentIds } }, include: { translations: true } })
       : Promise.resolve([]),
     prisma.channelListing.findMany({ include: { translations: true },
-      where: { productId: { in: [...found] }, channel, marketplace, aliasKey: input.aliasKey ?? '', channelConnectionId: connectionId },
+      where: { productId: { in: channel === 'EBAY' ? [...new Set([...found, ...parentIds])] : [...found] }, channel, marketplace, aliasKey: input.aliasKey ?? '', channelConnectionId: connectionId },
       orderBy: { id: 'asc' },
     }),
     resolveCategoriesForProducts({ productIds: [...found], channel, marketplace, mappingSnapshot: input.categoryMappingSnapshot, channelConnectionId: connectionId }),
   ])
   const parentById = new Map(parents.map((p) => [p.id, { ...p, ...input.productChangesByProduct?.[p.id] }]))
   const listingByProduct = new Map(listings.slice().reverse().map((l) => [l.productId, { ...l, ...input.listingChangesByProduct?.[l.productId] }]))
+  // Only an actual explicit parent blank needs an axis projection. Ordinary reads make no extra calls.
+  const blankParentAxes = new Map<string, Promise<Set<string>>>()
   for (const product of products) {
     categories[product.id] = categoryForListing(categories[product.id], channel, listingByProduct.get(product.id)?.platformAttributes)
   }
@@ -363,7 +365,26 @@ export async function resolveBatch(input: {
         const own = storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
         if (own.state === 'stored' && !isBlankValue(own.value)) contentHit = undefined
       }
-      const storedState = contentHit ? { state: 'inherited' as const } : storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
+      const keys = [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])]
+      let storedState = contentHit ? { state: 'inherited' as const } : storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, keys)
+      if (channel === 'EBAY' && p.parentId && contentHit?.tier !== 'pin' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics') {
+        const own = storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, keys)
+        const inherited = storedChannelState(listingByProduct.get(p.parentId) as unknown as Record<string, unknown> ?? {}, store, keys)
+        if (own.state !== 'stored' && inherited.state === 'stored' && inherited.value === null) {
+          const { isEbayListingLevel, loadEbayListingAxes } = await import('../ebay-listing-level.js')
+          let axes = blankParentAxes.get(p.parentId)
+          if (!axes) {
+            axes = loadEbayListingAxes({ parentId: p.parentId, market: marketplace, accountId: connectionId,
+              aliasKey: input.aliasKey ?? '', familyAxes: parentById.get(p.parentId)?.variationAxes })
+            blankParentAxes.set(p.parentId, axes)
+          }
+          if (isEbayListingLevel({ store, names: [field.sheetKey, field.fieldKey, field.label] }, await axes)) {
+            // A family clear removes child copies. Their mappings must not refill the cleared shared value.
+            contentHit = undefined
+            storedState = inherited
+          }
+        }
+      }
       const stored = !contentHit && storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
         ? storedState.value : undefined
       const systemValue = channel === 'AMAZON' && field.fieldKey === 'parentage_level'
