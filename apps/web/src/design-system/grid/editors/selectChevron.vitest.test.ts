@@ -22,3 +22,26 @@ describe('SelectChevron with onOpen', () => {
     expect(api.startEditingCell).toHaveBeenCalledOnce()
   })
 })
+
+/**
+ * Audit B21 (2026-09-30) — the chevron was an action on LOCKED cells too: it showed a pointer, `startEditingCell` silently
+ * did nothing on a cell AG will not edit, and no reason was given. A locked cell now wears the passive glyph (no pointer,
+ * a click selects the cell as on any locked cell; double-click or Enter explains why).
+ */
+describe('the chevron opens only a cell AG would edit', () => {
+  it('no opener for a locked cell, the opener for an editable one', () => {
+    const api = { startEditingCell: vi.fn() }
+    const node = { rowIndex: 2, rowPinned: null }
+    expect(openCellEditor(api, node, 'axis', { isCellEditable: () => false })).toBeUndefined()
+    openCellEditor(api, node, 'axis', { isCellEditable: () => true })!()
+    expect(api.startEditingCell).toHaveBeenCalledWith({ rowIndex: 2, colKey: 'axis', rowPinned: null })
+  })
+  it('both sheets hand the renderer\'s column to it', async () => {
+    const { readFileSync } = await import('node:fs')
+    const master = readFileSync(new URL('../../../app/products/[id]/edit/_studio/sheet/master/columns.tsx', import.meta.url), 'utf8')
+    const channel = readFileSync(new URL('../../../app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx', import.meta.url), 'utf8')
+    expect(master.match(/openCellEditor\(p\.api, p\.node, col\.key, p\.column\)/g)).toHaveLength(2)
+    expect(channel).toContain('openCellEditor(p.api, p.node, column.key, p.column)')
+    expect(master + channel).not.toMatch(/openCellEditor\([^)]*\.key\)/)
+  })
+})

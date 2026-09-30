@@ -136,7 +136,7 @@ export const CascadeCell = memo(function CascadeCell(
         * item, and falls to a second line. `.nds-cascade` is `inline-flex` with `gap: 6px` and the
         * value is `flex: 1 1 auto`, so as a sibling the value truncates before the glyph moves.
         */}
-      {(column.kind === 'select' || column.kind === 'boolean' || isReferenceField(column.key)) && !isShaped(column) && <SelectChevron onOpen={openCellEditor(p.api, p.node, column.key)} />}
+      {(column.kind === 'select' || column.kind === 'boolean' || isReferenceField(column.key)) && !isShaped(column) && <SelectChevron onOpen={openCellEditor(p.api, p.node, column.key, p.column)} />}
       {mapped && mapped.errors.length > 0 && (
         <span className="nds-cascade-maperr" aria-label={mappingNote ?? 'Mapping error'}>!</span>
       )}

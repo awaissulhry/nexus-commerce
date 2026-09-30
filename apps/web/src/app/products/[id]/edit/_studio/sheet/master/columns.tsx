@@ -499,7 +499,7 @@ export function buildMasterColumns(
           withMark(
             p,
             p.value != null && p.value !== '' ? label(p.value) : emptyOrRequired(p),
-            <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key)} />,
+            <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key, p.column)} />,
           ),
       }
     }
@@ -578,7 +578,7 @@ export function buildMasterColumns(
         editable,
         valueFormatter: (p) => booleanLabel(p.value),
         cellRenderer: (p: ICellRendererParams<StudioRow>) =>
-          withMark(p, p.value == null || p.value === '' ? emptyOrRequired(p) : <>{booleanLabel(p.value)}</>, <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key)} />),
+          withMark(p, p.value == null || p.value === '' ? emptyOrRequired(p) : <>{booleanLabel(p.value)}</>, <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key, p.column)} />),
       }
     }
     return {

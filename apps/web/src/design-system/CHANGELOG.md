@@ -22,6 +22,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **`MeasureEditor`**: Tab from the number lands in the unit list's search field when it has one (more than 8 units), so "mil" finds millimeters; it focused the list container and typed letters went nowhere (B22). New: **`unitsEntry`**. Mirrored in Factory.
 
+- **`openCellEditor`** takes the cell's **`column`** and returns no opener where AG will not edit (`column.isCellEditable`), so a locked list cell wears the passive chevron: no pointer, a click selects the cell as on any locked cell, and a double-click or Enter explains why. The action chevron promised a list there and opened nothing (B21). Without a column it is unchanged. Mirrored in Factory.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Factory.
