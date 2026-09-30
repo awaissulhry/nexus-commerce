@@ -79,7 +79,7 @@ jobs:
   # D1). The split is the same file list, every file once (scripts/ci/api-test-plan.mjs).
   # The shard count is written once, as the matrix: SHARD and the report's name take it from strategy.job-total,
   # and db-security reads it back from the reports' names (1..m of m, each once). A shard that never reported
-  # fails there (review of PR 6, 2026-09-30).
+  # fails there (review of fast-deploys step 6, 2026-09-30).
   api:
     name: API tests (${{ matrix.shard }}/${{ strategy.job-total }}, profiles OFF + ON)
     runs-on: ubuntu-latest
@@ -140,6 +140,8 @@ jobs:
           name: profiles-on-${{ matrix.shard }}-of-${{ strategy.job-total }}
           path: ${{ runner.temp }}/on.json
           if-no-files-found: error
+          # A re-run of a leg that already uploaded must not fail on its own name; each name has one writer.
+          overwrite: true
           retention-days: 7
 
   # Two parts since 2026-09-30 (one job before). In 15 runs of 2026-09-29 the real-PG suites alone took a median
@@ -151,9 +153,10 @@ jobs:
   # Part 2 uses the service container only for its image: the runner starts its own server and never pulls one.
   # The part count is the matrix's size (strategy.job-total); no command or check repeats it, so a matrix cut to
   # [1] runs every suite in part 1/1, not half of them. Each part records the suites it passed, and db-security
-  # checks that together they passed every suite once (review of PR 6, 2026-09-30).
+  # checks that together they passed every suite once (review of fast-deploys step 6, 2026-09-30).
   postgres:
-    name: PostgreSQL 17 — isolation, races, RBAC, migrations (${{ matrix.part }}/${{ strategy.job-total }})
+    # Part 1 also runs the one-off steps (RBAC coverage, the migration upgrade check, the database package).
+    name: PostgreSQL 17 — ${{ matrix.part == 1 && 'isolation, races, RBAC, migrations' || 'isolation, races' }} (${{ matrix.part }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -213,6 +216,7 @@ jobs:
           name: real-pg-part-${{ matrix.part }}
           path: ${{ runner.temp }}/real-pg-part.tsv
           if-no-files-found: error
+          overwrite: true
           retention-days: 7
 
   smoke:
@@ -364,7 +368,7 @@ jobs:
           pattern: real-pg-part-*
           path: ${{ runner.temp }}/real-pg
       # The API side counts one report per shard; this is the same guard for the PostgreSQL parts. A green postgres
-      # result alone does not show that every part was scheduled (review of PR 6, 2026-09-30).
+      # result alone does not show that every part was scheduled (review of fast-deploys step 6, 2026-09-30).
       - name: Every real-PostgreSQL suite passed in exactly one part
         run: |
           set -euo pipefail
