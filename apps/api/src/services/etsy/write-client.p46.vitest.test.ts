@@ -36,6 +36,26 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); __rateTest.reset() })
 
 describe('P4.6b — a listing write', () => {
+  it('passes lease loss through the gateway to the HTTP request as an unknown outcome', async () => {
+    live()
+    const abort = new AbortController()
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => { entered = resolve })
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init.signal!
+        if (signal.aborted) { reject(new DOMException('Lease lost', 'AbortError')); return }
+        signal.addEventListener('abort', () => reject(new DOMException('Lease lost', 'AbortError')), { once: true })
+        entered()
+      })
+    }))
+    const etsy = await etsyWriter('etsy-1')
+    const result = etsy.send({ path: '/listings/7/inventory', method: 'PUT', body: {}, signal: abort.signal })
+    const outcome = expect(result).rejects.toBeInstanceOf(GatewayNoAnswer)
+    await started
+    abort.abort()
+    await outcome
+  })
   it('names its account, carries keystring:shared_secret and the bearer, and lands on the ledger', async () => {
     live()
     const etsy = await etsyWriter('etsy-1')

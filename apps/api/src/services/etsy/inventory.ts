@@ -230,6 +230,87 @@ export class EtsyOfferingNotFound extends Error {
 }
 
 /**
+ * 2026-09-30 — a price Etsy's own inventory cannot take for this SKU alone, or in this currency. Raised before the
+ * PUT, so nothing was sent.
+ */
+export class EtsyPriceRefusal extends Error {
+  constructor(message: string) { super(message); this.name = 'EtsyPriceRefusal' }
+}
+
+/**
+ * Etsy answered, and its inventory does not allow the change: the SKU is not there, the data cannot be read, or the
+ * price cannot be set for this SKU alone. Nothing was sent, and the same inventory gives the same answer on a retry.
+ * A failed READ is not one of these; it is retryable.
+ */
+export function isEtsyInventoryRefusal(error: unknown): boolean {
+  return error instanceof EtsyOfferingNotFound || error instanceof EtsyInventoryShapeError || error instanceof EtsyPriceRefusal
+}
+
+/**
+ * 🔴 2026-09-30 — the currency check for a price.
+ *
+ * The PUT takes a bare number, and Etsy reads it in the shop's currency. Nexus holds the price in the listing
+ * market's currency (`Marketplace.currency`). The only place the two meet is the read made just before the write, where
+ * Etsy states `currency_code` on every price. A different currency, or none stated, is refused: a price is never
+ * converted, and a number sent in the wrong currency is a money defect no Etsy error would report.
+ */
+export function etsyPriceCurrencyRefusal(read: EtsyReadInventory, currency: string | null | undefined): string | null {
+  const wanted = (currency ?? '').trim().toUpperCase()
+  if (!/^[A-Z]{3}$/.test(wanted)) return 'A price for Etsy must say which currency it is in; nothing was sent.'
+  const stated = new Set<string>()
+  for (const product of read.products ?? []) {
+    if (product.is_deleted === true) continue
+    for (const offering of product.offerings ?? []) {
+      if (offering.is_deleted === true) continue
+      const code = typeof offering.price === 'object' && offering.price ? String(offering.price.currency_code ?? '').trim().toUpperCase() : ''
+      if (!code) return `Etsy did not state the currency of this listing's prices, so Nexus cannot tell that ${wanted} is right; nothing was sent.`
+      stated.add(code)
+    }
+  }
+  const other = [...stated].filter((code) => code !== wanted)
+  if (other.length > 0) {
+    return `Etsy prices this listing in ${[...stated].sort().join(', ')}, and Nexus holds this price in ${wanted}. A price is never converted, so nothing was sent.`
+  }
+  return null
+}
+
+/** The value a product has for each property its price depends on: products with the same key share one price on Etsy. */
+function priceGroupKey(product: EtsyWriteProduct, priceProperties: readonly number[]): string {
+  return priceProperties.map((id) => {
+    const value = product.property_values?.find((pv) => pv.property_id === id)
+    return value ? `${id}=${value.value_ids.join('+')}/${value.values.join('+')}` : `${id}=?`
+  }).join('|')
+}
+
+/**
+ * 🔴 2026-09-30 — a price change may not split a price Etsy keeps as one.
+ *
+ * Etsy's price depends only on the properties in `price_on_property` ("The `*_on_property` values should match the
+ * `property_id` values, but only if those properties affect the sku, quantity, price…" — Etsy's listings tutorial).
+ * With it empty, every variation of the listing has the one price; with `[size]`, every product of one size has one
+ * price whatever its colour. So a price for one SKU alone is only a price Etsy can hold when no other product shares
+ * its price group. Otherwise the choice is to change the other variations too (a price nobody asked for) or to send a
+ * split Etsy's own model does not allow. Neither is sent: the change is refused by name, before the PUT.
+ */
+function assertPriceGroupsWhole(before: EtsyInventoryWrite, after: EtsyInventoryWrite): void {
+  const priceProperties = after.price_on_property ?? []
+  after.products.forEach((product, pi) => {
+    const moved = product.offerings.some((offering, oi) => offering.price !== before.products[pi]?.offerings[oi]?.price)
+    if (!moved) return
+    const key = priceGroupKey(product, priceProperties)
+    const group = after.products.filter((other) => priceGroupKey(other, priceProperties) === key)
+    const prices = new Set(group.flatMap((other) => other.offerings.map((offering) => offering.price)))
+    if (prices.size > 1) {
+      const name = product.sku ? `"${product.sku}"` : `product #${pi + 1}`
+      const others = group.length - 1
+      throw new EtsyPriceRefusal(priceProperties.length === 0
+        ? `On Etsy this listing has one price for all its ${after.products.length} variations, so a price for ${name} alone cannot be sent without changing the other ${others}; nothing was sent.`
+        : `On Etsy ${name} shares its price with ${others} other variation(s) (the price varies only by property ${priceProperties.join(', ')}), so a price for it alone cannot be sent; nothing was sent.`)
+    }
+  })
+}
+
+/**
  * Apply changes to a write body. Returns a NEW body — the original is the record of what Etsy
  * held, and the read-back compares against it.
  *
@@ -248,6 +329,15 @@ export function applyOfferingChanges(body: EtsyInventoryWrite, changes: readonly
     }
     if (change.sku == null && next.products.length > 1) {
       throw new EtsyOfferingNotFound('This Etsy listing has more than one product, so a change must name its SKU; nothing was sent.')
+    }
+    // 2026-09-30 — one SKU on several Etsy products that Etsy prices differently: Nexus holds ONE price for the SKU and
+    // will not pick which of Etsy's prices it means, nor flatten them into one.
+    if (change.price !== undefined && matches.length > 1) {
+      const index = change.offeringIndex ?? 0
+      const held = new Set(matches.map((p) => p.offerings[index]?.price))
+      if (held.size > 1) {
+        throw new EtsyPriceRefusal(`Etsy has ${matches.length} products with SKU "${change.sku}" at different prices; Nexus holds one price for that SKU and will not choose between them, so nothing was sent.`)
+      }
     }
     for (const product of matches) {
       const index = change.offeringIndex ?? 0
@@ -269,6 +359,7 @@ export function applyOfferingChanges(body: EtsyInventoryWrite, changes: readonly
       }
     }
   }
+  if (changes.some((change) => change.price !== undefined)) assertPriceGroupsWhole(body, next)
   return next
 }
 

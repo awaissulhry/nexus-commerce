@@ -346,6 +346,7 @@ export const MATRIX_COPY = {
   formula: (expr: string) => `Formula ${expr}`,
   clamped: (which: 'floor' | 'ceiling') => `Clamped to the ${which}`,
   absentSaleEbay: 'eBay sale prices are promotions — Volume pricing',
+  absentSaleEtsy: 'Etsy has no sale price on a listing; sales are set on Etsy (Marketing → Sales and discounts)',
   absentFulfilmentShopify: 'Shopify has no fulfilment method',
   absentFulfilment: (channelLabel: string) => `${channelLabel} has no fulfilment method`,
   absentBusiness: (pt: string, market: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema on ${market})`,

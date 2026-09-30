@@ -101,3 +101,19 @@ describe('applyCell passes the price it read as expectedPrice', () => {
     else expect(target.expectedPrice).toBe(expected)
   })
 })
+
+// 2026-09-30 — Etsy's listing API has no sale price, so the read serves no Sale cell for an Etsy coordinate
+// (`channelShape`), and a sale written at one anyway (an old tab, a hand-made request) is refused before the door.
+describe('an Etsy coordinate has no Sale cell', () => {
+  it('a sale written there is refused by name, and the price door is never called', async () => {
+    const door = vi.mocked(writeChannelPrices); door.mockReset()
+    const read = {
+      rows: [{ id: 'row', cells: { 'ETSY:GLOBAL': { ...cells({ fulfilment: null, sync: null }), sale: null, listingId: 'listing', version: 3 } } }],
+      coordinates: [{ key: 'ETSY:GLOBAL', kind: 'global', channel: 'ETSY', market: 'GLOBAL', label: 'Etsy', region: null }],
+    } as never
+    const outcome = await applyCell(read, { rowId: 'row', coordinateKey: 'ETSY:GLOBAL', cell: 'salePrice', value: { value: 19, start: '2026-10-01', end: '2026-10-08' }, expectedVersion: 3 } as never, { productId: 'row', actor: 'tester', can: () => true })
+    // The fresh read the door re-reads serves no writable Sale cell there, so it is refused before any value check.
+    expect(outcome).toMatchObject({ outcome: 'refused', reason: 'This cell cannot be changed here' })
+    expect(door).not.toHaveBeenCalled()
+  })
+})

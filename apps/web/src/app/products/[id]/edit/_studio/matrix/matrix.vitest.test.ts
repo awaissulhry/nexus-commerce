@@ -37,6 +37,14 @@ describe('fixtures — deterministic, region-folded, honest about absence', () =
     expect(cs.find(c => c.key === 'EBAY:IT')!.absent).toEqual([{ cell: 'salePrice', reason: expect.stringContaining('promotions') }])
     expect(cs.find(c => c.key === 'SHOPIFY:GLOBAL')!.absent).toEqual([{ cell: 'fulfilment', reason: 'Shopify has no fulfilment method' }])
   })
+  it('Etsy has no sale price on a listing: the Sale cell is absent with its sentence, and Price stays', () => {
+    const etsy = previewCoordinates([...COORDS, { channel: 'ETSY', market: 'GLOBAL', label: 'Etsy', connected: true, accountId: 'acc-t' }]).find(c => c.key === 'ETSY:GLOBAL')!
+    expect(etsy.cells).toContain('price'); expect(etsy.cells).not.toContain('salePrice')
+    expect(etsy.absent).toEqual([
+      { cell: 'salePrice', reason: 'Etsy has no sale price on a listing; sales are set on Etsy (Marketing → Sales and discounts)' },
+      { cell: 'fulfilment', reason: 'Etsy has no fulfilment method' },
+    ])
+  })
   it('adds exactly one preview alias, on the first eBay market, as its own coordinate', () => {
     const cs = previewCoordinates(COORDS); const aliases = cs.filter(c => c.alias)
     expect(aliases).toHaveLength(1); expect(aliases[0]!.key).toBe('EBAY:IT#preview-alias'); expect(aliases[0]!.label).toBe('eBay · IT ②')

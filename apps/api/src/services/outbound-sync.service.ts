@@ -129,13 +129,16 @@ const AUTH_DEFER_MS = 15 * 60_000;
 // refresh.
 const AUTH_CLASS_RE = /Unauthorized|invalid_grant|Access to requested resource is denied|writes are paused until the operator reconnects|Held, nothing sent:.*(?:needs to be reconnected|no .* token for this account)/i;
 const AUTH_HOLD_CODES = new Set(['AUTH_REQUIRED', 'ACCOUNT_NEEDS_SIGNIN', 'CONNECTION_NEEDS_REAUTH', 'TOKEN_UNAVAILABLE']);
+// 2026-09-30 — another change to the same Etsy listing holds its inventory lock (etsy/listing-lock.ts). Nothing was
+// sent; the row waits its turn and spends no retry.
+const LISTING_BUSY_DEFER_MS = 30_000;
 
 export function withJitter(ms: number): number {
   return Math.round(ms * (1 + Math.random() * 0.2));
 }
 
 export type FailureDisposition =
-  | { kind: "deferral"; nextRetryAt: Date; errorCode: "CIRCUIT_OPEN_DEFERRED" | "AUTH_REQUIRED" }
+  | { kind: "deferral"; nextRetryAt: Date; errorCode: "CIRCUIT_OPEN_DEFERRED" | "AUTH_REQUIRED" | "ETSY_LISTING_BUSY" }
   | { kind: "terminal"; errorCode: string }
   | { kind: "retry"; nextRetryAt: Date; errorCode: "RETRY_SCHEDULED" };
 
@@ -145,6 +148,9 @@ export function computeFailureDisposition(
   opts?: { errorCode?: string; retryable?: boolean },
   now: number = Date.now(),
 ): FailureDisposition {
+  if (opts?.errorCode === "ETSY_LISTING_BUSY") {
+    return { kind: "deferral", nextRetryAt: new Date(now + withJitter(LISTING_BUSY_DEFER_MS)), errorCode: "ETSY_LISTING_BUSY" };
+  }
   const isCircuitOpen =
     opts?.errorCode === "EBAY_CIRCUIT_OPEN" || /circuit open/i.test(errorMessage);
   const isRateLimited =
@@ -2442,6 +2448,9 @@ export class OutboundSyncService {
    * - **Content is a different body format** (form-encoded, and partial), so it is a different
    *   call rather than a field on the same one.
    * - **The listing id is Etsy's**, and the offering inside it is found by SKU.
+   * - **A price** (2026-09-30, when the price door started queueing Etsy): only that offering's price changes, in
+   *   the listing market's currency checked against the one Etsy states; every quantity goes back exactly as Etsy
+   *   stated it in the read made just before the PUT. A price Etsy cannot hold for one SKU alone is refused.
    *
    * The quantity comes from `linkedDispatchQuantity` — the same three steps as Shopify and, through
    * `routedCeiling`, the same routed ceiling as Amazon and eBay. Etsy never gets a raw payload
@@ -2510,12 +2519,26 @@ export class OutboundSyncService {
         const { writeEtsyInventory } = await import("./etsy/inventory-write.service.js");
         const changes: Array<{ sku?: string | null; quantity?: number; price?: number }> = [];
         const offeringSku = channelListing?.sku ?? product?.etsySku ?? product?.sku ?? null;
-        if (syncType === "PRICE_UPDATE" || payload?.price != null) {
+        let priceCurrency: string | undefined;
+        const isPrice = syncType === "PRICE_UPDATE" || payload?.price != null;
+        if (isPrice) {
+          // 2026-09-30 — a price row with no usable price is refused by name. It used to reach the writer as "no
+          // change" and come back SUCCESS: "Etsy already holds these values".
+          const price = payload?.price == null || payload.price === "" ? Number.NaN : Number(payload.price);
+          if (!Number.isFinite(price) || price <= 0) return failed("This price change carries no usable price, so nothing was sent to Etsy.", "NO_PRICE", false);
           // P4.4c — the operator's own floor and ceiling, and it REFUSES rather than clamping,
           // because a price is a number a person typed.
-          const refusal = await priceRefusalFor({ price: payload?.price, productId: product?.id, channel: 'Etsy', sku });
+          const refusal = await priceRefusalFor({ price, productId: product?.id, channel: 'Etsy', sku });
           if (refusal) return failed(refusal, "PRICE_OUT_OF_BOUNDS", false);
-          changes.push({ sku: offeringSku, price: payload?.price });
+          // P4.4a, as the Amazon and eBay lanes: the currency is the listing market's Marketplace row, never guessed.
+          // The writer compares it with the currency Etsy states for the listing, and a mismatch sends nothing.
+          try {
+            priceCurrency = await marketCurrency("ETSY", String(channelListing?.marketplace ?? "GLOBAL"));
+          } catch (err) {
+            return failed(`${err instanceof Error ? err.message : String(err)} The price was not written.`, "MARKET_CURRENCY_UNCONFIGURED", false);
+          }
+          // Only the price: the writer sends every quantity back exactly as Etsy stated it in the read before the PUT.
+          changes.push({ sku: offeringSku, price });
         } else {
           const dispatchQuantity = await this.linkedDispatchQuantity(queueItem, sku, 'ETSY', 'Etsy');
           if (dispatchQuantity.refusal) return failed(dispatchQuantity.refusal, "NO_ROUTED_LOCATION", false);
@@ -2523,6 +2546,7 @@ export class OutboundSyncService {
         }
         const result = await writeEtsyInventory({
           accountId: destination.connectionId, listingId, changes,
+          ...(priceCurrency ? { priceCurrency } : {}),
           pushLock: channelListing ? [channelListing] : undefined,
           ledger: { productId: product?.id ?? null, listingId: channelListing?.id ?? null, triggeredBy: "api" },
         });
@@ -2535,12 +2559,18 @@ export class OutboundSyncService {
           : result.confirmed
             ? `Etsy listing ${listingId} updated and confirmed.`
             : `Etsy listing ${listingId} updated, but the read-back did not match. ${result.drift === null ? "Etsy could not be re-read." : `${result.drift.length} field(s) differ.`} An alert has been raised.`;
+        // Etsy has no sale price on a listing (its sales are shop promotions), so a Nexus sale is not in this write.
+        if (isPrice && payload?.salePrice != null) message += " Etsy has no per-listing sale price, so the sale price stays in Nexus only.";
       }
       writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
       return { success: true, queueId, channel: "ETSY", status: "SUCCESS", message };
     } catch (error) {
+      // Etsy's inventory refusing the change (a SKU it does not have, a price it cannot take alone, another currency)
+      // gives the same answer on a retry, so it is not retried. A failed read is not one of those: it stays retryable.
+      const { isEtsyInventoryRefusal } = await import("./etsy/inventory.js");
       return failed(error instanceof Error ? error.message : String(error),
-        typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined);
+        typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined,
+        !isEtsyInventoryRefusal(error));
     }
   }
 

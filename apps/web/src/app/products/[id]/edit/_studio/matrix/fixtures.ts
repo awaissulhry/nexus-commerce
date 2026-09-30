@@ -90,6 +90,7 @@ export function previewCoordinates(inputs: readonly PreviewCoordinateInput[]): M
     const absent: Array<{ cell: MatrixCellKind; reason: string }> = []
     let cells: MatrixCellKind[] = [...ALL_CELLS]
     if (c.channel === 'EBAY') { cells = cells.filter(k => k !== 'salePrice'); absent.push({ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEbay }) }
+    if (c.channel === 'ETSY') { cells = cells.filter(k => k !== 'salePrice'); absent.push({ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEtsy }) }
     if (c.channel !== 'AMAZON' && c.channel !== 'EBAY') { cells = cells.filter(k => k !== 'fulfilment'); absent.push({ cell: 'fulfilment', reason: MATRIX_COPY.absentFulfilment(channelLabel(c.channel)) }) }
     if (inEu) cells = cells.filter(k => !INVENTORY_CELL_KINDS.includes(k))
     const label = global ? channelLabel(c.channel) : `${channelLabel(c.channel)} · ${c.market}`
