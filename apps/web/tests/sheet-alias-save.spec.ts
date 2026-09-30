@@ -1,18 +1,17 @@
 /**
- * Local browser proof for shared product tokens across listing aliases. Supply a synthetic two-alias family through
- * E2E_ALIAS_FIXTURE (JSON: family, child, alias, account), E2E_AUTH_STATE, and PLAYWRIGHT_BASE_URL. Both aliases need a
- * German translation and eBay DE drafts. This changes only that family's shared and pinned German titles.
- * The caller owns seeding and cleanup; no production URL or live channel is allowed.
+ * Local browser proof for shared product tokens across listing aliases, on a synthetic two-alias eBay · DE family:
+ * `fixtures/sheet-alias-seed.mjs` (primary and alias drafts on parent and child, German translations) — seeded in
+ * `beforeAll` from E2E_DATABASE_URL, or handed in as a file through E2E_ALIAS_FIXTURE. The signed-in state comes from
+ * E2E_AUTH_STATE (`fixtures/sheet-global-setup.ts` writes it). This changes only that family's shared and pinned German
+ * titles. No production URL or live channel is allowed. Env: `fixtures/sheet-e2e.ts`; CI: the `sheet` job.
  */
-import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { LEGACY_WORKSPACE_ID } from '@nexus/database/workspace-context'
+import { aliasFixture, aliasFixtureAvailable, isLocal as local, sheetEnv, studioPath, type AliasFixture } from './fixtures/sheet-e2e'
 
-const fixturePath = process.env.E2E_ALIAS_FIXTURE
-const auth = process.env.E2E_AUTH_STATE
-const fixture = fixturePath ? JSON.parse(readFileSync(fixturePath, 'utf8')) as { family: string; child: string; alias: string; account: string } : null
+const auth = sheetEnv.auth
 const base = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
-const local = (url: string) => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)
+let fixture: AliasFixture | null = null
+const studio = () => studioPath(fixture!.family, `scope=EBAY&market=DE&account=${fixture!.account}&locale=de`)
 
 async function titleCell(page: Page, rowId: string) {
   const row = page.locator(`.ag-row[row-id="${rowId}"]`)
@@ -27,15 +26,15 @@ async function titleCell(page: Page, rowId: string) {
 }
 
 test.describe('an immediate shared save through a sibling alias', () => {
-  test.skip(!fixture || !auth, 'Needs E2E_ALIAS_FIXTURE and E2E_AUTH_STATE from a synthetic local fixture.')
+  test.skip(!aliasFixtureAvailable() || !auth, 'Needs E2E_DATABASE_URL (or E2E_ALIAS_FIXTURE) and E2E_AUTH_STATE — see fixtures/sheet-e2e.ts.')
   test.describe.configure({ mode: 'serial' })
   test.use({ storageState: auth })
   test.setTimeout(180_000)
+  test.beforeAll(() => { fixture = aliasFixture() })
 
   for (const width of [1680, 390]) for (const colorScheme of ['light', 'dark'] as const) {
     test(`${colorScheme}, ${width}px: the second save uses the confirmed product version before a read`, async ({ page }, info) => {
       if (!local(base)) throw new Error('This test may only use a local web app and local API.')
-      if (![fixture!.family, fixture!.child, fixture!.alias].every(id => id.startsWith('e2e_'))) throw new Error('Use a synthetic e2e_ fixture only.')
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
       await page.emulateMedia({ colorScheme })
       await page.addInitScript(theme => { localStorage.setItem('nexus:theme', theme) }, colorScheme)
@@ -47,7 +46,7 @@ test.describe('an immediate shared save through a sibling alias', () => {
         return route.continue()
       })
       page.on('response', response => { if (response.url().includes('/studio/sheet?') && response.ok()) completedReads++ })
-      await page.goto(`/w/${process.env.E2E_WORKSPACE_ID ?? LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=EBAY&market=DE&account=${fixture!.account}&locale=de`, { waitUntil: 'domcontentloaded' })
+      await page.goto(studio(), { waitUntil: 'domcontentloaded' })
       const first = `primary:${fixture!.child}`, second = `${fixture!.alias}:${fixture!.child}`
       await expect(page.locator(`.ag-row[row-id="${first}"]`)).toBeVisible({ timeout: 90_000 })
       await expect.poll(() => page.locator('html').evaluate(el => el.classList.contains('dark'))).toBe(colorScheme === 'dark')
@@ -84,7 +83,6 @@ test.describe('an immediate shared save through a sibling alias', () => {
 
   test('a paste across aliases skips unchanged shared values and keeps the next edit writable', async ({ page }) => {
     if (!local(base)) throw new Error('This test may only use a local web app and local API.')
-    if (![fixture!.family, fixture!.child, fixture!.alias].every(id => id.startsWith('e2e_'))) throw new Error('Use a synthetic e2e_ fixture only.')
     await page.setViewportSize({ width: 1680, height: 1000 })
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(base).origin })
     let blockReads = false
@@ -94,7 +92,7 @@ test.describe('an immediate shared save through a sibling alias', () => {
       return route.continue()
     })
     const primary = `primary:${fixture!.child}`, alias = `${fixture!.alias}:${fixture!.child}`
-    await page.goto(`/w/${process.env.E2E_WORKSPACE_ID ?? LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=EBAY&market=DE&account=${fixture!.account}&locale=de`)
+    await page.goto(studio())
     await expect(page.locator(`.ag-row[row-id="${primary}"]`)).toBeVisible({ timeout: 90_000 })
     blockReads = true
     const writes: unknown[] = []
@@ -151,7 +149,6 @@ test.describe('an immediate shared save through a sibling alias', () => {
   for (const width of [1680, 390]) for (const colorScheme of ['light', 'dark'] as const) {
     test(`${colorScheme}, ${width}px: an older sheet read keeps the next pin save writable`, async ({ page }, info) => {
       if (!local(base)) throw new Error('This test may only use a local web app and local API.')
-      if (![fixture!.family, fixture!.child, fixture!.alias].every(id => id.startsWith('e2e_'))) throw new Error('Use a synthetic e2e_ fixture only.')
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
       await page.emulateMedia({ colorScheme })
       await page.addInitScript(theme => { localStorage.setItem('nexus:theme', theme) }, colorScheme)
@@ -174,7 +171,7 @@ test.describe('an immediate shared save through a sibling alias', () => {
         }
         return route.continue()
       })
-      await page.goto(`/w/${process.env.E2E_WORKSPACE_ID ?? LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=EBAY&market=DE&account=${fixture!.account}&locale=de`)
+      await page.goto(studio())
       const rowId = `primary:${fixture!.child}`
       await expect(page.locator(`.ag-row[row-id="${rowId}"]`)).toBeVisible({ timeout: 90_000 })
       await expect.poll(() => page.locator('html').evaluate(el => el.classList.contains('dark'))).toBe(colorScheme === 'dark')

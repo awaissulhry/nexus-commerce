@@ -11,6 +11,10 @@
  * with the production row policies. Only the transport is fake: `fetch` answers as eBay would, the gateway's account
  * check and ledger are the shared stand-ins, and the seller token is a constant. Ids are invented.
  * Run: npx vitest run src/services/categories/schema-download-sheet.vitest.test.ts (and with NEXUS_WORKSPACES_ENABLED=1).
+ *
+ * What this does NOT prove: the fix. The route already fetched through the gateway before #186, so this file passes on
+ * the commit before it (tests lens, 2026-09-30). The fix is the sheet ASKING for the list (`MissingFieldsBanner.tsx`);
+ * `apps/web/tests/sheet-missing-fields.spec.ts` drives that in a browser (CI's `sheet` job) and fails without it.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import Fastify from 'fastify'

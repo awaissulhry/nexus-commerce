@@ -9,6 +9,8 @@
 #                migration upgrade check run once, in part 1
 #   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
 #                database login, seeded disposable database, production hosts fenced off
+#   sheet (1..3) the product-sheet Playwright specs (apps/web/tests/sheet-*.spec.ts) on the smoke job's stack: the
+#                sheet opened and driven by keyboard, mouse, paste and fill handle, every save read back
 #   db-security  one profiles-ON report per API shard, the profiles-ON ratchet over them, and every real-PG
 #                suite passed in exactly one PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
@@ -218,6 +220,19 @@ jobs:
         if: matrix.part == 1
         run: npm run test --workspace=@nexus/database
 
+      # The one-batch workspace adapter's other two arms (packages/database/scripts/workspace-adapter-postgres.vitest.test.ts):
+      # behind PgBouncer in transaction mode (Neon's pooler mode, one server connection per login) and with the off switch
+      # NEXUS_DB_SCOPED_BATCH=off. Part 1 runs its default arm with the database package. The test owns its containers;
+      # it needs the two images. ~15 s, in part 2 because part 1 already carries the one-off steps.
+      - name: Workspace adapter — behind PgBouncer (transaction mode), and with the one-batch path switched off
+        if: matrix.part == 2
+        working-directory: packages/database
+        run: |
+          docker pull -q postgres:17-alpine
+          docker pull -q edoburu/pgbouncer:v1.26.0-p0
+          NEXUS_ADAPTER_TEST_PGBOUNCER=edoburu/pgbouncer:v1.26.0-p0 npx vitest run scripts/workspace-adapter-postgres.vitest.test.ts
+          NEXUS_DB_SCOPED_BATCH=off npx vitest run scripts/workspace-adapter-postgres.vitest.test.ts
+
       - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins), part ${{ matrix.part }} of ${{ strategy.job-total }}
         run: node scripts/run-real-postgres-tests.mjs --required --part ${{ matrix.part }}/${{ strategy.job-total }} --record "$RUNNER_TEMP/real-pg-part.tsv"
 
@@ -341,6 +356,137 @@ jobs:
             ${{ runner.temp }}/web.log
           retention-days: 7
 
+  # Plan P3, root cause #11 (docs/product-sheet-editing/REPORT-2026-09-30.md): "Tests call handlers directly or stop at
+  # 'opened'; CI never opens the sheet". Both P0 sheet bugs shipped with 105 green unit tests. This job opens the product
+  # sheet in a real browser and drives it — keyboard, mouse, paste, fill handle, saves read back from the API — with the
+  # specs in apps/web/tests/sheet-*.spec.ts (config: apps/web/tests/sheet.config.ts). The stack is the smoke job's:
+  # production build, API in production mode on the restricted login, profiles ON, RBAC enforced, disposable seeded
+  # database, production hosts fenced off. Every spec seeds its own made-up family; every channel account it creates has
+  # no credentials, and every listing is an unpublished draft, so nothing can reach a channel.
+  sheet:
+    name: Product sheet (${{ matrix.shard }}/3) — production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_sheet_test
+        ports: ['5432:5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      ADMIN_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_sheet_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Fence production off (the web app falls back to the production API when a variable is missing)
+        run: |
+          echo "0.0.0.0 nexusapi-production-b7bb.up.railway.app api.xavia.it app.xavia.it" | sudo tee -a /etc/hosts
+          echo "SMOKE_SEED=$RUNNER_TEMP/smoke.json" >> "$GITHUB_ENV"
+
+      - name: Database, seed and restricted app login
+        run: |
+          psql postgresql://postgres@127.0.0.1:5432/postgres -qc "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
+          npx tsx scripts/ci/prepare-test-database.mts --url "$ADMIN_DATABASE_URL"
+          npx tsx scripts/ci/seed-smoke.mts --url "$ADMIN_DATABASE_URL" --out "$SMOKE_SEED"
+          node -e 'const s = require(process.env.SMOKE_SEED); console.log("::add-mask::" + new URL(s.appDatabaseUrl).password); console.log("::add-mask::" + s.password)'
+
+      # COOKIE_SECURE=false COOKIE_SAMESITE=lax: the stack is plain http on localhost. The API's default session cookie is
+      # a Secure, partitioned `__Host-` cookie, and Playwright's `route.fetch()` (the specs' fault injection re-sends a
+      # sheet read with it) does not send such a cookie over http. The web accepts either cookie name
+      # (apps/web/src/lib/workspaces/server.ts). Production keeps the defaults.
+      - name: Start the API (NODE_ENV=production, restricted login, profiles ON, RBAC enforced, http cookies)
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          cd apps/api
+          NODE_ENV=production PORT=8080 NEXUS_API_HOST=127.0.0.1 DATABASE_URL="$APP_DATABASE_URL" DIRECT_DATABASE_URL="$APP_DATABASE_URL" \
+          REDIS_URL=redis://127.0.0.1:6379 NEXUS_WORKSPACES_ENABLED=1 NEXUS_RBAC_MODE=enforce NEXUS_AMAZON_ENV_TOKEN=off \
+          COOKIE_SECURE=false COOKIE_SAMESITE=lax \
+            nohup node --import tsx src/index.ts > "$RUNNER_TEMP/api.log" 2>&1 &
+
+      - name: Build the web app (production; type step skipped — the checks job type-checks)
+        # `next build` directly, not `npm run build` — see the smoke job: its prebuild rewrites packages/shared/dist
+        # while the API started above imports it.
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_WORKSPACES_ENABLED: '1'
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXUS_CI_SKIP_BUILD_TYPECHECK: '1'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npx next build
+
+      - name: Start the web app (next start)
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          for _ in $(seq 1 90); do curl -sf http://127.0.0.1:8080/api/health/ready >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/api/health/ready || { echo "✗ API did not become ready"; tail -50 "$RUNNER_TEMP/api.log"; exit 1; }
+          cd apps/web
+          NODE_ENV=production DATABASE_URL="$APP_DATABASE_URL" NEXUS_API_PROXY_TARGET=http://127.0.0.1:8080 NEXT_TELEMETRY_DISABLED=1 \
+            nohup npx next start -p 3000 -H localhost > "$RUNNER_TEMP/web.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/login && break; sleep 1; done
+          curl -sf -o /dev/null http://localhost:3000/login || { echo "✗ web did not start"; tail -50 "$RUNNER_TEMP/web.log"; exit 1; }
+
+      # The smoke job's browser cache: keyed by the installed Playwright version (see there).
+      - name: Playwright version (browser cache key)
+        id: playwright
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('@playwright/test/package.json').version")
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Playwright browser
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: npx playwright install --with-deps chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: steps.browsers.outputs.cache-hit == 'true'
+
+      # The shards are assigned by file in tests/sheet.config.ts (SHARDS), which refuses a spec in no shard or in two and
+      # a SHEET_SHARD count other than its own: a matrix and a list that drift apart fail instead of skipping a spec.
+      # The specs seed through the ADMIN url (a loopback database whose name contains "test"; each seed refuses any
+      # other). The login is the smoke seed's owner, in both businesses; the specs open the legacy one under /w/<id>.
+      - name: Product sheet specs
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          E2E_API_URL: http://127.0.0.1:8080
+          E2E_DATABASE_URL: ${{ env.ADMIN_DATABASE_URL }}
+          E2E_WORKSPACE_ID: nexus_legacy_workspace
+          E2E_AUTH_STATE: ${{ runner.temp }}/sheet-auth.json
+          E2E_OUTPUT_DIR: ${{ runner.temp }}/sheet-results
+          E2E_REPORT_DIR: ${{ runner.temp }}/sheet-report
+        run: |
+          E2E_EMAIL=$(node -p 'require(process.env.SMOKE_SEED).email') \
+          E2E_PASSWORD=$(node -p 'require(process.env.SMOKE_SEED).password') \
+          SHEET_SHARD=${{ matrix.shard }}/${{ strategy.job-total }} \
+            npx playwright test -c tests/sheet.config.ts
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sheet-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/sheet-report
+            ${{ runner.temp }}/sheet-results
+            ${{ runner.temp }}/api.log
+            ${{ runner.temp }}/web.log
+          retention-days: 7
+
   db-security:
     name: db-security
     needs: [api, postgres]
@@ -407,7 +553,7 @@ jobs:
 
   ci-ok:
     name: ci-ok
-    needs: [checks, api, postgres, smoke, db-security]
+    needs: [checks, api, postgres, smoke, sheet, db-security]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2

@@ -14,6 +14,7 @@
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { expect, test, type Page, type Request } from '@playwright/test'
+import { readStoredSheet } from './fixtures/sheet-e2e'
 
 const env = {
   api: process.env.E2E_API_URL,
@@ -39,9 +40,26 @@ async function focusCell(page: Page, row: number, column: string) {
   return cell(page, row, column)
 }
 
+type BulkSave = { units: Array<{ changes: Array<{ id?: string; field: string; value: unknown }> }> }
 /** The changes a `bulk-save` carried, as `field = value`. */
-const changesOf = (request: Request) => (request.postDataJSON() as { units: Array<{ changes: Array<{ field: string; value: unknown }> }> })
+const changesOf = (request: Request) => (request.postDataJSON() as BulkSave)
   .units.flatMap((unit) => unit.changes.map((change) => `${change.field} = ${JSON.stringify(change.value)}`))
+const valueSent = (request: Request) => (request.postDataJSON() as BulkSave).units[0].changes[0].value
+
+/** Every write the sheet started has answered and nothing waits in its queue (no timer: the cells' own save state). */
+async function settled(page: Page) {
+  await expect(page.locator('.nds-cell-is-saving, .nds-cell-is-waiting')).toHaveCount(0, { timeout: 30_000 })
+}
+
+/** The value STORED for a grid row's column: read back from the API, never from the grid. */
+async function stored(page: Page, row: number, column: string) {
+  // The grid's row id is `<alias>:<productId>` (`channel/rows.ts`); the server's row is the product on the primary listing.
+  const productId = (await page.locator(`.ag-row[row-index="${row}"]`).first().getAttribute('row-id'))!.split(':').pop()
+  const sheet = await readStoredSheet(page, FAMILY, 'scope=channel&channel=EBAY&market=IT&locale=it')
+  const match = sheet.rows.find((r) => r.id === productId && !r.aliasId)
+  expect(match, `no stored row for ${productId}`).toBeTruthy()
+  return match!.values[column]?.value ?? null
+}
 
 test.describe('product sheet — lists by keyboard and by one click', () => {
   test.skip(!env.api || !env.email || !env.password || !env.database,
@@ -52,6 +70,21 @@ test.describe('product sheet — lists by keyboard and by one click', () => {
 
   let page: Page
   const saves: Request[] = []
+
+  /** Row 6's open list takes a new typed value: one known write, answered and settled. */
+  async function sentinel(page: Page) {
+    const target = await focusCell(page, 6, OPEN)
+    const typed = `E2E sentinel ${Date.now().toString(36)}`
+    const answered = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname.endsWith('/api/products/bulk-save'), { timeout: 30_000 })
+    await page.keyboard.press('Enter')
+    await expect(popup(page)).toBeVisible()
+    await page.keyboard.type(typed, { delay: 20 })
+    await expect(popup(page).locator('[role="option"].active')).toHaveText(`Use "${typed}"`)
+    await page.keyboard.press('Enter')
+    await expect(target).toContainText(typed)
+    await answered
+    await settled(page)
+  }
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(300_000)
@@ -130,8 +163,16 @@ test.describe('product sheet — lists by keyboard and by one click', () => {
     await page.keyboard.press('Enter')
     await expect(target).toContainText(chosen)
     await expect.poll(() => saves.length, { timeout: 30_000 }).toBe(before + 1)
-    await page.waitForTimeout(2_000)
-    expect(saves.length).toBe(before + 1)
+    const sent = changesOf(saves[before])
+    expect(sent, sent.join(' · ')).toHaveLength(1)
+    await saves[before].response()
+    await settled(page)
+    // A sentinel write on another row and column: the sheet sends in order, so a second write of this cell (the Enter
+    // also landing as a click on the focused option) would reach the wire before it or ride in the same request.
+    await sentinel(page)
+    expect(saves.length, saves.map((r) => changesOf(r).join(' · ')).join(' | ')).toBe(before + 2)
+    expect(changesOf(saves[before + 1])).toEqual([expect.stringMatching(new RegExp(`^attr_${OPEN} = `))])
+    expect(await stored(page, 4, STRICT)).toBe(valueSent(saves[before]))
   })
 
   test('Enter with nothing changed closes the list and writes nothing', async () => {
@@ -139,10 +180,14 @@ test.describe('product sheet — lists by keyboard and by one click', () => {
     const before = saves.length
     await page.keyboard.press('Enter')
     await expect(popup(page)).toBeVisible()
+    const kept = await stored(page, 1, OPEN)
     await page.keyboard.press('Enter')
     await expect(popup(page)).toBeHidden()
-    await page.waitForTimeout(2_000)
-    expect(saves.length).toBe(before)
+    // Nothing was written: the next write the sheet sends is the sentinel's alone.
+    await sentinel(page)
+    expect(saves.length, saves.slice(before).map((r) => changesOf(r).join(' · ')).join(' | ')).toBe(before + 1)
+    expect(changesOf(saves[before])).toEqual([expect.stringMatching(new RegExp(`^attr_${OPEN} = `))])
+    expect(await stored(page, 1, OPEN)).toEqual(kept)
   })
 
   test('an open list takes a typed value', async () => {

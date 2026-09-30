@@ -61,3 +61,16 @@ PLAYWRIGHT_BASE_URL=https://nexus-commerce-three.vercel.app \
 
 See [docs/cockpit-parity.md](../../../docs/cockpit-parity.md) for the
 parity reference these specs lock in.
+
+## Product sheet specs (`sheet-*.spec.ts`) — run in CI
+
+CI's `sheet` job opens the product sheet and drives it (plan P3, docs/product-sheet-editing/REPORT-2026-09-30.md) with
+`tests/sheet.config.ts`: a production build, a local API in production mode, a disposable seeded PostgreSQL 17. Each spec
+seeds its own made-up family through `E2E_DATABASE_URL` (a loopback database whose name contains `test`; the seeds refuse
+anything else). The variables are listed in `tests/fixtures/sheet-e2e.ts`; the login state is written by
+`tests/fixtures/sheet-global-setup.ts`. The same stack on your machine, step for step:
+
+```bash
+scripts/ci/run-sheet-e2e-local.sh                   # all specs
+SHEET_SHARD=2/3 scripts/ci/run-sheet-e2e-local.sh   # one CI shard (shards: SHARDS in tests/sheet.config.ts)
+```

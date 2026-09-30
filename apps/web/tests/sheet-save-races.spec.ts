@@ -1,15 +1,18 @@
-/** Local-only save/reload races. The caller seeds and removes the synthetic E2E_ALIAS_FIXTURE. */
-import { readFileSync } from 'node:fs'
+/**
+ * Local-only save/reload races on the synthetic `fixtures/sheet-alias-seed.mjs` family (seeded in `beforeAll` from
+ * E2E_DATABASE_URL, or handed in through E2E_ALIAS_FIXTURE); `fixtures/recreate-sheet-translation.mjs` plays the other
+ * writer. Signed-in state: E2E_AUTH_STATE. Env: `fixtures/sheet-e2e.ts`; CI: the `sheet` job.
+ */
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { LEGACY_WORKSPACE_ID } from '@nexus/database/workspace-context'
+import { aliasFixture, isLocal as local, sheetEnv, studioPath, type AliasFixture } from './fixtures/sheet-e2e'
 
-const fixture = process.env.E2E_ALIAS_FIXTURE ? JSON.parse(readFileSync(process.env.E2E_ALIAS_FIXTURE, 'utf8')) as { family: string; child: string } : null
-const auth = process.env.E2E_AUTH_STATE
-const api = process.env.E2E_API_URL ?? 'http://localhost:4006'
+let fixture: AliasFixture | null = null
+const auth = sheetEnv.auth
+const api = sheetEnv.api ?? 'http://localhost:4006'
 const base = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3006'
-const local = (url: string) => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)
+const master = () => studioPath(fixture!.family, 'scope=master&market=DE&locale=de')
 
 async function fieldCell(page: Page, key: string) {
   await page.keyboard.press('Escape')
@@ -34,13 +37,16 @@ async function edit(page: Page, key: string, value: string) {
   return { request: response.request().postDataJSON(), body: await response.json() }
 }
 test.describe('product sheet save snapshots', () => {
-  test.skip(!fixture || !auth || !process.env.E2E_DATABASE_URL, 'Needs a synthetic local fixture, private database and local auth state.')
+  // The database is needed either way: the recreate fixture writes the translation another writer would.
+  test.skip(!auth || !sheetEnv.database, 'Needs E2E_DATABASE_URL (a LOCAL test database) and E2E_AUTH_STATE — see fixtures/sheet-e2e.ts.')
   test.use({ storageState: auth, actionTimeout: 15_000 })
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
+  // Reseeded per test: each one recreates the child's translation, and the next must start from version 3 again.
+  test.beforeEach(() => { fixture = aliasFixture() })
 
   test('a read during a Shared save keeps the next text cell writable', async ({ page }) => {
-    if (!local(base) || !local(api) || ![fixture!.family, fixture!.child].every(id => id.startsWith('e2e_'))) throw new Error('Synthetic local fixture required')
+    if (!local(base) || !local(api)) throw new Error('Synthetic local fixture required')
     let holdRead = false, holdSave = false, readReady = false, saveReady = false, blockReads = false
     let releaseRead!: () => void, releaseSave!: () => void
     await page.route('**/*', async route => {
@@ -66,7 +72,7 @@ test.describe('product sheet save snapshots', () => {
       return route.continue()
     })
     await page.setViewportSize({ width: 1680, height: 1000 })
-    await page.goto(`/w/${LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=master&market=DE&locale=de`)
+    await page.goto(master())
     await expect(page.locator(`.ag-row[row-id="${fixture!.child}"]`)).toBeVisible({ timeout: 90_000 })
     holdRead = true
     await page.getByRole('button', { name: 'More', exact: true }).click()
@@ -95,7 +101,7 @@ test.describe('product sheet save snapshots', () => {
 
   for (const width of [1680, 390]) for (const colorScheme of ['light', 'dark'] as const) {
     test(`${colorScheme}, ${width}px: reload after a conflict and cell copy accepts a recreated translation`, async ({ page }, info) => {
-      if (!local(base) || !local(api) || ![fixture!.family, fixture!.child].every(id => id.startsWith('e2e_'))) throw new Error('Synthetic local fixture required')
+      if (!local(base) || !local(api)) throw new Error('Synthetic local fixture required')
       let oldRead: string | null = null, replayRead = false, blockReads = false
       await page.route('**/*', async route => {
         const url = route.request().url()
@@ -119,7 +125,7 @@ test.describe('product sheet save snapshots', () => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
       await page.emulateMedia({ colorScheme })
       await page.addInitScript(theme => { localStorage.setItem('nexus:theme', theme) }, colorScheme)
-      await page.goto(`/w/${LEGACY_WORKSPACE_ID}/products/${fixture!.family}/edit/studio?scope=master&market=DE&locale=de`)
+      await page.goto(master())
       await expect(page.locator(`.ag-row[row-id="${fixture!.child}"]`)).toBeVisible({ timeout: 90_000 })
       const external = `Recreated ${width} ${colorScheme} ${Date.now()}`
       // Change only the synthetic translation outside this browser, as another writer would.

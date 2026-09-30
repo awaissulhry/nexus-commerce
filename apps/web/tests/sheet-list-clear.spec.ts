@@ -1,4 +1,8 @@
-/** Local-only regression: Clear is a keyboard choice, including in short lists. */
+/**
+ * Local-only regression: Clear is a keyboard choice, including in short lists. Seeds its own family (and a
+ * credential-less eBay and Etsy account when the business has none) into E2E_DATABASE_URL, a LOCAL test database.
+ * Env: `fixtures/sheet-e2e.ts`; CI: the `sheet` job.
+ */
 import { expect, test, type Page } from '@playwright/test'
 import { LEGACY_WORKSPACE_ID } from '@nexus/database/workspace-context'
 import pg from 'pg'
@@ -25,8 +29,13 @@ async function fixture(action: 'seed' | 'remove') {
         await db.query(`INSERT INTO "Product" (id, "workspaceId", sku, name, "basePrice", "parentId", "updatedAt") VALUES ($1, $2, $3, $3, 10, $4, now())`, [`${family}_${variant}`, workspace, `E2E-CLEAR-${variant}`, family])
       }
       for (const [channel, market] of [['EBAY', 'IT'], ['ETSY', 'GLOBAL']]) {
-        const connection = (await db.query(`SELECT id FROM "ChannelConnection" WHERE "workspaceId" = $1 AND "channelType" = $2 AND "isActive" ORDER BY "isPrimary" DESC, id LIMIT 1`, [workspace, channel])).rows[0]?.id
-        if (!connection) throw Error(`The local fixture needs an active ${channel} connection; no channel call is made`)
+        let connection = (await db.query(`SELECT id FROM "ChannelConnection" WHERE "workspaceId" = $1 AND "channelType" = $2 AND "isActive" ORDER BY "isPrimary" DESC, id LIMIT 1`, [workspace, channel])).rows[0]?.id
+        if (!connection) {
+          // A clean seed has no account: a made-up one WITHOUT credentials, so nothing here can reach the channel.
+          connection = `e2e_${channel.toLowerCase()}_connection`
+          await db.query(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "isActive", "isPrimary", "displayName", "updatedAt")
+            VALUES ($1, $2, $3, true, true, $4, now()) ON CONFLICT (id) DO UPDATE SET "isActive" = true`, [connection, workspace, channel, `E2E ${channel} (no credentials)`])
+        }
         for (const id of [family, ...variants.map(v => `${family}_${v}`)]) {
           await db.query(`INSERT INTO "ChannelListing" (id, "workspaceId", "productId", channel, "channelMarket", marketplace, region, "channelConnectionId", "listingStatus", "isPublished", "platformAttributes", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, 'EU', $7, 'DRAFT', false, $8::jsonb, now())`, [`l_${channel}_${id}`, workspace, id, channel, `${channel}_${market}`, market, connection, JSON.stringify(channel === 'EBAY' ? { conditionId: '1000' } : { item_weight_unit: 'kg' })])
         }
