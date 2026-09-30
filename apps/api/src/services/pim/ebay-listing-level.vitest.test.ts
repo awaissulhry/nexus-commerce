@@ -49,10 +49,20 @@ describe('showEbayListingLevel — what the eBay sheet shows', () => {
   it('every row shows the parent\'s value; a row with its own different value says so; the parent is marked as the source', () => {
     const out = show()
     expect([out.p.origin.value, out.a.origin.value, out.b.origin.value, out.x.origin.value]).toEqual(['Pakistan', 'Pakistan', 'Pakistan', 'Pakistan'])
-    expect(out.a.origin).toMatchObject({ inherited: true, inheritedFrom: 'p', pinned: false, mapped: { value: 'Pakistan', listingLevel: { productId: 'p', sku: 'F', ownValue: 'Cina' } } })
-    expect(out.a.origin.mapped.warnings.join(' ')).toContain('This row holds "Cina", which eBay does not receive')
-    expect(out.b.origin.mapped.listingLevel).toEqual({ productId: 'p', sku: 'F' })
+    expect(out.a.origin).toMatchObject({ inherited: true, inheritedFrom: 'p', pinned: false, mapped: { value: 'Pakistan', listingLevel: { productId: 'p', sku: 'F', variation: true, ownValue: 'Cina' } } })
+    // The row's own value is named once, by the source (`ownValue`), not again in the mapping's warnings.
+    expect(out.a.origin.mapped.warnings).toEqual([])
+    expect(out.b.origin.mapped.listingLevel).toEqual({ productId: 'p', sku: 'F', variation: true })
     expect(out.p.origin.mapped.listingLevel).toEqual({ productId: 'p', sku: 'F' })
+  })
+  it('P1 review 4 — on a variation row the value is the LISTING\'s: inherited from the listing row, and no reset of its own', () => {
+    const out = show()
+    for (const id of ['a', 'b', 'x']) expect(out[id].origin).toMatchObject({ layer: 'alias', inherited: true, pinned: false, resettable: false })
+    // The listing's own row keeps its reset (it resets the listing's value).
+    expect(out.p.origin.resettable).toBeUndefined()
+    expect(out.p.origin.layer).toBeUndefined()
+    // An axis is the row's own: untouched.
+    expect(out.a.color).not.toHaveProperty('resettable')
   })
   it('control: an axis stays per row', () => {
     const out = show()
@@ -61,7 +71,10 @@ describe('showEbayListingLevel — what the eBay sheet shows', () => {
   it('no parent value: the first INCLUDED variation in SKU order supplies it (an excluded row is not sent, so it never does)', () => {
     const out = show(rows(), ['b', 'a'])
     expect([out.p.fit.value, out.b.fit.value, out.x.fit.value]).toEqual(['Slim', 'Slim', 'Slim'])
-    expect(out.b.fit.mapped.listingLevel).toMatchObject({ productId: 'a', ownValue: 'Regular' })
+    expect(out.b.fit.mapped.listingLevel).toMatchObject({ productId: 'a', variation: true, ownValue: 'Regular' })
+    // The variation that supplies the listing's value is a variation too: its cell is the listing's, with no reset.
+    expect(out.a.fit).toMatchObject({ value: 'Slim', layer: 'alias', resettable: false, mapped: { listingLevel: { productId: 'a', variation: true } } })
+    expect(out.p.fit).toMatchObject({ value: 'Slim', inherited: true, inheritedFrom: 'a' })
     const excludedFirst = rows(); excludedFirst[0].values.origin = cell(null)
     expect(show(excludedFirst, ['a']).b.origin.value).toBe('Cina')
   })

@@ -140,9 +140,10 @@ export interface MappedCell {
   /**
    * P1 (report 5 I-1) — an eBay item specific that is not an axis has one value per listing: this row shows the value
    * eBay receives, from the row `productId`/`sku` (the parent, or the first variation that holds one). A write on any row
-   * lands on the parent listing. `ownValue`: this row's own different value, which eBay does not receive.
+   * lands on the parent listing. `variation`: this row is a variation, so the value is the listing's (no reset of its own).
+   * `ownValue`: this row's own different value, which eBay does not receive.
    */
-  listingLevel?: { productId: string; sku: string; ownValue?: unknown }
+  listingLevel?: import('./ebay-listing-level.js').ListingLevelMark
 }
 
 export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' | 'effectiveLocale' | 'translationState' | 'needsTranslation'>, ContentWriteFacts {

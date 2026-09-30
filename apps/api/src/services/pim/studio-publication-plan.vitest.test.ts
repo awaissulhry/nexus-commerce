@@ -169,6 +169,8 @@ describe('the publish verdict per cell', () => {
     brand: { label: 'Brand', value: null, errors: ["Field 'Brand' is required."], findings: [found('nexus', "Field 'Brand' is required.")] },
     condition: { label: 'Condition', value: null, errors: ["Field 'Condition' is required."], findings: [found('required', "Field 'Condition' is required.")] },
     legacy: { label: 'Legacy', value: 'x', errors: ['A sentence with no finding'] },
+    // P1 review (7) — the check could not run: blocks.
+    theme: { label: 'Theme', value: 'x', errors: ['Category requirement validation is unavailable: timeout'], findings: [found('unchecked', 'Category requirement validation is unavailable: timeout')] },
   }
   const severities = async (channel: string) => {
     m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells })), missingProductIds: [], catalogue: {} }))
@@ -177,7 +179,7 @@ describe('the publish verdict per cell', () => {
     return Object.fromEntries(facts.issues.filter(i => i.productId === 'parent').map(i => [i.field, i.severity]))
   }
   it('eBay: an off-list value and a Nexus-only requirement warn; over 80 characters, a channel requirement and an unexplained error block', async () => {
-    expect(await severities('EBAY')).toEqual({ season: 'warning', title: 'error', brand: 'warning', condition: 'error', legacy: 'error' })
+    expect(await severities('EBAY')).toEqual({ season: 'warning', title: 'error', brand: 'warning', condition: 'error', legacy: 'error', theme: 'error' })
   })
   it('Amazon: an off-list value blocks (a closed enum); the Nexus-only requirement still warns', async () => {
     expect(await severities('AMAZON')).toMatchObject({ season: 'error', brand: 'warning' })
@@ -233,5 +235,21 @@ describe('eBay listing-level item specifics in the publish review', () => {
       expect.objectContaining({ productId: 'a', field: 'itemSpecifics.Genere', severity: 'warning',
         message: 'Genere: eBay takes one value for the whole listing and will get "Uomo" (from VENTRA-RED-MEN). 1 row holds another value that is not sent: VENTRA-YELLOW-WOMEN ("Donna").' }),
     ])
+  })
+})
+
+// P1 review (8) — the sheet names the row eBay's value comes from with the publisher's OWN order: one comparator.
+describe('the family order the publisher sends in', () => {
+  it('the sheet\'s supplier is the first row readPublicationFacts orders, whatever the SKU case and accents', async () => {
+    const { ebayFamilySupplier } = await import('./ebay-listing-level.js')
+    const skus = ['FAM-b', 'FAM-B', 'FAM-É', 'FAM-a', 'FAM-10', 'FAM-9']
+    m.products.mockResolvedValue([{ id: 'parent', sku: 'FAM', isParent: true }, ...skus.map(sku => ({ id: sku, sku, parentId: 'parent' }))])
+    m.listingRead.mockResolvedValue([{ id: 'lp', productId: 'parent' }, ...skus.map(sku => ({ id: `l-${sku}`, productId: sku }))])
+    m.excluded.mockResolvedValue(new Set())
+    const facts = await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })
+    const published = facts.products.map(p => p.sku)
+    // Every variation holds a value, the parent none: the supplier must be the first variation the publisher sends.
+    const supplier = ebayFamilySupplier([{ productId: 'parent', sku: 'FAM', isParent: true, value: '' }, ...[...skus].reverse().map(sku => ({ productId: sku, sku, isParent: false, value: sku }))])
+    expect(supplier?.sku).toBe(published[1])
   })
 })

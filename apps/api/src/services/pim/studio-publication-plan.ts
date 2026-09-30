@@ -11,6 +11,7 @@ import { publishContentIssues, resolvePublishContent, requireReviewedContent } f
 import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
+import { familyPublicationOrder } from './family-publication-order.js'
 import { ebayListingLevelValues, isEbayListingLevel, listingLevelWarning, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
@@ -48,7 +49,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     const rows = listings.filter(l => l.productId === p.id)
     return (p.id === parent.id || rows.length > 0) && !rows.some(l => excludedIds.has(l.id))
   })
-    .sort((a, b) => Number(b.id === parent.id) - Number(a.id === parent.id) || a.sku.localeCompare(b.sku))
+    .sort(familyPublicationOrder(p => p.id === parent.id))
   const closed = scope.channel === 'AMAZON' ? await closedMarketSet(selected.map(p => p.id)) : new Set<string>()
   const skipped = selected.filter(p => closed.has(`${p.id}|${scope.marketplace}`))
     .map(p => ({ productId: p.id, sku: p.sku, reason: 'Offer closed — not sent' }))
