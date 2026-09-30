@@ -14,7 +14,7 @@
 import { sendEmail, type SendResult } from './transport.js'
 
 function webBase(): string {
-  return (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+  return (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
 }
 
 export function invitationLink(rawToken: string): string {
