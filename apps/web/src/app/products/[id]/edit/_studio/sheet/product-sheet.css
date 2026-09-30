@@ -13,3 +13,10 @@
     transition: none;
   }
 }
+
+/* P1 — the body of the sheet's own questions (Delete: clear or reset; Set every row…). */
+.ps-dialog-body {
+  display: grid;
+  gap: var(--nds-space-12);
+}
+.ps-dialog-body p { margin: 0; }

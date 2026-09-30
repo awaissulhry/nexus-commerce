@@ -21,6 +21,7 @@
 import { commitLanguageGroups } from '../languageWrites'
 import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
+import { wireCellValue } from '../sheetReset'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -143,7 +144,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           // channel scope resets by clearing `*Override` and restoring `followMaster*`, which
           // is a different route entirely (PES.3 owns that `commit`). The intent is honoured
           // here rather than in the writer precisely so the two can differ.
-          value: c.intent === 'reset' ? null : c.value === '' ? null : c.value,
+          value: c.intent === 'reset' ? null : c.value === '' ? null : wireCellValue(c.value),
           ...(c.intent === 'reset' ? { intent: 'reset' } : {}),
         })),
         /* 🔴 THE MARKETPLACE CONTEXT. Without it every `attr_*` write on the master scope was
