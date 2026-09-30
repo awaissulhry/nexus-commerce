@@ -1,3 +1,7 @@
+## Clear is reachable with the arrow keys — 2026-09-30
+
+**`ListboxPanel`** lets ArrowUp reach Clear from the first option. Enter and Tab report an empty value before a grid ends the edit. Focusing Clear also updates the keyboard choice. A missing stored value still stays unchanged until the operator chooses. Mirrored in Factory.
+
 ## A short list takes the keyboard before it is painted — 2026-09-30
 
 Mirrored from web. `ListboxPanel` without a search field focuses its container in a layout effect, before the paint.

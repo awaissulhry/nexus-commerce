@@ -50,6 +50,8 @@ import type { ListboxOption } from './Listbox'
  * appears when there are MORE than 8). Below it the list is short enough to read.
  */
 export const LISTBOX_SEARCH_THRESHOLD = 8
+// -1 means no highlighted value. Clear needs its own position without shifting callers' option indices.
+const CLEAR_INDEX = -2
 
 /**
  * A panel option may be HELD: reachable and announced, never committed (Step 4.3 #2). The scope menu
@@ -106,7 +108,7 @@ export interface ListboxPanelProps {
    * counting its own array would be counting a different one.
    */
   activeIndex?: number
-  /** The panel's own ↑/↓ moved the highlight. Fires in both modes; controlled callers store it. */
+  /** The panel's own ↑/↓ moved the highlight. Clear is -2; -1 means no choice. Fires in both modes. */
   onActiveIndexChange?: (index: number) => void
   /** The flat, ranked, grouped list this panel is actually showing — index space for `activeIndex`. */
   onMatchesChange?: (matches: readonly ListboxOption[]) => void
@@ -236,9 +238,9 @@ export function ListboxPanel({
     // A searching panel moves its highlight with ↑/↓ while focus stays in the search field, so it is kept in view too.
     if (!controlled && !filtering) return
     const host = hostRef.current
-    const row = host?.querySelectorAll<HTMLElement>('button[role="option"]')[active + (showClear ? 1 : 0)]
+    const row = host?.querySelectorAll<HTMLElement>('button[role="option"]')[active === CLEAR_INDEX && showClear ? 0 : active + (showClear ? 1 : 0)]
     if (!host || !row) return
-    if (active === 0) { host.scrollTop = 0; return }
+    if (active === 0 || active === CLEAR_INDEX) { host.scrollTop = 0; return }
     // The panel may be static inside a positioned editor. offsetTop belongs to that ancestor,
     // so measure within this scroll viewport instead of counting the editor's preceding tools.
     const top = row.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop - host.clientTop
@@ -305,17 +307,22 @@ export function ListboxPanel({
         // Not also a click: Enter on a focused option button would activate it and commit a second time (code review).
         if (e.key === 'Enter') e.preventDefault()
         const m = active >= 0 ? matches[active] : undefined
-        onKeyChoice(m && !m.disabled && !heldReason(m) ? m.value : null)
+        onKeyChoice(active === CLEAR_INDEX && showClear ? '' : m && !m.disabled && !heldReason(m) ? m.value : null)
       } : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Escape') { e.preventDefault(); onCancel() }
         else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault()
-          const n = moveActive((i) => e.key === 'ArrowDown' ? Math.min(i + 1, matches.length - 1) : Math.max(i - 1, 0))
+          const n = moveActive((i) => {
+            if (e.key === 'ArrowUp') return i <= 0 && showClear ? CLEAR_INDEX : Math.max(i - 1, 0)
+            if (i === CLEAR_INDEX) return matches.length ? 0 : CLEAR_INDEX
+            return Math.min(i + 1, matches.length - 1)
+          })
           // A short uncontrolled list draws no `.active` row, so the focus ring IS the highlight: move it.
-          if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>('button[role="option"]')[n + (showClear ? 1 : 0)]?.focus()
+          if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>('button[role="option"]')[n === CLEAR_INDEX ? 0 : n + (showClear ? 1 : 0)]?.focus()
         }
         else if (e.key === 'Enter' && !onKeyChoice) {
+          if (active === CLEAR_INDEX && showClear) { e.preventDefault(); onCommit(''); return }
           const m = matches[active]
           if (m) { e.preventDefault(); if (!m.disabled && !heldReason(m)) onCommit(m.value) }
         }
@@ -329,7 +336,10 @@ export function ListboxPanel({
         </div>
       )}
       {showClear && (
-        <button type="button" role="option" aria-selected={!value} className={!value ? 'on' : undefined}
+        <button type="button" role="option" aria-selected={!value} tabIndex={optionTabIndex}
+          id={idPrefix ? `${idPrefix}-o${CLEAR_INDEX}` : undefined}
+          className={[!value ? 'on' : '', (filtering || controlled) && active === CLEAR_INDEX ? 'active' : ''].filter(Boolean).join(' ') || undefined}
+          onFocus={controlled ? undefined : () => { if (activeRef.current !== CLEAR_INDEX) moveActive(() => CLEAR_INDEX) }}
           onClick={() => onCommit('')}>
           {emptyLabel}
         </button>
