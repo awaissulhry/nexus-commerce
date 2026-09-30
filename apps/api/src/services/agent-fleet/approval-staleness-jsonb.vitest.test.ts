@@ -11,6 +11,7 @@
  * set-price or apply-content was handed back as stale every time, so an approved change never ran. This file drives
  * that path on a real PostgreSQL (PGlite) with the real tools and real rows: nothing is mocked in between.
  */
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../test-support/formula-database.js'
@@ -48,16 +49,15 @@ const A = LEGACY_WORKSPACE_ID
 const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
 
-const PERSON: UserPrincipal = {
-  kind: 'user',
-  userId: 'u-jsonb',
-  label: 'Page approver',
-  permissions: { isOwner: false, permissions: new Set(['ai.run', F.productsPriceEdit, F.productsEdit, F.productsBulkRun]) },
-  workspace: business,
-  via: 'app',
-}
-// MCP.10 — the same person asking through Claude.
-const CLAUDE: McpPrincipal = { ...PERSON, via: 'claude', workspace: business, oauthGrantId: 'grant-jsonb' }
+// MCP.10 — products.bulk.run as well, for the bulk changes.
+const PERMISSIONS = ['ai.run', F.productsPriceEdit, F.productsEdit, F.productsBulkRun]
+/**
+ * A real person who may do both, through both places a request reads permissions from (login roles with business
+ * profiles off, the membership of this business on): the commit re-reads the approver's permissions at run time.
+ */
+let PERSON: UserPrincipal
+/** MCP.10 — the same person asking through Claude (built once the person exists). */
+const claude = (): McpPrincipal => ({ ...PERSON, via: 'claude', workspace: business, oauthGrantId: 'grant-jsonb' })
 
 const ids: Record<string, string> = {}
 const product = (sku: string) => inside(() => database.client.product.findUniqueOrThrow({ where: { id: ids[sku] } }))
@@ -88,6 +88,22 @@ beforeAll(async () => {
   database = await formulaDatabase()
   vi.stubEnv('NEXUS_OAUTH_ISSUER', 'https://web.example.test')
   vi.stubEnv('NEXUS_AI_KILL_SWITCH', '')
+  {
+    const db = database.client
+    const role = await db.role.create({ data: { key: `JSONB_APPROVER_${randomUUID().slice(0, 8)}`, name: 'Approver', description: 'test', permissions: PERMISSIONS, isSystem: false } })
+    const user = await db.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: 'Page approver' } })
+    await db.userRole.create({ data: { userId: user.id, roleId: role.id } })
+    const membership = await db.workspaceMembership.create({ data: { workspaceId: A, userId: user.id, status: 'active' } })
+    await db.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
+    PERSON = {
+      kind: 'user',
+      userId: user.id,
+      label: 'Page approver',
+      permissions: { isOwner: false, permissions: new Set(PERMISSIONS) },
+      workspace: business,
+      via: 'app',
+    }
+  }
   await inside(async () => {
     const db = database.client
     await db.marketplace.create({ data: { channel: 'AMAZON', code: 'IT', name: 'AMAZON IT', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'], marketplaceId: 'TEST_AMAZON_IT' } as never })
@@ -160,7 +176,7 @@ describe('AP.6 — an unchanged approval from the Approvals page runs after the 
   })
 
   it('MCP.10 — a price change Claude asked for, approved on the page, runs', async () => {
-    const result = await runToolForClaude(CLAUDE, getTool('set-price')!, { productId: ids['J-CLAUDE'], price: 14 })
+    const result = await runToolForClaude(claude(), getTool('set-price')!, { productId: ids['J-CLAUDE'], price: 14 })
     const { approvalId } = JSON.parse((result.content[0] as { text: string }).text)
     await parkOnThePage(approvalId)
     expect(await commitAfterTheWindow(approvalId)).toMatchObject({ ok: true })
