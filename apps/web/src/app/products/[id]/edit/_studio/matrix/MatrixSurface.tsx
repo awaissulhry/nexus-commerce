@@ -38,6 +38,7 @@ import {
   exportGridCsv,
   GridExportRefused,
   GridSheet,
+  GridSheetNote,
   GridSheetStatus,
   gridGeometry,
   gridSelection,
@@ -84,6 +85,7 @@ import { MatrixBanner } from './MatrixBanner'
 import { MatrixSelectionVerbs } from './MatrixSelectionVerbs'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
+import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
 import { useVerbRun } from './verbs/useVerbRun'
 import { VerbDialog, type VerbDialogInitial } from './verbs/VerbDialog'
 import styles from './matrix.module.css'
@@ -154,7 +156,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const previewRows = useMemo(() => (sheet ? rows.map((r) => ({ id: r.id, sku: r.sku, isParent: r.isParent, basePrice: r.basePrice, status: r.status })) : null), [sheet, rows])
   const coordinateSource = useMemo(() => ({ channels: options.channels, marketplaces }), [options.channels, marketplaces])
   const getApiForMatrix = useCallback(() => getGridApi() as GridApi<{ id: string }> | null, [getGridApi])
-  const matrix = useMatrix({ productId, accountId: accountId ?? null, locale, rows: previewRows, coordinates: coordinateSource, tracker, getApi: getApiForMatrix, can: has, onSettled })
+  /* A server refusal is said the way the page says its own (`sayReason`, defined below with the verbs). */
+  const sayRefusal = useRef<(reason: string) => void>(() => {})
+  const onRefused = useCallback((reason: string) => sayRefusal.current(reason), [])
+  const matrix = useMatrix({ productId, accountId: accountId ?? null, locale, rows: previewRows, coordinates: coordinateSource, tracker, getApi: getApiForMatrix, can: has, onSettled, onRefused })
   const read = matrix.read
   const previewMode = read?.source === 'preview'
   const masterHeldReason = previewMode ? 'Preview data — Base price and Status are the Information sheet\'s; edit them there until the Matrix service lands.' : null
@@ -177,17 +182,38 @@ export function MatrixSurface({ productId }: { productId: string }) {
   useRegisterViewChip('matrix-sync-issues', chips[3] ?? null)
   useRegisterViewChip('matrix-suppressed', chips[4] ?? null)
 
+  /* ── refusals: every refused cell, its reason, and a view of the rows they are on ────────── */
+
+  const [refusedMarks, setRefusedMarks] = useState<RefusedMark[]>([])
+  useEffect(() => {
+    const collect = () => {
+      const marks: RefusedMark[] = []
+      for (const row of rowsRef.current) for (const c of visibleCoordinates) for (const k of c.cells) {
+        const m = tracker.get(row.id, matrixColId(c.key, k))
+        if (m?.state === 'refused') marks.push({ rowId: row.id, coordinate: c, kind: k, reason: m.reason })
+      }
+      setRefusedMarks(marks)
+    }
+    collect()
+    return tracker.subscribe(collect)
+  }, [tracker, visibleCoordinates])
+  const [showRefusedOnly, setShowRefusedOnly] = useState(false)
+  useEffect(() => { if (refusedMarks.length === 0) setShowRefusedOnly(false) }, [refusedMarks.length])
+  const refusedIds = useMemo(() => refusedRowIds(refusedMarks), [refusedMarks])
+  const refusalExample = useMemo(() => refusalLead(refusedMarks), [refusedMarks])
+
   const [search, setSearch] = useState('')
   const visibleRows = useMemo(() => {
     const chipRows = chipBar.active?.cells.byRow
     const needle = search.trim().toLowerCase()
     return ordered.filter((row) => {
+      if (showRefusedOnly && refusedIds.size > 0 && !refusedIds.has(row.id)) return false
       if (chipRows && !(row.id in chipRows)) return false
       if (!needle) return true
       const line = axesRef.current.map((a) => String(row.axisValues?.[a.key] ?? '')).join(' ')
       return `${row.sku} ${row.name ?? ''} ${line}`.toLowerCase().includes(needle)
     })
-  }, [ordered, chipBar.active, search])
+  }, [ordered, chipBar.active, search, showRefusedOnly, refusedIds])
 
   /* ── verbs: preview → confirm → run → revert ────────────────────────────────────────────── */
 
@@ -201,6 +227,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     lastSaid.current = { text: reason, at: now }
     toast.toast(reason, tone)
   }, [toast])
+  sayRefusal.current = (reason: string) => sayReason(reason, 'danger')
   const [verb, setVerb] = useState<{ spec: MatrixVerbSpec; targets: MatrixVerbTarget[]; label: string; initial?: VerbDialogInitial } | null>(null)
   const [selectedRows, setSelectedRows] = useState<StudioRow[]>([])
   const canEdit = has('products.edit')
@@ -513,12 +540,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   const [pending, setPending] = useState(0)
   useEffect(() => writer.subscribe(() => setPending(writer.pending)), [writer])
-  const [refused, setRefused] = useState(0)
-  useEffect(() => tracker.subscribe(() => {
-    let n = 0
-    for (const row of rowsRef.current) for (const c of visibleCoordinates) for (const k of c.cells) if (tracker.get(row.id, matrixColId(c.key, k))?.state === 'refused') n++
-    setRefused(n)
-  }), [tracker, visibleCoordinates])
+  const refused = refusedMarks.length
 
   const total = rows.length
   const variants = rows.filter((r) => !r.isParent).length
@@ -552,6 +574,17 @@ export function MatrixSurface({ productId }: { productId: string }) {
             <>
               {/* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */}
               <GridSheetStatus rows={visibleRows.length} pending={pending} refused={refused} saving={writer.busy} lastSavedAt={lastSavedAt}>
+                {/* The sheet's refusal note (`SheetFooterNote`'s): the count is a VIEW — it narrows the grid to the affected
+                    rows — and it carries ONE phrased example, so the reason is never only behind a hover. */}
+                {refused > 0 && (
+                  <span className="nds-grid-sheet-noteslot is-urgent">
+                    <GridSheetNote
+                      kind="refusal" count={refused} noun="cell" title={refusalExample}
+                      lead={showRefusedOnly ? `showing only the affected rows · ${refusalExample ?? ''}` : refusalExample}
+                      onShow={() => setShowRefusedOnly((v) => !v)}
+                    />
+                  </span>
+                )}
                 <span className="nds-cell-muted">{variants} {variants === 1 ? 'variant' : 'variants'}</span>
                 {euGroups.map((g) => (
                   <span key={g.key} className="nds-cell-muted" title={MATRIX_COPY.sharedEu(g.sharedInventoryWith!)}>Amazon EU: quantity is shared by {g.sharedInventoryWith!.length} markets</span>
