@@ -22,7 +22,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   4. any other category the product belongs to, by the same rules
  *   5. `Product.productType` for Amazon only — the legacy answer, kept so nothing that works today stops
  *      working, and REPORTED as `source: 'productType'` so the UI never implies a mapping
- *      exists when one does not
+ *      exists when one does not. A variation with none of its own takes its parent's (`fromParent`), as
+ *      steps 0–4 already do: Amazon keeps one product type per family
  *
  * Ancestor inheritance uses `CategoryClosure` (already maintained), so step 3 is one indexed
  * query, not a recursive walk.
@@ -82,6 +83,8 @@ export interface ResolvedCategory {
    * (`resolve-batch`), while this is a fact to show beside a category that still resolved.
    */
   otherMarketConflicts?: string[]
+  /** The variation resolved to nothing of its own, so this is its PARENT's resolved category (any source). */
+  fromParent?: boolean
 }
 
 const EMPTY: ResolvedCategory = {
@@ -149,15 +152,19 @@ export function categorySourceLabel(category: ResolvedCategory): string {
       case 'categoryWildcard': return `Mapped on ${on} for every market`
       case 'ancestorExact': return `Inherited from the mapping on ${on} for this market`
       case 'ancestorWildcard': return `Inherited from the mapping on ${on} for every market`
-      case 'productType': return "The product's own product type (no mapping for this market)"
+      case 'productType': return category.fromParent
+        ? "The parent product's product type (this variation has none of its own; no mapping for this market)"
+        : "The product's own product type (no mapping for this market)"
       case 'none': return category.conflicts?.length ? 'Conflicting shared categories. Choose a primary category.' : 'No category'
       // A new source fails the type check here until it has words of its own.
       default: { const unlabelled: never = category.source; return String(unlabelled) }
     }
   })()
+  // The productType wording says it already; any other source is the parent's, so it is named as the parent's.
+  const own = category.fromParent && category.source !== 'productType' ? `The parent product's: ${base.charAt(0).toLowerCase()}${base.slice(1)}` : base
   return category.otherMarketConflicts?.length
-    ? `${base}. Its Amazon listings in other markets disagree: ${category.otherMarketConflicts.join(', ')}`
-    : base
+    ? `${own}. Its Amazon listings in other markets disagree: ${category.otherMarketConflicts.join(', ')}`
+    : own
 }
 
 /** `{ "en": { "name": "Coats" } }` or `{ "en": "Coats" }` — both shapes exist in the wild. */
@@ -271,7 +278,13 @@ export async function resolveCategoriesForProducts(input: {
     where: { id: { in: productIds } }, select: { id: true, parentId: true, productType: true },
   })
   const membershipIds = [...new Set([...productIds, ...products.map(p => p.parentId).filter((id): id is string => !!id)])]
-  const [memberships, mappings, siblingTypes] = await Promise.all([
+  const amazon = channel.toUpperCase() === 'AMAZON'
+  /* A variation that resolves to nothing of its own takes its parent's RESOLVED category (Amazon keeps one product type per
+     family), so a parent that was not asked for (a bulk save names only the edited rows) is resolved too, first. Its raw
+     `productType` would not do: a mapping or a sibling listing can resolve the parent to another type (code review). */
+  const asked = new Set(products.map(p => p.id))
+  const extraParentIds = amazon ? [...new Set(products.filter(p => !p.productType && p.parentId && !asked.has(p.parentId)).map(p => p.parentId!))] : []
+  const [memberships, mappings, siblingTypes, extraParents] = await Promise.all([
     prisma.productCategory.findMany({
       where: { productId: { in: membershipIds } },
       select: { productId: true, categoryId: true, isPrimary: true },
@@ -287,7 +300,8 @@ export async function resolveCategoriesForProducts(input: {
         reviewedAt: true,
       },
     }),
-    channel.toUpperCase() === 'AMAZON' ? amazonTypesInSiblingMarkets(membershipIds, marketplace, input.channelConnectionId) : Promise.resolve(new Map<string, Map<string, Set<string>>>()),
+    amazon ? amazonTypesInSiblingMarkets(membershipIds, marketplace, input.channelConnectionId) : Promise.resolve(new Map<string, Map<string, Set<string>>>()),
+    extraParentIds.length ? prisma.product.findMany({ where: { id: { in: extraParentIds } }, select: { id: true, parentId: true, productType: true } }) : Promise.resolve([]),
   ])
 
   const mappedCategoryIds = new Set(mappings.map((m) => m.categoryId))
@@ -328,7 +342,9 @@ export async function resolveCategoriesForProducts(input: {
   const names = new Map(nameRows.map((r) => [r.id, categoryName(r.name)]))
 
   const disagreements = new Map<string, string[]>()
-  for (const p of products) {
+  // Parents first, so a variation's fallback reads its parent's finished answer.
+  const ordered = [...extraParents, ...products].sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId))
+  for (const p of ordered) {
     // Tier 0 (Amazon): the variant's own sibling listings, else its parent's, like category memberships below.
     const sibling = siblingTypes.get(p.id) ?? siblingTypes.get(p.parentId ?? '')
     if (sibling?.size === 1) {
@@ -362,13 +378,18 @@ export async function resolveCategoriesForProducts(input: {
     if (resolved) {
       resolved.categoryName = resolved.categoryId ? (names.get(resolved.categoryId) ?? null) : null
       out[p.id] = resolved
-    } else if (channel.toUpperCase() === 'AMAZON' && p.productType) {
+    } else if (amazon && p.productType) {
       out[p.id] = { ...EMPTY, channelCategoryId: p.productType, source: 'productType' }
+    } else if (amazon && p.parentId && out[p.parentId]?.channelCategoryId) {
+      // Without it every column of the variation's type is "Not applicable" (REGAL DE, 2026-09-30: 16 rows, 2,816 cells).
+      out[p.id] = { ...out[p.parentId], fromParent: true }
     } else {
       out[p.id] = { ...EMPTY }
     }
   }
   for (const [id, conflicts] of disagreements) out[id] = { ...out[id], otherMarketConflicts: conflicts }
+  // Only what was asked for: a parent resolved for its variations' sake is not an answer the caller requested.
+  for (const parent of extraParents) if (!productIds.includes(parent.id)) delete out[parent.id]
 
   for (const id of productIds) if (!out[id]) out[id] = { ...EMPTY }
   return out

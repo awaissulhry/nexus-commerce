@@ -20,7 +20,7 @@ import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
 import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
 import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
-import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, SELECT_CELL_CLASS, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
 
@@ -468,16 +468,19 @@ export function buildMasterColumns(
        */
       // One definition, shared with IO.1's import diff — see `optionLabel` for why (#501).
       const label = (v: unknown) => optionLabel(v, col.optionLabels)
+      // An open list takes a typed value (#27); every list can be cleared from the editor.
+      const selectParams = { options, allowCustom: col.mode === 'open', emptyLabel: SELECT_CLEAR_LABEL }
       return {
         ...def,
         ...selectEditor(options),
+        cellEditorParams: selectParams,
         ...(reference ? { cellEditor: ReferenceSelectEditor, cellEditorPopup: true, cellEditorParams: (p: { data?: StudioRow }) => referenceParams(p.data) } : {}),
         /* `=` opens the formula editor on a closed list too (Owner, #775). The option list is still
            the rule: the server refuses a result that is not one of them, naming them, and the cell
            shows that refusal with the formula kept for correction. */
         ...(opts.formula ? formulaCellEditorSelector<StudioRow>(opts.formula, col, row => reference
           ? { component: ReferenceSelectEditor, popup: true, params: referenceParams(row) }
-          : { component: SelectPanelEditor, params: { options } }, row => row.id) : {}),
+          : { component: SelectPanelEditor, params: selectParams }, row => row.id) : {}),
         editable,
         valueFormatter: (p) => label(p.value),
         /* D13 — the closed-list affordance, from the ENGINE and applied by KIND, never per column:
@@ -492,7 +495,7 @@ export function buildMasterColumns(
           withMark(
             p,
             p.value != null && p.value !== '' ? label(p.value) : emptyOrRequired(p),
-            <SelectChevron />,
+            <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key)} />,
           ),
       }
     }
@@ -569,7 +572,7 @@ export function buildMasterColumns(
         editable,
         valueFormatter: (p) => booleanLabel(p.value),
         cellRenderer: (p: ICellRendererParams<StudioRow>) =>
-          withMark(p, p.value == null || p.value === '' ? emptyOrRequired(p) : <>{booleanLabel(p.value)}</>, <SelectChevron />),
+          withMark(p, p.value == null || p.value === '' ? emptyOrRequired(p) : <>{booleanLabel(p.value)}</>, <SelectChevron onOpen={openCellEditor(p.api, p.node, col.key)} />),
       }
     }
     return {

@@ -622,6 +622,11 @@
   color: var(--nds-grid-muted-fg);
   pointer-events: none;
 }
+/* A chevron with its own click (`SelectChevron onOpen`) opens the list in one click; a double-click still bubbles to the cell. */
+.nds-ag-chev.is-action {
+  pointer-events: auto;
+  cursor: pointer;
+}
 .nds-ag-wrap .ag-cell.nds-cell-is-pending { background: var(--nds-grid-pending-bg) !important; }
 .nds-ag-wrap .ag-cell.nds-cell-is-saving { background: var(--nds-grid-saving-bg) !important; box-shadow: inset 0 0 0 1px var(--nds-primary); }
 .nds-ag-wrap .ag-cell.nds-cell-is-saved { box-shadow: inset 0 0 0 1px var(--nds-success); transition: box-shadow 400ms ease; }

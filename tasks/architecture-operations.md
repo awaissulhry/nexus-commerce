@@ -41,11 +41,11 @@ platform administrators or the release service cannot see both secret values.
 
 ## Process cutover
 
-Create the worker and scheduler services (`nexus-worker`, `nexus-scheduler`, created
-2026-09-26) with no source: only the deploy workflow deploys them, with `railway up` or
-from the API image (see "Image deploys and rollback").
+The worker and scheduler services (`nexus-worker`, `nexus-scheduler`, created
+2026-09-26) run the API image. Only the deploy workflow changes their image tag
+(see "Image deploys and rollback").
 Railway no longer lets a new service read a config file (Config as Code is deprecated),
-so their settings live in Railway: the API's build command; start `npm run start:worker`
+so their settings live in Railway: start `npm run start:worker`
 or `npm run start:scheduler`; health check `/health/ready`, 90 s; restart on failure;
 one replica in `europe-west4`. Only the API service runs schema migrations. Its settings
 live in Railway too, since `railway.toml` was removed (2026-09-26; Railway stops reading
@@ -85,8 +85,7 @@ event streams first, so browsers reconnect to another replica.
 ## Release behavior
 
 The GitHub deployment workflow calls CI for its own checkout and depends on success.
-Both push and manual dispatch follow this dependency. Railway then builds (or pulls the
-commit's image, see below), executes
+Both push and manual dispatch follow this dependency. Railway pulls the commit's image, executes
 `npm run db:migrate:deploy` as pre-deploy, starts the API, and waits for the readiness
 endpoint and expected build SHA. Ordinary restart/replica scale-up does not migrate.
 
@@ -94,13 +93,21 @@ A push ships only the services whose files differ from the commit each one runs 
 (read from its latest successful Railway deployment, `scripts/ci/release-changes.sh`).
 CI-only and docs-only pushes start no deploy. A hand run (`gh workflow run
 deploy-api.yml`) compares the same way, so it ships what a failed or skipped release
-left behind; `-f ship=all` ships every service. A service whose way of deploying changed
-(`RAILWAY_IMAGE_SERVICES`, next section) ships too. A service that already runs a newer
-commit is not rolled back when an older run is re-run in full ("Re-run all jobs").
-"Re-run failed jobs" reuses the old run's decision and CAN roll back, so after a
-newer release shipped, start a hand run instead. If only `Images` failed (a `railway up` release
-still ships without them), use "Re-run all jobs": it rebuilds this commit's images, and `changes`
-sees every service already on this commit and ships nothing.
+left behind; `-f ship=all` ships every service. All four services use images. If a service
+was changed back to a source deployment outside this workflow, the next release restores its image
+path, unless that service already runs a newer commit. An older release never moves a newer service
+back, except when the operator explicitly uses `ship=all`.
+
+Each selected service is checked again immediately before its forward deploy. A retry can reuse the
+original `changes` outputs, so this second check skips services that have become current or newer.
+It does not add a service the original run left out: start a fresh hand run from main after a rollback
+or when the desired set of services has changed. Rollback has its own explicit target and guards.
+
+**Do not replay deployment jobs from workflows before the image-only cutover.** Those versions can
+reuse a cached source-build choice. On 2026-09-30, run 36721092871 demonstrated this: a retry began a
+source build after the API had switched to an image. Refreshing the change-selection job restored the
+current modes. Prefer a new Deploy API run from main. Cancelling GitHub does not stop a Railway
+build already submitted; inspect Railway before retrying or removing that deployment.
 
 Disable/restrict any parallel native Railway autodeploy path before relying on the
 GitHub gate. Verify branch protection separately; local YAML cannot establish it.
@@ -126,131 +133,78 @@ archive. Consumers must be idempotent and tolerate reordering even within a subj
 
 ## Image deploys and rollback
 
-Every Deploy API run builds two images of its commit, beside CI: `ghcr.io/<owner>/nexus-api:<sha>`
-(API, worker and scheduler) and `ghcr.io/<owner>/nexus-web:<sha>`. The GitHub repository variable
-`RAILWAY_IMAGE_SERVICES` lists the services that deploy from them: a comma list of `api`, `worker`,
-`scheduler` and `web`. Railway then builds nothing. Every other service keeps `railway up`.
-Empty means none. An unknown name fails the run.
+Every Deploy API run builds two images of its commit beside the full CI:
+`ghcr.io/<owner>/nexus-api:<sha>` for API, worker and scheduler, and
+`ghcr.io/<owner>/nexus-web:<sha>` for web. Every selected service waits for both images and its required
+checks. Railway pulls the image and runs its start and health commands; it builds no source.
+There is no mode variable or `railway up` fallback in these workflows.
 
-### Move a service to image deploys
+The four switches completed on 2026-09-30. Evidence and timings are in
+[the fast-deploy plan](../docs/ci-fast-deploys/PLAN-2026-09-29.md#10-switches-measured-2026-09-30).
+PR #221 removed mode-variable routing. The old `RAILWAY_IMAGE_SERVICES` variable was deleted on
+2026-09-30 after older queued and running release/rollback workflows finished. The full release test
+then passed without it. Do not replay pre-cutover workflows; start a fresh run from main.
 
-The Owner sets the variable (GitHub → Settings → Secrets and variables → Actions → Variables).
-One service per deploy, in this order (the Owner, 2026-09-30: the web has users, so it goes last).
-Before the next step, check that the service is healthy on the right commit, and its logs and timings.
+### What a successful image deploy proves
 
-1. `scheduler`
-2. `scheduler,worker`
-3. `scheduler,worker,api`
-4. `scheduler,worker,api,web`
+The deploy uses the same project token. It reads the project's environments, changes the source
+with `serviceInstanceUpdate`, reads the source back, then calls `serviceInstanceDeployV2` and follows
+the returned deployment. These operations worked in the four live switches. The API's pre-deploy
+migration command and readiness SHA check stay in place.
 
-Then run Deploy API by hand (`gh workflow run deploy-api.yml`). It ships the service whose way of
-deploying changed, and nothing else that is current: `release-changes.sh` sees that the service
-runs a `railway up` build while the variable names it. The deploy points the service at its image
-in the project token's environment and starts a deployment, through Railway's GraphQL API: a read
-of the project's environments, `serviceInstanceUpdate` with `source.image`, a read-back of the
-source, then `serviceInstanceDeployV2`, which returns the deployment id. Settings → Source then
-shows the image. The commit each service runs: the API reports it at `/api/health/ready` (`build`);
-for all four, `railway deployment list -s <service> --limit 1 --json` shows `meta.image`
-(`…/nexus-api:<sha>`) or, for a `railway up` build, `meta.cliMessage` (`<role> GitHub <sha>`).
-After the first switch of each service, read its deploy log. It ends with `✓ Railway runs
-ghcr.io/<owner>/nexus-…:<sha>` when Railway's record of the deployment names that image. A
-`::warning::` that the record does not confirm it means the record names no image while the
-read-back found the image in the service's source: check the deployment on Railway once, and report
-it. The job fails when the record names another image or a `railway up` build, and when it names
-nothing (or cannot be read) while the read-back failed too: then nothing confirms the image. The log
-also names the deployment Railway started: `✓ Railway started deployment …`. A `::notice::` that
-Railway answered with the deployment that already serves means it started none: report it. A returned
-deployment that already existed must have a record that names the image: its source setting alone cannot
-confirm what that deployment runs (review, 2026-09-30).
-A deployment that stops being Railway's latest before it succeeds (removed or cancelled) fails the job
-at once. One that Railway never lists as the latest fails as soon as Railway's list of deployments
-shows it ended, or after 15 minutes (`✗ deployment … was never listed by Railway …`); the previous
-build keeps serving.
+The job ends with `✓ Railway runs ghcr.io/<owner>/nexus-…:<sha>` when Railway reports SUCCESS and
+its deployment record names the requested image. For all four services, read
+`railway deployment list -s <service> --limit 1 --json` and check `meta.image`. The API also reports
+its short commit in `/api/health/ready` as `build`. Old source deployments use `meta.cliMessage`;
+the release selector still reads those so it can compare commits and restore image mode safely.
 
-The web image carries the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values that `nexus-web` had
-when the image was built. Once the web deploys by image, a change to one of them on `nexus-web`
-reaches the web only with its next image: the next release that ships the web. A hand run of Deploy
-API rebuilds the image of the same commit under the same tag; that Railway then pulls the rebuilt
-image is not yet proven.
+A record naming another image or a source build fails the job. A missing record can only warn if
+the source read-back confirmed the image and the returned deployment is new; verify that case on
+Railway. An existing deployment must name the requested image in its own record. A source setting
+does not prove what an older deployment runs. A removed, failed or replaced deployment fails the
+job. One never listed as latest fails when its recorded terminal state is seen or the wait expires.
 
-Not yet proven: that the project token may change a service's source and deploy it (plan §7).
-2026-09-30, run 36697739589: the first try used `railway service source connect --image`, which
-changes the service in every environment. Railway answered the project token "Unauthorized" and
-nothing changed: a project token acts on one environment. The deploy now sends the per-environment
-mutations above; the next switch proves whether Railway lets the token send them. If Railway refuses
-the source change (`✗ Railway refused the change of the service's source …`: an HTTP 4xx status or a
-GraphQL error), nothing changed: the service keeps running its `railway up` build. Remove its name
-from the variable (no deploy is needed; later releases ship it with `railway up`), and report it. Do
-not set the image by hand in Settings → Source instead: the workflow sets the image on every deploy,
-so it fails again there. An HTTP 5xx is not a refusal: the change may have applied, and the job says
-`✗ no answer from Railway …` (see "When a step fails" below).
+The web image contains the `NEXT_PUBLIC_*` and `NEXUS_API_PROXY_TARGET` values that `nexus-web` had
+at build time. Changing those values requires a new image and web deployment. A new commit gives a
+new image tag. Rebuilding and pulling a changed image under the same commit tag remains unproved.
 
-Also not yet proven:
+### When an image deploy stops
 
-- that Railway applies the source change rather than staging it. The deploy reads the service's
-  source back before it deploys. If Railway staged the change, the job stops with `✗ Railway staged
-  the image change instead of applying it (Settings → Source) — nothing was deployed; …`; report
-  it. If that read fails, a `::warning::` says so and the deploy goes on; the job then passes only
-  when Railway's record of the deployment names the image.
-- whether `serviceInstanceUpdate` starts a deployment of its own. The deploy follows the one
-  `serviceInstanceDeployV2` returns; if the other becomes the latest after it, the job fails with
-  `✗ deployment … was replaced by deployment …`: report it.
-- that `serviceInstanceDeployV2` deploys the image the update set. Railway's docs say that by
-  default it deploys "the commit currently associated with the service"; they say nothing of
-  images. A deployment of anything else fails the job at the record check.
+The schema marks `serviceInstanceUpdate`'s environment as experimental: a change to an environment
+that is not a fork can reach every environment that is not a fork. The deploy writes nothing unless
+it can read the whole list and exactly one active environment is not a fork. If the project gains
+another such environment, or that list cannot be read, stop and resolve the scope before retrying.
 
-The schema marks `serviceInstanceUpdate`'s environment "[Experimental]": for an environment that is
-not a fork, the change reaches every environment that is not a fork. So the deploy first reads the
-project's environments and changes nothing unless exactly one is not a fork. On 2026-09-30 the
-project had one environment, production. After `✗ the Railway project has N environments that are
-not forks …`, another environment was added: remove the service's name from the variable and report
-it. After `✗ every environment of the Railway project is a fork …` or `✗ could not read all of the
-Railway project's environments …`, nothing changed either: remove the name and report the message.
+- A refused environment query means no source request was sent. Check the project token and read
+  permissions. Do not change to a broader token to bypass this guard.
+- A refused source request leaves the prior source in place. Fix the cause before another release.
+  There is no source-build fallback to enable.
+- `nothing was sent` applies to the named request only. A failed deployment request can follow an
+  already-applied source change. Check the source and deployment list.
+- A timeout, HTTP 5xx, broken success reply or missing result leaves the mutation's outcome unknown.
+  Check both Settings → Source and the deployments before retrying. The source update may have
+  started a deployment itself, even when the script did not call the deploy mutation.
+- A read-back showing an old or empty source stops before the explicit deploy call. Railway may have
+  staged the change. Check the staged changes and report the cause; do not assume it applied.
+- If the source changed but deployment failed, the source can still name the new image. Inspect it,
+  fix the cause and start a fresh Deploy API run, or use the guarded rollback below.
 
-When a step fails, what to do:
+The successful switches prove these behaviors for those runs. They do not establish that future
+updates can never be staged or start a deployment of their own. Keep the read-back and image-record
+checks. Do not infer the running image from Settings → Source alone.
 
-- `✗ Railway refused the token's environment and the project's environments (projectToken): …`:
-  nothing changed. Check that the `RAILWAY_TOKEN` secret is a project token of this project's
-  production environment. If the message names `project.environments`, the token may not read the
-  environments, and the deploy does not go on without them. Remove the service's name from the
-  variable and report it.
-- `✗ could not reach Railway for …: nothing was sent`: that request never left. For the token's
-  environment or the source change, nothing changed: run the deploy again. For a deployment of the
-  image (`serviceInstanceDeployV2`), the source change had already been made: see the next paragraph.
-- `✗ no answer from Railway to the change of the service's source … (serviceInstanceUpdate) … it may
-  still apply` (after a timeout, an HTTP 5xx or a broken success reply): the deploy started no deployment, and the service
-  keeps serving its last build. If the change applied, Railway may have started a deployment itself:
-  check the service's deployments too. Then look at Settings → Source. If it names the image, the
-  change applied: run Deploy API by hand again, which sets the same image and deploys it. If it
-  names the old source, nothing changed: run it again, or remove the name from the variable.
-- `✗ no answer from Railway to a deployment of …` (after a timeout, an HTTP 5xx or a broken success reply): a deployment may
-  have started. Look at the service's deployments on Railway before running the deploy again.
-- `✗ no usable answer from Railway … its answer holds no result`: treat a source change or deployment as unknown,
-  as above. A missing result does not prove that Railway refused the request.
+### Service commands
 
-If the source change works but the image deployment fails (or Railway refuses to start it, or is not
-reached), the service keeps serving its last `railway up` build while Settings → Source already names
-the image. When the read-back failed, the ✗ line says Settings → Source may name it: look first.
-Before the next deploy of that service, either fix the cause and run Deploy API by hand again (the
-name still in the variable), or remove the name and disconnect the image in Settings → Source: a
-hand run would not ship it then, because it already runs a current `railway up` build.
+- API: `node apps/api/dist/index.js`; pre-deploy `npm run db:migrate:deploy`; readiness
+  `/api/health/ready`, 300 seconds.
+- Worker and scheduler: `npm run start:worker` and `npm run start:scheduler`; readiness
+  `/health/ready`, 90 seconds. Their existing npm wrapper can report SIGTERM as exit 1 on shutdown.
+- Web: `node apps/web/scripts/start.mjs`; health `/login`, 120 seconds. Its image has no root
+  `package.json`, so a root `npm run …` start command does not work.
 
-Check first that the service's start command works in the image:
-
-- web: `node apps/web/scripts/start.mjs` (set so, read 2026-09-30), or none (the image starts it).
-  The web image has no root `package.json`, so a root `npm run …` start command would fail.
-- worker, scheduler: `npm run start:worker` and `npm run start:scheduler` (set so, read 2026-09-30)
-  work. `node
-  apps/api/dist/background.js worker` (or `scheduler`) also stops with exit 0 instead of 1.
-- API: start `node apps/api/dist/index.js`, pre-deploy `npm run db:migrate:deploy`, health check
-  `/api/health/ready`. These stay.
-
-Railway ignores the build command, watch paths and `RAILPACK_`/`NIXPACKS_` node versions for an image
-source. A failed image deployment never takes traffic: the previous build keeps serving.
-To move a service back, remove its name and run Deploy API by hand: that service ships with `railway
-up` (it runs an image while the variable no longer names it). Not yet tried: `railway up` on a
-service whose source is an image. If Railway refuses it, disconnect the image in Settings → Source
-first.
+Railway ignores build commands, watch paths and `RAILPACK_`/`NIXPACKS_` node versions for an image
+source. Keep start, pre-deploy and health settings on Railway. An image that fails its pre-deploy or
+health check does not take traffic from the previous healthy deployment.
 
 ### Roll back
 
@@ -262,7 +216,7 @@ must have succeeded: that run passed CI and built the images. The workflow runs 
 machine. It:
 
 - checks the commit, its Deploy API run and both of its images;
-- moves only the services in `RAILWAY_IMAGE_SERVICES`, and names the others in its summary;
+- selects all four services; `skip_api=true` leaves only the API in place;
 - moves the API first (Railway SUCCESS, then readiness shows that commit), then the worker, scheduler
   and web side by side, then runs the web's production smoke;
 - adds a ✓ or ✗ line per service to its summary once that service's job ends.
@@ -282,8 +236,8 @@ the web back past a change of those values brings the old ones back.
 The next Deploy API run compares each service with the commit it runs, so it ships every moved
 service whose files differ on main: **the code you rolled back from comes back with it.** Land the
 fix (or a revert) before anything else merges. To put main back without a new commit, run Deploy API
-by hand. Re-running the failed jobs of a Deploy API run that began before the rollback ships only
-what that run chose back then; run Deploy API by hand instead.
+by hand. A retry rechecks only the services selected by that old run; start a new hand run to compare
+all four services with main again.
 
 A rollback waits in the same queue as deploys (`deploy-api`). GitHub keeps one waiting run per queue: a
 push that lands while the rollback waits cancels it, and a rollback cancels a deploy that is still

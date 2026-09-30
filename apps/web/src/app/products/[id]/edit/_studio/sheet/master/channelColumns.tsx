@@ -26,7 +26,7 @@ const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({
 import {
   classifyProvenance, provenanceClassRules, roundTripClassRules, type CellSaveTracker,
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
-  longTextEditor, selectEditor, SELECT_CELL_CLASS, formulaCellEditorSelector, numericColumn,
+  longTextEditor, selectEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, formulaCellEditorSelector, numericColumn,
   sheetValidationFor, composeSheetCellClassRules, shapeColumnDef, shapeEditorSpec, isShaped,
   suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef,
 } from '@/design-system/grid'
@@ -99,7 +99,12 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
         : colForRow.kind === 'select'
           ? {
               component: SelectPanelEditor,
-              params: { options: (colForRow.options ?? []).map((o) => ({ value: o, label: colForRow.optionLabels?.[o] ?? o })) },
+              params: {
+                options: (colForRow.options ?? []).map((o) => ({ value: o, label: colForRow.optionLabels?.[o] ?? o })),
+                // An open channel list (eBay FREE_TEXT, an Amazon open enum) takes a typed value (#27).
+                allowCustom: colForRow.mode === 'open',
+                emptyLabel: SELECT_CLEAR_LABEL,
+              },
             }
           : colForRow.kind === 'boolean'
             ? {
