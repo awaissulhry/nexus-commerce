@@ -215,7 +215,7 @@ export async function sendReviewRequestEmail(ctx: ReviewEmailContext): Promise<{
   if (sup.suppressed) {
     return { ok: false, dryRun: false, suppressed: true, error: `suppressed (${sup.source})` }
   }
-  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
   const unsubUrl = `${webBase}/api/email/unsubscribe?token=${unsubscribeTokenFor(ctx.to)}&channel=review-request`
   const rendered = renderHtml(ctx)
   const result = await sendEmail({

@@ -14,7 +14,7 @@ import prisma from '../../db.js'
 import { sendEmail } from '../email/transport.js'
 import { logger } from '../../utils/logger.js'
 
-const WEB_URL = process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app'
+const WEB_URL = process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app'
 
 const CATEGORY_LABEL: Record<string, string> = {
   FIT_SIZING: 'Fit / Sizing',
