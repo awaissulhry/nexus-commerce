@@ -77,7 +77,7 @@ import { mergeAxisValues } from '../variants/family/projections'
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChips } from './chips'
-import { BASE_PRICE_COL, buildMatrixColumns, IDENTITY_COL, matrixColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
+import { BASE_PRICE_COL, buildMatrixColumns, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, matrixColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
 import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixVerbTarget } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
@@ -334,13 +334,22 @@ export function MatrixSurface({ productId }: { productId: string }) {
     openVerb({ ...spec, unavailable: null }, [{ rowId: row.id, coordinateKey: coord.key }], `${row.sku} on ${coord.label}`, { method })
   }, [read, verbSpecs, canEdit, openVerb])
 
+  /* A phone: the pinned identity gives way so a coordinate column can be on screen (`identityWidthFor`). The room it
+     shares is the grid's width less the OTHER pinned columns (the selection checkbox). Changes only when the grid
+     crosses a width that changes the answer, so a desktop resize rebuilds nothing. */
+  const [identityWidth, setIdentityWidth] = useState(IDENTITY_COL_W)
+  const onGridSizeChanged = useCallback((e: { clientWidth: number; api: GridApi<StudioRow> }) => {
+    const otherPinned = e.api.getDisplayedLeftColumns().filter((c) => c.getColId() !== IDENTITY_COL).reduce((n, c) => n + c.getActualWidth(), 0)
+    const next = identityWidthFor(e.clientWidth - otherPinned)
+    setIdentityWidth((prev) => (prev === next ? prev : next))
+  }, [])
   const columnDefs = useMemo(
     () => buildMatrixColumns({
       coordinates: visibleCoordinates, cellsOf: matrix.cellsOf, rowOf: matrix.rowOf, tracker,
       sheetColumns: sheet?.columns ?? [], locale: localeOrFirst, market: marketOrFirst,
-      axesRef, rowMenuRef, masterHeldReason, onJump, onPickFulfilment, rowsRef,
+      axesRef, rowMenuRef, masterHeldReason, onJump, onPickFulfilment, rowsRef, identityWidth,
     }),
-    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, masterHeldReason, onJump, onPickFulfilment],
+    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, masterHeldReason, onJump, onPickFulfilment, identityWidth],
   )
   const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true }), [])
   const rowSelection = useMemo(() => gridSelection<StudioRow>(), [])
@@ -638,6 +647,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
               rowSelection={rowSelection}
               onSelectionChanged={onSelectionChanged}
               onGridReady={onGridReady}
+              onGridSizeChanged={onGridSizeChanged}
               onGridPreDestroyed={onGridPreDestroyed}
               onCellValueChanged={onCellValueChanged}
               onCellDoubleClicked={onCellDoubleClicked}

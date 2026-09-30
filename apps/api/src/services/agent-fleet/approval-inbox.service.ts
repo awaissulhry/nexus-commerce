@@ -639,6 +639,13 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // whether outbound email is live or dry-run, and that flip turns a recorded
   // no-op into an irreversible real send.
   'send-customer-message': ['suppressed', 'emailOnFile', 'note'],
+
+  // MCP.10 — the bulk changes (tools/bulk.tools.ts). `changes` names the from → to the operator read, but
+  // only for the first 20 of up to 250 products; `basis` fingerprints every product's starting value and
+  // every listing that follows the price, so a move on product 21 is caught too. `totals` says how many; the
+  // price tool's `change` carries the operation and the currency it is in.
+  'bulk-price-change': ['change', 'changes', 'totals', 'basis'],
+  'bulk-attribute-change': ['changes', 'totals', 'basis'],
 }
 
 export interface StalenessVerdict {

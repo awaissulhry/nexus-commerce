@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { WORKSPACES_ENABLED, isIdentityPath, workspaceFromPath, withoutWorkspace, workspaceHref } from './lib/workspaces/paths'
+import { WORKSPACES_ENABLED, isIdentityPath, withoutNextInternals, workspaceFromPath, withoutWorkspace, workspaceHref } from './lib/workspaces/paths'
 
 export function proxy(request: NextRequest) {
   if (!WORKSPACES_ENABLED) return NextResponse.next()
@@ -39,7 +39,8 @@ export function proxy(request: NextRequest) {
   }
   const destination = new URL(visibleUrl)
   if (referringId) destination.pathname = workspaceHref(referringId, path)
-  else { destination.pathname = '/profiles'; destination.search = ''; destination.searchParams.set('next', path + request.nextUrl.search) }
+  // `next` is the page the person asked for: a client-side navigation's `_rsc` is Next's, not theirs.
+  else { destination.pathname = '/profiles'; destination.search = ''; destination.searchParams.set('next', withoutNextInternals(path + request.nextUrl.search)) }
   return NextResponse.redirect(destination, 307)
 }
 

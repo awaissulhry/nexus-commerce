@@ -12,7 +12,7 @@ import { requiredScope, toolAnnotations } from './mcp-server.js'
 /** Call OUR AI provider: offered in the app only. */
 const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-content', 'draft-seo', 'translate-content']
 /** Their preview or their action reaches a marketplace or a buyer. */
-const OPEN_WORLD = ['publish-listing', 'send-customer-message', 'set-price']
+const OPEN_WORLD = ['bulk-price-change', 'publish-listing', 'send-customer-message', 'set-price']
 
 describe('MCP.7 — every tool, as Claude sees it', () => {
   it('has a short title', () => {

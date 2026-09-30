@@ -534,6 +534,38 @@ describe('business profile boundaries with PostgreSQL', () => {
     } finally { vi.unstubAllEnvs(); await app.close() }
   })
 
+  it('shows the team read-only to a member who may open Team & Access (users.manage), and keeps every change owner-only', async () => {
+    const owner = await person(), admin = await person(), viewer = await person(), outsider = await person(), invitee = await person()
+    const profile = await service.create(owner.id, details())
+    await service.create(outsider.id, details())
+    // The Admin system role grants users.manage; the Viewer does not (beforeAll: products.view only).
+    const adminRole = await database.client.role.create({ data: { key: `ADMIN_${randomUUID()}`, name: 'Admin', isSystem: true, permissions: ['users.manage', 'products.view'] } })
+    const adminMember = await database.client.workspaceMembership.create({ data: { workspaceId: profile.id, userId: admin.id, roles: { create: { roleId: adminRole.id } } } })
+    await database.client.workspaceMembership.create({ data: { workspaceId: profile.id, userId: viewer.id, roles: { create: { roleId: viewerId } } } })
+    const invitation = await service.invite(owner.id, profile.id, { email: invitee.email, roleIds: [viewerId] })
+
+    const asOwner = await service.listMembers(owner.id, profile.id)
+    expect(asOwner.canManage).toBe(true)
+    const asAdmin = await service.listMembers(admin.id, profile.id)
+    expect(asAdmin.canManage).toBe(false)
+    // The same team the owner sees: every member, the roles and the pending invitation.
+    expect(asAdmin.members.map(member => member.user.email).sort()).toEqual([owner.email, admin.email, viewer.email].sort())
+    expect(asAdmin.members).toEqual(asOwner.members)
+    expect(asAdmin.roles).toEqual(asOwner.roles)
+    expect(asAdmin.invitations).toEqual([expect.objectContaining({ id: invitation.invitation.id, email: invitee.email })])
+
+    // A member whose roles do not grant users.manage cannot read the team; nor can someone from another business.
+    await expect(service.listMembers(viewer.id, profile.id)).rejects.toMatchObject({ code: 'team_view_forbidden', statusCode: 403 })
+    await expect(service.listMembers(outsider.id, profile.id)).rejects.toMatchObject({ code: 'workspace_unavailable' })
+
+    // Every change stays owner-only for the Admin.
+    await expect(service.invite(admin.id, profile.id, { email: `${randomUUID()}@example.test`, roleIds: [viewerId] })).rejects.toMatchObject({ code: 'workspace_owner_required' })
+    await expect(service.changeMember(admin.id, profile.id, adminMember.id, { roleIds: [ownerId], status: 'active', version: 1 })).rejects.toMatchObject({ code: 'workspace_owner_required' })
+    await expect(service.revokeInvitation(admin.id, profile.id, invitation.invitation.id)).rejects.toMatchObject({ code: 'workspace_owner_required' })
+    await expect(service.saveRole(admin.id, profile.id, { name: 'Not allowed', permissions: [] })).rejects.toMatchObject({ code: 'workspace_owner_required' })
+    expect((await service.membership(admin.id, profile.id)).isOwner).toBe(false)
+  })
+
   it('keeps custom roles inside their business and invalidates membership versions on a permission edit', async () => {
     const user = await person(), member = await person()
     const a = await service.create(user.id, details()), b = await service.create(user.id, details())

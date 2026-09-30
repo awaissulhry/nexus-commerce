@@ -15,6 +15,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { installAuthFetch } from '@/lib/auth/install-fetch'
 import { setCsrfToken } from '@/lib/auth/csrf-store'
+import { useTheme } from '@/lib/theme/use-theme'
 import { ConsentForm, type ConsentView } from './ConsentForm'
 import '../../profiles/profiles.css'
 import './consent.css'
@@ -34,6 +35,8 @@ type Stage =
 const describe = (problem: OAuthProblem, fallback: string) => problem.error_description || fallback
 
 export default function AuthorizePage() {
+  // MCP.12 — like /profiles, this page has no application top bar to apply the saved theme, so it never turned dark.
+  useTheme()
   const { status } = useAuth()
   const [search, setSearch] = useState<string | null>(null)
   const [stage, setStage] = useState<Stage>({ kind: 'checking' })

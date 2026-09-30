@@ -118,3 +118,37 @@ it('restarts a transaction that an EARLIER statement already aborted (25P02), ho
   expect(abortedByEarlierStatement({ code: 'P2002' })).toBe(false)
   expect(abortedByEarlierStatement({ message: 'new row violates row-level security policy for table "Product"' })).toBe(false)
 })
+
+
+it('restarts after a bare pg-adapter conflict at commit and runs effects only for the committed attempt', async () => {
+  // Prisma 7 can throw this directly from COMMIT, without a P2010 wrapper (measured in the sheet race CI).
+  const conflict = Object.assign(new Error('TransactionWriteConflict'), {
+    name: 'DriverAdapterError', cause: { kind: 'TransactionWriteConflict' },
+  })
+  let attempts = 0
+  const effects: number[] = []
+  const client = {
+    async $transaction(work: (tx: unknown) => Promise<number>) {
+      attempts++
+      const result = await work({})
+      if (attempts === 1) throw conflict
+      return result
+    },
+  }
+  const result = await inDatabaseTransaction(client as never, async () => {
+    const attempt = attempts
+    await afterDatabaseCommit('committed-attempt', async () => { effects.push(attempt) })
+    return attempt
+  })
+  expect(result).toBe(2)
+  expect(attempts).toBe(2)
+  expect(effects).toEqual([2])
+  expect(retryableConflict(Object.assign(new Error('wrapped'), { cause: conflict }))).toBe(true)
+})
+
+it('does not restart an unrelated bare pg-adapter error or guess from its message', () => {
+  expect(retryableConflict(Object.assign(new Error('UniqueConstraintViolation'), {
+    name: 'DriverAdapterError', cause: { kind: 'UniqueConstraintViolation' },
+  }))).toBe(false)
+  expect(retryableConflict(new Error('TransactionWriteConflict'))).toBe(false)
+})

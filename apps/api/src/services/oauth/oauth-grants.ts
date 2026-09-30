@@ -20,7 +20,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { FEATURES } from '@nexus/shared/permissions'
 import { hasPermission, type ResolvedPermissions } from '../../lib/auth/rbac.js'
-import { MCP_SCOPES, type McpScope } from './oauth-config.js'
+import { MCP_SCOPES, mcpEnabled, mcpWorkspaceAllowList, type McpScope } from './oauth-config.js'
 import { revokeGrant } from './oauth-server.js'
 
 export class ConnectedAppError extends Error {
@@ -146,6 +146,18 @@ export async function listBusinessConnectedApps(admin: BusinessAdmin): Promise<C
       active: row.user.status === 'active' && row.user.workspaceMemberships.some((m) => m.status === 'active'),
     },
   }))
+}
+
+/**
+ * MCP.12 — whether Claude can put a request in this business's Approvals page, and how many live connections could:
+ * the Approvals page's "nothing is waiting" line names it beside the scheduled checks, read rather than asserted.
+ * `enabled` is MCP switched on and this business allowed by the rollout list. Counts only; no person is named.
+ */
+export async function claudeConnectionState(workspaceId: string): Promise<{ enabled: boolean; connections: number }> {
+  const allow = mcpWorkspaceAllowList()
+  const enabled = mcpEnabled() && (allow === null || allow.has(workspaceId))
+  const connections = await prisma.oAuthGrant.count({ where: { workspaceId, revokedAt: null } })
+  return { enabled, connections }
 }
 
 /** The person ends one of their own connections. */

@@ -98,6 +98,124 @@
   --nds-border: var(--nds-grey-200);
   --nds-border-subtle: var(--nds-grey-150);
   --nds-border-strong: var(--nds-grey-300);
+  /* MCP.12 — the tokens the `.acr-btn` family below and the Approvals card read, which `.dark` also flips:
+     measured on /fleet/approvals under a dark OS, the section's edge and borders turned pink and dark red on
+     this light ground. Each is the DS's own light value, through the ramp like the rest of this pin.
+     (`--nds-danger-strong` has no ramp value; approvals.css pins it where it is read.) */
+  --nds-primary: var(--nds-blue-800);
+  --nds-text-link: var(--nds-blue-800);
+  --nds-primary-ghost-border: var(--nds-blue-200);
+  --nds-wash-primary: var(--nds-blue-50);
+  --nds-success-strong: var(--nds-green-700);
+  --nds-danger-soft: var(--nds-red-soft);
+}
+
+/* ── MCP.12 · `.acr-btn`, the fleet's button family ─────────────────────
+   control-room.css drew this family until its own buttons moved to the DS
+   `Button` (DS-ALIGN: bare → secondary chrome, `.go` → success, `.stop` →
+   danger outline, `.primary`, `.ghost`).
+   Its rules left with them, and every fleet page still draws ~100 buttons
+   with the class, so they rendered as bare browser buttons. They get their
+   look back HERE, once, at the DS `sm` tier and from the tokens pinned above,
+   so every fleet page and its portals stay light under a dark OS. Page
+   stylesheets load after this one and keep their own adjustments.
+
+   Labels may wrap: a one-product Apply names its SKU and both prices, and at
+   a 390px viewport `nowrap` pushed it past its card. */
+.fleet-surface .acr-btn,
+.fleet-portal .acr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--nds-control-h-sm);
+  padding: 4px 11px;
+  font: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: start;
+  /* `break-word`, not `anywhere`: `anywhere` also shrinks the button's min-content width, so a flex header
+     squeezed "Refresh" into "Refr / esh" at 390px. */
+  overflow-wrap: break-word;
+  color: var(--nds-text);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  cursor: pointer;
+}
+.fleet-surface .acr-btn svg,
+.fleet-portal .acr-btn svg {
+  flex-shrink: 0;
+}
+/* Inside a banner the button takes the banner's tone ("Try again" in an error
+   banner reads red), which is why the family once inherited everywhere. Only
+   there: in an empty state it inherited a muted grey below 4.5:1. */
+.fleet-surface .acr-banner .acr-btn,
+.fleet-portal .acr-banner .acr-btn {
+  color: inherit;
+}
+.fleet-surface .acr-btn:hover:not(:disabled),
+.fleet-portal .acr-btn:hover:not(:disabled) {
+  background: var(--nds-surface-sunken);
+}
+.fleet-surface .acr-btn:focus-visible,
+.fleet-portal .acr-btn:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+.fleet-surface .acr-btn:disabled,
+.fleet-portal .acr-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.fleet-surface .acr-btn.go,
+.fleet-portal .acr-btn.go {
+  color: var(--nds-text-inverse);
+  background: var(--nds-success-strong);
+  border-color: var(--nds-success-strong);
+}
+.fleet-surface .acr-btn.primary,
+.fleet-portal .acr-btn.primary {
+  color: var(--nds-text-inverse);
+  background: var(--nds-primary);
+  border-color: var(--nds-primary);
+}
+.fleet-surface .acr-btn.go:hover:not(:disabled),
+.fleet-portal .acr-btn.go:hover:not(:disabled),
+.fleet-surface .acr-btn.primary:hover:not(:disabled),
+.fleet-portal .acr-btn.primary:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+.fleet-surface .acr-btn.go:hover:not(:disabled),
+.fleet-portal .acr-btn.go:hover:not(:disabled) {
+  background: var(--nds-success-strong);
+}
+.fleet-surface .acr-btn.primary:hover:not(:disabled),
+.fleet-portal .acr-btn.primary:hover:not(:disabled) {
+  background: var(--nds-primary);
+}
+.fleet-surface .acr-btn.ghost,
+.fleet-portal .acr-btn.ghost {
+  color: var(--nds-text-link);
+  background: var(--nds-surface);
+  border-color: var(--nds-primary-ghost-border);
+}
+.fleet-surface .acr-btn.ghost:hover:not(:disabled),
+.fleet-portal .acr-btn.ghost:hover:not(:disabled) {
+  background: var(--nds-wash-primary);
+}
+/* The DS's danger outline reads `--nds-danger-text`, whose light value has no
+   ramp step and so cannot be pinned here without a literal; red-700 is the
+   nearest ramp red that holds text contrast on white (5.4:1). */
+.fleet-surface .acr-btn.stop,
+.fleet-portal .acr-btn.stop {
+  color: var(--nds-red-700);
+  background: var(--nds-surface);
+  border-color: var(--nds-red-700);
+}
+.fleet-surface .acr-btn.stop:hover:not(:disabled),
+.fleet-portal .acr-btn.stop:hover:not(:disabled) {
+  background: var(--nds-danger-soft);
 }
 
 .fleet-surface {
