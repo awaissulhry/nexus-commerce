@@ -39,16 +39,13 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 import pg from 'pg'
+import { sheetFixtureDatabaseConfig } from './sheet-fixture-target.mjs'
 
 const args = process.argv.slice(2)
 const value = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
-const url = new URL(value('--url') ?? process.env.NEXUS_TEST_LOCAL_PG_URL ?? '')
+const database = sheetFixtureDatabaseConfig(value('--url') ?? process.env.NEXUS_TEST_LOCAL_PG_URL ?? '')
 const out = value('--out')
 if (!out) { console.error('✗ --out <file> is required'); process.exit(1) }
-if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname) || !url.pathname.includes('test')) {
-  console.error(`✗ REFUSED: ${url.hostname}${url.pathname} — only a loopback database whose name contains "test"`)
-  process.exit(1)
-}
 const workspace = value('--workspace') ?? 'nexus_legacy_workspace'
 const prefix = workspace === 'nexus_legacy_workspace' ? 'e2e_sheet_' : `e2e_sheet_${createHash('sha256').update(workspace).digest('hex').slice(0, 12)}_`
 const rows = Number(value('--rows') ?? 150)
@@ -102,7 +99,7 @@ const FAMILIES = [
   { scope: 'speed', id: `${prefix}speed`, sku: 'E2E-SHEET-SPEED', label: 'Speed', channel: 'EBAY', market: 'IT', channelMarket: 'EBAY_IT', region: 'IT', attributes: { categoryId: EBAY_CATEGORY, subtitle: 'E2E speed baseline' } },
 ] as const
 
-const client = new pg.Client({ connectionString: url.toString() })
+const client = new pg.Client(database)
 await client.connect()
 const seeded: Record<string, unknown> = {}
 try {
