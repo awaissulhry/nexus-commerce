@@ -94,3 +94,30 @@ export function adoptContentVersions(row: TokenRow | null | undefined, body: unk
   }
   return [...moved]
 }
+
+/**
+ * Audit A09 — a read that resolved a lost save (`recoverSheetRow`) found `stored` cells holding what was typed: the
+ * content rows they write hand the read's token to every cell of `row` writing there, as a save's answer does
+ * (`adoptContentVersions`). A content row that one of the `unconfirmed` cells also writes (the read shows it different,
+ * or could not tell) keeps the token the operator saw, so an edit there is still checked against the other writer.
+ */
+export function adoptReadContentVersions(row: TokenRow, read: TokenRow, stored: readonly string[], unconfirmed: readonly string[] = []): string[] {
+  const confirmed = new Map<string, ContentSnapshot>()
+  for (const colId of stored) {
+    const snapshot = snapshotOf(read, read.values?.[colId])
+    if (snapshot) confirmed.set(snapshot.key, snapshot)
+  }
+  for (const colId of unconfirmed) {
+    const key = tokenKey(row, row.values?.[colId])
+    if (key) confirmed.delete(key)
+  }
+  const moved: string[] = []
+  for (const [colId, cell] of Object.entries(row.values ?? {})) {
+    const current = snapshotOf(row, cell), next = current && confirmed.get(current.key)
+    if (!cell || !current || !next || !newer(next, current)) continue
+    if (cell.contentVersion !== next.version) moved.push(colId)
+    cell.contentVersion = next.version
+    cell[snapshotKey] = next
+  }
+  return moved
+}

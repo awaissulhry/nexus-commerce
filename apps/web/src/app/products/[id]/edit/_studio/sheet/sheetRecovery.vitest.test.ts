@@ -62,3 +62,24 @@ describe('scoped save recovery', () => {
     expect((await recoverSheetRow(page, { ...req, cells: [{ colId: 'descriptionThemeId', value: 'Modern', intent: 'set' }] }, scope))?.matches.descriptionThemeId).toBeNull()
   })
 })
+
+describe('audit A09 — a recovery read hands on the content token of a text it found stored', () => {
+  const text = (value: unknown, contentVersion: number) => ({ ...cell(value), writeTarget: 'master', writeField: 'name', contentAddress: { tier: 'language', language: 'it' }, contentVersion })
+  const lost = () => ({ rowId: 'alias:child', cells: [{ colId: 'title', value: 'Typed', intent: 'set' as const }, { colId: 'stock', value: 5, intent: 'set' as const }],
+    row: { id: 'child', version: 3, aliasId: 'alias', listing: { id: 'listing', version: 7 }, values: { title: text('Typed', 4), bullet: text('Old bullet', 4), stock: cell(5) } as Record<string, any> } })
+  const read = (title: string) => ({ ...body(), rows: [{ id: 'child', version: 4, aliasId: 'alias', listing: { id: 'listing', version: 8 },
+    values: { title: text(title, 5), bullet: text('Old bullet', 5), stock: cell(2) } }] })
+
+  it('the title was stored (its text moved 4 → 5): every cell writing that text carries 5, so the next edit is not refused', async () => {
+    const req = lost()
+    const result = await recoverSheetRow(read('Typed'), req, scope)
+    expect(result?.matches).toEqual({ title: true, stock: false })
+    expect([req.row.values.title.contentVersion, req.row.values.bullet.contentVersion]).toEqual([5, 5])
+    expect(req.row.values.title.value).toBe('Typed')
+  })
+  it('a text the read shows DIFFERENT keeps the token the operator saw: a later edit there is still checked', async () => {
+    const req = lost()
+    await recoverSheetRow(read('Someone else'), req, scope)
+    expect([req.row.values.title.contentVersion, req.row.values.bullet.contentVersion]).toEqual([4, 4])
+  })
+})
