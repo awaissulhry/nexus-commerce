@@ -36,7 +36,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
-import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing } from './types'
+import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
   schemaRevision?: string
@@ -67,8 +67,8 @@ export interface ChannelSheetState {
    */
   backendMissing: boolean
   reload: () => void
-  /** Reconcile saved values and provenance without replacing the grid with a loading state. */
-  refresh: (canApply: () => boolean) => Promise<void>
+  /** Reconcile saved values and provenance without replacing the grid with a loading state. True when the rows were replaced. */
+  refresh: (canApply: () => boolean) => Promise<boolean>
   applyLocal: (rowId: string, mutate: (row: ChannelSheetRow) => void) => void
 }
 
@@ -144,18 +144,20 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
-  const refresh = useCallback(async (canApply: () => boolean) => {
-    if (activeUrl.current !== url) return
+  const refresh = useCallback(async (canApply: () => boolean): Promise<boolean> => {
+    if (activeUrl.current !== url) return false
     const mine = ++requestRef.current
     try {
       const res = await fetch(compactSheetUrl(url), {
         credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30_000),
       })
-      if (!res.ok) return
+      if (!res.ok) return false
       const body = channelSheetResponse(await res.json())
-      if (mine === requestRef.current && activeUrl.current === url && canApply()) setResponse({ url, data: body })
+      if (mine === requestRef.current && activeUrl.current === url && canApply()) { setResponse({ url, data: body }); return true }
+      return false
     } catch {
-      // Preserve the confirmed edit if the follow-up read is temporarily unavailable.
+      // Preserve the confirmed edit if the follow-up read is temporarily unavailable (the caller may try again).
+      return false
     }
   }, [url])
 
@@ -229,6 +231,16 @@ export const writeLandsOnListing = (cell: { writeTarget?: string } | null | unde
 
 /** "I saw no listing on this coordinate" — a listing's own version is never 0 (the schema starts it at 1). */
 export const NO_LISTING_VERSION = 0
+
+/**
+ * The record a cell's change is written to — `changes[].target` (see the note where the change is built): a content
+ * edit follows the address the operator chose (a pin is the listing's, the shared text is Master's), every other cell
+ * the server's `writeTarget`. One definition, so the readiness refresh (P2 review 4) asks the question the save answered.
+ */
+export function changeTarget(cell: StudioCellValue | undefined, intent?: string): 'channel' | 'master' {
+  const address = intent === 'reset' || intent === 'reset-list' ? cell?.contentAcknowledgement?.pin.address ?? cell?.contentAddress : cell?.contentAddress
+  return cell?.contentAcknowledgement ? address?.tier === 'pin' ? 'channel' : 'master' : writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb === 'channel' ? 'channel' : 'master'
+}
 
 /** A family listing a listing-level eBay write moved (`familyListings[]`): its id and the version it holds now. */
 export interface FamilyListing { productId: string; listingId: string; version: number }
@@ -459,7 +471,7 @@ async function commitChannelLanguage(
          * Defaulting to `'master'` when the server sent no cell matches the endpoint's own default
          * — the safe direction is the shared record refusing the edit, not a silent channel write.
          */
-        target: cell?.contentAcknowledgement ? address?.tier === 'pin' ? 'channel' : 'master' : writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb ?? 'master',
+        target: changeTarget(cell, intent),
         intent: intent === 'reset-list' ? 'reset' : intent,
       },
     }
