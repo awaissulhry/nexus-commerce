@@ -97,6 +97,9 @@ const GATES = {
   'real-PostgreSQL split self-test': node('scripts/run-real-postgres-tests.mjs', '--self-test'),
   'DS-GAPS append-only': node('scripts/check-ds-gaps-append-only.mjs', '--check'),
   'DS api guard': node('apps/web/src/design-system/tools/api-guard.mjs'),
+  // Product sheet plan P3 item 4 (2026-09-30) — a new column kind or cell editor without a key-ownership test fails.
+  'sheet editor coverage': node('scripts/check-sheet-editor-coverage.mjs', '--check'),
+  'sheet editor coverage self-test': node('scripts/check-sheet-editor-coverage.mjs', '--self-test'),
 }
 
 if (process.argv.includes('--list')) {
