@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { cellValueOf, isUnchanged, panelValueOf } from './selectPanelModel'
+import { cellValueOf, isUnchanged, panelValueOf, typedStart, withStoredValue } from './selectPanelModel'
 
 /**
  * The cell↔panel value boundary (AG.1-f). The cell speaks the wire's language (`null`, a code like
@@ -77,5 +77,28 @@ describe('isUnchanged — why an unchanged pick is a CANCEL', () => {
     for (const chosen of ['PK', 'IT', '0', '']) {
       expect(panelValueOf(cellValueOf(chosen))).toBe(panelValueOf(chosen))
     }
+  })
+})
+
+describe('withStoredValue — a stored value the list does not hold stays visible (P0, 2026-09-30)', () => {
+  const options = [{ value: 'Cina', label: 'Cina' }, { value: 'Italia', label: 'Italia' }]
+  it('puts it first, marked, so the editor can show and keep it', () => {
+    expect(withStoredValue(options, 'Xavia Racing', 'current')[0]).toEqual({ value: 'Xavia Racing', label: 'Xavia Racing', trailing: 'current' })
+  })
+  it('leaves the list alone when it holds the value or nothing is stored', () => {
+    expect(withStoredValue(options, 'Italia', 'current')).toBe(options)
+    expect(withStoredValue(options, null, 'current')).toBe(options)
+    expect(withStoredValue(options, '', 'current')).toBe(options)
+  })
+})
+
+describe('typedStart — the key that opened the editor by typing', () => {
+  it('keeps a printable key and drops Enter, F2 and a double-click', () => {
+    expect(typedStart('C')).toBe('C')
+    expect(typedStart('5')).toBe('5')
+    expect(typedStart('Enter')).toBe('')
+    expect(typedStart('F2')).toBe('')
+    expect(typedStart(null)).toBe('')
+    expect(typedStart(undefined)).toBe('')
   })
 })

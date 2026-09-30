@@ -32,7 +32,7 @@ export const textEditor = (): Pick<ColDef, 'editable' | 'cellEditor' | 'cellEdit
   ...scalarValueEditor('text'),
 })
 
-export { selectEditor, SelectChevron, SELECT_CELL_CLASS, type SelectEditorParams } from './SelectCellEditor'
+export { selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, type SelectEditorParams } from './SelectCellEditor'
 /* Exported so a host can name it as the FALLBACK editor beside `formulaSelector` — `=` opens the
    formula editor on a closed list, anything else opens this one (#775). */
 export { SelectPanelEditor, type SelectPanelEditorParams } from './SelectPanelEditor'

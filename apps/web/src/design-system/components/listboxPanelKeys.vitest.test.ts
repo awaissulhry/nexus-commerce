@@ -119,3 +119,80 @@ describe('ListboxPanel — Enter commits what the operator is on', () => {
     expect(onCommit).toHaveBeenCalledWith('d')
   })
 })
+
+/**
+ * P0 (2026-09-30) — Enter and Tab in a grid list. AG's popup listener runs before this panel's bubble `onKeyDown` and ends the
+ * edit with the last reported value, so the panel reports the choice in the CAPTURE phase (`onKeyChoice`) and leaves the
+ * commit and the move to the grid. Measured in production: Enter and Tab closed every list with its old value.
+ */
+describe('ListboxPanel — onKeyChoice reports Enter and Tab before the grid ends the edit', () => {
+  const capture = (root: El, key: string) => (root.props.onKeyDownCapture as (e: unknown) => void)({ key, nativeEvent: { isComposing: false } })
+  const arrow = (root: El, key: 'ArrowDown' | 'ArrowUp') => (root.props.onKeyDown as (e: unknown) => void)({ key, preventDefault() {} })
+  const search = (root: El) => flat(root).find((el) => el.type === 'input')
+  const labels = (root: El) => optionEls(root).map((o) => [o.props.children].flat().filter((c) => typeof c === 'string').join(''))
+
+  it('Enter reports the highlighted row, and the panel does not also commit it', () => {
+    const onCommit = vi.fn()
+    const onKeyChoice = vi.fn()
+    const root = render({ options, value: 'b', onCommit, onCancel() {}, onKeyChoice })
+    capture(root, 'Enter')
+    enter(root)
+    expect(onKeyChoice).toHaveBeenCalledWith('b')
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+
+  it('Tab reports the row ↓ moved to', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'b', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Tab')
+    expect(onKeyChoice).toHaveBeenCalledWith('c')
+  })
+
+  it('a stored value the list does not hold highlights nothing: Enter reports null, and ↓ reaches row 1', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'zz', onCommit() {}, onCancel() {}, onKeyChoice }
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(null)
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('a')
+  })
+
+  it('without onKeyChoice, Enter on a value the list does not hold commits nothing (it committed row 1)', () => {
+    const onCommit = vi.fn()
+    enter(render({ options, value: 'zz', onCommit, onCancel() {} }))
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+
+  it('initialQuery starts the search with the key that opened the cell, on the best match', () => {
+    const onKeyChoice = vi.fn()
+    const root = render({ options, onCommit() {}, onCancel() {}, onKeyChoice, initialQuery: 'Ch' })
+    expect(search(root)?.props.value).toBe('Ch')
+    capture(root, 'Enter')
+    expect(onKeyChoice).toHaveBeenCalledWith('c')
+  })
+
+  it('allowCustom offers the typed text as the only row when nothing matches, and Enter takes it', () => {
+    const onKeyChoice = vi.fn()
+    const root = render({ options, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: 'Xavia Racing' })
+    expect(labels(root)).toEqual(['Use "Xavia Racing"'])
+    capture(root, 'Enter')
+    expect(onKeyChoice).toHaveBeenCalledWith('Xavia Racing')
+  })
+
+  it('allowCustom puts the typed text LAST when there are matches, so Enter still takes the best match', () => {
+    const onKeyChoice = vi.fn()
+    const root = render({ options, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: 'lt' })
+    const rows = labels(root)
+    expect(rows.length).toBeGreaterThan(1)
+    expect(rows[rows.length - 1]).toBe('Use "lt"')
+    capture(root, 'Enter')
+    expect(onKeyChoice).not.toHaveBeenCalledWith('lt')
+  })
+
+  it('allowCustom adds nothing for an exact match, whatever the case', () => {
+    const root = render({ options, onCommit() {}, onCancel() {}, allowCustom: true, initialQuery: 'bravo' })
+    expect(labels(root).some((l) => l.startsWith('Use '))).toBe(false)
+  })
+})

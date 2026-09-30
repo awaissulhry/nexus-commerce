@@ -45,3 +45,18 @@ export function cellValueOf(chosen: string): string | null {
 export function isUnchanged(cellValue: unknown, chosen: string): boolean {
   return panelValueOf(cellValue) === panelValueOf(cellValueOf(chosen))
 }
+
+/**
+ * The options a list editor shows: the stored value first when the list does not hold it, so it stays visible and can be
+ * kept (a stored eBay brand, a value from an older category list). Without it the editor opened with nothing selected and
+ * the value could not be seen, let alone kept (P0, 2026-09-30).
+ */
+export function withStoredValue<T extends { value: string; label: unknown }>(options: T[], cellValue: unknown, note: string): Array<T | { value: string; label: string; trailing: string }> {
+  const stored = panelValueOf(cellValue)
+  return stored && !options.some((o) => o.value === stored) ? [{ value: stored, label: stored, trailing: note }, ...options] : options
+}
+
+/** The printable key that opened the editor by typing (AG's `eventKey`), or `''` for Enter, F2 and double-click. */
+export function typedStart(eventKey: string | null | undefined): string {
+  return eventKey?.length === 1 ? eventKey : ''
+}
