@@ -104,15 +104,27 @@ export function notListedTitle(c: MatrixCoordinate): string {
   return `${c.label} — ${c.cells.length} ${c.cells.length === 1 ? 'cell' : 'cells'}${c.sharedInventoryWith ? ` · ${MATRIX_COPY.sharedEu(c.sharedInventoryWith)}` : ''}`
 }
 
-export function MatrixGroupHeader(p: { displayName: string; coordinate?: MatrixCoordinate }) {
-  const c = p.coordinate
+/** The group's roll-up tag: `20 listed`, `0 listed · 1 draft`; null for a group that serves no `Listing` cell. */
+export function stripTag(c: MatrixCoordinate | undefined): string | null {
   /* A group that serves no `Listing` cell (the EU inventory group) has nothing to count: no tag,
      rather than a `0 listed` that reads as "nothing is listed here". */
-  const tag = c && c.listed !== null && c.cells.includes('listing')
+  return c && c.listed !== null && c.cells.includes('listing')
     ? `${c.listed} listed${c.draft !== null && c.draft > 0 ? ` · ${c.draft} draft` : ''}`
     : null
+}
+
+/** The strip's tooltip: the whole name, and the counts — which a narrow group moves off its line (matrix.module.css). */
+export function stripTitle(c: MatrixCoordinate | undefined, displayName: string): string {
+  if (!c) return displayName
+  const tag = stripTag(c)
+  return tag ? `${notListedTitle(c)} · ${tag}` : notListedTitle(c)
+}
+
+export function MatrixGroupHeader(p: { displayName: string; coordinate?: MatrixCoordinate }) {
+  const c = p.coordinate
+  const tag = stripTag(c)
   return (
-    <span className="nds-matrix-strip" title={c ? notListedTitle(c) : p.displayName}>
+    <span className="nds-matrix-strip" title={stripTitle(c, p.displayName)}>
       <span className="nds-matrix-strip-label">{p.displayName}</span>
       {tag && <Tag tone={c && c.listed! > 0 ? 'success' : 'neutral'} className="nds-matrix-strip-tag">{tag}</Tag>}
     </span>

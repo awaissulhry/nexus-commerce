@@ -13,13 +13,18 @@
   min-width: 0;
 }
 
-/* The strip label + roll-up tag on one line, the tag trailing. */
+/* The strip label + roll-up tag on one line, the tag trailing. The strip is a SIZE CONTAINER (the grid DS's own
+   technique for its selection bar), so a narrow group can decide what it shows — see below. A size container cannot
+   take its width from its content, hence `width: 100%` of the group header. */
 .surface :global(.nds-matrix-strip) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
+  position: relative;
+  container-type: inline-size;
 }
 .surface :global(.nds-matrix-strip-label) {
   overflow: hidden;
@@ -29,6 +34,23 @@
 }
 .surface :global(.nds-matrix-strip-tag) {
   flex: none;
+}
+/* 2026-09-30 — a one-column group (a Price-only group in the Pricing view, a `Not listed` market) is ~100–120px. The
+   tag never shrank, so the NAME did: "eBay · IT" read as "I", an Etsy group showed its counts and no name. Here the
+   name wins: the count tag leaves the line visually but stays in the header's text (read by a screen reader, and in
+   the strip's tooltip with the name). Two columns and more (≥ ~200px) show both, as before. */
+@container (max-width: 160px) {
+  .surface :global(.nds-matrix-strip-tag) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* The verb dialog: form, notices, table, refusals — one column. */
