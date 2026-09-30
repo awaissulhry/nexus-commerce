@@ -270,9 +270,9 @@ A new `.github/workflows/ci.yml`. The jobs run in parallel.
 |---|---|---|---|
 | `checks` | always | static gates, typecheck, web tests and small workspace tests (see below) | 3–4 min |
 | `api (1/4)` … `(4/4)` | **always, full suite, never affected-gated** | each shard runs its quarter of the whole API suite twice: profiles **OFF**, then profiles **ON** (see below). Three shards until 2026-09-30. | ~4 min |
-| `postgres (1/2)`, `(2/2)` | **always** | one `pgvector/pgvector:pg17` container per part (see below). The real-PG suites are split in two by measured time; the other real-DB steps run once, in part 1. One job until 2026-09-30. | 4–5 min |
+| `postgres (1/2)`, `(2/2)` | **always** | one `pgvector/pgvector:pg17` container per part (see below). The real-PG suites are split in two by measured time; the other real-DB steps run once, in part 1. The part count is the matrix's size. One job until 2026-09-30. | 4–5 min |
 | `smoke (1/2)`, `(2/2)` | affected web or api | builds and starts the app, runs Playwright `@smoke` (see below) | 5–6 min |
-| `db-security` | always, needs `api` + `postgres` | aggregator with a fixed name, so a branch rule can require it | seconds |
+| `db-security` | always, needs `api` + `postgres` | aggregator with a fixed name, so a branch rule can require it. It counts one profiles-ON report per API shard, and checks that the PostgreSQL parts together passed every real-PG suite once. | seconds |
 | `ci-ok` | always, needs all | fails on any failed or cancelled job. "Skipped" is allowed only for `smoke`. | seconds |
 
 Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: `smoke`, about 6–7 min (estimate).
@@ -310,15 +310,16 @@ Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: `smoke`, about 6–
   - A JSON report is uploaded per shard.
   - `db-security` merges the reports and runs `profiles-on-ratchet.mjs --report=` against a CI baseline, `profiles-on-baseline.ci.json`.
   - The ratchet is changed to count a file as "fixed" **only if it ran**. Today it calls every baselined file that did not fail "fixed", so any partial run goes red.
-- **Workers:** `maxWorkers` is 2 by today's formula on 4 vCPU. The shard count is a repository variable.
+- **Workers:** `maxWorkers` is 2 by today's formula on 4 vCPU. The shard count is fixed in `ci.yml`: the matrix, `--shard n/4` and db-security's report count change together. A mismatch fails: a shard outside 1..m is refused, and a missing report fails db-security.
 - **Skip ratchet:** a skipped test file that is not on a short allowlist fails the job. This catches tests that skip because an env variable is missing.
 
-**`postgres` job — one container, all real-DB work**
-- Since 2026-09-30 two parts. `run-real-postgres-tests.mjs --part N/2` runs half of the real-PG suites, split by measured time; it refuses a split that loses or repeats a suite. Part 1 also runs every other step below, once.
+**`postgres (1/2, 2/2)` — real-DB work**
+- Since 2026-09-30 two parts, a matrix; the part count M is the matrix's size (`strategy.job-total`). `run-real-postgres-tests.mjs --required --part N/M` runs its share of the real-PG suites, split by measured time, and refuses a split that loses or repeats a suite. Each part records the suites it passed (`--record`), and db-security checks that together they passed every suite once.
+- Part 1 also runs the other steps below, once: runtime-role, RBAC coverage, the baseline check and the upgrade path. Only the real-PG runner line runs in both parts, half of the suites in each.
 - The container runs with fsync, synchronous_commit and full_page_writes off, on tmpfs. It creates the `vector` and `pg_trgm` extensions, which only migrations create.
 - **Security:**
   - `runtime-role-postgres`
-  - `run-real-postgres-tests.mjs --required --url <job PG>` (new flag: reuse this server instead of `docker run`)
+  - `run-real-postgres-tests.mjs --required --part N/M --record <file>`: the real-PG suites on the runner's own throwaway server, started from the job's image (the planned `--url` flag was never built)
   - `npx tsx apps/api/src/scripts/check-rbac-coverage.ts`. A review traced it: it needs only built shared/events and the Prisma client, not real secrets.
 - **Baseline check:** `baseline.vitest.test.ts` and `check-applied-but-missing.vitest.test.ts` read the URL from env, falling back to `apps/api/.env` locally. Today both crash on a clean runner.
 - **Upgrade path — the migrations run the way production runs them:**

@@ -120,7 +120,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 
   if (value('--shard')) {
     const [index, count] = value('--shard').split('/').map(Number)
-    if (!(index >= 1 && index <= count)) fail([`✗ --shard must look like 1/3, got ${value('--shard')}`])
+    if (!(index >= 1 && index <= count)) fail([`✗ --shard must look like n/m (shard n of m, e.g. 1/4), got ${value('--shard')}`])
     const bins = shards(included, count)
     const covered = bins.flatMap(b => b.files)
     if (covered.length !== included.length || new Set(covered).size !== included.length) fail(['✗ the shards do not cover every included file exactly once'])

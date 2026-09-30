@@ -8,7 +8,8 @@
 #                migration upgrade check run once, in part 1
 #   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
 #                database login, seeded disposable database, production hosts fenced off
-#   db-security  the profiles-ON ratchet over all API shards (fixed name, so a branch rule can require it)
+#   db-security  the profiles-ON ratchet over all API shards, and every real-PG suite passed in exactly one
+#                PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
 #
 # Nothing here is path-filtered except typecheck (turbo --affected) and the small-workspace tests.
@@ -141,8 +142,11 @@ jobs:
   # split by measured time (scripts/run-real-postgres-tests.mjs --part; it refuses a split that loses or repeats a
   # suite). The steps that run once (RBAC, the migration upgrade check, the database package) stay on part 1.
   # Part 2 uses the service container only for its image: the runner starts its own server and never pulls one.
+  # The part count is the matrix's size (strategy.job-total); no command or check repeats it, so a matrix cut to
+  # [1] runs every suite in part 1/1, not half of them. Each part records the suites it passed, and db-security
+  # checks that together they passed every suite once (review of PR 6, 2026-09-30).
   postgres:
-    name: PostgreSQL 17 — isolation, races, RBAC, migrations (${{ matrix.part }}/2)
+    name: PostgreSQL 17 — isolation, races, RBAC, migrations (${{ matrix.part }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -194,8 +198,15 @@ jobs:
         if: matrix.part == 1
         run: npm run test --workspace=@nexus/database
 
-      - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins), part ${{ matrix.part }} of 2
-        run: node scripts/run-real-postgres-tests.mjs --required --part ${{ matrix.part }}/2
+      - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins), part ${{ matrix.part }} of ${{ strategy.job-total }}
+        run: node scripts/run-real-postgres-tests.mjs --required --part ${{ matrix.part }}/${{ strategy.job-total }} --record "$RUNNER_TEMP/real-pg-part.tsv"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: real-pg-part-${{ matrix.part }}
+          path: ${{ runner.temp }}/real-pg-part.tsv
+          if-no-files-found: error
+          retention-days: 7
 
   smoke:
     name: Smoke (${{ matrix.shard }}/2) — production build
@@ -306,9 +317,9 @@ jobs:
     timeout-minutes: 5
     steps:
       # A matrix job's result is success only when every leg succeeded: all four API shards, both PostgreSQL parts.
-      - name: All API shards and both PostgreSQL parts must have passed
+      - name: All API shards and every PostgreSQL part must have passed
         run: |
-          echo "api (4 shards): ${{ needs.api.result }} · postgres (2 parts): ${{ needs.postgres.result }}"
+          echo "api (4 shards): ${{ needs.api.result }} · postgres (every part): ${{ needs.postgres.result }}"
           test "${{ needs.api.result }}" = success && test "${{ needs.postgres.result }}" = success
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -323,6 +334,26 @@ jobs:
           reports=$(find "$RUNNER_TEMP/on" -name on.json | sort | paste -sd, -)
           test "$(echo "$reports" | tr ',' '\n' | grep -c .)" = 4 || { echo "✗ expected 4 shard reports, got: $reports"; exit 1; }
           node apps/api/scripts/profiles-on-ratchet.mjs --report="$reports" --baseline=apps/api/scripts/profiles-on-baseline.ci.json
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: real-pg-part-*
+          path: ${{ runner.temp }}/real-pg
+      # The API side counts one report per shard; this is the same guard for the PostgreSQL parts. A green postgres
+      # result alone does not show that every part was scheduled (review of PR 6, 2026-09-30).
+      - name: Every real-PostgreSQL suite passed in exactly one part
+        run: |
+          set -euo pipefail
+          all="$RUNNER_TEMP/real-pg-all.tsv"
+          passed="$RUNNER_TEMP/real-pg-passed.tsv"
+          node scripts/run-real-postgres-tests.mjs --list | sort > "$all"
+          test -s "$all" || { echo "✗ the real-PG suite list is empty — could not measure"; exit 1; }
+          test -d "$RUNNER_TEMP/real-pg" || { echo "✗ no PostgreSQL part recorded its suites"; exit 1; }
+          find "$RUNNER_TEMP/real-pg" -name real-pg-part.tsv -exec cat {} + | sort > "$passed"
+          if ! diff "$all" "$passed"; then
+            echo "✗ the PostgreSQL parts did not pass every real-PG suite exactly once (< never passed, > passed twice or not listed)"
+            exit 1
+          fi
+          echo "✓ the PostgreSQL parts passed all $(grep -c . "$all") real-PG suites, each once"
 
   ci-ok:
     name: ci-ok

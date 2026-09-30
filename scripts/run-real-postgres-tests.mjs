@@ -63,12 +63,15 @@
  *   The same commit gives the same split on every machine, so the M jobs together run every suite once.
  *   Before any container starts, the split is checked. A suite in no part or in two, a suite listed twice,
  *   a suite whose name or expected count changed, or an empty part is REFUSED. Each suite keeps its "expect".
+ *   CI takes M from the size of its matrix and records what each part passed (--record); db-security then
+ *   checks that the parts together passed every suite once. A matrix that loses a part cannot stay green.
  *
  *   node scripts/run-real-postgres-tests.mjs                     # production-equivalent owner by default
  *   node scripts/run-real-postgres-tests.mjs --owner production   # as a non-superuser owner, production's rights
  *   node scripts/run-real-postgres-tests.mjs --required           # CI: missing Docker or image FAILS instead of skipping
  *   node scripts/run-real-postgres-tests.mjs --part 1/2           # CI: one of two parts (see PARTS)
  *   node scripts/run-real-postgres-tests.mjs --part 1/2 --list    # print that part's files and expected counts; no Docker
+ *   node scripts/run-real-postgres-tests.mjs --record <file>      # after a pass: write each suite's file and passed count, as --list does
  *   node scripts/run-real-postgres-tests.mjs --write-durations    # after a whole run: average its times into those --part uses
  *   node scripts/run-real-postgres-tests.mjs --self-test          # the split check refuses planted faults (a static gate)
  *   node scripts/run-real-postgres-tests.mjs --suites '[{"name":"x","file":"src/…","expect":1}]'   # harness use
@@ -207,7 +210,12 @@ if (args.includes('--self-test')) {
 const partArg = args.includes('--part') ? /^(\d+)\/(\d+)$/.exec(flag('--part') ?? '') : null
 const part = partArg ? { index: Number(partArg[1]), count: Number(partArg[2]) } : null
 if (args.includes('--part') && !(part && part.index >= 1 && part.index <= part.count)) {
-  console.error(`❌ --part must look like 1/2, got ${flag('--part') ?? 'nothing'}`)
+  console.error(`❌ --part must look like n/m (part n of m, e.g. 1/2), got ${flag('--part') ?? 'nothing'}`)
+  process.exit(1)
+}
+const record = flag('--record')
+if (args.includes('--record') && !(record && !record.startsWith('--'))) {
+  console.error(`❌ --record needs a file to write, got ${record ?? 'nothing'}`)
   process.exit(1)
 }
 if (args.includes('--write-durations') && (part || flag('--suites'))) {
@@ -299,7 +307,8 @@ try {
 
   // A suite's wall time: its tests plus the import and setup before them. The suites run one after another, so
   // this is the time from the previous suite's end to its own; vitest's per-file time leaves out the import and
-  // setup, a third of the run measured 2026-09-30 (186 of 558 s). The time goes in the log and --write-durations.
+  // setup, a third of the run measured 2026-09-30 (186 of 558 s). The time is on each ✓ line, so a CI log shows how
+  // even the parts really are. Only --write-durations, after a whole local run, changes the times the split reads.
   const wall = new Map()
   let previousEnd = report?.startTime ?? 0
   for (const result of [...(report?.testResults ?? [])].sort((a, b) => a.startTime - b.startTime)) {
@@ -315,24 +324,29 @@ try {
     const ok = file?.status === 'passed' && passed === suite.expect && failed === 0 && skipped === 0
     const detail = file ? `${passed} passed, ${failed} failed, ${skipped} skipped; suite ${file.status}` : 'not in the report'
     const ms = wall.get(resolve(API, suite.file)) ?? 0
-    return { suite, ok, ms, line: `${suite.name}: ${detail} (expected ${suite.expect} passed; ${(ms / 1000).toFixed(1)} s)` }
+    return { suite, ok, ms, passed, line: `${suite.name}: ${detail} (expected ${suite.expect} passed; ${(ms / 1000).toFixed(1)} s)` }
   })
 
   if (run.status === 0 && report && verdicts.every((v) => v.ok)) {
     for (const v of verdicts) console.log(`✓ ${v.line}`)
     console.log(`✓ real-PostgreSQL tests passed (throwaway PostgreSQL, ${image})${part ? ` — part ${part.index}/${part.count}, ${RUN.length} suites, ${expected(RUN)} passes` : ''}`)
+    if (record) {
+      // The same lines as --list, so db-security can compare the parts' records with the whole list.
+      writeFileSync(record, verdicts.map((v) => `${v.suite.file}\t${v.passed}\n`).join(''))
+      console.log(`✓ recorded ${verdicts.length} passed suites in ${record}`)
+    }
     if (args.includes('--write-durations')) {
       // One run is not enough: local times move with the machine's load. On 2026-09-30 the same 55 suites took 558 s,
       // then 331 s, and a split from one run was 58/42 by the other's times; from both averaged, 51/49 by either.
-      // So a refresh averages this run with the stored times, the stored ones scaled to this run's total. A suite new
-      // to the file takes this run's time.
+      // So a refresh averages this run with the stored times, the stored ones scaled to this run's total: the newest
+      // run weighs half, the one before a quarter, and so on. A suite new to the file takes this run's time.
       const stored = measured()
       const known = verdicts.filter((v) => stored[v.suite.file] > 0)
       const scale = known.reduce((sum, v) => sum + v.ms, 0) / (known.reduce((sum, v) => sum + stored[v.suite.file], 0) || 1)
       const time = (v) => (stored[v.suite.file] > 0 ? Math.round((v.ms + stored[v.suite.file] * scale) / 2) : v.ms)
       const files = Object.fromEntries(verdicts.map((v) => [v.suite.file, time(v)]).sort(([a], [b]) => a.localeCompare(b)))
-      const note = 'Per-suite wall time (ms), import and setup included, averaged over whole real-PostgreSQL runs; only used to balance --part. Refresh with --write-durations.'
-      writeFileSync(DURATIONS, `${JSON.stringify({ '//': note, measuredAt: new Date().toISOString().slice(0, 10), files }, null, 2)}\n`)
+      const note = 'Per-suite wall time (ms), import and setup included, from whole local real-PostgreSQL runs; only used to balance --part. Each --write-durations refresh averages its run with the stored times, so the newest run weighs half. measuredAt is the UTC time of the last refresh.'
+      writeFileSync(DURATIONS, `${JSON.stringify({ '//': note, measuredAt: `${new Date().toISOString().slice(0, 16)}Z`, files }, null, 2)}\n`)
       console.log(`✓ wrote ${verdicts.length} suite times to ${relative(ROOT, DURATIONS)} (${known.length} averaged with the stored times)`)
     }
     process.exit(0)

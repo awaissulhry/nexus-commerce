@@ -1,6 +1,6 @@
 {
-  "//": "Per-suite wall time (ms), import and setup included, averaged over whole real-PostgreSQL runs; only used to balance --part. Refresh with --write-durations.",
-  "measuredAt": "2026-09-29",
+  "//": "Per-suite wall time (ms), import and setup included, from whole local real-PostgreSQL runs; only used to balance --part. Each --write-durations refresh averages its run with the stored times, so the newest run weighs half. measuredAt is the UTC time of the last refresh.",
+  "measuredAt": "2026-09-29T22:43Z",
   "files": {
     "src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts": 2139,
     "src/services/amazon-finances-base-postgres.vitest.test.ts": 1754,
