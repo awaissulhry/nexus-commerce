@@ -17,6 +17,7 @@ vi.mock('../../db.js', () => ({ default: db }))
 vi.mock('./content-workspace.service.js', () => ({ object: (v: unknown) => v ?? {}, PUBLISH_KEY: '_nexusContentPublish', contentDestination: async () => ({ familyId: 'family', productId: 'family', accountId: 'store-a', marketplace: 'GLOBAL', aliasKey: '' }) }))
 const schema = vi.hoisted(() => ({ revision: 'schema-1', definitions: [], types: [], locales: [{ locale: 'en', primary: true }] }))
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: async () => schema }))
+vi.mock('./colour-products/settings.js', () => ({ colourGrouping: async () => null }))
 vi.mock('./admin-client.js', () => ({ shopifyAdmin: async () => ({ graphql: async () => ({ job: { id: 'job-1', done: state.done } }) }), assertShopifyResult: (v: unknown) => v }))
 vi.mock('./linked-products-gateway.js', () => ({
   linkedDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), readLinkedStoreSchema: async () => schema, readLinkedProducts: async () => [], readLinkedFields: async () => [],

@@ -2,8 +2,8 @@
 // read. See that file's header for why it exists and why it is a `.cjs` and not the `.mjs` the
 // hand-off note below guessed.
 const { tabRedirects, bareIndexRedirect } = require('./src/app/marketing/ads/rules-automation/_shared/rulesTabRoutes.cjs');
-// The browser's /backend API calls as a Vercel external rewrite — no function (see the module's header).
-const { backendRewrites, backendHeaders } = require('./src/lib/workspaces/backendRewrite.cjs');
+// The browser's /backend API calls as an external rewrite that `next start` proxies to the API (see the module's header).
+const { backendRewrites } = require('./src/lib/workspaces/backendRewrite.cjs');
 // MCP.5 — connecting Claude: the OAuth metadata rewrite and the consent page's headers.
 const { oauthRewrites, oauthHeaders } = require('./src/lib/oauth/oauthRoutes.cjs');
 const path = require('node:path');
@@ -13,7 +13,7 @@ const nextConfig = {
   reactStrictMode: true,
   // The Docker image only (apps/web/Dockerfile sets NEXT_OUTPUT=standalone): a server.js with just the files it needs,
   // traced from the repository root so the workspace packages come along. This freezes rewrites, headers and redirects
-  // at build time, so the image is built with the values they read. Unset in CI's smoke build and on Vercel: unchanged.
+  // at build time, so the image is built with the values they read. Unset in CI's smoke build and Railway's Railpack build.
   ...(process.env.NEXT_OUTPUT === 'standalone' ? { output: 'standalone', outputFileTracingRoot: path.join(__dirname, '../..') } : {}),
   // Repository instructions are maintained at the root; dev startup must not generate new ones.
   agentRules: false,
@@ -23,14 +23,14 @@ const nextConfig = {
   // any `git push` runs the pre-push hook's `rm -rf .next && next build`, which
   // nukes a running `next dev`'s build dir → 500s on the shared preview. Running
   // dev with NEXT_DEV_ISOLATED=1 puts its artifacts in `.next-dev`, which the
-  // prod build never touches. No-op wherever the env var is unset (prod, Vercel,
-  // the pre-push build) → safe to commit.
+  // prod build never touches. No-op wherever the env var is unset (prod, the
+  // pre-push build) → safe to commit.
   // NEXT_DIST_DIR is the explicit override, and it exists for the PRE-PUSH build. The hook used
   // to `rm -rf .next && next build` into the shared dir, so two sessions pushing at once deleted
   // each other's output mid-build — observed 2026-08-06 with three concurrent pushes, each dying
   // on ENOENT for a file its own build had just written (_ssgManifest.js, pages-manifest.json).
-  // Guaranteed, not flaky: any overlap fails. Unset in prod and on Vercel, so behaviour there is
-  // byte-identical to before.
+  // Guaranteed, not flaky: any overlap fails. Unset in prod, so behaviour there is byte-identical
+  // to before.
   distDir: process.env.NEXT_DIST_DIR || (process.env.NEXT_DEV_ISOLATED === '1' ? '.next-dev' : '.next'),
   // BP (2026-08-21) — local-first verification proxy. Current Chrome's Local Network Access
   // policy blocks cross-port loopback POST/PATCH regardless of the target's CORS headers
@@ -38,11 +38,10 @@ const nextConfig = {
   // :8099 can never receive writes from a hand-driven browser. With NEXT_DEV_STUB_PROXY set
   // (local dev only), /api/* is rewritten SERVER-SIDE to the stub — same-origin in the browser,
   // so no CORS and no LNA apply. Pair with NEXT_PUBLIC_API_URL=http://localhost:<dev-port>.
-  // Unset everywhere real (prod, Vercel, the pre-push build) → zero rewrites, zero change.
+  // Unset everywhere real (prod, the pre-push build) → zero rewrites, zero change.
   //
-  // beforeFiles: `/backend/api/*` goes straight to the API as a Vercel external rewrite, ahead of the `/backend` route
-  // handler (which keeps only the channel-connect callback). Vercel paused the site on 2026-09-27 for the function
-  // proxy's memory use; see src/lib/workspaces/backendRewrite.cjs.
+  // beforeFiles: `/backend/api/*` goes straight to the API as an external rewrite (`next start` proxies it), ahead of the
+  // `/backend` route handler (which keeps only the channel-connect callback); see src/lib/workspaces/backendRewrite.cjs.
   async rewrites() {
     const stub = process.env.NEXT_DEV_STUB_PROXY
     return {
@@ -56,10 +55,11 @@ const nextConfig = {
     }
   },
   async headers() {
-    return [...backendHeaders(process.env), ...oauthHeaders()]
+    return oauthHeaders()
   },
   // CI's smoke build (docs/ci-plan.md §3) and the Docker image (apps/web/Dockerfile): the `checks` job already
-  // type-checks the app, so these builds skip that step. Unset on Vercel, where next build still type-checks.
+  // type-checks the app, so these builds skip that step. Unset in Railway's Railpack build, where next build still
+  // type-checks.
   typescript: { ignoreBuildErrors: process.env.NEXUS_CI_SKIP_BUILD_TYPECHECK === '1' },
   // This prevents Turbopack from breaking the Prisma connection
   serverExternalPackages: ["@prisma/client", "pg", "@nexus/database"],
@@ -74,7 +74,7 @@ const nextConfig = {
       dynamic: 180,
       static: 300,
     },
-    // `next start` proxies the `/backend/api/*` rewrite itself (on Vercel the edge did it) and cuts a proxied request
+    // `next start` proxies the `/backend/api/*` rewrite itself and cuts a proxied request
     // after this many ms with no bytes — 30 000 by default. The Amazon ZIP may wait 90 s for its first byte
     // (media-plan-archive.service.ts), so 5 minutes. Live streams ping every ≤ 25 s and stay open.
     proxyTimeout: 300_000,
@@ -263,7 +263,7 @@ const nextConfig = {
       // That page DID redirect a browser, but only client-side: the ads layout
       // renders before the page, so the response has already begun streaming and
       // headers are gone by the time the redirect throws — 200 with the target in
-      // the RSC payload, on dev AND on prod. Verified with curl against Vercel,
+      // the RSC payload, on dev AND on prod. Verified with curl against prod,
       // not assumed. Config redirects run before routing, so these are real 308s.
       //
       // NOT caught, deliberately: /marketing/ads/rules-automation/fleet/… , where

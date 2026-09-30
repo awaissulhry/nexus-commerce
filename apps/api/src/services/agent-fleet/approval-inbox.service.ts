@@ -557,7 +557,7 @@ export interface StalenessVerdict {
 const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : String(c))
 
 /**
- * MCP.10 — one text per value whatever the order of its keys, for comparing a stored preview with a fresh one.
+ * One text per value whatever the order of its keys, for comparing a stored preview with a fresh one.
  *
  * The stored preview is jsonb, and jsonb re-orders an object's keys (shorter first): `{ from, to }` reads back as
  * `{ to, from }`. Compared through plain JSON.stringify, every object-valued material field therefore "moved" when

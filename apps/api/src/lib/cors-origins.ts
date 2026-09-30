@@ -13,8 +13,6 @@ const ENV_WEB_ORIGINS = (process.env.NEXUS_WEB_ORIGINS ?? '')
 
 export const ALLOWED_WEB_ORIGINS: string[] = [
   'http://localhost:3000',
-  'https://nexus-commerce-three.vercel.app',
-  'https://nexus-commerce-web.vercel.app',
   ...ENV_WEB_ORIGINS,
 ]
 

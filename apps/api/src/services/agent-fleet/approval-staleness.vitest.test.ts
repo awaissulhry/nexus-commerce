@@ -131,11 +131,11 @@ describe('AP.6 — checkStaleness', () => {
 })
 
 /**
- * MCP.10 — the stored preview is jsonb, which re-orders an object's keys. The comparison must not care about key
+ * AP.6 — the stored preview is jsonb, which re-orders an object's keys. The comparison must not care about key
  * order at any depth, and must still see every value, and every change of array order. (The real round trip through
  * jsonb is proven on PGlite in approval-staleness-jsonb.vitest.test.ts.)
  */
-describe('MCP.10 — key order never counts, a value or an array order always does', () => {
+describe('AP.6 — key order never counts, a value or an array order always does', () => {
   /** A fresh preview, keys in the order a tool builds them. */
   const FRESH = {
     action: 'set-price',
