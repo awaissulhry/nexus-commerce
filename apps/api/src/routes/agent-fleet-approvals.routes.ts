@@ -35,8 +35,10 @@ import { recordControlChange } from '../services/agent-fleet/control-audit.servi
 import { listCharters } from '../services/agent-fleet/charter-registry.js'
 import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
 import {
+  cannotApproveFor,
   checkStaleness,
   FLEET_TOOLS,
+  inboxViewer,
   resolveActor,
 } from '../services/agent-fleet/approval-inbox.service.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
@@ -688,7 +690,7 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  fastify.get('/agent/fleet/approvals/outside', async () => {
+  fastify.get('/agent/fleet/approvals/outside', async (request) => {
     const rows = await prisma.agentApproval.findMany({
       where: {
         status: { in: ['pending', 'scheduled'] },
@@ -720,6 +722,9 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true, agentKey: true, mode: true },
     })
     const runById = new Map(runs.map((r) => [r.id, r]))
+    // Per row: why THIS viewer may not approve it (null when they may) — a card never offers an Apply that can only
+    // answer 403 (a person whose permission was taken away while their approval waited, say).
+    const cannotApprove = cannotApproveFor(await inboxViewer(request))
 
     return {
       approvals: rows.map((a) => {
@@ -741,6 +746,8 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
           originKey: run?.agentKey ?? null,
           /** True for all of these — it is why they matter. */
           canExecute: typeof tool?.execute === 'function',
+          /** Why this viewer may not approve it, in the approve's own words; null when they may. */
+          cannotApprove: cannotApprove(a.toolName),
           /** No `charterKey`, so no per-worker history exists for these. */
           trackRecord: null,
         }

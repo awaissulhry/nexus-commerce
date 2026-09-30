@@ -19,6 +19,9 @@ vi.mock('../../db.js', () => ({
     },
     agentRun: { findMany: vi.fn() },
     agentExemplar: { findMany: vi.fn() },
+    // The person who approved, looked up again at commit (login roles with business profiles off, the membership on).
+    userProfile: { findUnique: vi.fn() },
+    workspaceMembership: { findUnique: vi.fn() },
   },
 }))
 /* S9.4 — commitScheduledApproval now restamps `expiresAt` when it hands a
@@ -193,10 +196,30 @@ describe('AP.6 — commit refuses a stale action', () => {
       status: 'scheduled',
       executeAfter: new Date(Date.now() - 1000),
       decidedBy: 'Awais',
+      decidedByUserId: 'u1',
+      workspaceId: 'ws_alpha_0001',
       toolName: 'set-target-bid',
       args: { targetId: 't1' },
       preview: STORED,
     } as never)
+    // The person who approved still owns the business: these tests are about the facts, not the person.
+    db.userProfile.findUnique.mockResolvedValue({ id: 'u1', status: 'active', permissionsVersion: 1, roleAssignments: [{ role: { key: 'OWNER' } }] } as never)
+    db.workspaceMembership.findUnique.mockResolvedValue({
+      id: 'm1', status: 'active', version: 1, userId: 'u1', createdAt: new Date(), user: { status: 'active' },
+      workspace: { id: 'ws_alpha_0001', name: 'Alpha', status: 'active', version: 1 },
+      roles: [{ role: { id: 'r1', key: 'OWNER', name: 'Owner', permissions: [] } }],
+    } as never)
+  })
+
+  it('an approval that does not say which person approved it is not run (fail closed)', async () => {
+    db.agentApproval.findUnique.mockResolvedValue({
+      status: 'scheduled', executeAfter: new Date(Date.now() - 1000), decidedBy: 'Awais', decidedByUserId: null,
+      workspaceId: 'ws_alpha_0001', toolName: 'set-target-bid', args: { targetId: 't1' }, preview: STORED,
+    } as never)
+    const out = await commitScheduledApproval('a1')
+    expect(out).toEqual({ ok: false, error: 'not run — it could not be re-checked — it does not say which person approved it. Approve it again.' })
+    expect(gate).not.toHaveBeenCalled()
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'permission_refused' }))
   })
 
   it('never executes when the facts moved', async () => {
@@ -253,7 +276,7 @@ describe('AP.6 — commit refuses a stale action', () => {
     expect(gate).toHaveBeenCalledWith(
       'a1',
       'approve',
-      expect.objectContaining({ kind: 'system', label: 'Awais' }),
+      expect.objectContaining({ kind: 'user', userId: 'u1', label: 'Awais' }),
     )
   })
 })
