@@ -36,4 +36,11 @@ describe('Typed media cell transfers', () => {
     expect(transfer.processCellFromClipboard(p as never)).toBe('Previous value')
     expect(transfer.processCellForClipboard({...p,column:mediaColumn} as never)).toBe(p.value)
   })
+  it('parses a paste into every other column with that column\'s own parser, and leaves the media column raw', () => {
+    const parseValue = (text: string) => text === '9 OUNCE' ? { value: 9, unit: 'OUNCE' } : text.split(' | ')
+    const p = {api,column:textColumn,node:{data:rows[0]},value:'9 OUNCE',parseValue,formatValue:()=> 'label'}
+    expect(transfer.processCellFromClipboard(p as never)).toEqual({ value: 9, unit: 'OUNCE' })
+    expect(transfer.processCellFromClipboard({...p,value:'a | b'} as never)).toEqual(['a', 'b'])
+    expect(transfer.processCellFromClipboard({...p,column:mediaColumn,value:'raw media text'} as never)).toBe('raw media text')
+  })
 })
