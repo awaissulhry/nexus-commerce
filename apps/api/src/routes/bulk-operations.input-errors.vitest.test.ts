@@ -51,6 +51,10 @@ describe('a refused bulk job answers 400 with the plain reason', () => {
     ['a quantity that is not whole', job({ actionPayload: { quantityOverride: 2.5 } }), 'quantityOverride must be a whole number, zero or more.'],
     ['no channel scope', job({ channel: undefined, actionPayload: { priceOverride: 5 } }), 'MARKETPLACE_OVERRIDE_UPDATE requires `channel` to be set (e.g. "AMAZON"). Refusing to run without a channel scope.'],
     ['a scope that matches nothing', job({ targetProductIds: ['no-such-product'], actionPayload: { priceOverride: 5 } }), 'No items found matching the specified criteria'],
+    ['an unknown field, named with the one probably meant', job({ actionPayload: { price: 5 } }), 'Unknown override field: price (did you mean priceOverride?). The fields are: priceOverride, followMasterPrice, quantityOverride, followMasterQuantity, stockBuffer, followMasterTitle, followMasterDescription, followMasterImages, followMasterBulletPoints, pricingRule, priceAdjustmentPercent, isPublished.'],
+    ['an unknown field beside a known one (never dropped silently)', job({ actionPayload: { priceOverride: 5, pirceOverride: 6 } }), expect.stringMatching(/^Unknown override field: pirceOverride\. The fields are: /)],
+    ['a pricing rule that does not exist', job({ actionPayload: { pricingRule: 'CHEAP' } }), 'pricingRule must be one of FIXED, MATCH_AMAZON, PERCENT_OF_MASTER.'],
+    ['a follow flag that is not true or false', job({ actionPayload: { followMasterPrice: 'yes' } }), 'followMasterPrice must be true or false.'],
   ])('🔴 create: %s', async (_name, body, reason) => {
     const response = await post('/api/bulk-operations', body)
     expect(response.statusCode, response.body).toBe(400)

@@ -333,6 +333,13 @@ const OVERRIDE_FOLLOW_KEYS = [
   'followMasterBulletPoints',
 ] as const;
 const OVERRIDE_PRICING_RULES = ['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER'] as const;
+/** Every field an override payload may carry (`isPublished` is known, and refused by its own sentence). */
+const OVERRIDE_FIELDS = [
+  'priceOverride', 'followMasterPrice', 'quantityOverride', 'followMasterQuantity', 'stockBuffer',
+  ...OVERRIDE_FOLLOW_KEYS, 'pricingRule', 'priceAdjustmentPercent', 'isPublished',
+] as const;
+/** The likely meant field for a near miss — `price` for `priceOverride` is the one callers make. */
+const OVERRIDE_FIELD_HINTS: Record<string, string> = { price: 'priceOverride', quantity: 'quantityOverride', buffer: 'stockBuffer' };
 
 export function marketplaceOverridePlan(payload: Record<string, any>): MarketplaceOverridePlan {
   const numOrNull = (v: unknown): number | null | undefined => {
@@ -343,7 +350,19 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
   };
   const columns: Prisma.ChannelListingUpdateInput = {};
 
+  // A field the override does not know is never dropped silently: a typo would otherwise leave the price unchanged
+  // while the job reports success. Named, with the field that was probably meant.
+  const unknown = Object.keys(payload).filter((k) => !(OVERRIDE_FIELDS as readonly string[]).includes(k));
+  if (unknown.length > 0) {
+    const named = unknown.map((k) => (OVERRIDE_FIELD_HINTS[k] ? `${k} (did you mean ${OVERRIDE_FIELD_HINTS[k]}?)` : k));
+    throw new BulkActionInputError(
+      `Unknown override field${unknown.length > 1 ? 's' : ''}: ${named.join(', ')}. The fields are: ${OVERRIDE_FIELDS.join(', ')}.`,
+    );
+  }
   if ('isPublished' in payload) throw new BulkActionInputError(PUBLISH_FLAG_REFUSAL);
+  for (const flag of ['followMasterPrice', 'followMasterQuantity'] as const) {
+    if (flag in payload && typeof payload[flag] !== 'boolean') throw new BulkActionInputError(`${flag} must be true or false.`);
+  }
 
   let price: number | null | undefined;
   if ('priceOverride' in payload) {
@@ -400,15 +419,20 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
   }
 
   for (const k of OVERRIDE_FOLLOW_KEYS) {
-    if (typeof payload[k] === 'boolean') (columns as Record<string, unknown>)[k] = payload[k];
+    if (!(k in payload)) continue;
+    if (typeof payload[k] !== 'boolean') throw new BulkActionInputError(`${k} must be true or false.`);
+    (columns as Record<string, unknown>)[k] = payload[k];
   }
-  if (
-    typeof payload.pricingRule === 'string' &&
-    (OVERRIDE_PRICING_RULES as readonly string[]).includes(payload.pricingRule)
-  ) {
+  if ('pricingRule' in payload) {
+    if (!(OVERRIDE_PRICING_RULES as readonly string[]).includes(payload.pricingRule)) {
+      throw new BulkActionInputError(`pricingRule must be one of ${OVERRIDE_PRICING_RULES.join(', ')}.`);
+    }
     columns.pricingRule = payload.pricingRule as Prisma.ChannelListingUpdateInput['pricingRule'];
   }
-  if (typeof payload.priceAdjustmentPercent === 'number') {
+  if ('priceAdjustmentPercent' in payload) {
+    if (typeof payload.priceAdjustmentPercent !== 'number' || !Number.isFinite(payload.priceAdjustmentPercent)) {
+      throw new BulkActionInputError('priceAdjustmentPercent must be a number.');
+    }
     columns.priceAdjustmentPercent = payload.priceAdjustmentPercent.toFixed(2);
   }
 
