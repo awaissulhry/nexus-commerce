@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AlertTriangle } from 'lucide-react'
 
 import { Button } from '@/design-system/primitives'
@@ -15,6 +16,7 @@ import { EmptyState } from '@/design-system/components'
 
 import { StudioClient } from './StudioClient'
 import { loadStudioData, type StudioData } from './studio-data'
+import { prefetchStudio } from './studioPrefetch'
 import Loading from '../studio/loading'
 import styles from './studio.module.css'
 
@@ -23,6 +25,11 @@ export function StudioLoader({ id }: { id: string }) {
     { kind: 'loading' } | { kind: 'ok'; data: StudioData } | { kind: 'failed'; message: string }
   >({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const search = useSearchParams()
+
+  // P2 (I4-2) — the destination check and the sheet read need only the URL: start them now, beside the frame's own
+  // reads, instead of after them. The hooks adopt them only if they resolve exactly the same reads.
+  useEffect(() => { if (search) prefetchStudio(id, search) }, [id]) // page load only: later URL changes are the hooks' own reads
 
   useEffect(() => {
     let cancelled = false

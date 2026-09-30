@@ -22,6 +22,7 @@ import { installAuthFetch } from './install-fetch'
 import { setCsrfToken } from './csrf-store'
 import { setBrowserUserId } from '../workspaces/browser-identity'
 import { isPublicPath } from './public-paths'
+import { readSession, rendersBeforeSession } from './session-read'
 
 export interface AuthUser {
   id: string
@@ -66,18 +67,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const loadedOnce = useRef(false)
 
+  // The fetch patch (credentials, workspace header, CSRF) must be in place before ANY child effect runs: a route that
+  // draws while the session loads (`rendersBeforeSession`) starts its reads in effects that run before this provider's.
+  useState(() => { installAuthFetch(); return null })
+
   async function load(): Promise<void> {
     installAuthFetch()
     const base = getBackendUrl()
     try {
-      const csrf = await fetch(`${base}/api/auth/csrf`, { credentials: 'include' })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)
-      if (csrf?.csrfToken) setCsrfToken(csrf.csrfToken)
-
-      const res = await fetch(`${base}/api/auth/me`, { credentials: 'include' })
-      if (res.ok) {
-        const data = await res.json()
+      // CSRF and the session together (P2, I4-2): the token is needed by the first write, not by the session read.
+      const { csrfToken, me } = await readSession(base)
+      if (csrfToken) setCsrfToken(csrfToken)
+      if (me) {
+        const data = me as { user?: AuthUser | null; isOwner?: boolean; permissions?: string[] }
         setUser(data.user ?? null)
         setBrowserUserId(data.user?.id ?? null)
         setIsOwner(!!data.isOwner)
@@ -116,8 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const has = (permission: string): boolean => isOwner || permissions.has(permission)
 
   // No flash of forbidden content: while resolving on a protected route in
-  // enforce mode, render nothing (a splash) instead of the app chrome.
-  if (ENFORCE && status === 'loading' && !isPublicPath(pathname)) {
+  // enforce mode, render nothing (a splash) instead of the app chrome — except on a route that draws its frame and
+  // starts its reads meanwhile (`rendersBeforeSession`); the API refuses those reads without a session either way.
+  if (ENFORCE && status === 'loading' && !isPublicPath(pathname) && !rendersBeforeSession(pathname)) {
     return <div aria-busy="true" style={{ minHeight: '100vh' }} />
   }
 

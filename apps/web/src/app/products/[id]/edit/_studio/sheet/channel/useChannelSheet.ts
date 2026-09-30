@@ -28,6 +28,7 @@ import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
+import { channelScopeUrl as buildChannelScopeUrl } from '../../sheetUrls'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
@@ -69,25 +70,9 @@ export interface ChannelSheetState {
   applyLocal: (rowId: string, mutate: (row: ChannelSheetRow) => void) => void
 }
 
-/**
- * PES.5 §3.2.
- *
- * 🔴 The market parameter is `market`, NOT `marketplace`. §3.2's prose writes `&marketplace=`, but
- * the shipped route reads `q.market` and answers `400 {"error":"market is required"}` — verified
- * against the running service, not the doc. The RESPONSE still calls it `scope.marketplace`, so the
- * two names genuinely coexist and only the request side takes `market`.
- */
+/** The channel scope's read URL — built in `../../sheetUrls.ts`, shared with the page-load prefetch. */
 export function channelScopeUrl(o: UseChannelSheetOptions): string {
-  const params = new URLSearchParams({
-    scope: 'channel',
-    channel: o.channel,
-    market: o.marketplace,
-  })
-  if (o.accountId) params.set('accountId', o.accountId)
-  if (o.locale) params.set('locale', o.locale)
-  if (o.locales) params.set('locales', o.locales.join(','))
-  if (o.view) params.set('view', o.view)
-  return `${getBackendUrl()}/api/products/${o.productId}/studio/sheet?${params}`
+  return buildChannelScopeUrl(o)
 }
 
 /** A successful HTTP response must contain a sheet before it can replace the current view. */

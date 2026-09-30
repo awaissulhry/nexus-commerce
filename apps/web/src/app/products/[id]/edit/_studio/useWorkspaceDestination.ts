@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { getBackendUrl } from '@/lib/backend-url'
+import { destinationUrl } from './sheetUrls'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from './studio-read'
 
 export interface WorkspaceDestination {
@@ -24,10 +24,7 @@ export function useWorkspaceDestination(productId: string, channel: string, mark
   useEffect(() => {
     if (!enabled) return
     const controller = new AbortController()
-    const query = new URLSearchParams({ channel, market: market! })
-    if (accountId !== undefined) query.set('accountId', accountId)
-    if (listingId !== undefined) query.set('listingId', listingId)
-    void fetchStudioRead(`${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/studio/destination?${query}`, controller.signal).then(async response => {
+    void fetchStudioRead(destinationUrl(productId, channel, market!, accountId, listingId), controller.signal).then(async response => {
       const body = await response.json()
       if (controller.signal.aborted) return
       setResult({ key, state: response.ok ? { status: 'ready', data: body } : { status: 'error', message: new StudioReadError(response.status, body).message } })
