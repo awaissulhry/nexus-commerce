@@ -12,6 +12,9 @@
  *
  *   E2E_DATABASE_URL=postgresql://…@127.0.0.1:<port>/<db> E2E_API_URL=http://127.0.0.1:<api> \
  *   E2E_EMAIL=… E2E_PASSWORD=… PLAYWRIGHT_BASE_URL=http://127.0.0.1:<web> npx playwright test sheet-bulk-autosave
+ *
+ * With business profiles on (NEXT_PUBLIC_WORKSPACES_ENABLED=1, as in production) also set E2E_WORKSPACE_ID to the
+ * business the login belongs to: the seed writes there, the studio opens under `/w/<id>`, and reads go via `/backend`.
  */
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
@@ -22,6 +25,8 @@ const env = {
   email: process.env.E2E_EMAIL,
   password: process.env.E2E_PASSWORD,
   database: process.env.E2E_DATABASE_URL,
+  /** Set when the web runs with business profiles on (NEXT_PUBLIC_WORKSPACES_ENABLED=1); the seed writes there too. */
+  workspace: process.env.E2E_WORKSPACE_ID,
 }
 const FAMILY = 'e2e_bulk_autosave'
 const ROWS = 500
@@ -54,11 +59,14 @@ test.describe('product sheet — one operation, one save', () => {
     const rowPatches: Request[] = []
     page.on('request', (request) => {
       const path = new URL(request.url()).pathname
-      if (request.method() === 'POST' && path === '/api/products/bulk-save') bulkSaves.push(request)
-      if (request.method() === 'PATCH' && path === '/api/products/bulk') rowPatches.push(request)
+      // `endsWith`: with business profiles on, the browser calls `/backend/api/…` (apps/web/CLAUDE.md).
+      if (request.method() === 'POST' && path.endsWith('/api/products/bulk-save')) bulkSaves.push(request)
+      if (request.method() === 'PATCH' && path.endsWith('/api/products/bulk')) rowPatches.push(request)
     })
 
-    await page.goto(`/products/${FAMILY}/edit/studio?scope=EBAY&market=IT`)
+    // With business profiles on, a studio address carries the business (`/w/<id>`); an owner of two businesses
+    // otherwise lands on the profile picker. E2E_WORKSPACE_ID is the business the seed writes to.
+    await page.goto(`${env.workspace ? `/w/${env.workspace}` : ''}/products/${FAMILY}/edit/studio?scope=EBAY&market=IT`)
     await expect(page.locator('.ag-row[row-index="1"]')).toBeVisible({ timeout: 60_000 })
 
     // Keyboard to the column: focusing a cell makes the grid scroll the column into view.
@@ -133,9 +141,15 @@ test.describe('product sheet — one operation, one save', () => {
     expect(bulkSaves).toHaveLength(2)
 
     // Every value is STORED: read the sheet back from the API, not from the grid.
-    const read = await page.request.get(`${env.api}/api/products/${FAMILY}/studio/sheet?scope=channel&channel=EBAY&market=IT&locale=it`)
-    expect(read.ok()).toBe(true)
-    const sheet = await read.json() as { rows: Array<{ rowKind: string; sku: string; values: Record<string, { value: unknown }> }> }
+    // Through the page's own fetch, which carries the session and, with business profiles on, the business
+    // (`/backend/api/…`); a bare request from the test has neither.
+    const sheetPath = `/api/products/${FAMILY}/studio/sheet?scope=channel&channel=EBAY&market=IT&locale=it`
+    const read = await page.evaluate(async (url) => {
+      const res = await fetch(url)
+      return { ok: res.ok, status: res.status, body: await res.json().catch(() => null) }
+    }, env.workspace ? `/backend${sheetPath}` : `${env.api}${sheetPath}`)
+    expect(read.ok, `sheet read answered ${read.status}`).toBe(true)
+    const sheet = read.body as { rows: Array<{ rowKind: string; sku: string; values: Record<string, { value: unknown }> }> }
     const variants = sheet.rows.filter((row) => row.rowKind === 'variant')
     expect(variants).toHaveLength(ROWS)
     expect(variants.filter((row) => row.values[COLUMN]?.value !== THEME.id).map((row) => row.sku)).toEqual([])
