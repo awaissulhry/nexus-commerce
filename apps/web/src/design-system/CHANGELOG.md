@@ -1,3 +1,7 @@
+## Fast typing keeps the whole value — 2026-09-30
+
+**`FormulaCellEditor`** finishes opening a typed edit inside the first native key event, so later keys reach the input. Shortcuts, composition, locked cells, and editor-owned keys keep their existing handling. The pinned AG React patch creates the popup in layout, retains the same wrapper through StrictMode replay, and keeps its original cleanup lifetime. Mirrored in Factory.
+
 ## Saved views can share one initial read — 2026-09-30
 
 **`useGridViews`** and **`useGridState`** accept an optional keyed initial reader. A sheet can load its named views and working layouts in one bounded request. Explicit refresh stays a fresh read. Scope and request guards reject old replies. **`parseWorkingLayout`** applies the same checks to either transport. These files exist only in the web app; there is no Factory counterpart.

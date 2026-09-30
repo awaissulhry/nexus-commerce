@@ -1,3 +1,7 @@
+## Fast typing keeps the whole value — 2026-09-30
+
+**`FormulaCellEditor`** finishes opening a typed edit inside the first native key event, so later keys reach the input. Shortcuts, composition, locked cells, and editor-owned keys keep their existing handling. The pinned AG React patch creates the popup in layout, retains the same wrapper through StrictMode replay, and keeps its original cleanup lifetime. Mirrored in Factory.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.
