@@ -49,12 +49,12 @@ async function fixture() {
   return { product, listing }
 }
 
-async function post(f: Awaited<ReturnType<typeof fixture>>, value: unknown) {
+async function post(f: Awaited<ReturnType<typeof fixture>>, value: unknown, field = 'attr_production_partner_ids') {
   const current = await prisma.channelListing.findUniqueOrThrow({ where: { id: f.listing.id } })
   const response = await app.inject({ method: 'POST', url: '/api/products/bulk-save', headers: { 'content-type': 'application/json' }, payload: JSON.stringify({
     operationId: `integer-${++serial}`, units: [{ key: 'partners', expectedVersion: current.version,
       marketplaceContexts: [{ channel: 'ETSY', marketplace: 'GLOBAL', accountId: account, locale: 'en' }],
-      changes: [{ id: f.product.id, field: 'attr_production_partner_ids', target: 'channel', value }],
+      changes: [{ id: f.product.id, field, target: 'channel', value }],
     }],
   }) })
   expect(response.statusCode, response.body).toBe(200)
@@ -71,7 +71,7 @@ it.each([['9007199254740993'], [9007199254740992], '[9007199254740993]', ['-9007
     expect(after.overrideData).toEqual(before.overrideData)
     expect(after.version).toBe(before.version)
     expect(unit.body.errors).toEqual([expect.objectContaining({ id: f.product.id, field: 'attr_production_partner_ids',
-      error: 'Production partner IDs is outside the safe whole-number range (-9007199254740991 to 9007199254740991). It has not been rounded or saved.' })])
+      error: 'Production partner IDs is outside the safe whole-number range (-9007199254740991 to 9007199254740991).' })])
   }))
 
 it('saves the safe positive boundary as a JSON number and reads it back from the sheet', () => scoped(async () => {
@@ -110,4 +110,42 @@ it.each([Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, -1, 0, -1.25])('persi
   expect(after.categoryAttributes).toEqual(stored.categoryAttributes)
   expect(after.version).toBe(stored.version)
   expect(refused.body.errors).toEqual([expect.objectContaining({ field: 'attr_signed_count', error: expect.stringContaining('Signed count is outside the safe whole-number range') })])
+}))
+
+
+it('keeps a valid cell in a mixed request while refusing only the unsafe number, with a usable next token', () => scoped(async () => {
+  const f = await fixture()
+  const response = await app.inject({ method: 'POST', url: '/api/products/bulk-save', headers: { 'content-type': 'application/json' }, payload: JSON.stringify({
+    units: [{ key: 'mixed', expectedVersion: f.listing.version,
+      marketplaceContexts: [{ channel: 'ETSY', marketplace: 'GLOBAL', accountId: account, locale: 'en' }],
+      changes: [
+        { id: f.product.id, field: 'attr_production_partner_ids', target: 'channel', value: ['9007199254740993'] },
+        { id: f.product.id, field: 'attr_who_made', target: 'channel', value: 'i_did' },
+      ],
+    }],
+  }) })
+  expect(response.statusCode, response.body).toBe(200)
+  const unit = response.json().units[0]
+  expect(unit.status, JSON.stringify(unit)).toBe(200)
+  expect(unit.body.errors).toEqual([expect.objectContaining({ field: 'attr_production_partner_ids', error: expect.stringContaining('safe whole-number range') })])
+  const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: f.listing.id } })
+  expect(stored.platformAttributes).toMatchObject({ production_partner_ids: [17], who_made: 'i_did' })
+  expect(unit.body).toMatchObject({ currentVersion: stored.version, versionOf: 'channelListing' })
+  const next = await post(f, [18])
+  expect(next.status, JSON.stringify(next)).toBe(200)
+  expect(next.body.errors ?? []).toEqual([])
+  const after = await prisma.channelListing.findUniqueOrThrow({ where: { id: f.listing.id } })
+  expect(after.platformAttributes).toMatchObject({ production_partner_ids: [18], who_made: 'i_did' })
+}))
+
+
+it.each(['9007199254740993', 9007199254740992])('cannot bypass numeric safety with a positional list write of %s', value => scoped(async () => {
+  const f = await fixture()
+  const before = await prisma.channelListing.findUniqueOrThrow({ where: { id: f.listing.id } })
+  const field = 'attr_production_partner_ids[1]'
+  const result = await post(f, value, field)
+  const after = await prisma.channelListing.findUniqueOrThrow({ where: { id: f.listing.id } })
+  expect(after.platformAttributes).toEqual(before.platformAttributes)
+  expect(after.version).toBe(before.version)
+  expect(result.body.errors).toEqual([expect.objectContaining({ id: f.product.id, field: 'attr_production_partner_ids', error: expect.stringContaining('safe whole-number range') })])
 }))

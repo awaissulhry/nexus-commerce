@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseShape } from './shapeValue'
+import { coerceTyped, commitValue } from './formulaEditing'
 import { shapeColumnDef } from './shapeColumn'
 import { parseScalarValue, scalarColumnDef } from './scalarValue'
 
@@ -66,4 +67,18 @@ describe('unsafe whole numbers retain their text until the API can refuse them',
     expect(parseShape('list', ['9007199254740993'], { kind: 'text' })).toEqual(['9007199254740993'])
     expect(parseShape('list', '=9007199254740993', { kind: 'number' })).toBe('=9007199254740993')
   })
+})
+
+
+it.each(['9007199254740993', '-9007199254740993', '9.007199254740993e15'])(
+  'keeps scalar editor input %s intact before it reaches the column parser', text => {
+    expect(coerceTyped(text, 'number')).toBe(text)
+    expect(commitValue(text, '7', 'number')).toBe(text)
+    expect(JSON.parse(JSON.stringify({ value: commitValue(text, '7', 'number') }))).toEqual({ value: text })
+  })
+
+
+it.each([Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER, 0, -1.25])('keeps supported scalar editor number %s typed', value => {
+  expect(coerceTyped(String(value), 'number')).toBe(value)
+  expect(commitValue(String(value), '7', 'number')).toBe(value)
 })

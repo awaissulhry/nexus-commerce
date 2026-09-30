@@ -214,6 +214,8 @@ export function coerceTyped(text: string, kind: CommitKind): string | number {
   const t = text.trim()
   if (t === '') return ''
   const n = Number(t)
+  // Preserve unsupported whole-number digits for the storage refusal and reopening the draft.
+  if (Number.isInteger(n) && !Number.isSafeInteger(n)) return text
   return Number.isFinite(n) ? n : text
 }
 

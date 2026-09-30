@@ -3,7 +3,7 @@ import { coerceForShape, type ShapeWriteFacts } from './sheet-values.js'
 
 const scalar: ShapeWriteFacts = { kind: 'number', label: 'Partner ID' }
 const list: ShapeWriteFacts = { ...scalar, shape: 'list', cardinality: { min: 0, max: null } }
-const reason = 'Partner ID is outside the safe whole-number range (-9007199254740991 to 9007199254740991). It has not been rounded or saved.'
+const reason = 'Partner ID is outside the safe whole-number range (-9007199254740991 to 9007199254740991).'
 
 describe('unsafe integer storage boundary', () => {
   it.each(['9007199254740993', '-9007199254740993', '9007199254740992', '-9007199254740992', '9.007199254740993e15'])(
