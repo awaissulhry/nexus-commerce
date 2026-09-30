@@ -4,10 +4,16 @@ import { CHANNEL_FIELD_MAP, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '
 import { readListValue } from './sheet-values.js'
 import { storedChannelState } from './channel-value-mutation.js'
 import type { SheetColumn } from './sheet-columns.service.js'
-import { isOffListError } from './mapping/validate-channel-value.js'
+import { cellFindings, editVerdict } from './value-verdict.js'
 
 type Change = { id: string; field: string; value: unknown; reset?: boolean; slot?: number; target?: string }
-/** Validate the same serialized candidate the resolver presents, before the ordinary writer commits. */
+/**
+ * Validate the same serialized candidate the resolver presents, before the ordinary writer commits.
+ *
+ * P1 (`value-verdict.ts`) — the verdict, per CELL: a finding the field's type cannot hold refuses that change alone
+ * (`errors`); every other finding (off-list, over a limit, required, the channel schema) is stored and comes back as a
+ * warning with its exact reason. One bad cell never refuses another cell of the same product.
+ */
 export async function informationChangeErrors(input: {
   channel: string; marketplace: string; accountId?: string | null; aliasKey?: string; locale?: string
   changes: Change[]; listings: Array<Record<string, any>>; columns: Map<string, Map<string, SheetColumn>>
@@ -40,24 +46,33 @@ export async function informationChangeErrors(input: {
   }
   const after = await resolveBatch({ ...coordinate, listingChangesByProduct: patches })
   const errors: Array<{ id: string; field: string; error: string }> = []
+  const warnings: Array<{ id: string; field: string; warning: string }> = []
   for (const product of after.products) {
     const changes = input.changes.filter(c => c.id === product.productId)
     // Category changes preserve old values; the newly applicable errors appear on reload.
     if (changes.every(c => /^(attr_)?(taxonomy_id|categoryId|productType)$/.test(c.field))) continue
     const previous = before.products.find(p => p.productId === product.productId)
     for (const cell of Object.values(product.cells)) {
-      if (cell.value === null || cell.value === undefined || cell.value === '' || Array.isArray(cell.value) && cell.value.length === 0) continue
-      for (const error of cell.errors) {
-        const changed = editedKeys.get(product.productId)?.has(cell.fieldKey)
-        if (!changed && previous?.cells[cell.fieldKey]?.errors.includes(error)) continue
+      const changed = editedKeys.get(product.productId)?.has(cell.fieldKey)
+      // An empty cell this save did not write is not this save's business; one it cleared answers its warning
+      // (a field the channel requires — stored empty, flagged, and blocked at publish).
+      if (!changed && (cell.value === null || cell.value === undefined || cell.value === '' || Array.isArray(cell.value) && cell.value.length === 0)) continue
+      const field = (changed ? changes.find(c => c.id === product.productId && c.field.replace(/^attr_/, '').replace(/^(amazon|ebay)_/, '').replace(/^name$/, 'title') === cell.fieldKey)?.field : undefined)
+        ?? changes.find(c => c.id === product.productId)?.field ?? changes[0].field
+      // One sentence per rule and cell: the resolver and the schema can both state one over-length value.
+      const said = new Set<string>()
+      for (const found of cellFindings(cell)) {
+        if (said.has(found.rule)) continue
+        said.add(found.rule)
+        if (!changed && previous?.cells[cell.fieldKey]?.errors.includes(found.message)) continue
         // Information saves incomplete language drafts; readiness still reports untranslated sources.
-        if (/fallback|Translation into|content .*missing/i.test(error)) continue
-        // P6 (docs/attributes/PLAN.md §4.4) — a value off the channel's closed list is saved and flagged, never refused.
-        if (isOffListError(error)) continue
-        errors.push({ id: product.productId, field: changes.find(c => editedKeys.get(product.productId)?.has(cell.fieldKey) && c.field.replace(/^attr_/, '') === cell.fieldKey)?.field ?? changes[0].field,
-          error: `${cell.label}: ${error}` })
+        if (/fallback|Translation into|content .*missing/i.test(found.message)) continue
+        // Only a cell this save wrote can be refused; a new problem on a cell derived from it is a warning.
+        if (changed && editVerdict(found) === 'refuse') errors.push({ id: product.productId, field, error: `${cell.label}: ${found.message}` })
+        else warnings.push({ id: product.productId, field, warning: `${cell.label}: ${found.message}` })
       }
     }
   }
-  return [...new Map(errors.map(error => [JSON.stringify(error), error])).values()]
+  const unique = <T>(rows: T[]) => [...new Map(rows.map(row => [JSON.stringify(row), row])).values()]
+  return { errors: unique(errors), warnings: unique(warnings) }
 }

@@ -10,6 +10,7 @@ import { marketLanguages } from './market-languages.js'
 import { publishContentIssues, resolvePublishContent, requireReviewedContent } from './publish-review-gate.js'
 import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
+import { cellFindings, publishVerdict } from './value-verdict.js'
 
 // JSONB can return object keys in a different order from the preview request.
 // Preserve semantic array order and JSON/toJSON values while hashing objects canonically.
@@ -70,7 +71,9 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
       if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
-      for (const message of cell.errors) issues.push({ productId: row.productId, sku: row.sku, field, severity: 'error', message: `${cell.label ?? field}: ${message}` })
+      // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
+      for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
+        severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
     }
     if (result.missingProductIds.length) error('Some products could not be read. Refresh the product before publishing.')
     resolved.push(result)

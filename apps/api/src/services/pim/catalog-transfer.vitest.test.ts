@@ -213,7 +213,10 @@ describe('catalog preview', () => {
     expect((await buildTransferPlan([channelRow()], 'update', ctx, contracts)).issues[0].message).toContain('Multiple listings')
   })
   it('uses current channel constraints and preserves list shapes', async () => {
-    expect((await buildTransferPlan([channelRow({ value: 'A title that is too long' })], 'update', context(), contracts)).issues[0].message).toContain('exceeds')
+    // P1 (`value-verdict.ts`) — over the channel's limit is imported and named; publish blocks it.
+    const long = await buildTransferPlan([channelRow({ value: 'A title that is too long' })], 'update', context(), contracts)
+    expect(long.issues).toEqual([])
+    expect(long.warnings.join(' ')).toContain('exceeds')
     const result = await buildTransferPlan([channelRow({ field: 'material', value: ['A | B', 'Cotton'] })], 'update', context(), contracts)
     expect(result.issues).toEqual([])
     expect(result.targets[0].patch.overrideData).toEqual({ material: ['A | B', 'Cotton'] })
@@ -261,16 +264,18 @@ describe('Shopify and Etsy product information transfer', () => {
     expect(reset.issues).toEqual([])
     expect(reset.targets[0].contentWrites).toEqual([expect.objectContaining({ values: {}, reset: ['title'] })])
   })
-  it('preserves numeric Etsy taxonomy IDs and refuses invalid category and tag values', async () => {
+  it('preserves numeric Etsy taxonomy IDs, refuses an invalid category, and imports a tag off its format with a warning (P1)', async () => {
     const r = channelRow({ entity: 'Listings', channel: 'ETSY', marketplace: 'GLOBAL', field: 'taxonomy_id', value: 123 })
     const c = { ...contracts, channel: async () => ({ fields: await storeFields('ETSY') }) }
     const same = await buildTransferPlan([r], 'update', storeContext(r, { taxonomy_id: 123 }), c)
     expect(same.issues).toEqual([])
     expect(same.targets[0].cells[0]).toMatchObject({ verdict: 'unchanged', after: 123 })
+    // The category is an identity (it picks the field set), like a reference: an invalid one is still refused.
     const bad = await buildTransferPlan([{ ...r, value: 1.5 }], 'update', storeContext(r), c)
     expect(bad.issues[0].message).toContain('multiple of 1')
     const tags = await buildTransferPlan([{ ...r, entity: 'Overrides', field: 'tags', value: ['invalid & tag'] }], 'update', storeContext(r), c)
-    expect(tags.issues[0].message).toContain('configured format')
+    expect(tags.issues).toEqual([])
+    expect(tags.warnings.join(' ')).toContain('configured format')
     const clear = await buildTransferPlan([{ ...r, action: 'CLEAR', value: undefined }], 'update', storeContext(r, { taxonomy_id: 123 }), c)
     expect(clear.issues).toEqual([])
     expect(clear.targets[0].patch).toMatchObject({ platformAttributes: { taxonomy_id: null } })

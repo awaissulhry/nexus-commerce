@@ -22,7 +22,7 @@ import { getFieldDefinition } from '../pim/field-registry.service.js'
 import { readStoredChannelValue } from '../pim/channel-inheritance.js'
 import { applyPlatformMutations, channelValueMutation, type ChannelValueMutation } from '../pim/channel-value-mutation.js'
 import { CHANNEL_FIELD_MAP, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '../pim/channel-field-map.js'
-import { coerceForShape, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
+import { checkForStorage, coerceForShape, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
 import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from '../pim/master-field-gate.js'
 import { validationMarketplace } from '../pim/validation-marketplace.js'
 import { auditLogService } from '../audit-log.service.js'
@@ -180,6 +180,13 @@ export interface ProductBulkChangeError {
   error: string
 }
 
+/** P1 (`pim/value-verdict.ts`) — a value that was STORED with a problem the channel or Nexus flags, and its reason. */
+export interface ProductBulkChangeWarning {
+  id: string
+  field: string
+  warning: string
+}
+
 export interface ProductBulkContext {
   ifMatch?: string | string[]
   formulaWriteToken?: string | string[]
@@ -251,13 +258,13 @@ async function channelRowContract(
 }
 
 /**
- * R-58 (A-47) — a MASTER bullet may not be longer than the TIGHTEST bullet cap of the channels the product (or a child that
+ * R-58 (A-47) — a MASTER bullet longer than the TIGHTEST bullet cap of the channels the product (or a child that
  * inherits it) is listed on. The caps are read from each listed coordinate's own column contract (`channelRowContract`, the
  * same facts the channel sheet and its slot writes use) — never a number kept here. A product listed nowhere has no cap.
- * A coordinate whose facts cannot be read refuses the bullet by name (fail closed): "tightest" is unknown without it.
- * Returns one refusal per over-cap bullet change, naming the bullet's own number.
+ * P1 — the bullet is stored either way: one warning per over-cap bullet change, naming the bullet's own number and the
+ * coordinate whose cap it passes (or the coordinate whose facts could not be read). That channel's publish blocks it.
  */
-async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBulkChangeError[]> {
+async function masterBulletCapWarnings(edits: ContentEdit[]): Promise<ProductBulkChangeWarning[]> {
   const bulletEdits = edits.filter(edit => contentField(edit.column.slot?.of ?? edit.column.key) === 'bulletPoints')
   if (!bulletEdits.length) return []
   const editIds = [...new Set(bulletEdits.map(edit => edit.change.id))]
@@ -293,7 +300,7 @@ async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBul
       for (const id of ids) if (!unreadable.has(id)) unreadable.set(id, where)
     }
   }
-  const refusals: ProductBulkChangeError[] = []
+  const refusals: ProductBulkChangeWarning[] = []
   for (const { change, column } of bulletEdits) {
     const family = familyOf.get(change.id) ?? [change.id]
     const blind = family.map(id => unreadable.get(id)).find(Boolean)
@@ -306,14 +313,14 @@ async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBul
     }
     if (!items.some(item => item.text.length > 0)) continue
     if (blind) {
-      refusals.push({ id: change.id, field: change.field, error: `Could not read the bullet limit for ${blind}. Reload before saving bullets.` })
+      refusals.push({ id: change.id, field: change.field, warning: `Could not read the bullet limit for ${blind}; the bullets are saved and checked again at publish.` })
       continue
     }
     const all = family.flatMap(id => capsOf.get(id) ?? [])
     if (!all.length) continue // listed nowhere that declares bullets: no cap
     const tightest = all.reduce((a, b) => (b.cap < a.cap ? b : a))
     const over = items.find(item => item.text.length > tightest.cap)
-    if (over) refusals.push({ id: change.id, field: change.field, error: `Bullet ${over.n} takes at most ${tightest.cap} characters — the ${tightest.where} cap (it has ${over.text.length})` })
+    if (over) refusals.push({ id: change.id, field: change.field, warning: `Bullet ${over.n} takes at most ${tightest.cap} characters — the ${tightest.where} cap (it has ${over.text.length})` })
   }
   return refusals
 }
@@ -606,6 +613,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
 
   const validated: Validated[] = []
   const errors: ProductBulkChangeError[] = []
+  const warnings: ProductBulkChangeWarning[] = []
+  const warnFrom = (id: string, field: string, found: Array<{ message: string }>) => { for (const f of found) warnings.push({ id, field, warning: f.message }) }
 
   // ── #489 — the server enforces the caps the SHEET shows ──────────────
   // Measured 2026-09-02: this path enforced closed lists and NO length cap at
@@ -785,7 +794,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
   }
   if (contentEdits.length && !primaryContext) {
-    for (const refusal of await masterBulletCapRefusals(contentEdits)) errors.push(refusal)
+    // P1 — a master bullet over a listed channel's cap is stored and flagged; that channel's publish blocks it.
+    for (const warning of await masterBulletCapWarnings(contentEdits)) warnings.push(warning)
   }
   if (errors.length && !context.contentPerRow) return { success: false, updated: 0, errors }
   // R-60 — per row (the sheet's opt-in only): a refused content row leaves BOTH paths below; the other rows go on.
@@ -807,13 +817,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (contentToWrite.length) {
     const addressed = new Set(contentEdits.map(edit => edit.change))
     const remaining = changes.filter(change => !addressed.has(change) && !refusedRows?.has(change))
-    return applyContentBulk(input, context, contentToWrite, () => otherRows(remaining), refusedRows ? errors : [])
+    return applyContentBulk(input, context, contentToWrite, () => otherRows(remaining), refusedRows ? errors : [], warnings)
   }
   if (refusedRows) {
     const addressed = new Set(contentEdits.map(edit => edit.change))
     const rest = await otherRows(changes.filter(change => !addressed.has(change) && !refusedRows.has(change)))
     const all = [...errors, ...((rest as { errors?: ProductBulkChangeError[] }).errors ?? [])]
-    return { ...rest, success: (rest.updated ?? 0) > 0, updated: rest.updated ?? 0, errors: all }
+    const allWarnings = [...warnings, ...((rest as { warnings?: ProductBulkChangeWarning[] }).warnings ?? [])]
+    return { ...rest, success: (rest.updated ?? 0) > 0, updated: rest.updated ?? 0, errors: all, ...(allWarnings.length ? { warnings: allWarnings } : {}) }
   }
   /** `n > cap` is over; a value exactly AT the cap is accepted. */
   const capViolation = (field: string, value: unknown, id?: string): string | null => {
@@ -989,11 +1000,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
       // #489 — the cap of the SLOT column the sheet shows (`bulletPoints_3` → 700), not of the list.
       const slotColumnKey = `${c.field.replace(/^attr_/, '').replace(/^(amazon|ebay)_/, '')}_${slotOf.index}`
+      // P1 — over the cap is stored and flagged; the channel's own limit blocks only at publish.
       const slotCapErr = capViolation(slotColumnKey, slotValue, c.target === 'channel' ? c.id : undefined)
-      if (slotCapErr) {
-        errors.push({ id: c.id, field: raw.field, error: slotCapErr })
-        continue
-      }
+      if (slotCapErr) warnings.push({ id: c.id, field: raw.field, warning: slotCapErr })
       validated.push({ id: c.id, field: c.field, value: slotValue, cascade: !!c.cascade, target: c.target, slot: slotOf.index })
       continue
     }
@@ -1030,21 +1039,22 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       const facts = rowColumn ? factsOf(rowColumn) : columnFactsByKey.get(c.field.replace(/^attr_/, ''))
       // A display name can exceed the ID's cap. Resolve it before validating the stored form.
       const reference = isReferenceField(c.field.slice(5))
-      const shaped = coerceForShape(reference ? { key: c.field, shape: 'scalar', kind: 'text' } : facts, value)
+      // P1 (`pim/value-verdict.ts`) — only what the field's type cannot hold is refused; every other rule (the list, a
+      // length, a count, a format) stores the value and answers a warning with the same sentence.
+      const shaped = checkForStorage(reference ? { key: c.field, shape: 'scalar', kind: 'text' } : facts, value)
       if (shaped.ok === false) {
         // (`strictNullChecks` is off here, so the discriminated union does not narrow by itself.)
         errors.push({ id: c.id, field: c.field, error: (shaped as { error: string }).error })
         continue
       }
       value = (shaped as { value: unknown }).value
-      // #489 — refuse an over-cap value with the SAME sentence the sheet shows; per item for a list.
-      const capErr = reference ? null : Array.isArray(value)
+      const shapeFindings = (shaped as { findings: Array<{ rule: string; message: string }> }).findings
+      warnFrom(c.id, c.field, shapeFindings)
+      // #489 — an over-cap value carries the SAME sentence the sheet shows; per item for a list (once per cell).
+      const capErr = reference || shapeFindings.some(f => f.rule === 'length') ? null : Array.isArray(value)
         ? value.map((item, i) => { const e = capViolation(c.field, item, c.target === 'channel' ? c.id : undefined); return e ? `value ${i + 1}: ${e}` : null }).find((e) => e) ?? null
         : capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
-      if (capErr) {
-        errors.push({ id: c.id, field: c.field, error: capErr })
-        continue
-      }
+      if (capErr) warnings.push({ id: c.id, field: c.field, warning: capErr })
       validated.push({
         id: c.id,
         field: c.field,
@@ -1089,36 +1099,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         const trimmed = value.trim()
         value = trimmed === '' ? null : trimmed
       }
-      // Length validation (lightweight — frontend already enforces)
-      if (
-        typeof value === 'string' &&
-        c.field === 'amazon_title' &&
-        value.length > 200
-      ) {
-        errors.push({
-          id: c.id,
-          field: c.field,
-          error: 'Amazon title max 200 characters',
-        })
-        continue
-      }
-      if (
-        typeof value === 'string' &&
-        c.field === 'ebay_title' &&
-        value.length > 80
-      ) {
-        errors.push({
-          id: c.id,
-          field: c.field,
-          error: 'eBay title max 80 characters',
-        })
-        continue
-      }
-      // #489 — refuse an over-cap value with the SAME sentence the sheet shows.
-      const capErr = capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
-      if (capErr) {
-        errors.push({ id: c.id, field: c.field, error: capErr })
-        continue
+      // P1 — a title over the channel's limit is stored and flagged; publish blocks it with the channel's rule.
+      if (typeof value === 'string' && c.field === 'amazon_title' && value.length > 200) {
+        warnings.push({ id: c.id, field: c.field, warning: 'Amazon title max 200 characters' })
+      } else if (typeof value === 'string' && c.field === 'ebay_title' && value.length > 80) {
+        warnings.push({ id: c.id, field: c.field, warning: 'eBay title max 80 characters' })
+      } else {
+        // #489 — the SAME sentence the sheet shows.
+        const capErr = capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
+        if (capErr) warnings.push({ id: c.id, field: c.field, warning: capErr })
       }
       validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade, target: c.target })
       continue
@@ -1384,12 +1373,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
-    // #489 — refuse an over-cap value with the SAME sentence the sheet shows.
+    // #489 — the SAME sentence the sheet shows; P1 — stored and flagged, not refused.
     const capErr = capViolation(c.field, value, c.target === 'channel' ? c.id : undefined)
-    if (capErr) {
-      errors.push({ id: c.id, field: c.field, error: capErr })
-      continue
-    }
+    if (capErr) warnings.push({ id: c.id, field: c.field, warning: capErr })
     validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade, target: c.target })
   }
 
@@ -1720,12 +1706,17 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         const listings = await prisma.channelListing.findMany({ where: { productId: { in: [...new Set(candidates.map(c => c.id))] },
           channel: primaryContext.channel, marketplace: primaryContext.marketplace, channelConnectionId: connFor.get(primaryContext.channel) ?? null, aliasKey: primaryContext.aliasKey ?? '' } })
         const issues = await informationChangeErrors({ ...primaryContext, accountId: connFor.get(primaryContext.channel), changes: candidates, listings, columns: rowContract })
-        errors.push(...issues)
-        const refused = new Set(issues.map(issue => issue.id))
-        for (let i = validated.length - 1; i >= 0; i--) if (isChannelChange(validated[i]) && refused.has(validated[i].id)) validated.splice(i, 1)
+        errors.push(...issues.errors)
+        // The channel's own verdict on a cell replaces the column contract's sentence for it (one reason, not two).
+        const judged = new Set(issues.warnings.map(issue => `${issue.id}\u0000${issue.field}`))
+        for (let i = warnings.length - 1; i >= 0; i--) if (judged.has(`${warnings[i].id}\u0000${warnings[i].field}`)) warnings.splice(i, 1)
+        warnings.push(...issues.warnings)
+        // P1 — only the refused CELL leaves the save; the product's other changes are stored.
+        const refused = new Set(issues.errors.map(issue => `${issue.id}\u0000${issue.field}`))
+        for (let i = validated.length - 1; i >= 0; i--) if (isChannelChange(validated[i]) && refused.has(`${validated[i].id}\u0000${validated[i].field}`)) validated.splice(i, 1)
       } catch (error) {
-        for (const candidate of candidates) errors.push({ id: candidate.id, field: candidate.field, error: `Information validation is unavailable: ${error instanceof Error ? error.message : String(error)}` })
-        for (let i = validated.length - 1; i >= 0; i--) if (candidates.includes(validated[i])) validated.splice(i, 1)
+        // The values were shape-checked above; the channel check runs again at publish. Stored, and said so.
+        for (const candidate of candidates) warnings.push({ id: candidate.id, field: candidate.field, warning: `The channel check is unavailable (${error instanceof Error ? error.message : String(error)}); the value is saved and checked again at publish.` })
       }
     }
   }
@@ -1738,6 +1729,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       dryRun: true,
       wouldUpdate: validated.length,
       errors,
+      ...(warnings.length ? { warnings } : {}),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
     }
   }
@@ -1890,6 +1882,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       success: true,
       updated: 0,
       unchanged: noOpKeys.size,
+      ...(warnings.length ? { warnings } : {}),
       ...(await createdListingsReadBack()),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
       cascadeCount: 0,
@@ -3076,6 +3069,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       cascadeCount: cascadingParents.length,
       affectedChildren: totalAffectedChildren,
       errors: errors.length ? errors : undefined,
+      // P1 — the stored values that carry a problem, each with its exact reason (`pim/value-verdict.ts`).
+      ...(warnings.length ? { warnings } : {}),
       elapsedMs,
       // W1.2 — when the caller participated in optimistic
       // concurrency, surface the freshly-incremented version so

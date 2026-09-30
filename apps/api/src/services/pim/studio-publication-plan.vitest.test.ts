@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn() }))
 vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: m.closed }))
 vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) } } }))
@@ -156,4 +156,35 @@ it('still refuses a paused still-draft that is deliberately held — only the pa
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft, presenceIntent: 'HELD' }, { id: 'listing-child', productId: 'child', ...stillDraft }])
   m.excluded.mockResolvedValue(new Set())
   expect((await readPublicationFacts('parent', scope)).issues).toContainEqual(expect.objectContaining({ severity: 'error', message: expect.stringContaining('deliberately held') }))
+})
+
+// P1 (`value-verdict.ts`) — the publish review blocks only what the channel itself would reject, with the channel's rule;
+// report 2 I-9, report 5 I-2, report 6 §2a: every cell error used to be a block.
+describe('the publish verdict per cell', () => {
+  const found = (rule: string, message: string) => ({ rule, message })
+  const cells = {
+    season: { label: 'Season', value: 'Tutte le stagioni', errors: ['Season contains an unaccepted value. Allowed values: Estate · Inverno · Tutte le stagione.'],
+      findings: [found('offList', 'Season contains an unaccepted value. Allowed values: Estate · Inverno · Tutte le stagione.')] },
+    title: { label: 'Title', value: 'x'.repeat(94), errors: ['Title exceeds 80 characters (94).'], findings: [found('length', 'Title exceeds 80 characters (94).')] },
+    brand: { label: 'Brand', value: null, errors: ["Field 'Brand' is required."], findings: [found('nexus', "Field 'Brand' is required.")] },
+    condition: { label: 'Condition', value: null, errors: ["Field 'Condition' is required."], findings: [found('required', "Field 'Condition' is required.")] },
+    legacy: { label: 'Legacy', value: 'x', errors: ['A sentence with no finding'] },
+  }
+  const severities = async (channel: string) => {
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells })), missingProductIds: [], catalogue: {} }))
+    m.languages.mockResolvedValue(['it'])
+    const facts = await readPublicationFacts('parent', { ...scope, channel })
+    return Object.fromEntries(facts.issues.filter(i => i.productId === 'parent').map(i => [i.field, i.severity]))
+  }
+  it('eBay: an off-list value and a Nexus-only requirement warn; over 80 characters, a channel requirement and an unexplained error block', async () => {
+    expect(await severities('EBAY')).toEqual({ season: 'warning', title: 'error', brand: 'warning', condition: 'error', legacy: 'error' })
+  })
+  it('Amazon: an off-list value blocks (a closed enum); the Nexus-only requirement still warns', async () => {
+    expect(await severities('AMAZON')).toMatchObject({ season: 'error', brand: 'warning' })
+  })
+  it('the message keeps the channel\'s words', async () => {
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: { title: cells.title } })), missingProductIds: [], catalogue: {} }))
+    const facts = await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })
+    expect(facts.issues).toContainEqual(expect.objectContaining({ field: 'title', severity: 'error', message: 'Title: Title exceeds 80 characters (94).' }))
+  })
 })
