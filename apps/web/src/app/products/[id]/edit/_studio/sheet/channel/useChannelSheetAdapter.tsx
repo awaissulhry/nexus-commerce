@@ -131,7 +131,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const refreshReadinessSoonRef = useRef(() => { });
     refreshReadinessSoonRef.current = () => {
         if (readinessTimer.current) clearTimeout(readinessTimer.current);
-        readinessTimer.current = setTimeout(() => { readinessTimer.current = null; refreshReadiness(); }, 800);
+        // P2 (I4-9) — a save moved this coordinate only: read it, not the family's every coordinate.
+        readinessTimer.current = setTimeout(() => { readinessTimer.current = null; refreshReadiness({ coordinate: true }); }, 800);
     };
     /* When the rows (and so this scope's progress bars) were last read — "Refresh progress · read 12:04". */
     const [progressReadAt, setProgressReadAt] = useState<number | null>(null);

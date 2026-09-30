@@ -8,6 +8,7 @@
  */
 
 import { SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
+import { getBackendUrl } from '@/lib/backend-url'
 import type { ReadinessMatrixEntry, ScopeReadiness } from './types'
 
 /** The four states the scope vocabulary allows. Anything else is a contract change, not a value. */
@@ -114,4 +115,36 @@ export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
     return [{ ...score, coordinateKey: raw.coordinateKey, channel: raw.channel, market: raw.market, accountId: raw.accountId, aliasId: raw.aliasId,
       language: raw.language, label: raw.label, missing, optionalMissing, byProduct, computedAt: typeof raw.computedAt === 'string' ? raw.computedAt : null }]
   })
+}
+
+/**
+ * P2 (2026-09-30, I4-9) — merge a readiness read of ONE coordinate (`?only=coordinate`, asked after a save) into the
+ * family-wide answer the scope menu shows. Only that channel's chip and that coordinate's matrix entries are taken from
+ * the new answer: whatever else it carries (a partial Shared chip, another channel, or — before the API honours
+ * `only` — the whole family again) leaves the rest of the menu exactly as it was read.
+ */
+export function mergeCoordinateReadiness<T extends { byScope: Readonly<Record<string, ScopeReadiness>>; matrix: ReadinessMatrixEntry[] }>(
+  previous: T, json: unknown, coordinate: { channel: string; market: string; accountId?: string | null },
+): T {
+  const scopes = parseReadinessResponse(json)
+  const mine = (entry: ReadinessMatrixEntry) => entry.channel === coordinate.channel && entry.market === coordinate.market &&
+    (coordinate.accountId == null || entry.accountId === coordinate.accountId)
+  const fresh = parseReadinessMatrix(json).filter(mine)
+  const replaced = new Set(fresh.map((entry) => `${entry.coordinateKey}\u0000${entry.language}`))
+  return {
+    ...previous,
+    byScope: scopes[coordinate.channel] ? { ...previous.byScope, [coordinate.channel]: scopes[coordinate.channel] } : previous.byScope,
+    matrix: fresh.length ? [...previous.matrix.filter((entry) => !replaced.has(`${entry.coordinateKey}\u0000${entry.language}`)), ...fresh] : previous.matrix,
+  }
+}
+
+/** The readiness read. `only: 'coordinate'` asks for the one channel coordinate a save moved (P2, I4-9). */
+export function readinessUrl(productId: string, q: { market: string; locale?: string | null; channel?: string; listingId?: string; accountId?: string; only?: 'coordinate' }): string {
+  const params = new URLSearchParams({ market: q.market })
+  if (q.locale) params.set('locale', q.locale)
+  if (q.channel) params.set('channel', q.channel)
+  if (q.listingId) params.set('listingId', q.listingId)
+  if (q.accountId) params.set('accountId', q.accountId)
+  if (q.only) params.set('only', q.only)
+  return `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/readiness?${params}`
 }
