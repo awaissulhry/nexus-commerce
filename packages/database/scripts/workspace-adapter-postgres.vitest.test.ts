@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import pg from 'pg'
 import { PrismaClient } from '@prisma/client'
 import { WorkspacePg } from '../workspace-adapter.ts'
@@ -15,19 +18,28 @@ import type { WorkspaceContext } from '../workspace-context.ts'
 // The off switch (NEXUS_DB_SCOPED_BATCH=off) returns to one short transaction per statement: every SAFETY test below must
 // pass on both paths; the round-trip count and the open-transaction tripwire belong to the one-batch path only.
 const oneBatch = process.env.NEXUS_DB_SCOPED_BATCH !== 'off'
+// Optional: every pool below talks to the server through PgBouncer in transaction mode, the mode of Neon's pooler, with
+// ONE server connection per login, so all client connections share it. NEXUS_ADAPTER_TEST_PGBOUNCER=<image> turns it on
+// (checked with edoburu/pgbouncer, PgBouncer 1.26); NEXUS_ADAPTER_TEST_PGBOUNCER_PREPARED sets max_prepared_statements.
+const bouncerImage = process.env.NEXUS_ADAPTER_TEST_PGBOUNCER
+const bouncerPrepared = Number(process.env.NEXUS_ADAPTER_TEST_PGBOUNCER_PREPARED ?? 0)
 
-describe('workspace adapter on real PostgreSQL', () => {
+describe(`workspace adapter on real PostgreSQL${bouncerImage ? ` behind PgBouncer (transaction mode, max_prepared_statements ${bouncerPrepared})` : ''}`, () => {
   const container = `nexus-workspace-adapter-${process.pid}-${randomBytes(4).toString('hex')}`
   const login = `adapter_login_${randomBytes(4).toString('hex')}`
   let started = false
+  let bouncerStarted = false
+  let network = false
+  let bouncerDir = ''
   let port = 0
+  let poolPort = 0
   let admin: pg.Client | undefined
   const pools: pg.Pool[] = []
   const clients: PrismaClient[] = []
 
   const docker = (...args: string[]) => execFileSync('docker', args, { encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   const scope = (workspaceId: string, actorUserId: string | null = null): WorkspaceContext => ({ workspaceId, actorUserId, membershipId: null, roleKeys: [] })
-  const pool = (user = login, max = 1) => { const p = new pg.Pool({ host: '127.0.0.1', port, user, database: 'postgres', max, connectionTimeoutMillis: 5_000 }); pools.push(p); return p }
+  const pool = (user = login, max = 1) => { const p = new pg.Pool({ host: '127.0.0.1', port: poolPort, user, database: 'postgres', max, connectionTimeoutMillis: 5_000 }); pools.push(p); return p }
   const prisma = (p: pg.Pool, s?: WorkspaceContext) => { const c = new PrismaClient({ adapter: new WorkspacePg(p, s), log: [] }); clients.push(c); return c }
   type Seen = { login: string; role: string; workspace: string | null; actor: string | null }
   const WHO = `SELECT session_user::text AS login, current_user::text AS role,
@@ -48,10 +60,12 @@ describe('workspace adapter on real PostgreSQL', () => {
 
   beforeAll(async () => {
     docker('image', 'inspect', 'postgres:17-alpine')
-    docker('run', '-d', '--rm', '--name', container, '-p', '127.0.0.1::5432',
+    if (bouncerImage) { docker('image', 'inspect', bouncerImage); docker('network', 'create', container); network = true }
+    docker('run', '-d', '--rm', '--name', container, '-p', '127.0.0.1::5432', ...(bouncerImage ? ['--network', container] : []),
       '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', '--tmpfs', '/var/lib/postgresql/data', 'postgres:17-alpine')
     started = true
     port = Number(docker('port', container, '5432/tcp').split('\n')[0].split(':').pop())
+    poolPort = port
     for (let attempt = 0; attempt < 100; attempt++) {
       const candidate = new pg.Client({ host: '127.0.0.1', port, user: 'postgres', database: 'postgres', connectionTimeoutMillis: 500 })
       try { await candidate.connect(); admin = candidate; break }
@@ -79,6 +93,29 @@ describe('workspace adapter on real PostgreSQL', () => {
         WITH CHECK ("workspaceId" = NULLIF(current_setting('nexus.workspace_id', true), ''));
       CREATE POLICY outsider_everything ON public."AdapterProbe" TO adapter_outsider USING (true) WITH CHECK (true);
     `)
+    if (bouncerImage) {
+      bouncerDir = mkdtempSync(join(tmpdir(), 'nexus-adapter-bouncer-'))
+      writeFileSync(join(bouncerDir, 'userlist.txt'), [login, 'adapter_outsider', 'postgres'].map(user => `"${user}" ""\n`).join(''))
+      writeFileSync(join(bouncerDir, 'pgbouncer.ini'), [
+        '[databases]', `* = host=${container} port=5432`,
+        '[pgbouncer]', 'listen_addr = 0.0.0.0', 'listen_port = 6432', 'auth_type = trust', 'auth_file = /cfg/userlist.txt',
+        'pool_mode = transaction', 'default_pool_size = 1', 'max_client_conn = 200', `max_prepared_statements = ${bouncerPrepared}`,
+        'ignore_startup_parameters = extra_float_digits,options', '',
+      ].join('\n'))
+      docker('run', '-d', '--rm', '--name', `${container}-bouncer`, '--network', container, '-p', '127.0.0.1::6432',
+        '-v', `${bouncerDir}:/cfg:ro`, '--entrypoint', '/usr/bin/pgbouncer', bouncerImage, '/cfg/pgbouncer.ini')
+      bouncerStarted = true
+      poolPort = Number(docker('port', `${container}-bouncer`, '6432/tcp').split('\n')[0].split(':').pop())
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const candidate = new pg.Client({ host: '127.0.0.1', port: poolPort, user: login, database: 'postgres', connectionTimeoutMillis: 500 })
+        try { await candidate.connect(); await candidate.query('SELECT 1'); await candidate.end(); break }
+        catch (error) {
+          await candidate.end().catch(() => {})
+          if (attempt === 99) throw error
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
+    }
   }, 60_000)
 
   afterAll(async () => {
@@ -86,7 +123,12 @@ describe('workspace adapter on real PostgreSQL', () => {
       await Promise.allSettled(clients.map(client => client.$disconnect()))
       await Promise.allSettled(pools.map(p => p.end()))
       await admin?.end()
-    } finally { if (started) docker('stop', container) }
+    } finally {
+      if (bouncerStarted) docker('stop', `${container}-bouncer`)
+      if (started) docker('stop', container)
+      if (network) docker('network', 'rm', container)
+      if (bouncerDir) rmSync(bouncerDir, { recursive: true, force: true })
+    }
   }, 40_000)
 
   it.skipIf(!oneBatch)('runs a statement outside a transaction as the runtime role with its business, in ONE round trip', async () => {
@@ -105,6 +147,17 @@ describe('workspace adapter on real PostgreSQL', () => {
     const plain = await shared.query<Seen>(WHO)
     expect(plain.rows).toEqual([{ login, role: login, workspace: null, actor: null }])
     expect((await shared.query<{ open: boolean }>('SELECT now() = statement_timestamp() AS open')).rows[0].open).toBe(true)
+  })
+
+  it.runIf(bouncerImage)('behind the pooler, two client connections share ONE server connection, and the second never sees the first one\'s business', async () => {
+    const first = pool()
+    const second = pool()
+    const pid = async (p: pg.Pool) => (await p.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0].pid
+    const scoped = prisma(first, scope('business_a', 'user_1'))
+    expect(await scoped.$queryRawUnsafe<Seen[]>(WHO)).toEqual([{ login, role: 'nexus_workspace_runtime', workspace: 'business_a', actor: 'user_1' }])
+    expect((await second.query<Seen>(WHO)).rows).toEqual([{ login, role: login, workspace: null, actor: null }])
+    // Two client connections, one server process: the pooler is in the path (direct connections would differ).
+    expect(await pid(second)).toBe(await pid(first))
   })
 
   it('applies row-level security to reads and writes, and commits a write before it returns', async () => {
