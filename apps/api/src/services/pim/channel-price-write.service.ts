@@ -35,7 +35,9 @@ import { CHANNEL_FIELD_MAP, channelOverrideKeys } from './channel-field-map.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
 import { storedCompareAt, withCompareAt } from './compare-at-price.js'
 
-const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
+// ETSY since 2026-09-30: `syncToEtsy` sends a PRICE_UPDATE (P4.6e). It was left off while Etsy was read-only (D6,
+// overridden 2026-09-21), so an Etsy price was saved here and never queued.
+const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 /** The same operator grace window the FOLLOW/PIN primitives use: 30 s to undo before the push leaves. */
 const PRICE_HOLD_MS = 30 * 1000
 

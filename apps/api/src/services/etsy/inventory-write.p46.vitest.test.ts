@@ -57,7 +57,7 @@ afterEach(() => { vi.clearAllMocks() })
 
 const write = (changes: Array<Record<string, unknown>>, readBack?: unknown) => {
   if (readBack !== undefined) h.readBack = readBack
-  return writeEtsyInventory({ accountId: 'etsy-1', listingId: 7, changes: changes as never, readBackDelayMs: 0 })
+  return writeEtsyInventory({ accountId: 'etsy-1', listingId: 7, changes: changes as never, readBackDelayMs: 0, priceCurrency: 'EUR' })
 }
 
 describe('P4.6c — the happy path', () => {

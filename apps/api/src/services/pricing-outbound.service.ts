@@ -90,18 +90,10 @@ export async function pushPriceUpdate(
   if (channel === 'AMAZON') {
     return await pushAmazonPrice(prisma, sku, marketplace, snapshot, startedAt, args)
   }
-  // P4.4d — eBay, Shopify and WooCommerce all reach their existing sender
-  // through the one queue. Etsy is read-only through Wave 4 (D6) and has no
-  // price sender at all, so it is refused rather than queued for nobody.
-  if (channel === 'ETSY') {
-    return {
-      ok: false, sku, channel, marketplace,
-      pushedPrice: Number(snapshot.computedPrice), currency: snapshot.currency,
-      error: 'Etsy is read-only in Nexus (D6). Nothing was queued.',
-      durationMs: Date.now() - startedAt,
-    }
-  }
-  if (channel === 'EBAY' || channel === 'SHOPIFY' || channel === 'WOOCOMMERCE') {
+  // P4.4d — eBay, Shopify, WooCommerce and Etsy reach their existing sender
+  // through the one queue. Etsy was refused here while it was read-only (D6);
+  // D6 was overridden 2026-09-21 and `syncToEtsy` sends a PRICE_UPDATE (P4.6e).
+  if (channel === 'EBAY' || channel === 'SHOPIFY' || channel === 'WOOCOMMERCE' || channel === 'ETSY') {
     return await queuePriceUpdate(prisma, sku, channel, marketplace, snapshot, startedAt, args)
   }
   return {
