@@ -2,7 +2,7 @@ import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { isLocalizableContent, contentField } from '../pim/content-resolver.js'
-import { applyContentBulk, type ContentEdit } from '../pim/content-bulk-write.js'
+import { applyContentBulk, type ContentEdit, type ContentOwnerVersion } from '../pim/content-bulk-write.js'
 import { variationAttributePatch } from '../pim/shared-variation-values.js'
 import { optionModeFrom } from '@nexus/shared/attributes'
 import type { SheetChannel } from '../pim/sheet-columns.service.js'
@@ -212,6 +212,8 @@ export interface ProductBulkContext {
    * all-or-nothing: they answer "failed" on any error and would otherwise hide a partial save.
    */
   contentPerRow?: boolean
+  /** Internal continuation after content checked this request's precondition; never supplied by HTTP. */
+  readContentOwner?: ContentOwnerVersion
 }
 
 export class ProductBulkError extends Error {
@@ -547,7 +549,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       received: String(rawBodyExpectedVersion).slice(0, 80),
     })
   }
-  const expectedVersion = headerVersion ?? bodyExpectedVersion
+  let expectedVersion = headerVersion ?? bodyExpectedVersion
   if (expectedVersion !== undefined) {
     const ids = new Set(changes.map((c) => c?.id).filter(Boolean))
     if (ids.size !== 1) {
@@ -850,11 +852,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // R-60 — per row (the sheet's opt-in only): a refused content row leaves BOTH paths below; the other rows go on.
   const refusedRows = errors.length ? new Set(changes.filter(change => errors.some(e => e.id === change.id && e.field === change.field))) : null
   const contentToWrite = refusedRows ? contentEdits.filter(edit => !refusedRows.has(edit.change)) : contentEdits
-  const otherRows = async (remaining: typeof changes) => {
+  const otherRows = async (remaining: typeof changes, readContentOwner?: ContentOwnerVersion) => {
     if (!remaining.length) return { updated: 0, errors: [] }
-    const product = expectedVersion !== undefined ? await prisma.product.findUnique({ where: { id: remaining[0].id }, select: { version: true } }) : null
     try {
-      return await applyProductBulkEdits({ ...input, changes: remaining, expectedVersion: product?.version }, { ...context, ifMatch: undefined })
+      return await applyProductBulkEdits({ ...input, changes: remaining, expectedVersion }, { ...context, ifMatch: undefined, readContentOwner })
     } catch (error) {
       // Per row, "every other row was refused" is a set of row errors, not a failure of the rows that were saved.
       if (context.contentPerRow && error instanceof ProductBulkError && error.statusCode === 400 && Array.isArray(error.details.errors)) {
@@ -866,7 +867,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (contentToWrite.length) {
     const addressed = new Set(contentEdits.map(edit => edit.change))
     const remaining = changes.filter(change => !addressed.has(change) && !refusedRows?.has(change))
-    return applyContentBulk(input, context, contentToWrite, () => otherRows(remaining), refusedRows ? errors : [], warnings)
+    return applyContentBulk({ ...input, expectedVersion }, context, contentToWrite, readContentOwner => otherRows(remaining, readContentOwner), refusedRows ? errors : [], warnings)
   }
   if (refusedRows) {
     const addressed = new Set(contentEdits.map(edit => edit.change))
@@ -1837,6 +1838,12 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       ...(warnings.length ? { warnings } : {}),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
     }
+  }
+
+  // Refused/no-op facts no longer choose the owner. Advance a token only if content already checked
+  // this same owner inside the transaction; otherwise preserve the caller's original precondition.
+  if (expectedVersion !== undefined && validated.length && context.readContentOwner) {
+    expectedVersion = await context.readContentOwner(validated[0].id, validated.every(isChannelChange) ? 'channelListing' : 'product') ?? expectedVersion
   }
 
   // A listing a door already moved in this request → the version it holds now. Every later guard on that listing

@@ -45,11 +45,11 @@ beforeAll(async () => {
 }, 60_000)
 afterAll(async () => { await app?.close(); await state.db?.close() })
 
-const patch = async (payload: ProductBulkInput) => {
+const patch = async (payload: ProductBulkInput, headers?: Record<string, string>) => {
   const query = process.env.MEASURE_CONTENT_REPLY ? vi.spyOn(pg.Client.prototype, 'query') : null
   try {
-    const result = await scoped(() => app.inject({ method: 'PATCH', url: '/api/products/bulk', payload }))
-    if (query) console.log('CONTENT_REPLY_STATEMENTS', JSON.stringify({ field: payload.changes[0].field, value: payload.changes[0].value,
+    const result = await scoped(() => app.inject({ method: 'PATCH', url: '/api/products/bulk', payload, headers }))
+    if (query) console.log('CONTENT_REPLY_STATEMENTS', JSON.stringify({ field: payload.changes[0].field, value: payload.changes[0].value, lastValue: payload.changes.at(-1)?.value,
       calls: query.mock.calls.length, statements: query.mock.calls.reduce((n, args) => n + (args[0]?.constructor?.name === 'ScopedQuery' ? 2 : 1), 0) }))
     return result
   } finally { query?.mockRestore() }
@@ -222,4 +222,136 @@ it('returns final family listing tokens when another content group advances the 
   expect(stored.productId).toBe(parent.id)
   expect((await productRow(parent.id)).description).toBe('PARENT TITLE')
   expect(receipt.version).toBe(stored.version)
+}, 60_000)
+
+
+it.each([
+  { tier: 'source', refusal: 'type' }, { tier: 'source', refusal: 'address' },
+  { tier: 'language', refusal: 'type' }, { tier: 'language', refusal: 'address' },
+] as const)('keeps the original product CAS after $tier content is refused for $refusal', async ({ tier, refusal }) => {
+  const product = await scoped(() => prisma.product.create({ data: { sku: `cas-refused-${++serial}`, name: 'source', brand: 'initial brand', basePrice: 10 } }))
+  const locale = tier === 'source' ? 'it' : 'de', marketplace = tier === 'source' ? 'IT' : 'DE'
+  const contentAddress = refusal === 'address' ? undefined : tier === 'source' ? { tier } : { tier, language: locale }
+  const marketplaceContexts = [{ marketplace, locale }]
+  const refused = { id: product.id, field: 'name', value: ['invalid list'], contentAddress }
+  const external = await patch({ changes: [{ id: product.id, field: 'brand', value: 'external brand' }], expectedVersion: product.version, marketplaceContexts })
+  expect(external.statusCode, external.body).toBe(200)
+  const before = await productRow(product.id)
+  const request = (expectedVersion?: number) => ({ changes: [refused, { id: product.id, field: 'brand', value: 'next brand' }], expectedVersion, marketplaceContexts })
+  const stale = await patch(request(product.version))
+  expect.soft(stale.statusCode, stale.body).toBe(409)
+  expect.soft((await productRow(product.id)).brand).toBe('external brand')
+  // If-Match is the same caller precondition; omitting it from the body must not turn it into a fresh token.
+  const staleHeader = await patch(request(), { 'if-match': String(product.version) })
+  expect.soft(staleHeader.statusCode, staleHeader.body).toBe(409)
+  expect.soft((await productRow(product.id)).brand).toBe('external brand')
+  const valid = await patch(request(before.version))
+  expect(valid.statusCode, valid.body).toBe(200)
+  expect(valid.json().errors).toEqual([expect.objectContaining({ field: 'name' })])
+  expect((await productRow(product.id)).brand).toBe('next brand')
+}, 60_000)
+
+it.each(['', 'synthetic-cas-alias'])('keeps listing CAS after refused pin content on listing %s', async alias => {
+  const product = await scoped(() => prisma.product.create({ data: { sku: `cas-pin-${++serial}`, name: 'source', basePrice: 10, version: 8 } }))
+  const aliasKey = alias ? `${alias}-${serial}` : ''
+  if (aliasKey) await scoped(() => prisma.productListingAlias.create({ data: { id: aliasKey, productId: product.id, channel: 'EBAY', marketplace: 'DE', channelConnectionId: account, label: 'Synthetic CAS alias' } }))
+  const listing = await scoped(() => prisma.channelListing.create({ data: { productId: product.id, channel: 'EBAY', marketplace: 'DE', channelMarket: 'EBAY_DE', region: 'EU', channelConnectionId: account, aliasKey, version: 7 } }))
+  const address: ContentAddress = { tier: 'pin', language: 'de', coordinate: { channel: 'EBAY', market: 'DE', accountId: account, ...(aliasKey ? { aliasId: aliasKey } : {}) } }
+  const marketplaceContexts = [{ channel: 'EBAY', marketplace: 'DE', accountId: account, aliasKey, locale: 'de' }]
+  const external = await patch({ changes: [{ id: product.id, field: 'ebay_quantity', target: 'channel', value: 1 }], expectedVersion: listing.version, marketplaceContexts })
+  expect(external.statusCode, external.body).toBe(200)
+  const before = await listingRow(listing.id)
+  const request = (expectedVersion: number) => ({ changes: [
+    { id: product.id, field: 'name', value: ['invalid list'], contentAddress: address, contentAcknowledged: true },
+    { id: product.id, field: 'ebay_quantity', target: 'channel' as const, value: 2 },
+  ], expectedVersion, marketplaceContexts })
+  expect((await patch(request(listing.version))).statusCode).toBe(409)
+  expect(await listingRow(listing.id)).toEqual(before)
+  const valid = await patch(request(before.version))
+  expect(valid.statusCode, valid.body).toBe(200)
+  expect(valid.json().errors).toEqual([expect.objectContaining({ field: 'name' })])
+  expect((await listingRow(listing.id)).quantity).toBe(2)
+  expect((await productRow(product.id)).version).toBe(product.version)
+}, 60_000)
+
+it.each([
+  { tier: 'source', invalidFact: false, draft: false }, { tier: 'language', invalidFact: false, draft: false },
+  { tier: 'pin', invalidFact: false, draft: false }, { tier: 'pin', invalidFact: true, draft: false },
+  { tier: 'pin', invalidFact: false, draft: true },
+] as const)('hands off the confirmed $tier owner after accepted content (invalid fact=$invalidFact, draft=$draft)', async ({ tier, invalidFact, draft }) => {
+  const product = await scoped(() => prisma.product.create({ data: { sku: `cas-accepted-${++serial}`, name: 'source', brand: 'old brand', basePrice: 10 } }))
+  const isPin = tier === 'pin', locale = tier === 'source' ? 'it' : 'de', market = tier === 'source' ? 'IT' : 'DE'
+  let listing = isPin && !draft ? await scoped(() => prisma.channelListing.create({ data: { productId: product.id, channel: 'EBAY', marketplace: market, channelMarket: `EBAY_${market}`, region: 'EU', channelConnectionId: account, version: 7 } })) : null
+  const address: ContentAddress = isPin ? { tier: 'pin', language: locale, coordinate: { channel: 'EBAY', market, accountId: account } }
+    : tier === 'language' ? { tier, language: locale } : { tier }
+  const marketplaceContexts = [{ marketplace: market, locale, ...(isPin ? { channel: 'EBAY', accountId: account } : {}) }]
+  const ownerVersion = isPin ? listing?.version ?? 0 : product.version
+  const payload: ProductBulkInput = { changes: [
+    { id: product.id, field: 'name', value: 'saved title', contentAddress: address, contentVersion: 0, contentAcknowledged: true },
+    isPin ? { id: product.id, field: 'ebay_quantity', target: 'channel', value: 4 } : { id: product.id, field: 'brand', value: 'saved brand' },
+    ...(invalidFact ? [{ id: product.id, field: 'not_a_field', value: 'invalid fact' }] : []),
+  ], expectedVersion: ownerVersion, marketplaceContexts }
+  const result = await patch(payload)
+  expect(result.statusCode, result.body).toBe(200)
+  expect(result.json().errors ?? []).toEqual(invalidFact ? [expect.objectContaining({ field: 'not_a_field' })] : [])
+  if (isPin && !listing) listing = await scoped(() => prisma.channelListing.findFirstOrThrow({ where: { productId: product.id, channelConnectionId: account, aliasKey: '' } }))
+  if (listing) {
+    const after = await listingRow(listing.id)
+    expect(after.translations[0].name).toBe('saved title')
+    expect(after.quantity).toBe(4)
+    expect(result.json().currentVersion).toBe(after.version)
+    expect((await productRow(product.id)).version).toBe(product.version)
+  } else {
+    const after = await productRow(product.id)
+    expect(tier === 'source' ? after.name : after.translations[0].name).toBe('saved title')
+    expect(after.brand).toBe('saved brand')
+    expect(result.json().currentVersion).toBe(after.version)
+  }
+  const before = listing ? await listingRow(listing.id) : await productRow(product.id)
+  const stale = { ...payload, changes: payload.changes.map(change => ({ ...change, contentVersion: before.translations[0]?.version, value: change.field === 'name' ? 'stale title' : isPin ? 5 : 'stale brand' })) }
+  expect((await patch(stale)).statusCode).toBe(409)
+  const header = await patch({ ...stale, expectedVersion: undefined }, { 'if-match': String(ownerVersion) })
+  expect(header.statusCode, header.body).toBe(409)
+  expect(listing ? await listingRow(listing.id) : await productRow(product.id)).toEqual(before)
+}, 60_000)
+
+it('checks the original product token even when shared content would be a no-op', async () => {
+  const product = await scoped(() => prisma.product.create({ data: { sku: `cas-noop-${++serial}`, name: 'source', brand: 'initial brand', basePrice: 10 } }))
+  const address: ContentAddress = { tier: 'language', language: 'de' }
+  await scoped(() => writeContent({ productId: product.id, address, values: { title: 'same German title' }, label: 'Title', state: 'reviewed' }))
+  const original = await productRow(product.id)
+  const marketplaceContexts = [{ marketplace: 'DE', locale: 'de' }]
+  expect((await patch({ changes: [{ id: product.id, field: 'brand', value: 'external brand' }], expectedVersion: original.version, marketplaceContexts })).statusCode).toBe(200)
+  const before = await productRow(product.id)
+  const request = (expectedVersion: number) => ({ changes: [
+    { id: product.id, field: 'name', value: 'same German title', contentAddress: address, contentVersion: before.translations[0].version },
+    { id: product.id, field: 'brand', value: 'next brand' },
+  ], expectedVersion, marketplaceContexts })
+  expect((await patch(request(original.version))).statusCode).toBe(409)
+  expect(await productRow(product.id)).toEqual(before)
+  const valid = await patch(request(before.version))
+  expect(valid.statusCode, valid.body).toBe(200)
+  expect(valid.json().errors ?? []).toEqual([])
+  const after = await productRow(product.id)
+  expect(after.translations[0].version).toBe(before.translations[0].version)
+  expect(after.version).toBe(before.version + 1) // Only the fact moved the product.
+  expect(after.brand).toBe('next brand')
+}, 60_000)
+
+
+it.each(['source', 'language', 'pin'] as const)('stores a valid fact beside refused %s content with the current token', async tier => {
+  const product = await scoped(() => prisma.product.create({ data: { sku: `cas-partial-${++serial}`, name: 'source', basePrice: 10 } }))
+  const pin = tier === 'pin', locale = tier === 'source' ? 'it' : 'de', market = tier === 'source' ? 'IT' : 'DE'
+  const listing = pin ? await scoped(() => prisma.channelListing.create({ data: { productId: product.id, channel: 'EBAY', marketplace: market, channelMarket: `EBAY_${market}`, region: 'EU', channelConnectionId: account } })) : null
+  const address: ContentAddress = pin ? { tier: 'pin', language: locale, coordinate: { channel: 'EBAY', market, accountId: account } }
+    : tier === 'language' ? { tier, language: locale } : { tier }
+  const result = await patch({ changes: [
+    { id: product.id, field: 'name', value: ['invalid list'], contentAddress: address, contentAcknowledged: true },
+    pin ? { id: product.id, field: 'ebay_quantity', target: 'channel', value: 6 } : { id: product.id, field: 'brand', value: 'partial saved brand' },
+  ], expectedVersion: listing?.version ?? product.version,
+    marketplaceContexts: [{ marketplace: market, locale, ...(pin ? { channel: 'EBAY', accountId: account } : {}) }] })
+  expect(result.statusCode, result.body).toBe(200)
+  expect(result.json().updated).toBe(1)
+  expect(result.json().errors).toEqual([expect.objectContaining({ field: 'name' })])
+  expect(listing ? (await listingRow(listing.id)).quantity : (await productRow(product.id)).brand).toBe(pin ? 6 : 'partial saved brand')
 }, 60_000)
