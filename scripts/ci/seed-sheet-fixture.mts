@@ -169,7 +169,7 @@ try {
     const source = `${prefix}taxonomy_${channel.toLowerCase()}`
     const snapshot = `${source}_snapshot`
     await client.query(`INSERT INTO "MarketplaceTaxonomy" (id, "workspaceId", channel, marketplace, "nextSyncAt", "updatedAt") VALUES ($1, $2, $3, $4, now() + interval '30 days', now())`, [source, workspace, channel, c.market])
-    await client.query(`INSERT INTO "MarketplaceTaxonomySnapshot" (id, "workspaceId", "sourceId", status, "nodeCount", "completedAt") VALUES ($1, $2, $3, 'active', $4, now())`, [snapshot, workspace, source, c.ids.length])
+    await client.query(`INSERT INTO "MarketplaceTaxonomySnapshot" (id, "workspaceId", "sourceId", status, "nodeCount", "completedAt") VALUES ($1, $2, $3, 'SUCCEEDED', $4, now())`, [snapshot, workspace, source, c.ids.length])
     for (const [i, id] of c.ids.entries()) {
       await client.query(`INSERT INTO "MarketplaceTaxonomyNode" (id, "workspaceId", "snapshotId", "externalId", name, path, assignable) VALUES ($1, $2, $3, $4, $5, $6, true)`,
         [`${source}_node_${i}`, workspace, snapshot, id, c.names[i], `E2E › ${c.names[i]}`])
