@@ -43,7 +43,7 @@
  *     switch, that it also narrows the columns (D1 = A, on by default).
  * `docs/product-sheet-toolbar/PLAN-2026-09-27.md`.
  */
-import { useRef, type ReactNode } from 'react'
+import { memo, useRef, type ReactNode } from 'react'
 import { AlertTriangle, ChevronDown, MoreHorizontal, Search, X } from 'lucide-react'
 
 import { Button, Input } from '@/design-system/primitives'
@@ -154,7 +154,13 @@ export interface SheetToolbarProps<TPage> {
   absent?: readonly AbsentControl[]
 }
 
-export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
+/**
+ * Audit B32 — memoised: the sheet hands it the SAME props object while nothing it shows changed (`ProductSheetSurface`,
+ * `stableProps.ts`), so a save's status change no longer re-renders its menus, search and views.
+ */
+export const SheetToolbar = memo(SheetToolbarBar) as typeof SheetToolbarBar
+
+function SheetToolbarBar<TPage>(p: SheetToolbarProps<TPage>) {
   const blocked = !!(p.loading || p.unavailable)
   const blockedReason = p.loading ? 'The sheet is still loading' : 'This sheet could not be read'
   const overflowReason = blocked ? blockedReason : p.pendingWrite ? 'Wait for the pending write to finish.' : null

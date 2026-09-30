@@ -592,12 +592,15 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         masterMarket: market,
     }) : [], [sheet, drawerScope, languageScope.options.locales, languageScope.primaryLanguage, market]);
     const staleTypes = sheet?.meta.schemaAge.filter((a) => Date.now() - new Date(a.fetchedAt).getTime() > 7 * 864e5) ?? [];
-    const emptyState = sheetEmptyState(rows.length, () => {
+    /* B32 — one object while the row count and Reload stay the same: a new one every render re-rendered the grid host. */
+    const clearNarrowing = useRef(() => { });
+    clearNarrowing.current = () => {
         setSearch('');
         chipBar.setActive(null);
         setShowRefusedOnly(false);
         getGridApi()?.setFilterModel(null);
-    }, onReload);
+    };
+    const emptyState = useMemo(() => sheetEmptyState(rows.length, () => clearNarrowing.current(), onReload), [rows.length, onReload]);
     return {
         scope: 'master',
         loading, switching, unavailable: !!error,
