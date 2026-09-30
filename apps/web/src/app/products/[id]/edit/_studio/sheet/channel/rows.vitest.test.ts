@@ -396,3 +396,18 @@ describe('the rows a listing review covers', () => {
     expect(reviewRowsOf(ROWS, 'a1', true)).toHaveLength(0)
   })
 })
+
+describe('row objects (P2, I4-4)', () => {
+  it('the same server row keeps its grid row object, and what was settled on it', () => {
+    const cache = new WeakMap<object, ReturnType<typeof withRowIdentity>[number]>()
+    const first = withRowIdentity(RAW, ALIASES, cache)
+    first[0].values = { ...first[0].values, settled: { value: 'kept' } as never }
+    // Names landing re-derive the page with the same rows: every row is the same object, with its settled value.
+    const again = withRowIdentity(RAW, ALIASES, cache)
+    expect(again.every((row, i) => row === first[i])).toBe(true)
+    expect((again[0].values as Record<string, { value: unknown }>).settled.value).toBe('kept')
+    // A read returns new server rows: new grid rows.
+    const read = withRowIdentity(RAW.map((r) => ({ ...r })), ALIASES, cache)
+    expect(read.some((row, i) => row === first[i])).toBe(false)
+  })
+})

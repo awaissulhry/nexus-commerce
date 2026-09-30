@@ -52,6 +52,11 @@ const prismaMock = {
   }),
   $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const sql = strings.join('?')
+    // The membership read is one statement (workspace.service.ts, P2); answer it from the membership rows below.
+    if (sql.includes('FROM "public"."WorkspaceMembership" m')) {
+      const row = await prismaMock.workspaceMembership.findUnique({ where: { workspaceId_userId: { workspaceId: values[0], userId: values[1] } } })
+      return row ? [row] : []
+    }
     if (sql.includes('FOR UPDATE')) return [...connections.values()].filter(row => row.id === values[0] && row.workspaceId === values[1]).map(row => ({ id: row.id }))
     if (sql.includes('"isActive"=true')) return [...connections.values()].filter(row => row.workspaceId === values[0] && row.channelType === 'EBAY'
       && row.externalAccountId === values[1] && row.isActive && row.id !== values[2]

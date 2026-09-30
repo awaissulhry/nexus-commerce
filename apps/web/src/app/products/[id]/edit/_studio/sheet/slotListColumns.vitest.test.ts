@@ -150,7 +150,9 @@ describe('the channel adapter wires the one cell (source read — the hook canno
     expect(src).toContain('onCellValueChanged({ data: e.data, colDef: { colId: slot.colId }')
   })
   it('the one cell is in the grid columns, says why when locked, and keeps bullets in the displayed-fields export', () => {
-    expect(src).toContain('withSlotListColumns(withProductMediaColumn(data?.columns ?? [])')
+    // P2 — the grid columns come from the read's columns, kept by content (`stableColumns`).
+    expect(src).toContain('withSlotListColumns(withProductMediaColumn(stableColumns)')
+    expect(src).toContain('const stableColumns = useMemo(() => data?.columns ?? [], [columnsKey])')
     expect(src).toContain('refusalReason.current = (key, row) => isSlotListKey(key) ? slotListRefusal(key, row,')
     expect(src).toContain('visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns)')
     expect(src).toContain('setPendingWrites(prior => queuePendingEdit(prior, next))')

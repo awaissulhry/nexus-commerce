@@ -23,10 +23,10 @@ vi.mock('../../db.js', () => ({
     agentRun: { findMany: vi.fn() },
     // The person who approved, looked up again at commit (login roles with business profiles off, the membership on).
     userProfile: { findUnique: vi.fn() },
-    workspaceMembership: { findUnique: vi.fn() },
+    $queryRaw: vi.fn(),
   },
 }))
-vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn() }))
+vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn(), EXPIRY_HOURS: 24 }))
 vi.mock('./control-audit.service.js', () => ({ recordControlChange: vi.fn() }))
 vi.mock('./exemplar.service.js', () => ({ mintExemplarFromDecision: vi.fn() }))
 vi.mock('../../utils/logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }))
@@ -69,11 +69,11 @@ beforeEach(() => {
   db.agentApproval.findMany.mockResolvedValue([] as never)
   // The person who approved (u1, "Awais") still owns the business: these tests are about the window, not the person.
   db.userProfile.findUnique.mockResolvedValue({ id: 'u1', status: 'active', permissionsVersion: 1, roleAssignments: [{ role: { key: 'OWNER' } }] } as never)
-  db.workspaceMembership.findUnique.mockResolvedValue({
+  db.$queryRaw.mockResolvedValue([{
     id: 'm1', status: 'active', version: 1, userId: 'u1', createdAt: new Date(), user: { status: 'active' },
     workspace: { id: 'ws_alpha_0001', name: 'Alpha', status: 'active', version: 1 },
     roles: [{ role: { id: 'r1', key: 'OWNER', name: 'Owner', permissions: [] } }],
-  } as never)
+  }] as never)
 })
 
 describe('AP.4 — approving parks instead of firing', () => {
@@ -276,6 +276,9 @@ describe('AP.5 — one expiry clock', () => {
     db.agentApproval.updateMany.mockResolvedValue({ count: 1 } as never)
     const r = await runApprovalMaintenance()
     expect(r.committed).toBe(2)
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+      expect(db.$queryRaw).toHaveBeenCalledWith(expect.anything(), 'ws_alpha_0001', 'u1')
+    } else expect(db.$queryRaw).not.toHaveBeenCalled()
   })
 
   it('one failing commit does not stop the rest', async () => {
@@ -292,6 +295,11 @@ describe('AP.5 — one expiry clock', () => {
     const r = await runApprovalMaintenance()
     expect(r.committed).toBe(1)
     expect(r.failed).toBe(1)
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'execution_failed' }))
+    expect(db.agentApproval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'a1', status: 'pending' },
+      data: expect.objectContaining({ decidedBy: null, decidedAt: null, expiresAt: expect.any(Date) }),
+    }))
   })
 })
 
