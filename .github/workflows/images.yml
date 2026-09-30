@@ -25,6 +25,8 @@ on:
       - 'apps/web/next.config.js'
       - 'apps/web/scripts/start.mjs'
       - 'package-lock.json'
+      # Both Dockerfiles run `turbo prune`, which reads turbo.json (2026-09-30).
+      - 'turbo.json'
       - 'apps/api/Dockerfile.dockerignore'
       - 'apps/web/Dockerfile.dockerignore'
       - 'scripts/ci/check-image-secrets.sh'

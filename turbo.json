@@ -37,6 +37,7 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/package.json",
         "$TURBO_ROOT$/docs/fixtures/**",
         "$TURBO_ROOT$/packages/database/**"
       ],

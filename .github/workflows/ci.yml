@@ -13,7 +13,7 @@
 #                suite passed in exactly one PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
 #
-# Nothing here is path-filtered except the typecheck of the packages (turbo --affected; the two apps are always
+# Nothing here is path-filtered except the typecheck of the other workspaces (turbo --affected; the two apps are always
 # type-checked) and the small-workspace tests.
 # Selecting "security" tests by file name misses real ones, so the API suite always runs whole.
 
