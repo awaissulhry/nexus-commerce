@@ -218,7 +218,7 @@ Runner: a **public** repo gets free GitHub-hosted `ubuntu-latest` with **4 vCPU 
 | Tier | Runs | Budget | Estimate |
 |---|---|---|---|
 | A pre-commit | lint-staged → the fast gates for the staged file types | < 10 s | 1–5 s |
-| B pre-push | typecheck of the affected workspaces | < 2 min | ~20–60 s (api 17 s and web ~45 s, in parallel) |
+| B pre-push | typecheck of the affected workspaces, then of both apps | < 2 min | ~20–90 s (api 17 s and web ~45 s, in parallel; 2026-09-30: api 25 s and web 63 s alone) |
 | C PR required | see 2.3 | < 10 min wall | measured 12.7 min (median of 15 runs, 2026-09-29); est. 8.25 min since the 2026-09-30 split (§2.3) |
 | D merge to main | verify, deploy, smoke production | — | deploy time + ~2 min |
 | E nightly + manual | everything slow | — | 30–60 min |
@@ -248,8 +248,16 @@ Runner: a **public** repo gets free GitHub-hosted `ubuntu-latest` with **4 vCPU 
 
 **New hook**
 - `.githooks/pre-push` runs `npx turbo run typecheck --affected --cache=local:rw`. The base is `git merge-base HEAD origin/main`.
+- Then it type-checks `@nexus/api` and `@nexus/web` on every push, as CI does (2026-09-30, see §2.3).
 - `turbo.json` gets a `typecheck` task that depends on `@nexus/shared#build` and `@nexus/events#build` only.
   - Not `@nexus/database#build`, because it rewrites tracked generated files in the shared checkout.
+  - `@nexus/api#typecheck` and `@nexus/web#typecheck` in `turbo.json` replace that task for the two apps (turbo does
+    not merge them with it): the same dependsOn and outputs, plus inputs that name the files each app compiles from
+    outside its folder (2026-09-30). The API: `apps/web/src` and `apps/web/package.json`; the web: `apps/api/src`,
+    `apps/api/package.json` and `docs/fixtures`; both: `packages/database`. Without them the cache key ignored those files, and a cached pass
+    replayed after they changed. In a git worktree, turbo uses the main checkout's `.turbo/cache`, so every session
+    shares that cache. They sit in the root `turbo.json`, not in `apps/*/turbo.json`: a file there is an app file, and
+    Deploy API would ship. A change to `typecheck` must be made in all three entries.
 - Pass `tsc --incremental false`. A shared `tsbuildinfo` has given false results before.
 - Web runs `next typegen` before `tsc`, so the route types exist.
 - Known limit: like today, this checks the working tree, including uncommitted files.
@@ -289,6 +297,12 @@ Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: the slowest `api` s
   - the expand/contract check (§4.2)
   - a rule that migration folders already on main stay byte-identical
 - `turbo run typecheck --affected`.
+- Then `turbo run typecheck --filter=@nexus/api --filter=@nexus/web` on every run (2026-09-30). A review found that
+  `--affected` picks a workspace only by the files changed inside its own folder or its declared dependencies, but each
+  app compiles files of the other: the API compiles `presence.ts`, `registry.ts` and `tone.ts` from `apps/web/src`, and
+  the web compiles `apps/api/src/lib/listing-coordinate.ts` and `docs/fixtures/vt1/fixtures.ts`. A change to only those
+  files type-checked neither the importing app nor, for `fixtures.ts`, any workspace at all. A task the first step
+  already ran replays from turbo's local cache.
 - The **whole** web vitest suite. It takes 6 s locally, and it holds the proxy, workspace-path and permission-gate tests.
 - `turbo run test --affected --filter=!@nexus/api --filter=!@nexus/web`: factory, shared, events.
 
