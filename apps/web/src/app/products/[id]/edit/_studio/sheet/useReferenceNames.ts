@@ -14,6 +14,10 @@ async function read(path: string, signal: AbortSignal) {
   return response.json()
 }
 
+const NO_LABELS: ReferenceLabels = {}
+/** How long names already in wait for a slower lookup before they are shown (B35). */
+export const NAMES_FLUSH_MS = 1000
+
 /** Slow taxonomy/account lookups enrich columns without replacing rows or holding up the sheet. */
 export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: string, market: string, accountId?: string): T | null {
   const connectionId = sheet?.scope.connectionId ?? accountId
@@ -42,9 +46,17 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
     if (!keys) return
     const abort = new AbortController()
     const present = new Set(keys.split(','))
-    const apply = (labels: ReferenceLabels) => {
-      if (!abort.signal.aborted) setResolved(previous => ({ coordinate, labels: mergeReferenceLabels(previous?.coordinate === coordinate ? previous.labels : {}, labels) }))
+    /* Audit B35 — ONE update for the lookups that land together: each used to set the names on its own, and each set
+       rebuilt every column definition (GALE eBay IT: category labels, breadcrumbs and policies — 3 full rebuilds in the
+       first seconds). A lookup still out after NAMES_FLUSH_MS does not hold back the names already in. */
+    let batch: ReferenceLabels = {}
+    const flush = () => {
+      if (abort.signal.aborted || !Object.keys(batch).length) return
+      const labels = batch
+      batch = {}
+      setResolved(previous => ({ coordinate, labels: mergeReferenceLabels(previous?.coordinate === coordinate ? previous.labels : {}, labels) }))
     }
+    const apply = (labels: ReferenceLabels) => { batch = mergeReferenceLabels(batch, labels) }
     const tasks: Promise<unknown>[] = []
     if (channel === 'ETSY' && productTypes) {
       const query = new URLSearchParams({ ids: productTypes, ...(connectionId ? { accountId: connectionId } : {}) })
@@ -110,14 +122,19 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
       apply(Object.fromEntries(marketKeys.map(key => [key, names])))
     }))
     // Each lookup settles independently. Unavailable names keep the original ID visible.
-    void Promise.allSettled(tasks)
-    return () => abort.abort()
+    const late = setTimeout(flush, NAMES_FLUSH_MS)
+    void Promise.allSettled(tasks).then(() => { clearTimeout(late); flush() })
+    return () => { clearTimeout(late); abort.abort() }
   }, [coordinate]) // every value the lookups read is in `coordinate`; the sheet's object identity is not
 
-  return useMemo(() => {
-    if (!sheet) return null
-    const current = pictures?.coordinate === coordinate ? pictures : null
-    const columns = nameReferenceColumns(sheet.columns, resolved?.coordinate === coordinate ? resolved.labels : {})
-    return { ...sheet, columns: current ? columns.map(column => column.shopifyField?.type.includes('_reference') ? { ...column, referenceImages: current.images, referenceSwatches: current.swatches } : column) : columns }
-  }, [sheet, resolved, pictures, coordinate]) as T | null
+  // B35 — the columns are named again only when the columns or the names change, not on every read of the rows.
+  const labels = resolved?.coordinate === coordinate ? resolved.labels : NO_LABELS
+  const current = pictures?.coordinate === coordinate ? pictures : null
+  const sheetColumns = sheet?.columns
+  const columns = useMemo(() => {
+    if (!sheetColumns) return null
+    const named = nameReferenceColumns(sheetColumns, labels)
+    return current ? named.map(column => column.shopifyField?.type.includes('_reference') ? { ...column, referenceImages: current.images, referenceSwatches: current.swatches } : column) : named
+  }, [sheetColumns, labels, current])
+  return useMemo(() => (sheet && columns ? { ...sheet, columns } : null), [sheet, columns]) as T | null
 }

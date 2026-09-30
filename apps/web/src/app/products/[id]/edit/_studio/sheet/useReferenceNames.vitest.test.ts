@@ -79,3 +79,46 @@ describe('useReferenceNames', () => {
     expect(fetch.mock.calls.length).toBeGreaterThan(asked)
   })
 })
+
+/**
+ * Audit B35 — each name lookup that landed after load set the names on its own, and each set gave the sheet new column
+ * objects, so the grid rebuilt every column definition once per lookup (GALE eBay IT: 3 in the first seconds).
+ */
+describe('useReferenceNames — the lookups that land together rebuild the columns once', () => {
+  beforeEach(() => { hooks.s.slots = []; vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  const withPolicies = (): NonNullable<Sheet> => ({ ...sheet('A'), columns: [{ key: 'categoryId', label: 'Category' }, { key: 'brand', label: 'Brand' }, { key: 'fulfillmentPolicyId', label: 'Shipping' }] as never })
+
+  it('three lookups answering at different moments → one new set of columns', async () => {
+    const answers: Record<string, unknown> = {
+      'reference-labels': { labels: { brand: { X: 'Xavia' } } },
+      'category-breadcrumbs': { breadcrumbs: { 177104: { local: 'Giacche' } } },
+      policies: { fulfillment: [{ id: 'f1', name: 'Standard' }], payment: [], return: [] },
+    }
+    let delay = 0
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const key = Object.keys(answers).find(k => String(url).includes(k)) ?? 'none'
+      await new Promise(resolve => setTimeout(resolve, (delay += 100)))
+      return new Response(JSON.stringify(answers[key] ?? {}))
+    }))
+    const input = withPolicies()
+    const identities = new Set<unknown>([render(input)?.columns])
+    for (let t = 0; t < 12; t++) { await vi.advanceTimersByTimeAsync(100); identities.add(render(input)?.columns) }
+    // The first columns (no names yet), then ONE set with every name in it.
+    expect(identities.size).toBe(2)
+    const last = render(input)!.columns as Array<{ key: string; optionLabels?: Record<string, string> }>
+    expect(last.find(c => c.key === 'categoryId')?.optionLabels).toMatchObject({ 177104: 'Giacche' })
+  })
+
+  it('a lookup still out after NAMES_FLUSH_MS does not hold back the names already in', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).includes('category-breadcrumbs')) await new Promise(resolve => setTimeout(resolve, 5_000))
+      return new Response(JSON.stringify({ labels: { brand: { A: 'Alpha' } }, breadcrumbs: { 177104: { local: 'Giacche' } } }))
+    }))
+    const input = sheet('A')
+    const first = render(input)?.columns
+    await vi.advanceTimersByTimeAsync(1_100)
+    expect(render(input)?.columns).not.toBe(first)
+  })
+})
