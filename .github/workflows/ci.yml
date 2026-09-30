@@ -2,14 +2,14 @@
 #
 # Target: under 10 minutes of wall time, with EVERY security check on every run:
 #   checks       static gates, typecheck of affected workspaces, the whole web suite, small workspaces
-#   api (1..4)   the WHOLE API suite in four shards, business profiles OFF then ON
+#   api (1..4)   the WHOLE API suite in four shards, business profiles OFF then ON (the count lives in the matrix)
 #   postgres (1..2)  real PostgreSQL 17: the real-PG race suites in two parts, split by measured time;
 #                runtime-role isolation, RBAC deny-by-default coverage, database package tests and the
 #                migration upgrade check run once, in part 1
 #   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
 #                database login, seeded disposable database, production hosts fenced off
-#   db-security  the profiles-ON ratchet over all API shards, and every real-PG suite passed in exactly one
-#                PostgreSQL part (fixed name, so a branch rule can require it)
+#   db-security  one profiles-ON report per API shard, the profiles-ON ratchet over them, and every real-PG
+#                suite passed in exactly one PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
 #
 # Nothing here is path-filtered except typecheck (turbo --affected) and the small-workspace tests.
@@ -76,10 +76,12 @@ jobs:
 
   # Four shards since 2026-09-30 (three before). In 15 runs of 2026-09-29 a shard took 6–11 min and the
   # PostgreSQL job 7–12.6 min: verify was the long pole of every deploy (docs/ci-fast-deploys/PLAN-2026-09-29.md,
-  # D1). The split is the same file list, every file once (scripts/ci/api-test-plan.mjs). db-security counts
-  # one report per shard.
+  # D1). The split is the same file list, every file once (scripts/ci/api-test-plan.mjs).
+  # The shard count is written once, as the matrix: SHARD and the report's name take it from strategy.job-total,
+  # and db-security reads it back from the reports' names (1..m of m, each once). A shard that never reported
+  # fails there (review of PR 6, 2026-09-30).
   api:
-    name: API tests (${{ matrix.shard }}/4, profiles OFF + ON)
+    name: API tests (${{ matrix.shard }}/${{ strategy.job-total }}, profiles OFF + ON)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -102,6 +104,7 @@ jobs:
         options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
+      SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -115,7 +118,7 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379
           NEXUS_TEST_REDIS_URL: redis://127.0.0.1:6379
         run: |
-          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/4 --run -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
+          node scripts/ci/api-test-plan.mjs --shard "$SHARD" --run -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
           node scripts/ci/api-test-plan.mjs --check-skips "$RUNNER_TEMP/off.json"
 
       - name: Profiles ON (judged by the ratchet in db-security)
@@ -125,7 +128,7 @@ jobs:
           REDIS_URL: redis://127.0.0.1:1
         run: |
           set +e
-          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/4 --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
+          node scripts/ci/api-test-plan.mjs --shard "$SHARD" --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
           echo "profiles-ON pass exited $? — known failures are judged against profiles-on-baseline.ci.json"
           set -e
           test -s "$RUNNER_TEMP/on.json" || { echo "✗ no profiles-ON report — could not measure"; exit 1; }
@@ -133,14 +136,18 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: profiles-on-${{ matrix.shard }}
+          # profiles-on-<n>-of-<m>: db-security derives the shard count from these names.
+          name: profiles-on-${{ matrix.shard }}-of-${{ strategy.job-total }}
           path: ${{ runner.temp }}/on.json
+          if-no-files-found: error
           retention-days: 7
 
   # Two parts since 2026-09-30 (one job before). In 15 runs of 2026-09-29 the real-PG suites alone took a median
-  # 10.5 min of this job's 12.4 min, and the job was verify's longest in 14 of them. Each part runs half of the suites,
-  # split by measured time (scripts/run-real-postgres-tests.mjs --part; it refuses a split that loses or repeats a
-  # suite). The steps that run once (RBAC, the migration upgrade check, the database package) stay on part 1.
+  # 10.5 min of this job's 12.4 min, and the job was verify's longest in 14 of them. Each part runs its share of the
+  # suites, split by measured time (scripts/run-real-postgres-tests.mjs --part; it refuses a split that loses or
+  # repeats a suite). The steps that run once (RBAC, the migration upgrade check, the database package) stay on
+  # part 1, and the split gives part 1 a head start for their ~32 s (PART_ONE_HEAD_START in the runner), so both
+  # parts end together.
   # Part 2 uses the service container only for its image: the runner starts its own server and never pulls one.
   # The part count is the matrix's size (strategy.job-total); no command or check repeats it, so a matrix cut to
   # [1] runs every suite in part 1/1, not half of them. Each part records the suites it passed, and db-security
@@ -316,10 +323,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # A matrix job's result is success only when every leg succeeded: all four API shards, both PostgreSQL parts.
+      # A matrix job's result is success only when every leg succeeded: every API shard, every PostgreSQL part.
       - name: All API shards and every PostgreSQL part must have passed
         run: |
-          echo "api (4 shards): ${{ needs.api.result }} · postgres (every part): ${{ needs.postgres.result }}"
+          echo "api (every shard): ${{ needs.api.result }} · postgres (every part): ${{ needs.postgres.result }}"
           test "${{ needs.api.result }}" = success && test "${{ needs.postgres.result }}" = success
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -329,10 +336,28 @@ jobs:
         with:
           pattern: profiles-on-*
           path: ${{ runner.temp }}/on
+      # The expected count comes from the reports: every name says n-of-m, all m must agree, and n must run 1..m
+      # with no gap and no repeat. A literal count here could drift from the matrix and stay green.
+      - name: One profiles-ON report per API shard
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/on" 2>/dev/null || { echo "✗ no profiles-ON report was downloaded — could not measure"; exit 1; }
+          got=$(find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | sort)
+          m=$(echo "$got" | sed -nE 's/^profiles-on-[0-9]+-of-([0-9]+)$/\1/p' | sort -u)
+          [ "$(echo "$m" | grep -c .)" = 1 ] || { echo "✗ the reports do not name one shard count (profiles-on-<n>-of-<m>):"; echo "$got"; exit 1; }
+          want=$(seq 1 "$m" | sed "s/.*/profiles-on-&-of-$m/" | sort)
+          if [ "$got" != "$want" ]; then
+            echo "✗ expected one report per shard, 1..$m of $m (< missing, > not expected):"
+            diff <(echo "$want") <(echo "$got") || true
+            exit 1
+          fi
+          for d in $want; do test -s "$d/on.json" || { echo "✗ $d holds no on.json — could not measure"; exit 1; }; done
+          # The ratchet reads every on.json below here, so one more anywhere would count a shard twice.
+          [ "$(find . -name on.json | grep -c .)" = "$m" ] || { echo "✗ more than one on.json per shard:"; find . -name on.json; exit 1; }
+          echo "✓ $m profiles-ON reports: shards 1..$m of $m, each once"
       - name: Profiles-ON ratchet over every shard
         run: |
           reports=$(find "$RUNNER_TEMP/on" -name on.json | sort | paste -sd, -)
-          test "$(echo "$reports" | tr ',' '\n' | grep -c .)" = 4 || { echo "✗ expected 4 shard reports, got: $reports"; exit 1; }
           node apps/api/scripts/profiles-on-ratchet.mjs --report="$reports" --baseline=apps/api/scripts/profiles-on-baseline.ci.json
       - uses: actions/download-artifact@v4
         with:

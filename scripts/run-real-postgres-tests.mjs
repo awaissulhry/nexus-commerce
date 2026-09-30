@@ -59,7 +59,8 @@
  *   In one CI job the suites took about 10.5 minutes (median of 15 runs, 2026-09-29): the longest step of every
  *   deploy. `--part N/M` runs one of M parts, so M jobs run side by side. The split is the API shards' split
  *   (scripts/ci/api-test-plan.mjs): longest suite first, each to the lightest part, by the times in
- *   scripts/ci/real-postgres-durations.json.
+ *   scripts/ci/real-postgres-durations.json. Part 1 starts with a head start for the steps only it runs
+ *   (PART_ONE_HEAD_START), so the jobs, not only their suites, end together.
  *   The same commit gives the same split on every machine, so the M jobs together run every suite once.
  *   Before any container starts, the split is checked. A suite in no part or in two, a suite listed twice,
  *   a suite whose name or expected count changed, or an empty part is REFUSED. Each suite keeps its "expect".
@@ -153,30 +154,42 @@ function measured() {
   return existsSync(DURATIONS) ? JSON.parse(readFileSync(DURATIONS, 'utf8')).files ?? {} : {}
 }
 
-/** `count` parts of `suites`, balanced by `weights`; each part keeps the SUITES order. */
+// Part 1 also runs the postgres job's one-off steps (ci.yml): durability off and the image pull ~4 s, RBAC coverage
+// ~8 s, the migration upgrade check ~11 s, the database package ~9 s (medians of 15 CI runs, 2026-09-29). Their 32 s
+// are 5 % of the 630 s the suites took in the same runs (median), so part 1 starts the split with 32/630 of the
+// suites' total. A share, not seconds: the stored times are local, and a refresh on a faster or slower machine
+// scales them all. Moving a step between parts, or a step that becomes much slower, means changing this number.
+const PART_ONE_HEAD_START = 32 / 630
+
+/** `count` parts of `suites`, balanced by `weights`, part 1 with its head start; each part keeps the SUITES order. */
 function split(suites, count, weights) {
-  return shards(suites.map((suite) => suite.file), count, weights).map((bin) => suites.filter((suite) => bin.files.includes(suite.file)))
+  const files = suites.map((suite) => suite.file)
+  const headStart = PART_ONE_HEAD_START * files.reduce((sum, file) => sum + (weights[file] ?? 1000), 0) // 1 s: as shards()
+  return shards(files, count, weights, [headStart]).map((bin) => suites.filter((suite) => bin.files.includes(suite.file)))
 }
 
 /** What is wrong with `parts` as a split of `suites`: every suite must be in exactly one part, unchanged. */
 function checkParts(suites, parts) {
   const problems = []
   const same = (a, b) => a.name === b.name && a.file === b.file && a.expect === b.expect
-  for (const [i, suite] of suites.entries()) {
-    if (suites.findIndex((other) => other.file === suite.file) < i) problems.push(`listed twice in SUITES: ${suite.file}`)
-  }
   for (const [i, part] of parts.entries()) if (part.length === 0) problems.push(`part ${i + 1}/${parts.length} has no suites`)
-  for (const suite of suites) {
-    const where = parts.flatMap((part, i) => part.filter((s) => s.file === suite.file).map(() => i + 1))
-    if (where.length === 0) problems.push(`in no part: ${suite.file}`)
-    if (where.length > 1) problems.push(`in parts ${where.join(' and ')}: ${suite.file}`)
+  // One line per suite file. A file listed twice is placed once per copy, so its placement says nothing more:
+  // the duplicate is the fault, and its line names the parts it reached.
+  for (const file of new Set(suites.map((suite) => suite.file))) {
+    const copies = suites.filter((suite) => suite.file === file).length
+    const where = parts.flatMap((part, i) => part.filter((s) => s.file === file).map(() => i + 1))
+    const distinct = [...new Set(where)]
+    const named = distinct.length > 1 ? `parts ${distinct.join(' and ')}` : `part ${distinct[0]}`
+    if (copies > 1) problems.push(`listed ${copies} times in SUITES${where.length ? ` (placed in ${named})` : ''}: ${file}`)
+    else if (where.length === 0) problems.push(`in no part: ${file}`)
+    else if (where.length > 1) problems.push(`in ${where.length} places (${named}): ${file}`)
   }
   for (const suite of parts.flat()) {
     const listed = suites.find((s) => s.file === suite.file)
     if (!listed) problems.push(`in a part but not in SUITES: ${suite.file}`)
     else if (!same(listed, suite)) problems.push(`name or expected count changed on the way: ${suite.file}`)
   }
-  return problems
+  return [...new Set(problems)]
 }
 
 const expected = (suites) => suites.reduce((sum, suite) => sum + suite.expect, 0)
@@ -196,11 +209,15 @@ if (args.includes('--self-test')) {
     'a suite listed twice': [doubled, [one, two]],
     'a suite in no part': [SUITES, [one, two.slice(1)]],
     'a suite in both parts': [SUITES, [one, [...two, one[0]]]],
+    'a suite twice in one part': [SUITES, [[...one, one[0]], two]],
     'a changed expected count': [SUITES, [[{ ...one[0], expect: one[0].expect + 1 }, ...one.slice(1)], two]],
     'a suite not in SUITES': [SUITES, [[...one, { ...one[0], file: `${one[0].file}.planted` }], two]],
     'an empty part': [SUITES.slice(0, 1), split(SUITES.slice(0, 1), 2, weights)],
   }
   for (const [fault, [suites, parts]] of Object.entries(planted)) if (checkParts(suites, parts).length === 0) failures.push(`not refused: ${fault}`)
+  // A duplicate is placed once per copy; the refusal still names it on ONE line.
+  const lines = checkParts(doubled, split(doubled, 2, weights)).filter((p) => p.endsWith(`: ${SUITES[0].file}`))
+  if (lines.length !== 1) failures.push(`a suite listed twice gave ${lines.length} lines, not 1: ${lines.join(' | ')}`)
   if (failures.length) { console.error(`❌ real-PostgreSQL split self-test:\n${failures.map((f) => `  ${f}`).join('\n')}`); process.exit(1) }
   console.log(`✓ real-PostgreSQL split self-test: splits into 1–4 parts hold all ${SUITES.length} suites once; ${Object.keys(planted).length} planted faults refused`)
   process.exit(0)

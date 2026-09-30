@@ -87,9 +87,13 @@ function durations() {
   try { return JSON.parse(readFileSync(DURATIONS, 'utf8')).files ?? {} } catch { return {} }
 }
 
-/** Greedy longest-first split, so the slow database files do not pile into one shard. */
-export function shards(files, count, weights = durations()) {
-  const bins = Array.from({ length: count }, () => ({ total: 0, files: [] }))
+/**
+ * Greedy longest-first split, so the slow database files do not pile into one shard. `start[i]` is time bin i
+ * spends on other work before its files (the real-PostgreSQL parts give part 1 its one-off steps); the API shards
+ * pass none.
+ */
+export function shards(files, count, weights = durations(), start = []) {
+  const bins = Array.from({ length: count }, (_, i) => ({ total: start[i] ?? 0, files: [] }))
   const weighted = files.map(f => ({ f, w: weights[f] ?? 1000 })).sort((a, b) => b.w - a.w || a.f.localeCompare(b.f))
   for (const { f, w } of weighted) {
     const bin = bins.reduce((min, b) => (b.total < min.total ? b : min))
