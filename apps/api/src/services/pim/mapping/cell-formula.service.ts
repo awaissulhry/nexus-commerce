@@ -47,6 +47,8 @@ import { evaluateExpr, validateExpr, exprDependenciesDeep, exprRefPositions } fr
 import { getMappingForMarketplace } from '../schema-mapping.service.js'
 import { getFieldCatalogue, type CatalogueField } from './field-catalogue.service.js'
 import { writerAcceptsField } from '../master-field-gate.js'
+import { validateChannelValue } from './validate-channel-value.js'
+import { finding, publishVerdict } from '../value-verdict.js'
 
 /** The audit action that carries a pinned-over formula. Deliberately NOT one of the event-only
  *  actions PES.4's restore reader excludes (`create`, `imagePublish*`, `soft-delete`). */
@@ -110,7 +112,9 @@ export type FormulaFieldWriter = (args: {
   expectedVersion?: number
   dryRun?: boolean
   updatedBy?: string | null
-}) => Promise<{ ok: boolean; error?: string | null; atomicResults?: unknown[] }>
+}) => Promise<{ ok: boolean; error?: string | null; atomicResults?: unknown[]
+  /** Audit A31 — the save's own verdict on the value (the warnings a typed value gets), when the writer returns one. */
+  warnings?: string[] }>
 
 let fieldWriter: FormulaFieldWriter | null = null
 
@@ -175,7 +179,7 @@ type OptionSource = {
 type OptionVerdict = { ok: true; value: unknown; warning?: string; allowedOptions?: string[]; actualValue?: unknown }
   | { ok: false; error: string; allowedOptions: string[]; actualValue: unknown }
 
-function checkOptions(source: OptionSource, value: unknown): OptionVerdict {
+function checkOptions(source: OptionSource, value: unknown, channel?: string | null): OptionVerdict {
   const options = source?.options
   if (!options || options.length === 0) return { ok: true, value }
   if (value === null || value === undefined || value === '') return { ok: true, value }
@@ -207,7 +211,7 @@ function checkOptions(source: OptionSource, value: unknown): OptionVerdict {
   return {
     ok: true,
     value: normalised,
-    warning: `${named} ${off.length === 1 ? 'is' : 'are'} not in the list for ${source?.label ?? 'this column'} (${shown}). Saved as it is${source?.selectionOnly ? '; the channel may refuse it at publish' : ''}.`,
+    warning: `${named} ${off.length === 1 ? 'is' : 'are'} not in the list for ${source?.label ?? 'this column'} (${shown}). Saved as it is${source?.selectionOnly && refusesOffList(channel) ? '; the channel may refuse it at publish' : ''}.`,
     allowedOptions: options,
     actualValue: value,
   }
@@ -236,14 +240,20 @@ export function optionVerdict(input: {
   /** The channel catalogue entry, when the scope has one. Supplies the option list. */
   catalogueField: OptionSource
   value: unknown
+  /** The coordinate's channel: whether an off-list value is one the channel refuses at publish (`publishVerdict`). */
+  channel?: string | null
 }): OptionVerdict {
   const optionSource = input.catalogueField ?? input.column
   if (!optionSource) return { ok: true, value: input.value }
   return checkOptions(
     { ...optionSource, label: input.column?.label ?? optionSource.label },
     input.value,
+    input.channel,
   )
 }
+
+/** Audit A31 — "the channel may refuse it at publish" only where publish blocks an off-list value (not eBay). */
+const refusesOffList = (channel: string | null | undefined) => !channel || publishVerdict(channel, finding('offList', '')) === 'block'
 
 export type FormulaScope = 'master' | 'channel'
 
@@ -371,6 +381,8 @@ export interface EvaluationOutcome {
   /** Set when no new value may be stored. The previous value is retained. */
   error: string | null
   warnings: string[]
+  /** The formula's own value checks among `warnings` (a length, a requirement): the save's verdict replaces them. */
+  checks?: string[]
   dependsOn: string[]
 }
 
@@ -526,12 +538,13 @@ export function evaluateAgainstContext(input: {
     // #775(2) — the option check moved OUT of here to `checkOptions`, so master
     // and channel scopes cannot disagree about what they accept. It runs once,
     // in the caller, where the sheet column is also available as a source.
-    for (const member of (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')) {
-      if (field.maxLength && member.length > field.maxLength) flagged.push(`The result is ${member.length} characters; ${field.label} accepts ${field.maxLength}.`)
-      const bytes = Buffer.byteLength(member, 'utf8')
-      if (field.maxBytes && bytes > field.maxBytes) flagged.push(`The result is ${bytes} UTF-8 bytes; ${field.label} accepts ${field.maxBytes}.`)
+    // Audit A31 — the channel check a typed value gets (`validateChannelValue`: an eBay aspect measured as eBay receives
+    // it, a joined list on a one-value aspect as a count), in the words and with the label its save warning carries.
+    const found = validateChannelValue(field, value).findings
+    for (const problem of found) if (problem.rule !== 'offList' && problem.rule !== 'deprecated') flagged.push(`${field.label}: ${problem.message}`)
+    if (!isPresent(value) && field.priority === 'required' && res.warnings.length === 0 && !found.some(problem => problem.rule === 'required')) {
+      flagged.push(`${field.label}: Field '${field.label}' is required.`)
     }
-    if (!isPresent(value) && field.priority === 'required' && res.warnings.length === 0) flagged.push(`${field.label} is required, and the formula resolved to nothing.`)
   }
 
   // A formula that evaluates cleanly to NOTHING while warning about why is not a success. The
@@ -548,7 +561,7 @@ export function evaluateAgainstContext(input: {
     }
   }
 
-  return { value, error: null, warnings: [...res.warnings, ...flagged], dependsOn: deep.attributes }
+  return { value, error: null, warnings: [...res.warnings, ...flagged], checks: flagged, dependsOn: deep.attributes }
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -566,7 +579,7 @@ async function writeValue(
   atomic?: () => unknown[],
   expectedVersion?: number,
   dryRun = false,
-): Promise<{ atomicResults?: unknown[] }> {
+): Promise<{ atomicResults?: unknown[]; warnings?: string[] }> {
   // #775 — delegated to the ordinary cell writer. Everything this used to do by
   // hand (the master allow-list, the channel column mapping, the `attr_*` merge
   // with its marketplace context, the select validation, the CAS, the audit row)
@@ -691,7 +704,7 @@ async function prepareCellFormula(input: CellCoordinate & { expr: string; expect
   // but exists only on a channel scope; the sheet column carries the options on
   // every scope. Preferring one and falling back to the other is what stops the
   // two scopes accepting different values.
-  const checked = outcome.error ? null : optionVerdict({ column: col, catalogueField: field, value: outcome.value })
+  const checked = outcome.error ? null : optionVerdict({ column: col, catalogueField: field, value: outcome.value, channel: input.scope === 'channel' ? input.channel : null })
   const refusal = checked && checked.ok === false ? checked : null
   /** The value as the store should hold it — `TRUE` resolved to `true`. */
   const normalisedValue = checked && checked.ok ? checked.value : outcome.value
@@ -713,13 +726,14 @@ export async function previewCellFormula(input: CellCoordinate & { expr: string;
   const prepared = await prepareCellFormula(input)
   const { ctx, outcome, col, writeField, normalisedValue, effectiveError, refusal, optionWarning } = prepared
   let error = effectiveError
+  let saveWarnings: string[] | undefined
   if (!error) {
-    try { await writeValue(input, normalisedValue, col, undefined, undefined, true) }
+    try { saveWarnings = (await writeValue(input, normalisedValue, col, undefined, undefined, true)).warnings }
     catch (e) { error = e instanceof Error ? e.message : String(e) }
   }
   return { ok: !error, error, value: error ? null : normalisedValue,
     before: ctx.flat[input.fieldKey] ?? null, expectedState: formulaStateToken(ctx, prepared.existing),
-    dependsOn: outcome.dependsOn, warnings: [...outcome.warnings, ...(optionWarning ? [optionWarning] : [])],
+    dependsOn: outcome.dependsOn, warnings: formulaWarnings(outcome, optionWarning, saveWarnings),
     ...(refusal ? { allowedOptions: refusal.allowedOptions, actualValue: refusal.actualValue } : {}),
     unknownRefs: exprRefPositions(input.expr).filter(ref => !ref.name.includes('.') && !Object.prototype.hasOwnProperty.call(ctx.flat, ref.name)),
     errorPos: exprRefPositions(input.expr).find(ref => !ref.name.includes('.') && !Object.prototype.hasOwnProperty.call(ctx.flat, ref.name))?.pos ?? null,
@@ -777,8 +791,8 @@ export async function setCellFormula(input: CellCoordinate & {
 
   // An invalid expression is retained for correction while the previous value stays intact.
   // A valid expression and its materialised result commit in the ordinary writer's transaction.
-  const saved = effectiveError ? await mutation() :
-    (await writeValue(input, normalisedValue, col, () => [mutation()], col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)).atomicResults?.[0] as Awaited<ReturnType<typeof mutation>>
+  const written = effectiveError ? null : await writeValue(input, normalisedValue, col, () => [mutation()], col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)
+  const saved = effectiveError ? await mutation() : written!.atomicResults?.[0] as Awaited<ReturnType<typeof mutation>>
   if (!saved) throw new Error('The formula transaction did not return its saved expression.')
   const versionAfter =
     (await prisma.product.findUnique({ where: { id: input.productId }, select: { version: true } }))?.version ?? null
@@ -834,9 +848,20 @@ export async function setCellFormula(input: CellCoordinate & {
     value: effectiveError ? ctx.flat[input.fieldKey] ?? null : normalisedValue,
     error: effectiveError,
     ...(refusal ? { allowedOptions: refusal.allowedOptions, actualValue: refusal.actualValue } : {}),
-    warnings: [...outcome.warnings, ...(optionWarning ? [optionWarning] : [])],
+    warnings: formulaWarnings(outcome, optionWarning, written?.warnings),
     cascaded,
   }
+}
+
+/**
+ * Audit A31 — a formula's result gets the verdict a typed value gets, in the same words: the save's own warnings (the
+ * channel check, the column's list and limits) replace the formula's own value and list checks. The evaluation's own
+ * warnings stay. When the writer says nothing about the value, the formula's checks (in the same words) stand.
+ */
+function formulaWarnings(outcome: EvaluationOutcome, optionWarning: string | undefined, saveWarnings: string[] | undefined): string[] {
+  if (!saveWarnings?.length) return [...outcome.warnings, ...(optionWarning ? [optionWarning] : [])]
+  const own = outcome.warnings.filter(warning => !outcome.checks?.includes(warning))
+  return [...new Set([...own, ...saveWarnings])]
 }
 
 /** The catalogue entry for a channel cell, so caps and closed lists apply. Master cells have no
@@ -945,7 +970,7 @@ export async function setCellLiteral(input: CellCoordinate & {
   // refused `basePrice needs a ContentAddress before it can be saved.` The same
   // predicate this file already uses at :575 decides it.
   if (isLocalizableContent(col.slot?.of ?? col.key, col.storage)) contentAddress(input.contentAddress, col.label)
-  const verdict = optionVerdict({ column: col, catalogueField: await catalogueFieldFor(input), value: input.value })
+  const verdict = optionVerdict({ column: col, catalogueField: await catalogueFieldFor(input), value: input.value, channel: input.scope === 'channel' ? input.channel : null })
   if (verdict.ok === false) throw new Error(verdict.error)
   const literalWarning = verdict.warning
   const atomic = () => [
@@ -1136,7 +1161,7 @@ export async function reevaluateDependents(input: {
       // the routed name, and the same option check. A dependent cell that
       // recomputes to a value outside its list must not be written either.
       const depCol = await columnFor(coord as never, ctx.columnSet)
-      const depChecked = outcome.error ? null : optionVerdict({ column: depCol, catalogueField: field, value: outcome.value })
+      const depChecked = outcome.error ? null : optionVerdict({ column: depCol, catalogueField: field, value: outcome.value, channel: coord.scope === 'channel' ? coord.channel : null })
       const depRefusal = depChecked && depChecked.ok === false ? depChecked : null
       const competingLocale = depCol && depCol.storage !== 'localizedContent' && all.some(other => other.id !== row.id && other.fieldKey === row.fieldKey && other.scope === row.scope && other.channel === row.channel && other.marketplace === row.marketplace && other.channelConnectionId === row.channelConnectionId && other.aliasKey === row.aliasKey)
       const canonicalChannelFormula = row.scope === 'channel' && depCol?.writeTarget === 'master'
