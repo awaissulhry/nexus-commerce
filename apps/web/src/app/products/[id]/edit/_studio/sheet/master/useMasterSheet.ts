@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CellSaveTracker, SheetWriter, type GridApi, type SheetWriteRequest, type SheetWriteResult } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
+import { masterSheetUrl } from '../../sheetUrls'
 
 import { adaptLegacySheet, type LegacySheetPage } from './adaptLegacy'
 import { recoverSheetRow } from '../sheetRecovery'
@@ -223,7 +224,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
      * lost debugging time to exactly this, and then so did I. The scope is derived server-side
      * from the presence of `channel`, so master sends neither `scope` nor `channel`.
      */
-    const studioUrl = `${backend}/api/products/${productId}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
+    const studioUrl = masterSheetUrl(productId, market, locale, opts.locales)
     const legacyUrl = `${backend}/api/products/sheet?market=${encodeURIComponent(market)}&parentIds=${encodeURIComponent(productId)}&limit=1`
 
     const load = async (): Promise<StudioSheet> => {
