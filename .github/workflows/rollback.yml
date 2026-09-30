@@ -197,7 +197,7 @@ jobs:
             echo "**Railway variables stay as they are now:** only the image changes. (Railway's own Rollback button would also put back the old deployment's variables.)"
             if [ "$WEB" = true ]; then
               echo
-              echo "**The web image carries its own build's values:** \`NEXT_PUBLIC_*\` and \`NEXUS_API_PROXY_TARGET\` as nexus-web had them when \`${SHA:0:8}\` was built. If they changed since, the old ones come back with it."
+              echo "**The web image carries its own build's values:** \`NEXT_PUBLIC_*\` and \`NEXUS_API_PROXY_TARGET\` as nexus-web had them when the \`${SHA:0:8}\` tag was last built (a re-run of its Deploy API run rebuilds it). If they changed since, the old ones come back with it."
             fi
             echo
             echo "- To move to \`${SHA:0:8}\` (the API first, then the others side by side):${moves:- none}"

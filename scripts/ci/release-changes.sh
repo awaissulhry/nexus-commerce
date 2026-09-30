@@ -54,6 +54,11 @@ read_running() {
   esac
 }
 
+# The commit is here, or can be fetched.
+have_commit() {
+  git cat-file -e "$1^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 -q origin "$1" 2>/dev/null
+}
+
 # Sets ship=true when $1 (the role) must ship, and prints why. $4: true when it deploys by image, false when by
 # `railway up`, empty when unknown.
 must_ship() {
@@ -68,6 +73,13 @@ must_ship() {
     return
   fi
   read_running "$service"
+  # Newer first: a re-run of an older run must not roll a service back, not even one whose way of deploying changed
+  # since (review of PR 2, 2026-09-30).
+  if [ -n "$sha" ] && [ "$sha" != "$GITHUB_SHA" ] && have_commit "$sha" && git merge-base --is-ancestor "$GITHUB_SHA" "$sha" 2>/dev/null; then
+    echo "::warning::$role: runs ${sha:0:9}, which is newer than this release — not rolled back"
+    ship=false
+    return
+  fi
   if [ "$by_image" = true ] && [ "$kind" = up ]; then
     echo "$role: ships (it moves to image deploys: RAILWAY_IMAGE_SERVICES names it)"
     return
@@ -85,13 +97,8 @@ must_ship() {
     ship=false
     return
   fi
-  if ! git cat-file -e "$sha^{commit}" 2>/dev/null && ! git fetch --no-tags --depth=1 -q origin "$sha" 2>/dev/null; then
+  if ! have_commit "$sha"; then
     echo "::warning::$role: could not fetch $sha, the commit it runs — it ships"
-    return
-  fi
-  if git merge-base --is-ancestor "$GITHUB_SHA" "$sha" 2>/dev/null; then
-    echo "::warning::$role: runs ${sha:0:9}, which is newer than this release — not rolled back"
-    ship=false
     return
   fi
   # --no-renames: a file moved out of a service's tree must count for that tree too. -z: git would otherwise quote a

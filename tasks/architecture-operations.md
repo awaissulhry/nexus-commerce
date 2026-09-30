@@ -163,9 +163,16 @@ API rebuilds the image of the same commit under the same tag; that Railway then 
 image is not yet proven.
 
 Not yet proven: that the project token may change a service's source (plan §7). If the connect
-fails, nothing changed and the service keeps its build. Remove its name from the variable, so the
-next deploy ships it with `railway up` again, and report it. Do not connect the image by hand in
-Settings → Source instead: the workflow connects the image on every deploy, so it fails again there.
+fails, nothing changed: the service keeps running its `railway up` build. Remove its name from the
+variable (no deploy is needed; later releases ship it with `railway up`), and report it. Do not
+connect the image by hand in Settings → Source instead: the workflow connects the image on every
+deploy, so it fails again there.
+
+If the connect works but the image deployment fails, the service keeps serving its last `railway up`
+build while Settings → Source already names the image. Before the next deploy of that service,
+either fix the cause and run Deploy API by hand again (the name still in the variable), or remove the
+name and disconnect the image in Settings → Source: a hand run would not ship it then, because it
+already runs a current `railway up` build.
 
 Check first that the service's start command works in the image:
 
@@ -180,8 +187,9 @@ Check first that the service's start command works in the image:
 Railway ignores the build command, watch paths and `RAILPACK_`/`NIXPACKS_` node versions for an image
 source. A failed image deployment never takes traffic: the previous build keeps serving.
 To move a service back, remove its name and run Deploy API by hand: that service ships with `railway
-up`. Not yet tried: `railway up` on a service whose source is an image. If Railway refuses it,
-disconnect the image in Settings → Source first.
+up` (it runs an image while the variable no longer names it). Not yet tried: `railway up` on a
+service whose source is an image. If Railway refuses it, disconnect the image in Settings → Source
+first.
 
 ### Roll back
 
@@ -218,7 +226,9 @@ what that run chose back then; run Deploy API by hand instead.
 
 A rollback waits in the same queue as deploys (`deploy-api`). GitHub keeps one waiting run per queue: a
 push that lands while the rollback waits cancels it, and a rollback cancels a deploy that is still
-waiting. Run the cancelled one again, as a new run or a re-run: the next deploy sees either.
+waiting. Run the cancelled one again, as a new run or a re-run: the next deploy sees either. A
+deploy that a rollback cancelled: only after the fix or a revert is on main, or it ships the code the
+rollback took away.
 
 Railway's own Rollback button on an older deployment also works for image deploys, one service at a
 time. The button also puts back that deployment's variables (Railway's docs: "Both the Docker image
