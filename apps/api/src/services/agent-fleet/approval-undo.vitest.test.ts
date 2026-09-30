@@ -8,8 +8,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../db.js', () => ({
-  default: {
+vi.mock('../../db.js', () => {
+  const db = {
     agentApproval: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -24,8 +24,16 @@ vi.mock('../../db.js', () => ({
     // The person who approved, looked up again at commit (login roles with business profiles off, the membership on).
     userProfile: { findUnique: vi.fn() },
     workspaceMembership: { findUnique: vi.fn() },
-  },
-}))
+  }
+  // Since P2 the membership read is one statement (workspace.service.ts `membership`); answer it from the membership
+  // mock above, as oauth.vitest.test.ts does. Any other raw read is not part of this fixture.
+  const $queryRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    if (!strings.join('?').includes('FROM "public"."WorkspaceMembership" m')) throw new Error('Unsupported $queryRaw in this fixture')
+    const row = await db.workspaceMembership.findUnique({ where: { workspaceId_userId: { workspaceId: values[0], userId: values[1] } } })
+    return row ? [row] : []
+  })
+  return { default: { ...db, $queryRaw } }
+})
 vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn() }))
 vi.mock('./control-audit.service.js', () => ({ recordControlChange: vi.fn() }))
 vi.mock('./exemplar.service.js', () => ({ mintExemplarFromDecision: vi.fn() }))
