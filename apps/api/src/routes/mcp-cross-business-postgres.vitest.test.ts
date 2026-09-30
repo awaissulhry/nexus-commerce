@@ -9,8 +9,8 @@
  * token says A); another belongs to B only. Every B row a tool can read carries a canary string.
  *
  *   1. every tool A's token is offered, handed B's ids: not found, empty or refused — and the same arguments run
- *      inside B DO reach B's rows, so the refusal is the business boundary and not a bad argument; approving what
- *      A queued changes nothing in B
+ *      inside B DO reach B's rows, so the refusal is the business boundary and not a bad argument; every change
+ *      tool answers "not found" and queues nothing, and no row of B changes
  *   2. naming B by header or query: 400, and nothing ran
  *   3. the person removed from A: the very next call is 401
  *   4. the person's role in A loses products.price.edit: set-price leaves the next tools/list and is refused
@@ -646,7 +646,6 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
   describe("1 — every tool Claude is offered, handed business B's ids", () => {
     const offered: AgentTool[] = []
     const probes = new Map<string, Record<string, unknown>>()
-    const queuedInA: string[] = []
 
     it('the person in both businesses is offered every MCP tool, so the loop below covers the registry', async () => {
       const { tools } = await withClaude(tokens.a.access, 'A', (client) => client.listTools())
@@ -700,33 +699,34 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       expect(missed).toEqual([])
     })
 
-    it('from A: B is not found, the list is empty or the call is refused — never a row of B; approving what A queued leaves B untouched', async () => {
+    it('from A: B is not found, the list is empty or the call is refused — never a row of B; a change is refused as not found and nothing is queued', async () => {
       const before = await digest(B)
       // The digest sees B's rows (control): the seeded product, order and approvals are in it.
       expect(before.Product).toMatch(/^1:/)
       expect(before.AgentApproval).not.toMatch(/^0:/)
-      const leaks: string[] = []
-      const outcomes: Record<string, string> = {}
+      const approvalsInA = async () =>
+        (await rowsOf<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval" WHERE "workspaceId" = $1', [A]))[0].n
+      const queuedBefore = await approvalsInA()
+      const problems: string[] = []
+      let changes = 0
       await withClaude(tokens.a.access, 'A', async (client) => {
         for (const [name, args] of probes) {
           const result = await client.callTool({ name, arguments: args })
           const outcome = outcomeOf(result)
-          outcomes[name] = outcome
-          if (outcome === 'crashed') leaks.push(`${name}: failed instead of answering`)
+          if (outcome === 'crashed') problems.push(`${name}: failed instead of answering`)
           const seen = traces(JSON.stringify(result), seeded.b, B_CANARY, args)
-          if (seen.length) leaks.push(`${name}: ${seen.join(', ')}`)
-          if (outcome === 'queued') queuedInA.push(JSON.parse(textOf(result)).approvalId)
+          if (seen.length) problems.push(`${name}: ${seen.join(', ')}`)
+          // A change aimed at a row A does not have is refused by the tool itself, before anything waits for a person.
+          if (!offered.find((tool) => tool.name === name)!.readOnly) {
+            changes++
+            if (outcome !== 'refused' || !/not found/i.test(textOf(result))) problems.push(`${name}: ${outcome}, not "not found": ${textOf(result).slice(0, 120)}`)
+          }
         }
       })
-      expect(leaks).toEqual([])
-      expect(Object.keys(outcomes).length).toBe(probes.size)
-
-      // A change queued with B's ids waits in A. A person in A approves it: it runs in A, where B's rows do not exist.
-      for (const id of queuedInA) {
-        const decided = await inApp('A', 'POST', `/api/agent/approvals/${id}/approve`, sessions.both, A, {})
-        expect(decided.statusCode, decided.body).toBe(200)
-        expect(traces(decided.body, seeded.b, B_CANARY, [id])).toEqual([])
-      }
+      expect(problems).toEqual([])
+      expect(changes).toBe(offered.filter((tool) => !tool.readOnly).length)
+      expect(changes).toBeGreaterThan(0)
+      expect(await approvalsInA()).toBe(queuedBefore)
       expect(await digest(B)).toEqual(before)
     })
   })
@@ -838,7 +838,7 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
         ['fleet/approvals/:id/undo', {}, 409, { error: 'nothing to undo' }],
         ['fleet/approvals/:id/commit', {}, 409, { error: 'approval not found' }],
         ['fleet/approvals/:id/snooze', { until }, 404, { error: 'approval not found' }],
-        ['fleet/approvals/:id/unsnooze', {}, 200, {}],
+        ['fleet/approvals/:id/unsnooze', {}, 404, { error: 'approval not found' }],
         ['fleet/approvals/:id/recheck', {}, 200, { stale: true, why: 'the request no longer exists' }],
       ]
       for (const id of [inA.waiting, inA.parked]) {
@@ -849,6 +849,14 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
         }
         const read = await inApp('B-only', 'POST', '/api/agent/tools/approval-status/invoke', sessions.bOnly, B, { approvalId: id })
         expect(read.json()).toMatchObject({ ok: false, error: 'Approval not found' })
+      }
+      // Both at once, as the bulk bar sends them: nothing to preview, nothing decided.
+      const ids = [inA.waiting, inA.parked]
+      const preview = await inApp('B-only', 'POST', '/api/agent/fleet/approvals/bulk-preview', sessions.bOnly, B, { ids, decision: 'approve' })
+      expect(preview.json()).toMatchObject({ count: 0 })
+      for (const payload of [{ ids, decision: 'approve' }, { ids, decision: 'reject', reason: 'MCP.8' }]) {
+        const bulk = await inApp('B-only', 'POST', '/api/agent/fleet/approvals/bulk-decide', sessions.bOnly, B, payload)
+        expect({ decision: payload.decision, done: (bulk.json() as { done?: number }).done }).toEqual({ decision: payload.decision, done: 0 })
       }
 
       expect(await rowsOf('SELECT * FROM "AgentApproval" WHERE id = ANY($1::text[]) ORDER BY id', [[inA.waiting, inA.parked]])).toEqual(rowsBefore)

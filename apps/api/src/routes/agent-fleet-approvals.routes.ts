@@ -608,11 +608,13 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
   /** Bring a set-aside request back now. */
   fastify.post<{ Params: { id: string } }>(
     '/agent/fleet/approvals/:id/unsnooze',
-    async (request) => {
-      await prisma.agentApproval.updateMany({
+    async (request, reply) => {
+      const cleared = await prisma.agentApproval.updateMany({
         where: { id: request.params.id },
         data: { snoozedUntil: null },
       })
+      // MCP.8 — a request this business cannot see is not found, as on every sibling route; never "ok".
+      if (cleared.count === 0) return reply.code(404).send({ error: 'approval not found' })
       return { ok: true }
     },
   )
