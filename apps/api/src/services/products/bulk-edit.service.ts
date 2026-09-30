@@ -1,3 +1,4 @@
+import { ProductBulkError } from '../../lib/product-bulk-error.js'
 import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
@@ -216,13 +217,7 @@ export interface ProductBulkContext {
   readContentOwner?: ContentOwnerVersion
 }
 
-export class ProductBulkError extends Error {
-  /** `cause` keeps the original failure, so a lost race wrapped as a 500 is still retried (`retryableConflict`). */
-  constructor(readonly statusCode: number, readonly details: Record<string, unknown>, cause?: unknown) {
-    super(typeof details.error === 'string' ? details.error : 'Product edit failed')
-    if (cause !== undefined) (this as { cause?: unknown }).cause = cause
-  }
-}
+export { ProductBulkError } from '../../lib/product-bulk-error.js'
 
 type SheetColumnRow = Map<string, import('../pim/sheet-columns.service.js').SheetColumn>
 
