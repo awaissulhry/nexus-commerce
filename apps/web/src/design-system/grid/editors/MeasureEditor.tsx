@@ -28,6 +28,14 @@ export interface MeasureEditorParams {
   eventKey?: string | null
 }
 
+/**
+ * Where Tab from the number lands in the unit list: its search field when it has one (more than 8 units), the list
+ * itself otherwise. It always focused the list, so with a search field typed letters went nowhere (audit B22).
+ */
+export function unitsEntry(units: HTMLElement): HTMLElement {
+  return units.querySelector<HTMLElement>('.nds-combo-search input') ?? units
+}
+
 export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function MeasureEditor(props, _ref) {
   const { unitOptions = [], label, value, column, api, stopEditing, onValueChange } = props
   const [m, setM] = useState<MeasureDraft>(() => asMeasure(value))
@@ -73,7 +81,7 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
     const inNumber = e.target instanceof HTMLInputElement && !units?.contains(e.target)
     if (!units || inNumber === e.shiftKey) return
     e.preventDefault(); e.stopPropagation()
-    if (inNumber) units.focus()
+    if (inNumber) unitsEntry(units).focus()
     else root.current?.querySelector<HTMLInputElement>('input')?.focus()
   }
   return (

@@ -20,6 +20,8 @@ Product sheet audit 2026-09-30 (WP1).
 
 - **PageUp / PageDown / Home / End in every list editor** (B20). **`ListboxPanel`**: PageUp/PageDown move the highlight by the rows in view (**`listboxPageSize`**, 8 when nothing can be measured), and Home/End reach the ends of a list without a search field; in a search field Home and End stay the caret's (the editable-combobox convention). **`AsyncListboxPanel`**: PageUp/PageDown. **`ListPanelEditor`**: its box walk takes all four. All through `nextActiveIndex` (`lib/media-choice.ts`). Mirrored in Web.
 
+- **`MeasureEditor`**: Tab from the number lands in the unit list's search field when it has one (more than 8 units), so "mil" finds millimeters; it focused the list container and typed letters went nowhere (B22). New: **`unitsEntry`**. Mirrored in Web.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.

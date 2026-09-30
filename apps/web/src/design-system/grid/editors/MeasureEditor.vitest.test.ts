@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MeasureEditor } from './MeasureEditor'
+import { MeasureEditor, unitsEntry } from './MeasureEditor'
 import { measureFromText } from './shapeValue'
 import { parseShape } from './shapeColumn'
 
@@ -82,5 +82,19 @@ describe('MeasureEditor — the unit list is named (audit B19)', () => {
       api: { stopEditing: vi.fn() }, column: { getActualWidth: () => 150 },
     } as any))
     expect(capture.units.ariaLabel).toBe('Item weight — unit')
+  })
+})
+
+/**
+ * Audit B22 (2026-09-30) — with more than 8 units the unit list has its own search field, but Tab from the number focused
+ * the list's container, so typed letters went nowhere ("mil" did not find millimeters).
+ */
+describe('MeasureEditor — Tab to the units lands where the operator can type', () => {
+  it('the search field when the unit list has one, the list itself otherwise', () => {
+    const field = { focus: vi.fn() }
+    const searching = { querySelector: (s: string) => (s === '.nds-combo-search input' ? field : null), focus: vi.fn() }
+    expect(unitsEntry(searching as never)).toBe(field)
+    const short = { querySelector: () => null, focus: vi.fn() }
+    expect(unitsEntry(short as never)).toBe(short)
   })
 })
