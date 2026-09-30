@@ -84,6 +84,8 @@ export async function resolveChannelValues(input: {
   productIds: string[]
   /** The channel fields the sheet is showing. Omit for the whole catalogue (slower). */
   fieldKeys?: string[]
+  /** Channel fields the sheet reads as numbered slots, before any blank-member compaction. */
+  slotFieldKeys?: string[]
   locale?: string
   /** Pin one channel category for every product; omit to use each product's own. */
   productType?: string | null

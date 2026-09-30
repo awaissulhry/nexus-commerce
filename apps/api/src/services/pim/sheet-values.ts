@@ -66,7 +66,7 @@ export function readMeasureValue(raw: unknown): MeasureValue | null {
  * slot `n` of a list is item `n-1`; a list column shows the array; a measure shows `{ value, unit }`.
  * `base` is the value stored under the column's base key (`slot.of` for a slot).
  */
-export function projectCellValue(col: Pick<SheetColumn, 'shape' | 'slot'>, base: unknown): unknown {
+export function projectCellValue(col: Pick<SheetColumn, 'shape' | 'slot'>, base: unknown, options: { preserveListPositions?: boolean } = {}): unknown {
   if (col.slot) {
     const list = readListValue(base)
     if (!list) return null
@@ -76,6 +76,8 @@ export function projectCellValue(col: Pick<SheetColumn, 'shape' | 'slot'>, base:
   if (col.shape === 'list') {
     const list = readListValue(base)
     if (!list) return null
+    // A sheet will index this list into numbered cells. Publishing and ordinary list cells still omit blanks.
+    if (options.preserveListPositions) return list
     const kept = list.filter((v) => !isBlankValue(v))
     return kept
   }

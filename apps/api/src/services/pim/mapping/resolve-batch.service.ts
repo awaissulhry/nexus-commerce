@@ -69,7 +69,7 @@ export interface ResolvedCell {
   requestedLocale?: string
   effectiveLocale?: string
   translationState?: import('../attribute-resolver.js').ResolvedValue['translationState']
-  /** The value that would ship, AFTER any enum auto-correction. */
+  /** After enum auto-correction; a sheet's explicitly requested numbered lists retain their empty positions. */
   value: unknown
   status: 'mapped' | 'unmapped'
   /** FM.2 provenance — locked / override / linked / fallback / default / catalogRule / missing. */
@@ -186,6 +186,8 @@ export async function resolveBatch(input: {
   productIds: string[]
   /** Restrict to these fields. Omit for the whole catalogue. */
   fieldKeys?: string[]
+  /** Sheet-only: these channel fields will be indexed into numbered cells, so keep empty positions. */
+  slotFieldKeys?: string[]
   locale?: string
   /** Force one category's rule set for every product (the editor pins the category it is
    *  editing); omit to resolve each product's own category. */
@@ -216,6 +218,7 @@ export async function resolveBatch(input: {
     || ['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data'].includes(field.sourceOwner.label))
   const productIds = [...new Set(input.productIds)].filter(Boolean)
   const includeCatalogue = input.includeCatalogue !== false
+  const slotFieldKeys = new Set(input.slotFieldKeys ?? [])
 
   // ── per-template loads: once, not per product ────────────────────
   const mapping = input.mappingSnapshot ?? await getMappingForMarketplace(channel, marketplace)
@@ -340,6 +343,7 @@ export async function resolveBatch(input: {
     const fields: CatalogueField[] = catalogue.fields
 
     const cells: Record<string, ResolvedCell> = {}
+    const slotValues = new Map<string, unknown[]>()
     let mapped = 0, unmapped = 0, errorCount = 0, requiredMissing = 0
 
     for (const field of fields) {
@@ -374,7 +378,8 @@ export async function resolveBatch(input: {
       // A deliberately cleared override is still an override; it must not revive Master.
       const hasStored = effectiveStored !== undefined
       const directRaw = channel === 'EBAY' ? normalizeEbayListingValue(field.sheetKey ?? field.fieldKey, effectiveStored) : effectiveStored
-      const directValue = projectCellValue({ shape: field.shape }, directRaw)
+      const listProjection = { preserveListPositions: slotFieldKeys.has(field.fieldKey) }
+      const directValue = projectCellValue({ shape: field.shape }, directRaw, listProjection)
 
       if (!contentHit && !hasStored && !rule) {
         const errors: string[] = []
@@ -417,11 +422,14 @@ export async function resolveBatch(input: {
         },
       })
 
-      const wire = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape, contentField(field.sheetKey ?? field.fieldKey))
+      const wire = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value, listProjection) : r.value, field.shape, contentField(field.sheetKey ?? field.fieldKey))
+      if (listProjection.preserveListPositions && Array.isArray(wire)) slotValues.set(field.fieldKey, wire)
+      // Schema checks still see the outbound list. Empty edit positions are not invalid provider values.
+      const normalized = listProjection.preserveListPositions && field.shape === 'list' ? projectCellValue({ shape: 'list' }, wire) : wire
       // P1 (report 3 I-3.8) — a multi-value eBay item specific shows the values eBay receives: a legacy joined list
       // ("Ventilato, Impermeabile, …", over 65 characters) is its parts, as the publisher sends it.
-      const projected = channel === 'EBAY' && field.shape === 'list' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' && Array.isArray(wire)
-        ? ebayAspectValues(wire) : wire
+      const projected = channel === 'EBAY' && field.shape === 'list' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' && Array.isArray(normalized)
+        ? ebayAspectValues(normalized) : normalized
       const { value, errors, findings, autoCorrected, overLimit } = validateChannelValue(field, projected)
       // A mapping that failed or was skipped: the value that would ship is unknown, so nothing was checked.
       for (const warning of r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning))) {
@@ -527,6 +535,16 @@ export async function resolveBatch(input: {
       schemaValidation, channelValidation: 'not-checked', listingOwnerFields: fields.filter(f => f.sourceOwner).length,
     }
     if (wanted) for (const key of Object.keys(cells)) if (!wanted.has(key)) delete cells[key]
+    for (const [key, positions] of slotValues) {
+      const cell = cells[key]
+      // An entirely empty list has no positions to display and must still count as missing.
+      if (!cell || !Array.isArray(cell.value) || cell.value.length === 0) continue
+      const normalized = cell.value
+      // Enum corrections retain item count. A provider split must not move the operator's original positions.
+      let index = 0
+      cell.value = positions.filter(value => !isBlankValue(value)).length === normalized.length
+        ? positions.map(value => isBlankValue(value) ? value : normalized[index++]) : positions
+    }
     out.push({
       productId: p.id,
       sku: p.sku,

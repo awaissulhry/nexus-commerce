@@ -1187,6 +1187,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           // engine's rules are keyed on — never by the merged sheet keys or slot keys. Measured
           // 2026-09-05: sending 186 sheet keys made the resolve 3.7 s; ~107 channel keys is the truth.
           fieldKeys: [...new Set(columns.map((c) => c.channels?.[coordinate.label]?.key ?? c.channels?.[coordinate.label]?.attribute).filter((k): k is string => !!k))],
+          slotFieldKeys: [...new Set(columns.filter(c => c.slot).map(c => c.channels?.[coordinate.label]?.key ?? c.channels?.[coordinate.label]?.attribute).filter((k): k is string => !!k))],
           locale,
         }) }))),
         MAPPING_TIMEOUT_MS * Math.max(1, Math.ceil(familyIds.length / 250)),
@@ -1482,7 +1483,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         const rowMapping = mappedByRow[`${product.id}:${projection.id ?? ''}`]
         const mRaw = rowMapping?.[mappedKey] ?? rowMapping?.[col.slot ? col.slot.of : col.key]
         const m = mRaw && col.slot
-          ? { ...mRaw, value: Array.isArray(mRaw.value) ? (mRaw.value[col.slot.index - 1] ?? null) : col.slot.index === 1 ? mRaw.value : null,
+          ? { ...mRaw, value: projectCellValue(col, mRaw.value),
               ...(isBlank(mRaw.value) && col.slot.index > Math.max(1, channelFacts?.cardinality?.min ?? 1) ? { errors: [], mappingErrors: [] } : {}) }
           : mRaw
         // #473 — ABSENT, not null, when the cell has no formula (#415's rule,
