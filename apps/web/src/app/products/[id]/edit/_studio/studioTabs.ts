@@ -31,3 +31,27 @@ export function preloadStudioTab(tab: string | null): void {
   const load = STUDIO_TAB_LOADERS[(tab && tab in STUDIO_TAB_LOADERS ? tab : 'sheet') as StudioTabId]
   void load().catch(() => {})
 }
+
+/**
+ * Audit B04 — a tab's code that did not arrive: the connection dropped, or a deploy removed the chunk this page asked for.
+ * Webpack names it `ChunkLoadError`; a native dynamic import fails with the browser's own sentence.
+ */
+export function isChunkLoadError(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'ChunkLoadError'
+    || /Loading (CSS )?chunk \S+ failed|Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i.test(error.message))
+}
+
+/**
+ * B04 — one component per tab, made again after it failed. `next/dynamic` wraps each loader in ONE `React.lazy`, which
+ * keeps a rejected import and throws it on every later render, so retrying a tab needs a new component, not a re-render.
+ */
+export function studioTabCache<T>(make: (id: StudioTabId) => T): { get: (id: StudioTabId) => T; forget: (id: StudioTabId) => void } {
+  const made = new Map<StudioTabId, T>()
+  return {
+    get: (id) => {
+      if (!made.has(id)) made.set(id, make(id))
+      return made.get(id)!
+    },
+    forget: (id) => { made.delete(id) },
+  }
+}

@@ -46,8 +46,9 @@ import { closeStudioRecord } from './recordClose'
 import { createWorkspaceSaveStore } from './workspaceSave'
 import { useInFlightGuard } from './useInFlightGuard'
 import { studioChannelViewPatch } from './navigationHref'
-import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness, readinessUrl } from './readiness'
+import { parseReadinessResponse, parseReadinessMatrix, readinessUrl } from './readiness'
 import { isViewChipVisible } from './viewChips'
+import { rememberStudioEntry, studioEntryChoices } from './studioPrefetch'
 import { marketGate, marketGateReason } from './marketGate'
 import {
   channelServesMarket,
@@ -390,7 +391,10 @@ export function useScopeReadiness(): ScopeReadinessQuery {
   return useContext(ReadinessCtx)
 }
 
-/** `coordinate: true` — only the open channel coordinate moved (a save on it): read that one and keep the rest. */
+/**
+ * Every refresh reads what the scope shows (`readinessUrl`): on a channel scope that is already the open coordinate's
+ * matrix and every chip, so `coordinate` (a save that moved only the open coordinate) asks for the same read.
+ */
 export type ReadinessRefresh = (options?: { coordinate?: boolean }) => void
 const ReadinessRefreshCtx = createContext<ReadinessRefresh>(() => {})
 
@@ -406,32 +410,9 @@ export function useReadinessRefresh(): ReadinessRefresh {
   return useContext(ReadinessRefreshCtx)
 }
 
-function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null, noMarketReason?: string | null, coordinateNonce = 0): ScopeReadinessQuery {
+function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null, noMarketReason?: string | null): ScopeReadinessQuery {
   const [query, setQuery] = useState<ScopeReadinessQuery>({ status: 'loading' })
   const queryCoordinate = JSON.stringify([productId, market, channel, accountId, listingId, locale])
-
-  /*
-   * P2 (2026-09-30, I4-9) — after a save on a channel coordinate, read THAT coordinate (`only=coordinate`) and merge it
-   * into the answer on screen; the family-wide read (every scope, every coordinate: 11 MB raw on GALE eBay IT) stays for
-   * the page load, a Reload and "Refresh progress". It never blocks anything: the last answer stays until this lands,
-   * and a failure keeps it.
-   */
-  useEffect(() => {
-    if (!coordinateNonce || !market || !channel) return
-    const abort = new AbortController()
-    const coordinate = queryCoordinate
-    void fetch(readinessUrl(productId, { market, locale, channel, listingId, accountId, only: 'coordinate' }), { cache: 'no-store', signal: abort.signal })
-      .then(async (res) => {
-        if (!res.ok) return
-        const json: unknown = await res.json()
-        if (abort.signal.aborted) return
-        setQuery((prev) => (prev.status === 'ready' && prev.coordinate === coordinate
-          ? { ...mergeCoordinateReadiness(prev, json, { channel, market, accountId }), at: Date.now(), refreshError: undefined }
-          : prev))
-      })
-      .catch(() => { /* the last answer stays on screen */ })
-    return () => abort.abort()
-  }, [coordinateNonce]) // only a coordinate refresh asks; the coordinate itself is read by the effect below
 
   useEffect(() => {
     if (!market) {
@@ -462,6 +443,8 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
     // Client-side on purpose: under RBAC enforce the Next server cannot read the API-origin
     // session cookie, so a server fetch comes back 401 (reference_rbac_enforce_ssr).
     // Read every unambiguous account/market coordinate so scope chips and projection columns agree.
+    // On a channel scope, what the scope shows only (audit B02). A refresh re-runs this effect: its cleanup aborts a
+    // read already in flight, so an answer that started before a save can never land after the one asked for it (B01).
     const url = readinessUrl(productId, { market, locale, channel, listingId, accountId })
 
     /*
@@ -639,10 +622,17 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
 
   // ── read the URL, then fall back — never the other way round.
   const marketParam = search.get(URL_KEYS.market)
+  /* Audit B03 — a URL that names no market opens on the one this operator last worked in (`lastMarket.ts`) from the FIRST
+     render, as the page-load prefetch resolves it (`studioEntrySearch`). It used to open on the default and move a tick
+     later, so the first sheet and readiness reads were thrown away and the prefetch was never adopted. */
+  const rememberedMarket = useMemo(() => (marketParam ? null : readLastMarket()), [marketParam])
   const market = useMemo(() => {
     if (marketParam && baseOptions.markets.some((m) => m.code === marketParam)) return marketParam
+    if (!marketParam && rememberedMarket && baseOptions.markets.some((m) => m.code === rememberedMarket)) return rememberedMarket
     return defaultMarket(baseOptions)
-  }, [marketParam, baseOptions])
+  }, [marketParam, rememberedMarket, baseOptions])
+  // What the next URL-silent link into this business resolves against, for its page-load prefetch.
+  useEffect(() => { rememberStudioEntry(browserWorkspaceId(), studioEntryChoices(marketplaces, primaryLanguage)) }, [marketplaces, primaryLanguage])
 
 
   const scopeParam = search.get(URL_KEYS.scope)
@@ -661,9 +651,13 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   const destination = useWorkspaceDestination(product.id, scope, market, requestedAccount, listingId)
   const accountId = requestedAccount ?? (destination.status === 'ready' ? destination.data.accountId : undefined)
   const localesParam = search.get('locales')
-  const locales = useMemo(() => languageSelection(localesParam), [localesParam])
   const localeParam = search.get(URL_KEYS.locale)
   const supportedLanguages = useMemo(() => scopeLanguages(scope, market, marketplaces, primaryLanguage), [scope, market, marketplaces, primaryLanguage])
+  // B03 — the same for the languages this operator last picked in this scope (`lastLanguages.ts`), from the first render.
+  const rememberedLanguages = useMemo(() => (localeParam || localesParam ? null : readLastLanguages(languagesKey(scope, market), supportedLanguages)),
+    [localeParam, localesParam, scope, market, supportedLanguages])
+  const locales = useMemo(() => languageSelection(localesParam) ?? (rememberedLanguages && rememberedLanguages.length > 1 ? rememberedLanguages : null),
+    [localesParam, rememberedLanguages])
   const options = useMemo(() => ({ ...baseOptions, locales: supportedLanguages.map(code => ({ code, label: localeLabel(code) })) }), [baseOptions, supportedLanguages])
   const localeError = locales && (!locales.length || locales.some(code => !supportedLanguages.includes(code))) ? 'Choose supported content languages for this scope.'
     : localeParam && !/^[a-z]{2,3}$/.test(localeParam) ? 'This content language is invalid. Choose a language.'
@@ -672,7 +666,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
     : marketParam && marketParam !== market ? 'This market is unavailable. Choose an available market.'
     : scope === MASTER_SCOPE && listingId ? 'A listing needs its channel and market. Choose a channel scope to continue.' : localeError
 
-  const locale = locales?.[0] ?? localeParam ?? (scope === MASTER_SCOPE ? primaryLanguage : supportedLanguages[0] ?? null)
+  const locale = locales?.[0] ?? localeParam ?? rememberedLanguages?.[0] ?? (scope === MASTER_SCOPE ? primaryLanguage : supportedLanguages[0] ?? null)
 
   /*
    * The tab is validated against the CURRENT SCOPE, not just against the list of ids.
@@ -876,10 +870,10 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
    * worked in. See `lastMarket.ts` — the computed default is a five-way tie broken alphabetically,
    * which is not a fact about anybody's catalogue.
    *
-   * Deliberately an effect and not part of the `useMemo` above: `localStorage` does not exist during
-   * SSR, so reading it in render would make the server's HTML and the client's first paint disagree.
-   * The correction lands one tick later, replaces rather than pushes, and only ever fires when the
-   * URL was silent.
+   * The page shows the remembered market from its first render (`rememberedMarket` above, audit B03): the
+   * studio renders only in the browser (`StudioLoader` draws it after its reads), so reading `localStorage`
+   * there cannot disagree with a server's HTML. This effect only writes it to the URL — replaces rather than
+   * pushes, and only ever fires when the URL was silent and the market is not the default.
    *
    * Goes through `push` like every other writer. It used to call `router.replace` directly, which
    * made it the one write that could not be coalesced — and therefore the one that could still lose
@@ -888,10 +882,11 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   useEffect(() => {
     if (marketParam) return
     const remembered = readLastMarket()
-    if (!remembered || remembered === market) return
+    // The page already shows it (B03); the URL names it when it is not the default, as before.
+    if (!remembered || remembered === defaultMarket(baseOptions)) return
     if (!options.markets.some((m) => m.code === remembered)) return
     push({ [URL_KEYS.market]: remembered })
-  }, [marketParam, market, options.markets, push])
+  }, [marketParam, baseOptions, options.markets, push])
 
   /* TOOLBAR REBUILD (2026-09-27) — the same for the content languages: a URL that names none opens on the languages
      this operator last picked in this scope (`lastLanguages.ts`). Replaces, never pushes; a link that names them wins. */
@@ -899,9 +894,10 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
     if (localeParam || localesParam || scopeError) return
     const remembered = readLastLanguages(languagesKey(scope, market), supportedLanguages)
     if (!remembered) return
-    if (remembered.length === 1 && remembered[0] === locale) return
+    // The page already shows them (B03); the URL names them when they are not the scope's default, as before.
+    if (remembered.length === 1 && remembered[0] === (scope === MASTER_SCOPE ? primaryLanguage : supportedLanguages[0] ?? null)) return
     push(languagesPatch(remembered))
-  }, [localeParam, localesParam, scopeError, scope, market, supportedLanguages, locale, push])
+  }, [localeParam, localesParam, scopeError, scope, market, supportedLanguages, primaryLanguage, push])
 
 
   const setScope = useCallback(
@@ -1075,17 +1071,10 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   useInFlightGuard(save.state, save.publication.publicationBlocker, canChangeEditor)
   const liveNonce = useLiveRefresh(product.id)
   const [askedNonce, setAskedNonce] = useState(0)
-  const [coordinateNonce, setCoordinateNonce] = useState(0)
-  const scopeRef = useRef(scope)
-  scopeRef.current = scope
-  const refreshReadiness = useCallback<ReadinessRefresh>((options) => {
-    // A coordinate refresh only makes sense on a channel scope; Shared's saves move every coordinate.
-    if (options?.coordinate && scopeRef.current !== MASTER_SCOPE) setCoordinateNonce((n) => n + 1)
-    else setAskedNonce((n) => n + 1)
-  }, [])
+  const refreshReadiness = useCallback<ReadinessRefresh>(() => setAskedNonce((n) => n + 1), [])
   // Only the resolved market being ABSENT has a gate reason; a scope error or an unready destination keeps "No market selected."
   const noMarketReason = market ? null : marketGateReason(marketGate({ market, locale, marketCount: baseOptions.markets.length, discoveryFailed: marketplacesFailed === true }))
-  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce + askedNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason, coordinateNonce)
+  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce + askedNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason)
 
   // P2 — one object per change of what it says, not per render: every reader re-rendered on every provider render.
   const accountHealth = accounts.find(a => a.id === accountId)?.health

@@ -13,7 +13,7 @@
  */
 
 import dynamic from 'next/dynamic'
-import type { ComponentType } from 'react'
+import { Component, type ComponentType, type ReactNode } from 'react'
 
 import { Banner, ProgressBar } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
@@ -21,7 +21,7 @@ import { Button } from '@/design-system/primitives'
 import { useStudioScope, useStudioProduct } from './contracts'
 import { studioAccountAccess } from './accountScope'
 import { STUDIO_TAB_LABELS } from './navigation'
-import { STUDIO_TAB_LOADERS } from './studioTabs'
+import { isChunkLoadError, STUDIO_TAB_LOADERS, studioTabCache } from './studioTabs'
 import { MASTER_SCOPE, STUDIO_TABS, type StudioTabId } from './types'
 import styles from './studio.module.css'
 
@@ -35,9 +35,37 @@ import styles from './studio.module.css'
  * know what any of them look like. MX.P's Matrix, the ONE Variants switch (master is VP.3's surface, a channel scope
  * VP.4's projection) and the Sharing studio are the same components as before, only loaded later.
  */
-const TABS = Object.fromEntries(STUDIO_TABS.map((id) => [id, dynamic(STUDIO_TAB_LOADERS[id], {
+const TABS = studioTabCache((id): ComponentType => dynamic(STUDIO_TAB_LOADERS[id], {
   loading: () => <ProgressBar indeterminate ariaLabel={`Loading ${STUDIO_TAB_LABELS[id]}`} />,
-})])) as Record<StudioTabId, ComponentType>
+}))
+
+/**
+ * Audit B04 — a tab that fails stays a tab. Its code is loaded when it is opened, so a dropped connection or a deploy
+ * since the page opened can fail it; and nothing inside the studio caught that, so the app-wide error page replaced the
+ * whole studio and its "Try again" re-threw the same cached failure. Here the tab says what happened and "Reload tab"
+ * makes its component again (a fresh import); "Reload page" is for a deploy that removed the code this page knows.
+ */
+class StudioTabBoundary extends Component<{ tab: StudioTabId; surfaceKey: string }, { error: unknown }> {
+  state: { error: unknown } = { error: null }
+  static getDerivedStateFromError(error: unknown) { return { error } }
+  retry = () => { TABS.forget(this.props.tab); this.setState({ error: null }) }
+  render(): ReactNode {
+    const { tab, surfaceKey } = this.props
+    const { error } = this.state
+    if (error === null) {
+      const Surface = TABS.get(tab)
+      return <Surface key={surfaceKey} />
+    }
+    const label = STUDIO_TAB_LABELS[tab]
+    const chunk = isChunkLoadError(error)
+    return <Banner tone="danger" title={chunk ? `${label} could not be loaded` : `${label} stopped working`}
+      action={<><Button size="sm" variant="secondary" onClick={this.retry}>Reload tab</Button>{' '}
+        <Button size="sm" variant="ghost" onClick={() => window.location.reload()}>Reload page</Button></>}>
+      {chunk ? 'Its code did not arrive: the connection dropped, or Nexus was updated since this page opened. Reload the tab to try again; if it fails again, reload the page.'
+        : `${error instanceof Error && error.message ? `${error.message} ` : ''}The rest of the studio still works. Reload the tab to try again.`}
+    </Banner>
+  }
+}
 
 export function StudioTabHost() {
   const product = useStudioProduct()
@@ -52,10 +80,12 @@ export function StudioTabHost() {
     Select a connected account in the scope controls to continue. Product values will load for that account.
   </Banner>
   if (scope !== MASTER_SCOPE && destination.status !== 'ready') return <Banner tone="neutral">Choose an available market to load this destination.</Banner>
-  const Surface = TABS[tab] ?? TABS.sheet
+  const shown = STUDIO_TABS.includes(tab) ? tab : 'sheet'
+  const surfaceKey = JSON.stringify([product.id, shown, scope, market, locale, accountId, listingId])
   return (
-    <section aria-label={STUDIO_TAB_LABELS[tab]} className={styles.tabPanel}>
-      <Surface key={JSON.stringify([product.id, tab, scope, market, locale, accountId, listingId])} />
+    <section aria-label={STUDIO_TAB_LABELS[shown]} className={styles.tabPanel}>
+      {/* Keyed like the surface: another tab or coordinate starts without the last one's failure. */}
+      <StudioTabBoundary key={surfaceKey} tab={shown} surfaceKey={surfaceKey} />
     </section>
   )
 }

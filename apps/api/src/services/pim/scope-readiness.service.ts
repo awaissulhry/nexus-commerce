@@ -61,25 +61,38 @@ export class ReadinessCoordinateRequiredError extends Error {
  * alias when the destination names one): its scope chip in `scopes` and its entries, every language, in `matrix`.
  * The chip leaves out `missing` / `optionalMissing`, the lists its matrix entry carries (the chip parser reads neither).
  * Measured on GALE-JACKET · eBay · IT: the family-wide answer was 13.1 MB, every coordinate of the family.
+ *
+ * `onlyScope` (audit B02): what an open channel scope shows — every scope's chip in this market (Shared's and each
+ * channel's, without their lists) and the open coordinate's matrix entries, every language. The chips are the default
+ * answer's; the other coordinates' field lists are never read from the index. The page reads this on a channel scope at
+ * load, on Reload, on "Refresh progress", after a save and on a live refresh.
  */
-export async function getProductReadiness(input: { productId: string; market: string; channel?: string; accountId?: string; selectedOnly?: boolean; listingId?: string; locale?: string; onlyCoordinate?: boolean }): Promise<ProductReadiness> {
+export async function getProductReadiness(input: { productId: string; market: string; channel?: string; accountId?: string; selectedOnly?: boolean; listingId?: string; locale?: string; onlyCoordinate?: boolean; onlyScope?: boolean }): Promise<ProductReadiness> {
   const market = input.market.toUpperCase()
   const locale = normalizeLanguage(input.locale ?? PRIMARY_CONTENT_LOCALE)
-  if (input.onlyCoordinate && (!input.channel || !(input.accountId || input.listingId))) throw new ReadinessCoordinateRequiredError()
+  const narrowed = input.onlyCoordinate || input.onlyScope
+  if (narrowed && (!input.channel || !(input.accountId || input.listingId))) throw new ReadinessCoordinateRequiredError()
   const destination = input.channel ? await resolveWorkspaceDestination({ productId: input.productId, channel: input.channel, marketplace: market, accountId: input.accountId, listingId: input.listingId }) : null
-  const only = input.onlyCoordinate ? { channel: input.channel!.toUpperCase(), accountId: destination?.accountId ?? input.accountId ?? null, aliasId: destination?.aliasKey ?? null } : null
+  const only = narrowed ? { channel: input.channel!.toUpperCase(), accountId: destination?.accountId ?? input.accountId ?? null, aliasId: destination?.aliasKey ?? null } : null
   if (only && !only.accountId) throw new ReadinessCoordinateRequiredError()
   const product = await prisma.product.findFirstOrThrow({ where: { id: input.productId, deletedAt: null }, select: { id: true, parentId: true } })
   const rootId = product.parentId ?? product.id
-  const [familyRows, markets] = await Promise.all([
-    prisma.readinessIndex.findMany({ where: { product: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null },
+  const family = { product: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null } }
+  const orderBy = [{ coordinateKey: 'asc' as const }, { language: 'asc' as const }, { productId: 'asc' as const }]
+  const [familyRows, markets, scopeRows] = await Promise.all([
+    prisma.readinessIndex.findMany({ where: { ...family,
       ...(only ? { channel: only.channel, accountId: only.accountId, ...(only.aliasId !== null ? { aliasId: only.aliasId } : {}) } : {}) },
-    orderBy: [{ coordinateKey: 'asc' }, { language: 'asc' }, { productId: 'asc' }] }),
+    orderBy }),
     prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true, languages: true, language: true } }),
+    // The chips' rows: Shared and this market's coordinates (a channel without markets answers for GLOBAL), without the
+    // field lists — a chip carries none, and they are most of the index's bytes.
+    input.onlyScope ? prisma.readinessIndex.findMany({ where: { ...family, OR: [{ channel: null }, { market: { in: [market, 'GLOBAL'] } }] },
+      omit: { missing: true, optionalMissing: true }, orderBy }) : null,
   ])
   const onlyCoordinate = only ? coordinatesFor(market, markets, { only: [only.channel] })[0] : undefined
   if (only && !onlyCoordinate) throw new ReadinessCoordinateRequiredError()
   const rows = onlyCoordinate ? familyRows.filter(r => r.market === onlyCoordinate.marketplace) : familyRows
+  const chipRows: ReadinessIndex[] = scopeRows ? scopeRows.map(r => ({ ...r, missing: [], optionalMissing: [] })) : rows
   const groups = new Map<string, ReadinessIndex[]>()
   for (const row of rows) { const key = JSON.stringify([row.coordinateKey, row.language]); const group = groups.get(key) ?? []; group.push(row); groups.set(key, group) }
   const languages = readinessLanguages(markets)
@@ -112,23 +125,28 @@ export async function getProductReadiness(input: { productId: string; market: st
     return { language, pct: result.pct, state: result.state }
   })
   const scopes: ScopeReadiness[] = []
-  if (!onlyCoordinate) {
-    const master = summarizeReadinessIndex(rows.filter(r => !r.channel && r.language === locale), shared, locale, 'Shared product')
-    master.languages = languageSummaries(rows.filter(r => !r.channel), shared, 'Shared product')
-    scopes.push(master)
+  // The chips leave out the lists their matrix entries carry when the answer is narrowed (the chip parser reads neither).
+  const chip = (summary: ReturnType<typeof summarizeReadinessIndex>): ScopeReadiness => {
+    if (narrowed) { delete (summary as Partial<typeof summary>).missing; delete (summary as Partial<typeof summary>).optionalMissing }
+    return summary
   }
-  for (const coordinate of onlyCoordinate ? [onlyCoordinate] : coordinatesFor(market, markets, input.selectedOnly ? { only: input.channel ? [input.channel] : [] } : {})) {
+  const oneCoordinate = input.onlyCoordinate ? onlyCoordinate : undefined
+  if (!oneCoordinate) {
+    const master = summarizeReadinessIndex(chipRows.filter(r => !r.channel && r.language === locale), shared, locale, 'Shared product')
+    master.languages = languageSummaries(chipRows.filter(r => !r.channel), shared, 'Shared product')
+    scopes.push(chip(master))
+  }
+  for (const coordinate of oneCoordinate ? [oneCoordinate] : coordinatesFor(market, markets, input.selectedOnly ? { only: input.channel ? [input.channel] : [] } : {})) {
     let accountId: string | null = null
     let unavailable: string | undefined
     try { accountId = coordinate.channel === input.channel ? destination?.accountId ?? input.accountId ?? null : await readFamilyAccountId(rootId, coordinate.channel, coordinate.marketplace) }
     catch (error) { unavailable = error instanceof Error ? error.message : 'Choose an account for this destination.' }
     const aliasId = coordinate.channel === input.channel ? destination?.aliasKey ?? null : null
-    const candidates = rows.filter(r => r.channel === coordinate.channel && r.market === coordinate.marketplace && r.accountId === accountId && r.language === locale && (aliasId === null || r.aliasId === aliasId))
+    const candidates = chipRows.filter(r => r.channel === coordinate.channel && r.market === coordinate.marketplace && r.accountId === accountId && r.language === locale && (aliasId === null || r.aliasId === aliasId))
     const summary = summarizeReadinessIndex(candidates, { channel: coordinate.channel, market: coordinate.marketplace, accountId, aliasId }, locale, coordinate.label)
     if (unavailable) { summary.pct = null; summary.state = 'absent'; summary.note = unavailable }
-    summary.languages = languageSummaries(rows.filter(r => r.channel === coordinate.channel && r.market === coordinate.marketplace && r.accountId === accountId && (aliasId === null || r.aliasId === aliasId)), summary, coordinate.label)
-    if (onlyCoordinate) { delete (summary as Partial<typeof summary>).missing; delete (summary as Partial<typeof summary>).optionalMissing }
-    scopes.push(summary)
+    summary.languages = languageSummaries(chipRows.filter(r => r.channel === coordinate.channel && r.market === coordinate.marketplace && r.accountId === accountId && (aliasId === null || r.aliasId === aliasId)), summary, coordinate.label)
+    scopes.push(chip(summary))
   }
-  return { market, locale, scopes, matrix, computedAt: rows.length ? new Date(Math.min(...rows.map(r => r.computedAt.getTime()))).toISOString() : new Date().toISOString() }
+  return { market, locale, scopes, matrix, computedAt: chipRows.length ? new Date(Math.min(...chipRows.map(r => r.computedAt.getTime()))).toISOString() : new Date().toISOString() }
 }

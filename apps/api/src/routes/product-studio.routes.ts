@@ -601,10 +601,11 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       const channel = q.channel ? String(q.channel).toUpperCase() : undefined
       const accountId = q.accountId ? String(q.accountId) : undefined
       if (accountId && !channel) return reply.code(400).send({ error: 'channel is required when accountId is provided' })
-      // P2 — `only=coordinate`: just the named channel coordinate (scope-readiness.service.ts). Any other value is refused
-      // rather than read as "everything", which is a different, much larger answer.
-      if (q.only !== undefined && q.only !== 'coordinate') return reply.code(400).send({ error: 'bad_only', message: 'only must be "coordinate", or be omitted.' })
-      const result = await getProductReadiness({ productId: id, market, channel, accountId, ...(q.locale ? { locale: String(q.locale) } : {}), ...(q.workspace === '1' ? { selectedOnly: true } : {}), ...(q.listingId ? { listingId: String(q.listingId) } : {}), ...(q.only === 'coordinate' ? { onlyCoordinate: true } : {}) })
+      // P2 — `only=coordinate`: just the named channel coordinate; `only=scope`: what the open channel scope shows (every
+      // chip, the open coordinate's matrix) (scope-readiness.service.ts). Any other value is refused rather than read as
+      // "everything", which is a different, much larger answer.
+      if (q.only !== undefined && q.only !== 'coordinate' && q.only !== 'scope') return reply.code(400).send({ error: 'bad_only', message: 'only must be "coordinate" or "scope", or be omitted.' })
+      const result = await getProductReadiness({ productId: id, market, channel, accountId, ...(q.locale ? { locale: String(q.locale) } : {}), ...(q.workspace === '1' ? { selectedOnly: true } : {}), ...(q.listingId ? { listingId: String(q.listingId) } : {}), ...(q.only === 'coordinate' ? { onlyCoordinate: true } : {}), ...(q.only === 'scope' ? { onlyScope: true } : {}) })
       reply.header('Server-Timing', `readiness;dur=${Date.now() - t0}`)
       return result
     } catch (err) {
