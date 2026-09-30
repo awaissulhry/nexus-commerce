@@ -162,11 +162,13 @@ describe('P1 review', () => {
     expect((await specifics(ids.BLANKA))['Paese di origine'] ?? null).toBeNull()
     expect(await specifics(ids.BLANKA)).toMatchObject({ Colore: 'Rosso' })
   })
-  it('(5) control: a clear where no row of the family holds a value IS a no-op', async () => {
+  it('(5b) a clear where no row of the family stores a value is still WRITTEN: the shown value may come from a mapping, and only a stored blank stops it (review 2026-09-30)', async () => {
     const before = await listing(ids.BLANK)
     const result = await save(ids.BLANKB, { field: 'attr_paese_di_origine', value: null })
-    expect(result, JSON.stringify(result)).toMatchObject({ success: true, updated: 0 })
-    expect((await listing(ids.BLANK)).version).toBe(before.version)
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+    expect(result.unchanged ?? 0).toBe(0)
+    expect((await listing(ids.BLANK)).version).toBeGreaterThan(before.version)
+    expect(await specifics(ids.BLANK)).toHaveProperty('Paese di origine')
   })
   it('(10) two families in one save load their variation projections at the same time', async () => {
     axesCalls.max = 0
