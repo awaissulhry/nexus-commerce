@@ -2,8 +2,8 @@
 #
 # Railway's native GitHub integration is unreliable on this project
 # (it stops auto-deploying after rebases or after the worker crashes
-# on a Redis hiccup). This workflow takes over: every push to main
-# builds and ships the new container via Railway CLI. The container
+# on a Redis hiccup). This workflow takes over: a push to main that
+# changes a service's files ships it via Railway CLI. The container
 # applies migrations in Railway's pre-deploy release step after building,
 # and Railway waits for /api/health/ready before switching traffic.
 #
@@ -13,13 +13,17 @@
 #                    tokens. Scope to the Nexus project so this
 #                    workflow can't push to other Railway projects.
 #
-# Optional secret:
-#   RAILWAY_SERVICE — Railway service ID for the API. Omit if the
-#                     project has exactly one service.
+#   RAILWAY_SERVICE, RAILWAY_WORKER_SERVICE, RAILWAY_SCHEDULER_SERVICE
+#                  — the three distinct service IDs of the API code.
 #
 # The web app (apps/web) ships from here too, since 2026-09-29 (it left Vercel): job `deploy-web`, after the API
 # serves the same commit, then `smoke-web`. It needs the secret RAILWAY_WEB_SERVICE (the `nexus-web` service ID)
-# and the repository variable NEXUS_WEB_URL (its public address). The `changes` job ships only what changed.
+# and the repository variable NEXUS_WEB_URL (its public address).
+#
+# Each service ships only when its own files differ from the commit it runs now (job `changes`,
+# scripts/ci/release-changes.sh). CI-only and docs-only changes deploy nothing (the Owner, 2026-09-30): the paths
+# below leave out .github/, scripts/, docs/ (except the one fixture the web imports) and every Markdown file. A hand
+# run compares the same way; `gh workflow run deploy-api.yml -f ship=all` ships every service.
 
 name: Deploy API
 
@@ -35,50 +39,72 @@ on:
       - 'package-lock.json'
       - 'patches/**'
       - 'apps/web/**'
-      - '.github/workflows/deploy-api.yml'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/prod-smoke.yml'
+      # The one file outside the workspaces that the web imports (the /design-system catalogue).
+      - 'docs/fixtures/vt1/fixtures.ts'
+      # Files Railway's own build reads (2026-09-29: a root .dockerignore broke the API build, run 36636596664).
+      - '.dockerignore'
+      - '.gitignore'
+      - '.railwayignore'
+      - 'railway.json'
+      - 'railway.toml'
+      - 'railpack.json'
+      - 'nixpacks.toml'
+      - '.npmrc'
+      - 'mise.toml'
+      - '.tool-versions'
+      - 'Dockerfile'
+      - '!**/*.md'
   workflow_dispatch:
+    inputs:
+      ship:
+        description: changed = only services whose files differ from what they run; all = every service
+        type: choice
+        options: [changed, all]
+        default: changed
 
 concurrency:
   group: deploy-api
   cancel-in-progress: false
 
 jobs:
-  # Which services changed since the last release that fully succeeded. Not since the previous commit: a newer push
-  # cancels a run still waiting in the `deploy-api` group, and a failed run may not have shipped everything — their
-  # changes must ride with this run (2026-09-29: #164's API change was in a cancelled run). A hand run
-  # (workflow_dispatch) ships everything; so does a push when that release cannot be found or read.
+  # Which services must ship: those whose files differ from the commit each one runs now, read from its latest
+  # successful Railway deployment (scripts/ci/release-changes.sh). Not the last successful run: a cancelled or failed
+  # run, or a hand rollback, leaves a service on an older commit, and only the service knows which (2026-09-29: #179's
+  # API landed although its run was cancelled). A service whose commit cannot be read ships; a service that already
+  # runs a newer commit does not (a re-run of an old run must not roll it back). `-f ship=all` ships everything.
   changes:
     name: What changed
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
-      actions: read
       contents: read
     outputs:
       api: ${{ steps.diff.outputs.api }}
+      worker: ${{ steps.diff.outputs.worker }}
+      scheduler: ${{ steps.diff.outputs.scheduler }}
+      background: ${{ steps.diff.outputs.background }}
       web: ${{ steps.diff.outputs.web }}
     steps:
+      # The whole history without file contents: enough to compare trees and to tell which commit is newer.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      # Without the CLI every service ships (the script cannot read what they run): too much, never too little.
+      - name: Install Railway CLI (pinned)
+        continue-on-error: true
+        run: npm install -g @railway/cli@5.30.1
+
       - id: diff
         env:
-          EVENT: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          api=true web=true
-          base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-api.yml/runs?branch=main&status=success&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null) || base=''
-          if [ "$EVENT" = push ] && [ -n "$base" ] && git fetch --no-tags --depth=1 origin "$base" 2>/dev/null; then
-            files=$(git diff --name-only "$base" "$GITHUB_SHA")
-            echo "Changed since $base, the last successful release:"
-            printf '%s\n' "$files"
-            shared='package(-lock)?\.json$|patches/|\.github/workflows/(deploy-api|ci)\.yml$'
-            grep -qE "^(apps/api/|packages/(database|shared|events)/|$shared)" <<< "$files" && api=true || api=false
-            grep -qE "^(apps/web/|packages/(database|shared)/|\.github/workflows/prod-smoke\.yml$|$shared)" <<< "$files" && web=true || web=false
-          fi
-          echo "api=$api web=$web"
-          { echo "api=$api"; echo "web=$web"; } >> "$GITHUB_OUTPUT"
+          SHIP_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.ship == 'all' }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          WORKER_SERVICE: ${{ secrets.RAILWAY_WORKER_SERVICE }}
+          SCHEDULER_SERVICE: ${{ secrets.RAILWAY_SCHEDULER_SERVICE }}
+          WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
+        run: scripts/ci/release-changes.sh
 
   # The whole CI (ci.yml) on the exact commit being released. Before 2026-09-26 main deployed without
   # waiting for any check. docs/ci-plan.md §2.4.
@@ -188,18 +214,37 @@ jobs:
   # The worker and scheduler ship the same commit once the API serves it, side by side and each
   # with its own time limit. In one job, three sequential builds overran its 25 minutes
   # (2026-09-26): the job was cancelled while the scheduler's build was still running.
+  # Only the roles in `changes.background` ship. They ship after the API, or without it when the API already runs
+  # their files; never after a failed API deploy.
   deploy-background:
-    needs: deploy
+    needs: [changes, verify, deploy]
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.verify.result == 'success' &&
+      needs.changes.outputs.background != '[]' &&
+      (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
     name: Ship ${{ matrix.role }} to Railway
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        role: [worker, scheduler]
+        role: ${{ fromJSON(needs.changes.outputs.background) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # The same check as the API job's: this job may now run without it.
+      - name: Require prepared worker and scheduler services
+        env:
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          WORKER_SERVICE: ${{ secrets.RAILWAY_WORKER_SERVICE }}
+          SCHEDULER_SERVICE: ${{ secrets.RAILWAY_SCHEDULER_SERVICE }}
+        run: |
+          test -n "$API_SERVICE" && test -n "$WORKER_SERVICE" && test -n "$SCHEDULER_SERVICE" &&
+          test "$API_SERVICE" != "$WORKER_SERVICE" && test "$API_SERVICE" != "$SCHEDULER_SERVICE" && test "$WORKER_SERVICE" != "$SCHEDULER_SERVICE" || {
+            echo "Configure three distinct API, worker and scheduler services before deploying. See tasks/architecture-operations.md."
+            exit 1
+          }
 
       - name: Install Railway CLI (pinned)
         run: npm install -g @railway/cli@5.30.1
@@ -207,16 +252,19 @@ jobs:
       - name: Deploy ${{ matrix.role }} from the same release
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
+          # No fall-through: an empty worker ID must not deploy the scheduler service.
+          SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || matrix.role == 'scheduler' && secrets.RAILWAY_SCHEDULER_SERVICE || '' }}
         run: scripts/ci/railway-up.sh --service "$SERVICE" --ci --message "${{ matrix.role }} GitHub ${{ github.sha }}"
 
   # The web ships after the API serves the same commit (its pages may call new API routes), or alone when only the web
   # changed. `railway up` returns when the build ends; Railway then waits for /login to answer before it switches
   # traffic, so this waits for the deployment itself to report SUCCESS.
+  # !cancelled(), not always(): always() still runs after the run is cancelled, and a cancelled release must not ship.
   deploy-web:
     needs: [changes, verify, deploy]
     if: >-
-      always() && needs.verify.result == 'success' && needs.changes.outputs.web == 'true' &&
+      !cancelled() && needs.changes.result == 'success' && needs.verify.result == 'success' &&
+      needs.changes.outputs.web == 'true' &&
       (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
     name: Build + ship the web to Railway
     runs-on: ubuntu-latest
@@ -259,11 +307,11 @@ jobs:
           echo "✗ Railway did not serve web deployment $DEPLOYMENT_ID within 12 minutes"
           exit 1
 
-  # always(): without it a skipped API deploy (a web-only push) skips this job too, though deploy-web succeeded
-  # (run 36557837250, 2026-09-29).
+  # A status function: without one a skipped API deploy (a web-only push) skips this job too, though deploy-web
+  # succeeded (run 36557837250, 2026-09-29).
   smoke-web:
     needs: deploy-web
-    if: always() && needs.deploy-web.result == 'success'
+    if: ${{ !cancelled() && needs.deploy-web.result == 'success' }}
     name: Web production smoke
     uses: ./.github/workflows/prod-smoke.yml
     with:
