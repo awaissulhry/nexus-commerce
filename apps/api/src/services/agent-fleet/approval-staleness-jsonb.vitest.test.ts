@@ -175,6 +175,22 @@ describe('AP.6 — an unchanged approval from the Approvals page runs after the 
     expect((await product('J-BULK-ATTR')).categoryAttributes).toEqual({ fit: 'slim' })
   })
 
+  it('bulk attributes run after jsonb reorders the requested attribute keys', async () => {
+    const row = await inside(() => database.client.product.create({ data: {
+      sku: 'J-BULK-KEY-ORDER', name: 'Bulk key order', basePrice: 10,
+      categoryAttributes: { lining_note: 'Mesh', fit: 'regular' },
+    } }))
+    const attributes = { lining_note: 'Fleece', fit: 'slim' }
+    const id = await approveOnThePage('bulk-attribute-change', { products: [row.id], attributes })
+    const savedArgs = (await approval(id)).args as { attributes: Record<string, unknown> }
+    expect(Object.keys(savedArgs.attributes)).not.toEqual(Object.keys(attributes))
+    expect(await inside(() => checkStaleness(id))).toEqual({ stale: false, why: null })
+    expect(await commitAfterTheWindow(id)).toMatchObject({ ok: true })
+    expect((await approval(id)).status).toBe('executed')
+    expect((await inside(() => database.client.product.findUniqueOrThrow({ where: { id: row.id } }))).categoryAttributes)
+      .toEqual(attributes)
+  })
+
   it('MCP.10 — a price change Claude asked for, approved on the page, runs', async () => {
     const result = await runToolForClaude(claude(), getTool('set-price')!, { productId: ids['J-CLAUDE'], price: 14 })
     const { approvalId } = JSON.parse((result.content[0] as { text: string }).text)

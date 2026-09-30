@@ -478,7 +478,8 @@ interface AttributePlan {
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 
 async function planAttributes(args: Record<string, unknown>, nothing: string): Promise<AttributePlan | Refusal> {
-  const attributes = Object.entries((args.attributes ?? {}) as Record<string, unknown>)
+  // Stored approval arguments are jsonb: key order can change without any value changing.
+  const attributes = Object.entries((args.attributes ?? {}) as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
   const refs = args.products as string[]
   if (attributes.length * new Set(refs).size > WRITER_MAX_CHANGES) {
     return {
