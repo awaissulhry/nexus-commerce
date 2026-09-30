@@ -291,7 +291,7 @@ export async function writeChannelPrices(input: {
           const saleRemoved = l.channel === 'AMAZON' && effectiveSale.value == null && (
             (saleChanges && currentSale.value != null && !!currentSale.start && !!currentSale.end)
             || !!(await tx.outboundSyncQueue.findFirst({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { path: ['saleRemoved'], equals: true } }, select: { id: true } })))
-          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
+          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
           const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
           const row = await createOutboundRow(tx, {
             data: {
@@ -299,6 +299,7 @@ export async function writeChannelPrices(input: {
               syncStatus: 'PENDING' as never, syncType: 'PRICE_UPDATE', holdUntil, externalListingId: l.externalListingId, maxRetries: 3,
               payload: {
                 source: 'CHANNEL_PRICE_WRITE', marketplace: l.marketplace, actor: input.actor,
+                productSku: l.product?.sku ?? null,
                 price: effectivePrice ?? undefined,
                 salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
                 ...(saleRemoved ? { saleRemoved: true } : {}),

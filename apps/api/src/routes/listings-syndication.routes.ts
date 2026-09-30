@@ -6,6 +6,7 @@ import { marketLanguages, languageTag } from '../services/pim/market-languages.j
 import { amazonCredsConfigured, getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { allowApiKeyScope } from '../lib/api-key-hook.js'
 import { computeHealth, aggregateIssuesByCategory } from '../services/listings/health.service.js'
@@ -3383,6 +3384,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           skippedItems: 0,
           progressPercent: 0,
           isRollbackable: false, // Phase J of /bulk-operations adds rollback; not in scope here
+          // Who ran it: the signed-in person (bulk-action-actor.ts); the job history shows their name.
+          createdBy: bulkActorOf(request),
         },
       })
       const jobId = job.id

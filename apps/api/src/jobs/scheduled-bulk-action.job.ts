@@ -18,6 +18,7 @@ import { runProfileTimer } from '../lib/cron/workspace-timer.js'
  */
 
 import prisma from '../db.js'
+import { scheduledRunActor } from '../services/bulk-action-actor.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { logger } from '../utils/logger.js'
 import {
@@ -79,7 +80,8 @@ export async function runScheduledBulkActionTickOnce(): Promise<TickSummary> {
             ? row.targetVariationIds
             : undefined,
         filters,
-        createdBy: row.createdBy ?? 'scheduled',
+        // The person who scheduled it (checked to be a real person), else schedule:<id> — never the stored free text.
+        createdBy: await scheduledRunActor(prisma, row),
       } as never)
       // Fire-and-forget the actual processing — schedule consumers
       // aren't awaiting the result; status flows through the active-

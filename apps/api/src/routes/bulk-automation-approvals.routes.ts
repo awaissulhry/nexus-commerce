@@ -9,6 +9,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { BulkApprovalService } from '../services/automation/bulk-approval.service.js'
 import prisma from '../db.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 
 const approvalService = new BulkApprovalService(prisma)
 
@@ -52,7 +53,8 @@ const bulkAutomationApprovalsRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const a = await approvalService.approve(
           request.params.id,
-          request.body?.approvedBy ?? null,
+          // Who approved is the signed-in person, never a name from the body (bulk-action-actor.ts).
+          bulkActorOf(request),
         )
         return reply.send({ success: true, approval: a })
       } catch (e) {
@@ -79,7 +81,7 @@ const bulkAutomationApprovalsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const a = await approvalService.reject(
         request.params.id,
-        request.body?.rejectedBy ?? null,
+        bulkActorOf(request),
         request.body?.reason ?? null,
       )
       return reply.send({ success: true, approval: a })

@@ -12,6 +12,7 @@ import {
 } from '../services/scheduled-bulk-action.service.js'
 import { runScheduledBulkActionTickOnce } from '../jobs/scheduled-bulk-action.job.js'
 import prisma from '../db.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 
 const scheduleService = new ScheduledBulkActionService(prisma)
 
@@ -28,6 +29,7 @@ interface CreateBody {
   cronExpression?: string | null
   timezone?: string
   templateId?: string | null
+  /** Ignored: a schedule records the signed-in person, and its runs act for them (`bulk-action-actor.ts`). */
   createdBy?: string | null
 }
 
@@ -104,7 +106,7 @@ const scheduledBulkActionRoutes: FastifyPluginAsync = async (fastify) => {
           cronExpression: body.cronExpression ?? null,
           timezone: body.timezone,
           templateId: body.templateId ?? null,
-          createdBy: body.createdBy ?? null,
+          createdBy: bulkActorOf(request),
         })
         return reply.code(201).send({ success: true, schedule })
       } catch (e) {
