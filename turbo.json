@@ -11,6 +11,28 @@
       "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
       "outputs": []
     },
+    // 2026-09-30: each app's typecheck cache key must hold every file its tsc program reads from outside its folder.
+    // turbo hashes only the package's own folder and the builds it depends on, so an edit to apps/web/src (@nexus/api
+    // compiles presence.ts, registry.ts and tone.ts), to apps/api/src (@nexus/web compiles lib/listing-coordinate.ts),
+    // to docs/fixtures (vt1/fixtures.ts) or to packages/database (its .d.ts files and the Prisma schema) left the hash
+    // unchanged, and a cached pass replayed. That local cache is one directory shared by every worktree of a checkout.
+    // See ci.yml, "Typecheck both apps". Here, not in apps/*/turbo.json: a file there is an app file, and deploy-api.yml
+    // would ship the services for a CI change. Keep dependsOn and outputs the same as "typecheck" above.
+    "@nexus/api#typecheck": {
+      "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/web/src/**", "$TURBO_ROOT$/packages/database/**"],
+      "outputs": []
+    },
+    "@nexus/web#typecheck": {
+      "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/docs/fixtures/**",
+        "$TURBO_ROOT$/packages/database/**"
+      ],
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
       "cache": false,

@@ -69,8 +69,8 @@ jobs:
         # docs/fixtures/vt1/fixtures.ts. A change to only those files did not type-check the app importing them, a
         # change to fixtures.ts alone type-checked no workspace at all, and Deploy API's `verify` runs this job before
         # every release. So both apps are type-checked on every run. A task the step above already ran replays from
-        # the local cache: apps/api/turbo.json and apps/web/turbo.json put those outside files into its key.
-        run: npx turbo run typecheck --filter=@nexus/api --filter=@nexus/web --cache=local:rw,remote:r -- --incremental false
+        # the local cache: turbo.json puts those outside files into its key.
+        run: npx turbo run typecheck --filter=@nexus/api --filter=@nexus/web --cache=local:rw -- --incremental false
 
       - name: Web tests (whole suite — proxy, workspace paths and permission gates included)
         env:

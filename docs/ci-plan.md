@@ -251,8 +251,9 @@ Runner: a **public** repo gets free GitHub-hosted `ubuntu-latest` with **4 vCPU 
 - Then it type-checks `@nexus/api` and `@nexus/web` on every push, as CI does (2026-09-30, see §2.3).
 - `turbo.json` gets a `typecheck` task that depends on `@nexus/shared#build` and `@nexus/events#build` only.
   - Not `@nexus/database#build`, because it rewrites tracked generated files in the shared checkout.
-  - `apps/api/turbo.json` and `apps/web/turbo.json` add to its inputs the files each app compiles from outside its
-    folder: the other app's `src`, `docs/fixtures` and `packages/database` (2026-09-30). Without them the cache key
+  - `@nexus/api#typecheck` and `@nexus/web#typecheck` in `turbo.json` add to its inputs the files each app compiles
+    from outside its folder: the other app's `src`, `docs/fixtures` and `packages/database` (2026-09-30). They sit in
+    the root `turbo.json`, not in `apps/*/turbo.json`: a file there is an app file, and Deploy API would ship. Without them the cache key
     ignored those files, and a cached pass replayed after they changed. In a git worktree, turbo uses the main
     checkout's `.turbo/cache`, so every session shares that cache.
 - Pass `tsc --incremental false`. A shared `tsbuildinfo` has given false results before.
