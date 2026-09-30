@@ -636,6 +636,8 @@ async function commitChannelLanguage(
         const warning = warningOf(colId, change.field)
         cells[colId] = hit ? { ok: false, reason: hit.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
       }
+      // Audit A07 — the cells it did store moved (their source, the row's progress): the sheet reads them once.
+      if (settle) coord.onStored?.({ read: settle.kind === 'read' ? settle.reason : 'the answer refused a cell' })
       return { ok: false, version, cells }
     }
     /**

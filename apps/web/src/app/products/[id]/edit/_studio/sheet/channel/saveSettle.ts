@@ -3,7 +3,7 @@
  * quiet read is owed, and whether readiness must be read for the whole family. Kept out of the adapter so each rule can
  * be tested without a grid.
  */
-import type { SheetWriteRequest } from '@/design-system/grid'
+import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 import { changeTarget } from './useChannelSheet'
 import type { ChannelSheetRow } from './types'
 
@@ -41,12 +41,31 @@ export function rowSettle(req: Pick<SheetWriteRequest<ChannelSheetRow>, 'cells' 
   }
 }
 
+/**
+ * Audit A01 — every other quiet read of the sheet (Refresh progress, a formula or media save, a Shopify review): it
+ * replaces the rows only if no save started or settled while it was on the wire. Its statements may have run before that
+ * save committed, and a save settled in place owes no read that would correct the rows afterwards. A read dropped for
+ * that is owed as the follow-up read, which is taken when the sheet is idle.
+ */
+export function guardedRead(deps: Pick<FollowUpReadDeps, 'read' | 'sequence'> & { owe: () => void }, canApply: () => boolean): Promise<boolean> {
+  const sequence = deps.sequence()
+  return deps.read(() => deps.sequence() === sequence && canApply()).then((applied) => {
+    if (!applied && deps.sequence() !== sequence) deps.owe()
+    return applied
+  })
+}
+
+/** Audit A07 — did this save store anything? A 200 that refused some cells still stored the others. */
+export function storedSome(result: Pick<SheetWriteResult, 'ok' | 'cells'>): boolean {
+  return result.ok || Object.values(result.cells ?? {}).some((cell) => cell.ok)
+}
+
 export interface FollowUpReadDeps {
   /** Nothing pending, nothing unconfirmed, no open editor: a read may replace the rows. */
   idle: () => boolean
   /** The sheet's quiet read; resolves true when it replaced the rows. */
   read: (canApply: () => boolean) => Promise<boolean>
-  /** The write sequence: a write started after the read began makes the read's answer stale. */
+  /** The write sequence: a write started or settled after the read began makes the read's answer stale. */
   sequence: () => number
   /** `setTimeout`, returning its cancel. */
   schedule: (run: () => void, ms: number) => () => void
@@ -62,7 +81,7 @@ export class FollowUpRead {
   private attempts = 0
   private cancel: (() => void) | null = null
 
-  constructor(private readonly deps: FollowUpReadDeps, private readonly retryMs = 1500, private readonly maxAttempts = 40) {}
+  constructor(private readonly deps: FollowUpReadDeps, private readonly retryMs = 1500, private readonly quickAttempts = 40, private readonly slowestMs = 30_000) {}
 
   get isOwed(): boolean { return this.owed }
 
@@ -96,9 +115,13 @@ export class FollowUpRead {
     this.retry()
   }
 
+  /**
+   * Audit A10 — an owed read is never given up: an editor held open for minutes, or an unconfirmed cell, only delays it.
+   * After the quick retries it waits longer each time (up to `slowestMs`); while the sheet is busy no retry fetches.
+   */
   private retry(): void {
-    if (this.attempts >= this.maxAttempts) return
     this.attempts++
-    this.cancel = this.deps.schedule(() => { this.cancel = null; this.settle() }, this.retryMs)
+    const ms = this.attempts <= this.quickAttempts ? this.retryMs : Math.min(this.retryMs * 2 ** (this.attempts - this.quickAttempts), this.slowestMs)
+    this.cancel = this.deps.schedule(() => { this.cancel = null; this.settle() }, ms)
   }
 }
