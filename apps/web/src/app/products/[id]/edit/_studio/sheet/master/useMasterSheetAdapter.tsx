@@ -295,17 +295,23 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* Progress columns (2026-09-26) — members of the column model (Customise, views, locks), built by `progressColumns`
        below. The per-market ones follow the readiness index for the pressed language. */
     const coordinateColumns = useMemo(() => coordinateReadinessColumns(readinessMatrix, locale), [readinessMatrix, locale]);
-    const progressSpecs = useMemo<SheetColumn[]>(() => (sheet ? [
+    /* Audit B27 — the column model is keyed on what the columns SAY, as the channel sheet's is (`columnsKey`): a sheet
+       read that returns the same columns, or a readiness answer, no longer rebuilds every attribute ColDef (each rebuild
+       re-created every visible cell renderer, twice per edit). */
+    const hasSheet = !!sheet;
+    const columnsKey = useMemo(() => JSON.stringify(sheet?.columns ?? []), [sheet?.columns]);
+    const stableColumns = useMemo(() => sheet?.columns ?? [], [columnsKey]);
+    const progressSpecs = useMemo<SheetColumn[]>(() => (hasSheet ? [
         progressSheetColumn<SheetColumn>(SCOPE_PROGRESS_COLUMN, 'Shared product', SHARED_PROGRESS_TIP),
         ...coordinateColumns.map((c) => progressSheetColumn<SheetColumn>(progressKeyOf(c.colId), c.label, marketProgressTip(c.label, languageLabel(c.language), c.computedAt))),
-    ] : []), [sheet, coordinateColumns]);
-    const schemaColumns = useMemo(() => [...progressSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))], [sheet, progressSpecs]);
-    const viewCtx = useMemo(() => ({
-        variationAxes: sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes,
-        locale,
-        scopeLabel: SHARED_SCOPE_LABEL,
-        flaggedKeys: flaggedColumnKeys(sheet?.rows),
-    }), [sheet, locale, variationAxes]);
+    ] : []), [hasSheet, coordinateColumns]);
+    const attributeSchema = useMemo(() => withProductMediaColumn(stableColumns).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never)), [stableColumns]);
+    const schemaColumns = useMemo(() => [...progressSpecs, ...attributeSchema], [progressSpecs, attributeSchema]);
+    const viewCtxKey = useMemo(() => JSON.stringify([sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes, locale, flaggedColumnKeys(sheet?.rows)]), [sheet, variationAxes, locale]);
+    const viewCtx = useMemo(() => {
+        const [axes, language, flaggedKeys] = JSON.parse(viewCtxKey) as [string[], string, string[]];
+        return { variationAxes: axes, locale: language, scopeLabel: SHARED_SCOPE_LABEL, flaggedKeys };
+    }, [viewCtxKey]);
     columnByKeyRef.current = useMemo(() => new Map(schemaColumns.map((c) => [c.key, c])), [schemaColumns]);
     const allColumnKeys = useMemo(() => schemaColumns.map((c) => c.key), [schemaColumns]);
     const customisableColumns = schemaColumns;
@@ -360,7 +366,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             api.refreshCells({ force: true });
     }, [activeChip]);
     const visibleRows = useMemo(() => activeChip ? filterProductSheetRows(scopeRows, row => (activeChip.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, activeChip]);
-    const attributeColumns = useMemo(() => (sheet ? control.decorate(buildSheetColumns('master', { columns: withoutProgressColumns(schemaColumns).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef)) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring, control.decorate]);
+    const attributeColumns = useMemo(() => (hasSheet ? control.decorate(buildSheetColumns('master', { columns: withoutProgressColumns(attributeSchema).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef)) : []), [hasSheet, attributeSchema, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring, control.decorate]);
     const identityColumns = useMemo<ColDef<StudioRow>[]>(() => [], []);
     /* Progress columns (2026-09-26) — what the card's actions call. Read through refs: the column set is built before
        the grid exists, and a card is opened long after either is current. */
@@ -384,7 +390,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
      * authority). Built by the ONE builder both scopes use (`../progressColumns`).
      */
     const progressColumns = useMemo<ColDef<StudioRow>[]>(() => {
-        if (!sheet) return [];
+        if (!hasSheet) return [];
         const subjectOf = (p: ICellRendererParams) => (p.data as StudioRow | undefined)?.sku ?? null;
         const own = progressColumn<StudioRow>({
             colId: SCOPE_PROGRESS_COLUMN,
@@ -422,7 +428,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             },
         }));
         return [own, ...perMarket];
-    }, [sheet, coordinateColumns, locale, progressMenu]);
+    }, [hasSheet, coordinateColumns, locale, progressMenu]);
     const columnDefs = useMemo(() => {
         const rank = new Map(orderColumnKeys(schemaColumns, viewCtx).map((k, i) => [k, i]));
         const ordered = attributeColumns

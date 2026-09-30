@@ -24,6 +24,7 @@ import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { adoptContentVersions } from '../contentVersions'
+import { planMasterSettle, type MasterSettle } from './masterSettle'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -85,6 +86,12 @@ export interface MasterCommitContext {
    * family, 2026-09-28). The host reloads that read here.
    */
   onVariationThemeSaved?: () => void
+  /**
+   * Audit B27 — each stored part of the row's save, with whether its answer describes the result (`planMasterSettle`):
+   * the cells it covers are settled in place, anything else makes the sheet read once. A part that reports nothing (the
+   * variation theme, a refused or unanswered send) leaves its cells uncovered, and the sheet reads.
+   */
+  onStored?: (colIds: string[], plan: MasterSettle) => void
 }
 
 async function commitMasterLanguage(
@@ -218,6 +225,10 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         version = versionFromBody(body) ?? version
         // The translation the save moved hands its new token to every cell writing to it.
         adoptContentVersions(req.row, body)
+        ctx.onStored?.(bulk.map((c) => c.colId), req.row
+          ? planMasterSettle({ row: req.row, body, column: (key) => byKey.get(key),
+            changes: bulk.map((c) => ({ colId: c.colId, field: byKey.get(c.colId)?.writeField ?? c.colId, value: c.value, intent: c.intent })) })
+          : { kind: 'read', reason: 'no row' })
       }
     }
 
