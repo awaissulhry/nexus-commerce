@@ -13,6 +13,7 @@ import { requiredFinding, validateChannelValue } from './mapping/validate-channe
 import { contentWireValue } from './content-read.js'
 import { checkForStorage, coerceForShape } from './sheet-values.js'
 import { editVerdict, type ValueFinding } from './value-verdict.js'
+import { ebayAxisIdentities, isEbayListingLevel } from './ebay-listing-level.js'
 import { channelValuePatch, jsonRecord, storedChannelState, type ValueRecord } from './channel-value-mutation.js'
 import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
@@ -222,6 +223,26 @@ export function channelImportVerdict(field: CatalogueField, action: TransferRow[
   }
   const refused = findings.filter(found => editVerdict(found) === 'refuse')
   return { value: checked.value, refused: refused.length ? refused.map(found => found.message).join(' ') : null, findings }
+}
+
+/**
+ * Audit A25 — eBay takes ONE value per listing for an item specific that is not a variation axis: the parent's, else the
+ * first variation's that holds one (`ebay-listing-level.ts`). The sheet's save writes such a value where eBay reads it; an
+ * import writes the row it names, so the review says when that row's value is not what eBay receives. The axes are the
+ * family's own (the fallback the listing's variation projection uses).
+ */
+export function ebayListingLevelImportWarning(field: CatalogueField, action: TransferRow['action'], product: TransferProduct, context: TransferContext): string | null {
+  const family = product.parentId ? jsonRecord(product.parent) : product.isParent || context.parentsWithChildren?.has(product.id) ? product : null
+  if (!family) return null
+  const axes = ebayAxisIdentities(Array.isArray(family.variationAxes) ? family.variationAxes.map(String) : [])
+  if (!isEbayListingLevel({ store: field.channelStore, names: [field.fieldKey, field.sheetKey, field.label] }, axes)) return null
+  if (product.parentId && action === 'SET') {
+    return `eBay takes one value for the whole listing, from the parent ${String(family.sku)} (or, when it holds none, the first variation that does). This row's value is stored but sent only in that case: import it on ${String(family.sku)}.`
+  }
+  if (!product.parentId && action !== 'SET') {
+    return 'eBay takes one value for the whole listing: with the parent empty, it sends the first variation that still stores one. Clear it on the variations too, or clear it in the sheet, which clears every row.'
+  }
+  return null
 }
 
 export function isEmptyChannelValue(value: unknown): boolean {
@@ -732,6 +753,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             if (checked.refused) { error(row, checked.refused); continue }
             for (const found of checked.findings) warnings.add(`${first.channel} ${first.marketplace}: ${row.sku} ${field.label}: ${found.message} Imported as written.`)
             value = checked.value
+            const listingLevel = first.channel === 'EBAY' && existingProduct ? ebayListingLevelImportWarning(field, row.action, existingProduct, context) : null
+            if (listingLevel) warnings.add(`${first.channel} ${first.marketplace}: ${row.sku} ${field.label}: ${listingLevel}`)
           }
           const changed = cell(row, old, value, state)
           target.cells.push(changed)
