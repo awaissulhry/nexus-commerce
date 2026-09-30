@@ -137,3 +137,13 @@ describe('useMasterSheetAdapter — the column model is keyed on column content'
     expect(src).toMatch(/const stableColumns = useMemo\(\(\) => sheet\?\.columns \?\? \[\], \[columnsKey\]\)/)
   })
 })
+
+describe('useChannelSheetAdapter — B34: the recovery read asks for the compact wire form too', () => {
+  it('readScope wraps its URL in compactSheetUrl and decodes the answer', () => {
+    const src = readFileSync(join(__dirname, '..', 'channel', 'useChannelSheetAdapter.tsx'), 'utf8')
+    const at = src.indexOf('const readScope = async')
+    const body = src.slice(at, src.indexOf('recoverSheetRow', at))
+    expect(body).toMatch(/fetch\(compactSheetUrl\(channelScopeUrl\(/)
+    expect(body).toMatch(/const page = decodeSheetCells\(await response\.json\(\)\)/)
+  })
+})

@@ -22,7 +22,8 @@ import { useSheetUndo } from '../useSheetUndo';
 import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
 import { withShopifyColumns } from '../../shopify/unlinkedInformationColumns';
-import { channelScopeUrl } from './useChannelSheet';
+import { channelScopeUrl, compactSheetUrl } from './useChannelSheet';
+import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire';
 import { reloadImpact } from '../master/reloadGuard';
 import { ProductRoleChip } from '../ProductRoleChip';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
@@ -354,10 +355,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         /* The scope's read, ONCE, for every row a lost answer left unknown (`readBackBatch`) or for one row (`readBack`). */
         const readScope = async (requests: SheetWriteRequest<ChannelSheetRow>[]) => {
             const recoveryLanguages = columnLanguages(requests.flatMap(request => request.cells.map(cell => cell.colId)));
-            const response = await fetch(channelScopeUrl({ productId, channel, marketplace, accountId, locale, locales: recoveryLanguages.length ? [...new Set([...(locale ? [locale] : []), ...recoveryLanguages])] : null }), { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30000) });
+            // B34 — the compact wire form, as every other read of this sheet (about a fifth of the bytes).
+            const response = await fetch(compactSheetUrl(channelScopeUrl({ productId, channel, marketplace, accountId, locale, locales: recoveryLanguages.length ? [...new Set([...(locale ? [locale] : []), ...recoveryLanguages])] : null })), { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30000) });
             if (!response.ok)
                 return null;
-            const page = await response.json();
+            const page = decodeSheetCells(await response.json());
             return Promise.all(requests.map(request => recoverSheetRow(page, request, { channel, market: marketplace, accountId, locale })));
         };
         writerRef.current = new SheetWriter<ChannelSheetRow>({
