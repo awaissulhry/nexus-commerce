@@ -26,9 +26,18 @@ import { RESTRICTED_FIELDS } from '../../lib/auth/financial-fields.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 
 let database: Pick<Awaited<ReturnType<typeof formulaDatabase>>, 'client' | 'close'>
-vi.mock('../../db.js', () => ({
-  default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
-}))
+// MCP.10 — wrapped as db.ts wraps it: inside a transaction, `prisma.x` is that transaction's client. The
+// product bulk writer (behind the bulk tools' dry run) opens one and queries through `prisma` inside it;
+// on the raw client those queries waited for the pool's only connection, which the transaction held.
+vi.mock('../../db.js', async () => {
+  const { contextualDatabase } = await import('../../lib/database-context.js')
+  let wrapped: object | null = null
+  return {
+    default: new Proxy({}, {
+      get: (_target, property) => Reflect.get((wrapped ??= contextualDatabase(database.client as never)), property),
+    }),
+  }
+})
 
 import { callTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { listTools } from './tool-registry.js'
@@ -96,11 +105,18 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'listing-issues': (ids) => ({ productId: ids.productId }),
   'channel-price-stock': (ids) => ({ productId: ids.productId }),
   'out-of-sync-listings': (ids) => ({ productId: ids.productId }),
+  // MCP.10 — previews only here: a queued bulk change shows its prices and values, never a cost.
+  'bulk-price-change': (ids) => ({ products: [ids.productId], operation: 'percent', value: 10 }),
+  'bulk-attribute-change': (ids) => ({ products: [ids.productId], attributes: { lining_note: 'Quilted' } }),
 }
 
 async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> {
   return inside(workspaceId, async () => {
     const db = database.client
+    // MCP.10 — the market the listing below is on: the bulk writer builds its attribute rules from it.
+    await db.marketplace.create({
+      data: { channel: 'EBAY', code: 'IT', name: 'Italy', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'], marketplaceId: 'EBAY_IT' } as never,
+    })
     const product = await db.product.create({
       data: {
         sku: `${mark}-MONEY-SKU`,
@@ -108,6 +124,8 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
         basePrice: '19.90',
         costPrice: '4242.42',
         totalStock: 7,
+        // MCP.10 — a saved attribute, so bulk-attribute-change has one it may set.
+        categoryAttributes: { lining_note: `${mark} mesh` },
       },
     })
     const order = await db.order.create({

@@ -2,10 +2,10 @@
  * AP.6 — an approval given in the Approvals page runs, unless the facts really moved.
  *
  * Every approve from the Approvals page (/fleet/approvals — its fleet queue and its "outside the fleet" queue,
- * where set-price and apply-content wait) goes one way: POST /agent/fleet/approvals/:id/decide →
- * decideFleetApproval parks it for the undo window → the page or the maintenance sweep commits it →
- * commitScheduledApproval re-runs the tool's dry run and compares the material preview fields (checkStaleness) →
- * it runs, or it is handed back.
+ * where set-price and apply-content wait — and, MCP.10, the bulk changes and everything Claude asks for) goes one
+ * way: POST /agent/fleet/approvals/:id/decide → decideFleetApproval parks it for the undo window → the page or the
+ * maintenance sweep commits it → commitScheduledApproval re-runs the tool's dry run and compares the material preview
+ * fields (checkStaleness) → it runs, or it is handed back.
  *
  * The stored preview is jsonb, which re-orders an object's keys. Compared as plain JSON text, an unchanged
  * set-price or apply-content was handed back as stale every time, so an approved change never ran. This file drives
@@ -34,21 +34,30 @@ vi.mock('../../lib/queue.js', () => ({
   searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
   addJobSafely: vi.fn(async () => ({ enqueued: false })),
 }))
+// MCP.10 — the bulk tools go through the product writer: its read cache and readiness rebuild are left out.
+vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
+vi.mock('../pim/readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 
 import { runOrQueueTool } from '../agents/approval-gate.service.js'
+import { getTool } from '../agents/tool-registry.js'
 import type { UserPrincipal } from '../agents/call-tool.js'
+import { runToolForClaude } from '../mcp/mcp-tool-call.js'
+import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { checkStaleness, commitScheduledApproval, decideFleetApproval } from './approval-inbox.service.js'
 
 const A = LEGACY_WORKSPACE_ID
 const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
 
-const PERMISSIONS = ['ai.run', F.productsPriceEdit, F.productsEdit]
+// MCP.10 — products.bulk.run as well, for the bulk changes.
+const PERMISSIONS = ['ai.run', F.productsPriceEdit, F.productsEdit, F.productsBulkRun]
 /**
  * A real person who may do both, through both places a request reads permissions from (login roles with business
  * profiles off, the membership of this business on): the commit re-reads the approver's permissions at run time.
  */
 let PERSON: UserPrincipal
+/** MCP.10 — the same person asking through Claude (built once the person exists). */
+const claude = (): McpPrincipal => ({ ...PERSON, via: 'claude', workspace: business, oauthGrantId: 'grant-jsonb' })
 
 const ids: Record<string, string> = {}
 const product = (sku: string) => inside(() => database.client.product.findUniqueOrThrow({ where: { id: ids[sku] } }))
@@ -59,9 +68,14 @@ async function approveOnThePage(tool: string, args: Record<string, unknown>) {
   const run = await inside(() => database.client.agentRun.create({ data: { agentKey: 'manual-action', trigger: 'manual', status: 'done' } }))
   const queued = await inside(() => runOrQueueTool(tool, args, PERSON, run.id))
   expect(queued, queued.error).toMatchObject({ ok: true, mode: 'queued' })
-  const parked = await inside(() => decideFleetApproval({ id: queued.approvalId!, decision: 'approve', actor: PERSON }))
+  return parkOnThePage(queued.approvalId!)
+}
+
+/** Approve an already queued request on the Approvals page: it is parked, not run. */
+async function parkOnThePage(approvalId: string) {
+  const parked = await inside(() => decideFleetApproval({ id: approvalId, decision: 'approve', actor: PERSON }))
   expect(parked).toMatchObject({ ok: true, status: 'scheduled' })
-  return queued.approvalId!
+  return approvalId
 }
 
 /** The undo window closes (moved into the past rather than waited for), and the page commits it. */
@@ -72,6 +86,8 @@ async function commitAfterTheWindow(approvalId: string) {
 
 beforeAll(async () => {
   database = await formulaDatabase()
+  vi.stubEnv('NEXUS_OAUTH_ISSUER', 'https://web.example.test')
+  vi.stubEnv('NEXUS_AI_KILL_SWITCH', '')
   {
     const db = database.client
     const role = await db.role.create({ data: { key: `JSONB_APPROVER_${randomUUID().slice(0, 8)}`, name: 'Approver', description: 'test', permissions: PERMISSIONS, isSystem: false } })
@@ -102,10 +118,24 @@ beforeAll(async () => {
         data: { productId: ids[sku], channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: account.id, price: '10.00', followMasterPrice: true, pricingRule: 'FIXED' } as never,
       })
     }
+    // MCP.10 — the bulk changes and Claude's request: products of a family with an attribute the bulk writer may set.
+    const group = await db.attributeGroup.create({ data: { code: 'jsonb', label: 'Specifications' } })
+    const fit = await db.customAttribute.create({ data: { code: 'fit', label: 'Fit', groupId: group.id, type: 'select' } })
+    const family = await db.productFamily.create({ data: { code: 'jsonb-jackets', label: 'Jackets' } })
+    await db.familyAttribute.create({ data: { familyId: family.id, attributeId: fit.id, channels: [] } })
+    for (const sku of ['J-BULK-PRICE', 'J-BULK-ATTR', 'J-CLAUDE']) {
+      ids[sku] = (await db.product.create({
+        data: { sku, name: `${sku} jacket`, basePrice: '10.00', familyId: family.id, categoryAttributes: { fit: 'regular' } },
+      })).id
+      await db.channelListing.create({
+        data: { productId: ids[sku], channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: account.id, price: '10.00', followMasterPrice: true, pricingRule: 'FIXED' } as never,
+      })
+    }
   })
 }, 120_000)
 
 afterAll(async () => {
+  vi.unstubAllEnvs()
   await database?.close()
 }, 30_000)
 
@@ -133,6 +163,24 @@ describe('AP.6 — an unchanged approval from the Approvals page runs after the 
     expect((await approval(id)).status).toBe('executed')
     const stored = await product('J-CONTENT')
     expect([stored.name, stored.bulletPoints]).toEqual(['Better title', ['x', 'y']])
+  })
+
+  it('MCP.10 — bulk-price-change and bulk-attribute-change run too', async () => {
+    const price = await approveOnThePage('bulk-price-change', { products: ['J-BULK-PRICE'], operation: 'percent', value: 50 })
+    expect(await commitAfterTheWindow(price)).toMatchObject({ ok: true })
+    expect(Number((await product('J-BULK-PRICE')).basePrice)).toBe(15)
+
+    const attr = await approveOnThePage('bulk-attribute-change', { products: ['J-BULK-ATTR'], attributes: { fit: 'slim' } })
+    expect(await commitAfterTheWindow(attr)).toMatchObject({ ok: true })
+    expect((await product('J-BULK-ATTR')).categoryAttributes).toEqual({ fit: 'slim' })
+  })
+
+  it('MCP.10 — a price change Claude asked for, approved on the page, runs', async () => {
+    const result = await runToolForClaude(claude(), getTool('set-price')!, { productId: ids['J-CLAUDE'], price: 14 })
+    const { approvalId } = JSON.parse((result.content[0] as { text: string }).text)
+    await parkOnThePage(approvalId)
+    expect(await commitAfterTheWindow(approvalId)).toMatchObject({ ok: true })
+    expect(Number((await product('J-CLAUDE')).basePrice)).toBe(14)
   })
 })
 
