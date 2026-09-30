@@ -8,6 +8,10 @@ The pinned AG React patch checks that its cell is alive and still owns the same 
 
 ## Saved views can share one initial read — 2026-09-30
 
+## 2026-09-30 — Preserve unsafe whole-number input
+
+Numeric cells and lists keep unsafe whole-number text intact so the API can refuse it by name without storing a rounded value. Safe values and text IDs keep their existing types.
+
 **`useGridViews`** and **`useGridState`** accept an optional keyed initial reader. A sheet can load its named views and working layouts in one bounded request. Explicit refresh stays a fresh read. Scope and request guards reject old replies. **`parseWorkingLayout`** applies the same checks to either transport. These files exist only in the web app; there is no Factory counterpart.
 
 ## Sheet save progress stays in the status strip — 2026-09-30

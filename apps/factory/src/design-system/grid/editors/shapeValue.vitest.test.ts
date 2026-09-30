@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseShape } from './shapeValue'
 import { shapeColumnDef } from './shapeColumn'
+import { parseScalarValue, scalarColumnDef } from './scalarValue'
 
 describe('typed list values', () => {
   it.each([
@@ -36,5 +37,33 @@ describe('typed list values', () => {
     if (typeof column.valueParser !== 'function') throw new Error('the shaped column has no value parser')
     expect(column.valueParser({ newValue: '7 | 8' } as never)).toEqual([7, 8])
     expect(column.valueParser({ newValue: ['7', '8'] } as never)).toEqual([7, 8])
+  })
+})
+
+
+describe('unsafe whole numbers retain their text until the API can refuse them', () => {
+  it.each(['9007199254740993', '-9007199254740993', '9007199254740992', '-9007199254740992', '9.007199254740993e15'])(
+    'preserves %s in scalar, list, paste and JSON transport', text => {
+      const scalar = scalarColumnDef({ kind: 'number' })
+      const list = shapeColumnDef({ key: 'partners', shape: 'list', kind: 'number' }, () => [])
+      if (typeof scalar.valueParser !== 'function' || typeof list.valueParser !== 'function') throw new Error('missing column parser')
+      expect(parseScalarValue({ kind: 'number' }, text)).toBe(text)
+      expect(scalar.valueParser({ newValue: text } as never)).toBe(text)
+      const typed = parseShape('list', ['7', text], { kind: 'number' })
+      const pasted = list.valueParser({ newValue: `7 | ${text}` } as never)
+      expect(typed).toEqual([7, text])
+      expect(pasted).toEqual([7, text])
+      expect(JSON.parse(JSON.stringify({ typed, pasted }))).toEqual({ typed: [7, text], pasted: [7, text] })
+    })
+
+  it.each([Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER, 0, -1, 1, -1.25, 0.125])('still sends supported number %s as a number', value => {
+    expect(parseScalarValue({ kind: 'number' }, String(value))).toBe(value)
+    expect(parseShape('list', [String(value)], { kind: 'number' })).toEqual([value])
+  })
+
+  it('leaves large text IDs and formulas unchanged', () => {
+    expect(parseScalarValue({ kind: 'text' }, '9007199254740993')).toBe('9007199254740993')
+    expect(parseShape('list', ['9007199254740993'], { kind: 'text' })).toEqual(['9007199254740993'])
+    expect(parseShape('list', '=9007199254740993', { kind: 'number' })).toBe('=9007199254740993')
   })
 })

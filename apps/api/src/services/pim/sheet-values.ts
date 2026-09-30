@@ -204,6 +204,8 @@ export function checkForStorage(facts: ShapeWriteFacts | undefined, raw: unknown
       }
     }
     if (typeof member === 'number') {
+      // JSON numbers cannot distinguish an unsafe integer from a rounded neighbouring integer.
+      if (Number.isInteger(member) && !Number.isSafeInteger(member)) return { ok: false, error: `${named(facts ?? {})} is outside the safe whole-number range (-9007199254740991 to 9007199254740991). It has not been rounded or saved.` }
       const min = number('minimum') ?? number('min'), max = number('maximum') ?? number('max')
       if (min !== undefined && member < min) flag('format', `must be at least ${min}`)
       if (max !== undefined && member > max) flag('format', `must be at most ${max}`)
