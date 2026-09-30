@@ -242,6 +242,9 @@ interface Described {
   evidence: Array<{ label: string; value: string }>
 }
 
+/** MCP.12 — how a changes map shows a value that is not set. */
+export const EMPTY_VALUE = '(empty)'
+
 const euro = (cents: unknown) =>
   typeof cents === 'number' ? `€${(cents / 100).toFixed(2)}` : null
 
@@ -274,8 +277,15 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
            rendered card, not reasoned about. The card names the unit the tool
            omitted; every other field keeps its value verbatim. */
         const money = /price|cost|fee/i.test(field)
+        /* MCP.12 — a value that is not there reads as a word. `plain(null)` is
+           "—", and "number_of_pockets — → 4" put a dash where the old value
+           goes, which reads as a typo rather than as "nothing was set". */
         const fmt = (v: unknown) =>
-          money && typeof v === 'number' && Number.isFinite(v) ? `€${v.toFixed(2)}` : plain(v)
+          v == null || v === '' || (Array.isArray(v) && v.length === 0)
+            ? EMPTY_VALUE
+            : money && typeof v === 'number' && Number.isFinite(v)
+              ? `€${v.toFixed(2)}`
+              : plain(v)
         out.deltas.push({ field, from: fmt(ch.from), to: fmt(ch.to) })
       }
     }
@@ -708,7 +718,7 @@ export function ApprovalCard({
               <span className="aq-dfield">{x.field}</span>
               {x.from != null ? (
                 <>
-                  <span className="aq-dfrom">{x.from}</span>
+                  <span className={x.from === EMPTY_VALUE ? 'aq-dfrom aq-dempty' : 'aq-dfrom'}>{x.from}</span>
                   <ArrowRight size={14} aria-hidden />
                 </>
               ) : (

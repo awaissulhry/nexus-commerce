@@ -51,7 +51,7 @@ import { FleetPageShell } from '../_shell/FleetPageShell'
 import { HowApprovalsWork } from './HowApprovalsWork'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { ApprovalCard, type FleetLabels } from './ApprovalCard'
-import { outsideHeading } from './approval-words'
+import { claudeDoorSentence, outsideHeading, type ClaudeDoor } from './approval-words'
 import {
   ParkedRow,
   PrecedentPanel,
@@ -133,6 +133,8 @@ interface GateState {
        an API that has never heard of `producers`. S2.a took production down by
        assuming the opposite. Every read below is guarded. */
     producers?: Array<{ key: string; enabled: boolean }>
+    /** MCP.12 — optional for the same reason: whether Claude can ask here, and how many live connections. */
+    claude?: ClaudeDoor
   }
 }
 
@@ -806,6 +808,7 @@ function OutsideQueue({
   busy,
   expiryHours,
   producers,
+  claude,
   state,
   onRetry,
   onHold,
@@ -821,6 +824,7 @@ function OutsideQueue({
   busy: boolean
   expiryHours: number
   producers?: Array<{ key: string; enabled: boolean }>
+  claude?: ClaudeDoor
   state: 'loading' | 'ok' | 'failed'
   onRetry: () => void
   onHold?: (id: string) => Promise<{ ok: boolean; executeAfter?: string; error?: string }>
@@ -898,6 +902,9 @@ function OutsideQueue({
                   } switched on.`}
             </>
           ) : null}
+          {/* MCP.12 — the other door: a person asking in Claude. Read from the API like the
+              producers above, and omitted against an API that does not send it. */}
+          {claude ? <> {claudeDoorSentence(claude)}</> : null}
         </span>
       </p>
     )
@@ -1504,6 +1511,7 @@ export function ApprovalsClient() {
         busy={busy}
         expiryHours={gate?.expiry.hours ?? 24}
         producers={gate?.outside.producers}
+        claude={gate?.outside.claude}
         state={outsideOk === null ? 'loading' : outsideOk ? 'ok' : 'failed'}
         onRetry={() => void refresh()}
         onHold={hold}

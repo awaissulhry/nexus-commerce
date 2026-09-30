@@ -128,8 +128,9 @@ export const TOOL_CARDS: Record<string, ToolCard> = {
   },
   /* ── MCP.12 · the bulk changes a person asks for through Claude ─────── */
   'bulk-price-change': {
-    wants: 'wants to change many prices',
-    shortAsk: 'change the master price of many products',
+    // Count-neutral: one bulk request can name a single product.
+    wants: 'wants to change master prices',
+    shortAsk: 'change master prices',
     approveLabel: 'Apply these prices',
     reversible:
       'Partly — each previous master price is recorded, so another change can set them back, but listings already sent to their marketplace sold at the new price in the meantime.',
@@ -140,14 +141,14 @@ export const TOOL_CARDS: Record<string, ToolCard> = {
       'If this is wrong, every listing that follows the master price sells at the wrong price on its marketplace until it is corrected — and orders placed in the meantime stand at that price.',
   },
   'bulk-attribute-change': {
-    wants: 'wants to change attributes on many products',
-    shortAsk: 'change attributes on many products, in Nexus only',
+    wants: 'wants to change product attributes',
+    shortAsk: 'change product attributes, in Nexus only',
     approveLabel: 'Apply these values',
     reversible:
       'Yes — it changes Nexus only, and each previous value is recorded, so another change can put them back before anything is published.',
     undoable: 'yes',
     wrongCost:
-      'If this is wrong, Nexus holds the wrong values on these products until they are corrected. No marketplace changes until someone publishes from Nexus — and then the wrong values go with it.',
+      'If this is wrong, Nexus holds wrong values until they are corrected. No marketplace changes until someone publishes from Nexus — and then the wrong values go with it.',
     nexusOnly: true,
   },
   'send-customer-message': {

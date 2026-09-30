@@ -127,3 +127,21 @@ export function outsideHeading(toolNames: string[]): string {
   if (reach === 0) return n === 1 ? '1 request can change Nexus — it does not reach a sales channel' : `${n} requests can change Nexus — none of them reaches a sales channel`
   return `${plural(n, 'request')} can change something — ${reach} on your sales channels, ${nexusOnly} in Nexus only`
 }
+
+/** MCP.12 — whether a person can ask for a change in Claude here: MCP on for this business, and its live connections. */
+export interface ClaudeDoor {
+  enabled: boolean
+  connections: number
+}
+
+/**
+ * The empty queue named only the two scheduled checks as the things that could put a request here. A person asking
+ * in Claude, over their Nexus connection, is the third; this says whether that door is open, from the API's answer.
+ */
+export function claudeDoorSentence(door: ClaudeDoor): string {
+  if (!door.enabled) return 'Connecting Claude is switched off for this business, so nothing can arrive from Claude.'
+  if (door.connections === 0) {
+    return 'People can also ask for a change in Claude over a Nexus connection; no one has connected Claude to this business yet.'
+  }
+  return `People can also ask for a change in Claude over a Nexus connection; ${plural(door.connections, 'connection')} to this business ${door.connections === 1 ? 'is' : 'are'} live, and each request waits here for a person.`
+}

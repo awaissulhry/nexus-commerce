@@ -1345,73 +1345,31 @@
   cursor: pointer;
 }
 
-/* ── MCP.12 · the verbs had no chrome ─────────────────────────────────────
+/* ── MCP.12 · the verbs, and this page's light palette ───────────────────
  *
- * `.acr-btn` lost its base rules when control-room.css moved its own buttons to
- * the DS `Button` (DS-ALIGN): this page still draws Apply, Reject, Hold and Undo
- * with the class, so they rendered as bare browser buttons — measured in a
- * local end-to-end run on 2026-09-30, the page Claude sends people to. The rest
- * of this page is built from its own classes, so the class gets its base back
- * HERE, from DS tokens, at the DS `sm` tier; scoped to `.aq-page` so no
- * neighbour's page is restyled. It sits ABOVE the S4.c and S6.d blocks on
- * purpose: their `:disabled` overrides must keep winning on source order.
+ * `.acr-btn`'s base look now lives once in fleet-pages.css, for every fleet
+ * page. What stays here is this page's own: the S4.c and S6.d `:disabled`
+ * blocks below, and a disabled primary losing its green edge with its green.
  *
- * Only tokens the fleet's light pin holds (fleet-pages.css) are read, so the
- * light-only page stays light under `.dark`. The one it does not hold,
- * `--nds-success-strong`, is pinned to its light value on this page, the way
- * the fleet pin does it: under `.dark` it is #6ee7a8, and white on it is 1.5:1.
- *
- * Labels may wrap: a one-product Apply names its SKU and both prices, and at a
- * 390px viewport `nowrap` pushed it past the card. */
+ * And one pin the fleet's shared pin cannot hold: `--nds-danger-strong`, the
+ * edge of the section of requests that can run. Under a dark OS `.dark` makes
+ * it #f79289, and measured on this light page (2026-09-30) that edge turned
+ * pink. Its light value is a literal with no ramp step, so it is pinned as the
+ * DS's own light literal, as shared-shell.css pins it; the example's green
+ * below reads the pinned token instead of a literal, so this file's literal
+ * count does not rise. */
 .aq-page {
-  --nds-success-strong: var(--nds-green-700);
+  --nds-danger-strong: #a3211a;
 }
-.aq-page .acr-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--nds-control-h-sm);
-  padding: 4px 11px;
-  font: inherit;
-  font-size: var(--nds-font-size-sm-plus);
-  font-weight: 600;
-  line-height: 1.25;
-  text-align: start;
-  overflow-wrap: anywhere;
-  color: var(--nds-text);
-  background: var(--nds-surface);
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-lg);
-  cursor: pointer;
-}
-.aq-page .acr-btn svg {
-  flex-shrink: 0;
-}
-.aq-page .acr-btn:hover:not(:disabled) {
-  background: var(--nds-surface-sunken);
-}
-.aq-page .acr-btn:focus-visible {
-  outline: 2px solid var(--nds-text);
-  outline-offset: 1px;
-}
-.aq-page .acr-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.aq-page .acr-btn.go {
-  color: var(--nds-text-inverse);
-  background: var(--nds-success-strong);
-  border-color: var(--nds-success-strong);
-}
-.aq-page .acr-btn.go:hover:not(:disabled) {
-  background: var(--nds-success-strong);
-  filter: brightness(0.94);
-}
-/* S6.d below paints a disabled primary solid and muted; its green edge goes with the green. */
 .aq-page .acr-btn.go:disabled {
   border-color: transparent;
 }
 
+/* MCP.12 — an old value that was not set: a word, not struck through (there was nothing to strike). */
+.aq-page .aq-deltas .aq-dempty {
+  text-decoration: none;
+  font-weight: 400;
+}
 /* MCP.12 — "and N more": a bulk preview keeps 20 lines and counts the rest. */
 .aq-page .aq-deltas .aq-dmore {
   font-size: var(--nds-font-size-base);
@@ -1526,7 +1484,7 @@
  * Wins on specificity (5 classes to 4), so it holds wherever it sits.
  */
 .aq-example .aq-card .acr-btn.go:disabled {
-  background: #15804f;
+  background: var(--nds-success-strong);
   color: var(--nds-white);
 }
 

@@ -9,13 +9,15 @@
  *   · the section heading and the parked row name no one channel, and a Nexus-only request is not counted as
  *     reaching one.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { TOOL_CARDS, toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { ApprovalCard, ChannelEffectDetail, type CardApproval } from './ApprovalCard'
 import { ParkedRow } from './ApprovalLists'
-import { approveLabelFor, channelEffectOf, moreThanShown, outsideHeading } from './approval-words'
+import { approveLabelFor, channelEffectOf, claudeDoorSentence, moreThanShown, outsideHeading } from './approval-words'
 
 const bulkPrice = {
   action: 'bulk-price-change',
@@ -118,7 +120,7 @@ describe('MCP.12 — the bulk tools have their own card, and it is honest', () =
 
   it('the price change says the marketplaces follow, and that what they did stands', () => {
     const html = card('bulk-price-change', bulkPrice)
-    expect(html).toContain('wants to change many prices')
+    expect(html).toContain('wants to change master prices')
     expect(html).toContain('every listing that follows the master price sells at the wrong price on its marketplace')
     expect(html).toContain('This cannot be undone, only compensated for.')
     expect(toolCardFor('bulk-price-change').nexusOnly).toBeFalsy()
@@ -126,7 +128,7 @@ describe('MCP.12 — the bulk tools have their own card, and it is honest', () =
 
   it('the attribute change says Nexus only, and that another change puts it back', () => {
     const html = card('bulk-attribute-change', bulkAttribute)
-    expect(html).toContain('wants to change attributes on many products')
+    expect(html).toContain('wants to change product attributes')
     expect(html).toContain('No marketplace changes until someone publishes from Nexus')
     expect(html).toContain('We can put this back the way it was')
     expect(toolCardFor('bulk-attribute-change').nexusOnly).toBe(true)
@@ -179,6 +181,55 @@ describe('MCP.12 — no one channel is named, and Nexus-only is not counted as r
     }))
     expect(html).toContain('Nothing has changed yet.')
     expect(html).not.toContain('Amazon')
-    expect(html).toContain('change the master price of many products')
+    expect(html).toContain('Approved — change master prices')
   })
 })
+
+describe('MCP.12 — an old value that was not set reads as a word', () => {
+  const one = {
+    ...bulkAttribute,
+    changes: { 'TEST-A number_of_pockets': { from: null, to: 4 } },
+    totals: { products: 1, changes: 1, alreadySet: 0 },
+  }
+
+  it('"(empty) → 4", never "— → 4", on the card and on its button', () => {
+    const html = card('bulk-attribute-change', one)
+    expect(html).toContain('<span class="aq-dfrom aq-dempty">(empty)</span>')
+    expect(html).not.toMatch(/<span class="aq-dfrom[^"]*">—<\/span>/)
+    expect(applyButton(html)).toBe('Apply — TEST-A number_of_pockets (empty) → 4')
+  })
+
+  it('a value that is set keeps its strike-through', () => {
+    expect(card('set-price', setPrice)).toContain('<span class="aq-dfrom">€20.00</span>')
+  })
+})
+
+describe('MCP.12 — the empty queue names Claude too, from the API\'s answer', () => {
+  it('says whether the door is open, and how many connections are live', () => {
+    expect(claudeDoorSentence({ enabled: false, connections: 3 })).toBe(
+      'Connecting Claude is switched off for this business, so nothing can arrive from Claude.',
+    )
+    expect(claudeDoorSentence({ enabled: true, connections: 0 })).toBe(
+      'People can also ask for a change in Claude over a Nexus connection; no one has connected Claude to this business yet.',
+    )
+    expect(claudeDoorSentence({ enabled: true, connections: 1 })).toBe(
+      'People can also ask for a change in Claude over a Nexus connection; 1 connection to this business is live, and each request waits here for a person.',
+    )
+    expect(claudeDoorSentence({ enabled: true, connections: 2 })).toContain('2 connections to this business are live')
+  })
+
+  it('the page renders it only when the API sends it', () => {
+    const source = readFileSync(join(import.meta.dirname, 'ApprovalsClient.tsx'), 'utf8')
+    expect(source).toMatch(/\{claude \? <> \{claudeDoorSentence\(claude\)\}<\/> : null\}/)
+    expect(source).toMatch(/claude=\{gate\?\.outside\.claude\}/)
+  })
+})
+
+describe('MCP.12 — the ads inbox names no one channel either', () => {
+  it('its parked row says nothing has changed yet', () => {
+    const inbox = readFileSync(join(import.meta.dirname, '../../marketing/ads/rules-automation/fleet/ApprovalInbox.tsx'), 'utf8')
+    expect(inbox).not.toContain('Nothing has reached Amazon yet')
+    expect(inbox).toContain('Nothing has changed yet.')
+  })
+})
+
