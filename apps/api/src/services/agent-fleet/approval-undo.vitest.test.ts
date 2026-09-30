@@ -21,6 +21,9 @@ vi.mock('../../db.js', () => ({
       update: vi.fn(),
     },
     agentRun: { findMany: vi.fn() },
+    // The person who approved, looked up again at commit (login roles with business profiles off, the membership on).
+    userProfile: { findUnique: vi.fn() },
+    workspaceMembership: { findUnique: vi.fn() },
   },
 }))
 vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn() }))
@@ -64,6 +67,13 @@ beforeEach(() => {
     agentRun: { agentKey: 'amazon-bid-tuner' },
   } as never)
   db.agentApproval.findMany.mockResolvedValue([] as never)
+  // The person who approved (u1, "Awais") still owns the business: these tests are about the window, not the person.
+  db.userProfile.findUnique.mockResolvedValue({ id: 'u1', status: 'active', permissionsVersion: 1, roleAssignments: [{ role: { key: 'OWNER' } }] } as never)
+  db.workspaceMembership.findUnique.mockResolvedValue({
+    id: 'm1', status: 'active', version: 1, userId: 'u1', createdAt: new Date(), user: { status: 'active' },
+    workspace: { id: 'ws_alpha_0001', name: 'Alpha', status: 'active', version: 1 },
+    roles: [{ role: { id: 'r1', key: 'OWNER', name: 'Owner', permissions: [] } }],
+  } as never)
 })
 
 describe('AP.4 — approving parks instead of firing', () => {
@@ -185,6 +195,8 @@ describe('AP.4 — commit enforces the window server-side', () => {
       status: 'scheduled',
       executeAfter: new Date(Date.now() + 10_000),
       decidedBy: 'Awais',
+      decidedByUserId: 'u1',
+      workspaceId: 'ws_alpha_0001',
     } as never)
     expect(await commitScheduledApproval('a1')).toEqual({
       ok: false,
@@ -199,16 +211,18 @@ describe('AP.4 — commit enforces the window server-side', () => {
         status: 'scheduled',
         executeAfter: new Date(Date.now() - 1000),
         decidedBy: 'Awais',
+        decidedByUserId: 'u1',
+        workspaceId: 'ws_alpha_0001',
       } as never)
       .mockResolvedValue({ agentRun: { agentKey: 'amazon-bid-tuner' } } as never)
     const out = await commitScheduledApproval('a1')
     expect(out.ok).toBe(true)
     // Attribution survives the delay — the sweep does not become the decider.
-    // The sweep runs the decision under the person who took it.
+    // The sweep runs the decision AS the person who took it: their id, under their name.
     expect(gate).toHaveBeenCalledWith(
       'a1',
       'approve',
-      expect.objectContaining({ kind: 'system', label: 'Awais' }),
+      expect.objectContaining({ kind: 'user', userId: 'u1', label: 'Awais' }),
     )
   })
 
@@ -227,6 +241,8 @@ describe('AP.4 — commit enforces the window server-side', () => {
       status: 'scheduled',
       executeAfter: new Date(Date.now() - 1000),
       decidedBy: 'Awais',
+      decidedByUserId: 'u1',
+      workspaceId: 'ws_alpha_0001',
     } as never)
     db.agentApproval.updateMany.mockResolvedValue({ count: 0 } as never)
     expect(await commitScheduledApproval('a1')).toEqual({ ok: false, error: 'already taken' })
@@ -254,6 +270,8 @@ describe('AP.5 — one expiry clock', () => {
       status: 'scheduled',
       executeAfter: new Date(Date.now() - 1000),
       decidedBy: 'Awais',
+      decidedByUserId: 'u1',
+      workspaceId: 'ws_alpha_0001',
     } as never)
     db.agentApproval.updateMany.mockResolvedValue({ count: 1 } as never)
     const r = await runApprovalMaintenance()
@@ -266,6 +284,8 @@ describe('AP.5 — one expiry clock', () => {
       status: 'scheduled',
       executeAfter: new Date(Date.now() - 1000),
       decidedBy: 'Awais',
+      decidedByUserId: 'u1',
+      workspaceId: 'ws_alpha_0001',
     } as never)
     gate.mockResolvedValueOnce({ ok: false, error: 'boom' })
     gate.mockResolvedValueOnce({ ok: true, status: 'executed' })

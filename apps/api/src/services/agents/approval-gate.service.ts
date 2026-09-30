@@ -148,6 +148,14 @@ export async function requestApproval(
 }
 
 /**
+ * The person behind a decision (`decidedByUserId`), written beside the name shown (`decidedBy`). Only a person sets
+ * it: a system decider (the sweep running a decision a person already took) leaves the stored person in place.
+ */
+function deciderId(decider: ToolPrincipal): { decidedByUserId?: string } {
+  return decider.kind === 'user' ? { decidedByUserId: decider.userId } : {}
+}
+
+/**
  * Approve or reject one request. A person may approve only what they could
  * have done themselves (the tool's `requires`), checked before the claim. A
  * system decider is the sweep running a decision already taken and checked.
@@ -175,6 +183,7 @@ export async function decideApproval(
       data: {
         status: 'rejected',
         decidedBy: decider.label,
+        ...deciderId(decider),
         decidedAt: new Date(),
         reason: reason ?? null,
       },
@@ -191,7 +200,7 @@ export async function decideApproval(
   // Approve — atomic pending→executing claim makes execution idempotent.
   const claim = await prisma.agentApproval.updateMany({
     where: { id, status: 'pending' },
-    data: { status: 'executing', decidedBy: decider.label, decidedAt: new Date() },
+    data: { status: 'executing', decidedBy: decider.label, ...deciderId(decider), decidedAt: new Date() },
   })
   if (claim.count === 0) return { ok: false, error: 'already taken' }
 

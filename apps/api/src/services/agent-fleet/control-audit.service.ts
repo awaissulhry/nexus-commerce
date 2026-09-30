@@ -33,6 +33,9 @@ export type ControlAction =
   // described had moved. Recorded because a silent non-execution is worse
   // than a failure nobody can explain.
   | 'stale_refused'
+  // An approved action refused at run time because the person who approved it no longer holds the permissions it
+  // needs in this business (their role changed, or their access was removed, while it waited). It never ran.
+  | 'permission_refused'
   // NAF.AQ-S9 — an approved action that was attempted and FAILED. Distinct
   // from `stale_refused`, which never ran: this one reached the tool and the
   // tool said no. Added because the commit path used to return early on

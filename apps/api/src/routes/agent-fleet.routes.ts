@@ -15,9 +15,11 @@ import { isAutonomyLevel, AUTONOMY_LEVELS } from '../services/advertising/ads-au
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import {
   bulkDecide,
+  cannotApproveFor,
   commitScheduledApproval,
   decideFleetApproval,
   inboxCounts,
+  inboxViewer,
   listInbox,
   previewBulk,
   recentPrecedents,
@@ -398,15 +400,19 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
             : q.status && q.status !== 'pending'
               ? 'decided'
               : 'waiting'
-      const [approvals, counts] = await Promise.all([
+      const [approvals, counts, viewer] = await Promise.all([
         listInbox(view, Number(q.limit) || 100),
         inboxCounts(),
+        inboxViewer(request),
       ])
       // FX.1 — resolve the entities each approval touches.
       const labels = await resolveFleetLabels(
         collectRefs({ items: approvals.map((a) => ({ args: a.args })) }),
       )
-      return { approvals, counts, view, labels }
+      // Per row: why THIS viewer may not approve it (null when they may), so the card never offers an Apply that
+      // can only answer 403.
+      const cannotApprove = cannotApproveFor(viewer)
+      return { approvals: approvals.map((a) => ({ ...a, cannotApprove: cannotApprove(a.toolName) })), counts, view, labels }
     },
   )
 

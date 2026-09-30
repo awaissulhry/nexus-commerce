@@ -33,7 +33,10 @@ import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordina
 import { detectEuIntentConflict, EU_GUARD_REMEDY } from './amazon-eu-quantity-guard.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { MARKETPLACE_ID_MAP } from './amazon/flat-file.service.js'
+import { readAmazonOfferLive, type AmazonOfferLiveRead } from './amazon/purchasable-offer.js'
 import { logger } from '../utils/logger.js'
+
+export type { AmazonOfferLiveRead } from './amazon/purchasable-offer.js'
 
 export interface MarketOfferTarget extends Omit<ListingCoordinate, 'channel'> {}
 
@@ -69,24 +72,7 @@ async function loadRow(t: MarketOfferTarget) {
   })
 }
 
-/** The marketplace's purchasable_offer instances from a live attributes read. */
-function offerInstancesFor(attrs: Record<string, unknown> | null | undefined, marketplaceId: string): Array<Record<string, unknown>> {
-  const po = (attrs as { purchasable_offer?: Array<Record<string, unknown>> } | null | undefined)?.purchasable_offer
-  if (!Array.isArray(po)) return []
-  return po.filter((x) => x && (x.marketplace_id === marketplaceId || po.length === 1))
-}
-
 type OfferPatchResult = Awaited<ReturnType<typeof amazonSpApiClient.patchPurchasableOffer>>
-
-/** What the live read saw, handed to a caller's `refuse` check before anything is sent. */
-export interface AmazonOfferLiveRead {
-  /** 'failed' = the read threw or answered success:false — nothing about the listing is known. */
-  read: 'ok' | 'failed'
-  offers: Array<Record<string, unknown>>
-  /** fulfillment_availability[].fulfillment_channel_code, e.g. DEFAULT (merchant) or AMAZON_EU (FBA). */
-  fulfillmentChannels: string[]
-  error?: string
-}
 
 export interface AmazonOfferCloseAttempt {
   sent: boolean
@@ -126,24 +112,10 @@ export async function closeAmazonOfferOnChannel(input: {
 }): Promise<AmazonOfferCloseAttempt> {
   const { sellerId, sku, marketplaceId } = input
   let productType = String(input.productType ?? '').toUpperCase()
-  const live: AmazonOfferLiveRead = { read: 'ok', offers: [], fulfillmentChannels: [] }
-  try {
-    const answer = await amazonSpApiClient.getListingsItem({
-      sellerId, sku, marketplaceId, includedData: ['attributes', 'summaries'],
-    } as never)
-    const raw = (answer as { rawResponse?: { attributes?: Record<string, unknown>; summaries?: Array<{ productType?: string }> } }).rawResponse
-    if ((answer as { success?: boolean }).success === false) {
-      live.read = 'failed'
-      live.error = (answer as { error?: string }).error ?? 'the listing read answered success:false'
-    }
-    live.offers = offerInstancesFor(raw?.attributes, marketplaceId)
-    const fa = (raw?.attributes as { fulfillment_availability?: Array<{ fulfillment_channel_code?: unknown }> } | undefined)?.fulfillment_availability
-    live.fulfillmentChannels = Array.isArray(fa) ? fa.map((f) => String(f?.fulfillment_channel_code ?? '').toUpperCase()) : []
-    const liveType = raw?.summaries?.[0]?.productType
-    if (liveType) productType = String(liveType).toUpperCase()
-  } catch (snapErr) {
-    live.read = 'failed'
-    live.error = snapErr instanceof Error ? snapErr.message : String(snapErr)
+  // The one live reader (amazon/purchasable-offer.ts), shared with the queue's price push.
+  const live: AmazonOfferLiveRead = await readAmazonOfferLive({ sellerId, sku, marketplaceId })
+  if (live.productType) productType = live.productType
+  if (live.read === 'failed') {
     logger.warn('market-offer close: live snapshot read failed', { sku, marketplaceId, error: live.error, dbFallback: !!input.dbFallback })
   }
 
