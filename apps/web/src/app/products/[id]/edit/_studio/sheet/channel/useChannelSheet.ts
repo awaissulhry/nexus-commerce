@@ -27,6 +27,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
+import { followListingVersion, planSavedCellPatch } from './savedCellPatch'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
 import { channelScopeUrl as buildChannelScopeUrl } from '../../sheetUrls'
 
@@ -34,7 +35,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
-import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetListing } from './types'
+import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing } from './types'
 
 export interface UseChannelSheetOptions {
   schemaRevision?: string
@@ -370,7 +371,14 @@ export interface ChannelWriteCoord {
   /** A save started listings on this coordinate (`adopted`: the rows that now hold one). */
   onListingsCreated?: (created: CreatedListing[], adopted: ChannelSheetRow[]) => void
   /** P1 review (2) — a listing-level eBay save moved other rows of the family (their listing version, their shown value). */
-  onFamilyChanged?: (rows: ChannelSheetRow[]) => void
+  onFamilyChanged?: (rows: ChannelSheetRow[], columns?: string[]) => void
+  /** P2 — the column a cell belongs to, so a confirmed save can be settled in place (`savedCellPatch.ts`). */
+  columnOf?: (colId: string) => SheetColumn | undefined
+  /**
+   * P2 — how this save settled: the rows patched in place from its answer, or why the sheet must read again. A save
+   * that reports nothing (a variation theme, a Shopify field) is read again, as before.
+   */
+  onStored?: (outcome: { patched: ChannelSheetRow[]; columns: string[] } | { read: string }) => void
   /**
    * How this row's `PATCH /api/products/bulk` body leaves: on its own (default), or as one unit of the sheet
    * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
@@ -511,15 +519,20 @@ async function commitChannelLanguage(
     }
     // The drafts this save started: adopted into the saved row and its whole family BEFORE the version write-back
     // below, which then lands on the listing the saved row now holds.
+    const family = [...(coord.familyRows?.() ?? [])]
+    const listingVersions = new Map([row, ...family].map((r) => [r, r.listing?.version]))
+    // P2 — decided against the answer before its other effects land; applied once the save is known to be clean.
+    const settle = res.ok && coord.onStored ? planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId),
+      changes: changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value, intent: change.intent, target: change.target })) }) : null
     if (res.ok) {
       reportCreated(req, coord, createdListingsOf(body))
       // Only what the server STORED travels to the family: a cell it refused (a 200 can still refuse single cells) keeps
       // its refusal on this row and never paints its value on the siblings (review 2026-09-30).
       const refused = (Array.isArray(body?.errors) ? body.errors : []) as Array<{ id?: string; field?: string }>
       const stored = changes.filter(({ change }) => change.intent !== 'reset' && !refused.some((e) => e.field === change.field && (e.id === undefined || e.id === row.id)))
-      const moved = adoptFamilyListings([...(coord.familyRows?.() ?? [])], familyListingsOf(body), row,
+      const moved = adoptFamilyListings(family, familyListingsOf(body), row,
         stored.map(({ colId, change }) => ({ colId, value: change.value })))
-      if (moved.length) coord.onFamilyChanged?.(moved)
+      if (moved.length) coord.onFamilyChanged?.(moved, stored.map(({ colId }) => colId))
     }
     const raw = typeof body?.currentVersion === 'number' ? body.currentVersion : undefined
     /**
@@ -606,6 +619,12 @@ async function commitChannelLanguage(
     }
 
     const warned = changes.flatMap(({ colId, change }) => { const warning = warningOf(colId, change.field); return warning ? [[colId, { ok: true, warning }] as const] : [] })
+    if (settle?.kind === 'patch') {
+      const patched = new Set(settle.apply())
+      // The family row's variation theme carries its listing's version as its write token: it moves with the listing.
+      for (const r of [row, ...family]) if (followListingVersion(r, listingVersions.get(r), r.listing?.version)) patched.add(r)
+      coord.onStored?.({ patched: [...patched], columns: changes.map(({ colId }) => colId) })
+    } else if (settle) coord.onStored?.({ read: settle.reason })
     return warned.length ? { ok: true, version, cells: { ...Object.fromEntries(changes.map(({ colId }) => [colId, { ok: true }])), ...Object.fromEntries(warned) } } : { ok: true, version }
   } catch (err) {
     return { ok: false, unreachable: true, reason: `Connection lost — refresh to check whether this saved. ${err instanceof Error ? err.message : String(err)}` }

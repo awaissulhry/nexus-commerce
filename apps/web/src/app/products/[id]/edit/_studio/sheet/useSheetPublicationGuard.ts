@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { usePublicationSave, useStudioScope } from '../contracts'
+import { usePublicationBarrier, useStudioScope } from '../contracts'
 
 /** Drain committed cells; keep open editors and unconfirmed writes available for review. */
 export function useSheetPublicationGuard(
@@ -9,7 +9,8 @@ export function useSheetPublicationGuard(
   tracker: { readonly hasUnconfirmedChanges: boolean },
   getGridApi: () => { getEditingCells(): unknown[] } | null | undefined,
 ) {
-  const { registerPublicationBarrier } = usePublicationSave()
+  // P2 — the barrier only: reading the whole save state re-rendered the sheet on every save state change.
+  const registerPublicationBarrier = usePublicationBarrier()
   const { registerScopeChangeGuard } = useStudioScope()
   useEffect(() => {
     const blocker = () => (getGridApi()?.getEditingCells().length ?? 0) > 0
