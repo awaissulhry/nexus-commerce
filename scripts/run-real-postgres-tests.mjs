@@ -89,6 +89,7 @@ const API = `${ROOT}/apps/api`
 const args = process.argv.slice(2)
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
+  { name: 'Shopify colour sync (durable debounce, rollback, claims and stale completion)', file: 'src/services/shopify/colour-products/sync-postgres.vitest.test.ts', expect: 11 },
   { name: 'disposable database teardown (autovacuum retried, a leaked connection fails at once)', file: 'src/test-support/concurrent-database.vitest.test.ts', expect: 3 },
   { name: 'saved listing issues (account and profile isolation, live keyset pages)', file: 'src/services/cx/listing-issues-postgres.vitest.test.ts', expect: 7 },
   { name: 'inbound receipt identity (simultaneous delivery and profile isolation)', file: 'src/services/cx/ingress/receipt-postgres.vitest.test.ts', expect: 8 },

@@ -13,6 +13,7 @@ import { startEventInfrastructure, stopEventInfrastructure } from '../workers/ev
 import { closeBroker } from '../lib/events/index.js'
 import { startStockPoolWorker } from '../services/stock-pool/pool-tasks.js'
 import { startAssortmentSyncWorker } from '../services/assortment/sync-worker.js'
+import { startShopifyColourSyncWorker } from '../workers/shopify-colour-sync.worker.js'
 import { startAmazonMediaWorker, stopAmazonMediaWorker } from '../jobs/amazon-media.job.js'
 import { stopScheduledTasks } from '../lib/cron/clustered.js'
 import { envEnabled } from '../utils/env-flag.js'
@@ -51,6 +52,7 @@ export async function startWorker(): Promise<() => Promise<void>> {
     registerStatusSection('ams', amsPollerFacts)
     if (process.env.NEXUS_ENABLE_STOCK_POOL_WORKER !== '0') stopPollers.push(startStockPoolWorker())
     if (process.env.NEXUS_ENABLE_ASSORTMENT_SYNC !== '0') stopPollers.push(startAssortmentSyncWorker())
+    stopPollers.push(startShopifyColourSyncWorker())
     startAmazonMediaWorker()
     return stop
   } catch (error) {

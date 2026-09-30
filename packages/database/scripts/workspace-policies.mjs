@@ -107,6 +107,7 @@ export function workspacePolicySql() {
   // Shared stock step 6 (AE.4) — live product sync: capture, the change queue, the worker's door.
   // Byte-for-byte the tail of 20260919d.
   sql.push(readFileSync(new URL('../workspaces/assortment-sync.sql', import.meta.url), 'utf8'))
+  sql.push(readFileSync(new URL('../workspaces/shopify-colour-sync.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/ebay-quarantine.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/inbound-history.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/ebay-erasure-review.sql', import.meta.url), 'utf8'))

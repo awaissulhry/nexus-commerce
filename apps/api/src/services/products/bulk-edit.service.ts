@@ -154,7 +154,17 @@ export interface ProductBulkInput {
    *  accept the narrow meaning and rename it) — deliberately not
    *  taken here. Consumers that must not over-trust it: the Product
    *  Edit Studio's cell autosave, products-catalog's inline grid
-   *  edit (~:1213), and PES.8's AI draft-apply. */
+   *  edit (~:1213), and PES.8's AI draft-apply.
+   *
+   *  2026-09-30 — one exception inside THIS writer: a master ATTRIBUTE
+   *  merge that changes a product moves its `version` (+1) and
+   *  `updatedAt` in the same statement, token or not
+   *  (`setBasedAttrMerges`; no extra UPDATE). A tokenless bulk
+   *  attribute change otherwise left both unchanged, so a studio edit
+   *  opened before it passed this CAS and overwrote it unseen, and
+   *  the list ETags (count + newest `updatedAt`) answered 304 with the
+   *  old attributes. Every other tokenless field write here still
+   *  leaves `version` alone. */
   expectedVersion?: number
   /**
    * D15.4 / item 8 — validate and report, write NOTHING.
@@ -349,11 +359,18 @@ export const SET_BASED_CHUNK = 2000
  *
  * A product whose merge touches its VARIATION AXES keeps the per-product statement (`writeAttrMerge`), for every one of
  * its merges and in their order: that statement also rewrites `variations` and the legacy axis bag from the locked row.
+ *
+ * A product whose attributes the merge CHANGES moves like any other product write: `updatedAt` to now (what Prisma's
+ * `@updatedAt` does for the other master fields), and `version` up by one, so an edit opened before this one no longer
+ * passes the version check and cannot overwrite it unseen. `versionCheckedProductId` is the product the caller's version check
+ * already bumps (a token write); its merge leaves the version to that check. A merge that stores the same attributes
+ * moves neither.
  */
 export function setBasedAttrMerges(
   merges: Array<{ id: string; patch: Record<string, unknown>; remove: string[] }>,
-  writeOne: (productId: string, patch: Record<string, any>, remove?: string[]) => Promise<unknown>,
+  writeOne: (productId: string, patch: Record<string, any>, remove: string[], bumpVersion: boolean) => Promise<unknown>,
   variationOwners: Map<string, { categoryAttributes: unknown; variantAttributes: unknown; variationAxes: string[] }>,
+  versionCheckedProductId?: string,
 ): Array<Promise<unknown>> {
   const axisProducts = new Set(merges.filter(m => {
     const owner = variationOwners.get(m.id)
@@ -362,19 +379,24 @@ export function setBasedAttrMerges(
   const statements: Array<Promise<unknown>> = []
   const folded = new Map<string, { patch: Record<string, unknown>; remove: Set<string> }>()
   for (const merge of merges) {
-    if (axisProducts.has(merge.id)) { statements.push(writeOne(merge.id, merge.patch, merge.remove)); continue }
+    if (axisProducts.has(merge.id)) { statements.push(writeOne(merge.id, merge.patch, merge.remove, merge.id !== versionCheckedProductId)); continue }
     const acc = folded.get(merge.id) ?? { patch: {}, remove: new Set<string>() }
     for (const key of merge.remove) { delete acc.patch[key]; acc.remove.add(key) }
     Object.assign(acc.patch, merge.patch)
     folded.set(merge.id, acc)
   }
-  const rows = [...folded].map(([id, acc]) => ({ id, patch: acc.patch, remove: [...acc.remove] }))
+  const rows = [...folded].map(([id, acc]) => ({ id, patch: acc.patch, remove: [...acc.remove], bump: id !== versionCheckedProductId }))
   for (let i = 0; i < rows.length; i += SET_BASED_CHUNK) {
     const chunk = JSON.stringify(rows.slice(i, i + SET_BASED_CHUNK))
+    // Every SET expression reads the row as it was, so each compares the new bag with the stored one.
     statements.push(prisma.$executeRaw`
       UPDATE "Product" AS p
-      SET "categoryAttributes" = (COALESCE(p."categoryAttributes", '{}'::jsonb) - v.remove) || v.patch
-      FROM jsonb_to_recordset(${chunk}::jsonb) AS v(id text, patch jsonb, remove text[])
+      SET "categoryAttributes" = (COALESCE(p."categoryAttributes", '{}'::jsonb) - v.remove) || v.patch,
+          "version" = CASE WHEN v.bump AND ((COALESCE(p."categoryAttributes", '{}'::jsonb) - v.remove) || v.patch) IS DISTINCT FROM p."categoryAttributes"
+            THEN p."version" + 1 ELSE p."version" END,
+          "updatedAt" = CASE WHEN ((COALESCE(p."categoryAttributes", '{}'::jsonb) - v.remove) || v.patch) IS DISTINCT FROM p."categoryAttributes"
+            THEN now() ELSE p."updatedAt" END
+      FROM jsonb_to_recordset(${chunk}::jsonb) AS v(id text, patch jsonb, remove text[], bump boolean)
       WHERE p.id = v.id
     `)
   }
@@ -2448,23 +2470,34 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // attr_* writers — use jsonb merge: COALESCE ensures null becomes
     // empty object first; the || operator does shallow merge so
     // existing keys not in the patch are preserved.
-    const writeAttrMerge = (productId: string, patch: Record<string, any>, remove: string[] = []) => {
+    const writeAttrMerge = (productId: string, patch: Record<string, any>, remove: string[] = [], bumpVersion = true) => {
       const owner = variationOwners.get(productId)
       const axes = owner ? variationAttributePatch(owner, owner.variationAxes, patch, remove) : null
       // One atomic merge within the existing bulk transaction and Product CAS. Unedited axes and
       // unrelated attributes are read from the locked row, never replaced by a stale client bag.
-      if (axes?.changed) return prisma.$executeRaw`
-        UPDATE "Product"
-        SET "categoryAttributes" = ((COALESCE("categoryAttributes", '{}'::jsonb) - ${remove}::text[]) || ${JSON.stringify(patch)}::jsonb)
+      // A change moves `updatedAt` and `version` as the set-based merge does (`setBasedAttrMerges`).
+      if (axes?.changed) {
+        const attributes = Prisma.sql`((COALESCE("categoryAttributes", '{}'::jsonb) - ${remove}::text[]) || ${JSON.stringify(patch)}::jsonb)
               || jsonb_build_object('variations',
-                ((CASE WHEN jsonb_typeof("categoryAttributes"->'variations') = 'object' THEN "categoryAttributes"->'variations' ELSE '{}'::jsonb END) - ${axes.unset}::text[]) || ${JSON.stringify(axes.set)}::jsonb),
+                ((CASE WHEN jsonb_typeof("categoryAttributes"->'variations') = 'object' THEN "categoryAttributes"->'variations' ELSE '{}'::jsonb END) - ${axes.unset}::text[]) || ${JSON.stringify(axes.set)}::jsonb)`
+        const legacy = Prisma.sql`CASE WHEN jsonb_typeof("variantAttributes") = 'object' THEN "variantAttributes" - ${axes.legacyDrop}::text[] ELSE "variantAttributes" END`
+        const changes = Prisma.sql`(${attributes}) IS DISTINCT FROM "categoryAttributes" OR (${legacy}) IS DISTINCT FROM "variantAttributes"`
+        return prisma.$executeRaw`
+        UPDATE "Product"
+        SET "categoryAttributes" = ${attributes},
             -- R-23 (Step 2.6c-2): the legacy bag is never written; the touched axes leave it.
-            "variantAttributes" = CASE WHEN jsonb_typeof("variantAttributes") = 'object' THEN "variantAttributes" - ${axes.legacyDrop}::text[] ELSE "variantAttributes" END
+            "variantAttributes" = CASE WHEN jsonb_typeof("variantAttributes") = 'object' THEN "variantAttributes" - ${axes.legacyDrop}::text[] ELSE "variantAttributes" END,
+            "version" = CASE WHEN ${bumpVersion}::boolean AND (${changes}) THEN "version" + 1 ELSE "version" END,
+            "updatedAt" = CASE WHEN ${changes} THEN now() ELSE "updatedAt" END
         WHERE id = ${productId}
       `
+      }
+      const attributes = Prisma.sql`(COALESCE("categoryAttributes", '{}'::jsonb) - ${remove}::text[]) || ${JSON.stringify(patch)}::jsonb`
       return prisma.$executeRaw`
         UPDATE "Product"
-        SET "categoryAttributes" = (COALESCE("categoryAttributes", '{}'::jsonb) - ${remove}::text[]) || ${JSON.stringify(patch)}::jsonb
+        SET "categoryAttributes" = ${attributes},
+            "version" = CASE WHEN ${bumpVersion}::boolean AND (${attributes}) IS DISTINCT FROM "categoryAttributes" THEN "version" + 1 ELSE "version" END,
+            "updatedAt" = CASE WHEN (${attributes}) IS DISTINCT FROM "categoryAttributes" THEN now() ELSE "updatedAt" END
         WHERE id = ${productId}
       `
     }
@@ -2742,37 +2775,6 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
-    // P2 (docs/attributes/PLAN.md §4.7) — the master attribute merges, collected IN ORDER (direct edits, then cascades:
-    // the order the per-product statements used to run in) and written set-based below. Measured before this: one
-    // UPDATE per product plus one per child per field (500 products → ~980 statements).
-    const attrMerges: Array<{ id: string; patch: Record<string, any>; remove: string[] }> = []
-    const cascadeRemovals = new Map<string, string[]>()
-    const cascadePushes = new Map<string, string[]>()
-    for (const [productId, patch] of attrDirectByProduct) {
-      attrMerges.push({ id: productId, patch, remove: attrResetByProduct.get(productId) ?? [] })
-      if (childIdSet.has(productId)) {
-        const fields = cascadeRemovals.get(productId) ?? []
-        for (const stripped of Object.keys(patch)) fields.push(`attr_${stripped}`)
-        cascadeRemovals.set(productId, fields)
-      }
-    }
-
-    // Cascade attr edits — merge into parent + every child, then
-    // push the prefixed field names onto each child's cascadedFields.
-    for (const [parentId, patch] of attrCascadeByProduct) {
-      attrMerges.push({ id: parentId, patch, remove: [] })
-      const kids = childrenByParent.get(parentId) ?? []
-      const fieldNames = attrCascadeFieldNames.get(parentId) ?? []
-      for (const childId of kids) {
-        attrMerges.push({ id: childId, patch, remove: [] })
-        if (fieldNames.length) cascadePushes.set(childId, [...(cascadePushes.get(childId) ?? []), ...fieldNames])
-      }
-    }
-    updates.push(...setBasedAttrMerges(attrMerges, writeAttrMerge, variationOwners))
-    // Direct edits leave the cascade (all removals), THEN cascades join it (all pushes) — the old statement order.
-    updates.push(...setBasedCascadedFields(cascadeRemovals, 'remove'))
-    updates.push(...setBasedCascadedFields(cascadePushes, 'push'))
-
     // W1.2 — optimistic concurrency CAS. When the caller passed an
     // expectedVersion, prepend a Product.update keyed by (id,
     // version) so the database itself rejects the write when the
@@ -2804,10 +2806,45 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // with `target: 'channel'` (`'channel' !== 'channel'` is false) previously
     // took no CAS at all despite carrying a token.
     const hasMasterTargetedChange = validated.some((v) => !isChannelChange(v))
-    if (expectedVersion !== undefined && targetId && hasMasterTargetedChange) {
+    // The one product this version check bumps. Its attribute merge below leaves the version to the check, so an
+    // accepted write still advances it by exactly one; every other product whose attributes change is bumped by its merge.
+    const versionCheckedProductId = expectedVersion !== undefined && targetId && hasMasterTargetedChange ? targetId : undefined
+
+    // P2 (docs/attributes/PLAN.md §4.7) — the master attribute merges, collected IN ORDER (direct edits, then cascades:
+    // the order the per-product statements used to run in) and written set-based below. Measured before this: one
+    // UPDATE per product plus one per child per field (500 products → ~980 statements).
+    const attrMerges: Array<{ id: string; patch: Record<string, any>; remove: string[] }> = []
+    const cascadeRemovals = new Map<string, string[]>()
+    const cascadePushes = new Map<string, string[]>()
+    for (const [productId, patch] of attrDirectByProduct) {
+      attrMerges.push({ id: productId, patch, remove: attrResetByProduct.get(productId) ?? [] })
+      if (childIdSet.has(productId)) {
+        const fields = cascadeRemovals.get(productId) ?? []
+        for (const stripped of Object.keys(patch)) fields.push(`attr_${stripped}`)
+        cascadeRemovals.set(productId, fields)
+      }
+    }
+
+    // Cascade attr edits — merge into parent + every child, then
+    // push the prefixed field names onto each child's cascadedFields.
+    for (const [parentId, patch] of attrCascadeByProduct) {
+      attrMerges.push({ id: parentId, patch, remove: [] })
+      const kids = childrenByParent.get(parentId) ?? []
+      const fieldNames = attrCascadeFieldNames.get(parentId) ?? []
+      for (const childId of kids) {
+        attrMerges.push({ id: childId, patch, remove: [] })
+        if (fieldNames.length) cascadePushes.set(childId, [...(cascadePushes.get(childId) ?? []), ...fieldNames])
+      }
+    }
+    updates.push(...setBasedAttrMerges(attrMerges, writeAttrMerge, variationOwners, versionCheckedProductId))
+    // Direct edits leave the cascade (all removals), THEN cascades join it (all pushes) — the old statement order.
+    updates.push(...setBasedCascadedFields(cascadeRemovals, 'remove'))
+    updates.push(...setBasedCascadedFields(cascadePushes, 'push'))
+
+    if (versionCheckedProductId) {
       updates.unshift(
         prisma.product.update({
-          where: { id: targetId, version: expectedVersion },
+          where: { id: versionCheckedProductId, version: expectedVersion },
           data: { version: { increment: 1 } },
         }),
       )
