@@ -109,6 +109,10 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     const createdListings: Array<{ productId: string; listingId: string }> = []
     const refused = new Set<typeof plans>()
     let currentVersion: number | undefined, versionOf: 'product' | 'channelListing' = 'product'
+    // The content row each write moved (a pin's listing translation, a shared language's product translation) and the
+    // version it holds now: every cell on that row carries it as its token, so the sheet's NEXT edit there chains without
+    // waiting for a read (the P3 commit sweep, 2026-09-30: a second bullet save was refused as "changed").
+    const contentVersions: Array<{ id: string; tier: 'pin' | 'language'; language: string; version: number }> = []
     for (const group of groups.values()) {
       const first = group[0], change = first.edit.change
       if (first.draft && !first.listingId) {
@@ -132,8 +136,10 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       for (const plan of group.filter(p => p.edit.change.intent !== 'reset')) values[plan.field] = plan.slot ? withSlotValue(values[plan.field] ?? plan.baseValue, plan.slot, plan.value) : plan.value
       const reset = group.filter(p => p.edit.change.intent === 'reset').map(p => p.field)
       const ownerKey = first.address.tier === 'pin' ? `listing:${first.listingId}` : `product:${change.id}`
-      await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
+      const written = await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
         expectedVersion: ownerVersions.get(ownerKey) ?? input.expectedVersion ?? first.ownerVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined })
+      const writtenVersion = (written as { version?: unknown } | null)?.version
+      if (first.address.tier !== 'source' && typeof writtenVersion === 'number') contentVersions.push({ id: change.id, tier: first.address.tier, language: first.address.language, version: writtenVersion })
       versionOf = first.address.tier === 'pin' ? 'channelListing' : 'product'
       const owner = versionOf === 'channelListing' ? await prisma.channelListing.findUniqueOrThrow({ where: { id: first.listingId! }, select: { version: true } }) : await prisma.product.findUniqueOrThrow({ where: { id: change.id }, select: { version: true } })
       currentVersion = owner.version
@@ -162,6 +168,7 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     const createdOut = [...createdListings.map(row => ({ ...row, version: created.find(r => r.id === row.listingId)?.version ?? null })), ...(rest.createdListings ?? [])]
     const skipped = [...refused].reduce((n, group) => n + group.length, 0)
     return { ...rest, success: true, updated: plans.length - skipped + (rest.updated ?? 0), ...(createdOut.length ? { createdListings: createdOut } : {}),
+      ...(contentVersions.length ? { contentVersions } : {}),
       currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [], ...withWarnings(rest) }
   })
 }

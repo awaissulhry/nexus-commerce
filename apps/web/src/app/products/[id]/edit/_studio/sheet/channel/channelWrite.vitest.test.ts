@@ -622,3 +622,28 @@ describe('P1 — an emptied list is a clear (report 1 I-10)', () => {
     expect(seen.body.changes[0]).toMatchObject({ field: 'material', value: null, intent: 'set' })
   })
 })
+
+describe('the next content edit on a row chains on the version the last save answered (P3 commit sweep)', () => {
+  it('a second bullet save sends the version the first save moved the pin to, with no read in between', async () => {
+    const bodies: any[] = []
+    const answers = [
+      { updated: 1, currentVersion: 83, versionOf: 'channelListing', contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: 5 }] },
+      { updated: 1, currentVersion: 84, versionOf: 'channelListing', contentVersions: [{ id: 'p1', tier: 'pin', language: 'it', version: 6 }] },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: any) => {
+      bodies.push(JSON.parse(init.body))
+      return { ok: true, status: 200, json: async () => answers[bodies.length - 1] } as unknown as Response
+    }))
+    const address = { tier: 'pin', language: 'it', coordinate: { channel: 'AMAZON', market: 'IT' } }
+    const r = row({ values: {
+      bulletPoints_1: cell({ writeField: 'bulletPoints[1]', contentAddress: address, contentVersion: 4 } as never),
+      bulletPoints_2: cell({ writeField: 'bulletPoints[2]', contentAddress: address, contentVersion: 4 } as never),
+    } } as never)
+    await commitChannelRow({ rowId: 'primary:p1', row: r, cells: [{ colId: 'bulletPoints_1', value: 'One', intent: 'set' }] } as never, { channel: 'AMAZON', marketplace: 'IT' })
+    await commitChannelRow({ rowId: 'primary:p1', row: r, cells: [{ colId: 'bulletPoints_2', value: 'Two', intent: 'set' }] } as never, { channel: 'AMAZON', marketplace: 'IT' })
+    expect(bodies.map(body => body.changes[0].contentVersion)).toEqual([4, 5])
+    expect(bodies.map(body => body.expectedVersion)).toEqual([82, 83])
+    expect(r.values.bulletPoints_1.contentVersion).toBe(6)
+  })
+})
+
