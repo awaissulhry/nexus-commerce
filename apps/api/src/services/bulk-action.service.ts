@@ -309,6 +309,19 @@ export interface MarketplaceOverridePlan {
   columns: Prisma.ChannelListingUpdateInput;
 }
 
+/**
+ * A bulk job the caller asked for cannot run as asked — a payload every row would refuse, no channel scope, a scope
+ * that matches nothing. The routes answer it 400 with this plain reason (`statusCode`, as `ListingCoordinateError`
+ * does); anything else a job throws is a server fault and stays 500.
+ */
+export class BulkActionInputError extends Error {
+  readonly statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = 'BulkActionInputError';
+  }
+}
+
 /** The single-listing edit's own sentence (`PATCH /listings/:id`, `POST /listings/bulk-action`). */
 export const PUBLISH_FLAG_REFUSAL =
   'isPublished cannot be set by a bulk override. Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.';
@@ -330,27 +343,27 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
   };
   const columns: Prisma.ChannelListingUpdateInput = {};
 
-  if ('isPublished' in payload) throw new Error(PUBLISH_FLAG_REFUSAL);
+  if ('isPublished' in payload) throw new BulkActionInputError(PUBLISH_FLAG_REFUSAL);
 
   let price: number | null | undefined;
   if ('priceOverride' in payload) {
     const v = numOrNull(payload.priceOverride);
     // Before, an unreadable price was skipped without a word; a price someone typed is never dropped silently.
     if (v === undefined) {
-      throw new Error('priceOverride must be a number, or null to follow the master price again.');
+      throw new BulkActionInputError('priceOverride must be a number, or null to follow the master price again.');
     }
     if (v !== null && (!Number.isFinite(v) || v < 0)) {
-      throw new Error('priceOverride must be zero or more.');
+      throw new BulkActionInputError('priceOverride must be zero or more.');
     }
     price = v;
   }
   if (payload.followMasterPrice === true) {
     if (price != null) {
-      throw new Error('priceOverride and followMasterPrice: true contradict each other: send one of them.');
+      throw new BulkActionInputError('priceOverride and followMasterPrice: true contradict each other: send one of them.');
     }
     price = null;
   } else if (payload.followMasterPrice === false && price == null) {
-    throw new Error('followMasterPrice: false needs the price to send: set priceOverride to it.');
+    throw new BulkActionInputError('followMasterPrice: false needs the price to send: set priceOverride to it.');
   }
 
   // The quantity — never dropped silently either, and a whole number (the matrix's own rule).
@@ -358,21 +371,21 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
   if ('quantityOverride' in payload) {
     const v = numOrNull(payload.quantityOverride);
     if (v === undefined) {
-      throw new Error('quantityOverride must be a whole number, or null to follow the stock again.');
+      throw new BulkActionInputError('quantityOverride must be a whole number, or null to follow the stock again.');
     }
     if (v !== null && (!Number.isInteger(v) || v < 0)) {
-      throw new Error('quantityOverride must be a whole number, zero or more.');
+      throw new BulkActionInputError('quantityOverride must be a whole number, zero or more.');
     }
     quantity = v === null ? { follow: true } : { follow: false, value: v };
   }
   if (payload.followMasterQuantity === true) {
     if (quantity && !quantity.follow) {
-      throw new Error('quantityOverride and followMasterQuantity: true contradict each other: send one of them.');
+      throw new BulkActionInputError('quantityOverride and followMasterQuantity: true contradict each other: send one of them.');
     }
     quantity = { follow: true };
   } else if (payload.followMasterQuantity === false) {
     if (quantity?.follow) {
-      throw new Error('quantityOverride: null and followMasterQuantity: false contradict each other: send one of them.');
+      throw new BulkActionInputError('quantityOverride: null and followMasterQuantity: false contradict each other: send one of them.');
     }
     quantity ??= { follow: false };
   }
@@ -381,7 +394,7 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
   if ('stockBuffer' in payload) {
     const v = numOrNull(payload.stockBuffer);
     if (v == null || !Number.isInteger(v) || v < 0) {
-      throw new Error('stockBuffer must be a whole number, zero or more.');
+      throw new BulkActionInputError('stockBuffer must be a whole number, zero or more.');
     }
     buffer = v;
   }
@@ -400,7 +413,7 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
   }
 
   if (price === undefined && quantity === undefined && buffer === undefined && Object.keys(columns).length === 0) {
-    throw new Error(
+    throw new BulkActionInputError(
       'Invalid MARKETPLACE_OVERRIDE_UPDATE payload: at least one override field required',
     );
   }
@@ -452,7 +465,7 @@ export class BulkActionService {
         input.actionType === 'MARKETPLACE_OVERRIDE_UPDATE' &&
         (!input.channel || input.channel.trim().length === 0)
       ) {
-        throw new Error(
+        throw new BulkActionInputError(
           'MARKETPLACE_OVERRIDE_UPDATE requires `channel` to be set (e.g. "AMAZON"). Refusing to run without a channel scope.',
         );
       }
@@ -499,7 +512,7 @@ export class BulkActionService {
       }
 
       if (totalItems === 0) {
-        throw new Error('No items found matching the specified criteria');
+        throw new BulkActionInputError('No items found matching the specified criteria');
       }
 
       logger.info(`Creating bulk action job: ${input.jobName}`, {

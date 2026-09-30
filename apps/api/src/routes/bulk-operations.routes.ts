@@ -10,6 +10,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { sseResponseHeaders } from '../lib/sse.js'
 import {
+  BulkActionInputError,
   BulkActionService,
   type BulkActionType,
 } from '../services/bulk-action.service.js'
@@ -18,6 +19,9 @@ import { CreateBulkJobSchema } from './validation.js'
 import { bulkActorOf } from '../services/bulk-action-actor.js'
 
 const bulkActionService = new BulkActionService(prisma)
+
+/** A job that cannot run as asked is the caller's to fix (400, with the plain reason); anything else is ours (500). */
+const statusOf = (error: unknown) => (error instanceof BulkActionInputError ? 400 : 500)
 
 interface CreateBody {
   jobName?: string
@@ -124,8 +128,8 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error)
-        fastify.log.error({ err: error }, '[bulk-operations] create failed')
-        return reply.code(500).send({ success: false, error: message })
+        if (statusOf(error) === 500) fastify.log.error({ err: error }, '[bulk-operations] create failed')
+        return reply.code(statusOf(error)).send({ success: false, error: message })
       }
     },
   )
@@ -164,11 +168,11 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error)
-        fastify.log.error(
+        if (statusOf(error) === 500) fastify.log.error(
           { err: error },
           '[bulk-operations] check-conflicts failed',
         )
-        return reply.code(500).send({ success: false, error: message })
+        return reply.code(statusOf(error)).send({ success: false, error: message })
       }
     },
   )
@@ -213,11 +217,11 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error)
-        fastify.log.error(
+        if (statusOf(error) === 500) fastify.log.error(
           { err: error },
           '[bulk-operations] preview failed',
         )
-        return reply.code(500).send({ success: false, error: message })
+        return reply.code(statusOf(error)).send({ success: false, error: message })
       }
     },
   )

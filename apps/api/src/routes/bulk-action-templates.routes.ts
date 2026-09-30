@@ -16,7 +16,7 @@ import {
   BulkActionTemplateService,
   type ParameterDecl,
 } from '../services/bulk-action-template.service.js'
-import { BulkActionService } from '../services/bulk-action.service.js'
+import { BulkActionInputError, BulkActionService } from '../services/bulk-action.service.js'
 import prisma from '../db.js'
 import { bulkActorOf } from '../services/bulk-action-actor.js'
 
@@ -243,7 +243,7 @@ const bulkActionTemplateRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(201).send({ success: true, job })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (msg.startsWith('Required parameter missing')) {
+      if (msg.startsWith('Required parameter missing') || e instanceof BulkActionInputError) {
         return reply.code(400).send({ success: false, error: msg })
       }
       if (msg.includes('must be ') || msg.includes('must be one of')) {
