@@ -1,3 +1,7 @@
+## Long text is never cut at 200 characters — 2026-09-30
+
+Product sheet P1. **`longTextEditor`** always passes a browser limit far above any channel cap (**`NO_TEXT_LIMIT`**, **`textLimitFor(cap)`**): AG's `agLargeTextCellEditor` sets `maxLength || 200`, so a long-text cell with no limit stopped typing at 200 characters and a capped one at its cap. A channel's cap is a warning (the counter and the cell's tint), never a browser stop. Mirrored in Factory.
+
 ## refusalWords: a variation axis says so — 2026-09-30
 
 Product sheet P1 (`fix/product-sheet-editing`, report 2 I-11: the family row was locked on every per-variant column with the claim "this is a variation axis"). **`refusalWords`**' `per-variant-on-parent` takes **`axis`**: a real axis reads "… is a variation axis — each variation has its own value, so the parent has none. Open a variation row to edit it."; any other per-variant column keeps "… is set per variation — open a variation row to edit it, not the parent." (Not in Factory.)

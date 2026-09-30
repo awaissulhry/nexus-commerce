@@ -53,7 +53,7 @@ export const longTextEditor = (opts: { maxLength?: number; rows?: number; cols?:
   cellEditorParams: (p: { eGridCell?: HTMLElement; column?: { getActualWidth(): number } }) => {
     const box = publishEditorBox(p, 'longtext')
     return {
-      ...(opts.maxLength ? { maxLength: opts.maxLength } : {}),
+      maxLength: textLimitFor(opts.maxLength),
       // Kept, and deliberately NOT the old 8×60: if the CSS rule is ever absent these are what the
       // operator gets, and they should be the same size the rule would have produced.
       rows: opts.rows ?? Math.max(3, Math.round(box.height / LINE_HEIGHT_PX)),
@@ -61,6 +61,15 @@ export const longTextEditor = (opts: { maxLength?: number; rows?: number; cols?:
     }
   },
 })
+
+/**
+ * The browser limit a long-text editor gets: never below the text the field may hold, and NEVER AG's default. 🔴 "Absent
+ * means no attribute at all" (above) was not true: `agLargeTextCellEditor` sets `maxLength || 200`, so every long-text cell
+ * without a cap stopped typing at 200 characters, and a capped one at the cap (P1, 2026-09-30). A channel's cap is the
+ * Owner's rule's WARNING — the counter and the cell's tint say it — so it is never enforced by the browser.
+ */
+export const NO_TEXT_LIMIT = 1_000_000
+export const textLimitFor = (cap?: number | null) => Math.max(NO_TEXT_LIMIT, cap ?? 0)
 
 /** Rough metrics for the grid's editor font, used ONLY for the rows/cols fallback above. The
  *  authoritative size is the pixel box in the CSS custom properties. */
