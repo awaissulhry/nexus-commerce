@@ -10,7 +10,7 @@ import { buildChannelColumns, type BuildChannelColumnsOptions } from './master/c
 import { channelWriteGate } from './channel/rows'
 import { sheetViews } from './views'
 import {
-  defaultViewKeys, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotKeysHiddenByDefault,
+  acknowledgePendingEdits, defaultViewKeys, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotKeysHiddenByDefault,
   slotListKeyOfSlot, slotListRefusal, slotListViewNote, withSlotListColumns, type SlotColumnLike,
 } from './slotListColumns'
 import type { SheetColumn } from './master/types'
@@ -270,5 +270,33 @@ describe('two changed bullets that follow shared text → two queued choices; a 
     expect(row.values.bulletPoints_2.value).toBe('b2')
     expect(row.values.bulletPoints_5.value).toBe('NEW 5')
     expect(queue.map(q => q.colId)).toEqual(['bulletPoints_5'])
+  })
+})
+
+/* ── P1 (report 2 I-7) — a pasted column asks ONCE: the answer applies to every queued edit ─────────────────────── */
+describe('one answer for the whole paste', () => {
+  const choice = { shared: { label: 'Edit the shared Italian', address: { tier: 'source' } }, pin: { label: 'Pin on eBay · IT · it', address: { tier: 'pin', language: 'it' } }, reach: ['eBay · IT (it)'] }
+  const edit = (id: string, over: Record<string, unknown> = {}) => {
+    const row = { values: { name: { value: 'Pasted', contentAcknowledgement: choice, contentAddress: null, ...over } } } as any
+    return { rowId: id, colId: 'name', value: 'Pasted', row, previous: 'Before' }
+  }
+  it('"Pin" pins all three pasted titles, each at its own cell’s pin address', () => {
+    const queue = [edit('a'), edit('b'), edit('c')]
+    const { apply, keep } = acknowledgePendingEdits(queue, 'pin')
+    expect(apply.map(e => e.rowId)).toEqual(['a', 'b', 'c'])
+    expect(keep).toEqual([])
+    for (const e of apply) expect(e.row.values.name).toMatchObject({ contentAddress: { tier: 'pin', language: 'it' }, contentAcknowledged: true })
+  })
+  it('"Shared" takes a shared-record write too; "Pin" leaves it for its own question (it has no pin)', () => {
+    const master = edit('m', { contentAcknowledgement: null, affectsAllChannels: true })
+    expect(acknowledgePendingEdits([edit('a'), master], 'shared').apply.map(e => e.rowId)).toEqual(['a', 'm'])
+    const pinned = acknowledgePendingEdits([edit('a'), edit('m', { contentAcknowledgement: null, affectsAllChannels: true })], 'pin')
+    expect(pinned.apply.map(e => e.rowId)).toEqual(['a'])
+    expect(pinned.keep.map(e => e.rowId)).toEqual(['m'])
+  })
+  it('the adapter sends the answered edits as ONE save and asks nothing more (source contract)', () => {
+    const adapter = readFileSync(join(__dirname, 'channel', 'useChannelSheetAdapter.tsx'), 'utf8')
+    expect(adapter).toContain('const { apply, keep } = acknowledgePendingEdits(pendingWrites, tier);')
+    expect(adapter).toMatch(/writer\.beginOperation\(\);\s*try \{\s*for \(const edit of apply\)/)
   })
 })

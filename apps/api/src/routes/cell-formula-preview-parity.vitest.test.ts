@@ -93,14 +93,13 @@ describe('#782 preview parity — the option check runs on both scopes', () => {
         expect(b.error).toBeNull()
       })
 
-      it('a value OUTSIDE the list is REFUSED, with the allowed set as data', async () => {
+      // P1 (`pim/value-verdict.ts`) — an off-list result is kept, as a typed value is, and named in a warning.
+      it('a value OUTSIDE the list previews ok, kept as it is, with a warning naming the list', async () => {
         const b = (await preview('"maybe"', coord)).json()
-        expect(b.ok).toBe(false)
-        expect(b.value).toBeNull()
-        expect(b.error).toContain('not an allowed value')
-        // Raw codes, untranslated — this half is data, not prose.
-        expect(b.allowedOptions).toEqual(['false', 'true'])
-        expect(b.actualValue).toBe('maybe')
+        expect(b.ok).toBe(true)
+        expect(b.value).toBe('maybe')
+        expect(b.error).toBeNull()
+        expect(b.warnings.join(' ')).toContain('"maybe" is not in the list')
       })
 
       it('a NON-SELECT column has no list, so nothing is refused', async () => {
@@ -120,26 +119,26 @@ describe('#782 preview parity — the option check runs on both scopes', () => {
   }
 })
 
-describe('#782 the refusal names the field the way the HEADER does', () => {
+describe('#782 the warning names the field the way the HEADER does', () => {
+  const warning = async (coord?: Record<string, unknown>) => ((await preview('"maybe"', coord)).json().warnings as string[]).join(' ')
   it('channel scope: the SHEET COLUMN label, not the catalogue label', async () => {
-    const b = (await preview('"maybe"', CHANNEL)).json()
-    expect(b.error).toContain(COLUMN_LABEL)
+    const text = await warning(CHANNEL)
+    expect(text).toContain(COLUMN_LABEL)
     // The bug this pins: the catalogue's own name must not reach the message.
-    expect(b.error).not.toContain(CATALOGUE_LABEL)
+    expect(text).not.toContain(CATALOGUE_LABEL)
   })
 
   it('channel scope: the OPTIONS keep the labels the cell list shows', async () => {
     // The field name is the header's; the option names are the catalogue's.
     // Both halves in one sentence, which is the whole point of the split.
-    const b = (await preview('"maybe"', CHANNEL)).json()
-    expect(b.error).toContain('No, Sì')
+    expect(await warning(CHANNEL)).toContain('No, Sì')
   })
 
   it('master scope: the same header label, and the raw codes as its options', async () => {
-    const b = (await preview('"maybe"')).json()
-    expect(b.error).toContain(COLUMN_LABEL)
+    const text = await warning()
+    expect(text).toContain(COLUMN_LABEL)
     // No catalogue on master, so the column supplies the option names too.
-    expect(b.error).toContain('false, true')
+    expect(text).toContain('false, true')
   })
 })
 

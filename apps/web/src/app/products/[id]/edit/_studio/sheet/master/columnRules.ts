@@ -17,7 +17,7 @@
  */
 import { refusalWords } from '@/design-system/grid/editors/refusalWords'
 
-import { columnApplies, columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
+import { columnApplies, columnEditableOnRow, columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
 import type { SheetColumn, StudioCellValue, StudioRow } from './types'
 
@@ -33,7 +33,8 @@ export const cellOf = (row: StudioRow, key: string): StudioCellValue | undefined
 export function cellIsEditable(col: SheetColumn, row: StudioRow | undefined): boolean {
   if (!row) return false
   if (!col.editable) return false
-  if (!columnApplies(col, row)) return false
+  // P1 — the family row also holds a per-variant column's value for its variations (not an axis; `columnEditableOnRow`).
+  if (!columnEditableOnRow(col, row)) return false
   // 🔴 `!== false`, not a truthy test: the server states editability per cell, and a cell that
   // simply does not carry the flag is editable. Reading `undefined` as "not editable" would lock
   // most of the sheet on any response that omits it.
@@ -79,11 +80,16 @@ export function editRefusalReason(col: SheetColumn, row: StudioRow | undefined):
   /* The two ways `columnApplies` can say no, told apart, because the remedies differ completely:
      one says "go to a variation row", the other says "this field is not part of this product type".
      Collapsing them into one sentence would send an operator looking for a row that does not exist. */
-  if (row.isParent && col.scope === 'per_variant') return refusalWords(label, { kind: 'per-variant-on-parent' })
-  if (!columnApplies(col, row)) return refusalWords(label, { kind: 'not-applicable', productType: row.productType })
+  if (row.isParent && col.scope === 'per_variant' && !columnEditableOnRow(col, row)) return refusalWords(label, { kind: 'per-variant-on-parent', axis: col.axis === true })
+  if (!columnEditableOnRow(col, row)) return refusalWords(label, { kind: 'not-applicable', productType: row.productType })
   // The remaining veto is the per-CELL one: the column is editable and applies, and the server
   // still marked this particular cell locked.
   return refusalWords(label, { kind: 'cell-locked' })
+}
+
+/** The family row's value of a per-variant column its variations inherit (P1): editable there, optional, never required. */
+export function holdsFamilyValue(col: SheetColumn, row: StudioRow): boolean {
+  return row.isParent && !columnApplies(col, row) && columnEditableOnRow(col, row)
 }
 
 /** Whether a cell should be validated at all — a column that does not apply cannot be wrong. */

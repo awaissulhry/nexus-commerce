@@ -14,7 +14,7 @@ import { WorkspaceCache } from '../../../lib/workspace-cache.js'
  */
 import prisma from '../../../db.js'
 import { amazonSpecFromDefinition } from './amazon.js'
-import { ebaySpecFromCache, type EbayCachedAspect, type EbayCachedCondition, type EbayChannelSchemaRow } from './ebay.js'
+import { aspectNames, ebaySpecFromCache, type EbayCachedAspect, type EbayCachedCondition, type EbayChannelSchemaRow } from './ebay.js'
 import { normaliseKey, type ChannelSpec } from './types.js'
 
 export * from './types.js'
@@ -120,27 +120,50 @@ export async function loadEbaySpec(marketplace: string, categoryIds: string[]): 
   const cats = [...new Set(categoryIds.map(String).map(c => c.trim()).filter(Boolean))]
   if (cats.length > 1) throw new Error('Load eBay categories separately to preserve each leaf contract')
   const category = cats[0] ?? '*'
-  const [cached, schemaRows] = await Promise.all([
-    cats.length ? prisma.categorySchema.findFirst({
+  const [cachedRows, schemaRows] = await Promise.all([
+    cats.length ? prisma.categorySchema.findMany({
       where: { channel: 'EBAY', marketplace: { in: categorySchemaMarkets('EBAY', mk) }, productType: category, isActive: true },
       orderBy: [{ fetchedAt: 'desc' }, { id: 'asc' }],
       select: { schemaDefinition: true, fetchedAt: true, schemaVersion: true },
-    }) : Promise.resolve(null),
+    }) : Promise.resolve([]),
     prisma.channelSchema.findMany({
       where: { channel: 'EBAY', OR: [{ marketplace: mk }, { marketplace: null }] },
       orderBy: { marketplace: { sort: 'desc', nulls: 'last' } },
       select: { fieldKey: true, label: true, maxLength: true, required: true, allowedValues: true, notes: true },
     }),
   ])
+  const cached = cachedRows[0] ?? null
   const definition = cached?.schemaDefinition as { aspects?: EbayCachedAspect[]; conditions?: EbayCachedCondition[] } | null
   const rows = [...new Map(schemaRows.slice().reverse().map(r => [r.fieldKey, r])).values()] as EbayChannelSchemaRow[]
   const spec = ebaySpecFromCache({
     marketplace: mk, categoryId: category,
-    aspects: Array.isArray(definition?.aspects) ? definition.aspects : [],
+    aspects: Array.isArray(definition?.aspects) ? withRichShape(definition.aspects, cachedRows.slice(1)) : [],
     conditions: Array.isArray(definition?.conditions) ? definition.conditions : [],
     channelSchemaRows: rows, fetchedAt: cached?.fetchedAt ?? null,
   })
   spec.schemaVersion = cached?.schemaVersion ?? null
   spec.absent = !cached || !Array.isArray(definition?.aspects)
   return spec
+}
+
+/**
+ * P1 (report 3 I-3.5) — single or multiple values come from the FULL schema row. The newest row wins for the aspect list
+ * and its options, but the old flat-file GET writes a thin row (no `cardinality`, `maxLength`, `dataType`) that is
+ * often the newest: on 177101 "Chiusura" was then offered as a list while eBay says SINGLE. Each aspect the newest row
+ * leaves without them takes them from the newest older row of the SAME category that has them.
+ */
+function withRichShape(aspects: EbayCachedAspect[], older: Array<{ schemaDefinition: unknown }>): EbayCachedAspect[] {
+  const richer = older.flatMap(row => {
+    const list = (row.schemaDefinition as { aspects?: unknown } | null)?.aspects
+    return Array.isArray(list) ? list as EbayCachedAspect[] : []
+  }).filter(a => a && typeof a === 'object' && a.cardinality)
+  if (!richer.length) return aspects
+  // A thin row may carry only the localised label; a rich one both names. Either name identifies the aspect.
+  const identity = (a: EbayCachedAspect) => { const names = aspectNames(a); return names ? [normaliseKey(names.english), normaliseKey(names.localized)] : [] }
+  return aspects.map(aspect => {
+    if (!aspect || typeof aspect !== 'object' || aspect.cardinality) return aspect
+    const keys = identity(aspect)
+    const rich = keys.length ? richer.find(other => identity(other).some(key => keys.includes(key))) : undefined
+    return rich ? { ...aspect, cardinality: rich.cardinality, maxLength: aspect.maxLength ?? rich.maxLength, dataType: aspect.dataType ?? rich.dataType } : aspect
+  })
 }

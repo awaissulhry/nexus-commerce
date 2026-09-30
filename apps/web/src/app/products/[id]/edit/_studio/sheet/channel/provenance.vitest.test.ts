@@ -166,6 +166,18 @@ describe('cascadeOf — prefers the server layer, falls back honestly', () => {
     }
   })
 
+  it('offers "Follow Master" (a reset) on an old listing text, never another pin (P1, report 2 I-3)', () => {
+    // The server folded it into `master` until P1; the source decides, whatever layer an older read carries.
+    for (const layer of ['master', 'channel', 'alias'] as const) {
+      const snapshot = cell({ source: 'channelSnapshot', layer, pinned: false, follows: true, inherited: true })
+      expect(cascadeOf(snapshot, 'variant')).toBe('aliasVariant')
+      expect(cascadeOf(snapshot, 'parent')).toBe('alias')
+      expect(cascadeIntent(cascadeOf(snapshot, 'variant'), 'variant', 'Old title')?.action).toBe('reset')
+      expect(cascadeIntent(cascadeOf(snapshot, 'parent'), 'parent', 'Old title')?.action).toBe('reset')
+    }
+    expect(cascadeOf(cell({ source: 'channelSnapshot', value: null, pinned: false }), 'variant')).toBe('unset')
+  })
+
   it('resets an own named-alias override on a variant instead of pinning it again', () => {
     const overridden = cell({ layer: 'alias', pinned: true, inherited: false })
     expect(cascadeOf(overridden, 'variant')).toBe('aliasVariant')

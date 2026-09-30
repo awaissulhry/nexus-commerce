@@ -83,9 +83,17 @@ describe('LX.8 addressed writes, real disposable PostgreSQL, no provider', () =>
   expect((await read()).resolved.value).toBe('Nur auf Amazon DE')
  })
  it('rejects stale CAS and invalid paste/fill values without changing either table', async () => {
-  const before = await read(); expect((await bulk('x'.repeat(41), pin)).errors[0].error).toBe('Product title takes at most 40 characters')
+  // P1 (`value-verdict.ts`) — the invalid value is one its type cannot hold (a list sent to one text); an over-cap text is
+  // stored with a warning (next test).
+  const before = await read(); expect((await bulk(['x', 'y'], pin)).errors[0].error).toBe('Product title takes ONE value — a list was sent')
   await expect(writeContent({ productId:'lx-child', address:pin, values:{ title:'Stale' }, expectedVersion:0, label:'Product title' })).rejects.toThrow('Product title changed.')
   const after=await read(); expect(after.product).toEqual(before.product); expect(after.listing).toEqual(before.listing)
+ })
+ it('P1: an over-cap pasted title is STORED, and the answer names the cap as a warning', async () => {
+  const saved = await bulk('x'.repeat(41), pin)
+  expect(saved.errors).toEqual([])
+  expect(saved.warnings).toEqual([expect.objectContaining({ id: 'lx-child', warning: 'Product title takes at most 40 characters' })])
+  expect((await read()).resolved).toMatchObject({ value: 'x'.repeat(41), tier: 'pin' })
  })
  it('clears and resets pins without resurrecting legacy text or changing legacy columns', async () => {
   await writeContent({ productId:'lx-child', address:pin, values:{ title:null }, label:'Product title' }); expect((await read()).resolved).toMatchObject({ value:null, tier:'pin', follows:false })

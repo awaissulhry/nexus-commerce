@@ -60,7 +60,7 @@ async function seed(key: string, sku: string, opts: { following: boolean; ebay?:
   const listing = (channel: 'ETSY' | 'EBAY') => prisma.channelListing.create({ data: {
     productId: product.id, channel, channelConnectionId: channel === 'ETSY' ? accounts[key].etsy : accounts[key].ebay,
     channelMarket: channel === 'ETSY' ? 'ETSY_GLOBAL' : 'EBAY_DE', marketplace: channel === 'ETSY' ? 'GLOBAL' : 'DE', region: channel === 'ETSY' ? 'GLOBAL' : 'EU',
-    externalListingId: channel === 'ETSY' ? '1000000001' : '110000000001',
+    externalListingId: channel === 'ETSY' ? '1000000001' : 'test-ebay-listing',
     price: opts.following ? 20 : 25, priceOverride: opts.following ? null : 25, followMasterPrice: opts.following, masterPrice: 20,
   } })
   const etsy = await listing('ETSY')

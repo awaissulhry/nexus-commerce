@@ -4,7 +4,7 @@
  * — and a disagreement shows up as a cell that says "required" beside a pill that says "ready".
  */
 import { describe, it, expect } from 'vitest'
-import { columnApplies, columnRequiredByAny, columnRequiredHere, type SheetColumnRule, type SheetRowRule } from './master-sheet.js'
+import { columnApplies, columnEditableOnRow, columnRequiredByAny, columnRequiredHere, familyRowHoldsValue, type SheetColumnRule, type SheetRowRule } from './master-sheet.js'
 
 const col = (over: Partial<SheetColumnRule> = {}): SheetColumnRule => ({ scope: 'global', requiredBy: [], ...over })
 const PARENT: SheetRowRule = { isParent: true, productType: 'COAT' }
@@ -84,5 +84,26 @@ describe('columnRequiredByAny', () => {
     const c = col({ requiredBy: ['Amazon · IT'], requiredForProductTypes: ['SHOES'] })
     expect(columnRequiredByAny(c, CHILD)).toBe(false)
     expect(columnRequiredByAny(c, { isParent: false, productType: 'SHOES' })).toBe(true)
+  })
+})
+
+describe('P1 — the family row holds a per-variant value its variations inherit (report 2 I-11)', () => {
+  const col = (over: Record<string, unknown>) => ({ key: 'neckline', scope: 'per_variant' as const, requiredBy: [], storage: 'categoryAttributes', axis: false, ...over })
+  const parent = { isParent: true, productType: 'OUTERWEAR' }
+  it('holds a non-axis attribute stored where variations read the family value', () => {
+    expect(familyRowHoldsValue(col({}))).toBe(true)
+    expect(familyRowHoldsValue(col({ storage: 'localizedContent' }))).toBe(true)
+    expect(columnEditableOnRow(col({}), parent)).toBe(true)
+  })
+  it('never holds an axis, an identity code, a column-stored value, or a column whose axis is not known', () => {
+    expect(familyRowHoldsValue(col({ axis: true }))).toBe(false)
+    expect(familyRowHoldsValue(col({ key: 'ean', storage: 'categoryAttributes' }))).toBe(false)
+    expect(familyRowHoldsValue(col({ storage: 'column' }))).toBe(false)
+    expect(familyRowHoldsValue(col({ axis: undefined }))).toBe(false)
+    expect(columnEditableOnRow(col({ axis: true }), parent)).toBe(false)
+  })
+  it('keeps the other rules: a type the column does not apply to stays locked, and validation still follows columnApplies', () => {
+    expect(columnEditableOnRow(col({ applicableProductTypes: ['GLOVES'] }), parent)).toBe(false)
+    expect(columnApplies(col({}), parent)).toBe(false)
   })
 })
