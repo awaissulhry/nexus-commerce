@@ -48,7 +48,7 @@ import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, 
 import { resetActionWords } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { useCellFormulas } from '../../useCellFormulas';
-import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
+import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS, adoptFormulaVersions } from '../../formulaReadiness';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
 import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
@@ -234,9 +234,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         /* P0 — the rows already say which cells hold a formula, so no editor waits for the formula reads. */
         seedRows: rows,
         channelConnectionId: data?.scope.connectionId ?? accountId,
-        onSettled: () => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
-        onValueSaved: (rowId, fieldKey, value) => {
+        onSettled: () => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); refreshReadinessSoonRef.current(); },
+        onValueSaved: (rowId, fieldKey, value, answer) => {
             const node = getGridApi()?.getRowNode(rowId);
+            // A06 — the save moved the row's version: the next plain edit on it sends the new one (never a false 409).
+            adoptFormulaVersions(node?.data ?? rowsRef.current.find(row => row.rowId === rowId), answer, version => writerRef.current?.seed([{ id: rowId, version }]));
             if (!node?.data)
                 return;
             const cell = node.data.values?.[fieldKey];

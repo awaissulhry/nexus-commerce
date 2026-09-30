@@ -27,7 +27,7 @@ import { columnLanguages, languageField } from './sheet/languages'
 import { formulaReadKey } from './sheet/formulaColumns'
 import { useSaveReporter } from './contracts'
 import { reportedFormulaWrite } from './formulaWrites'
-import { FORMULA_READS_AT_ONCE, FORMULAS_LOADING, clearFailures, createHeldEdits, effectiveFormulas, emptyReads, failRead, failureFor, formulaState, landRead, rowKnown, runBounded, saveLocally, seedFromSheet, type FormulaReads, type FormulaSeedRow, type KnownFormula } from './formulaReadiness'
+import { FORMULA_READS_AT_ONCE, FORMULAS_LOADING, clearFailures, formulaBatchRequests, readFormulaFunctionsOnce, createHeldEdits, effectiveFormulas, emptyReads, failRead, failureFor, formulaState, landRead, rowKnown, runBounded, saveLocally, seedFromSheet, type FormulaReads, type FormulaSeedRow, type KnownFormula } from './formulaReadiness'
 
 export interface CellFormulaRow {
   productId: string
@@ -79,8 +79,13 @@ export interface UseCellFormulasInput {
    * previous language's sheet), or a cell would be judged by another coordinate's formulas.
    */
   seedRows?: readonly FormulaSeedRow[]
+  /** A formula save (or a value replacing one) settled: the sheet reads again (dependents may have moved). */
   onSettled?: () => void
-  onValueSaved?: (rowId: string, fieldKey: string, value: unknown) => void
+  /**
+   * The saved value, and the save's answer — its `versions` / `contentVersions` are the row's new tokens (audit A06:
+   * `adoptFormulaVersions`), or the next plain edit on the row would come back 409.
+   */
+  onValueSaved?: (rowId: string, fieldKey: string, value: unknown, answer: unknown) => void
 }
 
 export interface CellFormulas {
@@ -144,19 +149,31 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
   const live = useRef({ coordinateKey, writeFacts, onSettled, onValueSaved })
   live.current = { coordinateKey, writeFacts, onSettled, onValueSaved }
   const revision = useRef(0)
+  /* Audit B30 — only a save that wrote a value asks the sheet to read again. Removing a formula keeps its value and is
+     known locally (`saveLocally(null)`), so a reset of N formula cells no longer re-reads the sheet and every formula
+     batch N times. B29 — and the formulas themselves are not read again after a save: this tab's save is known
+     locally, and the sheet read that follows carries every cell's formula. */
+  const settleWanted = useRef(false)
   const queue = useMemo(() => createFormulaSaveQueue(() => {
-    if (live.current.coordinateKey !== coordinateKey) return
-    setNonce(n => n + 1)
+    if (live.current.coordinateKey !== coordinateKey || !settleWanted.current) return
+    settleWanted.current = false
     live.current.onSettled?.()
   }), [coordinateKey])
   useEffect(() => { queue.activate(); return () => queue.dispose() }, [queue])
-  const reload = useCallback(() => setNonce(n => n + 1), [])
+  /* An explicit Retry reads every row's formulas again, seeded or not. */
+  const forced = useRef(false)
+  const reload = useCallback(() => { forced.current = true; setNonce(n => n + 1) }, [])
 
   useEffect(() => {
-    const controller = new AbortController()
-    fetch(`${getBackendUrl()}/api/pim/formulas/functions`, { credentials: 'include', signal: controller.signal })
-      .then(r => r.ok ? r.json() : null).then(j => { if (Array.isArray(j?.functions)) setFunctions(j.functions) }).catch(() => {})
-    return () => controller.abort()
+    let live = true
+    // B29 — once per session: the list is the same for every sheet.
+    readFormulaFunctionsOnce(async () => {
+      const r = await fetch(`${getBackendUrl()}/api/pim/formulas/functions`, { credentials: 'include' })
+      const j = r.ok ? await r.json() : null
+      if (!Array.isArray(j?.functions)) throw new Error('No function list')
+      return j.functions
+    }).then(list => { if (live) setFunctions(list as FormulaFunctionDoc[]) }).catch(() => {})
+    return () => { live = false }
   }, [])
 
   useEffect(() => {
@@ -168,13 +185,9 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
       if (!controller.signal.aborted) setReads(previous => previous.key === readKey ? change(previous) : previous)
     }
     const ids = idsKey ? idsKey.split(',') : []
-    const groups = new Map<string, string[]>()
-    for (const id of ids) {
-      const alias = scopes[id]?.aliasKey ?? coord.aliasKey ?? ''
-      groups.set(alias, [...(groups.get(alias) ?? []), id])
-    }
-    const requests = languages.flatMap(language => [...groups].flatMap(([listingAlias, group]) =>
-      Array.from({ length: Math.ceil(group.length / 250) }, (_, i) => ({ language, listingAlias, batch: group.slice(i * 250, i * 250 + 250) }))))
+    const requests = formulaBatchRequests({ rowIds: ids, languages, forced: forced.current, seeded: id => seedRef.current.rows.has(id),
+      aliasOf: id => scopes[id]?.aliasKey ?? coord.aliasKey ?? '' })
+    forced.current = false
     /* P0 — in parallel (production waited 5 × ~0.43 s, one alias after another), and each answer lands on its own. */
     void runBounded(requests.map(({ language, listingAlias, batch }) => async () => {
       const rowByProduct = new Map(batch.map(id => [scopes[id]?.productId ?? id, id]))
@@ -197,8 +210,9 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
         else for (const [pid, fields] of Object.entries(body.formulas)) {
           for (const [fieldKey, f] of Object.entries(fields as Record<string, CellFormulaRow>)) add({ ...f, productId: pid, fieldKey })
         }
-        // A read that began before one of this tab's saves may predate it; that save's settle reads again.
+        // A read that began before one of this tab's saves may predate it: those rows are read again.
         if (mine === revision.current) land(previous => landRead(previous, { language, locale, rowIds: batch, formulas: found }))
+        else if (!controller.signal.aborted) setNonce(n => n + 1)
       } catch (error) {
         land(previous => failRead(previous, { language, rowIds: batch, error: error instanceof Error ? error.message : String(error) }))
       }
@@ -253,7 +267,8 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     revision.current += 1
     if (live.current.coordinateKey === coordinateKey && (literal || body.formula)) setReads(previous => previous.key === readKey ? saveLocally(previous, rowId, fieldKey, literal ? null : body.formula) : previous)
     const result = literal ? { ok: true } : formulaSaveOutcome(body)
-    if (result.ok && live.current.coordinateKey === coordinateKey) live.current.onValueSaved?.(rowId, fieldKey, body.value)
+    settleWanted.current = true
+    if (result.ok && live.current.coordinateKey === coordinateKey) live.current.onValueSaved?.(rowId, fieldKey, body.value, body)
     return result
   })), [reporter, queue, target, coordinateKey, readKey])
   const save = useCallback((rowId: string, fieldKey: string, expr: string) => commit(rowId, fieldKey, { expr }), [commit])
@@ -264,8 +279,12 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     for (const [name, value] of Object.entries(destination)) if (value != null) q.set(name, value)
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/product/${encodeURIComponent(canonicalId)}?${q}`, { method: 'DELETE', credentials: 'include' })
     const body = await res.json()
-    return res.ok ? { ok: true } : { ok: false, error: body?.error ?? 'Could not remove the formula.' }
-  })), [reporter, queue, target])
+    if (!res.ok) return { ok: false, error: body?.error ?? 'Could not remove the formula.' }
+    // B30 — the formula is gone and its value stays: known here, no read of the sheet or the formulas.
+    revision.current += 1
+    if (live.current.coordinateKey === coordinateKey) setReads(previous => previous.key === readKey ? saveLocally(previous, rowId, fieldKey, null) : previous)
+    return { ok: true }
+  })), [reporter, queue, target, coordinateKey, readKey])
   void productId
   const sourceLabelFor = (fieldKey?: string) => {
     const language = languageField(fieldKey ?? '', locale).locale

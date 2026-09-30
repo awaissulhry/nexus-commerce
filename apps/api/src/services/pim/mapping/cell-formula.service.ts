@@ -110,7 +110,7 @@ export type FormulaFieldWriter = (args: {
   expectedVersion?: number
   dryRun?: boolean
   updatedBy?: string | null
-}) => Promise<{ ok: boolean; error?: string | null; atomicResults?: unknown[] }>
+}) => Promise<{ ok: boolean; error?: string | null; atomicResults?: unknown[]; contentVersions?: unknown[] }>
 
 let fieldWriter: FormulaFieldWriter | null = null
 
@@ -566,7 +566,7 @@ async function writeValue(
   atomic?: () => unknown[],
   expectedVersion?: number,
   dryRun = false,
-): Promise<{ atomicResults?: unknown[] }> {
+): Promise<{ atomicResults?: unknown[]; contentVersions?: unknown[] }> {
   // #775 — delegated to the ordinary cell writer. Everything this used to do by
   // hand (the master allow-list, the channel column mapping, the `attr_*` merge
   // with its marketplace context, the select validation, the CAS, the audit row)
@@ -608,7 +608,30 @@ async function writeValue(
 // Set / delete / restore
 // ────────────────────────────────────────────────────────────────────
 
-export interface SetFormulaResult {
+/**
+ * Audit A06 — the versions a formula save leaves behind, read AFTER the save and every dependent formula it re-evaluated.
+ * The value is written through the ordinary bulk writer with a compare-and-set, so the product's (or the listing's)
+ * version moves; an answer without it left the sheet holding the old token, and the next plain edit on that row came
+ * back 409 "Another change landed first". The sheet adopts these exactly as it adopts a bulk save's `currentVersion`.
+ */
+export interface FormulaWriteVersions {
+  versions: { product: number | null; channelListing: number | null }
+  /** The translations the write moved (`contentVersions[]` of the bulk answer), for their cells' next CAS. */
+  contentVersions?: unknown[]
+}
+
+async function versionsAfterWrite(productId: string, listingId: string | null | undefined, contentVersions?: unknown[]): Promise<FormulaWriteVersions> {
+  const [product, listing] = await Promise.all([
+    prisma.product.findUnique({ where: { id: productId }, select: { version: true } }),
+    listingId ? prisma.channelListing.findFirst({ where: { id: listingId }, select: { version: true } }) : null,
+  ])
+  return {
+    versions: { product: (product as { version?: number } | null)?.version ?? null, channelListing: (listing as { version?: number } | null)?.version ?? null },
+    ...(Array.isArray(contentVersions) && contentVersions.length ? { contentVersions } : {}),
+  }
+}
+
+export interface SetFormulaResult extends Partial<FormulaWriteVersions> {
   formula: CellFormulaRow
   value: unknown
   error: string | null
@@ -777,8 +800,8 @@ export async function setCellFormula(input: CellCoordinate & {
 
   // An invalid expression is retained for correction while the previous value stays intact.
   // A valid expression and its materialised result commit in the ordinary writer's transaction.
-  const saved = effectiveError ? await mutation() :
-    (await writeValue(input, normalisedValue, col, () => [mutation()], col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)).atomicResults?.[0] as Awaited<ReturnType<typeof mutation>>
+  const written = effectiveError ? null : await writeValue(input, normalisedValue, col, () => [mutation()], col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)
+  const saved = written ? written.atomicResults?.[0] as Awaited<ReturnType<typeof mutation>> : await mutation()
   if (!saved) throw new Error('The formula transaction did not return its saved expression.')
   const versionAfter =
     (await prisma.product.findUnique({ where: { id: input.productId }, select: { version: true } }))?.version ?? null
@@ -836,6 +859,7 @@ export async function setCellFormula(input: CellCoordinate & {
     ...(refusal ? { allowedOptions: refusal.allowedOptions, actualValue: refusal.actualValue } : {}),
     warnings: [...outcome.warnings, ...(optionWarning ? [optionWarning] : [])],
     cascaded,
+    ...(written ? await versionsAfterWrite(input.productId, (ctx.channelListing as { id?: string } | null)?.id, written.contentVersions) : {}),
   }
 }
 
@@ -957,12 +981,13 @@ export async function setCellLiteral(input: CellCoordinate & {
         market: input.market ?? null, expr: existing.expr, dependsOn: existing.dependsOn, language: normalizeLanguage(input.locale || PRIMARY_CONTENT_LOCALE), contentAddress: input.contentAddress } as any,
     } })] : []),
   ]
-  await writeValue(input, verdict.value, col, atomic,
+  const written = await writeValue(input, verdict.value, col, atomic,
     col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)
   const cascaded = await reevaluateDependents({ productId: input.productId, changedFields: [input.fieldKey],
     updatedBy: input.updatedBy, ip: input.ip,
     ...(col.writeTarget === 'channelListing' && input.channel && input.marketplace ? { coordinate: { channel: input.channel, marketplace: input.marketplace, channelConnectionId: input.channelConnectionId, aliasKey: input.aliasKey, locale: input.locale } } : {}) })
-  return { ok: true, value: verdict.value, ...(literalWarning ? { warnings: [literalWarning] } : {}), cascaded }
+  return { ok: true, value: verdict.value, ...(literalWarning ? { warnings: [literalWarning] } : {}), cascaded,
+    ...await versionsAfterWrite(input.productId, (ctx.channelListing as { id?: string } | null)?.id, written.contentVersions) }
 }
 
 /** Restore an operation snapshot, including a formula that had kept its last valid value. */

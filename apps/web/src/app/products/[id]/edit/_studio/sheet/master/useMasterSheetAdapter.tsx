@@ -43,7 +43,7 @@ import { familyOps } from './familyOps';
 import { FamilySelectionVerbs } from './FamilySelectionBar';
 import { useFamily } from './useFamily';
 import { useCellFormulas } from '../../useCellFormulas';
-import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
+import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS, adoptFormulaVersions } from '../../formulaReadiness';
 import { cellOf, editRefusalReason } from './columnRules';
 import type { SheetColumn, StudioRow } from './types';
 import { useMasterSheet } from './useMasterSheet';
@@ -147,8 +147,11 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* P0 — the studio read's rows already say which cells hold a formula. Not a legacy read (it carries none) and not the
        previous language's sheet, which stays on screen while the next one loads. */
     const formulaSeedRows = useMemo(() => sheet?.meta.source === 'studio' && sheet.scope.locale === locale ? sheet.rows.map(row => ({ rowId: row.id, values: row.values })) : undefined, [sheet, locale]);
-    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, seedRows: formulaSeedRows, onSettled: refresh, onValueSaved: (rowId, fieldKey, value) => {
+    /* B07 — a formula save moves readiness like any other save: the sheet reads again and so do the progress bars. */
+    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, seedRows: formulaSeedRows, onSettled: () => { void refresh(); refreshReadinessSoon(); }, onValueSaved: (rowId, fieldKey, value, answer) => {
             const node = getGridApi()?.getRowNode(rowId);
+            // A06 — the save moved the row's version: the next plain edit on it sends the new one (never a false 409).
+            adoptFormulaVersions(node?.data ?? sheet?.rows.find(row => row.id === rowId), answer, version => writer.seed([{ id: rowId, version }]));
             if (!node?.data)
                 return;
             const cell = node.data.values?.[fieldKey];

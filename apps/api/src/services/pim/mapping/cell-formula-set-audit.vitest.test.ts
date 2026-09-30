@@ -193,3 +193,25 @@ it('allows a one-time transform to read its own field while linked formulas reje
   expect(writer).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }))
   expect(formulaUpsert).not.toHaveBeenCalled()
 })
+
+/**
+ * Audit A06 — a formula save writes its value through the bulk writer with a CAS, so the row's version moves. The answer
+ * carried no version, so the sheet kept the old token and the next plain edit on that row came back 409. The answer now
+ * states the versions read AFTER the save (and every dependent it re-evaluated), and the translations the write moved.
+ */
+describe('audit A06 — a formula save answers the versions it left', () => {
+  it('setCellFormula answers the product version read after the write', async () => {
+    writer.mockImplementation(async (input: any) => { version += 1; return { ok: true, atomicResults: await Promise.all(input.atomic?.() ?? []), contentVersions: [{ language: 'de', version: 7 }] } })
+    const result = await save('10 * 1.2')
+    expect(result.versions).toEqual({ product: 4, channelListing: null })
+    expect(result.contentVersions).toEqual([{ language: 'de', version: 7 }])
+  })
+  it('a refused formula wrote no value: no versions to adopt', async () => {
+    const result = await save('$athlete_typo')
+    expect(result.versions).toBeUndefined()
+  })
+  it('setCellLiteral answers the product version read after the write', async () => {
+    const result = await setCellLiteral({ productId: PID, scope: 'master', locale: 'de', market: 'DE', fieldKey: 'basePrice', value: 12 })
+    expect(result.versions).toEqual({ product: 4, channelListing: null })
+  })
+})

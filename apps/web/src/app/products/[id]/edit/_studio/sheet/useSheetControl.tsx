@@ -18,6 +18,10 @@ import { useActionConfirm, type AgMenuItemDef, type ColDef, type ColGroupDef, ty
 import { ClearOrResetDialog, SetColumnDialog, type ClearChoiceRequest, type SetColumnRequest } from './SheetControlDialogs'
 import { clearChoiceCounts, deleteAsks, isClearKey, isMenuKey, resetChanges, resetTargets, selectedCells, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
 import type { SheetCellChange } from './sheetUndo'
+import { runBounded } from '../formulaReadiness'
+
+/** Formula removals in flight at once during a reset (each is a server transaction). */
+const FORMULA_REMOVALS_AT_ONCE = 4
 
 export interface SheetControlOptions<Row> {
   getGridApi: () => GridApi<Row> | null
@@ -78,7 +82,9 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
   const reset = useCallback(async (targets: ResetTarget[]) => {
     const { writer, removeFormula, say, operation } = live.current
     const formulas = targets.filter(t => t.formula)
-    const refused = (await Promise.all(formulas.map(async t => ({ t, r: await removeFormula(t.rowId, t.colId) })))).filter(x => !x.r.ok)
+    // B30 — a few at a time: a column of 105 formula cells sent 105 DELETEs at once, each a server transaction.
+    const removed = await runBounded(formulas.map(t => async () => ({ t, r: await removeFormula(t.rowId, t.colId) })), FORMULA_REMOVALS_AT_ONCE)
+    const refused = removed.flatMap(x => x?.status === 'fulfilled' ? (x.value.r.ok ? [] : [x.value]) : [])
     if (refused.length) say(`${refused.length} formula ${refused.length === 1 ? 'cell was' : 'cells were'} not reset: ${refused[0].r.error ?? 'the formula could not be removed.'}`)
     const skip = new Set(refused.map(x => `${x.t.rowId}\u0000${x.t.colId}`))
     const kept = targets.filter(t => !skip.has(`${t.rowId}\u0000${t.colId}`))

@@ -9,6 +9,7 @@
  * Precedence: this tab's own save > a batch read that answered for the cell > the sheet read.
  */
 import { languageColumn } from './sheet/languages'
+import { adoptContentVersions } from './sheet/contentVersions'
 
 /** Batch reads in flight at once: parallel, but not one request per alias and language all at the same moment. */
 export const FORMULA_READS_AT_ONCE = 4
@@ -155,6 +156,49 @@ export function saveLocally(reads: FormulaReads, rowId: string, fieldKey: string
   saved.set(rowId, new Map(saved.get(rowId)).set(fieldKey, formula))
   return { ...reads, saved }
 }
+
+/**
+ * Audit B29 — the `/pim/formulas/batch` reads a load still owes: one per language × listing alias × 250 rows, for the
+ * rows the sheet read did NOT carry (a legacy read, the previous language's sheet). A row the sheet read seeded is
+ * known with its formulas already (`seedFromSheet`), so it is read again only on an explicit Retry (`forced`).
+ * Before, every load sent them all (GALE eBay IT: 5 reads; 15 with three languages) for formulas already on screen.
+ */
+export function formulaBatchRequests(input: { rowIds: readonly string[]; seeded: (rowId: string) => boolean; forced: boolean; languages: readonly string[]
+  aliasOf: (rowId: string) => string }): Array<{ language: string; listingAlias: string; batch: string[] }> {
+  const groups = new Map<string, string[]>()
+  for (const id of input.rowIds) {
+    if (!input.forced && input.seeded(id)) continue
+    const alias = input.aliasOf(id)
+    groups.set(alias, [...(groups.get(alias) ?? []), id])
+  }
+  return input.languages.flatMap(language => [...groups].flatMap(([listingAlias, group]) =>
+    Array.from({ length: Math.ceil(group.length / 250) }, (_, i) => ({ language, listingAlias, batch: group.slice(i * 250, i * 250 + 250) }))))
+}
+
+/**
+ * Audit A06 — a formula save (or a value replacing one) writes through the bulk writer with a compare-and-set, so the
+ * row's version moves. The answer states the versions it left (`versions`, `contentVersions`); the row adopts them the
+ * way it adopts a bulk save's, or the next plain edit on it would send the old token and come back 409.
+ */
+export interface FormulaVersionRow { id: string; listing?: unknown; values?: unknown }
+export function adoptFormulaVersions(row: FormulaVersionRow | null | undefined, answer: unknown, seedProductVersion: (version: number) => void): boolean {
+  const versions = (answer as { versions?: { product?: unknown; channelListing?: unknown } } | null)?.versions
+  let moved = false
+  if (typeof versions?.product === 'number') { seedProductVersion(versions.product); moved = true }
+  const listing = row?.listing as { version?: number } | null | undefined
+  if (typeof versions?.channelListing === 'number' && listing && typeof listing.version === 'number') { listing.version = versions.channelListing; moved = true }
+  if (row && adoptContentVersions(row as never, answer).length) moved = true
+  return moved
+}
+
+/** The function list is the same for every sheet of a session: read once (a failed read is asked again next time). */
+let functionsRead: Promise<unknown> | null = null
+export function readFormulaFunctionsOnce(read: () => Promise<unknown>): Promise<unknown> {
+  functionsRead ??= read().catch(error => { functionsRead = null; throw error })
+  return functionsRead
+}
+/** For tests: forget the session's function list. */
+export function forgetFormulaFunctions(): void { functionsRead = null }
 
 /** Run `tasks` with at most `limit` in flight; results in task order. No new task starts once `signal` aborts. */
 export async function runBounded<T>(tasks: ReadonlyArray<() => Promise<T>>, limit: number, signal?: AbortSignal): Promise<Array<PromiseSettledResult<T> | undefined>> {

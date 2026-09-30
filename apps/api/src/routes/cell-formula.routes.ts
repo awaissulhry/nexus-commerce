@@ -139,14 +139,14 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
           : {}),
       },
     }))
-    const body = res.json() as { error?: string; details?: string[]; errors?: Array<{ error?: string }>; updated?: number; unchanged?: number }
+    const body = res.json() as { error?: string; details?: string[]; errors?: Array<{ error?: string }>; updated?: number; unchanged?: number; contentVersions?: unknown[] }
     const first = body?.errors?.[0]?.error ?? body?.details?.[0]
     if (res.statusCode !== 200 || first) {
       // The writer's own sentence, verbatim — it is the one the operator would
       // have seen typing the value by hand, which is the point of the rule.
       return { ok: false, error: first ?? body.error ?? `write refused (HTTP ${res.statusCode})` }
     }
-    return { ok: true, atomicResults: context.results }
+    return { ok: true, atomicResults: context.results, contentVersions: body.contentVersions }
   })
 
   fastify.get('/pim/formulas/functions', async (_req, reply) =>
