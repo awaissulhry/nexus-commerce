@@ -247,8 +247,9 @@ jobs:
           curl -sf -o /dev/null http://localhost:3000/login || { echo "✗ web did not start"; tail -50 "$RUNNER_TEMP/web.log"; exit 1; }
 
       # Keyed by the Playwright version: it alone decides which browser build `playwright install` fetches. Keyed by
-      # package-lock.json, every lockfile change stored another 271 MB copy (11 copies, 3 GB of the full 10 GB cache,
-      # 2026-09-30). The version is read from what is installed, so a Playwright bump always gets its own browser.
+      # package-lock.json, each PR whose lockfile differed from main's stored its own 271 MB copy (11 copies, 3 GB of the
+      # full 10 GB cache, 2026-09-30). The version is read from what is installed, so a Playwright bump always gets its
+      # own browser.
       - name: Playwright version (browser cache key)
         id: playwright
         run: |
