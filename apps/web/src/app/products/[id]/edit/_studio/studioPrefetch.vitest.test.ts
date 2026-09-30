@@ -91,3 +91,12 @@ describe('the prefetch store', () => {
     expect(doFetch).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('the page-load prefetch reads the URL once', () => {
+  it('StudioLoader does not subscribe to the search params (every URL change re-rendered the whole studio)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync(`${__dirname}/StudioLoader.tsx`, 'utf8')
+    expect(src).not.toMatch(/useSearchParams\(|import \{[^}]*useSearchParams/)
+    expect(src).toContain('new URLSearchParams(window.location.search)')
+  })
+})
