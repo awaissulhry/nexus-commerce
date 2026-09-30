@@ -59,3 +59,27 @@ describe('useMasterSheet — the reconcile read is quiet', () => {
     expect(readRowBody()).toMatch(/recoverSheetRow\(/)
   })
 })
+
+/**
+ * 🔴 A FAILED QUIET READ KEEPS THE SHEET — the same kind of source guard, for the same reason.
+ *
+ * After every confirmed save the sheet re-reads quietly. When that read failed, its `.catch` recorded a load
+ * error, the adapter turned it into `unavailable`, and the surface swapped the whole grid for "Could not load
+ * shared product information" one read after a successful save (measured locally 2026-09-30,
+ * `sheet-save-races.spec.ts` test 1, 4 of 4 runs). The behaviour is proven by that browser spec; this holds the
+ * one line that decides it.
+ */
+describe('useMasterSheet — a failed quiet read keeps the sheet', () => {
+  const src = readFileSync(join(__dirname, 'useMasterSheet.ts'), 'utf8')
+  const readCatch = () => {
+    const at = src.indexOf('setError(studioReadMessage(err))')
+    if (at === -1) throw new Error('the sheet read no longer records its error through studioReadMessage — the guard cannot find it')
+    const start = src.lastIndexOf('.catch(', at)
+    if (start === -1) throw new Error('the read error is not recorded in a .catch — the guard cannot bound it')
+    return src.slice(start, at)
+  }
+
+  it('🔴 returns before recording an error when the read was quiet and a sheet is on screen', () => {
+    expect(readCatch()).toMatch(/if\s*\(\s*quiet\s*&&\s*sheetRef\.current\s*\)\s*return/)
+  })
+})

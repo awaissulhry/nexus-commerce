@@ -268,6 +268,11 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       })
       .catch((err: unknown) => {
         if (cancelled || mine !== requestRef.current) return
+        // A QUIET read (after a confirmed save, or "Refresh progress") that fails keeps the sheet on screen:
+        // the edit is already confirmed, and the next save or refresh reads again. Recording it as a load error
+        // replaced the whole grid with "Could not load shared product information" mid-edit. The channel sheet
+        // keeps its sheet the same way (`useChannelSheet` refresh).
+        if (quiet && sheetRef.current) return
         setError(studioReadMessage(err))
       })
       .finally(() => {
