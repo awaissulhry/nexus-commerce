@@ -137,6 +137,12 @@ export interface MappedCell {
   autoCorrected: { from: string; to: string } | null
   requiredByRule: boolean
   overLimit: { chars?: number; bytes?: number } | null
+  /**
+   * P1 (report 5 I-1) — an eBay item specific that is not an axis has one value per listing: this row shows the value
+   * eBay receives, from the row `productId`/`sku` (the parent, or the first variation that holds one). A write on any row
+   * lands on the parent listing. `ownValue`: this row's own different value, which eBay does not receive.
+   */
+  listingLevel?: { productId: string; sku: string; ownValue?: unknown }
 }
 
 export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' | 'effectiveLocale' | 'translationState' | 'needsTranslation'>, ContentWriteFacts {
@@ -458,6 +464,11 @@ export interface GetStudioSheetInput {
   market: string
   channel?: string
   locale?: string
+  /**
+   * P1 — each row's OWN stored value of an eBay listing-level item specific, for the readers that judge rows one by one
+   * (the variation projection's candidate axes). The operator's sheet shows the listing's one value on every row.
+   */
+  rowOwnValues?: boolean
 }
 
 export class UnknownProductError extends Error {
@@ -1799,6 +1810,14 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         if (row.readiness.issues.some((i) => i.severity === 'error')) row.readiness.state = 'errors'
         else if (row.readiness.state === 'ready' && row.readiness.issues.length > 0) row.readiness.state = 'missing'
       }
+    }
+
+    // P1 (report 5 I-1) — eBay takes one value per listing for an item specific that is not an axis: every row shows the
+    // value eBay receives (`ebay-listing-level.ts`). After the theme cells, which read the rows' own values as candidates.
+    if (coordinate?.channel === 'EBAY' && exclusionKnown && !input.rowOwnValues) {
+      const { showEbayListingLevel } = await import('./ebay-listing-level.js')
+      showEbayListingLevel({ rows, columns, label: coordinate.label, groups: projections.map(group => ({ aliasKey: group.id ?? '', axes: cells.get(group.id ?? '')?.axes,
+        familyAxes: root.variationAxes, includedIds: new Set(children.filter(child => { const own = listingByRow.get(`${child.id}:${group.id ?? ''}`); return !!own && !excluded.has(own.id) }).map(child => child.id)) })) })
     }
   }
 

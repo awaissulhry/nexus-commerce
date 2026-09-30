@@ -11,6 +11,9 @@ import { publishContentIssues, resolvePublishContent, requireReviewedContent } f
 import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
+import { ebayListingLevelValues, isEbayListingLevel, listingLevelWarning, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
+import { aspectCanonicalName } from '../ebay-theme-axes.js'
+import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
 
 // JSONB can return object keys in a different order from the preview request.
 // Preserve semantic array order and JSON/toJSON values while hashing objects canonically.
@@ -64,21 +67,37 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     if (refusal) error(refusal.sentence)
   }
   const languages = await marketLanguages(scope.channel, scope.marketplace)
+  // P1 (report 5 I-1/I-2/I-3) — eBay takes one value per listing for an item specific that is not an axis: its problems
+  // are the supplying row's (the parent, else the first variation that holds one), named once; the axes are the ones
+  // the publisher sends (the listing's variation projection).
+  const ebayAxes = scope.channel === 'EBAY' && included.length > 1 && included.some(p => p.id === parent.id)
+    ? await loadEbayListingAxes({ parentId: parent.id, market: scope.marketplace, accountId: scope.accountId, aliasKey: destination.aliasKey ?? '', familyAxes: parent.variationAxes })
+    : null
+  const familyRows = included.map(p => ({ productId: p.id, sku: p.sku, isParent: p.id === parent.id }))
   const resolved = []
   for (const locale of languages) {
     const result = await resolveBatch({ channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
       aliasKey: destination.aliasKey ?? '', productIds: included.map(p => p.id), locale, includeCatalogue: true })
+    const levels = ebayAxes ? ebayListingLevelValues({ rows: familyRows, axes: ebayAxes, fields: ebayFields(result.catalogue?.fields),
+      valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value }) : []
+    const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])
+    const reporterOf = (field: string) => levels.find(level => level.field.key === field)?.supplier.productId ?? parent.id
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
       if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
+      // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
+      if (listingLevelKeys.has(field) && row.productId !== reporterOf(field)) continue
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
       for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
     }
     if (result.missingProductIds.length) error('Some products could not be read. Refresh the product before publishing.')
+    if (!resolved.length) for (const level of levels.filter(level => level.differing.length)) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field: level.field.key,
+      severity: 'warning', message: listingLevelWarning(level.field.label, level.value, level.supplier.sku, level.differing) })
     resolved.push(result)
   }
   if (!languages.length) error('Configure a content language for this destination before publishing.')
+  if (ebayAxes && resolved[0]) issues.push(...ebayStoredSpecificIssues({ parentId: parent.id, rows: familyRows, listings, fields: ebayFields(resolved[0].catalogue?.fields), axes: ebayAxes }))
   for (const product of included) {
     const listing = listings.find(l => l.productId === product.id)
     const content = await resolvePublishContent({ product: product as any, parent: product.id === parent.id ? null : parent as any,
@@ -100,3 +119,45 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     excluded: products.length - selected.length, aliasLabel: alias?.label ?? 'Primary listing' }
 }
 export type PublicationFacts = Awaited<ReturnType<typeof readPublicationFacts>>
+
+/** The eBay catalogue fields as listing-level candidates (key, label, store, the names they go by). */
+function ebayFields(fields: ReadonlyArray<{ fieldKey: string; sheetKey?: string; label: string; channelStore?: unknown }> | undefined): ListingLevelField[] {
+  return (fields ?? []).map(f => ({ key: f.fieldKey, label: f.label, store: f.channelStore as ListingLevelField['store'], names: [f.fieldKey, f.sheetKey, f.label] }))
+}
+
+/**
+ * P1 (report 3 I-3.4/I-3.9, report 5 I-3) — the stored item specifics no column serves still ship: `buildEbayListingInput`
+ * starts from the stored bag. For those the review names the rows whose own value is not sent (eBay takes one per
+ * listing), and blocks a value over eBay's 65 characters. (Column values are judged per cell by the verdict.)
+ */
+export function ebayStoredSpecificIssues(input: {
+  parentId: string
+  rows: Array<{ productId: string; sku: string; isParent: boolean }>
+  listings: Array<{ productId: string; platformAttributes?: unknown }>
+  fields: ListingLevelField[]
+  axes: Set<string>
+}): StudioPublishIssue[] {
+  const issues: StudioPublishIssue[] = []
+  const covered = new Set(input.fields.flatMap(f => f.store?.kind === 'platformAttributes' && f.store.path?.[0] === 'itemSpecifics' && f.store.path[1] ? [aspectCanonicalName(f.store.path[1])] : []))
+  const bagOf = (productId: string) => {
+    const bag = input.listings.find(l => l.productId === productId)?.platformAttributes as { itemSpecifics?: Record<string, unknown> } | null | undefined
+    return bag?.itemSpecifics && typeof bag.itemSpecifics === 'object' ? bag.itemSpecifics : {}
+  }
+  const names = new Map<string, string>()
+  for (const row of input.rows) for (const name of Object.keys(bagOf(row.productId))) {
+    const key = aspectCanonicalName(name)
+    if (key && key !== 'condizione' && !covered.has(key) && !names.has(key)) names.set(key, name)
+  }
+  const fields: ListingLevelField[] = [...names].map(([key, name]) => ({ key, label: name, store: { kind: 'platformAttributes', path: ['itemSpecifics', name] } }))
+  const levels = ebayListingLevelValues({ rows: input.rows, fields, axes: input.axes,
+    valueOf: (row, field) => Object.entries(bagOf(row.productId)).find(([stored]) => aspectCanonicalName(stored) === field.key)?.[1] })
+  for (const level of levels) {
+    const field = `itemSpecifics.${level.field.label}`
+    if (level.differing.length) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field, severity: 'warning',
+      message: listingLevelWarning(level.field.label, level.value, level.supplier.sku, level.differing) })
+    const long = ebayAspectValues(level.value).find(value => value.length > EBAY_ASPECT_VALUE_MAX)
+    if (long) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field, severity: 'error',
+      message: `${level.field.label}: eBay takes at most ${EBAY_ASPECT_VALUE_MAX} characters per value; ${JSON.stringify(long.slice(0, 40) + '…')} has ${long.length}.` })
+  }
+  return issues
+}

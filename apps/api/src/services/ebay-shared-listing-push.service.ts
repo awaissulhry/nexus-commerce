@@ -8,6 +8,7 @@ import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-ap
 import { toTradingConditionId } from './ebay-condition.js'
 import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSynonymKey, canonicalizeRowAspects } from './ebay-theme-axes.js'
 import { orderAxisValues } from './ebay-value-order.js'
+import { ebayAspectValues } from './ebay-aspect-values.js'
 
 /** Incident #21 — "blank qty on a shared listing = whatever the pool allows".
  *  Callers' capQty implementations recognize this sentinel and return the pool
@@ -199,10 +200,13 @@ export function buildSharedListingInput(
   // specific doubled it on the page). Localized names win; when both language
   // twins carry values, the localized column's value is preferred.
   const axisCanonicals = new Set(variationSpecificNames.map((n) => aspectCanonicalName(n)))
-  const bestByCanonical = new Map<string, { display: string; value: string; localized: boolean }>()
+  const bestByCanonical = new Map<string, { display: string; values: string[]; localized: boolean }>()
   for (const source of [parentRow, ...variantRows]) {
     for (const [k, v] of Object.entries(source ?? {})) {
-      if (!k.startsWith('aspect_') || typeof v !== 'string' || !v.trim()) continue
+      if (!k.startsWith('aspect_')) continue
+      // P1 (report 3 I-3.2) — a list value is sent as its members; it used to be skipped as "not a string".
+      const values = ebayAspectValues(v)
+      if (!values.length) continue
       const name = k.slice('aspect_'.length).replace(/_/g, ' ').trim()
       if (!name) continue
       const canonicalLower = aspectCanonicalName(name)
@@ -220,21 +224,16 @@ export function buildSharedListingInput(
       // twin to prefer — first-seen wins, so we never promote an Italian
       // spelling over the market's own.
       if (!prev || (mayCanonicalize && isLocalized && !prev.localized)) {
-        bestByCanonical.set(canonicalLower, { display, value: v.trim(), localized: isLocalized })
+        bestByCanonical.set(canonicalLower, { display, values, localized: isLocalized })
       }
     }
   }
   // Incident #26 (code 21919308) — eBay caps each specific VALUE at 65 chars;
   // list-like values (Caratteristiche: 'Ventilato, Impermeabile, …') are
-  // MULTI-VALUE aspects and must ship as several <Value> entries.
+  // MULTI-VALUE aspects and ship as several <Value> entries (`ebayAspectValues`).
   const itemSpecifics: Record<string, string | string[]> = {}
-  for (const { display, value } of bestByCanonical.values()) {
-    if (value.length > 65 && /[,;]/.test(value)) {
-      const parts = [...new Set(value.split(/[,;]/).map((x) => x.trim()).filter(Boolean))]
-      itemSpecifics[display] = parts
-    } else {
-      itemSpecifics[display] = value
-    }
+  for (const { display, values } of bestByCanonical.values()) {
+    itemSpecifics[display] = values.length === 1 ? values[0] : values
   }
 
   return {

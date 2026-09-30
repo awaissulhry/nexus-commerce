@@ -24,6 +24,7 @@ import {
 } from './types.js'
 import { toInventoryCondition } from '../../ebay-condition.js'
 import { englishEbayAspectLabel } from '../../ebay-aspect-names.js'
+import { EBAY_ASPECT_VALUE_MAX } from '../../ebay-aspect-values.js'
 
 export interface EbayCachedAspect {
   id: string
@@ -167,7 +168,10 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     const options = Array.isArray(a.options) && a.options.length > 0 ? a.options.map(String) : undefined
     const isEnum = a.kind === 'enum' && !!options
     const kind: ChannelFieldSpec['kind'] = isEnum ? 'select' : a.kind === 'number' || a.dataType === 'NUMBER' ? 'number' : a.kind === 'date' || a.dataType === 'DATE' ? 'date' : isProseKey(norm) ? 'longtext' : 'text'
-    const maxLength = typeof a.maxLength === 'number' && a.maxLength > 0 ? a.maxLength : typeof row?.maxLength === 'number' && row.maxLength > 0 ? row.maxLength : undefined
+    // P1 (report 3 I-3.9) — eBay refuses any ONE value over 65 characters (21919308) whatever the cache says; the cache
+    // carries no cap, so the column declares eBay's: the sheet warns while editing and publish blocks it.
+    const cached = typeof a.maxLength === 'number' && a.maxLength > 0 ? a.maxLength : typeof row?.maxLength === 'number' && row.maxLength > 0 ? row.maxLength : undefined
+    const maxLength = Math.min(cached ?? EBAY_ASPECT_VALUE_MAX, EBAY_ASPECT_VALUE_MAX)
     const spec: ChannelFieldSpec = {
       key: norm,
       attribute: `aspect_${names.english}`,
@@ -176,8 +180,8 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
       englishLabel: englishEbayAspectLabel(names.english) ?? names.english,
       shape: multi ? 'list' : 'scalar',
       kind,
-      // eBay's aspect metadata declares no per-aspect maximum in the cache; the adapter records
-      // the truth (unbounded) rather than inventing one.
+      // eBay's aspect metadata declares no per-aspect maximum NUMBER of values in the cache; the adapter
+      // records the truth (unbounded) rather than inventing one.
       cardinality: multi ? { min: 1, max: null } : { min: 1, max: 1 },
       options,
       mode: options ? (a.enumMode === 'strict' ? 'strict' : 'open') : undefined,
