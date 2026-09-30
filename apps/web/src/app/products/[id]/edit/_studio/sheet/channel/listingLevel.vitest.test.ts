@@ -76,6 +76,20 @@ describe('(2) the family listings a save moved', () => {
   })
 })
 
+describe('(2b) a refused cell never travels to the family (review 2026-09-30)', () => {
+  it('a 200 that refuses the cell leaves the siblings and the parent showing the stored value', async () => {
+    const rows = family()
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ updated: 0, currentVersion: 9, versionOf: 'channelListing',
+      familyListings: [{ productId: 'p', listingId: 'lp', version: 5 }],
+      errors: [{ id: 'a', field: 'attr_paese_di_origine', error: 'No EBAY listing on IT yet' }] }) }) as unknown as Response))
+    const moved: ChannelSheetRow[][] = []
+    await commitChannelRow({ rowId: 'primary:a', row: rows[1], cells: [{ colId: 'paese_di_origine', value: 'Italia', intent: 'set' }] } as never,
+      { channel: 'EBAY', marketplace: 'IT', familyRows: () => rows, onFamilyChanged: changed => moved.push(changed) })
+    expect(rows[0].values.paese_di_origine.value).toBe('Pakistan')
+    expect(rows[2].values.paese_di_origine.value).toBe('Pakistan')
+  })
+})
+
 describe('(3) a value stored with a warning', () => {
   it('the cell carries the server\'s sentence; a cell with none is plainly saved', async () => {
     const rows = family()

@@ -1738,7 +1738,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
               const family = listingLevelFamily.get(`${v.id}\u0000${v.field}`)
               // P1 review (5) — a clear empties every copy on the listing: unchanged only when NO row of the family holds
               // a value (the parent may hold '' while a variation supplies what eBay gets).
-              if (family && (v.reset || isBlankValue(v.value))) current = (familyListingsOf.get(family) ?? []).some(listing => !isBlankValue(readPath(listing.platformAttributes, store.path))) ? { copies: true } : null
+              // No copy anywhere is NOT "unchanged": the shown value may come from a mapping, and a stored clear/reset is what
+              // stops it (undefined skips the no-op test below, as for the empty bag of 2026-09-05; review 2026-09-30).
+              if (family && (v.reset || isBlankValue(v.value))) current = (familyListingsOf.get(family) ?? []).some(listing => !isBlankValue(readPath(listing.platformAttributes, store.path))) ? { copies: true } : undefined
               else if (familyOwner) current = val !== undefined ? { ownCopy: val } : readPath((familyListingsOf.get(familyOwner) ?? []).find(listing => listing.productId === familyOwner)?.platformAttributes, store.path)
             } else {
               current = bagFor(v.id)[stripped]

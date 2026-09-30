@@ -528,8 +528,12 @@ async function commitChannelLanguage(
     // below, which then lands on the listing the saved row now holds.
     if (res.ok) {
       reportCreated(req, coord, createdListingsOf(body))
+      // Only what the server STORED travels to the family: a cell it refused (a 200 can still refuse single cells) keeps
+      // its refusal on this row and never paints its value on the siblings (review 2026-09-30).
+      const refused = (Array.isArray(body?.errors) ? body.errors : []) as Array<{ id?: string; field?: string }>
+      const stored = changes.filter(({ change }) => change.intent !== 'reset' && !refused.some((e) => e.field === change.field && (e.id === undefined || e.id === row.id)))
       const moved = adoptFamilyListings([...(coord.familyRows?.() ?? [])], familyListingsOf(body), row,
-        changes.filter(({ change }) => change.intent !== 'reset').map(({ colId, change }) => ({ colId, value: change.value })))
+        stored.map(({ colId, change }) => ({ colId, value: change.value })))
       if (moved.length) coord.onFamilyChanged?.(moved)
     }
     const raw = typeof body?.currentVersion === 'number' ? body.currentVersion : undefined
