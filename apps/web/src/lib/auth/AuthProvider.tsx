@@ -58,6 +58,20 @@ const ENFORCE = process.env.NEXT_PUBLIC_AUTH_ENFORCE === '1' || process.env.NEXT
 export { isPublicPath }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  /*
+   * 2026-09-30 — the fetch wrapper goes in HERE, during the first render, before any child renders.
+   *
+   * It used to be installed only inside `load()`, which runs from this component's mount EFFECT — and React runs a
+   * child's effects BEFORE its parent's. So a child that fetches in its own mount effect went first, on the plain
+   * `fetch`: no `credentials: 'include'`, no session cookie, a 401. The notifications bell did exactly that on every
+   * page load wherever the app renders its children while auth is still loading (enforce off: local dev), and was
+   * only right 30 s later. With enforce on, the splash below kept the children out until `load()` had run, which is
+   * why production never showed it.
+   *
+   * Safe during render: `installAuthFetch` is idempotent (one install per page), a no-op on the server (no `window`),
+   * and changes nothing React renders, so hydration is untouched.
+   */
+  installAuthFetch()
   const [status, setStatus] = useState<Status>('loading')
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isOwner, setIsOwner] = useState(false)
@@ -67,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadedOnce = useRef(false)
 
   async function load(): Promise<void> {
-    installAuthFetch()
+    installAuthFetch() // already installed by the first render; kept so `refresh` can never run without it
     const base = getBackendUrl()
     try {
       const csrf = await fetch(`${base}/api/auth/csrf`, { credentials: 'include' })
