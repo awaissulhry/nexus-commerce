@@ -40,6 +40,7 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react'
+import { Banner } from '@/design-system/components'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import {
@@ -646,13 +647,20 @@ export function ApprovalCard({
 
       {/* A request that came back sits ABOVE the delta: it changes how the
           number below should be read, so it cannot come after it. */}
+      {/* MCP.12 — the DS Banner, whose layout puts the icon beside the text: the
+          page's own <p> had colours but no layout, so the icon sat on a line of
+          its own above the sentence. Warning when it did not run; danger when it
+          was attempted and failed (something was sent). */}
       {comeback ? (
-        <p className={`aq-cameback${comeback.attempted ? ' attempted' : ''}`}>
-          <RotateCcw size={12} aria-hidden />
-          <span>
+        <Banner
+          tone={comeback.attempted ? 'danger' : 'warning'}
+          icon={<RotateCcw size={16} aria-hidden />}
+          className="aq-cameback"
+        >
+          <span className="aq-camebacktext">
             <strong>{comeback.headline}</strong> {comeback.detail} {comeback.tail}
           </span>
-        </p>
+        </Banner>
       ) : null}
 
       {/* 1 — THE DELTA. First, and the only large type on the card.

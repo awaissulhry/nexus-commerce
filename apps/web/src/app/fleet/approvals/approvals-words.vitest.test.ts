@@ -52,10 +52,11 @@ const setPrice = {
   deltaPct: 2.5,
 }
 
-function card(toolName: string, preview: Record<string, unknown>): string {
+function card(toolName: string, preview: Record<string, unknown>, reason?: string): string {
   const approval: CardApproval = {
     id: 'ap-1', toolName, charterKey: null, riskTier: 'high', status: 'pending', args: {}, preview,
     requestedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+    reason,
   }
   return renderToStaticMarkup(createElement(ApprovalCard, {
     approval, labels: { campaigns: {}, targets: {} }, workerName: 'Someone using Claude', busy: false, canExecute: true,
@@ -230,6 +231,28 @@ describe('MCP.12 — the ads inbox names no one channel either', () => {
     const inbox = readFileSync(join(import.meta.dirname, '../../marketing/ads/rules-automation/fleet/ApprovalInbox.tsx'), 'utf8')
     expect(inbox).not.toContain('Nothing has reached Amazon yet')
     expect(inbox).toContain('Nothing has changed yet.')
+  })
+})
+
+describe('MCP.12 — a request handed back reads as one DS Banner, icon beside the text', () => {
+  it('not run: the warning tone, the round arrow in the icon slot, the sentence in the body', () => {
+    const html = card('set-price', setPrice, 'not run — the facts moved since you approved it — base price changed')
+    expect(html).toMatch(/<div class="nds-banner warning aq-cameback" role="status"><span class="nds-banner-icon"><svg[^>]*lucide-rotate-ccw/)
+    expect(html).toContain('<div class="nds-banner-desc"><span class="aq-camebacktext"><strong>You approved this before, and it did not run.</strong>')
+    expect(html).toContain('the facts moved since you approved it')
+  })
+
+  it('attempted and failed: the danger tone', () => {
+    const html = card('set-price', setPrice, 'execution failed: the channel refused it')
+    expect(html).toMatch(/<div class="nds-banner danger aq-cameback" role="alert">/)
+    expect(html).toContain('<strong>You approved this, it was attempted, and it failed.</strong>')
+  })
+
+  it('the page styles only its spacing and measure, never the Banner’s colours', () => {
+    const css = readFileSync(join(import.meta.dirname, 'approvals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]*aq-cameback[^{}]*)\{([^}]*)\}/g)].map((m) => m[2])
+    expect(rules.length).toBeGreaterThan(0)
+    for (const body of rules) expect(body).not.toMatch(/\b(background|border|color)\s*:/)
   })
 })
 

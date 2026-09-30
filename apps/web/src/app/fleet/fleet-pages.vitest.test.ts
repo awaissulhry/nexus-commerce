@@ -30,9 +30,11 @@ function rulesFor(css: string, selector: RegExp): string[] {
 const tokensIn = (bodies: string[]) => new Set(bodies.flatMap((b) => [...b.matchAll(/var\((--nds-[a-z0-9-]+)\)/g)].map((m) => m[1])))
 const declared = (body: string) => new Set([...body.matchAll(/(--nds-[a-z0-9-]+)\s*:/g)].map((m) => m[1]))
 
-/** Tokens `.dark` redefines. */
+/** Tokens `.dark` redefines — in the DS, and in the app chrome's dark block, which wraps every page. */
 const darkBlock = rulesFor(tokens, /^\s*\.dark\b/).join('\n')
-const flipsInDark = declared(darkBlock)
+const shell = stripComments(read(join(SRC, 'app', '_shared', 'shared-shell.css')))
+const chromeDark = rulesFor(shell, /^\s*\.dark \.nds-chrome-host\b/).join('\n')
+const flipsInDark = new Set([...declared(darkBlock), ...declared(chromeDark)])
 /** Tokens the fleet's light pin (and its portals) sets back. */
 const fleetPin = declared(rulesFor(pages, /^\s*\.fleet-surface,\s*\.fleet-portal\s*$/).join('\n'))
 /** Tokens the Approvals page pins for itself. */
@@ -78,6 +80,7 @@ describe('MCP.12 — `.acr-btn` has its look back, once, for every fleet page', 
 
 describe('MCP.12 — what those rules and the Approvals card edges read stays light under a dark OS', () => {
   it('the dark block is read (control)', () => {
+    expect(declared(chromeDark).has('--nds-warning')).toBe(true)
     expect(flipsInDark.has('--nds-success-strong')).toBe(true)
     expect(flipsInDark.has('--nds-danger-strong')).toBe(true)
     expect(flipsInDark.size).toBeGreaterThan(20)
@@ -87,6 +90,14 @@ describe('MCP.12 — what those rules and the Approvals card edges read stays li
     const read = tokensIn(rulesFor(pages, /\.acr-btn/))
     expect(read.size).toBeGreaterThan(8)
     const unsafe = [...read].filter((t) => flipsInDark.has(t) && !fleetPin.has(t))
+    expect(unsafe).toEqual([])
+  })
+
+  it('the returned-request Banner (warning and danger tones) is dark-safe on the Approvals page', () => {
+    const components = stripComments(read(join(SRC, 'design-system', 'styles', 'components.css')))
+    const banner = tokensIn(rulesFor(components, /\.nds-banner(\.(warning|danger))?(\s|$|,)|\.nds-banner-(icon|body|desc|title)\b/))
+    expect([...banner]).toEqual(expect.arrayContaining(['--nds-warning-soft', '--nds-warning-strong', '--nds-danger-soft', '--nds-text-2']))
+    const unsafe = [...banner].filter((t) => flipsInDark.has(t) && !fleetPin.has(t) && !pagePin.has(t))
     expect(unsafe).toEqual([])
   })
 
