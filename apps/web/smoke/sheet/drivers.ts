@@ -152,11 +152,13 @@ export function pickFor(editor: EditorId, column: ApiColumn, current: unknown, n
     case 'ListPanelEditor': {
       const held: Array<string | number> = Array.isArray(current) ? current.map((v) => (column.kind === 'number' && !Number.isNaN(Number(v)) ? Number(v) : String(v))) : []
       if (column.options?.length) {
-        const code = column.options.filter((c) => !held.includes(c))[n]
-        if (!code) return { input: '', wire: undefined, skip: 'every option is already in the list' }
+        const itemOf = (code: string) => column.kind === 'number' ? Number(code) : code
+        const free = column.options.filter((code) => !held.includes(itemOf(code)))
+        if (!free.length) return { input: '', wire: undefined, skip: 'every option is already in the list' }
+        const code = free[n % free.length], item = itemOf(code)
         // Paste replaces the whole list with what was pasted; the editors add to it.
         // The cell summarises a list (chips, a count); the read-back checks what was stored.
-        return { input: labelOf(code), wire: path === 'paste' ? [code] : [...held, code] }
+        return { input: labelOf(code), wire: path === 'paste' ? [item] : [...held, item] }
       }
       const text = column.kind === 'number' ? String(7 + n + (held.includes(7 + n) ? 10 : 0)) : fresh(`e2e-${column.key.slice(0, 12)}-${tag}`, held.map(String).find((h) => h.startsWith(`e2e-${column.key.slice(0, 12)}-${tag}`)) ?? null, 40)
       const item = column.kind === 'number' ? Number(text) : text
