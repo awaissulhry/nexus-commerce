@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react'
 import { Clock, RefreshCw, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import './freshness-indicator.css'
 
 export interface FreshnessIndicatorProps {
   /** ms since epoch of the last successful fetch. */
@@ -52,11 +53,9 @@ export default function FreshnessIndicator({
   const ageMs = lastFetchedAt ? Math.max(0, now - lastFetchedAt) : null
   const isStale = ageMs != null && ageMs > staleAfterMs
 
-  const tone = error
-    ? 'border-rose-200 bg-rose-50 text-rose-700'
-    : isStale
-    ? 'border-amber-200 bg-amber-50 text-amber-800'
-    : 'border-default bg-white text-slate-600'
+  // Colours from DS tokens (freshness-indicator.css), so the box follows the
+  // app's theme: it was a white box with an invisible border on the dark page.
+  const tone = error ? 'is-error' : isStale ? 'is-stale' : null
 
   const Icon = error ? AlertCircle : Clock
   const label = (() => {
@@ -81,21 +80,16 @@ export default function FreshnessIndicator({
           ? new Date(lastFetchedAt).toLocaleString()
           : undefined
       }
-      className={cn(
-        'inline-flex items-center gap-1.5 h-8 px-2.5 text-sm rounded-md border transition-colors',
-        tone,
-        interactive && 'hover:border-slate-300 cursor-pointer',
-        className,
-      )}
+      className={cn('app-freshness', tone, className)}
     >
       {loading ? (
-        <RefreshCw className="w-3 h-3 animate-spin" />
+        <RefreshCw className="app-freshness-spin" aria-hidden />
       ) : (
-        <Icon className="w-3 h-3" />
+        <Icon aria-hidden />
       )}
       <span>{label}</span>
       {interactive && !loading && (isStale || error) && (
-        <span className="ml-0.5 opacity-70">·&nbsp;refresh</span>
+        <span className="app-freshness-hint">·&nbsp;refresh</span>
       )}
     </Wrapper>
   )

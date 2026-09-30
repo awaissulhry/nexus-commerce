@@ -1,5 +1,6 @@
 import Link from '@/lib/workspaces/Link'
 import { ChevronRight } from 'lucide-react'
+import './page-header.css'
 
 interface Breadcrumb {
   label: string
@@ -24,6 +25,10 @@ interface PageHeaderProps {
  * Phase 4 styling: 18px title, 13px description, single chrome row, kept
  * inline (no full-width background band) so pages with the layout's p-6
  * wrapper continue to render correctly without mechanical churn.
+ *
+ * Styled by page-header.css from DS tokens, not Tailwind colour classes: those
+ * read an alias that tokens.css redefines in another form, and the title turned
+ * black on the dark page (1.04:1). Same sizes and layout as before.
  */
 export default function PageHeader({
   title,
@@ -35,45 +40,31 @@ export default function PageHeader({
   const desc = description ?? subtitle
 
   return (
-    <div className="mb-5">
+    <div className="app-pagehdr">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="flex items-center gap-1.5 mb-2 text-base text-tertiary">
+        <nav className="app-pagehdr-crumbs" aria-label="Breadcrumb">
           {breadcrumbs.map((crumb, i) => (
-            <span key={i} className="flex items-center gap-1.5">
-              {i > 0 && <ChevronRight className="w-3 h-3 text-tertiary" />}
+            <span key={i} className="app-pagehdr-crumb">
+              {i > 0 && <ChevronRight aria-hidden />}
               {crumb.href ? (
-                <Link
-                  href={crumb.href}
-                  className="hover:text-primary transition-colors"
-                >
-                  {crumb.label}
-                </Link>
+                <Link href={crumb.href}>{crumb.label}</Link>
               ) : (
-                <span className="text-secondary font-label">{crumb.label}</span>
+                <span className="app-pagehdr-crumb-current">{crumb.label}</span>
               )}
             </span>
           ))}
         </nav>
       )}
 
-      {/* U.12 — mobile parity: title stacks above actions on narrow
-          screens (flex-col), actions wrap if a toolbar overflows. The
-          desktop layout (sm:flex-row sm:items-start sm:justify-between)
-          is unchanged. Title swaps `truncate` for `break-words` since
-          wrapping a long title beats truncating it on mobile, where
-          horizontal space is precious. */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-heading text-primary break-words sm:truncate">
-            {title}
-          </h1>
-          {desc && <p className="text-md text-secondary mt-0.5">{desc}</p>}
+      {/* U.12 — mobile parity: title stacks above actions on narrow screens,
+          actions wrap if a toolbar overflows; side by side from 640px. A long
+          title wraps on a phone and is cut with an ellipsis on a wide screen. */}
+      <div className="app-pagehdr-row">
+        <div className="app-pagehdr-text">
+          <h1 className="app-pagehdr-title">{title}</h1>
+          {desc && <p className="app-pagehdr-desc">{desc}</p>}
         </div>
-        {actions && (
-          <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0 sm:flex-nowrap">
-            {actions}
-          </div>
-        )}
+        {actions && <div className="app-pagehdr-actions">{actions}</div>}
       </div>
     </div>
   )

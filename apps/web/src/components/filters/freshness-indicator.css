@@ -1,0 +1,59 @@
+/*
+ * The "Updated Ns ago" box (49 pages), on DS tokens. It was `bg-white text-slate-600 border-default`:
+ * a white box on the dark page, and `border-default` reads the same colliding alias as the page header
+ * (see components/layout/page-header.css), so its border vanished. The tones follow the DS banner's:
+ * neutral, warning when stale, danger when the refresh failed. Sizes as before (32px tall, 11px text).
+ */
+.app-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--nds-font-size-xs);
+  line-height: 15px;
+  color: var(--nds-text-2);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.app-freshness svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.app-freshness.is-stale {
+  color: var(--nds-warning-text);
+  background: var(--nds-warning-soft);
+  border-color: var(--nds-warning);
+}
+.app-freshness.is-error {
+  color: var(--nds-danger-text);
+  background: var(--nds-danger-soft);
+  border-color: var(--nds-danger);
+}
+button.app-freshness {
+  cursor: pointer;
+}
+button.app-freshness:hover {
+  border-color: var(--nds-border-strong);
+}
+button.app-freshness:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+.app-freshness-spin {
+  animation: app-freshness-spin 1s linear infinite;
+}
+@keyframes app-freshness-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-freshness-spin { animation: none; }
+}
+.app-freshness-hint {
+  margin-left: 2px;
+  opacity: 0.7;
+}
