@@ -4,6 +4,7 @@ vi.mock('../../db.js', () => ({ default: { $transaction: (fn: any) => fn({ produ
 vi.mock('./content-workspace.service.js', () => ({ contentDestination: async () => ({ productId: 'family', familyId: 'family', accountId: 'store', marketplace: 'GLOBAL', aliasKey: '' }), object: (v: any) => v && typeof v === 'object' ? v : {}, PUBLISH_KEY: '_nexusContentPublish' }))
 vi.mock('./admin-client.js', () => ({ shopifyAdmin: s.next, assertShopifyResult: vi.fn() }))
 vi.mock('./linked-products-gateway.js', () => ({ linkedDigest: (v: any) => JSON.stringify(v) }))
+vi.mock('./colour-products/settings.js', () => ({ colourGrouping: async () => null }))
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: vi.fn() }))
 vi.mock('./linked-shared-content.service.js', () => ({ resolveSharedContent: vi.fn() }))
 vi.mock('./information-gateway.js', () => ({ readInformation: vi.fn(), readInformationNativeOwners: vi.fn(), verifyInformationPlan: vi.fn(), applyNativeEdit: vi.fn(), advanceMediaOrder: vi.fn() }))
