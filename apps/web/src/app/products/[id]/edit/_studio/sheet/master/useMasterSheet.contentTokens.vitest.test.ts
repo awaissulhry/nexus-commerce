@@ -86,9 +86,11 @@ beforeEach(async () => {
     const units = input.units.map(unit => {
       sent.push(unit)
       const accepted = unit.expectedVersion === stored.owner && unit.changes.every(change => change.contentVersion === undefined || change.contentVersion === stored.content)
-      if (!accepted) return { key: unit.key, status: 409, body: { error: 'Changed', currentVersion: stored.owner, versionOf: 'product' } }
-      for (const change of unit.changes) stored[change.field as 'name' | 'description' | 'brand'] = change.value
       const writesContent = unit.changes.some(change => change.contentVersion !== undefined)
+      // Canonical content refusals carry the sentence only. The ordinary fact CAS reports a diagnostic owner.
+      if (!accepted) return { key: unit.key, status: 409, body: writesContent ? { error: 'Changed', message: 'Changed' }
+        : { code: 'VERSION_CONFLICT', error: 'Changed', expectedVersion: unit.expectedVersion, currentVersion: stored.owner, versionOf: 'product' } }
+      for (const change of unit.changes) stored[change.field as 'name' | 'description' | 'brand'] = change.value
       stored.owner++
       if (writesContent) stored.content++
       if (formulaOnBrand && unit.changes.some(change => change.field === 'brand')) {
@@ -138,8 +140,10 @@ it.each(['set', 'retry'] as const)('a refused Name keeps its token through two q
 it('a diagnostic 409 does not pair a recreated content counter with the newer generic owner', async () => {
   // A delete/recreate can end with the same content counter; only the owner distinguishes the snapshots.
   stored = { ...stored, owner: 12, content: 4, name: 'Name B', description: 'Description B' }
-  await edit('description', 'Refused description')
-  expect(current.tracker.get('proof-product', 'description')?.state).toBe('refused')
+  await edit('brand', 'Refused brand')
+  expect(current.tracker.get('proof-product', 'brand')?.state).toBe('refused')
+  expect(sent[0]).toMatchObject({ expectedVersion: 10, changes: [{ field: 'brand', value: 'Refused brand' }] })
+  expect(sent[0].changes[0]).not.toHaveProperty('contentVersion')
   expect(current.writer.versionOf('proof-product')).toBe(12)
   await edit('name', 'Unseen overwrite')
   expect.soft(sent[1]).toMatchObject({ expectedVersion: 10, changes: [{ contentVersion: 4 }] })
