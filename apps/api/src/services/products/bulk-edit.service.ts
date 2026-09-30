@@ -9,7 +9,7 @@ import type { SheetChannel } from '../pim/sheet-columns.service.js'
 import type { FastifyBaseLogger } from 'fastify'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
-import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction } from '../../lib/database-context.js'
+import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
@@ -772,6 +772,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
       }
     } catch (error) {
+      // A lost race (40001, deadlock, or a statement the race already aborted) kills the whole transaction: it must
+      // restart it, not refuse this row and carry on in a transaction every next statement fails (measured 2026-09-30:
+      // a 41-row save answered 503 after its restarts all met 25P02).
+      if (transactionMustRestart(error)) throw error
       context.logger.warn({ err: error }, 'Attribute write contract unavailable')
       if (changes.some(c => isCategoryAttrField(c.field))) {
         throw new ProductBulkError(503, { error: 'Could not load attribute requirements. Reload the sheet before saving attributes.' })
