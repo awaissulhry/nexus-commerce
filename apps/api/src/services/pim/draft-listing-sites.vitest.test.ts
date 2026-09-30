@@ -98,6 +98,7 @@ describe('add child → copy from a sibling', () => {
 
   it('never copies the sibling\'s own channel ids or checkpoints: the new variant cannot claim its Shopify variant or eBay offers', async () => {
     const identity = { shopifyProductId: '9001', variantId: '9002', inventoryItemId: '9003', inventoryLocationId: 'gid://shopify/Location/9004', nexusFamilyId: ids.copy,
+      shopifyColourProductId: 'colour-black', shopifyColourStockPending: true, shopifyColourRetired: true,
       __offerIds: { EBAY_IT: 'offer-1' }, __lastPublishedAxes: { EBAY_IT: ['Colour'] }, _nexusContentPublish: { productId: 'gid://shopify/Product/9001' }, _nexusSheetMediaSync: { version: 1 } }
     const content = { descriptionThemeId: 'theme-1', _productMediaLocales: { it: ['photo-1'] } }
     const shopify = await listing({ productId: ids.copyB, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: accounts.shopify,

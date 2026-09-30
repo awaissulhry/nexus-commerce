@@ -10,7 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { planColourProducts, type ColourPlanFamily } from '@nexus/shared/shopify-colour-products'
 
 const state = vi.hoisted(() => ({ db: null as any, destination: null as any, family: null as any, store: [] as any[], queries: [] as string[], mutations: [] as string[],
-  mode: 'live', definition: null as any, locations: [] as any[], refuseIdentity: null as string | null, refreshed: [] as string[] }))
+  mode: 'live', definition: null as any, locations: [] as any[], refuseIdentity: null as string | null, refreshed: [] as string[], duringConfirm: null as null | (() => Promise<void>) }))
 vi.mock('@nexus/database', async importOriginal => {
   const { formulaDatabase } = await import('../../../test-support/formula-database.js')
   state.db = await formulaDatabase()
@@ -29,7 +29,7 @@ const BLACK = 'gid://shopify/Product/101', YELLOW = 'gid://shopify/Product/102'
 const LOCATION = 'gid://shopify/Location/7', OTHER_LOCATION = 'gid://shopify/Location/8'
 const variantGid = (product: string, size: string) => `gid://shopify/ProductVariant/${product.split('/').pop()}${SIZES.indexOf(size)}`
 const itemGid = (product: string, size: string) => `gid://shopify/InventoryItem/${product.split('/').pop()}${SIZES.indexOf(size)}`
-const liveProduct = (id: string, colour: string, sku: (s: string) => string) => ({ id, title: 'GALE jacket', handle: `gale-${colour.toLowerCase()}`, status: 'ACTIVE', colour,
+const liveProduct = (id: string, colour: string, sku: (s: string) => string) => ({ id, title: 'GALE jacket', handle: `gale-${colour.toLowerCase()}`, status: 'ACTIVE', onlineStorePublished: true, colour,
   group: [BLACK, YELLOW], identity: null as string | null,
   variants: SIZES.filter(s => s !== 'XXS').map(s => ({ id: variantGid(id, s), sku: sku(s), inventoryItemId: itemGid(id, s), option: s, stocked: true })) })
 const liveStore = () => [
@@ -39,9 +39,10 @@ const liveStore = () => [
 const productOf = (id: string) => state.store.find(p => p.id === id)!
 
 /** The stand-in store: the reads Find and Confirm send, and the three writes Confirm may send. */
-function shopify(query: string, variables: any) {
+async function shopify(query: string, variables: any) {
   const name = query.trim().split(/[\s({]/)[1] ?? query
   state.queries.push(name)
+  if (name === 'NexusColourPublications') return { publications: { nodes: [{ id: 'gid://shopify/Publication/1', catalog: { apps: { nodes: [{ handle: 'online_store' }] } } }], pageInfo: { hasNextPage: false } } }
   if (query.trim().startsWith('mutation')) state.mutations.push(name)
   if (name === 'NexusColourSkus') {
     const asked = [...(variables.query as string).matchAll(/sku:"([^"]+)"/g)].map(m => m[1])
@@ -52,9 +53,12 @@ function shopify(query: string, variables: any) {
     return p ? { id: p.id, title: p.title, handle: p.handle, status: p.status, colour: { value: p.colour }, group: { value: JSON.stringify(p.group) },
       variants: { nodes: p.variants.map((v: any) => ({ id: v.id, sku: v.sku, inventoryItem: { id: v.inventoryItemId }, selectedOptions: [{ value: v.option }] })), pageInfo: { hasNextPage: false } } } : null
   }) }
-  if (name === 'NexusColourConfirmRead') return {
+  if (name === 'NexusColourConfirmRead') {
+    const hook = state.duringConfirm; state.duringConfirm = null; await hook?.()
+    return {
     nodes: variables.ids.map((id: string) => { const p = state.store.find(q => q.id === id); return p ? { id: p.id, title: p.title, status: p.status, identity: p.identity ? { value: p.identity } : null } : null }),
     locations: { nodes: state.locations }, identityDefinition: { nodes: state.definition ? [state.definition] : [] },
+    }
   }
   if (name === 'NexusCreateDefinition') {
     expect(variables.definition).toMatchObject({ namespace: 'nexus', key: 'family_id', type: 'id', ownerType: 'PRODUCT', capabilities: { uniqueValues: { enabled: true } } })
@@ -74,7 +78,7 @@ function shopify(query: string, variables: any) {
   }
   if (name === 'NexusColourReadBack') {
     const p = state.store.find(q => q.id === variables.id)
-    return { product: p ? { id: p.id, status: p.status, identity: p.identity ? { value: p.identity } : null,
+    return { product: p ? { id: p.id, status: p.status, onlineStorePublished: p.onlineStorePublished, identity: p.identity ? { value: p.identity } : null,
       variants: { nodes: p.variants.map((v: any) => ({ id: v.id, sku: v.sku, inventoryItem: { id: v.inventoryItemId, inventoryLevel: v.stocked && variables.location ? { id: 'level' } : null } })) } } : null }
   }
   throw new Error(`unexpected Shopify call ${name}`)
@@ -179,6 +183,24 @@ describe('Confirm — adopt the live Shopify product of each colour', () => {
     expect(view.confirmed[0]).toMatchObject({ status: 'DRAFT', notStockedAt: [skuOf('BLACK', 'M')] })
     expect(await listingOf(skuOf('BLACK', 'L'))).toMatchObject({ isPublished: false, listingStatus: 'INACTIVE', externalListingId: '101' })
     expect((await rowOf('color:black')).remoteStatus).toBe('DRAFT')
+  })
+
+  it('an Active product off Online Store waits for stock, but retains the initial stock task', async () => {
+    productOf(BLACK).onlineStorePublished = false
+    await find(); await confirm([BOTH[0]])
+    expect(await listingOf(skuOf('BLACK', 'S'))).toMatchObject({ isPublished: false, platformAttributes: { shopifyColourStockPending: true } })
+  })
+  it('first Confirm stops when the store switch changes during its read', async () => {
+    await find()
+    state.duringConfirm = async () => { await switchOn(false) }
+    await expect(confirm(BOTH)).rejects.toThrow(/changed/)
+    await nothingChanged()
+  })
+  it('first Confirm stops when a child SKU changes during its read', async () => {
+    await find()
+    state.duringConfirm = async () => { await prisma.product.update({ where: { id: ids[skuOf('BLACK', 'S')] }, data: { sku: 'CHANGED-DURING-CONFIRM' } }) }
+    try { await expect(confirm(BOTH)).rejects.toThrow(/changed/); await nothingChanged() }
+    finally { await scoped(() => prisma.product.update({ where: { id: ids[skuOf('BLACK', 'S')] }, data: { sku: skuOf('BLACK', 'S') } })) }
   })
 
   it('Shopify refuses one colour: the colours before it stay confirmed and the message says so', async () => {

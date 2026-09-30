@@ -523,7 +523,11 @@ function renderTokens(
 
 export interface FormulaWiring<TRow> {
   replaceFormula?: (rowId: string, fieldKey: string, value: unknown) => Promise<{ ok: boolean; error?: string }>
-  unavailableReason?: () => string | null
+  /**
+   * Why THIS cell cannot open its editor yet (its formula state is still loading, or its read failed), or null. Per
+   * cell: one slow or failed formula read must not block the cells whose state is already known.
+   */
+  unavailableReason?: (rowId: string | undefined, fieldKey: string) => string | null
   retry?: () => void
   sourceLabel?: (fieldKey?: string) => string
   canEditRow?: (row: TRow) => boolean
@@ -570,7 +574,7 @@ export function formulaCellEditorSelector<TRow>(
 ) {
   return {
     cellEditorSelector: (p: { data?: TRow; eventKey?: string | null }) => {
-      const unavailable = wiring.unavailableReason?.()
+      const unavailable = wiring.unavailableReason?.(p.data ? rowIdOf(p.data) : undefined, col.key)
       if (unavailable) return { component: FormulaUnavailableEditor, popup: true, params: { message: unavailable, retry: wiring.retry } }
       const stored = p.data ? wiring.exprFor(rowIdOf(p.data), col.key) : null
       const rowWritable = p.data ? wiring.canEditRow?.(p.data) : undefined

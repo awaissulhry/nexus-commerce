@@ -33,7 +33,7 @@ export interface FormulaWiring<TRow> {
         ok: boolean;
         error?: string;
     }>;
-    unavailableReason?: () => string | null;
+    unavailableReason?: (rowId: string | undefined, fieldKey: string) => string | null;
     retry?: () => void;
     sourceLabel?: (fieldKey?: string) => string;
     canEditRow?: (row: TRow) => boolean;

@@ -1,11 +1,11 @@
 # Roll production back to the images of an earlier commit — docs/ci-fast-deploys/PLAN-2026-09-29.md §5.
 #
-#   gh workflow run rollback.yml -f sha=<commit>                    # every service in RAILWAY_IMAGE_SERVICES
+#   gh workflow run rollback.yml -f sha=<commit>                    # all four services
 #   gh workflow run rollback.yml -f sha=<commit> -f skip_api=true   # the same, but the API keeps its build
 #
 # The commit must be on main, must have a successful Deploy API run (its checks passed) and must have both images
-# (ghcr.io/<owner>/nexus-api:<sha> and nexus-web:<sha>). Only the services named in the repository variable
-# RAILWAY_IMAGE_SERVICES move; the job summary names the ones left alone. Order, as in a release: the API (Railway
+# (ghcr.io/<owner>/nexus-api:<sha> and nexus-web:<sha>). All four services move, except the API with skip_api.
+# Order, as in a release: the API (Railway
 # SUCCESS, then readiness reports that commit), then the worker, scheduler and web side by side, then the web's
 # production smoke.
 #
@@ -111,7 +111,7 @@ jobs:
           done
           test "$missing" = 0 || { echo "✗ Deploy API built no images for this commit: pick a later one it released"; exit 1; }
 
-      # RAILWAY_IMAGE_SERVICES, minus the API with skip_api. The API goes back only to a commit with the same migration
+      # All four services, minus the API with skip_api. The API goes back only to a commit with the same migration
       # folders as main (review of PR 2, 2026-09-30). Its pre-deploy, packages/database/scripts/migrate-direct.mjs,
       # refuses to run when the database holds a migration with no folder in the image (check-applied-but-missing.mjs),
       # so the deployment would end FAILED; a folder that only the old commit has would be applied by it. Main is the
@@ -120,20 +120,13 @@ jobs:
       - name: Which services move
         id: mode
         env:
-          RAILWAY_IMAGE_SERVICES: ${{ vars.RAILWAY_IMAGE_SERVICES }}
           SKIP_API: ${{ inputs.skip_api }}
           SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
-          scripts/ci/image-services.sh > "$RUNNER_TEMP/mode"
-          # shellcheck source=/dev/null
-          . "$RUNNER_TEMP/mode"
+          api=true worker=true scheduler=true web=true
           api_skipped=false
-          if [ "$SKIP_API" = true ] && [ "$api" = true ]; then api=false api_skipped=true; fi
-          if [ "$api$worker$scheduler$web" = falsefalsefalsefalse ]; then
-            echo "✗ nothing to move: RAILWAY_IMAGE_SERVICES names no service (or only the API, and skip_api is set). Railway's Rollback button on a deployment also puts back that deployment's variables: read tasks/architecture-operations.md first."
-            exit 1
-          fi
+          if [ "$SKIP_API" = true ]; then api=false api_skipped=true; fi
           if [ "$api" = true ]; then
             dir=packages/database/prisma/migrations
             git ls-tree -d --name-only "$SHA:$dir" | sort > "$RUNNER_TEMP/migrations-then"
@@ -174,11 +167,10 @@ jobs:
           WEB: ${{ steps.mode.outputs.web }}
         run: |
           set -euo pipefail
-          moves='' unlisted='' skipped=''
+          moves='' skipped=''
           for pair in "api:$API" "worker:$WORKER" "scheduler:$SCHEDULER" "web:$WEB"; do
             if [ "${pair#*:}" = true ]; then moves+=" ${pair%%:*}"
             elif [ "${pair%%:*}" = api ] && [ "$API_SKIPPED" = true ]; then skipped=' api'
-            else unlisted+=" ${pair%%:*}"
             fi
           done
           dir=packages/database/prisma/migrations
@@ -201,7 +193,6 @@ jobs:
             fi
             echo
             echo "- To move to \`${SHA:0:8}\` (the API first, then the others side by side):${moves:- none}"
-            echo "- Left alone, not in RAILWAY_IMAGE_SERVICES (still on their current build):${unlisted:- none}"
             if [ -n "$skipped" ]; then echo "- Left alone by \`-f skip_api=true\`:$skipped"; fi
             echo
             echo "Each deploy job adds ✓ or ✗ below. A service with no line did not start: the API before it failed, or the run was cancelled."

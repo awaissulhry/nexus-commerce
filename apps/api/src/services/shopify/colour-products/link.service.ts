@@ -15,6 +15,7 @@
  * overwritten; a change made between that read and the write stops the run, and the next run repairs it.
  */
 import prisma from '../../../db.js'
+import { requireWorkspace } from '../../../lib/workspace-context.js'
 import { IMPACT_LINKED_SHOWN_LIMIT, SHOPIFY_LINKED_LIST_LIMIT } from '@nexus/shared/shopify-colour-products'
 import { definitionAddress, shopifyValuesEqual, validateShopifyField, type ShopifyFieldEdit, type ShopifyFieldDefinition, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { shopifyAdmin, type ShopifyGraphql } from '../admin-client.js'
@@ -24,6 +25,7 @@ import { getShopifyPublishMode } from '../../shopify-publish-gate.service.js'
 import { WorkspaceScopeError } from '../../pim/workspace-destination.js'
 import type { ColourProductSettings } from './settings.js'
 import { colourProductsView, planFor, rowsWhere, type Destination } from './find.service.js'
+import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 
 const VALUE_TYPE = 'single_line_text_field', LIST_TYPE = 'list.product_reference'
 /** `metafieldsSet` takes at most 25 fields per call; a 26th is refused (development store, 2026-09-30). */
@@ -46,6 +48,10 @@ const fold = (text: string) => text.trim().toLocaleLowerCase('en')
 export async function linkColourProducts(productId: string, scope: ContentScope) {
   if (getShopifyPublishMode() !== 'live') throw new WorkspaceScopeError('Shopify writes are switched off on this server. Nothing was changed.', 409)
   const destination = await contentDestination(productId, scope)
+  return withColourSyncLock(destination, () => linkDestination(destination))
+}
+
+async function linkDestination(destination: Destination) {
   const { rows, settings, plan } = await planFor(destination)
   // No "Linked ✓" until this run ends verified; a colour that left the group loses it too.
   await prisma.shopifyColourProduct.updateMany({ where: { ...rowsWhere(destination), linkVerifiedAt: { not: null } }, data: { linkVerifiedAt: null } })
@@ -66,9 +72,10 @@ export async function linkColourProducts(productId: string, scope: ContentScope)
   if (members.length > SHOPIFY_LINKED_LIST_LIMIT) throw new WorkspaceScopeError(`Shopify can group at most ${SHOPIFY_LINKED_LIST_LIMIT} products; this family has ${members.length} colour products. Nothing was changed.`, 409)
   const warnings = members.length > IMPACT_LINKED_SHOWN_LIMIT ? [`The theme shows at most ${IMPACT_LINKED_SHOWN_LIMIT} colours; this group has ${members.length}. The rest are grouped but not shown.`] : []
   const grouped = members.length >= 2
-  if (!members.length) return { ...await colourProductsView(destination, plan, settings), link: { grouped, members: 0, written: 0, cleared: 0, warnings, verifiedAt: null } }
+  const detached = rows.filter(r => r.state === 'NOT_FOUND' && r.shopifyProductId && !inPlan.has(r.valueKey))
+  if (!members.length && !detached.length) return { ...await colourProductsView(destination, plan, settings), link: { grouped, members: 0, written: 0, cleared: 0, warnings, verifiedAt: null } }
 
-  const { graphql } = await shopifyAdmin(destination.accountId)
+  const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
   const list = JSON.stringify(members.map(m => m.row.shopifyProductId))
   const wanted: Wanted[] = [
     ...(grouped ? members.filter(m => m.colourName !== null).map(member => ({ member, slot: 'value' as const, next: member.colourName })) : []),
@@ -82,6 +89,18 @@ export async function linkColourProducts(productId: string, scope: ContentScope)
     if (same.length) throw new WorkspaceScopeError(`${same.map(s => `"${s.m.name}"`).join(', ')} would all be called "${same[0].name}" on Shopify. Give each colour its own name. Nothing was changed.`, 409)
   }
   const edits: ShopifyFieldEdit[] = []
+  // Explicitly detached colours keep their address until this writer clears their old list.
+  // A proposal or a foreign product is never treated as an adopted colour.
+  for (const row of detached) {
+    const remote = (await graphql(`query NexusColourDetachedLink($id:ID!,$ns:String!,$key:String!) { product(id:$id) {
+      identity:metafield(namespace:"nexus",key:"family_id") { value } list:metafield(namespace:$ns,key:$key) { value type compareDigest }
+    } }`, { id: row.shopifyProductId, ns: settings.listField.namespace, key: settings.listField.key })).product
+    if (remote === null) continue
+    if (remote?.identity?.value !== `${requireWorkspace().workspaceId}:${destination.familyId}:c:${row.id}`)
+      throw new WorkspaceScopeError('A detached colour no longer has its confirmed Nexus identity. Review it before clearing its list.')
+    if (remote.list) edits.push({ ownerId: row.shopifyProductId!, ...settings.listField, type: remote.list.type,
+      value: remote.list.value, compareDigest: remote.list.compareDigest, nextValue: null, ownerLabel: row.colourName ?? row.valueKey })
+  }
   for (const w of wanted) {
     const node = nodes.get(w.member.row.shopifyProductId)!, current = node[w.slot], definition = definitions[w.slot], label = `"${node.title}" (${w.member.name})`
     if (current && current.type !== definition.type) throw new WorkspaceScopeError(`${label}: Shopify holds ${definitionAddress(definition)} as ${current.type}, not ${definition.type}. Nothing was changed.`, 422)
@@ -107,9 +126,14 @@ export async function linkColourProducts(productId: string, scope: ContentScope)
     if (wrong.length) throw new WorkspaceScopeError(`Shopify read back other colour fields for ${wrong.join(', ')}. Run the link again.`, 502)
   }
   const verifiedAt = new Date()
-  await prisma.shopifyColourProduct.updateMany({ where: { ...rowsWhere(destination), id: { in: members.map(m => m.row.id) } }, data: { linkVerifiedAt: verifiedAt } })
+  await commitColourSyncChange(async tx => {
+    if (detached.length) await tx.shopifyColourProduct.updateMany({ where: { ...rowsWhere(destination), id: { in: detached.map(r => r.id) }, state: 'NOT_FOUND' }, data: { shopifyProductId: null } })
+    await tx.shopifyColourProduct.updateMany({ where: { ...rowsWhere(destination), id: { in: members.map(m => m.row.id) } }, data: { linkVerifiedAt: verifiedAt } })
+    if (edits.length) await tx.productEvent.create({ data: { aggregateId: destination.familyId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED',
+      data: { shopifyColourLinks: 'Repaired', fields: edits.length }, metadata: { source: 'SYSTEM', writer: 'shopify-colour-link', channel: 'SHOPIFY', marketplace: destination.marketplace, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '' } } })
+  })
   return { ...await colourProductsView(destination, plan, settings),
-    link: { grouped, members: members.length, written: edits.filter(e => e.nextValue !== null).length, cleared: edits.filter(e => e.nextValue === null).length, warnings, verifiedAt: verifiedAt.toISOString() } }
+    link: { grouped, members: members.length, written: edits.filter(e => e.nextValue !== null).length, cleared: edits.filter(e => e.nextValue === null).length, warnings, verifiedAt: members.length ? verifiedAt.toISOString() : null } }
 }
 
 /**

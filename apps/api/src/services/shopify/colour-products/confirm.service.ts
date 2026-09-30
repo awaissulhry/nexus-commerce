@@ -28,6 +28,8 @@ import { logger } from '../../../utils/logger.js'
 import { readColourProductSettings } from './settings.js'
 import { loadColourPlan } from './family.js'
 import { claimedElsewhere, colourProductsView, gatherCandidates, linkedProducts, rowsWhere, type Destination } from './find.service.js'
+import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+import { colourIsPublished, readOnlineStorePublication } from './variants.js'
 
 const productGid = /^gid:\/\/shopify\/Product\/\d+$/
 const locationGid = /^gid:\/\/shopify\/Location\/\d+$/
@@ -52,7 +54,7 @@ const CONFIRM_READ = `query NexusColourConfirmRead($ids:[ID!]!) {
   nodes(ids:$ids) { ... on Product { id title status identity: metafield(namespace:"nexus",key:"family_id") { value } } }
   locations(first:250) { nodes { id name isActive } }
   identityDefinition: metafieldDefinitions(ownerType:PRODUCT,namespace:"nexus",key:"family_id",first:1) { nodes { id type { name } capabilities { uniqueValues { enabled } } } } }`
-const READ_BACK = `query NexusColourReadBack($id:ID!,$location:ID!) { product(id:$id) { id status identity: metafield(namespace:"nexus",key:"family_id") { value }
+const READ_BACK = `query NexusColourReadBack($id:ID!,$location:ID!,$publication:ID!) { product(id:$id) { id status onlineStorePublished:publishedOnPublication(publicationId:$publication) identity: metafield(namespace:"nexus",key:"family_id") { value }
   variants(first:250) { nodes { id sku inventoryItem { id inventoryLevel(locationId:$location) { id } } } } } }`
 
 type Row = Awaited<ReturnType<typeof prisma.shopifyColourProduct.findMany>>[number]
@@ -70,6 +72,10 @@ export async function confirmColourProducts(productId: string, scope: ContentSco
   const input = confirmBodySchema.parse(body ?? {})
   if (getShopifyPublishMode() !== 'live') throw new WorkspaceScopeError('Shopify writes are switched off on this server. Nothing was changed.', 409)
   const destination = await contentDestination(productId, scope)
+  return withColourSyncLock(destination, () => confirmDestination(destination, input))
+}
+
+async function confirmDestination(destination: Destination, input: z.infer<typeof confirmBodySchema>) {
   const settings = await readColourProductSettings(destination.accountId)
   if (!settings.enabled) throw new WorkspaceScopeError('Switch on colour products for this Shopify store first. Nothing was changed.', 409)
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination) })
@@ -83,7 +89,8 @@ export async function confirmColourProducts(productId: string, scope: ContentSco
   const { plan } = await loadColourPlan(destination.familyId, { colourNames })
   if (plan.mode !== 'colour-products' || !plan.splitAxis) throw new WorkspaceScopeError('This family has no colour to show as separate Shopify products. Nothing was changed.', 422)
 
-  const { graphql } = await shopifyAdmin(destination.accountId)
+  const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
+  const publication = await readOnlineStorePublication(graphql)
   const linked = linkedProducts(rows)
   const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...input.colours.map(c => c.shopifyProductId)])
   const matches = matchColourProducts(plan, candidates, linked)
@@ -143,7 +150,7 @@ export async function confirmColourProducts(productId: string, scope: ContentSco
   try {
     for (const adoption of adoptions) {
       try {
-        confirmed.push(await adopt(graphql, destination, adoption))
+        confirmed.push(await adopt(graphql, destination, adoption, publication))
       } catch (error) {
         const done = confirmed.length ? ` ${confirmed.map(c => `"${c.name}"`).join(', ')} ${confirmed.length === 1 ? 'is' : 'are'} confirmed.` : ''
         if (error instanceof WorkspaceScopeError) throw new WorkspaceScopeError(`${error.message}${done}`, error.statusCode)
@@ -161,25 +168,25 @@ export async function confirmColourProducts(productId: string, scope: ContentSco
 const listingCoordinate = (d: Destination) => ({ channel: 'SHOPIFY', marketplace: d.marketplace, channelConnectionId: d.accountId, aliasKey: d.aliasKey ?? '' })
 
 /** One colour: the identity and the missing SKUs on Shopify, read back; then its listings and row in one transaction. */
-async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adoption) {
+async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adoption, publication: string) {
   if (a.identityWritten) checked((await graphql(`mutation NexusColourIdentity($metafields:[MetafieldsSetInput!]!) { metafieldsSet(metafields:$metafields) { metafields { id } userErrors { field message } } }`,
     { metafields: [{ ownerId: a.shopifyProductId, namespace: 'nexus', key: 'family_id', type: 'id', value: a.identity }] })).metafieldsSet, 'Set the Nexus identity')
   if (a.skusToWrite.length) checked((await graphql(`mutation NexusColourWriteSkus($productId:ID!,$variants:[ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId:$productId,variants:$variants) { userErrors { field message } } }`,
     { productId: a.shopifyProductId, variants: a.skusToWrite.map(s => ({ id: s.shopifyVariantId, inventoryItem: { sku: s.sku } })) })).productVariantsBulkUpdate, 'Write the Nexus SKUs')
 
-  const back = (await graphql(READ_BACK, { id: a.shopifyProductId, location: a.locationId })).product
+  const back = (await graphql(READ_BACK, { id: a.shopifyProductId, location: a.locationId, publication })).product
   if (!back) throw new WorkspaceScopeError(`"${a.title}" could not be read back from Shopify.`, 502)
   if (back.identity?.value !== a.identity) throw new WorkspaceScopeError(`Shopify did not keep the Nexus identity on "${a.title}".`, 502)
   const remoteVariants = new Map<string, any>(back.variants.nodes.map((v: any) => [v.id, v]))
   const wrong = a.variants.filter(v => remoteVariants.get(v.shopifyVariantId)?.sku !== v.sku || remoteVariants.get(v.shopifyVariantId)?.inventoryItem?.id !== v.inventoryItemId)
   if (wrong.length) throw new WorkspaceScopeError(`Shopify read back other SKUs for ${wrong.map(v => v.sku).join(', ')} on "${a.title}".`, 502)
   const notStocked = a.variants.filter(v => !remoteVariants.get(v.shopifyVariantId)?.inventoryItem?.inventoryLevel).map(v => v.sku)
-  const isPublished = back.status === 'ACTIVE'
+  const isPublished = colourIsPublished(back)
 
   const productIds = a.variants.map(v => v.productId)
   let draftsCreated = 0
   try {
-    await prisma.$transaction(async tx => {
+    await commitColourSyncChange(async tx => {
       const row = await tx.shopifyColourProduct.findUnique({ where: { id: a.row.id } })
       if (!row || row.updatedAt.getTime() !== a.row.updatedAt.getTime()) throw new WorkspaceScopeError(`"${a.name}" changed while it was confirmed. Run Find again.`, 409)
       const ensured = await ensureDraftListings(tx, { channel: 'SHOPIFY', market: destination.marketplace, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '', productIds, family: true })
@@ -192,7 +199,8 @@ async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adopt
         if ((tied && String(tied) !== shortId(a.shopifyProductId)) || (pa.variantId && String(pa.variantId) !== shortId(v.shopifyVariantId))) throw new WorkspaceScopeError(`${v.sku} became the listing of another Shopify product while it was confirmed.`, 409)
         await tx.channelListing.update({ where: { id: listing.id }, data: {
           platformAttributes: { ...pa, nexusFamilyId: destination.familyId, shopifyColourProductId: a.row.id, shopifyProductId: shortId(a.shopifyProductId), variantId: shortId(v.shopifyVariantId),
-            inventoryItemId: shortId(v.inventoryItemId!), inventoryLocationId: a.locationId } as Prisma.InputJsonValue,
+            inventoryItemId: shortId(v.inventoryItemId!), inventoryLocationId: a.locationId,
+            shopifyColourStockPending: true, shopifyColourRetired: false } as Prisma.InputJsonValue,
           externalListingId: shortId(a.shopifyProductId), platformProductId: shortId(a.shopifyProductId), isPublished, listingStatus: isPublished ? 'ACTIVE' : 'INACTIVE',
           // A draft this confirm made real loses the pause that kept it inert (as a publish does); any other row keeps its own.
           ...(isStillDraftListing(listing) ? { syncPaused: false } : {}), version: { increment: 1 },

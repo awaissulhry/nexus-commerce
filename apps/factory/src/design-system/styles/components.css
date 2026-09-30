@@ -1037,6 +1037,16 @@ body.nds-drawer-resizing * {
   border-radius: var(--nds-radius-md);
   color: var(--nds-text-3);
 }
+/* Sticky, so the search stays in view while the list scrolls: the grid opens a long list scrolled to its value, which left
+   the field above the fold with the caret still in it (P0, 2026-09-30). `top: -5px` covers the panel's own padding. */
+.nds-combo-pop > .nds-combo-search {
+  position: sticky;
+  top: -5px;
+  z-index: 1;
+  background: var(--nds-surface);
+  /* paints its 5px bottom margin too, so a half-scrolled row does not show through the gap */
+  box-shadow: 0 5px 0 var(--nds-surface);
+}
 .nds-combo-search svg {
   flex-shrink: 0;
 }

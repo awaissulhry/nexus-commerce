@@ -19,6 +19,7 @@ import { lockProductStock } from './stock-lock.js'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { pooledNow, PooledProductError } from './stock-pool/pool-guard.js'
 import { StockLocationUnresolved } from './default-stock-location.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -782,6 +783,9 @@ async function cascadeQuantityToListings(
       offerClosedAt: true,
       sourceLocationCodes: true,
       channelConnectionId: true,
+      // A still-draft is held like a paused listing (below).
+      listingStatus: true,
+      isPublished: true,
     },
   })
 
@@ -847,7 +851,10 @@ async function cascadeQuantityToListings(
       isFba: method === 'FBA',
       offerClosed: !!(listing as { offerClosedAt?: Date | null }).offerClosedAt,
       followMasterQuantity: listing.followMasterQuantity,
-      syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
+      // A still-draft (never published, no channel id) is held like a paused listing even when it is
+      // not paused: it is not on the channel, and only Publish sends it. Every published listing's
+      // quantity is worked out exactly as before.
+      syncPaused: ((listing as { syncPaused?: boolean }).syncPaused ?? false) || isStillDraftListing(listing),
       pinnedQuantity: listing.quantity,
       stockBuffer: listing.stockBuffer ?? 0,
       channelPolicy: policyFor(scPolicies, listing.channel, listing.marketplace, listing.channelConnectionId),
@@ -990,7 +997,7 @@ async function cascadeQuantityToListings(
     })
   }
   if (pausedSkips > 0) {
-    logger.info('cascadeQuantityToListings: sync-paused listings snapshot-only (SC)', {
+    logger.info('cascadeQuantityToListings: sync-paused listings and still-drafts snapshot-only (SC)', {
       productId, paused: pausedSkips,
     })
   }
