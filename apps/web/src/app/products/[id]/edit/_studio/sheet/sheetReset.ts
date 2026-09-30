@@ -8,7 +8,7 @@
  *
  * Pure: no React, no AG at runtime. Tested beside this file.
  */
-import { isProductRelationshipColumn } from '@nexus/shared/master-sheet'
+import { familyRowHoldsValue, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 import { cascadeIntent, cascadeOf, hasValue, wholeListWriteField } from './channel/provenance'
 import { isCellEditable, offersCascade } from './channel/rows'
 import type { ChannelSheetRow } from './channel/types'
@@ -64,7 +64,7 @@ export const MASTER_RESET_EXCLUDED: ReadonlySet<string> = new Set(['basePrice', 
  * family row's source value inherits from nothing, so it has no reset — resetting it would clear the family.
  */
 export function masterResetOffer(row: StudioRow | undefined, column: Pick<MasterColumn, 'key' | 'scope' | 'editable' | 'writeField'> & { axis?: boolean; storage?: string },
-  formula = false, familyHolds: (column: { scope: string; axis?: boolean; storage?: string }) => boolean = c => c.scope === 'global'): ResetOffer | null {
+  formula = false, familyHolds: (column: { key: string; scope: 'global' | 'per_variant'; axis?: boolean; storage?: string }) => boolean = c => c.scope === 'global' || familyRowHoldsValue(c)): ResetOffer | null {
   const cell = row?.values?.[column.key]
   if (!row || !cell || cell.editable === false || column.editable === false) return null
   if (isProductRelationshipColumn(column.key) || MASTER_RESET_EXCLUDED.has(column.writeField ?? column.key)) return null

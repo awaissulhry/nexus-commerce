@@ -28,7 +28,7 @@ import { variationThemeColumnDef } from '@/design-system/grid'
 import { scalarColumnDef, booleanLabel, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
-import { cellIsEditable, cellOf, sourceLabel, validationApplies, widthFor } from './columnRules'
+import { cellIsEditable, cellOf, holdsFamilyValue, sourceLabel, validationApplies, widthFor } from './columnRules'
 import { optionLabel } from '../optionLabel'
 import { languageColumn } from '../languages'
 import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } from '../referenceLabels'
@@ -251,7 +251,8 @@ export function buildMasterColumns(
       // cannot be built without its options, and a union argument would defeat exactly that check.
       valueGetter: (p: ValueGetterParams<StudioRow>) => (p.data ? cellOf(p.data, col.key)?.value ?? null : null),
       valueSetter: (p: ValueSetterParams<StudioRow>) => {
-        if (!p.data || !applies(p.data, col)) return false
+        // P1 — the family row also takes the value its variations inherit for a per-variant column (not an axis).
+        if (!p.data || !(applies(p.data, col) || holdsFamilyValue(col, p.data))) return false
         // 🔴 AG rebuilds `newValue` by re-running the value getter on `params.data` the moment this
         // returns, so the row object must be MUTATED here — scheduling React state hands the save
         // path the OLD value (reference_ag_value_setter_must_mutate_params_data).
@@ -307,7 +308,7 @@ export function buildMasterColumns(
              field outside this product type or family, a slot past the category's cardinality): the
              engine's hatch. `applies`, not `editable` — a read-only value that DOES apply is not
              "not for this row", and the tooltip below already says which of the two it is. */
-          'nds-cell-na': (p) => !!p.data && !applies(p.data, col),
+          'nds-cell-na': (p) => !!p.data && !applies(p.data, col) && !holdsFamilyValue(col, p.data),
         },
       }),
       /*
@@ -321,8 +322,9 @@ export function buildMasterColumns(
         const own = (): string => {
           const v = validation.validate(p.value, p.data!, col.key)
           if (v.message) return v.message
+          if (holdsFamilyValue(col, p.data!)) return 'The family value: each variation without its own value inherits it'
           if (!applies(p.data!, col)) {
-            return p.data!.isParent ? 'Belongs to each variation, not to the parent' : `Not part of ${p.data!.productType ?? 'this product type'}`
+            return p.data!.isParent ? col.axis ? 'A variation axis: each variation has its own value' : 'Belongs to each variation, not to the parent' : `Not part of ${p.data!.productType ?? 'this product type'}`
           }
           const draft = draftFor?.(p.data!.id, col.key) ?? null
           if (draft) {

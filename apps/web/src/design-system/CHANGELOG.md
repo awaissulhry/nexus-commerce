@@ -1,3 +1,7 @@
+## refusalWords: a variation axis says so — 2026-09-30
+
+Product sheet P1 (`fix/product-sheet-editing`, report 2 I-11: the family row was locked on every per-variant column with the claim "this is a variation axis"). **`refusalWords`**' `per-variant-on-parent` takes **`axis`**: a real axis reads "… is a variation axis — each variation has its own value, so the parent has none. Open a variation row to edit it."; any other per-variant column keeps "… is set per variation — open a variation row to edit it, not the parent." (Not in Factory.)
+
 ## SourceIndicator `quiet` — 2026-09-30
 
 Product sheet P1 (`fix/product-sheet-editing`: the source of every cell is visible on every channel; eBay, Amazon and Shopify hid it). **`SourceIndicator`** takes **`quiet`**: a routine source (a value that follows somewhere else) is drawn in `--nds-text-muted`, full colour on hover and keyboard focus (`.nds-source-indicator--quiet`, `components.css`). The icon, its name and its action stay; nothing is hidden. Catalog: the value-source row shows it. Mirrored in Factory: `SourceIndicator.tsx`, `styles/components.css`.

@@ -735,11 +735,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
         for (const mk of marketFree ? ['GLOBAL'] : markets) {
           const set = await getSheetColumns({ market: mk, ...(marketFree ? { allowUnknownMarket: true } : {}), productTypes, familyIds, savedFields: (await import('../pim/family-sheet-schema.js')).savedAttributeFields(schemaFamilyRows.map(r => r.categoryAttributes)), savedFieldsFor: 'shared', includeEmptyChannels: true })
-          const { columnApplies } = await import('@nexus/shared/master-sheet')
+          const { columnEditableOnRow } = await import('@nexus/shared/master-sheet')
+          const { canonicalVariantAxis } = await import('../pim/variant-attribute-keys.js')
           for (const product of ptRows) {
             const row = new Map<string, import('../pim/sheet-columns.service.js').SheetColumn>()
             const shape = { isParent: product.isParent, productType: product.productType, familyId: product.familyId ?? product.parent?.familyId }
-            for (const col of set.columns) row.set(col.key, { ...col, editable: col.editable && columnApplies(col, shape) })
+            // P1 (report 2 I-11) — the family row holds a per-variant column's value for its variations unless it is a
+            // variation axis (the studio sheet's own rule, `columnEditableOnRow`); `axis` from this family's axes.
+            const axes = new Set((variationOwners.get(product.id)?.variationAxes ?? []).map(axis => canonicalVariantAxis(String(axis))))
+            for (const col of set.columns) row.set(col.key, { ...col, editable: col.editable && columnEditableOnRow({ ...col, axis: col.scope === 'per_variant' && axes.has(canonicalVariantAxis(col.key)) }, shape) })
             masterRowContract.set(product.id, row)
           }
           for (const col of set.columns) {
