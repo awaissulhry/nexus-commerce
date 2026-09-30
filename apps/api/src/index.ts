@@ -217,6 +217,7 @@ import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import mfaRoutes from "./routes/mfa.routes.js";
 import oauthRoutes from './routes/oauth.routes.js';
+import oauthGrantsRoutes from './routes/oauth-grants.routes.js';
 import teamRoutes from "./routes/team.routes.js";
 // Phase S2 (RBAC engine) — the one global permission gate (shadow/enforce).
 import { rbacHook } from "./lib/auth/rbac-hook.js";
@@ -543,6 +544,8 @@ app.register(authRoutes);
 app.register(mfaRoutes);
 // MCP.5 — OAuth 2.1 for connecting Claude (/api/oauth/*). 404 unless NEXUS_MCP_ENABLED=1.
 app.register(oauthRoutes);
+// MCP.6 — Connected apps: a person's own Claude connections and a business's, and revoking them.
+app.register(oauthGrantsRoutes, { prefix: '/api' });
 app.register(workspaceInvitationsRoutes);
 // Phase S4 — Team & Access API (/api/team/*), gated by the RBAC manifest.
 app.register(teamRoutes);

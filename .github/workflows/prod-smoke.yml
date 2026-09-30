@@ -44,5 +44,4 @@ jobs:
         working-directory: apps/web
         env:
           PROD_BASE_URL: ${{ inputs.url }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npx playwright test -c smoke/prod.config.ts

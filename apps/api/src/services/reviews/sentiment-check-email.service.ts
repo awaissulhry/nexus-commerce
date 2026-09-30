@@ -165,7 +165,7 @@ function buildHtml(ctx: SentimentEmailContext): string {
   const copy = COPY[locale]
   const positiveUrl = `${ctx.baseUrl}/positive`
   const negativeUrl = `${ctx.baseUrl}/negative`
-  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
   const unsubUrl = `${webBase}/api/email/unsubscribe?token=${unsubscribeTokenFor(ctx.to)}&channel=review-sentiment-check`
   const productStrong = ctx.productName
     ? `<strong>${escapeHtml(ctx.productName)}</strong>`
@@ -258,7 +258,7 @@ function buildText(ctx: SentimentEmailContext): string {
   const positiveUrl = `${ctx.baseUrl}/positive`
   const negativeUrl = `${ctx.baseUrl}/negative`
   const product = ctx.productName ?? copy.productFallback
-  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
   const unsubUrl = `${webBase}/api/email/unsubscribe?token=${unsubscribeTokenFor(ctx.to)}&channel=review-sentiment-check`
   const lines = [
     copy.greeting(firstNameOf(ctx.customerName)),
@@ -307,7 +307,7 @@ export function renderSentimentCheckPreview(opts: {
     to: 'preview@xavia.it',
     customerName: opts.customerName ?? 'Test Operator',
     productName: opts.productName ?? 'Casco Xavia Carbon',
-    baseUrl: (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '') + '/r/__test__',
+    baseUrl: (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '') + '/r/__test__',
     channelOrderId: 'TEST-PREVIEW',
     locale: opts.locale,
   })
@@ -341,7 +341,7 @@ export async function sendSentimentCheckEmail(
  * `mailto:` is the legacy fallback for ancient clients.
  */
 function buildUnsubscribeHeaders(to: string): Record<string, string> {
-  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+  const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
   const token = unsubscribeTokenFor(to)
   const httpUrl = `${webBase}/api/email/unsubscribe?token=${token}&channel=review-sentiment-check`
   const mailto = 'mailto:unsubscribe@xavia.it?subject=unsubscribe'

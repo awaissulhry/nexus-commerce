@@ -77,7 +77,7 @@ Local numbers below are **measured** on this Mac (18 cores) or **read** from the
 | CI `ci.yml` (main) | PR to main, push to main | one job with 11 steps and no path filter | measured: 11.8 min (§1.1) |
 | `deploy-api.yml` (main) | push to main, API paths | `npm ci`, prisma generate, API build, 2 tests, `railway up`, health poll. **It does not wait for CI.** | measured: 10.2 min (§1.1) |
 | Railway | `railway up` | builds from source (`dist/` is gitignored); no tests | unknown |
-| Vercel | every push, every branch | `turbo-ignore @nexus/web`, then `next build` with type checks | unknown |
+| Railway `nexus-web` (since 2026-09-29) | push to main, web paths (`deploy-api.yml` job `deploy-web`) | `railway up`: builds from source, `next build` with type checks, then `next start` | unknown |
 
 **Pre-push step times, read from the 2026-09-25 logs:**
 
@@ -160,7 +160,7 @@ Local numbers below are **measured** on this Mac (18 cores) or **read** from the
 | `npm ci`, which also runs prisma generate in postinstall | each Actions job, plus Railway per service |
 | API build (shared, events, prisma generate, tsc) | CI, deploy job, Railway per service. The deploy job's `dist/` is thrown away. |
 | Catalog CSV tests | the deploy job, and again inside `src/services/pim` (branch) |
-| Web build | hook, Vercel preview, Vercel production |
+| Web build | hook, CI smoke build, Railway `nexus-web` (production only) |
 | Railway native autodeploy | **probably still on** (inferred from "Railway commit checks report success") → maybe a second deploy and a second migration run per push |
 
 **The 20 slowest test files**
@@ -386,7 +386,7 @@ Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: the slowest `api` s
 - **API:**
   - Keep the SHA and health poll.
   - Add a Railway deployment-status check for the worker and scheduler. The exact CLI command is verified in PR-4.
-- **Web:** a new workflow on `deployment_status` (Vercel, Production, success) runs Playwright `@prod` against `environment_url`. It checks that:
+- **Web:** `prod-smoke.yml`, called by `deploy-api.yml` (job `smoke-web`) after `deploy-web` ships the web to Railway, runs Playwright `@prod` against `vars.NEXUS_WEB_URL`. It checks that:
   - the sign-in page renders;
   - `/backend/api/health/ready` reports healthy;
   - static assets load.
@@ -424,7 +424,7 @@ Peak: 9 jobs per PR run (7 until 2026-09-30). Critical path: the slowest `api` s
 | PG with fsync, synchronous_commit, full_page_writes off, on tmpfs | Yes | 10–20 % of real-PG time | none (throwaway database) | drop the flags |
 | **Template DB clone** | Yes, **one clone per test FILE, not per worker**. A per-worker database lets files see each other's rows. At 0.34 s a clone is cheap enough for every file. | PGlite: 2.3 s → 0.34 s × 53 files ≈ **1.7 CPU-min**. Real PG: `CREATE DATABASE … TEMPLATE nexus_template`, roles made once. | objects that span the cluster (roles) could leak, so per-file role names stay | env `NEXUS_TEST_NO_TEMPLATE=1` |
 | Playwright sharding + storageState | storageState yes. 2 shards; if smoke takes < 2 min, go to 1. | sign-in once instead of per test | the sign-out test needs its own login | the matrix size |
-| Skip the type step in CI `next build` | Yes, via a CI-only env flag. Vercel is unchanged. | ~1 min on the critical path | none while `checks` is required | remove the env var |
+| Skip the type step in CI `next build` | Yes, via a CI-only env flag. The Railway web build is unchanged. | ~1 min on the critical path | none while `checks` is required | remove the env var |
 | Paid larger runners | **No.** Not available to a free personal account. | — | — | — |
 
 ## 4. Railway, schema rule, branch protection
@@ -475,7 +475,7 @@ After #4, `RuntimePool` refuses any runtime login that owns objects or bypasses 
    - Use `railway variables --set … --skip-deploys`, so the change waits for the #4 deploy. Main's code still migrates at start with `DATABASE_URL`, and a restricted login cannot do that.
    - Keep `MIGRATION_DATABASE_URL` on `neondb_owner`.
 
-5. **Vercel Production:** set `DATABASE_URL` to the `nexus_app` pooler URL. It applies on the next production build, which is the #4 merge.
+5. **Railway `nexus-web`:** set `DATABASE_URL` to the `nexus_app` pooler URL (today it references the API's, `${{@nexus/api.DATABASE_URL}}`, so step 4 already changes it). It applies on the web's next deployment.
 
 6. **Railway:** disconnect the API service's native GitHub source, so each push deploys once and migrates once.
 
@@ -491,7 +491,7 @@ After #4, `RuntimePool` refuses any runtime login that owns objects or bypasses 
 **Rollback:**
 - Railway: redeploy the previous deployment.
 - Railway: set `DATABASE_URL` back to the `neondb_owner` pooler URL.
-- Vercel: promote the previous production deployment.
+- Railway `nexus-web`: redeploy the previous deployment.
 - #4 adds **no** migration folders (measured: 0 against main), so a rollback meets the same schema.
 
 ### 4.2 Expand/contract rule

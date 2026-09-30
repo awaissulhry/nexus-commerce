@@ -1,0 +1,18 @@
+/* MCP.6 — Connected apps. Layout only: every control keeps its design-system size and colour. */
+/* The base size on the root: the security page around it is a legacy page, and plain text would
+   otherwise take the browser's 16 px. */
+.connected-apps { min-width: 0; font-size: var(--nds-font-size-base); color: var(--nds-text); }
+.connected-apps-body { display: grid; gap: var(--nds-space-12); min-width: 0; }
+.connected-apps-list { list-style: none; margin: 0; padding: 0; display: grid; min-width: 0; }
+.connected-apps-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--nds-space-16); padding: var(--nds-space-12) 0; min-width: 0; }
+.connected-apps-row:first-child { padding-top: 0; }
+.connected-apps-row:last-child { padding-bottom: 0; }
+.connected-apps-row + .connected-apps-row { border-top: 1px solid var(--nds-border-subtle); }
+.connected-apps-main { flex: 1; display: grid; gap: var(--nds-space-8); min-width: 0; }
+.connected-apps-app { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--nds-space-2) var(--nds-space-8); overflow-wrap: anywhere; }
+.connected-apps-host { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.connected-apps-action { flex: none; }
+.connected-apps-dialog { display: grid; gap: var(--nds-space-12); }
+.connected-apps-dialog p { margin: 0; line-height: 1.6; }
+/* A phone: the action goes under the details, at its own size. */
+@media (max-width: 600px) { .connected-apps-row { flex-direction: column; } }
