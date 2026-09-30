@@ -3,7 +3,7 @@ import { parse } from 'graphql'
 import { emptyShopifyLinkedDraft, fieldAddress, shopifyDefinitionApplicability, shopifyLinkedDraftSchema, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 
 const fixture = vi.hoisted(() => {
-  const data = { audits: [] as any[], listings: [] as any[], gql: null as any, failSave: false }
+  const data = { audits: [] as any[], listings: [] as any[], gql: null as any, failSave: false, colourGrouping: null as null | { fields: Array<{ namespace: string; key: string }>; family: boolean; products: string[] } }
   function match(row: any, where: any): boolean { return Object.entries(where).every(([key, value]: [string, any]) => value && typeof value === 'object' && 'in' in value ? value.in.includes(row[key]) : row[key] === value) }
   const db: any = { auditLog: { create: async ({ data: row }: any) => { data.audits.push(structuredClone(row)); return { id: String(data.audits.length) } } }, product: { findFirst: async ({ where }: any) => where.id === 'family' ? { id: 'family', name: 'Family', parentId: null, deletedAt: null, children: [] } : null },
     marketplace: { findFirst: async ({ where }: any) => where.channel === 'SHOPIFY' && where.code === 'GLOBAL' ? { id: 'global', currency: 'EUR' } : null },
@@ -19,6 +19,7 @@ const fixture = vi.hoisted(() => {
   return { data, db }
 })
 vi.mock('../../db.js', () => ({ default: fixture.db }))
+vi.mock('./colour-products/settings.js', () => ({ colourGrouping: async () => fixture.data.colourGrouping }))
 vi.mock('../connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_: string, account: string) => { if (!['A', 'B'].includes(account)) throw new Error('Account unavailable'); return account } }))
 vi.mock('./admin-client.js', () => ({ shopifyAdmin: async (account: string) => ({ graphql: (q: string, v: any) => fixture.data.gql(q, v, account) }), assertShopifyResult: (payload: any) => { if (!payload || payload.userErrors?.length) throw new Error(payload?.userErrors?.[0]?.message ?? 'Missing result'); return payload } }))
 import { applyLinkedBatch, beginLinkedSync, advanceLinkedSync, buildLinkedPlan, getLinkedWorkspace, importLinkedFamily, LINKED_KEY, previewLinkedWorkspace, rebaseLinkedWorkspace, saveLinkedWorkspace } from './linked-products.service'
@@ -36,7 +37,7 @@ const connection = (nodes: any[]) => ({ nodes, pageInfo: { hasNextPage: false, e
 const lookup = (ownerId: string, key = 'siblings') => fields.get(fieldAddress({ ownerId, namespace: 'custom', key }))
 beforeEach(() => {
   invalidateShopifyDefinitionConstraints()
-  fields = new Map(); calls = []; fixture.data.audits = []; loseAck = false; schemaChanged = false; fixture.data.failSave = false
+  fields = new Map(); calls = []; fixture.data.audits = []; loseAck = false; schemaChanged = false; fixture.data.failSave = false; fixture.data.colourGrouping = null
   for (const id of [1, 2]) { const value = { ownerId: gid(id), namespace: 'custom', key: 'siblings', type: 'list.product_reference', value: JSON.stringify([gid(1), gid(2)]), compareDigest: `base-${id}` }; fields.set(fieldAddress(value), value) }
   fixture.data.listings = ['A', 'B'].map(account => ({ id: `listing-${account}`, productId: 'family', channel: 'SHOPIFY', channelConnectionId: account, marketplace: 'GLOBAL', aliasKey: '', version: 1, externalListingId: '1', platformAttributes: { untouched: account } }))
   fixture.data.gql = async (query: string, variables: any = {}, account = 'A'): Promise<any> => {
@@ -480,6 +481,55 @@ describe('review, conflicts and resumable synchronization', () => {
     lookup(gid(2)).compareDigest = 'new'
     await expect(applyLinkedBatch(gql, changes)).rejects.toThrow('Shopify changed')
     expect(lookup(gid(1)).value).not.toBe('[]')
+  })
+})
+
+describe('colour products own the grouping fields of the families they manage (PR 4)', () => {
+  // Any two addresses: the guard compares addresses, and the fixture store defines these two.
+  const managed = [{ namespace: 'custom', key: 'caption' }, { namespace: 'custom', key: 'siblings' }]
+  const family = { fields: managed, family: true, products: [] as string[] }
+  const captionEdit = (id: number) => ({ ownerId: gid(id), namespace: 'custom', key: 'caption', type: 'single_line_text_field', value: null, compareDigest: null, nextValue: 'Black', ownerLabel: `Product ${id}` })
+  const informationDraft = (edits: any[], sharedFields: any[] = []) => ({ ...emptyShopifyLinkedDraft(), informationOnly: true as const, members: [{ id: gid(1), title: 'Product 1', handle: 'p-1', image: null }], edits, sharedFields })
+  it('the Product family tab cannot save links, an edit or a shared rule of either field; removing the links is allowed', async () => {
+    const data = await initialized()
+    fixture.data.colourGrouping = family
+    await expect(saveLinkedWorkspace('family', scope, { expectedRevision: data.revision, draft: data.draft })).rejects.toThrow('Colour products link this family on Shopify. Remove its links in Product family first.')
+    await expect(saveLinkedWorkspace('family', scope, { expectedRevision: data.revision, draft: { ...data.draft, relationship: null, baselineLinks: [], edits: [captionEdit(1)] } }))
+      .rejects.toThrow('Colour products write custom.caption and custom.siblings on these products. Remove those edits here; Nexus keeps both fields correct.')
+    const rule = { namespace: 'custom', key: 'caption', sourceProductId: gid(1), excludedProductIds: [],
+      baseline: data.draft.members.map(m => ({ ownerId: m.id, namespace: 'custom', key: 'caption', type: 'single_line_text_field', value: null, compareDigest: null })) }
+    await expect(saveLinkedWorkspace('family', scope, { expectedRevision: data.revision, draft: { ...data.draft, relationship: null, baselineLinks: [], sharedFields: [rule] } })).rejects.toThrow('Colour products write custom.caption')
+    const unlinked = await saveLinkedWorkspace('family', scope, { expectedRevision: data.revision, draft: { ...data.draft, relationship: null, baselineLinks: [] } })
+    expect(unlinked.draft.relationship).toBeNull()
+  })
+  it('another family cannot write them on a colour product of the store; its other products stay free', async () => {
+    fixture.data.colourGrouping = { fields: managed, family: false, products: [gid(1)] }
+    const current = await getLinkedWorkspace('family', scope)
+    await expect(saveLinkedWorkspace('family', scope, { expectedRevision: current.revision, draft: informationDraft([captionEdit(1)]) })).rejects.toThrow('Colour products write custom.caption')
+    const links = { ...emptyShopifyLinkedDraft(), relationship: { namespace: 'custom', key: 'siblings', includeSelf: true }, members: [1, 2].map(n => ({ id: gid(n), title: `Product ${n}`, handle: `p-${n}`, image: null })) }
+    await expect(saveLinkedWorkspace('family', scope, { expectedRevision: current.revision, draft: links })).rejects.toThrow('Some of these products are colour products of another family, and colour products write their colour list. Remove them from this Product family.')
+    contentFields()
+    const saved = await saveLinkedWorkspace('family', scope, { expectedRevision: current.revision, draft: { ...informationDraft([captionEdit(2)]), members: [{ id: gid(2), title: 'Product 2', handle: 'p-2', image: null }] } })
+    expect(saved.draft.edits).toHaveLength(1)
+  })
+  it('a pending edit (sheet cells, automation) is refused where every path synchronizes, and a sync begun before colour products took over stops before its first write', async () => {
+    contentFields()
+    const current = await getLinkedWorkspace('family', scope)
+    const stored = fields.get(fieldAddress({ ownerId: gid(1), namespace: 'custom', key: 'caption' }))
+    await saveLinkedWorkspace('family', scope, { expectedRevision: current.revision, draft: informationDraft([{ ...stored, nextValue: 'Black', ownerLabel: 'Product 1' }]) })
+    const review = await previewLinkedWorkspace('family', scope)
+    expect(review.plan.changes).toHaveLength(1)
+    fixture.data.colourGrouping = family
+    await expect(beginLinkedSync('family', scope, { expectedRevision: review.workspace.revision, planRevision: review.plan.revision })).rejects.toThrow('Colour products write custom.caption')
+    expect((await getLinkedWorkspace('family', scope)).operation).toBeNull()
+    fixture.data.colourGrouping = null
+    const running = await beginLinkedSync('family', scope, { expectedRevision: review.workspace.revision, planRevision: review.plan.revision })
+    expect(running.operation?.status).toBe('RUNNING')
+    fixture.data.colourGrouping = { fields: managed, family: false, products: [gid(1)] }
+    await expect(advanceLinkedSync('family', scope, running.operation!.id)).rejects.toThrow('Colour products write custom.caption')
+    expect((await getLinkedWorkspace('family', scope)).operation).toMatchObject({ status: 'UNVERIFIED', error: expect.stringContaining('Colour products write custom.caption') })
+    expect(calls.some(c => c.name === 'NexusLinkedSet')).toBe(false)
+    expect(fields.get(fieldAddress(stored)).value).toBe(stored.value)
   })
 })
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tier B pre-push (docs/ci-plan.md §2.2) — typecheck of the affected workspaces, under 2 minutes.
+# Tier B pre-push (docs/ci-plan.md §2.2) — typecheck of the affected workspaces and of both apps, under 2 minutes.
 #
 # Everything the old 56-step hook ran now runs in CI on every pull request (.github/workflows/ci.yml,
 # required on main): the static gates, the whole API suite in both business-profile modes, the whole
@@ -23,4 +23,7 @@ base=$(git merge-base HEAD origin/main 2>/dev/null || true)
 start=$(date +%s)
 # --incremental false: a tsbuildinfo shared by several sessions in one checkout has given false results.
 TURBO_SCM_BASE="$base" npx turbo run typecheck ${base:+--affected} --cache=local:rw --output-logs=errors-only -- --incremental false
+# Both apps, always: each one type-checks files of the other, which --affected cannot see (2026-09-30; ci.yml,
+# "Typecheck both apps"). A task the line above already ran replays from the local cache.
+npx turbo run typecheck --filter=@nexus/api --filter=@nexus/web --cache=local:rw --output-logs=errors-only -- --incremental false
 echo "pre-push: typecheck passed in $(( $(date +%s) - start ))s — the full gate runs in CI on the pull request."

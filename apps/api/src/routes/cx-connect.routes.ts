@@ -25,7 +25,7 @@ import {
   importAmazonEnvironmentAuthorization,
 } from '../services/cx/connectors/amazon-sp/self-authorization.js'
 
-const WEB_ORIGIN = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
+const WEB_ORIGIN = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
 
 function channelKeyFromParam(p: string): ChannelKey | null {
   const key = p.toUpperCase().replace(/-/g, '_')
