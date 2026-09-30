@@ -32,17 +32,19 @@ export interface ReferenceReadIntent {
   live: boolean
   /** Ignore a warm client-side entry — orthogonal to `live`. */
   refresh?: boolean
+  /** A newly assigned ID needs a read started after it, not an older in-flight catalog. Editors share pending reads by default. */
+  reusePending?: boolean
 }
 
 export async function loadReferenceChoices(field: ReferenceField, scope: ReferenceScope, intent: ReferenceReadIntent): Promise<ReferenceChoices> {
-  const { live, refresh = false } = intent
+  const { live, refresh = false, reusePending = true } = intent
   const theme = field === 'descriptionThemeId'
   const etsy = REFERENCE_FIELDS[field].channel === 'ETSY'
   if (etsy && !scope.connectionId) throw new Error('Choose an Etsy account before selecting a resource.')
   if (!theme && !etsy && (!scope.market || !scope.productType)) throw new Error('Choose a product type and marketplace before selecting a shipping template.')
   const key = theme ? 'themes' : JSON.stringify([etsy ? field : 'shippingTemplate', scope.market, scope.productType, scope.connectionId ?? 'primary'])
   const hit = cache.get(key)
-  if (hit && (hit.pending || (!refresh && hit.expires > Date.now()))) return hit.value
+  if (hit && (hit.pending ? reusePending : !refresh && hit.expires > Date.now())) return hit.value
   const path = etsy ? `etsy/information/references?${new URLSearchParams({ accountId: scope.connectionId!, field })}` : theme ? 'ebay/description-themes?view=options' : `categories/reference-labels?${new URLSearchParams({ marketplace: scope.market!, productType: scope.productType!, shipping: '1', ...(live ? { live: '1' } : {}), ...(scope.connectionId ? { accountId: scope.connectionId } : {}) })}`
   const pending = (async () => {
     let response: Response

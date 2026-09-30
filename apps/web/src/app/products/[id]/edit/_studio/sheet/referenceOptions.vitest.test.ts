@@ -84,6 +84,23 @@ describe('reference choice loading', () => {
     resolve(response({ themes }))
     expect(await first).toEqual(await second)
   })
+  it.each(['resolve', 'reject'] as const)('keeps a forced new catalog when an older request finishes last (%s)', async finish => {
+    const pending: Array<{ resolve: (value: Response) => void; reject: (error: Error) => void }> = []
+    const fetcher = vi.fn(() => new Promise<Response>((resolve, reject) => { pending.push({ resolve, reject }) }))
+    vi.stubGlobal('fetch', fetcher)
+    const { loadReferenceChoices } = await import('./referenceOptions')
+    const old = loadReferenceChoices('descriptionThemeId', {}, { live: true, refresh: true }).catch(() => null)
+    const fresh = loadReferenceChoices('descriptionThemeId', {}, { live: false, refresh: true, reusePending: false })
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    const current = [{ ...themes[0], name: 'Current name' }]
+    pending[1].resolve(response({ themes: current }))
+    expect((await fresh).labels.active).toBe('Current name')
+    if (finish === 'resolve') pending[0].resolve(response({ themes }))
+    else pending[0].reject(new Error('Old request failed'))
+    await old
+    expect((await loadReferenceChoices('descriptionThemeId', {}, { live: false })).labels.active).toBe('Current name')
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
 
   it('rejects unavailable and malformed choices and permits recovery after a failed request', async () => {
     const fetcher = vi.fn()

@@ -47,6 +47,7 @@ import { createWorkspaceSaveStore } from './workspaceSave'
 import { useInFlightGuard } from './useInFlightGuard'
 import { studioChannelViewPatch } from './navigationHref'
 import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness, readinessUrl } from './readiness'
+import { decodeReadiness } from '@nexus/shared/readiness-wire'
 import { isViewChipVisible } from './viewChips'
 import { marketGate, marketGateReason } from './marketGate'
 import {
@@ -423,7 +424,7 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
     void fetch(readinessUrl(productId, { market, locale, channel, listingId, accountId, only: 'coordinate' }), { cache: 'no-store', signal: abort.signal })
       .then(async (res) => {
         if (!res.ok) return
-        const json: unknown = await res.json()
+        const json: unknown = decodeReadiness(await res.json())
         if (abort.signal.aborted) return
         setQuery((prev) => (prev.status === 'ready' && prev.coordinate === coordinate
           ? { ...mergeCoordinateReadiness(prev, json, { channel, market, accountId }), at: Date.now(), refreshError: undefined }
@@ -522,7 +523,7 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
           fail(`Readiness request failed (${res.status}).`)
           return
         }
-        const json: unknown = await res.json()
+        const json: unknown = decodeReadiness(await res.json())
         if (cancelled) return
         setQuery({ status: 'ready', byScope: parseReadinessResponse(json), matrix: parseReadinessMatrix(json), at: Date.now(), coordinate })
       } catch (e) {

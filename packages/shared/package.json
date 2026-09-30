@@ -201,6 +201,10 @@
     "./formula-functions": {
       "types": "./dist/formula-functions.d.ts",
       "default": "./dist/formula-functions.js"
+    },
+    "./readiness-wire": {
+      "types": "./dist/readiness-wire.d.ts",
+      "default": "./dist/readiness-wire.js"
     }
   },
   "scripts": {

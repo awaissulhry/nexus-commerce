@@ -14,6 +14,11 @@ const hooks = vi.hoisted(() => {
   return {
     s,
     react: {
+      useRef: (initial: unknown) => {
+        const i = s.i++
+        if (!(i in s.slots)) s.slots[i] = { value: { current: initial } }
+        return s.slots[i].value
+      },
       useState: (init: unknown) => {
         const i = s.i++
         if (!(i in s.slots)) s.slots[i] = { value: typeof init === 'function' ? (init as () => unknown)() : init }

@@ -6,6 +6,11 @@ const hooks = vi.hoisted(() => {
   return {
     s,
     react: {
+      useRef: (initial: unknown) => {
+        const i = s.i++
+        if (!(i in s.slots)) s.slots[i] = { value: { current: initial } }
+        return s.slots[i].value
+      },
       useState: (init: unknown) => {
         const i = s.i++
         if (!(i in s.slots)) s.slots[i] = { value: typeof init === 'function' ? (init as () => unknown)() : init }
@@ -49,7 +54,7 @@ const render = (value: Sheet) => {
 beforeEach(() => {
   hooks.s.slots = []; hooks.s.effects = []
   reads.policies.mockReset().mockResolvedValue({ paymentPolicies: [{ id: 'policy-a', name: 'Example policy' }], returnPolicies: [], fulfillmentPolicies: [] })
-  reads.themes.mockReset().mockResolvedValue({ labels: { 'theme-a': 'Example theme' }, options: [] })
+  reads.themes.mockReset().mockResolvedValue({ labels: { 'theme-a': 'Example theme', 'theme-b': 'Second theme' }, options: [] })
 })
 afterEach(() => vi.unstubAllGlobals())
 describe('reference names for displayed assignments', () => {
@@ -68,13 +73,14 @@ describe('reference names for displayed assignments', () => {
     const assigned = sheet('policy-a', 'theme-a')
     render(assigned)
     expect(reads.policies).toHaveBeenCalledExactlyOnceWith('IT', false, 'synthetic-account')
-    expect(reads.themes).toHaveBeenCalledExactlyOnceWith('descriptionThemeId', {}, { live: false })
+    expect(reads.themes).toHaveBeenCalledExactlyOnceWith('descriptionThemeId', {}, { live: false, refresh: true, reusePending: false })
     await Promise.resolve(); await Promise.resolve()
     const out = render(assigned)
     expect(out?.rows).toBe(assigned.rows)
     expect(out?.columns.find(c => c.key === 'paymentPolicyId')?.optionLabels?.['policy-a']).toBe('Example policy')
     expect(out?.columns.find(c => c.key === 'descriptionThemeId')?.optionLabels?.['theme-a']).toBe('Example theme')
-    render(sheet('policy-b', 'theme-b'))
+    const next = render(sheet('policy-b', 'theme-b'))
+    expect(next?.columns.find(c => c.key === 'descriptionThemeId')?.optionLabels?.['theme-b']).toBe('Second theme')
     expect(reads.policies).toHaveBeenCalledOnce()
     expect(reads.themes).toHaveBeenCalledOnce()
   })
