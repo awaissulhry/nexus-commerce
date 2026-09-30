@@ -44,6 +44,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import prisma from '../../../db.js'
 import { auditLogService } from '../../audit-log.service.js'
 import { decodeCellKey, type CellAddress } from './cell-key.js'
+import { internalWriteHeaders } from '../../pim/mapping/formula-write-context.js'
 
 export type DraftStatus =
   | 'pending'
@@ -549,10 +550,8 @@ async function applyTranslationGroup(
     const res = await app.inject({
       method: 'PUT',
       url: `/api/products/${productId}/translations/${encodeURIComponent(locale)}`,
-      headers: {
-        'content-type': 'application/json',
-        ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
-      },
+      // A19 — the session, its CSRF token and the business the hook verified, as the formula writer sends them.
+      headers: { 'content-type': 'application/json', ...internalWriteHeaders(request) },
       payload: body,
     })
 
@@ -718,10 +717,8 @@ export async function approveDrafts(
     const res = await app.inject({
       method: 'PATCH',
       url: '/api/products/bulk',
-      headers: {
-        'content-type': 'application/json',
-        ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
-      },
+      // A19 — the session, its CSRF token and the business the hook verified, as the formula writer sends them.
+      headers: { 'content-type': 'application/json', ...internalWriteHeaders(request) },
       payload: body,
     })
 

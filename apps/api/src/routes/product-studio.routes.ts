@@ -25,6 +25,7 @@ import { encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
 import { resolveWorkspaceDestination, resolveWorkspaceListing, WorkspaceScopeError } from '../services/pim/workspace-destination.js'
 import { AmbiguousConnectionError, NoConnectionError } from '../services/connection-resolver.service.js'
+import { internalWriteHeaders } from '../services/pim/mapping/formula-write-context.js'
 
 import { getSheetColumns, UnknownMarketError } from '../services/pim/sheet-columns.service.js'
 import {
@@ -1021,7 +1022,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       if (!cell?.editable || cell.writeTarget !== 'channelListing' || !cell.writeField)
         return reply.code(400).send({ error: 'This field is not an editable listing override. Use its owning editor.' })
       const result = await fastify.inject({ method: 'PATCH', url: '/api/products/bulk',
-        headers: { ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}), ...(request.headers.authorization ? { authorization: request.headers.authorization } : {}) },
+        headers: internalWriteHeaders(request),
         payload: { expectedVersion, changes: [{ id, field: cell.writeField, value: null, intent: 'reset', target: 'channel' }],
           marketplaceContexts: [{ channel: destination.channel, marketplace: destination.marketplace, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '' }] } })
       return reply.code(result.statusCode).send(result.json())
