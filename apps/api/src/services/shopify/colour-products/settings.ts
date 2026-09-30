@@ -53,3 +53,20 @@ export async function saveColourProductSettings(accountId: string, body: unknown
   if (result.count !== 1) throw new WorkspaceScopeError('A concurrent store update interrupted this save. Reload before retrying.', 409)
   return readColourProductSettings(accountId)
 }
+
+/**
+ * Who owns the two grouping fields (PR 4: the link writer, link.service.ts). `family`: colour products manage this family
+ * on this store and alias (a colour is confirmed). `products`: the confirmed colour products, of any family of the store,
+ * among `ownerIds` and this family's own. Null: the switch is off, or none of them is a colour product.
+ */
+export async function colourGrouping(destination: { familyId: string; accountId: string; marketplace: string; aliasKey?: string | null }, ownerIds: readonly string[] = []) {
+  const own = { familyId: destination.familyId, marketplace: destination.marketplace, aliasKey: destination.aliasKey ?? '' }
+  // The rows first: most families and products have none, and then the store settings are not read at all.
+  const rows = await prisma.shopifyColourProduct.findMany({ where: { channelConnectionId: destination.accountId, state: 'LINKED', shopifyProductId: { not: null },
+    OR: [own, ...(ownerIds.length ? [{ shopifyProductId: { in: [...new Set(ownerIds)] } }] : [])] }, select: { familyId: true, marketplace: true, aliasKey: true, shopifyProductId: true } })
+  if (!rows.length) return null
+  const settings = await readColourProductSettings(destination.accountId)
+  if (!settings.enabled) return null
+  return { fields: [settings.valueField, settings.listField], family: rows.some(r => r.familyId === own.familyId && r.marketplace === own.marketplace && r.aliasKey === own.aliasKey),
+    products: rows.map(r => r.shopifyProductId!) }
+}

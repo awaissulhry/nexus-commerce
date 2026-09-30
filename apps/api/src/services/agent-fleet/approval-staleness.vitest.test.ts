@@ -19,6 +19,9 @@ vi.mock('../../db.js', () => ({
     },
     agentRun: { findMany: vi.fn() },
     agentExemplar: { findMany: vi.fn() },
+    // The person who approved, looked up again at commit (login roles with business profiles off, the membership on).
+    userProfile: { findUnique: vi.fn() },
+    workspaceMembership: { findUnique: vi.fn() },
   },
 }))
 /* S9.4 — commitScheduledApproval now restamps `expiresAt` when it hands a
@@ -130,16 +133,93 @@ describe('AP.6 — checkStaleness', () => {
   })
 })
 
+/**
+ * AP.6 — the stored preview is jsonb, which re-orders an object's keys. The comparison must not care about key
+ * order at any depth, and must still see every value, and every change of array order. (The real round trip through
+ * jsonb is proven on PGlite in approval-staleness-jsonb.vitest.test.ts.)
+ */
+describe('AP.6 — key order never counts, a value or an array order always does', () => {
+  /** A fresh preview, keys in the order a tool builds them. */
+  const FRESH = {
+    action: 'set-price',
+    changes: {
+      'base price': { from: 10, to: 12 },
+      listings: [{ channel: 'EBAY', market: 'IT', price: { from: 11, to: 13 } }, { channel: 'AMAZON', market: 'DE', price: null }],
+    },
+  }
+  /** The same preview with its keys re-ordered at every depth, including inside the array, as jsonb returns it. */
+  const REORDERED = {
+    changes: {
+      listings: [{ price: { to: 13, from: 11 }, market: 'IT', channel: 'EBAY' }, { price: null, market: 'DE', channel: 'AMAZON' }],
+      'base price': { to: 12, from: 10 },
+    },
+    action: 'set-price',
+  }
+  const approvalWith = (stored: Record<string, unknown>) => {
+    db.agentApproval.findUnique.mockResolvedValue({ toolName: 'set-price', args: {}, preview: stored } as never)
+  }
+  const freshIs = (preview: Record<string, unknown>) =>
+    tools.mockReturnValue({ name: 'set-price', input: ANY_ARGS, execute: vi.fn(), handler: vi.fn().mockResolvedValue({ ok: true, preview }) } as never)
+
+  it('the same preview with its keys in another order, nested and inside arrays, is not stale', async () => {
+    approvalWith(REORDERED)
+    freshIs(FRESH)
+    expect(await checkStaleness('a1')).toEqual({ stale: false, why: null })
+  })
+
+  it('a changed value deep inside is stale', async () => {
+    approvalWith(REORDERED)
+    freshIs({ ...FRESH, changes: { ...FRESH.changes, listings: [{ ...FRESH.changes.listings[0], price: { from: 11, to: 14 } }, FRESH.changes.listings[1]] } })
+    const v = await checkStaleness('a1')
+    expect(v.stale).toBe(true)
+    expect(v.why).toContain('changes changed')
+  })
+
+  it('the same items in another array order are stale', async () => {
+    approvalWith(REORDERED)
+    freshIs({ ...FRESH, changes: { ...FRESH.changes, listings: [FRESH.changes.listings[1], FRESH.changes.listings[0]] } })
+    expect((await checkStaleness('a1')).stale).toBe(true)
+  })
+
+  it('a value that only changed type (12 → "12"), or that vanished, is stale', async () => {
+    approvalWith(REORDERED)
+    freshIs({ ...FRESH, changes: { ...FRESH.changes, 'base price': { from: 10, to: '12' } } })
+    expect((await checkStaleness('a1')).stale).toBe(true)
+    freshIs({ action: 'set-price' })
+    expect((await checkStaleness('a1')).stale).toBe(true)
+  })
+})
+
 describe('AP.6 — commit refuses a stale action', () => {
   beforeEach(() => {
     db.agentApproval.findUnique.mockResolvedValue({
       status: 'scheduled',
       executeAfter: new Date(Date.now() - 1000),
       decidedBy: 'Awais',
+      decidedByUserId: 'u1',
+      workspaceId: 'ws_alpha_0001',
       toolName: 'set-target-bid',
       args: { targetId: 't1' },
       preview: STORED,
     } as never)
+    // The person who approved still owns the business: these tests are about the facts, not the person.
+    db.userProfile.findUnique.mockResolvedValue({ id: 'u1', status: 'active', permissionsVersion: 1, roleAssignments: [{ role: { key: 'OWNER' } }] } as never)
+    db.workspaceMembership.findUnique.mockResolvedValue({
+      id: 'm1', status: 'active', version: 1, userId: 'u1', createdAt: new Date(), user: { status: 'active' },
+      workspace: { id: 'ws_alpha_0001', name: 'Alpha', status: 'active', version: 1 },
+      roles: [{ role: { id: 'r1', key: 'OWNER', name: 'Owner', permissions: [] } }],
+    } as never)
+  })
+
+  it('an approval that does not say which person approved it is not run (fail closed)', async () => {
+    db.agentApproval.findUnique.mockResolvedValue({
+      status: 'scheduled', executeAfter: new Date(Date.now() - 1000), decidedBy: 'Awais', decidedByUserId: null,
+      workspaceId: 'ws_alpha_0001', toolName: 'set-target-bid', args: { targetId: 't1' }, preview: STORED,
+    } as never)
+    const out = await commitScheduledApproval('a1')
+    expect(out).toEqual({ ok: false, error: 'not run — it could not be re-checked — it does not say which person approved it. Approve it again.' })
+    expect(gate).not.toHaveBeenCalled()
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'permission_refused' }))
   })
 
   it('never executes when the facts moved', async () => {
@@ -196,7 +276,7 @@ describe('AP.6 — commit refuses a stale action', () => {
     expect(gate).toHaveBeenCalledWith(
       'a1',
       'approve',
-      expect.objectContaining({ kind: 'system', label: 'Awais' }),
+      expect.objectContaining({ kind: 'user', userId: 'u1', label: 'Awais' }),
     )
   })
 })

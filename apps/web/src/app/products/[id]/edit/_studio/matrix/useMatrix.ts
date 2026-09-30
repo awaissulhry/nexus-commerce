@@ -38,6 +38,7 @@ import { buildPreviewMatrix } from './fixtures'
 import { previewVerb } from './preview'
 import { fetchMatrix, patchMatrix, previewCoordinateInputs, previewRowInputs, type CoordinateSourceOptions, type MatrixSource } from './source'
 import { applyCells, applyVerb, revertOperation } from './store'
+import { afterLiveWrite } from './refusals'
 
 export const matrixColId = (key: CoordinateKey, kind: string): string => `${key}.${kind}`
 
@@ -54,6 +55,8 @@ export interface UseMatrixOptions {
   can: (permission: string) => boolean
   /** Every settled write, refusals included — the caller gates its clock on `ok` (#705). */
   onSettled?: (info: { ok: boolean; savedAt: string }) => void
+  /** A cell the server refused, with its reason — the page says it the way it says its own refusals. */
+  onRefused?: (reason: string) => void
 }
 
 export interface MatrixState {
@@ -167,7 +170,9 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
         tracker.set(o.rowId, colId, 'saved')
         setTimeout(() => { if (tracker.get(o.rowId, colId)?.state === 'saved') { tracker.clear(o.rowId, colId); repaint(o.rowId, colId) } }, SAVED_FADE_MS)
       } else {
-        tracker.set(o.rowId, colId, 'refused', o.reason ?? (o.outcome === 'conflict' ? 'Changed elsewhere — reloaded' : 'Refused'))
+        const reason = o.reason ?? (o.outcome === 'conflict' ? 'Changed elsewhere — reloaded' : 'Refused')
+        tracker.set(o.rowId, colId, 'refused', reason)
+        if (o.outcome === 'refused') optsRef.current.onRefused?.(reason)
       }
       repaint(o.rowId, colId)
     }
@@ -198,10 +203,15 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     }
     try {
       const result = await patchMatrix(productId, cells)
-      const moved = result.results.some((r) => r.outcome === 'applied' || r.outcome === 'conflict')
-      if (moved) {
+      const after = afterLiveWrite(result.results)
+      if (after === 'reread') {
         const again = await fetchMatrix(productId, { accountId, locale })
         if (again.kind === 'live') commitRead(again.read)
+      } else if (after === 'restore' && readRef.current) {
+        /* A refusal wrote nothing, but the grid EDITED its clone of the cells (the engine's valueSetter): the typed
+           number would stay on screen, and the cell's own hover would describe it as saved. Re-commit the stored read
+           — a new object, so every cell repaints from fresh clones of what the server holds. */
+        commitRead({ ...readRef.current })
       }
       mark(result.results)
       return result.results
