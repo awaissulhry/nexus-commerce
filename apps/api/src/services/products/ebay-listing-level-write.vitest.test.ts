@@ -34,6 +34,7 @@ vi.mock('../pim/ebay-listing-level.js', async original => {
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { applyProductBulkEdits, ProductBulkError } from './bulk-edit.service.js'
+import { applyProductBulkSave } from './bulk-save.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const context = { formulaCascade: false, contentPerRow: true, logger: { warn: vi.fn(), error: vi.fn() } }
@@ -77,6 +78,15 @@ beforeAll(() => scoped(async () => {
   await create(ids.BLANK, { 'Paese di origine': '' })
   await create(ids.BLANKA, { 'Paese di origine': 'Cina', Colore: 'Rosso' })
   await create(ids.BLANKB, { Colore: 'Giallo' })
+  // A12 — families cleared as ONE sheet operation (one bulk-save unit per row): OPS (no row holds a copy), OPSCOPY (two do).
+  for (const family of ['OPS', 'OPSCOPY', 'OPSRESET', 'OPSPASTE']) {
+    ids[family] = (await prisma.product.create({ data: { sku: `LL-${family}`, name: family, basePrice: 10, isParent: true, variationAxes: ['Colore'] } as never })).id
+    await create(ids[family], { 'Paese di origine': 'Pakistan' })
+    for (const [n, key] of ['A', 'B', 'C'].entries()) {
+      ids[`${family}${key}`] = (await prisma.product.create({ data: { sku: `LL-${family}-${key}`, name: key, basePrice: 10, parentId: ids[family] } as never })).id
+      await create(ids[`${family}${key}`], { Colore: ['Rosso', 'Giallo', 'Verde'][n], ...(family === 'OPSCOPY' && key !== 'C' ? { 'Paese di origine': key === 'A' ? 'Cina' : 'Italia' } : {}) })
+    }
+  }
 }), 120_000)
 afterAll(async () => { await state.db?.close() }, 30_000)
 
@@ -163,12 +173,20 @@ describe('P1 review', () => {
     expect(await specifics(ids.BLANKA)).toMatchObject({ Colore: 'Rosso' })
   })
   it('(5b) a clear where no row of the family stores a value is still WRITTEN: the shown value may come from a mapping, and only a stored blank stops it (review 2026-09-30)', async () => {
+    // (5) left the parent's stored clear behind; this case is a family that stores nothing at all.
+    await scoped(async () => { const parent = await listing(ids.BLANK); await prisma.channelListing.update({ where: { id: parent.id }, data: { platformAttributes: { categoryId: '177104', itemSpecifics: {} } as never } }) })
     const before = await listing(ids.BLANK)
     const result = await save(ids.BLANKB, { field: 'attr_paese_di_origine', value: null })
     expect(result, JSON.stringify(result)).toMatchObject({ success: true })
     expect(result.unchanged ?? 0).toBe(0)
     expect((await listing(ids.BLANK)).version).toBeGreaterThan(before.version)
     expect(await specifics(ids.BLANK)).toHaveProperty('Paese di origine')
+  })
+  it('(5c) A12 — once the parent stores the clear and no row holds a copy, clearing again is unchanged: no listing moves', async () => {
+    const before = await Promise.all([ids.BLANK, ids.BLANKA, ids.BLANKB].map(listing))
+    const result = await save(ids.BLANKA, { field: 'attr_paese_di_origine', value: null })
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true, updated: 0, unchanged: 1, currentVersion: before[1].version, versionOf: 'channelListing' })
+    expect((await Promise.all([ids.BLANK, ids.BLANKA, ids.BLANKB].map(listing))).map(row => row.version)).toEqual(before.map(row => row.version))
   })
   it('(10) two families in one save load their variation projections at the same time', async () => {
     axesCalls.max = 0
@@ -178,5 +196,69 @@ describe('P1 review', () => {
     ] as never, marketplaceContexts: [ebayIT()] }, context) as Promise<any>)
     expect(result, JSON.stringify(result)).toMatchObject({ success: true })
     expect(axesCalls.max).toBe(2)
+  })
+})
+
+/** One sheet operation over `rows` (in sheet order), one unit per row carrying the row's own listing version (`runBulkOperation`). */
+const operation = (rows: string[], change: (id: string, index: number) => Record<string, unknown>) => scoped(async () => {
+  const units = []
+  for (const [index, id] of rows.entries()) units.push({ key: id, changes: [{ id, target: 'channel', intent: 'set', ...change(id, index) }] as never,
+    marketplaceContexts: [ebayIT()], expectedVersion: (await listing(id)).version })
+  return applyProductBulkSave({ units }, context as never)
+})
+
+describe('A12 — a family-wide Clear of a listing-level eBay value, as one sheet operation', () => {
+  it('no row holds a copy: every unit answers 200, the parent stores the clear, and no variation listing moves', async () => {
+    const rows = [ids.OPS, ids.OPSA, ids.OPSB, ids.OPSC]
+    const before = await Promise.all(rows.map(listing))
+    const result = await operation(rows, () => ({ field: 'attr_paese_di_origine', value: null }))
+    expect(result.units.map(unit => unit.status), JSON.stringify(result.units)).toEqual([200, 200, 200, 200])
+    expect(await specifics(ids.OPS)).toHaveProperty('Paese di origine', null)
+    const after = await Promise.all(rows.map(listing))
+    expect(after.slice(1).map(row => row.version)).toEqual(before.slice(1).map(row => row.version))
+    expect(after[0].version).toBe(before[0].version + 1)
+  })
+  it('two variations hold a copy: every unit answers 200 and every copy is gone', async () => {
+    const rows = [ids.OPSCOPYA, ids.OPSCOPY, ids.OPSCOPYB, ids.OPSCOPYC]
+    const before = await Promise.all(rows.map(listing))
+    const result = await operation(rows, () => ({ field: 'attr_paese_di_origine', value: null }))
+    expect(result.units.map(unit => unit.status), JSON.stringify(result.units)).toEqual([200, 200, 200, 200])
+    for (const id of [ids.OPSCOPYA, ids.OPSCOPYB, ids.OPSCOPYC]) expect((await specifics(id))['Paese di origine'] ?? null).toBeNull()
+    expect(await specifics(ids.OPSCOPY)).toHaveProperty('Paese di origine', null)
+    // C held nothing: its listing is not rewritten.
+    expect((await listing(ids.OPSCOPYC)).version).toBe(before[3].version)
+  })
+  it('a family-wide Reset answers 200 on every row and leaves no value anywhere', async () => {
+    const rows = [ids.OPSRESET, ids.OPSRESETA, ids.OPSRESETB, ids.OPSRESETC]
+    const result = await operation(rows, () => ({ field: 'attr_paese_di_origine', value: null, intent: 'reset' }))
+    expect(result.units.map(unit => unit.status), JSON.stringify(result.units)).toEqual([200, 200, 200, 200])
+    for (const id of rows) expect(await specifics(id)).not.toHaveProperty('Paese di origine')
+  })
+})
+
+describe('A13 — distinct values pasted on the variation rows of a listing-level eBay column', () => {
+  const paste = ['Pakistan', 'Cina', 'Italia']
+  it('as one sheet operation: every row saves, the last value is the listing\'s, and each replaced row is told which value replaced it', async () => {
+    const rows = [ids.OPSPASTEA, ids.OPSPASTEB, ids.OPSPASTEC]
+    const result = await operation(rows, (_id, index) => ({ field: 'attr_paese_di_origine', value: paste[index] }))
+    expect(result.units.map(unit => unit.status), JSON.stringify(result.units)).toEqual([200, 200, 200])
+    expect(await specifics(ids.OPSPASTE)).toMatchObject({ 'Paese di origine': 'Italia' })
+    const warned = result.units.map(unit => (unit.body.warnings as Array<{ id: string; field: string; warning: string }> | undefined) ?? [])
+    expect(warned[0]).toEqual([{ id: ids.OPSPASTEA, field: 'attr_paese_di_origine', warning: 'eBay takes one value for the whole listing: "Italia", saved later in this change, replaced "Pakistan" for every variation.' }])
+    expect(warned[1]).toEqual([{ id: ids.OPSPASTEB, field: 'attr_paese_di_origine', warning: 'eBay takes one value for the whole listing: "Italia", saved later in this change, replaced "Cina" for every variation.' }])
+    expect(warned[2]).toEqual([])
+  })
+  it('in one request: the same warnings, on the rows whose value was replaced', async () => {
+    const rows = [ids.OPSPASTEC, ids.OPSPASTEA]
+    const result = await scoped(async () => applyProductBulkEdits({ changes: rows.map((id, index) => ({ id, field: 'attr_paese_di_origine', value: ['Cina', 'Pakistan'][index], target: 'channel', intent: 'set' })) as never,
+      marketplaceContexts: [ebayIT()] }, context) as Promise<any>)
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+    expect(await specifics(ids.OPSPASTE)).toMatchObject({ 'Paese di origine': 'Pakistan' })
+    expect(result.warnings).toEqual([{ id: ids.OPSPASTEC, field: 'attr_paese_di_origine', warning: 'eBay takes one value for the whole listing: "Pakistan", saved later in this change, replaced "Cina" for every variation.' }])
+  })
+  it('control: the same value on every row warns nobody', async () => {
+    const result = await operation([ids.OPSPASTEA, ids.OPSPASTEB], () => ({ field: 'attr_paese_di_origine', value: 'Italia' }))
+    expect(result.units.map(unit => unit.status)).toEqual([200, 200])
+    expect(result.units.map(unit => unit.body.warnings)).toEqual([undefined, undefined])
   })
 })

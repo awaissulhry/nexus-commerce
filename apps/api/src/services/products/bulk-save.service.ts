@@ -23,7 +23,7 @@
  */
 import prisma from '../../db.js'
 import { inDatabaseTransaction, inSavepoint } from '../../lib/database-context.js'
-import { applyProductBulkEdits, ProductBulkError, type ProductBulkContext, type ProductBulkInput } from './bulk-edit.service.js'
+import { applyProductBulkEdits, listingLevelOverwrites, ProductBulkError, type ListingLevelWrite, type ProductBulkContext, type ProductBulkInput } from './bulk-edit.service.js'
 
 /** A 500-row fill of 2 languages is 1,000 units; anything far beyond a sheet's page is not a sheet operation. */
 export const BULK_SAVE_MAX_UNITS = 2_000
@@ -101,10 +101,14 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
   const units = await inDatabaseTransaction(prisma, async () => {
     // Built inside the transaction: a restarted attempt starts from an empty list.
     const results: BulkSaveUnitResult[] = []
+    /** A13 — the listing-level eBay values the saved units wrote, in order, each with the result that answers its row. */
+    const levelWrites: Array<ListingLevelWrite & { result: BulkSaveUnitResult }> = []
     for (const { key, ...unit } of input.units) {
-      const outcome = await inSavepoint(() => applyProductBulkEdits(unit, { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false }))
+      const written: ListingLevelWrite[] = []
+      const outcome = await inSavepoint(() => applyProductBulkEdits(unit, { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false, listingLevelWrites: written }))
       if ('value' in outcome) {
         results.push({ key, status: 200, body: outcome.value as Record<string, unknown> })
+        for (const write of written) levelWrites.push({ ...write, result: results[results.length - 1] })
         continue
       }
       const error = outcome.error
@@ -116,6 +120,12 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
       context.logger.error({ err: error, unit: key }, '[products/bulk-save] a unit failed unexpectedly and was rolled back')
       const detail = error instanceof ProductBulkError ? String(error.details.message ?? error.message) : error instanceof Error ? error.message : String(error)
       results.push({ key, status: 500, body: { error: UNEXPECTED, detail, nothingSaved: true } })
+    }
+    // A13 — one family, one listing value: a row whose value a later row of this operation replaced is told so.
+    for (const warning of listingLevelOverwrites(levelWrites)) {
+      const body = levelWrites.find(write => write.id === warning.id && write.field === warning.field)!.result.body
+      const own = (body.warnings ?? []) as Array<{ id: string; field: string; warning: string }>
+      if (!own.some(other => other.id === warning.id && other.field === warning.field && other.warning === warning.warning)) body.warnings = [...own, warning]
     }
     return results
   }, { timeoutMs: BULK_SAVE_TIMEOUT_MS, memoReads: true })
