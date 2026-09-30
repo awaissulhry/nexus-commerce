@@ -17,6 +17,7 @@ import { EmptyState } from '@/design-system/components'
 import { StudioClient } from './StudioClient'
 import { loadStudioData, type StudioData } from './studio-data'
 import { prefetchStudio } from './studioPrefetch'
+import { preloadStudioTab } from './studioTabs'
 import Loading from '../studio/loading'
 import styles from './studio.module.css'
 
@@ -28,8 +29,13 @@ export function StudioLoader({ id }: { id: string }) {
   const search = useSearchParams()
 
   // P2 (I4-2) — the destination check and the sheet read need only the URL: start them now, beside the frame's own
-  // reads, instead of after them. The hooks adopt them only if they resolve exactly the same reads.
-  useEffect(() => { if (search) prefetchStudio(id, search) }, [id]) // page load only: later URL changes are the hooks' own reads
+  // reads, instead of after them. The hooks adopt them only if they resolve exactly the same reads. The tab the URL
+  // opens loads its code meanwhile too (I4-7: every tab is its own chunk).
+  useEffect(() => {
+    if (!search) return
+    prefetchStudio(id, search)
+    preloadStudioTab(search.get('tab'))
+  }, [id]) // page load only: later URL changes are the hooks' own reads
 
   useEffect(() => {
     let cancelled = false
