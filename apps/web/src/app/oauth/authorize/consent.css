@@ -1,2 +1,12 @@
-/* MCP.5 — the consent page: one short form, so a narrow column that starts at the top. Layout only. */
+/* MCP.5 — the consent page: one short form, so a narrow column that starts at the top. Layout, and its own text on the DS type scale. */
 .oauth-consent { max-width: 640px; align-content: start; }
+
+/* MCP.12 — the DS type scale. `.business-profiles p` sets no size, so "Returns to…" and "Claude may" took the
+   browser's 16 px beside a 12.5–13 px form. Body text is the base size; the group's name is a field label. */
+.oauth-consent p { font-size: var(--nds-font-size-base); }
+.oauth-consent .oauth-consent-group-label {
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+  color: var(--nds-text-strong);
+}
