@@ -42,7 +42,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Search } from 'lucide-react'
 import { groupOptions } from '../lib/group-options'
-import { searchOptions } from '../lib/option-search'
+import { searchOptions, searchTokens } from '../lib/option-search'
 import type { ListboxOption } from './Listbox'
 
 /**
@@ -130,7 +130,9 @@ export interface ListboxPanelProps {
   /**
    * Offer the typed text as a value of its own — `Use "…"` — for a list the channel leaves open (an eBay FREE_TEXT aspect,
    * an Amazon open enum). It is the FIRST row, so it is always in view, but the best match stays highlighted: Enter takes
-   * "Nero" for "Ner", ↑ takes the typed text. With no match it is the only row, and Enter takes it.
+   * "Nero" for "Ner", ↑ takes the typed text. When every typed word is a WHOLE word of that match ("Cotone" for "Cotone
+   * biologico") the typed text is highlighted instead: it is a value, not the start of one (audit B23). With no match it
+   * is the only row, and Enter takes it.
    */
   allowCustom?: boolean
   /**
@@ -148,6 +150,12 @@ export interface ListboxPanelProps {
 }
 
 const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
+/** Every word of `typed` is a whole word of the option (not merely the start of one). */
+const wholeWordsOf = (typed: string, o: ListboxOption) => {
+  const words = new Set(searchTokens(typeof o.label === 'string' ? o.label : o.value))
+  const t = searchTokens(typed)
+  return t.length > 0 && t.every((w) => words.has(w))
+}
 
 export function ListboxPanel({
   options, value, onCommit, onCancel, query, searchable, searchPlaceholder = 'Search…',
@@ -200,14 +208,19 @@ export function ListboxPanel({
     ? { value: typed, label: `Use "${typed}"` }
     : null
   const matches = custom ? [custom, ...listed] : listed
-  // While the operator types, the highlight starts on the best match — past the typed-text row when there is one.
-  const bestMatch = custom && listed.length ? 1 : 0
+  // While the operator types, the highlight starts on the best match — past the typed-text row when there is one, unless
+  // the typed words are whole words of that match (above).
+  const bestMatch = custom && listed.length && !wholeWordsOf(typed, listed[0]) ? 1 : 0
+  /* A query with no search token ("-", "&", "#") matches every option, so it searches for nothing: the highlight stays on
+     the stored value, as if nothing were typed. It jumped to row 1, and "-" then Enter replaced "Inverno" with "Estate"
+     (audit B15). */
+  const searching = ownsSearch && searchTokens(q).length > 0
   const hasOwnEmpty = options.some((o) => o.value === '')
   const showClear = emptyLabel != null && !hasOwnEmpty
   const selectedIndex = matches.findIndex((o) => o.value === value)
   /* A stored value that is not in the list highlights NOTHING until the operator moves or types, so Enter keeps a value it
      cannot show instead of committing row 1 in its place (P0, 2026-09-30: an Amazon product type was overwritten so). */
-  const active = controlled ? activeIndex : ownActive ?? (q && ownsSearch ? bestMatch : selectedIndex >= 0 ? selectedIndex : q ? 0 : -1)
+  const active = controlled ? activeIndex : ownActive ?? (searching ? bestMatch : selectedIndex >= 0 ? selectedIndex : q && !ownsSearch ? 0 : -1)
   activeRef.current = active
   const heldReason = (o: ListboxOption) => (o as ListboxPanelOption).heldReason
 

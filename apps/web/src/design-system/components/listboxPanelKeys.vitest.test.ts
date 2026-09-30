@@ -275,3 +275,42 @@ describe('ListboxPanel — onKeyChoice reports Enter and Tab before the grid end
     expect(labels(root).some((l) => l.startsWith('Use '))).toBe(false)
   })
 })
+
+/**
+ * Audit B15 (2026-09-30) — a first key with no search token ("-", ".", "/", "'", "&", "#") searched for nothing, so every
+ * option matched and row 1 was highlighted: "-" then Enter on a Stagione cell holding "Inverno" saved "Estate".
+ */
+describe('ListboxPanel — a typed key that searches for nothing keeps the stored value', () => {
+  const capture = (root: El, key: string) => (root.props.onKeyDownCapture as (e: unknown) => void)({ key, nativeEvent: { isComposing: false }, preventDefault() {}, stopPropagation() {} })
+  const seasons = [{ value: 'Estate', label: 'Estate' }, { value: 'Inverno', label: 'Inverno' }, { value: 'Tutte le stagioni', label: 'Tutte le stagioni' }]
+  it.each(['-', '.', '/', "'", '&', '#'])('%s then Enter keeps the stored value (strict list)', (key) => {
+    const onKeyChoice = vi.fn()
+    capture(render({ options: seasons, value: 'Inverno', onCommit() {}, onCancel() {}, onKeyChoice, initialQuery: key }), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('Inverno')
+  })
+  it('& then Enter in an open list keeps the stored value too', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options: seasons, value: 'Inverno', onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: '&' }
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('Inverno')
+  })
+  it('an empty cell stays empty: nothing is highlighted', () => {
+    const onKeyChoice = vi.fn()
+    capture(render({ options: seasons, onCommit() {}, onCancel() {}, onKeyChoice, initialQuery: '-' }), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(null)
+  })
+})
+
+/**
+ * Audit B23 (2026-09-30) — in an open list, a WHOLE word the operator typed was replaced by the longer option holding it:
+ * "Cotone" then Enter saved "Cotone biologico". A partial word still takes the best match ("Ner" → "Nero").
+ */
+describe('ListboxPanel — an open list keeps a whole typed value', () => {
+  const capture = (root: El, key: string) => (root.props.onKeyDownCapture as (e: unknown) => void)({ key, nativeEvent: { isComposing: false }, preventDefault() {}, stopPropagation() {} })
+  const materials = [{ value: 'Cotone biologico', label: 'Cotone biologico' }, { value: 'Nero', label: 'Nero' }, { value: 'Xavia Racing Team', label: 'Xavia Racing Team' }]
+  it.each([['Cotone', 'Cotone'], ['xavia racing', 'xavia racing'], ['Ner', 'Nero'], ['Coto', 'Cotone biologico']])('%s then Enter saves %s', (typed, saved) => {
+    const onKeyChoice = vi.fn()
+    capture(render({ options: materials, onCommit() {}, onCancel() {}, onKeyChoice, allowCustom: true, initialQuery: typed }), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(saved)
+  })
+})

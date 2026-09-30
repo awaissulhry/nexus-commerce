@@ -92,3 +92,11 @@ describe('AsyncListboxPanel — the stored value is kept unless the operator cho
     expect(event.stopPropagation).not.toHaveBeenCalled()
   })
 })
+
+describe('AsyncListboxPanel — a typed key that searches for nothing keeps the stored value (audit B15)', () => {
+  it.each(['-', '&', '#'])('%s then Enter commits the stored value, not the first choice', (typed) => {
+    const props = base({ value: 'ABRASIVE_DISCS', query: typed })
+    key(render(props), 'Enter')
+    expect(props.onCommit).toHaveBeenCalledWith('ABRASIVE_DISCS')
+  })
+})

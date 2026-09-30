@@ -7,6 +7,7 @@ import { Field } from './Field'
 import { ListboxPanel } from './ListboxPanel'
 import type { ListboxOption } from './Listbox'
 import { groupOptions } from '../lib/group-options'
+import { searchTokens } from '../lib/option-search'
 
 export interface AsyncListboxPanelProps {
   label: string
@@ -44,7 +45,8 @@ export function AsyncListboxPanel({ label, query, onQueryChange, options, value,
      OUTERWEAR with 3D_PRINTABLE_DESIGNS and saved it (P0, 2026-09-30). */
   useEffect(() => {
     const current = choices.findIndex(option => option.value === value && !option.disabled)
-    setActive(!query ? current : Math.max(0, choices.findIndex(option => !option.disabled)))
+    // A query with no search token ("-", "&") searches for nothing: the stored value keeps the highlight (audit B15).
+    setActive(!searchTokens(query).length ? current : Math.max(0, choices.findIndex(option => !option.disabled)))
     // Values/disabled state define the index space; labels can update without moving the cursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchKey, query, value])
