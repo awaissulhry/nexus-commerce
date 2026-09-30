@@ -7,7 +7,7 @@ import { adoptPrefetch, clearPrefetches, startPrefetch } from './prefetchStore'
 import { studioPrefetchPlan } from './studioPrefetch'
 import { fetchStudioRead } from './studio-read'
 import { channelScopeUrl } from './sheet/channel/useChannelSheet'
-import { masterSheetUrl } from './sheetUrls'
+import { compactSheetUrl, masterSheetUrl } from './sheetUrls'
 
 const ID = 'prod-family-1'
 const ACCOUNT = 'acct-ebay-1'
@@ -19,13 +19,14 @@ describe('studioPrefetchPlan', () => {
   it('names the channel sheet the hook reads, and the destination it checks', () => {
     const plan = studioPrefetchPlan(ID, params(`scope=EBAY&market=IT&account=${ACCOUNT}&locale=it&tab=sheet`))
     // The very URL `useChannelSheet` builds for this coordinate — anything else would never be adopted.
-    expect(plan.sheet).toBe(channelScopeUrl({ productId: ID, channel: 'EBAY', marketplace: 'IT', accountId: ACCOUNT, locale: 'it', locales: null }))
+    // The compact form the hook reads (P2): a prefetch of any other bytes would never be adopted.
+    expect(plan.sheet).toBe(compactSheetUrl(channelScopeUrl({ productId: ID, channel: 'EBAY', marketplace: 'IT', accountId: ACCOUNT, locale: 'it', locales: null })))
     expect(plan.destination).toMatch(new RegExp(`/api/products/${ID}/studio/destination\\?channel=EBAY&market=IT&accountId=${ACCOUNT}$`))
   })
 
   it('names the master sheet on the Shared scope, with no destination', () => {
-    expect(studioPrefetchPlan(ID, params('scope=master&market=IT&locale=it'))).toEqual({ destination: null, sheet: masterSheetUrl(ID, 'IT', 'it', null) })
-    expect(studioPrefetchPlan(ID, params('market=IT&locales=it,de'))).toEqual({ destination: null, sheet: masterSheetUrl(ID, 'IT', 'it', ['it', 'de']) })
+    expect(studioPrefetchPlan(ID, params('scope=master&market=IT&locale=it'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', null)) })
+    expect(studioPrefetchPlan(ID, params('market=IT&locales=it,de'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', ['it', 'de'])) })
   })
 
   it('guesses nothing the URL does not state', () => {

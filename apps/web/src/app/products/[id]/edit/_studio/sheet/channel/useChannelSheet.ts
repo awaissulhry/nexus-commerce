@@ -29,7 +29,8 @@ import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { followListingVersion, planSavedCellPatch } from './savedCellPatch'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
-import { channelScopeUrl as buildChannelScopeUrl } from '../../sheetUrls'
+import { channelScopeUrl as buildChannelScopeUrl, compactSheetUrl } from '../../sheetUrls'
+import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
@@ -76,9 +77,12 @@ export function channelScopeUrl(o: UseChannelSheetOptions): string {
   return buildChannelScopeUrl(o)
 }
 
+/** The compact wire form (`sheetUrls.ts`); `channelSheetResponse` restores today's shape. `url` stays the read's identity. */
+export { compactSheetUrl }
+
 /** A successful HTTP response must contain a sheet before it can replace the current view. */
 export function channelSheetResponse(body: unknown): ChannelScopePage {
-  const page = body as Partial<ChannelScopePage> | null
+  const page = decodeSheetCells(body) as Partial<ChannelScopePage> | null
   if (!page || !Array.isArray(page.rows) || !Array.isArray(page.columns) || !Array.isArray(page.aliases) ||
       !page.scope || typeof page.scope.channel !== 'string' || typeof page.scope.marketplace !== 'string' ||
       !page.meta || !Array.isArray(page.meta.schemaMissing) || !Array.isArray(page.meta.schemaAge)) {
@@ -111,7 +115,7 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 
     // Keep the current coordinate's schema during reload so AG retains column state.
     // `response.url === url` above already prevents another coordinate's data from showing.
-    fetchStudioRead(url, abort.signal)
+    fetchStudioRead(compactSheetUrl(url), abort.signal)
       .then(async (res) => {
         const body = await res.json().catch(() => null)
         if (!res.ok) throw new StudioReadError(res.status, body)
@@ -144,7 +148,7 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
     if (activeUrl.current !== url) return
     const mine = ++requestRef.current
     try {
-      const res = await fetch(url, {
+      const res = await fetch(compactSheetUrl(url), {
         credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30_000),
       })
       if (!res.ok) return

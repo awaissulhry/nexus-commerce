@@ -47,6 +47,13 @@ export function masterSheetUrl(productId: string, market: string, locale: string
   return `${getBackendUrl()}/api/products/${productId}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
 }
 
+/**
+ * P2 — the sheet read asks for the compact wire form (each column's shared cell once, each cell as its difference); the
+ * sheet hooks decode it to today's shape. Here, beside the other builders, so the page-load prefetch asks for the SAME
+ * bytes as the hook and is adopted — a prefetch of the plain form was never adopted and cost a second full read.
+ */
+export const compactSheetUrl = (url: string): string => `${url}${url.includes('?') ? '&' : '?'}cells=compact`
+
 /** The destination check a channel scope makes before its tab mounts. */
 export function destinationUrl(productId: string, channel: string, market: string, accountId?: string, listingId?: string): string {
   const query = new URLSearchParams({ channel, market })

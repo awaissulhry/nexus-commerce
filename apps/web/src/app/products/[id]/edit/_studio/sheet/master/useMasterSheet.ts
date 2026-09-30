@@ -19,7 +19,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CellSaveTracker, SheetWriter, type GridApi, type SheetWriteRequest, type SheetWriteResult } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
-import { masterSheetUrl } from '../../sheetUrls'
+import { compactSheetUrl, masterSheetUrl } from '../../sheetUrls'
+import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 
 import { adaptLegacySheet, type LegacySheetPage } from './adaptLegacy'
 import { recoverSheetRow } from '../sheetRecovery'
@@ -228,9 +229,10 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     const legacyUrl = `${backend}/api/products/sheet?market=${encodeURIComponent(market)}&parentIds=${encodeURIComponent(productId)}&limit=1`
 
     const load = async (): Promise<StudioSheet> => {
-      const studio = await fetchStudioRead(studioUrl, signal)
+      // P2 — the compact wire form (each column's shared cell once); decoded here to today's shape.
+      const studio = await fetchStudioRead(compactSheetUrl(studioUrl), signal)
       if (studio && studio.ok) {
-        const body = (await studio.json()) as StudioSheet
+        const body = decodeSheetCells((await studio.json()) as StudioSheet)
         return { ...body, meta: { ...body.meta, source: 'studio' } }
       }
       const failureBody: unknown = await studio?.json().catch(() => null)

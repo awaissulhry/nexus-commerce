@@ -9,7 +9,7 @@
  * state (no account, no language, another tab) is not guessed, it is simply not prefetched.
  */
 import { languageSelection } from './sheet/languages'
-import { channelScopeUrl, destinationUrl, masterSheetUrl } from './sheetUrls'
+import { channelScopeUrl, compactSheetUrl, destinationUrl, masterSheetUrl } from './sheetUrls'
 import { startPrefetch } from './prefetchStore'
 
 export interface StudioPrefetchPlan {
@@ -34,13 +34,13 @@ export function studioPrefetchPlan(productId: string, search: Params): StudioPre
   if (!scope || scope === 'master') {
     // A listing on master is a scope error: nothing loads.
     if (listing) return none
-    return { destination: null, sheet: sheetTab && locale ? masterSheetUrl(productId, market, locale, locales) : null }
+    return { destination: null, sheet: sheetTab && locale ? compactSheetUrl(masterSheetUrl(productId, market, locale, locales)) : null }
   }
   const account = search.get('account') ?? undefined
   return {
     destination: account !== undefined || listing !== undefined ? destinationUrl(productId, scope, market, account, listing) : null,
     // The sheet reads with the account the URL names; without one it waits for the destination to name it.
-    sheet: sheetTab && account && locale ? channelScopeUrl({ productId, channel: scope, marketplace: market, accountId: account, locale, locales }) : null,
+    sheet: sheetTab && account && locale ? compactSheetUrl(channelScopeUrl({ productId, channel: scope, marketplace: market, accountId: account, locale, locales })) : null,
   }
 }
 
