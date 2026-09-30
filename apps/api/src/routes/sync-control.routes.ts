@@ -28,7 +28,7 @@ import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-mast
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
 import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
-import { projectActionAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from '../services/amazon-eu-quantity-guard.js'
+import { projectActionAndDetect, projectBufferAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from '../services/amazon-eu-quantity-guard.js'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { closeMarketOffers, reopenMarketOffers, isFbaCoordinate } from '../services/amazon-market-offer.service.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
@@ -753,7 +753,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       // half-done either. Without expandEuAligned we answer 409 + the TRUE
       // scope (nothing written); with it, the action expands to every EU row
       // of the affected SKUs so platform state ≡ Amazon state.
-      if (['FOLLOW', 'PIN', 'ZERO_PIN'].includes(body.action)) {
+      // BUFFER too: a following listing publishes pool − buffer, so different buffers on two EU markets send Amazon
+      // two numbers for one quantity (the Studio matrix already writes a buffer to the whole EU group).
+      if (['FOLLOW', 'PIN', 'ZERO_PIN', 'BUFFER'].includes(body.action)) {
         const euTargets = listings.filter(
           (t) => t.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(t.marketplace.toUpperCase()),
         )
@@ -763,7 +765,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             where: { productId: { in: pids }, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
             select: {
               productId: true, channel: true, channelConnectionId: true, aliasKey: true, marketplace: true, followMasterQuantity: true, quantityOverride: true,
-              quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true,
+              quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true, stockBuffer: true,
               product: { select: { sku: true } },
             },
           })
@@ -786,8 +788,11 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
                 syncPaused: r.syncPaused,
                 isFba: r.fulfillmentMethod === 'FBA',
                 offerClosed: !!r.offerClosedAt,
+                stockBuffer: r.stockBuffer,
               }))
-            const v = projectActionAndDetect(prodRows, mkts, body.action as 'FOLLOW' | 'PIN' | 'ZERO_PIN')
+            const v = body.action === 'BUFFER'
+              ? projectBufferAndDetect(prodRows, mkts, Math.max(0, Math.trunc(body.buffer ?? 0)))
+              : projectActionAndDetect(prodRows, mkts, body.action as 'FOLLOW' | 'PIN' | 'ZERO_PIN')
             if (v.conflict) conflictedPids.push(pid)
           }
           if (conflictedPids.length > 0) {

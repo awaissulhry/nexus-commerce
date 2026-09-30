@@ -83,9 +83,29 @@ export interface SelectEditorParams {
  */
 export const SELECT_CELL_CLASS = 'nds-cell-is-select'
 
-/** The same lucide `ChevronDown` every other DS select uses — one glyph convention, not a new one. */
-export function SelectChevron() {
-  return <ChevronDown className="nds-ag-chev" size={13} strokeWidth={2} aria-hidden />
+/** The row that empties a closed list from its editor. */
+export const SELECT_CLEAR_LABEL = 'Clear'
+
+/**
+ * The same lucide `ChevronDown` every other DS select uses — one glyph convention, not a new one.
+ *
+ * With `onOpen` it is the list's button: one click opens the editor. It was a picture that looked like one (and the
+ * cell wears `cursor: pointer`), so a click only selected the cell and the list needed a double-click (P0, measured in
+ * production 2026-09-29). It stays `aria-hidden`: the keyboard opens the list with Enter or F2 on the focused cell.
+ */
+export function SelectChevron({ onOpen }: { onOpen?: () => void } = {}) {
+  return onOpen
+    ? <ChevronDown className="nds-ag-chev is-action" size={13} strokeWidth={2} aria-hidden onClick={onOpen} />
+    : <ChevronDown className="nds-ag-chev" size={13} strokeWidth={2} aria-hidden />
+}
+
+/** `onOpen` for a cell's chevron: start editing that cell, exactly as a double-click would (AG checks it is editable). */
+export function openCellEditor(
+  api: { startEditingCell(params: { rowIndex: number; colKey: string; rowPinned?: 'top' | 'bottom' | null }): void },
+  node: { rowIndex: number | null; rowPinned?: 'top' | 'bottom' | null },
+  colKey: string,
+): () => void {
+  return () => { if (node.rowIndex != null) api.startEditingCell({ rowIndex: node.rowIndex, colKey, rowPinned: node.rowPinned }) }
 }
 
 /**

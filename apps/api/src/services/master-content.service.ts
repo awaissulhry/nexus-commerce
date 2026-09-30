@@ -13,6 +13,7 @@ import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE } from './pim/content-locale.js
 import { normalizeLanguage } from './pim/content-language.js'
 import { contentField, listingFollowsContent, resolveContent } from './pim/content-resolver.js'
 import { marketLanguages } from './pim/market-languages.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
 
 const DEFAULT_HOLD_MS = 30 * 1000
 const CONTENT_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY']) // B3 — Shopify content push live (title + body_html)
@@ -147,8 +148,10 @@ export class MasterContentService {
         // The existing content sync queue consumes a language-qualified payload.
         // Caller transactions leave scheduling to the drain after commit.
         // A paused listing (an operator's pause, or an inert draft) follows the text but is not
-        // queued, as in the stock cascade: the push lock refused its row at dispatch anyway.
-        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false && ctx.queueOutbound !== false && !listing.syncPaused) {
+        // queued, as in the stock cascade: the push lock refused its row at dispatch anyway. A
+        // still-draft (never published, no channel id) is held the same way even when it is not
+        // paused: only Publish sends it, and it sends the text it follows.
+        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false && ctx.queueOutbound !== false && !listing.syncPaused && !isStillDraftListing(listing)) {
           const payload = Object.fromEntries(following.map(field => [field, resolveContent({ product: listing.product as any, parent: listing.productId === productId ? undefined : product as any, field, localizableKeys: fields, address: { requested: language } }).value]))
           const queue = await createOutboundRow(tx, { data: { productId: listing.productId, channelListingId: listing.id, channelConnectionId: listing.channelConnectionId, targetChannel: listing.channel as any,
             targetRegion: listing.region, externalListingId: listing.externalListingId, syncStatus: 'PENDING', syncType: 'CONTENT_UPDATE',

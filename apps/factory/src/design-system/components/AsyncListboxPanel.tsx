@@ -22,28 +22,42 @@ export interface AsyncListboxPanelProps {
   onRetry?: () => void
   onCommit: (value: string) => void
   onCancel: () => void
+  /**
+   * Tab chose the highlighted choice, reported in the capture phase so a grid can commit it and move right (see
+   * `ListboxPanel.onKeyChoice`). Absent, Tab leaves as it always did.
+   */
+  onKeyChoice?: (value: string | null) => void
+  /** Names the stored value when the loaded choices do not include it ("Current: …"); absent, nothing is shown. */
+  currentLabel?: string
   style?: CSSProperties
 }
 
 /** Search plus externally loaded choices. The caller owns fetching/filtering and popup placement. */
-export function AsyncListboxPanel({ label, query, onQueryChange, options, value, loading, error, message, placeholder = 'Search by name', emptyMessage = 'No matches', onRetry, onCommit, onCancel, style }: AsyncListboxPanelProps) {
+export function AsyncListboxPanel({ label, query, onQueryChange, options, value, loading, error, message, placeholder = 'Search by name', emptyMessage = 'No matches', onRetry, onCommit, onCancel, onKeyChoice, currentLabel, style }: AsyncListboxPanelProps) {
   const id = useId()
-  const [active, setActive] = useState(0)
+  const [active, setActive] = useState(-1)
   const choices = loading || error ? [] : groupOptions(options)?.flat ?? options
   const matchKey = choices.map(option => `${option.value}:${!!option.disabled}`).join('\u0000')
+  /* Unsearched, the highlight is the stored value — or NOTHING when the loaded page does not hold it. It used to fall to the
+     first choice, so opening Amazon's product types (the first 50 of 1,875, alphabetical) and pressing Enter replaced
+     OUTERWEAR with 3D_PRINTABLE_DESIGNS and saved it (P0, 2026-09-30). */
   useEffect(() => {
-    const current = !query ? choices.findIndex(option => option.value === value && !option.disabled) : -1
-    setActive(current >= 0 ? current : Math.max(0, choices.findIndex(option => !option.disabled)))
+    const current = choices.findIndex(option => option.value === value && !option.disabled)
+    setActive(!query ? current : Math.max(0, choices.findIndex(option => !option.disabled)))
     // Values/disabled state define the index space; labels can update without moving the cursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchKey, query, value])
-  const selected = choices[active]
+  const selected = active >= 0 ? choices[active] : undefined
+  const storedHidden = currentLabel !== undefined && !!value && !loading && !choices.some(option => option.value === value)
   return <div className="nds-async-listbox" style={style} onKeyDownCapture={event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onCancel(); return }
+    if (event.key === 'Tab' && onKeyChoice) { onKeyChoice(selected && !selected.disabled ? selected.value : null); return }
     if (!(event.target instanceof HTMLInputElement)) return
     if (event.key === 'Enter') {
       event.preventDefault(); event.stopPropagation()
+      // Nothing highlighted = the operator has not chosen: keep the stored value.
       if (selected && !selected.disabled) onCommit(selected.value)
+      else if (!query) onCancel()
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault(); event.stopPropagation()
       const direction = event.key === 'ArrowDown' ? 1 : -1
@@ -62,6 +76,7 @@ export function AsyncListboxPanel({ label, query, onQueryChange, options, value,
         value={query} onChange={event => { setActive(0); onQueryChange(event.target.value) }}
         leadingIcon={<Search size={14} aria-hidden />} placeholder={placeholder} />
     </Field>
+    {storedHidden && !query && <p role="status">Current: {currentLabel}</p>}
     {loading ? <p role="status">Loading choices…</p>
       : error ? <p role="alert">{error}</p>
       : choices.length ? <ListboxPanel idPrefix={id} optionTabIndex={-1} activeIndex={active} onActiveIndexChange={setActive}

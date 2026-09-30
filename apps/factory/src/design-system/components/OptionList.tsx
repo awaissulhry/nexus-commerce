@@ -56,6 +56,8 @@ export interface OptionListProps {
    * toggle; the Select-all row is not offered, because its "clear all" half would break it.
    */
   minSelected?: number
+  /** Text the search field starts with — the key that opened a grid cell by typing (AG's `eventKey`). */
+  initialQuery?: string
 }
 
 /** The next selection after toggling `v`, never dropping below `minSelected`. PURE. */
@@ -77,8 +79,9 @@ export function OptionList({
   selectAll = true,
   emptyLabel = 'No matches',
   minSelected = 0,
+  initialQuery = '',
 }: OptionListProps) {
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(initialQuery)
 
   const allChecked = value.length === options.length && options.length > 0
   const locked = (v: string) => minSelected > 0 && value.includes(v) && value.length <= minSelected
@@ -87,7 +90,7 @@ export function OptionList({
   // "Select all" that silently selected a search result would be a lie.
   const toggleAll = () => onChange(allChecked ? [] : options.map((o) => o.value))
 
-  const showSearch = searchable || options.length > SEARCH_THRESHOLD
+  const showSearch = searchable || !!initialQuery || options.length > SEARCH_THRESHOLD
   const matches = showSearch
     ? searchOptions(q, options, (o) => (typeof o.label === 'string' ? o.label : o.value))
     : options

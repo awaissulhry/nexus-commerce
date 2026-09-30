@@ -160,7 +160,9 @@ export function computeFailureDisposition(
   // (measured 2026-07-20: 20 debounce dead-letters) must still defer.
   const isDebounced =
     opts?.errorCode === "EBAY_REVISE_DEBOUNCED" || /debounced:/i.test(errorMessage);
-  if (isCircuitOpen || isRateLimited || isDebounced) {
+  // A structural colour sync can take longer than the normal stock retry window. Its lease is a wait, not a failure.
+  const isColourSyncBusy = opts?.errorCode === "SHOPIFY_COLOUR_SYNC_BUSY";
+  if (isCircuitOpen || isRateLimited || isDebounced || isColourSyncBusy) {
     const defer = isCircuitOpen ? CIRCUIT_DEFER_MS : RATE_LIMIT_DEFER_MS;
     return {
       kind: "deferral",
