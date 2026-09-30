@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { checkBulkSql } from './bulk-sql-budget.mts'
 
 const url = new URL(process.env.DATABASE_URL ?? '')
 assert(['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname) && url.pathname.includes('test'), 'SQL budgets require a loopback test database')
@@ -59,6 +60,16 @@ try {
     assert(measured.trips <= route.trips, `${route.url}: ${measured.trips} round trips > ${route.trips}`)
     assert(measured.sql <= route.sql, `${route.url}: ${measured.sql} SQL statements > ${route.sql}; original target remains <= 10`)
   }
+  assert(process.env.SHEET_SEED, 'SHEET_SEED is required for bulk SQL budgets')
+  const sheetSeed = JSON.parse(readFileSync(process.env.SHEET_SEED, 'utf8'))
+  assert.equal(sheetSeed.workspace, seed.workspaces.a, 'the bulk fixture must belong to the signed-in business')
+  const csrfToken = cookies.get('nexus_csrf') ?? cookies.get('__Host-nexus_csrf')
+  assert(csrfToken, 'the real sign-in must provide a CSRF cookie')
+  await checkBulkSql(app, sheetSeed.families.speed, {
+    ...headers,
+    origin: process.env.SHEET_ORIGIN ?? 'http://localhost:3000',
+    'x-nexus-csrf': csrfToken,
+  }, () => ({ trips, statements }))
 } finally {
   await app.close()
 }

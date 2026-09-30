@@ -103,6 +103,9 @@ jobs:
           TZ: Europe/Rome
         run: npm run test --workspace=@nexus/web
 
+      - name: Sheet smoke drivers and seed types
+        run: npx tsc --noEmit -p apps/web/smoke/sheet/tsconfig.json
+
       - name: Factory, shared and events tests (affected)
         run: npx turbo run test --affected --filter=@nexus/factory --filter=@nexus/shared --filter=@nexus/events
 
@@ -461,15 +464,8 @@ jobs:
       - run: npx playwright install-deps chromium
         if: steps.browsers.outputs.cache-hit == 'true'
 
-      - name: Authenticated trivial GET SQL budgets
-        run: |
-          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
-          cd apps/api
-          NODE_ENV=production DATABASE_URL="$APP_DATABASE_URL" DIRECT_DATABASE_URL="$APP_DATABASE_URL" \
-          REDIS_URL=redis://127.0.0.1:6379 NEXUS_WORKSPACES_ENABLED=1 NEXUS_RBAC_MODE=enforce \
-            npx tsx ../web/smoke/sheet/sql-budget.mts
-
       - name: '@sheet commit sweep'
+        id: sheet-sweep
         working-directory: apps/web
         env:
           SMOKE_BASE_URL: http://localhost:3000
@@ -478,6 +474,16 @@ jobs:
           SMOKE_OUTPUT_DIR: ${{ runner.temp }}/sheet-results
           SMOKE_REPORT_DIR: ${{ runner.temp }}/sheet-report
         run: npx playwright test -c smoke/sheet.config.ts --shard=${{ matrix.shard }}/3
+
+      - name: Authenticated GET and bulk SQL budgets
+        # A browser failure must not hide SQL evidence. Both steps still make this required job fail.
+        if: (success() || failure()) && steps.sheet-sweep.outcome != 'skipped'
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          cd apps/api
+          NODE_ENV=production DATABASE_URL="$APP_DATABASE_URL" DIRECT_DATABASE_URL="$APP_DATABASE_URL" \
+          REDIS_URL=redis://127.0.0.1:6379 NEXUS_WORKSPACES_ENABLED=1 NEXUS_RBAC_MODE=enforce \
+            npx tsx ../web/smoke/sheet/sql-budget.mts
 
       - if: failure()
         uses: actions/upload-artifact@v4

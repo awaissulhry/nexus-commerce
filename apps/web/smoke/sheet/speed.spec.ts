@@ -81,6 +81,7 @@ test('@sheet speed · production load, one edit, compact bytes and horizontal sc
   expect.soft(loadRequests.length, 'all load API requests; original target remains <= 15').toBeLessThanOrEqual(22)
   expect.soft(editRequests.length, 'requests after a scalar edit').toBeLessThanOrEqual(2)
   expect.soft(editBytes, 'encoded response bytes after a scalar edit').toBeLessThanOrEqual(10_000)
+  expect.soft(editRenders.total, 'committed component work after a scalar edit').toBeLessThanOrEqual(60)
   expect.soft(readiness).toHaveLength(1)
   expect.soft(readiness[0]?.url).toContain('only=coordinate')
   expect.soft(readiness[0]?.rawBytes, 'coordinate readiness raw bytes').toBeLessThanOrEqual(50_000)
@@ -109,6 +110,7 @@ test('@sheet speed · production load, one edit, compact bytes and horizontal sc
   expect(scroll.moved).toBeGreaterThan(0)
   expect(scrollRenders.total, 'scroll instrument observed component work').toBeGreaterThan(0)
   console.log(`SHEET_SCROLL ${JSON.stringify({ ...scroll, renders: scrollRenders, rendersPerFrame: scrollRenders.total / scroll.frames, target: 60 })}`)
+  expect.soft(scrollRenders.total / scroll.frames, 'committed component work per horizontal scroll frame').toBeLessThanOrEqual(60)
 })
 
 for (const delay of [0, 5, 15]) test(`@sheet speed · fast type-to-start preserves character order at ${delay} ms`, async ({ page }) => {
