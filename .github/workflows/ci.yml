@@ -33,8 +33,6 @@ permissions:
 
 env:
   TURBO_TELEMETRY_DISABLED: '1'
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   NEXUS_DISABLE_BACKGROUND_JOBS: '1'
   ENABLE_QUEUE_WORKERS: '0'
 
@@ -60,7 +58,7 @@ jobs:
         run: node scripts/ci/run-static-gates.mjs
 
       - name: Typecheck affected workspaces
-        run: npx turbo run typecheck --affected --cache=local:rw,remote:r -- --incremental false
+        run: npx turbo run typecheck --affected --cache=local:rw -- --incremental false
 
       - name: Web tests (whole suite — proxy, workspace paths and permission gates included)
         env:
@@ -248,12 +246,23 @@ jobs:
           for _ in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/login && break; sleep 1; done
           curl -sf -o /dev/null http://localhost:3000/login || { echo "✗ web did not start"; tail -50 "$RUNNER_TEMP/web.log"; exit 1; }
 
+      # Keyed by the Playwright version: it alone decides which browser build `playwright install` fetches. Keyed by
+      # package-lock.json, each PR whose lockfile differed from main's stored its own 271 MB copy (11 copies, 3 GB of the
+      # full 10 GB cache, 2026-09-30). The version is read from what is installed, so a Playwright bump always gets its
+      # own browser.
+      - name: Playwright version (browser cache key)
+        id: playwright
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('@playwright/test/package.json').version")
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Playwright browser
         id: browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: npx playwright install --with-deps chromium
         if: steps.browsers.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
