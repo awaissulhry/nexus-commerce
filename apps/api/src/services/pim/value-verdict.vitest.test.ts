@@ -8,12 +8,12 @@ import { validateChannelValue } from './mapping/validate-channel-value.js'
  *   edit time: only a value the field's TYPE cannot hold is refused; everything else is stored and warned about;
  *   publish time: block only what the channel itself would reject; Nexus's own rules warn.
  */
-const RULES: FindingRule[] = ['type', 'required', 'offList', 'deprecated', 'length', 'count', 'format', 'schema', 'nexus']
+const RULES: FindingRule[] = ['type', 'required', 'offList', 'deprecated', 'length', 'count', 'format', 'schema', 'unchecked', 'nexus']
 
 describe('edit time', () => {
   it('refuses only the type rule; every other finding is stored', () => {
     expect(Object.fromEntries(RULES.map(rule => [rule, editVerdict(finding(rule, 'x'))]))).toEqual({
-      type: 'refuse', required: 'store', offList: 'store', deprecated: 'store', length: 'store', count: 'store', format: 'store', schema: 'store', nexus: 'store',
+      type: 'refuse', required: 'store', offList: 'store', deprecated: 'store', length: 'store', count: 'store', format: 'store', schema: 'store', unchecked: 'store', nexus: 'store',
     })
   })
 })
@@ -21,13 +21,19 @@ describe('edit time', () => {
 describe('publish time', () => {
   const table = (channel: string) => Object.fromEntries(RULES.map(rule => [rule, publishVerdict(channel, finding(rule, 'x'))]))
   it('eBay: an off-list value warns (eBay keeps "Tutte le stagioni" live); limits, counts and requirements block', () => {
-    expect(table('EBAY')).toEqual({ type: 'block', required: 'block', offList: 'warn', deprecated: 'warn', length: 'block', count: 'block', format: 'block', schema: 'block', nexus: 'warn' })
+    expect(table('EBAY')).toEqual({ type: 'block', required: 'block', offList: 'warn', deprecated: 'warn', length: 'block', count: 'block', format: 'block', schema: 'block', unchecked: 'block', nexus: 'warn' })
   })
   it.each(['AMAZON', 'SHOPIFY', 'ETSY'])('%s: an off-list value blocks (a closed enum, a definition, a property list)', channel => {
     expect(table(channel).offList).toBe('block')
     expect(table(channel).nexus).toBe('warn')
   })
   it('the channel name is case-insensitive', () => expect(publishVerdict('amazon', finding('offList', 'x'))).toBe('block'))
+  it('P1 review (7) — a check that could not run blocks on every channel; only Nexus\'s own rules warn', () => {
+    for (const channel of ['EBAY', 'AMAZON', 'SHOPIFY', 'ETSY']) {
+      expect(publishVerdict(channel, finding('unchecked', 'Category requirement validation is unavailable: x'))).toBe('block')
+      expect(publishVerdict(channel, finding('nexus', "Field 'Brand' is required."))).toBe('warn')
+    }
+  })
 })
 
 describe('cellFindings', () => {

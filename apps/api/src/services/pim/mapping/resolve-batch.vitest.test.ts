@@ -347,3 +347,13 @@ describe('a stored item specific is never hidden by language content', () => {
     expect((await resolveBatch(input)).products[0].cells.style).toMatchObject({ value: 'Da motociclista', provenance: 'override' })
   })
 })
+
+// P1 review (7) — a check that could not run (a mapping expression that failed, requirements unavailable, conflicting
+// categories) is `unchecked`: stored, and BLOCKING at publish with its sentence.
+describe('findings that mean the check could not run', () => {
+  it('a failed mapping expression is `unchecked`', async () => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('packageWeight', { rule: { source: 'basePrice', transforms: [{ type: 'expr', expr: 'measure($basePrice, null)' }] } })] })
+    const cell = (await resolveBatch(input)).products[0].cells.packageWeight
+    expect(cell.findings?.filter(f => /measure\(\) needs a unit/.test(f.message)).map(f => f.rule)).toEqual(['unchecked'])
+  })
+})

@@ -423,8 +423,9 @@ export async function resolveBatch(input: {
       const projected = channel === 'EBAY' && field.shape === 'list' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' && Array.isArray(wire)
         ? ebayAspectValues(wire) : wire
       const { value, errors, findings, autoCorrected, overLimit } = validateChannelValue(field, projected)
+      // A mapping that failed or was skipped: the value that would ship is unknown, so nothing was checked.
       for (const warning of r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning))) {
-        errors.push(warning); findings.push(finding('nexus', warning))
+        errors.push(warning); findings.push(finding('unchecked', warning))
       }
       const mappingErrors = !hasStored && rule ? [...errors] : []
 
@@ -491,7 +492,7 @@ export async function resolveBatch(input: {
       if (!issue.required && isPresent(cell.value) && cell.rule && !['override', 'locked'].includes(cell.provenance ?? '')) cell.mappingErrors?.push(issue.message)
     }
     if (requirements.unavailable) {
-      for (const cell of Object.values(cells)) flag(cell, 'nexus', `Category requirement validation is unavailable: ${requirements.unavailable}`)
+      for (const cell of Object.values(cells)) flag(cell, 'unchecked', `Category requirement validation is unavailable: ${requirements.unavailable}`)
     }
 
     const context = presentation?.get(p.id)
@@ -506,10 +507,10 @@ export async function resolveBatch(input: {
         themeCell.findings = checked.findings
         themeCell.supplyingRule = { id: theme.rule.id, name: theme.rule.name, version: theme.rule.version, href: `/channels/ebay/variation-order-rules?market=${encodeURIComponent(marketplace)}&rule=${encodeURIComponent(theme.rule.id)}` }
       }
-      if (theme.conflicts.length) flag(themeCell, 'nexus', `Conflicting presentation rules: ${theme.conflicts.join('; ')}`)
+      if (theme.conflicts.length) flag(themeCell, 'unchecked', `Conflicting presentation rules: ${theme.conflicts.join('; ')}`)
     }
     if (categories[p.id]?.conflicts?.length) {
-      for (const cell of Object.values(cells)) flag(cell, 'nexus', `Conflicting shared categories: ${categories[p.id].conflicts!.join('; ')}. Choose a primary shared category or an explicit listing category.`)
+      for (const cell of Object.values(cells)) flag(cell, 'unchecked', `Conflicting shared categories: ${categories[p.id].conflicts!.join('; ')}. Choose a primary shared category or an explicit listing category.`)
     }
     for (const field of fields) if (field.schemaKnown === false && cells[field.fieldKey]?.rule) {
       const message = 'This rule targets a field absent from the selected category schema. Review the rule or refresh the schema.'

@@ -23,6 +23,8 @@ export async function informationChangeErrors(input: {
   const before = await resolveBatch(coordinate)
   const patches: Record<string, Record<string, unknown>> = {}
   const editedKeys = new Map<string, Set<string>>()
+  /** Every key each change edits (its field, its column, the channel's own key), so a cell names the change that wrote it. */
+  const changeKeys: Array<{ change: Change; keys: Set<string> }> = []
   for (const change of input.changes) {
     const key = change.field.replace(/^attr_/, '').replace(/^(amazon|ebay)_/, '').replace(/^name$/, 'title')
     const col = input.columns.get(change.id)?.get(key) ?? input.columns.get(change.id)?.get(key === 'title' ? 'name' : key)
@@ -40,9 +42,9 @@ export async function informationChangeErrors(input: {
       value = list
     }
     patches[change.id] = { ...listing, ...channelValuePatch(listing, target, channelOverrideKeys(change.field), change.reset ? 'INHERIT' : 'SET', value) }
-    const keys = editedKeys.get(change.id) ?? new Set<string>()
-    keys.add(key); if (col) keys.add(col.key)
-    editedKeys.set(change.id, keys)
+    const own = new Set<string>([key, ...(col ? [col.key, Object.values(col.channels ?? {})[0]?.key].filter((k): k is string => !!k) : [])])
+    changeKeys.push({ change, keys: own })
+    editedKeys.set(change.id, new Set([...(editedKeys.get(change.id) ?? []), ...own]))
   }
   const after = await resolveBatch({ ...coordinate, listingChangesByProduct: patches })
   const errors: Array<{ id: string; field: string; error: string }> = []
@@ -53,12 +55,14 @@ export async function informationChangeErrors(input: {
     if (changes.every(c => /^(attr_)?(taxonomy_id|categoryId|productType)$/.test(c.field))) continue
     const previous = before.products.find(p => p.productId === product.productId)
     for (const cell of Object.values(product.cells)) {
-      const changed = editedKeys.get(product.productId)?.has(cell.fieldKey)
+      // The change that wrote this cell, by the keys it edits — never a guess: a finding on a cell no change of this save
+      // wrote (a value derived from one) is that CELL's warning, under its own key, and is never a refusal.
+      const writer = changeKeys.find(entry => entry.change.id === product.productId && entry.keys.has(cell.fieldKey))?.change
+      const changed = !!writer
       // An empty cell this save did not write is not this save's business; one it cleared answers its warning
       // (a field the channel requires — stored empty, flagged, and blocked at publish).
       if (!changed && (cell.value === null || cell.value === undefined || cell.value === '' || Array.isArray(cell.value) && cell.value.length === 0)) continue
-      const field = (changed ? changes.find(c => c.id === product.productId && c.field.replace(/^attr_/, '').replace(/^(amazon|ebay)_/, '').replace(/^name$/, 'title') === cell.fieldKey)?.field : undefined)
-        ?? changes.find(c => c.id === product.productId)?.field ?? changes[0].field
+      const field = writer?.field ?? cell.fieldKey
       // One sentence per rule and cell: the resolver and the schema can both state one over-length value.
       const said = new Set<string>()
       for (const found of cellFindings(cell)) {
