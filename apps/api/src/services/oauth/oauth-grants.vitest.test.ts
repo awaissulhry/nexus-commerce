@@ -22,6 +22,7 @@ import { createWorkspaceService } from '../workspace.service.js'
 import { mcpResource } from './oauth-config.js'
 import { verifyAccessToken } from './oauth-server.js'
 import {
+  claudeConnectionState,
   listBusinessConnectedApps,
   listMyConnectedApps,
   revokeBusinessConnectedApp,
@@ -240,3 +241,29 @@ describe('MCP.6 — a business’s connected apps, for an admin', () => {
     expect(await db.oAuthGrant.findUniqueOrThrow({ where: { id: own.id } })).toMatchObject({ revokedBy: users.adminA, revokeReason: 'person' })
   })
 })
+
+describe('MCP.12 — whether Claude can ask in a business, for the Approvals page', () => {
+  const EMPTY = 'mcp12_business_empty'
+
+  it('counts the live connections of that business only, and says whether MCP is on for it', async () => {
+    await db.workspace.create({ data: { id: EMPTY, name: 'No connections', createdByUserId: users.adminB, creationKey: randomUUID() } })
+    const liveInB = await db.oAuthGrant.count({ where: { workspaceId: BUSINESS_B, revokedAt: null } })
+    expect(liveInB).toBeGreaterThan(0)
+    const ended = await connect(users.me, BUSINESS_B)
+    await db.oAuthGrant.update({ where: { id: ended.id }, data: { revokedAt: new Date(), revokeReason: 'person' } })
+
+    vi.stubEnv('NEXUS_MCP_ENABLED', '1')
+    vi.stubEnv('NEXUS_MCP_WORKSPACES', '')
+    expect(await claudeConnectionState(BUSINESS_B)).toEqual({ enabled: true, connections: liveInB })
+    expect(await claudeConnectionState(EMPTY)).toEqual({ enabled: true, connections: 0 })
+
+    // Off for a business the rollout list leaves out, and off everywhere when MCP is switched off.
+    vi.stubEnv('NEXUS_MCP_WORKSPACES', BUSINESS_A)
+    expect(await claudeConnectionState(BUSINESS_B)).toEqual({ enabled: false, connections: liveInB })
+    expect((await claudeConnectionState(BUSINESS_A)).enabled).toBe(true)
+    vi.stubEnv('NEXUS_MCP_ENABLED', '')
+    expect((await claudeConnectionState(BUSINESS_A)).enabled).toBe(false)
+    vi.stubEnv('NEXUS_MCP_WORKSPACES', '')
+  })
+})
+
