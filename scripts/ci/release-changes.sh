@@ -34,7 +34,8 @@ API_FILES="^(apps/api/|packages/(database|shared|events)/|$BUILD)"
 WEB_FILES="^(apps/web/|packages/(database|shared)/|docs/fixtures/vt1/fixtures\.ts$|$BUILD)"
 
 # What a service runs: sets `kind` (image, up, or empty when Railway cannot be read) and `sha` (empty when the
-# deployment names no commit). On the runner a hung call gives up after 60 s and the service ships (macOS has no
+# deployment names no commit). Only one of our GHCR images counts as an image deployment: a `railway up` record has no
+# meta.image today (read 2026-09-30), and a field Railway might add later must not flip every service to "image". On the runner a hung call gives up after 60 s and the service ships (macOS has no
 # `timeout`; the check runs without it there).
 LIMIT=()
 if command -v timeout >/dev/null; then LIMIT=(timeout 60); fi
@@ -43,7 +44,7 @@ read_running() {
   kind='' sha=''
   line=$(${LIMIT[@]+"${LIMIT[@]}"} railway deployment list --service "$service" --limit 20 --json 2>/dev/null |
     jq -r 'sort_by(.createdAt) | reverse | first(.[] | select(.status == "SUCCESS")) | .meta |
-      if (.image // "") != "" then "image " + .image else "up " + (.cliMessage // "") end' 2>/dev/null) || line=''
+      if ((.image // "") | test("^ghcr\\.io/[^/]+/nexus-(api|web)[:@]")) then "image " + .image else "up " + (.cliMessage // "") end' 2>/dev/null) || line=''
   case "$line" in
     image\ *)
       kind=image

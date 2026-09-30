@@ -98,7 +98,9 @@ left behind; `-f ship=all` ships every service. A service whose way of deploying
 (`RAILWAY_IMAGE_SERVICES`, next section) ships too. A service that already runs a newer
 commit is not rolled back when an older run is re-run in full ("Re-run all jobs").
 "Re-run failed jobs" reuses the old run's decision and CAN roll back, so after a
-newer release shipped, start a hand run instead.
+newer release shipped, start a hand run instead. If only `Images` failed (a `railway up` release
+still ships without them), use "Re-run all jobs": it rebuilds this commit's images, and `changes`
+sees every service already on this commit and ships nothing.
 
 Disable/restrict any parallel native Railway autodeploy path before relying on the
 GitHub gate. Verify branch protection separately; local YAML cannot establish it.
@@ -226,9 +228,9 @@ what that run chose back then; run Deploy API by hand instead.
 
 A rollback waits in the same queue as deploys (`deploy-api`). GitHub keeps one waiting run per queue: a
 push that lands while the rollback waits cancels it, and a rollback cancels a deploy that is still
-waiting. Run the cancelled one again, as a new run or a re-run: the next deploy sees either. A
-deploy that a rollback cancelled: only after the fix or a revert is on main, or it ships the code the
-rollback took away.
+waiting. Run the cancelled one again, as a new run or a re-run: the next deploy sees either. Re-run
+a deploy that a rollback cancelled only after the fix or a revert is on main, or it ships the code
+the rollback took away.
 
 Railway's own Rollback button on an older deployment also works for image deploys, one service at a
 time. The button also puts back that deployment's variables (Railway's docs: "Both the Docker image

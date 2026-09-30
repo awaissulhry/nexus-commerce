@@ -6,8 +6,9 @@
 # changes a service's files runs the whole CI on that exact commit (`verify`)
 # and builds both Docker images beside it (`images`, images.yml). When the
 # API ships, it also asks eBay about the consent scopes (`ebay`). Only then
-# does anything ship. The API applies migrations in Railway's pre-deploy
-# step, and Railway waits for /api/health/ready before switching traffic.
+# does anything ship; the images gate only the services that deploy by image.
+# The API applies migrations in Railway's pre-deploy step, and Railway waits
+# for /api/health/ready before switching traffic.
 #
 # Each service ships only when its own files differ from the commit it runs now (job `changes`,
 # scripts/ci/release-changes.sh). CI-only and docs-only changes deploy nothing (the Owner, 2026-09-30): the paths
