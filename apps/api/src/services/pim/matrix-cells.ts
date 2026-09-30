@@ -65,6 +65,8 @@ export function channelShape(channel: string): { cells: MatrixCellKind[]; absent
   let cells: MatrixCellKind[] = [...MATRIX_CELL_KINDS]
   const absent: Array<{ cell: MatrixCellKind; reason: string }> = []
   if (ch === 'EBAY') { cells = cells.filter((k) => k !== 'salePrice'); absent.push({ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEbay }) }
+  // 2026-09-30 — Etsy's listing API has no sale price (Etsy sales are shop promotions), so the cell is absent, not offered.
+  if (ch === 'ETSY') { cells = cells.filter((k) => k !== 'salePrice'); absent.push({ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEtsy }) }
   if (ch !== 'AMAZON' && ch !== 'EBAY') { cells = cells.filter((k) => k !== 'fulfilment'); absent.push({ cell: 'fulfilment', reason: MATRIX_COPY.absentFulfilment(channelLabel(ch)) }) }
   const fulfilment: FulfilmentMethod[] | null = ch === 'AMAZON' ? ['FBA', 'FBM'] : ch === 'EBAY' ? ['FBM', 'MCF'] : null
   return { cells, absent, fulfilment }

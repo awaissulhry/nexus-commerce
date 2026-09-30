@@ -121,6 +121,9 @@ describe('sync, price, fulfilment and coordinate helpers', () => {
   })
   it('coordinate shape: eBay has no sale, the global channels have no fulfilment, an EU market carries no inventory kinds', () => {
     expect(channelShape('EBAY').absent).toEqual([{ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEbay }])
+    // Etsy's listing API has no sale price: the cell is absent with its sentence (and Etsy has no fulfilment either).
+    expect(channelShape('ETSY').cells).not.toContain('salePrice'); expect(channelShape('ETSY').cells).toContain('price')
+    expect(channelShape('ETSY').absent).toEqual([{ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEtsy }, { cell: 'fulfilment', reason: 'Etsy has no fulfilment method' }])
     expect(channelShape('SHOPIFY').absent.map((a) => a.cell)).toEqual(['fulfilment']); expect(channelShape('SHOPIFY').fulfilment).toBeNull()
     expect(withoutInventory(channelShape('AMAZON').cells)).toEqual(['listing', 'price', 'salePrice'])
     expect(['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE', 'OTHER'].map(channelRank)).toEqual([0, 1, 2, 3, 4, 5])
