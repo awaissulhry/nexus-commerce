@@ -23,6 +23,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
+import { adoptContentVersions } from '../contentVersions'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -215,6 +216,8 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
          * the version it read from the sheet. A guessed version loses a race it should have won.
          */
         version = versionFromBody(body) ?? version
+        // The translation the save moved hands its new token to every cell writing to it.
+        adoptContentVersions(req.row, body)
       }
     }
 

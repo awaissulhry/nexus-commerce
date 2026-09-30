@@ -36,6 +36,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
+import { adoptContentVersions } from '../contentVersions'
 import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
@@ -571,6 +572,8 @@ async function commitChannelLanguage(
      */
     const versionOf: 'channelListing' | 'product' | undefined = body?.versionOf
     if (versionOf === 'channelListing' && raw !== undefined && row.listing) row.listing.version = raw
+    // The content row the save moved hands its new token to every cell writing to it (bullets, title, …).
+    adoptContentVersions(row, body)
     const version = versionOf === 'product' ? raw : undefined
 
     if (res.status === 404 || res.status === 501) {

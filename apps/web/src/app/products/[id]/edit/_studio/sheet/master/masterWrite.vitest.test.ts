@@ -334,6 +334,17 @@ describe('commitMasterRow — failures and reporting', () => {
     expect(bodies[1].changes[0]).toMatchObject({ field: 'name', value: 'German', contentVersion: 4, contentAddress: { tier: 'language', language: 'de' } })
     expect(result.version).toBe(9)
   })
+
+  it('chains the next translated edit on the translation version the last save answered (P3 commit sweep)', async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { errors: [], currentVersion: 8, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 5 }] }))
+      .mockResolvedValueOnce(json(200, { errors: [], currentVersion: 9, versionOf: 'product', contentVersions: [{ id: 'p1', tier: 'language', language: 'de', version: 6 }] }))
+    const row = { id: 'p1', values: { 'name@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 }, 'description@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } } } as unknown as StudioRow
+    const translated = { ...sheet, columns: [col('name@de', { writeField: 'name', locale: 'de' }), col('description@de', { writeField: 'description', locale: 'de' })] }
+    await commitMasterRow(req([{ colId: 'name@de', value: 'Name' }] as never, { expectedVersion: 7, row }), ctx({ sheet: translated }))
+    await commitMasterRow(req([{ colId: 'description@de', value: 'Text' }] as never, { expectedVersion: 8, row }), ctx({ sheet: translated }))
+    const bodies = fetchMock.mock.calls.map(call => JSON.parse(call[1].body))
+    expect(bodies.map(body => body.changes[0].contentVersion)).toEqual([4, 5])
+  })
 })
 
 describe('commitMasterRow — a PARTIAL success is reported as progress, not as a failure', () => {
