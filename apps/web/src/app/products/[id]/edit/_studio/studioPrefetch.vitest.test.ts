@@ -3,7 +3,7 @@
  * adopt them only when they would have made exactly the same read.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { adoptPrefetch, clearPrefetches, startPrefetch } from './prefetchStore'
+import { adoptPrefetch, clearPrefetches, PREFETCH_TTL_MS, startPrefetch } from './prefetchStore'
 import { studioPrefetchPlan } from './studioPrefetch'
 import { fetchStudioRead } from './studio-read'
 import { channelScopeUrl } from './sheet/channel/useChannelSheet'
@@ -99,5 +99,42 @@ describe('the page-load prefetch reads the URL once', () => {
     const src = readFileSync(`${__dirname}/StudioLoader.tsx`, 'utf8')
     expect(src).not.toMatch(/useSearchParams\(|import \{[^}]*useSearchParams/)
     expect(src).toContain('new URLSearchParams(window.location.search)')
+  })
+})
+
+describe('review 5 — an adopted prefetch is never aborted by its unadopted-expiry timer', () => {
+  it('a read the hook adopted and that takes longer than the expiry still completes', async () => {
+    vi.useFakeTimers()
+    try {
+      let signal: AbortSignal | undefined
+      let answer: (r: Response) => void = () => {}
+      startPrefetch(masterSheetUrl(ID, 'IT', 'it'), (_url, init) => { signal = init?.signal ?? undefined; return new Promise((resolve) => { answer = resolve }) })
+      const adopted = adoptPrefetch(masterSheetUrl(ID, 'IT', 'it'))
+      expect(adopted).not.toBeNull()
+      vi.advanceTimersByTime(PREFETCH_TTL_MS + 1_000)
+      expect(signal?.aborted).toBe(false)
+      answer(new Response('slow but whole'))
+      await expect((await adopted!).text()).resolves.toBe('slow but whole')
+    } finally { vi.useRealTimers() }
+  })
+  it('a prefetch nobody adopted is still dropped at the expiry', () => {
+    vi.useFakeTimers()
+    try {
+      let signal: AbortSignal | undefined
+      startPrefetch(masterSheetUrl(ID, 'IT', 'it'), (_url, init) => { signal = init?.signal ?? undefined; return new Promise(() => {}) })
+      vi.advanceTimersByTime(PREFETCH_TTL_MS + 1)
+      expect(signal?.aborted).toBe(true)
+      expect(adoptPrefetch(masterSheetUrl(ID, 'IT', 'it'))).toBeNull()
+    } finally { vi.useRealTimers() }
+  })
+})
+
+describe('review 10 — the prefetch adds nothing the fetch patch owns', () => {
+  it('sends no credentials (or headers) of its own: install-fetch adds credentials, CSRF and the workspace', () => {
+    let init: RequestInit | undefined
+    startPrefetch(masterSheetUrl(ID, 'IT', 'it'), (_url, i) => { init = i; return Promise.resolve(new Response('x')) })
+    expect(init).toBeDefined()
+    expect(init).not.toHaveProperty('credentials')
+    expect(init).not.toHaveProperty('headers')
   })
 })
