@@ -7,7 +7,7 @@ export {
   type ShellNavEntry,
 } from './AppShell'
 export { PageHeader, type PageHeaderProps } from './PageHeader'
-export { DetailHeader, type DetailHeaderProps } from './DetailHeader'
+export { DetailHeader, DETAIL_HEADER_FOLD, type DetailHeaderProps } from './DetailHeader'
 export {
   ScopeBar,
   type ScopeBarProps,

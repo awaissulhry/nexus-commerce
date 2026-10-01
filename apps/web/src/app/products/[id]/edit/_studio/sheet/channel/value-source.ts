@@ -10,11 +10,11 @@ export function resetSourceLabel(cell: StudioCellValue): string {
 
 /**
  * The reset's words, for Cell details and the cell menu. An old listing text is not an override anybody made: its
- * reset is "Follow Master" (P1, report 2 I-3), which stops using the listing's own text for this language.
+ * reset is "Follow Shared" (P1, report 2 I-3), which stops using the listing's own text for this language.
  */
 export function resetActionWords(cell: StudioCellValue, subject: { sku: string; listing: string }): { label: string; description: string } {
   if (cell.source === 'channelSnapshot') return {
-    label: 'Follow Master',
+    label: 'Follow Shared',
     description: `Stop using this listing’s own text for ${subject.sku} · ${subject.listing} and ${resetSourceLabel(cell)}.`,
   }
   const list = !!wholeListWriteField(cell.writeField)

@@ -119,8 +119,8 @@ export function notRestorableReason(field: string, coverage: FieldCoverage): str
   }
   if (!RESTORABLE_FIELDS.has(field)) {
     return field.startsWith('attr_') || field.includes('.')
-      ? 'Schema attribute — restore covers the master record’s own fields only.'
-      : 'Not a restorable field on the master record.'
+      ? 'Schema attribute — restore covers the Shared product’s own fields only.'
+      : 'Not a restorable field on the Shared product.'
   }
   return null
 }

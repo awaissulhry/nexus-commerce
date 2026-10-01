@@ -56,7 +56,7 @@ describe('a channel cell mounts only what it shows', () => {
 
 describe('SourceIndicator in a host without hints', () => {
   beforeEach(() => { counts.tooltip = 0 })
-  const mark = () => createElement(SourceIndicator, { kind: 'master', label: 'Follows Master', description: 'Uses Master.', tooltip: 'Follows Master. Uses Master', actionLabel: 'Show cell details', onAction: () => {} })
+  const mark = () => createElement(SourceIndicator, { kind: 'master', label: 'Follows Shared', description: 'Uses the Shared product.', tooltip: 'Follows Shared. Uses the Shared product', actionLabel: 'Show cell details', onAction: () => {} })
 
   it('draws exactly what the inert tooltip drew, without mounting it', () => {
     const hintless = renderToStaticMarkup(createElement(TooltipPortalProvider, { disabled: true, children: mark() }))
@@ -66,6 +66,6 @@ describe('SourceIndicator in a host without hints', () => {
     expect(counts.tooltip).toBe(1)
     expect(hinted).toContain(hintless)
     expect(hintless).toMatch(/^<button[^>]*data-value-source="master"/)
-    expect(hintless).toContain('title="Follows Master. Uses Master"')
+    expect(hintless).toContain('title="Follows Shared. Uses the Shared product"')
   })
 })

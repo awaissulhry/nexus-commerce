@@ -238,7 +238,7 @@ export function buildDiffColumns(opts: DiffColumnOptions): ColDef<DiffGridRow>[]
         const dest = cellDestination(column)
         const where =
           dest.target === 'channelListing'
-            ? `This column writes the channel listing, not the master record — the server routes it there whatever scope the file was exported from. If that listing is live, applying changes what buyers see.`
+            ? `This column writes the channel listing, not the Shared product — the server routes it there whatever scope the file was exported from. If that listing is live, applying changes what buyers see.`
             : null
         const readOnly = column?.editable === false ? `${column.label} is read-only on this scope.` : null
         return [where, readOnly].filter(Boolean).join(' ') || undefined

@@ -23,9 +23,9 @@ describe('cellHoverNote', () => {
       .toBe('No listing here.')
   })
 
-  it('names the shared master record for a cross-channel cell', () => {
+  it('names the Shared product for a cross-channel cell', () => {
     expect(cellHoverNote(cell({ affectsAllChannels: true }), 'eBay · IT'))
-      .toBe('Editing this on eBay · IT changes the shared master record — every channel sees it.')
+      .toBe('Editing this on eBay · IT changes the Shared product — every channel sees it.')
   })
 
   // 🔴 The regression that matters: eBay's `name`/`description` are writeVerb 'master' but

@@ -1280,6 +1280,23 @@
 .nds-detailhdr.dense .back:hover {
   text-decoration: underline;
 }
+/* The fold (`DETAIL_HEADER_FOLD`): 48 → 32 while the page scrolls. Moved here from the studio's own stylesheet (step 4,
+   2026-10-01) so no page restyles this header. The HEIGHT SNAPS — the sheet re-measures its top on resize, so an
+   animated height would re-virtualise the grid on every frame; only the contents animate. Every folded rule is scoped
+   to `.nds-detailhdr-fold.is-folded`, the element that holds the header and not the grid. */
+.nds-detailhdr-fold.is-folded .nds-detailhdr.dense { height: 32px; }
+/* What the folded strip drops: the identity pair and the pills. The name, the status and the actions stay. */
+.nds-detailhdr-fold.is-folded .nds-detailhdr-meta > *:not(:first-child),
+.nds-detailhdr-fold.is-folded .nds-detailhdr-meta .nds-pill { opacity: 0; transform: translateY(-2px); pointer-events: none; }
+.nds-detailhdr-fold .nds-detailhdr-meta > *,
+.nds-detailhdr-fold .nds-detailhdr-meta .nds-pill { transition: opacity 150ms cubic-bezier(0.2, 0, 0.2, 1), transform 150ms cubic-bezier(0.2, 0, 0.2, 1); }
+.nds-detailhdr-fold.is-folded .nds-detailhdr.dense h1 { font-size: var(--nds-font-size-base-plus); }
+@media (prefers-reduced-motion: reduce) {
+  .nds-detailhdr-fold .nds-detailhdr-meta > * { transition: none; }
+}
+@media (max-width: 760px) {
+  .nds-detailhdr-fold.is-folded .nds-detailhdr.dense { height: auto; }
+}
 
 /* ── ScopeBar ────────────────────────────────────────────────────── */
 /* Which LAYER of a record is being edited. Not a filter bar — see ScopeBar.tsx. */

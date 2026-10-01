@@ -389,13 +389,13 @@ export function cellHoverNote(
   if (cell.writeBlockedReason) return cell.writeBlockedReason
   if (cell.editable === false) return null
   if (cell.affectsAllChannels) {
-    return `Editing this on ${scopeLabel} changes the shared master record — every channel sees it.`
+    return `Editing this on ${scopeLabel} changes the Shared product — every channel sees it.`
   }
   return null
 }
 
 /**
- * How many of the columns in view write the shared master record — the toolbar's standing notice.
+ * How many of the columns in view write the Shared product — the toolbar's standing notice.
  *
  * A count, not a boolean: "33 of 35 columns" is the fact that makes an operator read the cell
  * notices, and one column behaving this way is a very different surface from thirty-three.

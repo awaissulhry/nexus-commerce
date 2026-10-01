@@ -17,7 +17,7 @@ describe('W0 honest absence and review vocabulary', () => {
   })
   it('readiness says Listed without claiming channel verification', () => {
     expect(readinessMeta('live', 'row')).toMatchObject({ label: 'Listed', tone: 'info', hint: 'Our record holds a channel reference. Whether it is selling is on the presence line.' })
-    expect(readinessMeta('unlisted', 'row')).toMatchObject({ label: 'No listing here', hint: 'We hold no listing record for this coordinate. Nothing has been checked against the channel.' })
+    expect(readinessMeta('unlisted', 'row')).toMatchObject({ label: 'Not listed yet', hint: 'Nexus has no listing here yet, so nothing has been checked against the channel.' })
   })
   it('review copy follows the actual mode', () => {
     expect(reviewCopy('check')).toEqual({ menu: 'Check before sending', title: 'Check before sending', subtitle: 'Nothing is sent from here.' })

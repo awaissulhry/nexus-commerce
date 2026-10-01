@@ -137,7 +137,7 @@ export function ShopifyContentWorkspace({ path, accountLabel }: { path: string; 
     })
     setNotice(`Imported ${importSource.title} into ${assignment.name}. Review the variant previews, then save in Nexus.`); setImportOpen(false)
   }
-  if (!workspace || !draft) return <div className={styles.workspace}>{error ? <Banner tone="danger" title="Shopify content unavailable" action={<Button onClick={() => void reload()}>Retry</Button>}>{error}</Banner> : <p role="status">Loading family content…</p>}</div>
+  if (!workspace || !draft) return <div className={styles.workspace}>{error ? <Banner tone="danger" title="Shopify content unavailable" action={<Button onClick={() => void reload()}>Try again</Button>}>{error}</Banner> : <p role="status">Loading family content…</p>}</div>
   const sourceName = (ids: string[] | undefined) => ids?.map(id => draft.assignments.find(a => a.id === id)?.name ?? id).join(' + ') || 'No assignment'
   return <div className={`${styles.workspace} nds-readable`} aria-busy={busy}>
     <header className={styles.header}>

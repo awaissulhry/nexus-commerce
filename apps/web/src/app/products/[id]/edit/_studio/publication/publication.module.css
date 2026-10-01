@@ -13,7 +13,8 @@
 .observation { display: grid; gap: var(--nds-space-8); padding: var(--nds-space-12); overflow-wrap: anywhere; }
 .observation + .observation { border-top: 1px solid var(--nds-border); }
 .observedField { display: grid; gap: var(--nds-space-6); }
-.observedValues { display: grid; gap: var(--nds-space-8); margin: 0; }
+.observedValues { display: grid; gap: var(--nds-space-8); margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .observedValues dt { color: var(--nds-text-muted); }
 .observedValues dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (min-width: 640px) { .observedValues { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* The DS small breakpoint (`tokens/breakpoints.ts` sm, 760px), desktop-first as the DS writes it. */
+@media (max-width: 760px) { .observedValues { grid-template-columns: minmax(0, 1fr); } }

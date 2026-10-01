@@ -6,6 +6,25 @@ export const IMPORT_ACCEPT = '.xlsx,.xlsm,.csv,.zip'
 /** The server's own limit for one upload (`PRODUCT_TRANSFER_MAX_BYTES`). */
 export const IMPORT_MAX_BYTES = 50 * 1024 * 1024
 
+/**
+ * Step 4 (D4) — the dialog names every file type it takes, from the same list the picker accepts, so the sentence can
+ * never drift from the picker: "Accepted: .xlsx, .xlsm, .csv or .zip, up to 50 MB."
+ */
+export function acceptedFilesSentence(accept: string, maxBytes: number): string {
+  const types = accept.split(',').map(t => t.trim()).filter(Boolean)
+  const list = types.length > 1 ? `${types.slice(0, -1).join(', ')} or ${types[types.length - 1]}` : types[0] ?? 'any file'
+  return `Accepted: ${list}, up to ${Math.round(maxBytes / 1024 / 1024)} MB.`
+}
+
+/** The step that failed; its title says what did not work (step 4, D4 — never "This did not work"). */
+export type ImportStep = 'read' | 'changes' | 'apply' | 'undo'
+export const IMPORT_FAILED: Record<ImportStep, string> = {
+  read: 'The file could not be checked',
+  changes: 'The list of changes could not be loaded',
+  apply: 'The changes could not be saved',
+  undo: 'The import could not be undone',
+}
+
 const FORMATS: Record<SheetImportFormat, string> = {
   nexus: 'Nexus file', 'nexus-legacy': 'Older Nexus file', amazon: 'Amazon template', ebay: 'eBay file', shopify: 'Shopify file', csv: 'CSV file', undo: 'Undo',
 }

@@ -101,7 +101,7 @@ export interface SheetColumn {
    *
    * 🔴 It lives here because the per-cell copy was omitted for BLANK cells — present on the fields
    * that already had a value, absent on exactly the empty field an operator is about to type into.
-   * That is why only 5 of 97 fields carried "writes to the master record": not a rendering bug, a
+   * That is why only 5 of 97 fields carried "writes to the Shared product": not a rendering bug, a
    * contract that supplied the fact everywhere except where it was needed. Read these first and
    * fall back to the cell, which still carries its copies so nothing breaks mid-migration.
    */
@@ -413,7 +413,7 @@ export function resolveLayer(cell: Pick<StudioCellValue, 'layer' | 'source'> | u
 
 /** Short chip text. Kept to one or two words so it fits beside a label without wrapping the row. */
 export const LAYER_LABEL: Record<Layer, string> = {
-  master: 'Master',
+  master: 'Shared',
   variant: 'Variant',
   alias: 'Alias',
   aliasVariant: 'Alias × variant',
@@ -433,13 +433,13 @@ export const LAYER_HINT: Record<Layer, string> = {
   variant: "Pinned on this variation — the parent's value no longer reaches it.",
   alias: 'Pinned on this listing alias. Other aliases of the same product are unaffected.',
   aliasVariant: 'Pinned on this alias AND this variation — the narrowest override there is.',
-  channel: 'Pinned on this channel listing. The master value no longer reaches it.',
+  channel: 'Pinned on this channel listing. The Shared value no longer reaches it.',
   linked: 'Supplied by a linked group: editing it here moves every coordinate in the group.',
   default: 'No value is set anywhere — the schema default is what would ship.',
-  locale: "From the master's localised content for this market's language.",
-  mapped: 'Derived by the mapping engine from a master field. Edit the mapping, not this cell.',
-  locked: 'An identity field pinned to master. It cannot diverge per channel.',
-  channelSnapshot: 'The last stored channel value. It follows legacy listing content, may differ from master, and is not an operator pin.',
+  locale: "From the Shared product's localised content for this market's language.",
+  mapped: 'Derived by the mapping engine from a Shared product field. Edit the mapping, not this cell.',
+  locked: 'An identity field pinned to the Shared product. It cannot diverge per channel.',
+  channelSnapshot: 'The last stored channel value. It follows legacy listing content, may differ from the Shared product, and is not an operator pin.',
   unknown: 'The server reported a provenance this build does not recognise. Shown verbatim, not guessed.',
 }
 

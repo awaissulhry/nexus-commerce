@@ -84,6 +84,10 @@
   --nds-shadow-rail: 8px 0 30px rgba(0, 0, 0, 0.35);
 }
 .h10-main { flex: 1; min-width: 0; min-height: 0; padding: 26px 30px; overflow-y: auto; }
+/* Step 4 (2026-10-01) — the global "Ask AI" button floats over the bottom-right corner and covered a table's "Rows per
+   page". While it is on screen, the page ends with the button's footprint of room (the DS token), so the last row of
+   controls scrolls clear of it. */
+:root:has([data-nds-fab]) .h10-main { padding-bottom: var(--nds-fab-reserve-block); }
 
 /* left rail — collapsible icon rail that expands on hover (H10 behavior).
    Resting = 66px icon-only strip; hovering expands it to 344px and OVERLAYS the

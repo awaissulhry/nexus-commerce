@@ -114,7 +114,7 @@ export function RestoreMode({ recordState, restorePoints, confirm, onRestore, on
       title: `Restore ${chosen.length} field${chosen.length === 1 ? '' : 's'} to ${new Date(at).toLocaleString()}?`,
       body: (
         <>
-          <p>These master values are overwritten with the values from that time:</p>
+          <p>These Shared product values are overwritten with the values from that time:</p>
           <ul>
             {chosen.slice(0, 8).map((r) => (
               <li key={r.field}>
@@ -129,7 +129,7 @@ export function RestoreMode({ recordState, restorePoints, confirm, onRestore, on
             and can itself be undone.
           </p>
           <p>
-            This writes the <strong>master record</strong>, so it affects every channel that inherits these
+            This writes the <strong>Shared product</strong>, so it affects every channel that inherits these
             fields — but it makes no marketplace call: nothing is published by restoring.
           </p>
           {data?.warnings?.map((w) => (

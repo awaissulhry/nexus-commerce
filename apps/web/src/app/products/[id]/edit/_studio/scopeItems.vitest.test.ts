@@ -173,3 +173,23 @@ describe('A-55 — T11: the four production screens, as the menu prints them', (
     expect(menu(motoventoEbayDE)).toEqual(['See each channel', 'Not computed', undefined])
   })
 })
+
+describe('Step 4 (D2) — "not listed here" reads the same on the chip as on the sheet', () => {
+  it('the open channel with no listing and no verdict says "Not listed yet", and the hover is the sheet notice', () => {
+    const i = { ...motoventoEbayDE, unlisted: true }
+    expect(menu(i)).toEqual(['See each channel', 'Not listed yet', undefined])
+    expect(title(i, 'EBAY')).toContain('Not listed on eBay · DE yet. Your first edit here starts a draft.')
+  })
+  it('a real verdict still wins: the rules are judged before the first listing exists', () => {
+    expect(menu({ ...xaviaEbayIT, unlisted: true })).toEqual(['See each channel', 'Blocked · 100%', 'Blocked · 100%', undefined])
+  })
+  it('only the OPEN scope is known to have no listing; another channel keeps its own answer', () => {
+    const i = { ...input({ marketplaces: xavia, market: 'DE', scope: 'EBAY', locale: 'de', readiness: ready([{ id: 'master', pct: 100, state: 'warn' }]) }), unlisted: true }
+    expect(menu(i)).toEqual(['See each channel', 'Not computed', 'Not listed yet', undefined])
+  })
+  it('a channel the response did not score says so in plain words', () => {
+    const i = input({ marketplaces: xavia, market: 'DE', scope: 'master', locale: 'de', readiness: ready([{ id: 'master', pct: 100, state: 'warn' }]) })
+    expect(title(i, 'AMAZON')).toContain('Nexus has not checked Amazon · DE yet.')
+    expect(title(i, 'AMAZON')).not.toContain('scored in this response')
+  })
+})

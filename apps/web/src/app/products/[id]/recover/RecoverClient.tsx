@@ -222,10 +222,9 @@ export default function RecoverClient({
         setExecuteError(json.recovery.error ?? 'Recovery failed')
         return
       }
-      // Hand off to the wizard for the recreate step. If the action
-      // was REPUBLISH_IN_PLACE, the wizard URL also points back to
-      // the wizard — the recoveryEventId query param is what links
-      // both halves in the audit row.
+      // Hand off to the product studio on the recovered channel · market
+      // (`wizardUrl` keeps its name; since 2026-10-02 it is the studio, not
+      // the old listing wizard). The workspace router adds the business.
       if (json.recovery.wizardUrl) {
         router.push(json.recovery.wizardUrl)
       } else {

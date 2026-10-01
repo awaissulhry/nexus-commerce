@@ -78,6 +78,7 @@ import { FamilyBand } from './FamilyBand'
 import { GenerateCombinationsDialog } from './GenerateCombinationsDialog'
 import { ManageAxesDialog, saveAxisOrder } from './ManageAxesDialog'
 import { useFamilyProjections } from './useFamilyProjections'
+import { FAMILY_UNSET, setupSentence } from '../../sheet/channel/rulesStatus'
 import styles from './family.module.css'
 
 /** §1.5, verbatim — the ONE reason this page may omit the views trigger. */
@@ -587,8 +588,9 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
               ...(sheet && (sheet.meta.schemaMissing.length > 0 || sheet.meta.schemaAge.length > 0) ? [{
                 tone: 'warning' as const,
                 label: sheet.meta.schemaMissing.length > 0 ? 'Setup incomplete' : 'Cached requirements',
+                /* Step 4 (D7) — plain words, never the raw keys; the fix is named where it is made. */
                 detail: sheet.meta.schemaMissing.length > 0
-                  ? `Attribute setup is incomplete: ${sheet.meta.schemaMissing.join(', ')}. The completeness percentages on these rows are computed over the attributes that COULD be read, so they are not a verdict on this product type. Choose a product family in Classification.`
+                  ? `${sheet.meta.schemaMissing.map(key => setupSentence(market, key)).join(' ')} The percentages on these rows count only the fields that could be read.${sheet.meta.schemaMissing.includes(FAMILY_UNSET) ? ' Choose the product family on Information: ⋯ → Classification.' : ''}`
                   : `Length caps and lists come from a schema last fetched ${sheet.meta.schemaAge.map(t => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
               }] : []),
               ...familyVerbs.status,

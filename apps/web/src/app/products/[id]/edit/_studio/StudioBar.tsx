@@ -19,9 +19,11 @@ export function StudioBar() {
   const discovery = useStudioDiscovery()
   const save = useStudioSave()
   // A-55 — the items and their readiness words live in `scopeItems.ts` (pure, tested); "Not set up" only when proven.
+  // The open channel's primary destination has no listing on this market (an alias destination is a choice, not a fact).
+  const unlisted = destination.status === 'ready' && !destination.data.listing && !destination.data.aliasKey
   const items = useMemo(() => scopeItems({ channels: options.channels, market, marketplaces, readiness, scope, save, locale,
-    discoveryFailed: discovery?.failed === true, destination: destination.status }),
-  [options.channels, market, marketplaces, readiness, scope, save, locale, discovery?.failed, destination.status])
+    discoveryFailed: discovery?.failed === true, destination: destination.status, unlisted }),
+  [options.channels, market, marketplaces, readiness, scope, save, locale, discovery?.failed, destination.status, unlisted])
   const available = options.locales.map(language => language.code)
   /* SHEET-VIEWS (Owner, 2026-09-26: "why do we have two different dropdowns for the country and then the
      language?"). On a channel scope the language list is the MARKET's languages, and every market but

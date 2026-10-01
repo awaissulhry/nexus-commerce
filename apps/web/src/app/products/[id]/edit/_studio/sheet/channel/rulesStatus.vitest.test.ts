@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chooseCategoryLink, downloadableCategory, missingRuleSentence, rulesStatus } from './rulesStatus'
+import { chooseCategoryLink, downloadableCategory, FAMILY_UNSET, missingRuleSentence, rulesStatus, setupSentence } from './rulesStatus'
 
 /** 2026-09-27 — Amazon · BE showed "Incomplete: OUTERWEAR" with 5 fixed columns: the rules were never downloaded. */
 describe('rulesStatus', () => {
@@ -31,7 +31,17 @@ describe('rulesStatus', () => {
     expect(chooseCategoryLink('EBAY', 'DE', ['EBAY:177117'])).toBeNull()
     expect(chooseCategoryLink('ETSY', 'GLOBAL', ['ETSY:*'])).toBeNull()
     expect(missingRuleSentence('EBAY', 'DE', 'EBAY:177117')).toBe("eBay's rules for category 177117 are not downloaded yet.")
-    expect(missingRuleSentence('ETSY', 'GLOBAL', 'ETSY:*')).toBe('No Etsy category is selected. Choose one to load its fields.')
+    expect(missingRuleSentence('ETSY', 'GLOBAL', 'ETSY:*')).toBe('No Etsy category is chosen. Choose one to load its fields.')
+  })
+
+  it('one verb for a choice not made, and never a raw key on screen (step 4, D7)', () => {
+    expect(missingRuleSentence('AMAZON', 'IT', 'AMAZON:category not selected')).toBe('No Amazon product type is chosen. Choose one to load its fields.')
+    expect(setupSentence('IT', FAMILY_UNSET)).toBe('No product family is chosen. The shared fields come from it.')
+    expect(downloadableCategory(FAMILY_UNSET)).toBeNull()
+    // The Shared product's sheet lists every channel's keys; each is worded for its own channel.
+    expect(setupSentence('DE', 'EBAY:*')).toBe('No eBay category is chosen for eBay · DE. Choose one in Categories.')
+    expect(setupSentence('BE', 'OUTERWEAR')).toBe("Amazon's rules for OUTERWEAR on Amazon · BE are not downloaded yet, so only the fixed columns show.")
+    for (const key of [FAMILY_UNSET, 'AMAZON:category not selected', 'EBAY:*', 'ETSY:*', 'SHOPIFY:*']) expect(setupSentence('IT', key)).not.toMatch(/[A-Z]+:/)
   })
 
   it('nothing missing is neutral, and names no download', () => {

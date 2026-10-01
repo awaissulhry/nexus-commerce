@@ -73,7 +73,7 @@ export function ImagesTab({ productId, header }: ImagesTabProps) {
               nothing for six seconds is indistinguishable from one that will never finish. */}
           {slow && (
             <span>
-              Still waiting on the server. <Button size="sm" variant="ghost" onClick={() => void ws.reload()}>Retry</Button>
+              Still waiting on the server. <Button size="sm" variant="ghost" onClick={() => void ws.reload()}>Try again</Button>
             </span>
           )}
         </div>

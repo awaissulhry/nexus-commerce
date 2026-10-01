@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import type { ProductTransferOptions, SheetImportStatus } from '@nexus/shared/catalog-transfer'
 import { defaultExportChoice, exportBlocker, exportDestinations, exportLanguages, exportProductIds, exportSelection, type ExportContext } from './exportModel'
-import { applyLabel, cellValue, changeCells, displayValue, doneView, focusChange, openFamilyActions, summaryLine, whereInFile } from './importModel'
+import { acceptedFilesSentence, applyLabel, cellValue, changeCells, displayValue, doneView, focusChange, IMPORT_ACCEPT, IMPORT_FAILED, IMPORT_MAX_BYTES, openFamilyActions, summaryLine, whereInFile } from './importModel'
+import { saveFirstNotice } from '../saveFirst'
 import { exportNotesOf } from './sheetTransferApi'
 
 const listing = (id: string, productId: string, channel: string, marketplace: string, accountId = 'acc-1', aliasKey = '') =>
@@ -127,5 +128,28 @@ describe('import words', () => {
   it('names where a problem is in the file', () => {
     expect(whereInFile({ sheet: 'Amazon IT', row: 14, column: 'F' })).toBe('Amazon IT · row 14 · column F')
     expect(whereInFile({})).toBe('')
+  })
+})
+
+describe('step 4 — the Import dialog says what it takes and what failed', () => {
+  it('names every file type the picker accepts, from the same list', () => {
+    expect(acceptedFilesSentence(IMPORT_ACCEPT, IMPORT_MAX_BYTES)).toBe('Accepted: .xlsx, .xlsm, .csv or .zip, up to 50 MB.')
+    for (const type of IMPORT_ACCEPT.split(',')) expect(acceptedFilesSentence(IMPORT_ACCEPT, IMPORT_MAX_BYTES)).toContain(type)
+  })
+  it('a failure title names the step, never "This did not work"', () => {
+    expect(Object.values(IMPORT_FAILED)).not.toContain('This did not work')
+    expect(IMPORT_FAILED.apply).toBe('The changes could not be saved')
+  })
+})
+
+describe('step 4 (D3) — one "save first" notice for Import and Publish', () => {
+  it('the same title and tone for the same state; only the next step differs', () => {
+    const saving = { kind: 'saving' as const, pending: 2 }
+    const failed = { kind: 'error' as const, failed: 1, pending: 0, message: '1 cell could not be saved.' }
+    expect(saveFirstNotice(saving, 'You can apply this file')).toEqual({ tone: 'info', title: 'Saving your edits', body: 'You can apply this file when they are saved.' })
+    expect(saveFirstNotice(saving, 'The review loads')).toMatchObject({ tone: 'info', title: 'Saving your edits' })
+    expect(saveFirstNotice(failed, 'The review loads')).toEqual({ tone: 'danger', title: 'Your edits are not saved', body: '1 cell could not be saved. The review loads when they are saved.' })
+    expect(saveFirstNotice({ kind: 'idle' }, 'x')).toBeNull()
+    expect(saveFirstNotice({ kind: 'saved', at: 1, count: 1 }, 'x')).toBeNull()
   })
 })

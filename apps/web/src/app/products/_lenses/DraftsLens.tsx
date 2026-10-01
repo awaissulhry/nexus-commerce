@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
+import { productStudioPath } from '@/lib/products/studio-path'
 import { Sparkles, CheckCircle2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -143,7 +144,7 @@ export function DraftsLens() {
                       </div>
                     </div>
                     <Link
-                      href={`/products/${d.productId}/list-wizard?channel=${d.channel}`}
+                      href={productStudioPath(d.productId, { channel: d.channel, market: d.marketplace })}
                       className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
                     >
                       {t('products.lens.drafts.publish')}
@@ -178,7 +179,7 @@ export function DraftsLens() {
                       </div>
                     </div>
                     <Link
-                      href={`/products/${p.id}/list-wizard?channel=${channel}`}
+                      href={productStudioPath(p.id, { channel })}
                       className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/40"
                     >
                       {t('products.lens.uncovered.list')}

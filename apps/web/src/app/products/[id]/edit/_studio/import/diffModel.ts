@@ -170,7 +170,7 @@ export function cellDestination(
     const channel = cellScope?.channel ?? null
     return { target, channel, label: `writes the ${channelLabel(channel)} listing` }
   }
-  return { target: 'master', channel: null, label: 'writes the master record' }
+  return { target: 'master', channel: null, label: 'writes the Shared product' }
 }
 
 /**
@@ -199,7 +199,7 @@ export function listingWriteWarning(diff: ImportDiff): string | null {
   }
   if (cells === 0) return null
   const where = [...channels].sort().join(' and ')
-  return `${cells} ${cells === 1 ? 'cell in this file writes' : 'cells in this file write'} to the ${where} ${channels.size === 1 ? 'listing' : 'listings'}, not to the master record — these columns route by their name whatever scope you exported from. If those listings are live, applying this changes what buyers see.`
+  return `${cells} ${cells === 1 ? 'cell in this file writes' : 'cells in this file write'} to the ${where} ${channels.size === 1 ? 'listing' : 'listings'}, not to the Shared product — these columns route by their name whatever scope you exported from. If those listings are live, applying this changes what buyers see.`
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────────

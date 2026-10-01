@@ -56,18 +56,18 @@ export function describeValueSource(cell: StudioCellValue | undefined, provenanc
     `Showing ${localized.effectiveLocale ?? 'source'} content. ${localized.requestedLocale ?? 'Selected language'} ${localized.translationState === 'outdated' ? 'needs review after a source change' : 'content is missing'}. This value does not count as translated content`)
   if (cell.nexusDraft) return source('override', 'Saved Nexus draft', 'Saved for this account, listing and field owner. Review synchronization to send these changes to Shopify')
   /* P1 (report 2 I-3) — an old listing text (the eBay title the listing was imported with). The mapping reads it
-     through `title`, which made it say "Follows Master" while 80 of 82 REGAL eBay IT titles differ from Master. */
+     through `title`, which made it say "Follows Shared" while 80 of 82 REGAL eBay IT titles differ from Master. */
   if (cell.source === 'channelSnapshot') return source('channel', LISTING_VALUE_LABEL,
-    'This listing still holds its own text, not Master’s. The next change to Master replaces it; Follow Master uses Master’s text now')
+    'This listing still holds its own text, not the Shared product’s. The next change to the Shared product replaces it; Follow Shared uses the Shared product’s text now')
   if (localized.translationState === 'draft' || localized.translationState === 'reviewed') return source('master',
     localized.translationState === 'draft' ? 'Translation draft' : 'Reviewed translation',
     `${localized.effectiveLocale} content${localized.translationState === 'draft' ? ' is saved and awaiting review' : ' has been reviewed'}`)
   const mapped = cell.mapped
   if (mapped?.provenance === 'override' || (!mapped && ['channel', 'alias', 'aliasVariant'].includes(cell.layer) && cell.pinned && !cell.inherited)) {
-    return source('override', 'Listing override', 'Stored for this SKU and listing on this channel and market; changes to Master do not replace it')
+    return source('override', 'Listing override', 'Stored for this SKU and listing on this channel and market; changes to the Shared product do not replace it')
   }
-  if (mapped?.sourceOwner) return source('channel', mapped.sourceOwner.label, 'This attribute uses its own channel or listing value. A Master mapping is not required')
-  if (mapped?.status === 'unmapped') return source('missing', 'No mapping', 'No rule connects this channel attribute to Master; configure a mapping or enter a listing value')
+  if (mapped?.sourceOwner) return source('channel', mapped.sourceOwner.label, 'This attribute uses its own channel or listing value. A mapping from the Shared product is not required')
+  if (mapped?.status === 'unmapped') return source('missing', 'No mapping', 'No rule connects this channel attribute to the Shared product; configure a mapping or enter a listing value')
   if (mapped?.provenance === 'default') return source('default', 'Channel default', 'Supplied by the channel’s category mapping or a configured default')
   if (mapped?.provenance === 'linked' || cell.linkGroupId || cell.layer === 'linked') return source('linked', 'Linked field', 'Follows a shared field link; its configured source determines the value')
   if (provenance === 'inheritedOverride') return source('linked', 'Inherited override', 'The server reports a value inherited from another listing layer')
@@ -75,20 +75,20 @@ export function describeValueSource(cell: StudioCellValue | undefined, provenanc
     if (mapped.supplyingRule) return source('rule', 'Shared rule', `Supplied by ${mapped.supplyingRule.name} · v${mapped.supplyingRule.version}. Editing this reusable rule can affect other matching products`)
     const path = mapped.legacySource === 'fallback' ? mapped.fallbackPath : mapped.sourcePath
     if (path && !mapped.usesExpression) {
-      return source('master', 'Follows Master', [
-        `Uses Master’s ${path}${mapped.legacySource === 'fallback' ? ' fallback' : ''} for this product and content language`,
+      return source('master', 'Follows Shared', [
+        `Uses the Shared product’s ${path}${mapped.legacySource === 'fallback' ? ' fallback' : ''} for this product and content language`,
         mapped.provenance === 'missing' ? 'The configured source currently produces no value' : null,
         mapped.appliedTransforms.length ? `Channel adjustments: ${mapped.appliedTransforms.join(', ')}` : null,
       ].filter(Boolean).join('. '))
     }
     return source('rule', 'Mapping rule', mapped.usesExpression
-      ? 'Calculated by a channel mapping expression; its inputs determine whether Master changes affect it'
+      ? 'Calculated by a channel mapping expression; its inputs determine whether Shared product changes affect it'
       : mapped.provenance === 'missing'
         ? 'A mapping exists, but it currently produces no value'
         : 'Supplied by the configured channel mapping')
   }
-  if (['master', 'variant'].includes(cell.layer)) return source('master', cell.writeTarget === 'master' ? 'Master value' : 'Follows Master', cell.affectsAllChannels
-    ? 'Shared Master field; editing it affects every channel that follows it'
-    : 'Uses the resolved Master value for this product and content language')
+  if (['master', 'variant'].includes(cell.layer)) return source('master', cell.writeTarget === 'master' ? 'Shared value' : 'Follows Shared', cell.affectsAllChannels
+    ? 'Shared product field; editing it affects every channel that follows it'
+    : 'Uses the resolved Shared product value for this product and content language')
   return source(cell.value == null ? 'missing' : 'channel', cell.value == null ? 'No value' : 'Channel value', 'No Master source is reported for this cell')
 }

@@ -85,7 +85,7 @@ export function FormulaComposer({ text, onChange, candidates, functions, preview
       {error ?? (!formula ? 'This replaces the formula with a value.' : line.kind === 'idle' ? 'Result will appear here' :
         line.kind === 'checking' ? 'Checking formula…' : line.kind === 'error' ? line.message : line.kind === 'empty' ? 'Result: empty' : `Result: ${line.value}`)}
     </div>
-    {response?.retryable && <Button size="xs" disabled={disabled || saving} onClick={retry}>Retry preview</Button>}
+    {response?.retryable && <Button size="xs" disabled={disabled || saving} onClick={retry}>Try again</Button>}
     {onApply && <div className="nds-formula-actions"><span>Enter to apply</span>
       {onCancel && <Button size="sm" disabled={saving} onClick={onCancel}>Cancel</Button>}
       <Button size="sm" variant="primary" disabled={disabled || saving || (formula && !expr.trim())} onClick={() => void save()}>{saving ? 'Saving…' : applyLabel}</Button>

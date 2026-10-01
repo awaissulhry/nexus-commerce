@@ -30,7 +30,7 @@ export function MediaPlanRoute({ productId, fallback }: { productId: string; fal
 
   if (plan.state.status === 'loading') return <div className={styles.state} aria-busy="true">
     <Skeleton width={320} height={16} /><Skeleton width={560} height={96} /><Skeleton width={560} height={96} />
-    {slow && <span>Still loading the photos… <Button size="sm" variant="ghost" onClick={() => void plan.reload()}>Retry</Button></span>}
+    {slow && <span>Still loading the photos… <Button size="sm" variant="ghost" onClick={() => void plan.reload()}>Try again</Button></span>}
   </div>
   if (plan.state.status === 'error') return <>
     <div className={styles.switch}><Banner tone="danger" title="The photo plan could not be loaded" action={<Button size="sm" variant="secondary" onClick={() => void plan.reload()}>Try again</Button>}>

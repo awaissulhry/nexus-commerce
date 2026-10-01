@@ -168,7 +168,7 @@ export function InventoryEditorModal({ row, density, onClose }: { row: ProductRo
       {!loading && error && (
         <div className={styles.invState}>
           <p>{error}</p>
-          <Button type="button" variant="secondary" size="sm" onClick={() => void reload()}>Retry</Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void reload()}>Try again</Button>
         </div>
       )}
 

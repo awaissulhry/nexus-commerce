@@ -421,6 +421,8 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
   font-variant-numeric: tabular-nums; color: var(--nds-text-strong); }
 
 /* ── Modal ───────────────────────────────────────────────────────── */
+/* While a dialog is open the page behind it does not move: a wheel on the backdrop no longer bounces the page. */
+html:has(> body > .nds-backdrop) { overscroll-behavior: none; }
 .nds-backdrop {
   position: fixed;
   inset: 0;
@@ -527,6 +529,9 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+  /* Step 4 (2026-10-01) — scroll lock. A wheel past the end of a long dialog (the Import review, 4,000 rows) chained
+     into the page, and the whole page behind the dialog slid with it. Contained here, as the Drawer's body is. */
+  overscroll-behavior: contain;
   padding: 12px 18px;
   border-top: 1px solid var(--nds-border-subtle);
   border-bottom: 1px solid var(--nds-border-subtle);

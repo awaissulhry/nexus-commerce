@@ -68,7 +68,7 @@
 /* ── header pieces ───────────────────────────────────────────────── */
 .identity {
   font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   color: var(--nds-text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -79,70 +79,27 @@
 .saveState {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--nds-space-6);
   white-space: nowrap;
 }
 .saveState.error {
   color: var(--nds-danger-text);
 }
-.saveSpinner {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  border-radius: var(--nds-radius-round);
-  border: 1.5px solid var(--nds-border-strong);
-  border-top-color: var(--nds-text-link);
-  animation: studioSpin 0.7s linear infinite;
-}
-@keyframes studioSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/* A reduced-motion setting must not leave a spinner that never resolves visually: the ring stops
-   turning and states its progress through colour alone. */
-@media (prefers-reduced-motion: reduce) {
-  .saveSpinner {
-    animation: none;
-    border-top-color: var(--nds-border-strong);
-    background: var(--nds-primary-soft);
-  }
-}
+/* The saving ring is the DS `Spinner` (step 4, D6); this file only places it. */
 
 /* ── tab placeholders ────────────────────────────────────────────── */
-/* A surface another lane owns. It says so, in full, rather than rendering an empty box that reads
-   as a broken page — placeholder surfaces are the roadmap, kept visible on purpose. */
+/* `StudioPlaceholder`: the DS EmptyState, centred in the tab; these only place it (step 4, D6 — no inline styles). */
 .placeholder {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 40px 24px;
-  text-align: center;
-  background: var(--nds-surface-sunken);
 }
-.placeholderTitle {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--nds-text);
-}
-.placeholderBody {
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--nds-text-2);
-  max-width: 46ch;
-}
-.placeholderLane {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  /* Measured 3.2:1 on the sunken ground with --nds-text-3, which is the ICON token. Text needs
-     4.5:1 (reference_grey_500_is_not_a_text_token). */
-  color: var(--nds-text-2);
+.placeholderText {
+  display: grid;
+  gap: var(--nds-space-6);
+  max-width: 52ch;
 }
 
 /* ── whole-frame states ──────────────────────────────────────────── */
@@ -152,7 +109,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 24px;
+  padding: var(--nds-space-40) var(--nds-space-24);
 }
 
 
@@ -164,8 +121,8 @@
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 16px;
+  gap: var(--nds-space-12);
+  padding: 0 var(--nds-space-16);
   background: var(--nds-surface);
   border-bottom: 1px solid var(--nds-border-subtle);
 }
@@ -174,7 +131,7 @@
 }
 .skelScope {
   height: var(--nds-toolbar-h);
-  gap: 8px;
+  gap: var(--nds-space-8);
 }
 
 /* The ARIA tabpanel wrapper must not become a layout box of its own — the tab's own surface owns
@@ -197,8 +154,8 @@
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
   color: var(--nds-text-link);
   text-decoration: none;
 }
@@ -208,40 +165,8 @@
 
 
 /* ── v2: the collapsing header (spec §4) ─────────────────────────── */
-/* 🔴 The HEIGHT SNAPS. `GridSheet` re-measures its top through a ResizeObserver on document.body,
-   so animating 48 → 32 would make AG re-virtualise on every frame of the transition. Only the
-   header's CONTENTS animate.
-   2026-10-01 — `collapsed` sits on `.bands`, not `.shell`: `> *:not(:first-child)` below has no class
-   to narrow it, so a flip restyles the WHOLE subtree under the toggled element. On `.shell` that was
-   the grid too (~3,450 elements, ~7 ms on a 40-row family, measured) on the frame the fold happens. */
-.bands.collapsed :global(.nds-detailhdr.dense) {
-  height: 32px;
-}
-/* What the collapsed strip drops: the SKU/ASIN pair and the pills. The name, status, autosave and
-   Publish ▾ stay — see spec §4.1. */
-.bands.collapsed :global(.nds-detailhdr-meta) > *:not(:first-child),
-.bands.collapsed :global(.nds-detailhdr-meta) :global(.nds-pill) {
-  opacity: 0;
-  transform: translateY(-2px);
-  pointer-events: none;
-}
-.shell :global(.nds-detailhdr-meta) > *,
-.shell :global(.nds-detailhdr-meta) :global(.nds-pill) {
-  /* 150ms; a literal easing because `--nds-ease-standard` does not exist and an undefined var
-     would invalidate the whole declaration. */
-  transition: opacity 150ms cubic-bezier(0.2, 0, 0.2, 1), transform 150ms cubic-bezier(0.2, 0, 0.2, 1);
-}
-.bands.collapsed :global(.nds-detailhdr.dense) :global(h1) {
-  font-size: 13.5px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .shell :global(.nds-detailhdr-meta) > * {
-    transition: none;
-  }
-}
-
-@media (max-width: 719px) {
-  .bands.collapsed :global(.nds-detailhdr.dense) { height: auto; }
-}
+/* The fold's look is the design system's (`DETAIL_HEADER_FOLD`, `styles/patterns.css`): `StudioFrame` puts its host
+   class on `.bands` and `useHeaderCollapse` toggles its folded class there. Nothing here restyles the header
+   (step 4, D6). */
 
 /* Ordered language chips share the scope bar and wrap with it. */

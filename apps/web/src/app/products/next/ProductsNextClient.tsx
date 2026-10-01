@@ -1512,6 +1512,8 @@ function ProductsNextInner() {
               <Input
                 leadingIcon={<Search size={13} style={{ color: 'var(--nds-text-3)' }} />}
                 placeholder="Search products…"
+                /* Step 4 (D6) — a placeholder is not a name: the field says what it searches. */
+                aria-label="Search products"
                 value={searchDraft}
                 onChange={(e) => { searchDirty.current = true; setSearchDraft(e.target.value) }}
                 style={{ width: '100%' }}

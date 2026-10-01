@@ -26,8 +26,8 @@ describe('channelResetOffer — a reset exists where the value is this listing�
     expect(channelResetOffer(channelRow({ brand: cell({ editable: false }) }), 'brand')).toBeNull()
     expect(channelResetOffer(channelRow({}), 'brand')).toBeNull()
   })
-  it('calls an old listing text’s reset "Follow Master", a list’s a whole-list reset, and a formula cell’s a formula removal', () => {
-    expect(channelResetOffer(channelRow({ name: cell({ source: 'channelSnapshot', layer: 'master', pinned: false, follows: true }) }), 'name')?.label).toBe('Follow Master')
+  it('calls an old listing text’s reset "Follow Shared", a list’s a whole-list reset, and a formula cell’s a formula removal', () => {
+    expect(channelResetOffer(channelRow({ name: cell({ source: 'channelSnapshot', layer: 'master', pinned: false, follows: true }) }), 'name')?.label).toBe('Follow Shared')
     expect(channelResetOffer(channelRow({ imageUrls_2: cell({ writeField: 'imageUrls[2]' }) }), 'imageUrls_2')).toMatchObject({ intent: 'reset-list', label: 'Reset list to inherited…' })
     expect(channelResetOffer(channelRow({ brand: cell() }), 'brand', true)).toEqual({ intent: 'reset', formula: true, label: 'Remove formula and reset to inherited' })
   })

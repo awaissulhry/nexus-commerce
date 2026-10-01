@@ -1,3 +1,7 @@
+## "Not listed yet", the header fold, "Try again" — 2026-10-01
+
+`readinessMeta('unlisted', 'row')` and presence `NONE` read "Not listed yet". `DetailHeader.tsx` exports `DETAIL_HEADER_FOLD` (the fold's rules live in the web app's `patterns.css`; Factory has no folding header). `FormulaCellEditor` / `FormulaComposer` say "Try again". Mirrored from the web app.
+
 ## Field shows what is wrong with a value — 2026-10-01
 
 **`Field`** takes **`error`**: a sentence under the control in `--nds-danger-text`, read with the control (`aria-describedby`); the control gets `aria-invalid` and an `Input` a `--nds-danger` border. Mirrored from the web app.

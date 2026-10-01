@@ -31,7 +31,7 @@ export function newProductBody(draft: NewProductDraft): { sku: string; name: str
 }
 
 /** The new (or existing) product's studio, inside the business the page is in: navigate with the workspace router. */
-export const productStudioPath = (productId: string) => `/products/${encodeURIComponent(productId)}/edit/studio`
+export { productStudioPath } from '@/lib/products/studio-path'
 
 export type CreateOutcome =
   | { kind: 'created'; id: string; sku: string }
