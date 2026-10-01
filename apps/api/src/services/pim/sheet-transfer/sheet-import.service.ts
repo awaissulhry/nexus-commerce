@@ -35,7 +35,8 @@ import {
 import { readEditorTransfer, type ChannelFileDecisions, type ImportLog } from '../catalog-editor-workbook.js'
 import { SHEET_IMPORT_SOURCE, type EbayFamilyPlan, type EbayListingPlan } from '../catalog-ebay-workbook.js'
 import { archiveAlias, createAlias, nameListingAlias } from '../listing-alias.service.js'
-import { ensureDraftListings } from '../draft-listing.service.js'
+import { draftListingFields, ensureDraftListings } from '../draft-listing.service.js'
+import { variationBag } from '../shared-variation-values.js'
 import { setFamilyAxes, setFamilyVariationValues } from '../family-variations.service.js'
 import { promoteProduct } from '../product-relationship.service.js'
 import { productEventService } from '../../product-event.service.js'
@@ -101,8 +102,18 @@ interface Payload {
   /** Phase 2: the scopes of the other families this import created; each record is saved against its own family's scope. */
   familyBoundaries?: ProductTransferBoundary[]
 }
-/** A family Apply created (or made the open product the parent of): `products` are the ones it created or brought back. */
-interface FamilyDone { rootId: string; rootSku: string; adopted: boolean; axes: string[]; products: { id: string; sku: string }[] }
+/**
+ * A family Apply created, made the open product the parent of (`adopted`), or completed (`existing`): `products` are the ones
+ * it created or brought back; `axesSet` and `filled` what it gave an existing family (Undo puts them back to none).
+ */
+interface FamilyDone {
+  rootId: string; rootSku: string; adopted: boolean; existing?: boolean; axes: string[]; products: { id: string; sku: string }[]
+  /** The attribute codes of `axes`, in the same order. */
+  axisCodes?: string[]
+  axesSet?: string[]
+  /** The values as stored (the dictionary's spelling): Undo clears only the ones still so. */
+  filled?: { productId: string; sku: string; values: Record<string, string> }[]
+}
 /** The main listing drafts Apply made (`listings`: only rows this import inserted). */
 interface MainDone { rootId: string; rootSku: string; accountId: string; marketplace: string; listings: { id: string; productId: string }[] }
 interface FamiliesDone { families: FamilyDone[]; mains: MainDone[] }
@@ -112,9 +123,12 @@ interface ListingsDone {
   families?: FamilyDone[]
   mains?: MainDone[]
 }
-const familySize = (family: EbayFamilyPlan) => 1 + family.children.length
+/** What Apply does for a family, counted as changes: the product (or the axes an existing family gets), each variation, each value it fills. */
+const familySize = (family: EbayFamilyPlan) => (family.existingId ? family.setsAxes ? 1 : 0 : 1) + family.children.length
+  + (family.fills ?? []).reduce((n, f) => n + Object.keys(f.values).length, 0)
 const planSize = (plan?: EbayListingPlan) => plan ? plan.names.length + plan.creates.length + (plan.families ?? []).reduce((n, f) => n + familySize(f), 0) + (plan.mains?.length ?? 0) : 0
-const undoSize = (undo?: ListingsDone) => undo ? undo.named.length + undo.created.length + (undo.families ?? []).reduce((n, f) => n + f.products.length, 0) + (undo.mains?.length ?? 0) : 0
+const undoSize = (undo?: ListingsDone) => undo ? undo.named.length + undo.created.length + (undo.mains?.length ?? 0)
+  + (undo.families ?? []).reduce((n, f) => n + f.products.length + (f.axesSet ? 1 : 0) + (f.filled ?? []).reduce((m, v) => m + Object.keys(v.values).length, 0), 0) : 0
 interface Dependency { sku: string; key?: string; before?: Record<string, unknown> | null; ignoreParent?: true }
 /** The record shape `applyTransferRecord` reads, plus what the review page shows. */
 interface RecordPayload {
@@ -365,9 +379,12 @@ async function finishCheck(jobId: string, input: CreateInput, records: { key: st
   const plan = input.listingPlan, undo = input.listingUndo
   // The products and listings Apply makes or names are changes too; a new listing's values become records when it exists.
   const creates = [...plan?.creates ?? [], ...plan?.mains ?? []]
-  const pendingRecords = creates.reduce((n, c) => n + new Set(c.rows.map(r => r.sku)).size, 0)
-  summary.changes += planSize(plan) + undoSize(undo) + creates.reduce((n, c) => n + c.rows.length, 0)
-  summary.products += (plan?.families ?? []).reduce((n, f) => n + familySize(f), 0) + (undo?.families ?? []).reduce((n, f) => n + f.products.length, 0)
+  // The new variations of an existing family on its listings: one record per variation and listing, once their rows exist.
+  const pending = [...creates.map(c => c.rows), ...(plan?.families ?? []).map(f => f.rows ?? [])]
+  const pendingRecords = pending.reduce((n, rows) => n + new Set(rows.map(r => JSON.stringify([r.sku, r.accountId, r.aliasKey]))).size, 0)
+  summary.changes += planSize(plan) + undoSize(undo) + pending.reduce((n, rows) => n + rows.length, 0)
+  summary.products += (plan?.families ?? []).reduce((n, f) => n + (f.existingId ? (f.setsAxes ? 1 : 0) + (f.fills?.length ?? 0) : 1) + f.children.length, 0)
+    + (undo?.families ?? []).reduce((n, f) => n + f.products.length + (f.filled?.length ?? 0), 0)
   summary.listings += pendingRecords + (undo?.created.length ?? 0)
   summary.created += creates.length
   const ready = records.filter(r => r.status === 'REVIEWED').length + planSize(plan) + pendingRecords + undoSize(undo)
@@ -586,6 +603,13 @@ async function applyListingPlan(jobId: string, payload: Payload, userId: string 
     const family = await prisma.product.findMany({ where: { OR: [{ id: m.rootId }, { parentId: m.rootId }], deletedAt: null }, select: { id: true } })
     await takeRows(main?.rows ?? [], { productId: { in: family.map(p => p.id) }, channel: 'EBAY', marketplace: m.marketplace, channelConnectionId: m.accountId, aliasKey: '' }, { aliasKey: '', accountId: m.accountId }, m.rootId)
   }
+  // Phase 2b — the new variations of an existing family, on each of its listings the file names.
+  for (const f of plan.families ?? []) {
+    const doneFamily = made.families.find(d => d.existing && d.rootSku === f.rootSku)
+    if (!doneFamily || !f.rows?.length || !doneFamily.products.length) continue
+    for (const l of f.listings ?? []) await takeRows(f.rows.filter(r => r.aliasKey === l.aliasKey && r.accountId === l.accountId),
+      { productId: { in: doneFamily.products.map(p => p.id) }, channel: 'EBAY', marketplace: l.marketplace, channelConnectionId: l.accountId, aliasKey: l.aliasKey }, { aliasKey: l.aliasKey, accountId: l.accountId }, doneFamily.rootId)
+  }
   for (const c of plan.creates) {
     const rootId = rootIdOf(c.rootId, c.rootSku)
     if (!rootId) throw new TransferConflict(`The product ${c.rootSku} was not created. Drop the file again.`)
@@ -675,23 +699,67 @@ async function createFamily(tx: Prisma.TransactionClient, family: EbayFamilyPlan
     return id
   }
   let rootId: string
-  if (family.adoptId) {
+  if (family.existingId) {
+    // Phase 2b — an existing family: what it has stays; it gets the axes it lacked (none before) and its new variations.
+    const root = await tx.product.findFirst({ where: { id: family.existingId, deletedAt: null }, select: { id: true, sku: true, parentId: true, variationAxisCodes: true, variationAxes: true } })
+    if (!root || root.sku !== family.rootSku || root.parentId || family.setsAxes && (root.variationAxisCodes.length || root.variationAxes.length)) throw new TransferConflict(`${family.rootSku} changed since the check. Drop the file again.`)
+    rootId = root.id
+  } else if (family.adoptId) {
     const root = await tx.product.findFirst({ where: { id: family.adoptId, deletedAt: null }, select: { id: true, sku: true, parentId: true, _count: { select: { children: { where: { deletedAt: null } } } } } })
     if (!root || root.sku !== family.rootSku || root.parentId || root._count.children) throw new TransferConflict(`${family.rootSku} changed since the check. Drop the file again.`)
     if (family.children.length) await promoteProduct(tx, root.id, family.theme)
     rootId = root.id
   } else rootId = await make(family.rootSku, { name: family.name, parentId: null, isParent: family.children.length > 0, ...(family.children.length ? { variationTheme: family.theme } : {}) })
   for (const child of family.children) await make(child.sku, { name: child.name, parentId: rootId, isParent: false })
-  if (family.axes.length) {
-    // THE writers of axes and values: dictionary codes, values matched to options, unknown values added as options.
+  const fills = family.fills ?? []
+  if (family.axes.length && (family.children.length || fills.length || family.setsAxes)) {
+    // THE writers of axes and values: dictionary codes, values matched to options, unknown values added as options. An
+    // existing family's axes are written only when it had none.
     const root = await tx.product.findUniqueOrThrow({ where: { id: rootId }, select: { version: true } })
-    let { version } = await setFamilyAxes(rootId, { expectedVersion: root.version, codes: family.axes.map(a => a.code), labels: family.axes.map(a => a.label) })
+    let version = root.version
+    if (!family.existingId || family.setsAxes) ({ version } = await setFamilyAxes(rootId, { expectedVersion: version, codes: family.axes.map(a => a.code), labels: family.axes.map(a => a.label) }))
     const idOf = new Map(products.map(p => [p.sku, p.id]))
-    const changes = family.children.flatMap(c => family.axes.map(a => ({ productId: idOf.get(c.sku)!, axis: a.code, value: c.values[a.code] ?? null, addOption: true })))
+    const changes = [...family.children.flatMap(c => family.axes.map(a => ({ productId: idOf.get(c.sku)!, axis: a.code, value: c.values[a.code] ?? null, addOption: true }))),
+      ...fills.flatMap(f => Object.entries(f.values).map(([axis, value]) => ({ productId: f.productId, axis, value, addOption: true })))]
     for (let offset = 0; offset < changes.length; offset += 2000) ({ version } = await setFamilyVariationValues(rootId, { expectedVersion: version, changes: changes.slice(offset, offset + 2000) }))
   }
-  await productReadCacheService.refreshInTransaction(tx, [rootId, ...products.map(p => p.id)])
-  return { rootId, rootSku: family.rootSku, adopted: !!family.adoptId, axes: family.axes.map(a => a.label), products }
+  // An existing family's listings the file names: each new variation gets its inert draft row there.
+  const added = products.map(p => p.id)
+  for (const l of family.existingId && added.length ? family.listings ?? [] : []) {
+    if (!l.aliasKey) await ensureDraftListings(tx, { channel: 'EBAY', market: l.marketplace, accountId: l.accountId, productIds: [rootId, ...added], family: true })
+    else await tx.channelListing.createMany({ data: added.map(productId => draftListingFields({ productId, channel: 'EBAY', market: l.marketplace, accountId: l.accountId, aliasKey: l.aliasKey })), skipDuplicates: true })
+  }
+  // What an existing family was given, as stored (the dictionary's spelling): Undo clears only values still so.
+  const stored = fills.length ? await tx.product.findMany({ where: { id: { in: fills.map(f => f.productId) } }, select: { id: true, categoryAttributes: true, variantAttributes: true } }) : []
+  const filled = fills.map(f => {
+    const bag = variationBag(stored.find(p => p.id === f.productId) ?? { categoryAttributes: null, variantAttributes: null })
+    return { productId: f.productId, sku: f.sku, values: Object.fromEntries(Object.keys(f.values).map(code => [code, String(bag[code] ?? '')])) }
+  })
+  await productReadCacheService.refreshInTransaction(tx, [rootId, ...products.map(p => p.id), ...fills.map(f => f.productId)])
+  return { rootId, rootSku: family.rootSku, adopted: !!family.adoptId, axes: family.axes.map(a => a.label), axisCodes: family.axes.map(a => a.code), products,
+    ...(family.existingId ? { existing: true, ...(family.setsAxes ? { axesSet: family.axes.map(a => a.code) } : {}), ...(filled.length ? { filled } : {}) } : {}) }
+}
+
+/**
+ * Undo of what an import gave an EXISTING family (phase 2b), through the same writers: the values it filled go back to none
+ * where they are still what it wrote, then the axes it set, where they are still its axes. A value changed since stays.
+ */
+async function undoFamilyValues(family: FamilyDone, binned: string[]) {
+  await inDatabaseTransaction(prisma, async () => {
+    const root = await prisma.product.findFirst({ where: { id: family.rootId, deletedAt: null }, select: { version: true, variationAxisCodes: true } })
+    if (!root) return
+    let version = root.version
+    const ids = (family.filled ?? []).map(f => f.productId).filter(id => !binned.includes(id))
+    const now = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, parentId: family.rootId, deletedAt: null }, select: { id: true, categoryAttributes: true, variantAttributes: true } }) : []
+    const changes = (family.filled ?? []).flatMap(f => {
+      const product = now.find(p => p.id === f.productId)
+      if (!product) return []
+      const bag = variationBag(product)
+      return Object.entries(f.values).filter(([code, value]) => value && String(bag[code] ?? '') === value).map(([axis]) => ({ productId: f.productId, axis, value: null }))
+    })
+    if (changes.length) ({ version } = await setFamilyVariationValues(family.rootId, { expectedVersion: version, changes }))
+    if (family.axesSet && JSON.stringify(root.variationAxisCodes) === JSON.stringify(family.axesSet)) await setFamilyAxes(family.rootId, { expectedVersion: version, codes: [], labels: [] })
+  }, { isolationLevel: 'Serializable', timeoutMs: 120_000 })
 }
 
 /**
@@ -701,6 +769,7 @@ async function createFamily(tx: Prisma.TransactionClient, family: EbayFamilyPlan
 async function undoFamilies(undo: ListingsDone, jobId: string, userId: string | null) {
   const binned = (undo.families ?? []).flatMap(f => f.products.map(p => p.id))
   const drafts = (undo.mains ?? []).flatMap(m => m.listings.filter(l => !binned.includes(l.productId)))
+  for (const family of undo.families ?? []) if (family.filled?.length || family.axesSet) await undoFamilyValues(family, binned)
   if (!binned.length && !drafts.length) return
   await prisma.$transaction(async tx => {
     const live = binned.length ? await tx.product.findMany({ where: { id: { in: binned }, deletedAt: null }, select: { id: true, sku: true } }) : []
@@ -760,6 +829,8 @@ export function planChanges(payload: Payload): SheetImportChange[] {
   const binned = new Set((payload.listingUndo?.families ?? []).flatMap(f => f.products.map(p => p.id)))
   for (const f of payload.listingUndo?.families ?? []) {
     const variations = f.products.filter(p => p.id !== f.rootId).length
+    if (f.axesSet) out.push(product(`plan:ux:${f.rootSku}`, f.rootSku, 'variationAxes', 'Axes', f.axes.join(', '), null, undone))
+    for (const v of f.filled ?? []) for (const [code, value] of Object.entries(v.values)) out.push(product(`plan:uv:${v.sku}:${code}`, v.sku, `variation:${code}`, labelOf(f, code), value, null, undone))
     if (f.adopted) out.push(product(`plan:uf:${f.rootSku}`, f.rootSku, 'variations', 'Variations', `${variations} ${variations === 1 ? 'variation' : 'variations'}`,
       `${f.rootSku} stays a product with variations${f.axes.length ? ` (${f.axes.join(', ')})` : ''}. Its variations go to the recycle bin.`, undone))
     for (const p of f.products) out.push(product(`plan:ud:${p.sku}`, p.sku, 'product', 'Product', `Product ${p.sku}`, 'In the recycle bin', undone))
@@ -772,6 +843,19 @@ export function planChanges(payload: Payload): SheetImportChange[] {
   // An import: the families, then the main listings, then the extra listings.
   for (const f of payload.listingPlan?.families ?? []) {
     const varies = f.axes.length ? ` (varies by ${f.axes.map(a => a.label).join(', ')})` : ''
+    if (f.existingId) {
+      // Phase 2b — an existing family: the axes it gets, its new variations, the values it lacked, then their listing values.
+      if (f.setsAxes) out.push(product(`plan:x:${f.rootSku}`, f.rootSku, 'variationAxes', 'Axes', null, f.axes.map(a => a.label).join(', '), made))
+      for (const c of f.children) out.push(product(`plan:v:${c.sku}`, c.sku, 'variation', 'Variation', null,
+        `${f.restore[c.sku] ? `${c.sku} back from the recycle bin` : `New variation ${c.sku}`} (${f.axes.map(a => c.values[a.code]).join(' · ')})`, made))
+      for (const v of f.fills ?? []) for (const a of f.axes) if (v.values[a.code]) out.push(product(`plan:fv:${v.sku}:${a.code}`, v.sku, `variation:${a.code}`, a.label, null, v.values[a.code], made))
+      if (!done) (f.rows ?? []).forEach((row, i) => {
+        const listing = f.listings?.find(l => l.aliasKey === row.aliasKey && l.accountId === row.accountId)
+        out.push(change(`plan:fr:${f.rootSku}:${i}`, { sku: row.sku, marketplace: row.marketplace, accountId: row.accountId, aliasKey: row.aliasKey },
+          `eBay · ${row.marketplace}${row.aliasKey && listing ? ` · ${listing.label}` : ''}`, row.field, payload.labels[labelKey(row, row.field)] ?? humanize(row.field), null, row.value, 'new'))
+      })
+      continue
+    }
     out.push(f.adoptId ? product(`plan:f:${f.rootSku}`, f.rootSku, 'variations', 'Variations', 'No variations', `${f.rootSku} becomes a product with variations${varies}`, made)
       : product(`plan:f:${f.rootSku}`, f.rootSku, 'product', 'Product', null, `${f.restore[f.rootSku] ? `${f.rootSku} back from the recycle bin` : `New product ${f.rootSku}`}${varies}`, made))
     for (const c of f.children) {
@@ -796,6 +880,9 @@ export function planChanges(payload: Payload): SheetImportChange[] {
   }
   return out
 }
+
+/** An axis's label in an undo row: the family's own spelling for the code, else the code. */
+const labelOf = (family: FamilyDone, code: string) => family.axes[(family.axisCodes ?? []).indexOf(code)] ?? code
 
 function transient(error: unknown) {
   const code = (error as { code?: string })?.code ?? ''
@@ -883,7 +970,7 @@ function statusOf(job: { id: string; status: string; processed: number | null; t
     canUndo: ['DONE', 'PARTIAL'].includes(state) && !payload.undoneBy && (payload.receipt?.saved ?? 0) > 0 && payload.format !== 'undo',
     ...(payload.readiness ? { readiness: payload.readiness.state } : {}),
     // Phase 2 — a family this import created is another product than the open one: the done screen offers to open it.
-    ...(!payload.undoneBy && payload.listingsDone?.families?.some(f => !f.adopted) ? { newFamilies: payload.listingsDone.families.filter(f => !f.adopted).map(f => ({ productId: f.rootId, sku: f.rootSku })) } : {}),
+    ...(!payload.undoneBy && payload.listingsDone?.families?.some(f => !f.adopted && !f.existing) ? { newFamilies: payload.listingsDone.families.filter(f => !f.adopted && !f.existing).map(f => ({ productId: f.rootId, sku: f.rootSku })) } : {}),
     ...(Array.isArray(job.errors) && (job.errors[0] as { message?: string })?.message ? { error: (job.errors[0] as { message: string }).message } : {}) }
 }
 

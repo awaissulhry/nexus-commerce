@@ -210,3 +210,33 @@ describe('the review of an import that creates a family', () => {
     ])
   })
 })
+
+// Phase 2b (the Owner, 2026-10-01) — an existing family the file completes: its new axes, variations and values, as "New";
+// an undo puts them back to none.
+describe('the review of an import that completes an existing family', () => {
+  it('lists the axes it gets, its new variations, the values it lacked, then the new variations’ listing values', () => {
+    const payload = { labels: {}, listingPlan: { names: [], creates: [], mains: [], families: [{ rootSku: 'GALE', existingId: 'r1', name: 'Gale', theme: '', setsAxes: true,
+      axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }], restore: {},
+      children: [{ sku: 'GALE-YELLOW-M', name: 'Gale (Giallo, M)', values: { color: 'Giallo', size: 'M' } }],
+      fills: [{ productId: 'v1', sku: 'GALE-BLACK-M', values: { color: 'Nero', size: 'M' } }],
+      listings: [{ accountId: 'acc-1', aliasKey: 'a1', marketplace: 'IT', label: 'IT-GALE' }],
+      rows: [{ ...base, entity: 'Overrides', sku: 'GALE-YELLOW-M', channel: 'EBAY', accountId: 'acc-1', marketplace: 'IT', aliasKey: 'a1', field: 'price', value: 105 }] }] } }
+    expect(planChanges(payload as never).map(c => [c.sku, c.destination, c.label, c.before, c.after, c.status])).toEqual([
+      ['GALE', 'Shared', 'Axes', null, 'Colore, Taglia', 'new'],
+      ['GALE-YELLOW-M', 'Shared', 'Variation', null, 'New variation GALE-YELLOW-M (Giallo · M)', 'new'],
+      ['GALE-BLACK-M', 'Shared', 'Colore', null, 'Nero', 'new'],
+      ['GALE-BLACK-M', 'Shared', 'Taglia', null, 'M', 'new'],
+      ['GALE-YELLOW-M', 'eBay · IT · IT-GALE', 'Price', null, 105, 'new'],
+    ])
+  })
+  it('an undo puts the axes and values back to none and the new variations in the recycle bin', () => {
+    const undo = { labels: {}, listingUndo: { named: [], created: [], mains: [], families: [{ rootId: 'r1', rootSku: 'GALE', adopted: false, existing: true,
+      axes: ['Colore', 'Taglia'], axisCodes: ['color', 'size'], axesSet: ['color', 'size'], products: [{ id: 'n1', sku: 'GALE-YELLOW-M' }],
+      filled: [{ productId: 'v1', sku: 'GALE-BLACK-M', values: { color: 'Nero' } }] }] } }
+    expect(planChanges(undo as never).map(c => [c.sku, c.label, c.before, c.after])).toEqual([
+      ['GALE', 'Axes', 'Colore, Taglia', null],
+      ['GALE-BLACK-M', 'Colore', 'Nero', null],
+      ['GALE-YELLOW-M', 'Product', 'Product GALE-YELLOW-M', 'In the recycle bin'],
+    ])
+  })
+})

@@ -4,7 +4,7 @@
  * Fixtures are built here in memory, in the shape of the Owner's GALE IT file; the Owner's own files are never read by a test.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { checkEbayLedger, clusterFileParents, ebayAccountFor, ebayFileSpecs, mapEbayWorkbook, planEbayGroups, varyingColumns, NEW_LISTING_KEY,
+import { checkEbayLedger, clusterFileParents, ebayAccountFor, ebayFileSpecs, mapEbayWorkbook, planEbayGroups, planFamilyUpdate, varyingColumns, NEW_LISTING_KEY,
   type EbayFamilyContext, type EbayRulesSource, type EbayWorkbookResult, type EbayWorkbookTable, type EbayWorkbookTarget } from './catalog-ebay-workbook.js'
 import { ebaySpecFromCache } from './channel-specs/ebay.js'
 import type { DictionaryAttribute } from './family-variations-core.js'
@@ -56,9 +56,9 @@ describe('a new family from the file — grouping', () => {
       axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }] })
     expect(groups[0].family!.adoptId).toBeUndefined()
     expect(groups[0].family!.children).toEqual([
-      { sku: 'GALE-BLACK-M', name: 'Giacca GALE', values: { color: 'Nero', size: 'M' } },
-      { sku: 'GALE-BLACK-L', name: 'Giacca GALE', values: { color: 'Nero', size: 'L' } },
-      { sku: 'GALE-YELLOW-M', name: 'Giacca GALE', values: { color: 'Giallo', size: 'M' } },
+      { sku: 'GALE-BLACK-M', name: 'Giacca GALE (Nero, M)', values: { color: 'Nero', size: 'M' } },
+      { sku: 'GALE-BLACK-L', name: 'Giacca GALE (Nero, L)', values: { color: 'Nero', size: 'L' } },
+      { sku: 'GALE-YELLOW-M', name: 'Giacca GALE (Giallo, M)', values: { color: 'Giallo', size: 'M' } },
     ])
     expect([...proposals.entries()]).toEqual([['IT-GALE', { rootId: '', rootSku: 'GALE' }], ['GALE-ALT1', { rootId: '', rootSku: 'GALE' }]])
   })
@@ -68,10 +68,12 @@ describe('a new family from the file — grouping', () => {
     // A later parent that bridges two families joins them.
     expect(clusterFileParents(['A', 'B', 'X'], p => ({ A: ['1'], B: ['2'], X: ['1', '2'] } as Record<string, string[]>)[p])).toEqual([['A', 'B', 'X']])
   })
-  it('a variation without a Title is named after the product and its values', async () => {
+  // The Owner, 2026-10-01: every variation the import creates is "<the product's title> (<values>)", whatever its row's Title.
+  it('a variation is named after the product and its values, never after its own row’s Title', async () => {
     const table = galeTable(['GALE'])
-    table.records[1].values.Title = ''
-    expect((await plan(table)).groups[0].family!.children[0].name).toBe('Giacca GALE (Nero, M)')
+    table.records[1].values.Title = 'Something else'
+    table.records[2].values.Title = ''
+    expect((await plan(table)).groups[0].family!.children.slice(0, 2).map(c => c.name)).toEqual(['Giacca GALE (Nero, M)', 'Giacca GALE (Nero, L)'])
   })
 })
 
@@ -226,5 +228,51 @@ describe('a category whose eBay rules this business never saved', () => {
     expect(result.exclusions.map(e => [e.row, e.message])).toEqual([3, 4, 5].map(row => [row, "Not imported: eBay IT's rules for category 177104 are missing (see row 2)."]))
     expect(result.rows).toEqual([])
     expect(checkEbayLedger(table, result).unaccounted).toEqual([])
+  })
+})
+
+// Phase 2b (the Owner, 2026-10-01) — an EXISTING family gets what the file adds, never loses what it has.
+describe('an existing family the file completes', () => {
+  const root = { id: 'r1', sku: 'GALE', name: 'Gale jacket', variationAxisCodes: ['color', 'size'], variationAxes: ['Colore', 'Taglia'] }
+  const variant = (id: string, sku: string, values: Record<string, string> = {}) => ({ id, sku, categoryAttributes: { variations: values }, variantAttributes: null })
+  const variants = [variant('v1', 'GALE-BLACK-M', { color: 'Nero', size: 'M' }), variant('v2', 'GALE-BLACK-L', { color: 'Nero', size: 'L' })]
+  const update = (patch: Partial<Parameters<typeof planFamilyUpdate>[0]> = {}) => planFamilyUpdate({ table: galeTable(['GALE']), root, variants, newSkus: ['GALE-YELLOW-M'], restore: {}, dictionary, ...patch })
+  it('creates a new variation SKU in the family, with its values for the family’s axes, named after the product', () => {
+    const { family, refused, issues } = update()
+    expect(refused.size).toBe(0)
+    expect(issues).toEqual([])
+    expect(family).toMatchObject({ existingId: 'r1', rootSku: 'GALE', axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }], fills: [] })
+    expect(family!.setsAxes).toBeUndefined()
+    expect(family!.children).toEqual([{ sku: 'GALE-YELLOW-M', name: 'Giacca GALE (Giallo, M)', values: { color: 'Giallo', size: 'M' } }])
+  })
+  it('refuses, by name, a new variation that collides with a variant, or that the file’s axes do not fit', () => {
+    const twin = update({ variants: [...variants, variant('v3', 'GALE-Y', { color: 'giallo', size: 'M' })] })
+    expect(twin.family).toBeNull()
+    expect(twin.refused.get('GALE-YELLOW-M')).toBe('GALE-Y and GALE-YELLOW-M would have the same Colore and Taglia. Give each variation its own values, then import again.')
+    const table = galeTable(['GALE'], KIDS, 'Colore')
+    const misfit = update({ table })
+    expect(misfit.refused.get('GALE-YELLOW-M')).toBe('The file varies GALE by Colore; the family varies by Colore, Taglia. Nexus does not change a family\'s axes: new variations are not created.')
+  })
+  it('a family copied without axes or values gets both from the file (the live case)', () => {
+    const bare = { ...root, variationAxisCodes: [], variationAxes: [] }
+    const { family, issues } = update({ root: bare, variants: [variant('v1', 'GALE-BLACK-M'), variant('v2', 'GALE-BLACK-L')], newSkus: [] })
+    expect(issues).toEqual([])
+    expect(family).toMatchObject({ setsAxes: true, axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }], children: [],
+      fills: [{ productId: 'v1', sku: 'GALE-BLACK-M', values: { color: 'Nero', size: 'M' } }, { productId: 'v2', sku: 'GALE-BLACK-L', values: { color: 'Nero', size: 'L' } }] })
+  })
+  it('never overwrites a value the family has: a different one in the file is a named problem; a missing one is filled', () => {
+    const { family, issues } = update({ variants: [variant('v1', 'GALE-BLACK-M', { color: 'Rosso', size: 'M' }), variant('v2', 'GALE-BLACK-L', { color: 'Nero' })], newSkus: [] })
+    expect(family!.fills).toEqual([{ productId: 'v2', sku: 'GALE-BLACK-L', values: { size: 'L' } }])
+    expect(issues.map(i => [i.sku, i.message])).toEqual([['GALE-BLACK-M', 'GALE-BLACK-M has Colore "Rosso" in Nexus and "Nero" in the file. Nexus keeps its value; change it on the product if the file is right.']])
+  })
+  it('nothing to add is no plan', () => {
+    expect(update({ newSkus: [] }).family).toBeNull()
+  })
+  it('a listing next to an existing family’s main listing becomes its extra listing, so its new variations are created there', async () => {
+    const products: P[] = [{ id: 'open', sku: 'GALE', parentId: null, productType: null, deletedAt: null }, { id: 'k1', sku: 'GALE-OLD', parentId: 'open', productType: null, deletedAt: null }]
+    const { out, proposals, groups } = await plan(galeTable(['GALE', 'IT-GALE']), products, { dictionary, open: { id: 'open', sku: 'GALE', children: 1 } })
+    expect(out.issues).toEqual([])
+    expect(groups.map(g => [g.rootId, g.records.length, g.family])).toEqual([['open', 8, undefined]])
+    expect(proposals.get('IT-GALE')).toEqual({ rootId: 'open', rootSku: 'GALE' })
   })
 })
