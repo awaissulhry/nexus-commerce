@@ -44,7 +44,7 @@ import { clearFieldCatalogueCache } from '../mapping/field-catalogue.service.js'
 import { createReferenceResolver } from '../reference-values.service.js'
 import { withCachedSchemas } from '../cached-schema-context.js'
 import { productReadCacheService } from '../../product-read-cache.service.js'
-import { deferReadiness, markReadinessPending, rebuildPendingFamily } from '../readiness-index.service.js'
+import { deferReadiness, markReadinessPending, rebuildImportedFamily } from '../readiness-index.service.js'
 
 export const SHEET_IMPORT_KIND = 'sheet-import-v1'
 const LEASE_MS = 60_000
@@ -479,8 +479,9 @@ export async function refreshSheetReadiness(jobId: string) {
     const started = performance.now()
     const failures: string[] = []
     for (const root of readiness.roots) {
-      // 0 = nothing pending any more (the drain or another worker got there first) — also done.
-      try { await rebuildPendingFamily(root) } catch (error) { failures.push(error instanceof Error ? error.message : String(error)) }
+      // 0 = nothing pending any more (the drain or another worker got there first) — also done. A family with no readiness
+      // row at all is built (audit P6: it had nothing to mark pending, so it stayed "Not computed").
+      try { await rebuildImportedFamily(root) } catch (error) { failures.push(error instanceof Error ? error.message : String(error)) }
     }
     // Only the readiness keys change: the rest of the job (an undo being linked meanwhile) is never overwritten.
     await prisma.$executeRawUnsafe(`UPDATE "BulkOperation" SET "changes" = jsonb_set(jsonb_set("changes", '{readiness,state}', to_jsonb($2::text)), '{readiness,error}', to_jsonb($3::text)) WHERE "id" = $1`,

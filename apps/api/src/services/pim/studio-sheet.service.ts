@@ -1872,6 +1872,13 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     }
   }
 
+  // Audit P5 (2026-10-01) — what eBay needs for a NEW listing beyond its category's fields (an item location, the three
+  // business policies), named on the main row only when Nexus KNOWS publish could not fill it (`ebay-publish-readiness.ts`).
+  if (coordinate?.channel === 'EBAY' && context?.connectionId) {
+    const { addEbayPublishReadiness } = await import('./ebay-publish-readiness.js')
+    await addEbayPublishReadiness({ rows, columns, label: coordinate.label, market: coordinate.marketplace, accountId: context.connectionId })
+  }
+
   // ── 6. alias group summaries ──────────────────────────────────────
   const aliases: AliasGroup[] = coordinate
     ? groups.map((g) => {
