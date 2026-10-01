@@ -19,6 +19,7 @@
 import { ebaySend } from './gateway/ebay.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { recordApiCall } from './outbound-api-call-log.service.js'
+import { rememberEbayAccountRead } from './ebay-account-defaults.js'
 
 export interface EbayPolicySummary {
   /** eBay-assigned id, used as fulfillmentPolicyId / paymentPolicyId
@@ -38,6 +39,11 @@ export interface EbayMerchantLocation {
   key: string
   name: string
   country: string | null
+  /** Audit P3 (2026-10-01) — with the country, what eBay needs to create a listing: a postal code or a city. */
+  postalCode?: string | null
+  city?: string | null
+  /** False for a location the seller disabled in eBay. */
+  enabled?: boolean
 }
 
 export interface EbayAccountSnapshot {
@@ -109,17 +115,29 @@ export class EbayAccountService {
         connectionId,
         options?.requireComplete,
       ),
-      options?.requireComplete ? Promise.resolve([]) : fetchLocations(
+      options?.requireComplete ? Promise.resolve({ items: [], read: false }) : fetchLocations(
         `${apiBase}/sell/inventory/v1/location`,
         headers,
         connectionId,
       ),
     ])
     const snapshot: EbayAccountSnapshot = {
-      fulfillmentPolicies: fulfillment,
-      paymentPolicies: payment,
-      returnPolicies: returnRes,
-      locations,
+      fulfillmentPolicies: fulfillment.items,
+      paymentPolicies: payment.items,
+      returnPolicies: returnRes.items,
+      locations: locations.items,
+    }
+    // Audit P2/P3 — keep what this read learned (the item location, which policies exist here) on the account, so a
+    // dry-run review and readiness know it without asking eBay. Only lists that were actually read are kept.
+    if (!options?.requireComplete) {
+      await rememberEbayAccountRead(connectionId, marketplaceId, {
+        ...(locations.read ? { locations: locations.items } : {}),
+        policies: {
+          ...(fulfillment.read ? { shipping: fulfillment.items.length } : {}),
+          ...(payment.read ? { payment: payment.items.length } : {}),
+          ...(returnRes.read ? { return: returnRes.items.length } : {}),
+        },
+      })
     }
     // Strict assignment reads need only policies; do not replace a full display snapshot's locations.
     if (!options?.requireComplete) this.cache.set(key, {
@@ -143,7 +161,7 @@ async function fetchPolicy(
   marketplaceId: string,
   connectionId: string,
   requireComplete = false,
-): Promise<EbayPolicySummary[]> {
+): Promise<{ items: EbayPolicySummary[]; read: boolean }> {
   let json:
     | (Record<string, unknown> | null)
   try {
@@ -181,7 +199,7 @@ async function fetchPolicy(
         err instanceof Error ? err.message : String(err)
       }`,
     )
-    return []
+    return { items: [], read: false }
   }
   if (requireComplete && (!json || !Array.isArray(json[arrayKey]))) throw new Error('Incomplete eBay policy response')
   const list = json && Array.isArray(json[arrayKey]) ? (json[arrayKey] as Array<{
@@ -192,7 +210,7 @@ async function fetchPolicy(
     marketplaceId?: string
   }>) : []
   if (requireComplete && list.some(p => !p || typeof (p.fulfillmentPolicyId ?? p.paymentPolicyId ?? p.returnPolicyId) !== 'string' || !(p.fulfillmentPolicyId ?? p.paymentPolicyId ?? p.returnPolicyId) || typeof p.name !== 'string' || !p.name.trim() || typeof p.marketplaceId !== 'string')) throw new Error('Incomplete eBay policy response')
-  return list.map((p) => ({
+  const items = list.map((p) => ({
     id:
       p.fulfillmentPolicyId ??
       p.paymentPolicyId ??
@@ -201,19 +219,23 @@ async function fetchPolicy(
     name: p.name ?? '',
     marketplaceId: p.marketplaceId ?? null,
   })).filter((p) => p.id.length > 0)
+  // An answer without the list is not a read of the list (an empty list is).
+  return { items, read: !!json && Array.isArray(json[arrayKey]) }
 }
 
 async function fetchLocations(
   url: string,
   headers: Record<string, string>,
   connectionId: string,
-): Promise<EbayMerchantLocation[]> {
+): Promise<{ items: EbayMerchantLocation[]; read: boolean }> {
+  type EbayLocationAddress = { country?: string; postalCode?: string; city?: string }
   let json:
     | {
         locations?: Array<{
           merchantLocationKey?: string
           name?: string
-          location?: { address?: { country?: string } }
+          merchantLocationStatus?: string
+          location?: { address?: EbayLocationAddress }
         }>
       }
     | null
@@ -222,7 +244,8 @@ async function fetchLocations(
       locations?: Array<{
         merchantLocationKey?: string
         name?: string
-        location?: { address?: { country?: string } }
+        merchantLocationStatus?: string
+        location?: { address?: EbayLocationAddress }
       }>
     } | null>(
       {
@@ -248,7 +271,8 @@ async function fetchLocations(
           locations?: Array<{
             merchantLocationKey?: string
             name?: string
-            location?: { address?: { country?: string } }
+            merchantLocationStatus?: string
+            location?: { address?: EbayLocationAddress }
           }>
         } | null
       },
@@ -259,15 +283,19 @@ async function fetchLocations(
         err instanceof Error ? err.message : String(err)
       }`,
     )
-    return []
+    return { items: [], read: false }
   }
-  return (json?.locations ?? [])
+  const items = (json?.locations ?? [])
     .map((l) => ({
       key: l.merchantLocationKey ?? '',
       name: l.name ?? l.merchantLocationKey ?? '',
       country: l.location?.address?.country ?? null,
+      postalCode: l.location?.address?.postalCode ?? null,
+      city: l.location?.address?.city ?? null,
+      enabled: l.merchantLocationStatus !== 'DISABLED',
     }))
     .filter((l) => l.key.length > 0)
+  return { items, read: !!json && Array.isArray(json.locations) }
 }
 
 export const ebayAccountService = new EbayAccountService()
