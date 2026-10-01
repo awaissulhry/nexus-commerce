@@ -39,6 +39,7 @@ import {
 
 export { normaliseKey, SLOT_COLUMNS_MAX }
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
+import type { SheetTone } from '@nexus/shared/sheet-groups'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -132,6 +133,8 @@ export interface SheetColumn {
   group: string
   /** Stable presentation group identity; never part of the value or mapping address. */
   groupKey?: string
+  /** The group's colour on the product sheet (`@nexus/shared/sheet-groups`); set where the sheet groups its columns. */
+  groupTone?: SheetTone
   kind: SheetColumnKind
   storage: SheetStorage
   /**
@@ -207,6 +210,10 @@ export interface SheetGroup {
   /** The channel's localised title where the group is a channel's (`Offerta`). */
   channelLabel: string | null
   order: number
+  /** The group's position in the channel's own schema (Amazon's `__propertyGroups`); `order` is the display order. */
+  sourceOrder?: number
+  /** The group's colour on the product sheet (`@nexus/shared/sheet-groups`). */
+  tone?: SheetTone
 }
 
 /** AM.1 — what each channel spec contributed: the conformance witness the client can show. */
@@ -670,7 +677,7 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       const gk = `${spec.channel}:${g.key}`
       if (seenGroup.has(gk)) continue
       seenGroup.add(gk)
-      channelGroups.push({ key: gk, label: g.label, channelLabel: g.channelLabel, order: g.order })
+      channelGroups.push({ key: gk, label: g.label, channelLabel: g.channelLabel, order: g.order, sourceOrder: g.order })
     }
     for (const f of spec.fields) {
       const listingOnly = !!f.channelStore && !f.masterKey
