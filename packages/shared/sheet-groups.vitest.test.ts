@@ -103,13 +103,48 @@ describe('groupSheetColumns — Amazon, as the old Amazon flat file', () => {
   })
 })
 
-describe('groupSheetColumns — Shared, Shopify and Etsy keep their groups', () => {
-  it('changes no group and no order, and colours each group by what it holds', () => {
-    const input = [col('__productRole', 'master:relationships', 'Product relationships'), col('name', 'master:identity', 'Identity'),
-      col('description', 'master:content', 'Content'), col('basePrice', 'master:pricing', 'Pricing'), col('weightValue', 'master:physical', 'Dimensions and weight')]
-    const { columns } = groupSheetColumns(input, [], null)
-    expect(columns.map((c) => [c.key, c.group, c.groupKey])).toEqual(input.map((c) => [c.key, c.group, c.groupKey]))
-    expect(columns.map((c) => c.groupTone)).toEqual(['slate', 'slate', 'purple', 'emerald', 'cyan'])
+describe('groupSheetColumns — Shared, Shopify and Etsy keep their groups, with ONE Identity group', () => {
+  const input = [
+    col('__productRole', 'master:relationships', 'Product relationships'), col('__parentSku', 'master:relationships', 'Product relationships'),
+    col('variation_theme', 'master:identity', 'Identity'), col('name', 'master:identity', 'Identity'), col('brand', 'master:identity', 'Identity'),
+    col('description', 'master:content', 'Content'), col('material', 'master:attributes', 'Specifications'),
+    col('gtin', 'master:identifiers', 'Identifiers'), col('ean', 'master:identifiers', 'Identifiers'),
+    col('basePrice', 'master:pricing', 'Pricing'), col('weightValue', 'master:physical', 'Dimensions and weight'),
+  ]
+  const groups: GroupableGroup[] = [
+    { key: 'master:relationships', label: 'Product relationships', channelLabel: null, order: -1 },
+    { key: 'master:identity', label: 'Identity', channelLabel: null, order: 0 },
+    { key: 'master:content', label: 'Content', channelLabel: null, order: 1 },
+    { key: 'master:attributes', label: 'Specifications', channelLabel: null, order: 2 },
+    { key: 'master:identifiers', label: 'Identifiers', channelLabel: null, order: 3 },
+    { key: 'master:pricing', label: 'Pricing', channelLabel: null, order: 4 },
+    { key: 'master:physical', label: 'Dimensions and weight', channelLabel: null, order: 5 },
+  ]
+  const out = groupSheetColumns(input, groups, null)
+
+  it('folds the variation theme, the product relationships, the identity fields and the identifiers into Identity (Owner, 2026-10-01)', () => {
+    expect(keysOf(out.columns, 'Identity')).toEqual(['variation_theme', '__productRole', '__parentSku', 'name', 'brand', 'gtin', 'ean'])
+    expect(out.groups.map((g) => g.label)).toEqual(['Identity', 'Content', 'Specifications', 'Pricing', 'Dimensions and weight'])
+  })
+
+  it('changes no other group and no other order, and colours each group by what it holds', () => {
+    expect(out.columns.map((c) => c.key)).toEqual(['variation_theme', '__productRole', '__parentSku', 'name', 'brand', 'gtin', 'ean', 'description', 'material', 'basePrice', 'weightValue'])
+    expect(out.columns.filter((c) => c.group !== 'Identity').map((c) => [c.key, c.groupKey])).toEqual(
+      input.filter((c) => !['master:relationships', 'master:identity', 'master:identifiers'].includes(c.groupKey!)).map((c) => [c.key, c.groupKey]))
+    expect(out.groups.map((g) => g.tone)).toEqual(['slate', 'purple', 'teal', 'emerald', 'cyan'])
+  })
+
+  it('is idempotent', () => {
+    const again = groupSheetColumns(out.columns, out.groups, null)
+    expect(again.columns).toEqual(out.columns)
+    expect(again.groups).toEqual(out.groups)
+  })
+
+  it('makes the Identity group on a channel sheet that has only the relationships and the theme (Shopify, Etsy)', () => {
+    const shopify = groupSheetColumns([col('__productRole', 'master:relationships', 'Product relationships'), col('variation_theme', 'master:identity', 'Identity'), col('title', 'SHOPIFY:general', 'General')],
+      [{ key: 'master:relationships', label: 'Product relationships', channelLabel: null, order: -1 }, { key: 'SHOPIFY:general', label: 'General', channelLabel: null, order: 0 }], 'SHOPIFY')
+    expect(shopify.columns.map((c) => [c.key, c.group])).toEqual([['variation_theme', 'Identity'], ['__productRole', 'Identity'], ['title', 'General']])
+    expect(shopify.groups.map((g) => g.label)).toEqual(['Identity', 'General'])
   })
 
   it('names a colour for every group a scope can show', () => {

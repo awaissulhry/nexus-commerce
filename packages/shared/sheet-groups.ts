@@ -123,6 +123,32 @@ export function sheetGroupTone(key: string | null | undefined, label: string | n
   return 'violet'
 }
 
+/* ── Shared, Shopify, Etsy: one Identity group ─────────────────────────────────────────────────────────────── */
+
+/**
+ * The Owner, 2026-10-01: "fold [the variation theme, product relations and identity] into a single group named
+ * identity, and maybe also the identifiers, so that everything related to the identity lives here." On the sheets
+ * the flat file never had, these four groups are ONE: the variation theme first, then the product role and parent
+ * SKU, then the identity fields and the identifiers in their incoming order. (eBay and Amazon keep the flat file's.)
+ */
+export const IDENTITY_GROUP = { key: 'master:identity', label: 'Identity' } as const
+const FOLDED_INTO_IDENTITY = new Set(['master:relationships', 'master:identity', 'master:identifiers'])
+const IDENTITY_LEAD = ['variation_theme', PRODUCT_ROLE_COLUMN, PARENT_SKU_COLUMN]
+
+function withOneIdentityGroup<C extends GroupableColumn, G extends GroupableGroup>(columns: readonly C[], groups: readonly G[]): { columns: C[]; groups: GroupableGroup[] } {
+  const folded = columns.map((c) => (c.groupKey && FOLDED_INTO_IDENTITY.has(c.groupKey) ? { ...c, group: IDENTITY_GROUP.label, groupKey: IDENTITY_GROUP.key } : c))
+  const firstSeen = new Map<string, number>()
+  folded.forEach((c, i) => { const key = c.groupKey ?? c.group; if (!firstSeen.has(key)) firstSeen.set(key, i) })
+  const ordered = stableByRank(folded, (c) => {
+    const lead = c.groupKey === IDENTITY_GROUP.key ? IDENTITY_LEAD.indexOf(c.key) : -1
+    return firstSeen.get(c.groupKey ?? c.group)! * 10 + (lead < 0 ? IDENTITY_LEAD.length : lead)
+  })
+  const at = groups.findIndex((g) => FOLDED_INTO_IDENTITY.has(g.key))
+  const kept: GroupableGroup[] = groups.filter((g) => !FOLDED_INTO_IDENTITY.has(g.key))
+  if (at >= 0 || folded.some((c) => c.groupKey === IDENTITY_GROUP.key)) kept.splice(Math.max(at, 0), 0, { ...IDENTITY_GROUP, channelLabel: null, order: 0 })
+  return { columns: ordered, groups: kept.map((g, i) => ({ ...g, order: i })) }
+}
+
 /* ── the one function ──────────────────────────────────────────────────────────────────────────────────────── */
 
 function stableByRank<T>(items: readonly T[], rank: (item: T) => number): T[] {
@@ -133,7 +159,8 @@ function stableByRank<T>(items: readonly T[], rank: (item: T) => number): T[] {
 
 /**
  * The sheet's columns in their flat-file groups and order, and the groups in display order, each with its colour.
- * eBay and Amazon are regrouped; every other scope keeps its groups and order and gains colours. Idempotent: a
+ * eBay and Amazon are regrouped; every other scope keeps its groups and order, except that its identity groups become
+ * one (`IDENTITY_GROUP`), and gains colours. Idempotent: a
  * column already in a flat-file group keeps it. Within a group the incoming order holds, except for the eBay fields
  * the flat file listed, which lead their group in the flat file's order.
  */
@@ -142,8 +169,9 @@ export function groupSheetColumns<C extends GroupableColumn, G extends Groupable
 ): { columns: C[]; groups: GroupableGroup[] } {
   const ch = (channel ?? '').toUpperCase()
   if (ch !== 'EBAY' && ch !== 'AMAZON') {
-    const toned = columns.map((c) => ({ ...c, groupTone: c.groupTone ?? sheetGroupTone(c.groupKey, c.group) }))
-    return { columns: toned, groups: groups.map((g) => ({ ...g, tone: g.tone ?? sheetGroupTone(g.key, g.label) })) }
+    const one = withOneIdentityGroup(columns, groups)
+    const toned = one.columns.map((c) => ({ ...c, groupTone: c.groupTone ?? sheetGroupTone(c.groupKey, c.group) }))
+    return { columns: toned, groups: one.groups.map((g) => ({ ...g, tone: g.tone ?? sheetGroupTone(g.key, g.label) })) }
   }
   const byGroupKey = new Map(groups.map((g) => [g.key, g]))
   const known = new Map<string, SheetGroupDef>()

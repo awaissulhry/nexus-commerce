@@ -39,7 +39,7 @@ import { defaultViewKeys } from './slotListColumns'
 import { flatFileGrouped, insertInNaturalOrder, sheetHeaderClasses, withoutPreGroupingOrder, type SheetHeaderClassParams, type SheetHeaderGroup } from './sheetGroups'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 import {
-  chooseLanding, fieldPayload, FIXED_GROUP_KEY, FIXED_GROUP_LABEL, FRONT_GROUP_KEYS, hasMyLayout, languageKeyMap, layoutPart, pickOf, progressShown,
+  chooseLanding, fieldPayload, FRONT_GROUP_KEYS, hasMyLayout, languageKeyMap, layoutPart, pickOf, progressShown,
   recalledPick, rememberPick, withPick, type SheetPick, type WorkingLayoutPayload,
 } from './sheetLayoutMemory'
 
@@ -230,29 +230,23 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     // move and pin; it sits in a group of its own right after Progress — where the sheet shows it until it is moved
     // (2026-09-27: the Customise order and the sheet order must be one order).
     const spec = (c: SheetColumn): PreferencesColumnSpec => ({ key: c.key, label: c.label, group: c.group, groupKey: c.groupKey, ...(c.groupTone ? { groupTone: c.groupTone } : {}), ...(c.managedBy === 'progress' ? { uncounted: true } : {}) })
-    /* 2026-10-01 — on a sheet grouped like the old flat file (eBay, Amazon) the variation theme stays in ITS group
-       (Listing / Variations), where the flat file had it, still always shown; Progress is already in the first group. */
-    if (flatFile) return [
+    /* 2026-10-01 — the variation theme stays in ITS group, still always shown: Listing / Variations on eBay and Amazon
+       (where the flat file had it), Identity everywhere else (the Owner folded Variation theme, Product relationships,
+       Identity and Identifiers into one Identity group). Progress leads; on eBay and Amazon it is already in the first group. */
+    return [
       { key: identityColumn, label: 'Identity (SKU, readiness)', locked: true },
       ...fieldColumns.filter((c) => c.managedBy === 'progress').map(spec),
       ...fieldColumns.filter((c) => c.managedBy !== 'progress').map((c) => (structural.includes(c.key) ? { ...spec(c), alwaysShown: true } : spec(c))),
     ]
-    return [
-      { key: identityColumn, label: 'Identity (SKU, readiness)', locked: true },
-      ...fieldColumns.filter((c) => c.managedBy === 'progress').map(spec),
-      ...fieldColumns.filter((c) => structural.includes(c.key)).map((c) => ({ ...spec(c), alwaysShown: true, group: FIXED_GROUP_LABEL, groupKey: FIXED_GROUP_KEY })),
-      ...fieldColumns.filter((c) => c.managedBy !== 'progress' && !structural.includes(c.key)).map(spec),
-    ]
-  }, [fieldColumns, identityColumn, structural, flatFile])
+  }, [fieldColumns, identityColumn, structural])
   /* A view's count is the attributes it shows. The variation theme is on screen in every view, so every preset names it
      first — which is also where it shows (`shownKeys`). */
   const views = useMemo(() => {
     const built = sheetViews(attributeColumns, fieldCtx, serverViews)
     const lead = structural.filter((k) => attributeKeys.has(k))
-    // On a flat-file sheet the variation theme keeps its seat in its group instead of leading.
-    const withLead = (columns: readonly string[]) => flatFile ? insertInNaturalOrder(columns, lead, orderedKeys) : [...new Set([...lead, ...columns])]
-    return lead.length ? { ...built, presets: built.presets.map((p) => ({ ...p, columns: withLead(p.columns) })) } : built
-  }, [attributeColumns, fieldCtx, serverViews, structural, attributeKeys, flatFile, orderedKeys])
+    // The variation theme keeps its seat in its group (Listing, Variations or Identity) instead of leading.
+    return lead.length ? { ...built, presets: built.presets.map((p) => ({ ...p, columns: insertInNaturalOrder(p.columns, lead, orderedKeys) })) } : built
+  }, [attributeColumns, fieldCtx, serverViews, structural, attributeKeys, orderedKeys])
   /* SHEET-VIEWS step 5 — the row facts a rule view follows. Read through a ref when a view is applied, so a
      gap fixed while editing does not pull its column off screen: a rule resolves at APPLY time, not live. */
   const ruleFacts = useMemo<ViewRuleFacts>(() => ({
@@ -437,9 +431,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const placed = new Set(own)
     const progress = progressShown(payload, progressKeys).filter((k) => !placed.has(k))
     const fixed = structural.filter((k) => alwaysColumns.includes(k) && !placed.has(k))
-    if (flatFile) return insertInNaturalOrder([...new Set([...identityKeys, ...progress, ...own])], fixed, [...identityKeys, ...progressKeys, ...orderedKeys])
-    return [...new Set([...identityKeys, ...progress, ...fixed, ...own])]
-  }, [specs, progressKeys, structural, alwaysColumns, identityKeys, flatFile, orderedKeys])
+    // The always-shown variation theme takes its seat in its group when the payload does not place it.
+    return insertInNaturalOrder([...new Set([...identityKeys, ...progress, ...own])], fixed, [...identityKeys, ...progressKeys, ...orderedKeys])
+  }, [specs, progressKeys, structural, alwaysColumns, identityKeys, orderedKeys])
   /** The attributes a payload shows here — the number beside it everywhere (trigger, menu, Customise). */
   const countOf = useCallback((payload: ColumnsViewPayload) => shownKeys(payload).filter((k) => attributeKeys.has(k)).length, [shownKeys, attributeKeys])
   /**
