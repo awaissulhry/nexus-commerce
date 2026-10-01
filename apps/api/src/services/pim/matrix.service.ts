@@ -160,6 +160,16 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   // ── 4. indexes ─────────────────────────────────────────────────────────────────────────────
   const tShape = Date.now()
   const memberById = new Map(members.map((m) => [m.id, m]))
+  // Shared stock by SKU — which business lends the stock a pooled member sells from (one query, only when one does).
+  const poolGrantIds = [...new Set([...syncLedgers.values()].flatMap((l) => (l.source.kind === 'pool' ? [l.source.grantId] : [])))]
+  const lenderOf = new Map(poolGrantIds.length
+    ? (await prisma.stockPoolGrant.findMany({ where: { id: { in: poolGrantIds } }, select: { id: true, ownerWorkspace: { select: { name: true } } } })).map((g) => [g.id, g.ownerWorkspace.name])
+    : [])
+  if (poolGrantIds.length) queries += 1
+  const sourceOf = (productId: string): MatrixRowRead['stock']['source'] => {
+    const ledger = syncLedgers.get(productId)
+    return ledger?.source.kind === 'pool' ? { kind: 'pool', grantId: ledger.source.grantId, lenderName: lenderOf.get(ledger.source.grantId) ?? 'another business' } : null
+  }
   const poolLocations = new Map<string, Array<{ code: string; available: number }>>()
   const fbaBucket = new Map<string, number>()
   for (const [productId, product] of syncLedgers) {
@@ -371,10 +381,17 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const locations = isParent
       ? [...children.reduce((m, c) => { for (const l of poolLocations.get(c.id) ?? []) m.set(l.code, (m.get(l.code) ?? 0) + l.available); return m }, new Map<string, number>()).entries()].map(([code, available]) => ({ code, available }))
       : poolLocations.get(member.id) ?? []
-    const available = locations.length === 0 ? null : locations.reduce((s, l) => s + l.available, 0)
+    // A SKU whose own stock is counted as 0 (it left a pool and holds no row here) pushes 0: say 0, not "Uncounted".
+    const countedZero = (id: string) => (poolLocations.get(id)?.length ?? 0) === 0 && syncLedgers.get(id)?.uncountedIsZero === true
+    const uncounted = locations.length === 0 && !(isParent ? children.length > 0 && children.every((c) => countedZero(c.id)) : countedZero(member.id))
+    const available = locations.length === 0 ? (uncounted ? null : 0) : locations.reduce((s, l) => s + l.available, 0)
+    const childSources = isParent ? children.map((c) => sourceOf(c.id)) : []
+    const source = isParent
+      ? (childSources.length > 0 && childSources.every((s) => s && s.grantId === childSources[0]!.grantId) ? childSources[0]! : null)
+      : sourceOf(member.id)
     return {
       id: member.id, sku: member.sku, role: isParent ? 'parent' : 'variant',
-      stock: { available, uncounted: locations.length === 0, locations },
+      stock: { available, uncounted, locations, source },
       basePrice: decimalToNumber(member.basePrice), status: member.status, cells,
     }
   }

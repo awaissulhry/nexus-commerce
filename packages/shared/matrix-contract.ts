@@ -192,7 +192,17 @@ export interface MatrixRowRead {
   id: string
   sku: string
   role: 'parent' | 'variant'
-  stock: { available: number | null; uncounted: boolean; locations: ReadonlyArray<{ code: string; available: number }> }
+  stock: {
+    available: number | null
+    uncounted: boolean
+    locations: ReadonlyArray<{ code: string; available: number }>
+    /**
+     * Shared stock by SKU (2026-10-01): where this SKU's listings take their number. Null (or absent) = this
+     * business's own warehouses; `pool` = the stock another business lends (the locations above are its).
+     * A parent: the source its variations share, when they all share one.
+     */
+    source?: { kind: 'pool'; grantId: string; lenderName: string } | null
+  }
   basePrice: number | null
   status: string
   cells: Record<CoordinateKey, MatrixCells>

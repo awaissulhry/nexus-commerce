@@ -21,7 +21,8 @@
 import type { MutableRefObject } from 'react'
 
 import type { MenuItemDef } from '@/design-system/components'
-import { Tag } from '@/design-system/primitives'
+import { Pill, Tag } from '@/design-system/primitives'
+import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
 import { matrixColumnDef, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
 
 import { buildMasterColumns } from '../sheet/master/columns'
@@ -32,6 +33,7 @@ import type { AxisSummary } from '../variants/family/coverage'
 
 import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
+import styles from './matrix.module.css'
 
 /**
  * The identity column's id — `identity`, the same id the Variants page uses and the one
@@ -156,7 +158,18 @@ function StockCell(p: ICellRendererParams<StudioRow> & { rowOf?: (id: string) =>
   const s = d ? stockOf(p.rowOf?.(d.id) ?? null) : null
   if (!s) return null
   if (s.uncounted) return <span className="nds-cell-value nds-cell-stock-out"><span className="nds-cell-value-text">⚠ {MATRIX_COPY.uncounted}</span></span>
-  return <span className="nds-cell-value nds-cell-num"><span className="nds-cell-value-text">{s.available ?? '—'}</span></span>
+  const number = <span className="nds-cell-value nds-cell-num"><span className="nds-cell-value-text">{s.available ?? '—'}</span></span>
+  // Shared stock by SKU: a SKU that sells from another business's stock says so; the tooltip names the business.
+  if (s.source) return <span className={styles.stockShared}>{number}<Pill tone="info">Shared</Pill></span>
+  return number
+}
+
+/** The Stock cell's tooltip: where the number comes from, and which warehouses hold it. */
+export function stockTooltip(s: MatrixRowRead['stock']): string {
+  if (s.uncounted) return MATRIX_COPY.uncountedHint
+  const where = s.locations.length ? s.locations.map((l) => `${l.code} ${l.available}`).join(' · ') : 'No routed location'
+  if (!s.source) return where
+  return `${poolSourceSentence({ lenderName: s.source.lenderName, available: s.available ?? 0 })} ${where}. This business's own stock is not used.`
 }
 
 function NotListedCell() {
@@ -240,8 +253,8 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
   const stock: ColDef<StudioRow> = {
     colId: STOCK_COL,
     headerName: 'Stock',
-    headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. Parent = the family total.',
-    width: 96, minWidth: 96,
+    headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. "Shared": the stock another business lends. Parent = the family total.',
+    width: 112, minWidth: 96,
     editable: false, suppressMovable: true, suppressHeaderMenuButton: true, sortable: true, resizable: true,
     cellClass: 'nds-ag-cell',
     valueGetter: (p) => (p.data ? stockOf(rowOf(p.data.id))?.available ?? null : null),
@@ -250,10 +263,9 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     tooltipValueGetter: (p) => {
       const s = p.data ? stockOf(rowOf(p.data.id)) : null
       if (!s) return undefined
-      if (s.uncounted) return MATRIX_COPY.uncountedHint
-      return s.locations.length ? s.locations.map((l) => `${l.code} ${l.available}`).join(' · ') : 'No routed location'
+      return stockTooltip(s)
     },
-    getQuickFilterText: (p) => { const s = p.data ? stockOf(rowOf(p.data.id)) : null; return s?.uncounted ? MATRIX_COPY.uncounted : String(s?.available ?? '') },
+    getQuickFilterText: (p) => { const s = p.data ? stockOf(rowOf(p.data.id)) : null; return s?.uncounted ? MATRIX_COPY.uncounted : `${s?.available ?? ''}${s?.source ? ` shared ${s.source.lenderName}` : ''}` },
   }
 
   const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [

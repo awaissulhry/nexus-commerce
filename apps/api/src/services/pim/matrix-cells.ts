@@ -220,7 +220,9 @@ export interface SyncFacts {
 
 /** `resolveIntendedQuantity`'s output VERBATIM in `kind`/`via`/`intended`; the rest are the facts beside it. */
 export function syncCellOf(res: IntendedResolution, f: SyncFacts): SyncCell {
-  const poolAvailable = f.routed.length === 0 ? null : f.routed.reduce((s, r) => s + r.available, 0)
+  // FOLLOW with nothing routed happens only when the stock counts as 0 (the SKU left a pool and holds no row here):
+  // 0 is pushed, so the cell says 0 available, not "nothing is pushed".
+  const poolAvailable = f.routed.length === 0 ? (res.kind === 'FOLLOW' ? 0 : null) : f.routed.reduce((s, r) => s + r.available, 0)
   const intended = res.kind === 'FOLLOW' ? res.quantity : res.kind === 'PINNED' ? res.quantity : null
   return {
     kind: res.kind,

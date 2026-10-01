@@ -1,0 +1,35 @@
+/* Shared stock by SKU — the Matrix's "Stock source" pop-up. Layout only; every control is the design system's. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  font-size: var(--nds-font-size-base);
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.legend {
+  grid-column: 1 / -1;
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.note {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.reasons {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
