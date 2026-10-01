@@ -18,7 +18,7 @@ import prisma from '../db.js'
 import { verifyPassword } from '../lib/auth/password.js'
 import { verifyTotp, generateEnrollment, generateRecoveryCodes } from '../lib/auth/mfa.js'
 import { writeAuthAudit } from '../lib/auth/audit.js'
-import { truncateIp } from '../lib/auth/session.js'
+import { markSessionMfaSatisfied, truncateIp } from '../lib/auth/session.js'
 import { verifyCsrf } from '../lib/auth/csrf.js'
 
 const mfaRoutes: FastifyPluginAsync = async (fastify) => {
@@ -61,6 +61,10 @@ const mfaRoutes: FastifyPluginAsync = async (fastify) => {
       await tx.twoFactorRecoveryCode.deleteMany({ where: { userId: id } })
       await tx.twoFactorRecoveryCode.createMany({ data: hashed.map((codeHash) => ({ userId: id, codeHash })) })
     })
+    // The code just proved the second factor on this session: it counts as done, so the person is not locked out of
+    // every business page right after setting two-factor up.
+    const sessionId = (req as { authSessionId?: string }).authSessionId
+    if (sessionId) await markSessionMfaSatisfied(sessionId, id)
     await audit(req, 'mfa.enabled')
     return { ok: true, recoveryCodes: raw }
   })
