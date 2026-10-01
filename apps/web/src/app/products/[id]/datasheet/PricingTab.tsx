@@ -325,7 +325,8 @@ export default async function PricingTab({
                       }
                     >
                       {l.pricingRule}
-                      {adjPct != null && adjPct !== 0 && (
+                      {/* The percent belongs to PERCENT_OF_MASTER only: a FIXED rule keeps a stored percent unused. */}
+                      {l.pricingRule === 'PERCENT_OF_MASTER' && adjPct != null && adjPct !== 0 && (
                         <span className="ml-0.5 tabular-nums">
                           {adjPct > 0 ? '+' : ''}
                           {adjPct}%
