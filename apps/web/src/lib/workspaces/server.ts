@@ -91,6 +91,8 @@ export async function requireWebPage() {
   catch (error) {
     if (!(error instanceof WorkspaceError)) throw error
     if (error.code === 'workspace_unavailable') redirect('/profiles?unavailable=1')
+    // Two-factor not completed on this sign-in: the profiles page says how to complete it (not "no permission").
+    if (error.code === 'mfa_required') redirect('/profiles')
     redirect('/403')
   }
 }

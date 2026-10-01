@@ -31,6 +31,10 @@ export interface AuthUser {
   roleKeys: string[]
   mfaEnabled: boolean
   mfaRequired: boolean
+  /** This sign-in proved the second factor. */
+  mfaSatisfied?: boolean
+  /** Two-factor applies to this login and this sign-in did not complete it: business pages refuse it (see /profiles). */
+  mfaIncomplete?: boolean
 }
 
 type Status = 'loading' | 'authed' | 'anon'

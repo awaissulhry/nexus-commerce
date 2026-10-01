@@ -1,5 +1,5 @@
 import { verifyPassword as verifyAuthPassword } from '../lib/auth/password.js'
-import { revokeSession, revokeAllSessions } from '../lib/auth/session.js'
+import { markSessionMfaSatisfied, revokeSession, revokeAllSessions } from '../lib/auth/session.js'
 import { currentProfileUser } from '../lib/auth/current-user.js'
 /**
  * Settings rebuild — Phase C
@@ -259,6 +259,10 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
             })),
           })
         })
+        // The code just proved the second factor on this session: it counts as done, so the person is not locked
+        // out of every business page right after turning two-factor on (2026-10-01).
+        const sessionId = (request as { authSessionId?: string }).authSessionId
+        if (sessionId) await markSessionMfaSatisfied(sessionId, user.id)
         await writeSettingsAudit({
           key: 'profile.password', // grouped under the security key
           action: 'update',
