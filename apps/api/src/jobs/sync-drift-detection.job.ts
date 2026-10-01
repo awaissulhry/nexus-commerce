@@ -50,6 +50,7 @@ import { isFbaListing } from '../services/outbound-sync.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js'
+import { followerListingPrice, pricingRuleLabel } from '@nexus/shared/listing-price'
 
 interface PriceDriftRow {
   listing_id: string
@@ -59,6 +60,17 @@ interface PriceDriftRow {
   sku: string
   listing_price: string
   master_price: string
+  pricing_rule: string
+  adjustment_percent: string | null
+}
+
+/**
+ * The price a FOLLOWING listing should carry — the rule's price, computed by the one function the cascade, the price
+ * door and the screens use (`@nexus/shared/listing-price`). It was `listing price ≠ master price`, so every listing
+ * following at "master +10%" was flagged as drift on every run. `null` = no expectation (MATCH_AMAZON). Pure.
+ */
+export function expectedFollowingPrice(row: Pick<PriceDriftRow, 'master_price' | 'pricing_rule' | 'adjustment_percent'>): number | null {
+  return followerListingPrice(row.master_price, row.pricing_rule, row.adjustment_percent)
 }
 
 interface QuantityDriftRow {
@@ -139,19 +151,30 @@ export async function runSyncDriftDetection(): Promise<SyncDriftDetectionResult>
   // ── Price drift ───────────────────────────────────────────────────
   // Decimal comparison is exact in Postgres; we cast to text for the
   // result shape so JS doesn't lose precision on the DB → Node hop.
-  const priceDrift = (await prisma.$queryRawUnsafe(`
+  // The SQL only narrows (a FIXED listing at the master price is never drift); the rule's price decides, in
+  // `expectedFollowingPrice` — never a second copy of the maths in SQL.
+  const priceCandidates = (await prisma.$queryRawUnsafe(`
     SELECT cl.id AS listing_id,
            cl."productId" AS product_id,
            cl.channel,
            cl.marketplace,
            p.sku,
            cl.price::text AS listing_price,
-           p."basePrice"::text AS master_price
+           p."basePrice"::text AS master_price,
+           cl."pricingRule"::text AS pricing_rule,
+           cl."priceAdjustmentPercent"::text AS adjustment_percent
     FROM "ChannelListing" cl
     JOIN "Product" p ON p.id = cl."productId"
-    WHERE cl."followMasterPrice" = true AND cl.price != p."basePrice"
+    WHERE cl."followMasterPrice" = true
+      AND cl."pricingRule" <> 'MATCH_AMAZON'
+      AND cl.price IS NOT NULL AND p."basePrice" IS NOT NULL
+      AND (cl."pricingRule" = 'PERCENT_OF_MASTER' OR cl.price != p."basePrice")
     ORDER BY cl.id
   `)) as PriceDriftRow[]
+  const priceDrift = priceCandidates.filter((d) => {
+    const expected = expectedFollowingPrice(d)
+    return expected !== null && Number(d.listing_price) !== expected
+  })
 
   for (const d of priceDrift) {
     try {
@@ -172,12 +195,15 @@ export async function runSyncDriftDetection(): Promise<SyncDriftDetectionResult>
       await syncHealthService.logConflict({
         channel: d.channel,
         conflictType: 'PRICE_MISMATCH',
-        message: `Master price drift on ${d.sku} (${d.channel}/${d.marketplace}): listing=${d.listing_price} master=${d.master_price}`,
+        message: `Master price drift on ${d.sku} (${d.channel}/${d.marketplace}): listing=${d.listing_price} expected=${expectedFollowingPrice(d)?.toFixed(2)} (${pricingRuleLabel(d.pricing_rule, d.adjustment_percent)}; master=${d.master_price})`,
         productId: d.product_id,
         localData: {
           source: 'master',
           field: 'basePrice',
           value: d.master_price,
+          expected: expectedFollowingPrice(d),
+          pricingRule: d.pricing_rule,
+          priceAdjustmentPercent: d.adjustment_percent,
         },
         remoteData: {
           source: 'channel-listing',

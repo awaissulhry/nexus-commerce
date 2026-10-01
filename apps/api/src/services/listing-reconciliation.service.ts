@@ -29,7 +29,7 @@ import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
-import { recordLiveListings } from './pim/live-listing.service.js'
+import { recordLiveListings, sendHeldPricesAfterGoLive, type RecordedLiveListing } from './pim/live-listing.service.js'
 import { isOnMediaPlan } from './images/media-plan-switch.js'
 import { mergeCategoryAttributes } from './pim/category-attributes-write.js'
 
@@ -506,6 +506,7 @@ export async function confirmReconRow(id: string, reviewedBy: string, coordinate
   // The legacy variation model cannot express aliases or nullable unique inputs.
   if (isVariationChild && (coordinate.aliasKey !== '' || reconConn === null)) throw new Error('RECON_VARIATION_COORDINATE_UNSUPPORTED')
 
+  let wentLive: RecordedLiveListing[] = []
   await prisma.$transaction(async (tx) => {
     const existing = await tx.channelListing.findFirst({ where })
     // PR.1 recreate guard lands with the identity schema. Until then never
@@ -518,7 +519,7 @@ export async function confirmReconRow(id: string, reviewedBy: string, coordinate
     // was confirmed with before (the parent ASIN when there is one); a new row takes the listing ASIN. A
     // DIFFERENT stored ASIN is never replaced by a confirm: it is refused so the operator sees it.
     if (reconConn === null) throw new Error('RECON_ACCOUNT_REQUIRED: choose the account this listing is live on')
-    const [recorded] = await recordLiveListings(tx, {
+    const [recorded] = wentLive = await recordLiveListings(tx, {
       channel: coordinate.channel, market: coordinate.marketplace, accountId: reconConn, aliasKey: coordinate.aliasKey,
       rows: [{
         productId: coordinate.productId,
@@ -581,6 +582,8 @@ export async function confirmReconRow(id: string, reviewedBy: string, coordinate
       },
     })
   })
+  // Round 6 — a still-draft this confirm made live: its held price changes are sent once, now that it is committed.
+  await sendHeldPricesAfterGoLive(wentLive, reviewedBy)
 }
 
 /**

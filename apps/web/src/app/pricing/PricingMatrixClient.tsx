@@ -159,6 +159,8 @@ const SOURCE_TONE: Record<string, string> = {
   MASTER_INHERIT: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-800',
   FALLBACK: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
 }
+// The listing's own held price (Match Amazon, another currency) reads like the channel's own price: the same chip.
+SOURCE_TONE.LISTING_PRICE = SOURCE_TONE.CHANNEL_OVERRIDE
 
 // E.1.b — concise display labels for pricing source chips. The raw
 // enum keys are screamy and operator-hostile; SOURCE_LABEL maps each
@@ -171,6 +173,8 @@ const SOURCE_LABEL: Record<string, string> = {
   CHANNEL_RULE: 'Channel rule',
   PRICING_RULE: 'Rule',
   MASTER_INHERIT: 'Master',
+  // 2026-10-01 — the price the listing holds (Match Amazon, or a market in another currency than the master).
+  LISTING_PRICE: 'Listing price',
   FALLBACK: 'Fallback',
 }
 
@@ -567,6 +571,7 @@ export default function PricingMatrixClient() {
     { value: 'CHANNEL_RULE',     label: 'Channel rule' },
     { value: 'PRICING_RULE',     label: 'Rule' },
     { value: 'MASTER_INHERIT',   label: 'Master' },
+    { value: 'LISTING_PRICE',    label: 'Listing price' },
     { value: 'FALLBACK',         label: 'Fallback' },
   ]
 
@@ -1494,8 +1499,9 @@ function PricingDetailDrawer({
       })
       const json = await res.json()
       if (json.ok) {
+        // Queued, not sent: the one dispatcher sends it after the 30-second hold (2026-10-01).
         toast.success(
-          `Pushed ${json.pushedPrice} ${json.currency} to ${json.channel}:${json.marketplace}.`,
+          `Queued ${Number(json.pushedPrice).toFixed(2)}${json.currency ? ` ${json.currency}` : ''} for ${json.channel}:${json.marketplace}; it is sent after a 30-second hold.`,
         )
         onPushed()
       } else {
@@ -1582,6 +1588,14 @@ function PricingDetailDrawer({
               <Item
                 label={t('pricing.drawer.appliedRule')}
                 value={`${breakdown.appliedRule.type}${breakdown.appliedRule.adjustment != null ? ` (${breakdown.appliedRule.adjustment >= 0 ? '+' : ''}${breakdown.appliedRule.adjustment}%)` : ''}`}
+              />
+            )}
+            {/* 2026-10-01 — a PricingRule's price or Match Amazon's competitor undercut: the engine's own number, never the
+                listing's price and never sent by Nexus's rules — labelled as a suggestion. */}
+            {breakdown.suggestion && (
+              <Item
+                label={t('pricing.drawer.suggestion')}
+                value={`${Number(breakdown.suggestion.price).toFixed(2)} ${row.currency} — ${breakdown.suggestion.reason}`}
               />
             )}
           </dl>

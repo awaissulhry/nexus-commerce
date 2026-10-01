@@ -10,6 +10,8 @@ import { ledgerInputs, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { resolveIntendedQuantity, routedAvailable } from '../sync-control-core.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
 import { guardedColourGraphql, withColourSyncLock } from './colour-products/sync-work.js'
+import { listingSendPriceNow } from '../pim/follower-price.js'
+import { priceRefusalFor } from '../price-bounds.service.js'
 
 /** Activated native families use named accounts and exact IDs; SKU searches never choose a variant. */
 export async function syncNativeShopifyOffer(item: any) {
@@ -68,7 +70,20 @@ async function syncNativeOffer(item: any, observedListing?: Awaited<ReturnType<t
   if (!remote || remote.sku !== item.product.sku || remote.product.id !== productId || remote.inventoryItem.id !== inventoryItemId
     || expectedColourIdentity && remote.product.identity?.value !== expectedColourIdentity) throw new Error('The Shopify variant identity changed. Reconcile the family before syncing.')
   if (item.syncType === 'PRICE_UPDATE') {
-    const price = listing.followMasterPrice ? item.product.basePrice : listing.priceOverride ?? listing.price ?? item.payload?.price
+    // Round 6 — the price as the price door queued it (`payload.price`), as every other dispatcher sends it: a follower's
+    // RULE price, a pin's own. It sent `product.basePrice` for every following listing, so a "master +10%" variant got the
+    // master. A row with no price (the bulk channel batch) sends the listing's own send price (`listingSendPrice`).
+    let price: unknown = item.payload?.price
+    if (price === undefined || price === null || price === '') {
+      const send = await listingSendPriceNow(listing, item.product.basePrice, `Shopify ${listing.marketplace}`)
+      if (send.price == null) throw Object.assign(new Error(`${item.product.sku}: ${send.reason} Nothing was sent.`), { code: 'NO_PRICE_TO_SEND' })
+      price = send.price
+    }
+    // The product's own floor and ceiling, as the other price senders hold a price to them (master currency only).
+    const outside = await priceRefusalFor({ price: Number(price), productId: item.product.id, channel: 'Shopify', sku: item.product.sku, market: { channel: 'SHOPIFY', marketplace: listing.marketplace } })
+    if (outside) throw Object.assign(new Error(outside), { code: 'PRICE_OUT_OF_BOUNDS' })
+    // Shopify's two decimals ("22.00", not "22"), as the stored prices read.
+    if (typeof price === 'number' && Number.isFinite(price)) price = price.toFixed(2)
     if (!/^\d+(\.\d{1,2})?$/.test(String(price))) throw new Error('A valid variant price is required.')
     checked((await gql(`mutation NexusOfferPrice($productId:ID!,$variants:[ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId:$productId,variants:$variants) { userErrors { field message } } }`, { productId, variants: [{ id: variantId, price: String(price) }] })).productVariantsBulkUpdate, 'Update variant price')
     if (Number((await read())?.price) !== Number(price)) throw new Error('Shopify price readback differs from the requested price.')

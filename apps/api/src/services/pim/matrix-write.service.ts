@@ -60,6 +60,8 @@ import { canonical } from './import-diff.service.js'
 import { setFulfillmentMethod, type FulfilmentWrite } from './fulfillment-method.service.js'
 import { writeChannelPrices } from './channel-price-write.service.js'
 import { getMatrixRead } from './matrix.service.js'
+import { roundCents } from '@nexus/shared/listing-price'
+import type { ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
 
 export interface DoorContext {
@@ -74,7 +76,7 @@ const OP_KIND = 'studio-matrix-verb'
 
 /* ── the read, and the listing rows a coordinate stands for ─────────────────────────────────── */
 
-interface Target { id: string; marketplace: string; version: number }
+export interface Target { id: string; marketplace: string; version: number }
 type Located = { row: MatrixRowRead; coord: MatrixCoordinate; cells: MatrixCells }
 
 function locate(read: MatrixRead, rowId: string, key: CoordinateKey): Located | null {
@@ -113,7 +115,8 @@ async function bumpAll(tx: Prisma.TransactionClient, targets: readonly Target[],
   return true
 }
 
-class Conflict extends Error { constructor(readonly version: number) { super('conflict') } }
+/** A compare-and-set lost to another write; carries the listing's CURRENT version. */
+export class Conflict extends Error { constructor(readonly version: number) { super('conflict') } }
 
 async function bumpTx(targets: readonly Target[], extra?: Prisma.ChannelListingUpdateManyMutationInput): Promise<void> {
   await prisma.$transaction(async (tx) => {
@@ -122,6 +125,65 @@ async function bumpTx(targets: readonly Target[], extra?: Prisma.ChannelListingU
 }
 
 const asInt = (v: unknown): number | null => { const n = typeof v === 'number' ? v : Number(v); return Number.isInteger(n) ? n : null }
+
+/**
+ * The quantity MODE writes of the matrix's Mode and Qty cells — ONE implementation for every screen that changes how a
+ * listing's quantity is set (the Studio matrix, the listings grid's stock cell, the listing drawer's and the bulk
+ * bar's follow toggles, the reset to master, 2026-10-01), so they cannot drift:
+ *   1. Owner rule: FBA quantity is untouchable. Any Amazon-managed target refuses the whole write BEFORE anything is
+ *      staged (`amazonManagedListingIds`, the primitive's own verdict), so neither the FBA row nor half of an EU group
+ *      is written. `staged: false`.
+ *   2. Every target's version is bumped under CAS — with a typed quantity staged into `quantity` (D-MX3) — and a lost
+ *      one throws `Conflict`.
+ *   3. The follow/pin primitive (`setFollowMasterQuantity`): FOLLOW rejoins the stock and publishes it; PIN snapshots
+ *      the (typed) quantity into the three quantity columns. Either queues the QUANTITY_UPDATE. A target it still skips
+ *      as FBA refuses with `staged: true`.
+ *   4. (Checked before 2.) A PIN on a SKU that sells from another business's stock is refused with the Matrix's
+ *      sentence (`sharedStockReason`), `staged: false` — the shared-stock rule of #230.
+ * `coordinates` narrows the primitive to exactly the target listings (the listing screens); the matrix narrows by markets.
+ */
+/**
+ * Shared stock by SKU (#230, Owner 2026-10-01): the business whose stock this product sells from, or null. Asked
+ * exactly as the database's quantity guard asks it (stock-pool.sql, nexus_stock_pool_quantity_guard: an ACTIVE
+ * StockPoolLink on the product), so a fixed number is refused here, with the Matrix's sentence, in every case the
+ * database would refuse it with an error.
+ */
+export async function sharedStockLender(productId: string): Promise<string | null> {
+  const link = await prisma.stockPoolLink.findFirst({
+    where: { productId, status: 'active' },
+    select: { grant: { select: { ownerWorkspace: { select: { name: true } } } } },
+  })
+  return link ? link.grant?.ownerWorkspace?.name ?? 'another business' : null
+}
+
+export async function writeQuantityMode(input: {
+  productId: string
+  channel: string
+  targets: readonly Target[]
+  follow: boolean
+  /** PIN only: the typed quantity to pin at; without it a PIN keeps the number the listing shows now. */
+  quantity?: number
+  actor: string
+  coordinates?: ListingCoordinate[]
+}): Promise<{ refused?: string; staged?: boolean }> {
+  if (input.channel === 'AMAZON' && (await amazonManagedListingIds(input.targets.map((t) => t.id))).size > 0) return { refused: MATRIX_COPY.amazonManaged, staged: false }
+  // 4. Shared stock by SKU (#230): a SKU that sells from another business's stock gets no fixed number — neither a PIN
+  //    of what it shows nor a typed one (the Matrix holds its Qty and Mode cells the same way). Back to Follow is fine.
+  //    Refused before anything is staged; the database refuses it too (nexus_stock_pool_quantity_guard).
+  if (!input.follow) {
+    const lender = await sharedStockLender(input.productId)
+    if (lender) return { refused: sharedStockReason(lender), staged: false }
+  }
+  await bumpTx(input.targets, !input.follow && input.quantity !== undefined ? { quantity: input.quantity } : undefined)
+  const r = await setFollowMasterQuantity({ productIds: [input.productId], channel: input.channel as 'AMAZON' | 'EBAY', markets: input.targets.map((t) => t.marketplace), follow: input.follow, actor: input.actor, ...(input.coordinates ? { coordinates: input.coordinates } : {}) })
+  if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { refused: MATRIX_COPY.amazonManaged, staged: true }
+  return {}
+}
+
+/** The Qty cell's PIN at a typed quantity (`writeQuantityMode`, follow: false). */
+export function pinTypedQuantity(input: Omit<Parameters<typeof writeQuantityMode>[0], 'follow' | 'quantity'> & { quantity: number }) {
+  return writeQuantityMode({ ...input, follow: false })
+}
 
 /* ── one cell through the door ──────────────────────────────────────────────────────────────── */
 
@@ -155,12 +217,11 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const mode = w.value === 'PINNED' ? 'PINNED' : w.value === 'FOLLOW' ? 'FOLLOW' : null
         if (!mode) return refuse('Mode is Follow or Pinned')
         if (s.mode === mode) return noop()
-        // Shared stock by SKU: a SKU that sells from a lent stock gets no fixed number (the database refuses it too).
-        if (mode === 'PINNED' && row.stock?.source) return refuse(sharedStockReason(row.stock.source.lenderName))
-        if (await amazonManaged()) return managedRefusal()
-        await bumpTx(targets)
-        const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: mode === 'FOLLOW', actor: ctx.actor })
-        if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version + 1 }
+        /* `writeQuantityMode`: the one implementation the listing screens' follow toggles use too — FBA refused, and a
+           PIN on a SKU that sells from another business's stock refused with `sharedStockReason` (shared stock by SKU,
+           #230; the read holds the cell with the same sentence). */
+        const moded = await writeQuantityMode({ productId: row.id, channel, targets, follow: mode === 'FOLLOW', actor: ctx.actor })
+        if (moded.refused) return { ...base, outcome: 'refused', reason: moded.refused, version: moded.staged ? cells.version + 1 : cells.version }
         return applied()
       }
       case 'syncQty': {
@@ -170,11 +231,10 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         /* A pinned row's value is `intended` when the resolver speaks and `held` (the lockstep-written quantity) under a
            pause — measured in the rehearsal: comparing `intended` alone spent a version on a re-pin of a paused row. */
         if (s.mode === 'PINNED' && (s.intended ?? s.held) === n) return noop()
-        if (await amazonManaged()) return managedRefusal()
-        /* D-MX3: the typed value is staged into `quantity` under CAS; the PIN primitive snapshots exactly that. */
-        await bumpTx(targets, { quantity: n })
-        const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: false, actor: ctx.actor })
-        if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version + 1 }
+        /* D-MX3: the typed value is staged into `quantity` under CAS; the PIN primitive snapshots exactly that —
+           `pinTypedQuantity`, the one implementation the listings grid uses too. */
+        const pinned = await pinTypedQuantity({ productId: row.id, channel, targets, quantity: n, actor: ctx.actor })
+        if (pinned.refused) return { ...base, outcome: 'refused', reason: pinned.refused, version: pinned.staged ? cells.version + 1 : cells.version }
         return applied()
       }
       case 'syncBuffer': {
@@ -204,8 +264,9 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const p = cells.price; if (!p) return refuse('This coordinate has no price')
         if (!ctx.can(PRICE_PERMISSION)) return refuse(PRICE_PERMISSION_REASON)
         const v = w.value === null ? null : typeof w.value === 'number' ? w.value : Number(w.value)
-        if (v !== null && (!Number.isFinite(v) || v < 0)) return refuse('A price is zero or more')
-        const rounded = v === null ? null : Math.round(v * 100) / 100
+        // A typed price is above 0, as the price door requires (2026-10-01); rounded with the one cents helper.
+        if (v !== null && (!Number.isFinite(v) || v <= 0)) return refuse('A price must be above 0')
+        const rounded = v === null ? null : roundCents(v)
         if (rounded !== null && p.value === rounded && p.source === 'override') return noop()
         if (rounded === null && p.source === 'master') return noop()
         /* A-17 (R-12): this read passed the version check above, so its price is the one the operator saw. A verb

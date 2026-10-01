@@ -13,7 +13,7 @@ import { copySiblingListings, type SkippedListingCopy } from '../services/pim/va
 import { importEbayCatalog, getEbayImportStats } from "../services/ebay-import.service.js";
 import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
-import { masterPriceService } from "../services/master-price.service.js";
+import { MasterPriceRefusedError, masterPriceService } from "../services/master-price.service.js";
 import { applyStockMovement } from "../services/stock-movement.service.js";
 import { replaceCategoryAttributesKeepingVariations } from "../services/pim/category-attributes-write.js";
 
@@ -985,6 +985,10 @@ export async function catalogRoutes(app: FastifyInstance) {
         message: "Product updated (no changes to sync)",
       });
     } catch (error: any) {
+      // A master price the product's own rules refuse (not above 0, outside its floor/ceiling): said, not a 500.
+      if (error instanceof MasterPriceRefusedError) {
+        return reply.status(400).send({ success: false, error: { code: error.code, message: error.message } });
+      }
       console.error("Error updating product:", error);
 
       return reply.status(500).send({
@@ -1665,6 +1669,9 @@ export async function catalogRoutes(app: FastifyInstance) {
         message: "Child product updated successfully",
       });
     } catch (error: any) {
+      if (error instanceof MasterPriceRefusedError) {
+        return reply.status(400).send({ success: false, error: { code: error.code, message: error.message } });
+      }
       console.error("Error updating child product:", error);
 
       return reply.status(500).send({

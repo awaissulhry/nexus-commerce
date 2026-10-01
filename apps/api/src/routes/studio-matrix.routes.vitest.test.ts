@@ -39,6 +39,8 @@ vi.mock('../db.js', () => ({
     bulkOperation: { create: (...a: unknown[]) => mocks.bulkCreate(...a), findUnique: (...a: unknown[]) => mocks.bulkFindUnique(...a), updateMany: vi.fn().mockResolvedValue({ count: 1 }), update: vi.fn().mockResolvedValue({}) },
     syncControlAudit: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
     outboundSyncQueue: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    // Shared stock by SKU (#230): no product here sells from another business's stock (`sharedStockLender`).
+    stockPoolLink: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))

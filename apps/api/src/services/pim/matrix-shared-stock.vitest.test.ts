@@ -196,4 +196,49 @@ describe('the Matrix says where a SKU takes its stock from', () => {
     await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bM], to: 'pool', grantId, withVariations: false }))
     expect(await ebayListing(id.bM)).toMatchObject({ followMasterQuantity: false, quantity: 0 })
   })
+
+  // ── The listing screens' quantity writes keep the same rule (pricing rules reach the channels, round 3) ─────────────
+  // The listing drawer's toggle, the bulk bar's follow/unfollow, the reset and the grid's stock cell go through the
+  // Matrix's own quantity helpers (`writeQuantityMode` / `pinTypedQuantity`): no PIN and no typed number on a SKU that
+  // sells from another business's stock, with the Matrix's sentence, and nothing written; back to Follow is fine.
+  const quantityRows = async (listingId: string) => (await sql(`SELECT id FROM "OutboundSyncQueue" WHERE "channelListingId" = $1 AND "syncType" = 'QUANTITY_UPDATE'`, [listingId])).length
+  const lent = "Sells from Lender A's stock, so the quantity follows it. Change the stock in Lender A, or disconnect it first (Stock source)."
+
+  it('🔴 the drawer and the bulk bar cannot PIN a shared SKU: refused (alone) or skipped and named (with other fields); nothing written', async () => {
+    const cell = await import('../listings/listing-matrix-cell.service.js')
+    const listing = await ebayListing(id.bL)
+    expect(listing).toMatchObject({ followMasterQuantity: true })
+    const before = { ...(await sql(`SELECT version, quantity, "quantityOverride", "followMasterQuantity" FROM "ChannelListing" WHERE id = $1`, [listing.id]))[0] }
+    const rowsBefore = await quantityRows(String(listing.id))
+    const alone = await as(B, user.ownerB, () => cell.setListingQuantityFollow({ listingId: String(listing.id), follow: false, actor: 'person-1', onFba: 'refuse' })).then(() => null, (e) => e)
+    expect(alone).toMatchObject({ statusCode: 400, message: lent })
+    const withOthers = await as(B, user.ownerB, () => cell.setListingQuantityFollow({ listingId: String(listing.id), follow: false, actor: 'person-1', onFba: 'skip' }))
+    expect(withOthers).toEqual({ outcome: 'skipped', skipped: lent })
+    expect((await sql(`SELECT version, quantity, "quantityOverride", "followMasterQuantity" FROM "ChannelListing" WHERE id = $1`, [listing.id]))[0]).toEqual(before)
+    expect(await quantityRows(String(listing.id))).toBe(rowsBefore)
+  })
+
+  it('🔴 the grid\'s stock cell cannot type a number on a shared SKU (the Matrix\'s Qty hold), and nothing is written', async () => {
+    const cell = await import('../listings/listing-matrix-cell.service.js')
+    const listing = await ebayListing(id.bL)
+    const rowsBefore = await quantityRows(String(listing.id))
+    for (const value of [5, 0]) {
+      const refused = await as(B, user.ownerB, () => cell.writeListingCellThroughMatrix({ listingId: String(listing.id), write: { cell: 'syncQty', value }, actor: 'person-1', can: () => true })).then(() => null, (e) => e)
+      expect(refused, `typed ${value}`).toMatchObject({ statusCode: 400, message: lent })
+    }
+    expect(await ebayListing(id.bL)).toMatchObject({ followMasterQuantity: true })
+    expect(await quantityRows(String(listing.id))).toBe(rowsBefore)
+    // The helper itself, as the Matrix's Qty cell calls it: refused before anything is staged.
+    const pinned = await as(B, user.ownerB, () => writes.pinTypedQuantity({ productId: id.bL, channel: 'EBAY', targets: [{ id: String(listing.id), marketplace: 'IT', version: 0 }], quantity: 4, actor: 'person-1' }))
+    expect(pinned).toEqual({ refused: lent, staged: false })
+  })
+
+  it('back to Follow stays allowed on a shared SKU (its fixed 0 ends; the lent number is queued)', async () => {
+    const cell = await import('../listings/listing-matrix-cell.service.js')
+    const listing = await ebayListing(id.bM)
+    expect(listing).toMatchObject({ followMasterQuantity: false, quantity: 0 })
+    const r = await as(B, user.ownerB, () => cell.setListingQuantityFollow({ listingId: String(listing.id), follow: true, actor: 'person-1', onFba: 'refuse' }))
+    expect(r).toEqual({ outcome: 'applied' })
+    expect(await ebayListing(id.bM)).toMatchObject({ followMasterQuantity: true, quantity: 6 })
+  })
 })

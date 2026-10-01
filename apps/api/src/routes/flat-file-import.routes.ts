@@ -24,6 +24,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { previewImport } from '../services/flat-file/import/import.service.js'
 import { applyChanges, applyDeletes, deleteConfirmationPhrase } from '../services/flat-file/import/apply.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 import type { ApplyResult } from '../services/flat-file/import/apply.js'
 import { generateProcessingReport } from '../services/flat-file/import/report.js'
 import type { ImportScope } from '../services/flat-file/import/scope.js'
@@ -166,6 +167,7 @@ const flatFileImportRoutes: FastifyPluginAsync = async (fastify) => {
         const changed = await applyChanges(prisma, fresh.diff, {
           scope,
           conflictPolicy: conflictPolicy ?? 'file-wins',
+          actor: bulkActorOf(request) ?? 'flat-file-import',
         })
 
         // Apply row-level deletes (if any). Requires typed confirmation phrase.

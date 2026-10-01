@@ -282,7 +282,7 @@ it('publishes the saved gallery order and respects an explicitly empty gallery',
 
 it('updates an existing Amazon alias by seller SKU without a destructive full replacement', async () => {
   const product = { id: 'p', sku: 'MASTER-SKU', name: 'Master title', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
-  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { aliasKey: 'alias-b' },
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { aliasKey: 'alias-b', currency: 'EUR' },
     listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'ALIAS-SKU', fulfillmentMethod: 'FBM' }], followMasterPrice: false, priceOverride: 35, stockBuffer: 2 }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
   const prepared = await prepareAmazonPublication(facts)
@@ -306,7 +306,7 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
 
 it('2026-09-27: an existing listing Amazon runs as FBA is published as FBA even when the product flag says FBM', async () => {
   const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
-  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { aliasKey: '' },
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { aliasKey: '', currency: 'EUR' },
     listings: [{ productId: 'p', externalListingId: 'ASIN', fulfillmentMethod: null, platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] },
       offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: null }] }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
@@ -323,7 +323,7 @@ it('2026-09-27: an existing listing Amazon runs as FBA is published as FBA even 
 it('F2: the Amazon product type is the resolver’s answer for this listing (no second read), never the product’s own', async () => {
   // The product says OUTERWEAR; the resolver found COAT on its Amazon listings in the region's other markets.
   const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', productType: 'OUTERWEAR', images: [{ id: 'image', url: 'https://example.test/image' }] }
-  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: {},
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { currency: 'EUR' },
     listings: [{ productId: 'p', externalListingId: 'ASIN', platformAttributes: {}, offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT', source: 'listingOtherMarket' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
   await prepareAmazonPublication(facts)
@@ -343,7 +343,7 @@ it('CHMAP M4: a field the Owner ignored in the ACTIVE mapping version is left ou
     team_name: { type: 'array', items: { properties: { value: { type: 'string' } } } }, color: { type: 'array', items: { properties: { value: { type: 'string' } } } },
   } } }))
   const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
-  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: {},
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { currency: 'EUR' },
     listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: { team_name: { value: 'Giacca', errors: [] }, color: { value: 'Nero', errors: [] } } }],
       catalogue: { schema: { present: true }, fields: [{ fieldKey: 'team_name' }, { fieldKey: 'color' }] } }] }
@@ -381,7 +381,7 @@ it('CHMAP M4: Amazon takes an attribute whole — one ignored part keeps the who
     team_name: text,
   } } }))
   const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
-  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: {},
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { currency: 'EUR' },
     listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: { sleeve__type: { value: 'Raglan', errors: [] }, sleeve__length_description: { value: 'Manica lunga', errors: [] }, team_name: { value: 'Giacca', errors: [] } } }],
       catalogue: { schema: { present: true }, fields: [{ fieldKey: 'sleeve__type' }, { fieldKey: 'sleeve__length_description' }, { fieldKey: 'team_name' }] } }] }
@@ -420,7 +420,7 @@ it('CHMAP M7 (B2): a market outside the row builder\'s five gets its own marketp
   const text = { type: 'array', items: { type: 'object', properties: { value: { type: 'string' } } } }
   m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'NL', productType: 'COAT', schemaDefinition: { properties: { color: text } } }))
   const product = { id: 'p', sku: 'SKU-1', name: 'Jas', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
-  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'NL', accountId: 'account-b' }, parent: product, products: [product], languages: ['nl'], destination: {},
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'NL', accountId: 'account-b' }, parent: product, products: [product], languages: ['nl'], destination: { currency: 'EUR' },
     listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: { color: { value: 'Zwart', errors: [] } } }], catalogue: { schema: { present: true }, fields: [{ fieldKey: 'color' }] } }] }
   await prepareAmazonPublication(facts)
@@ -446,7 +446,7 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   const parent = { id: 'p', sku: 'PARENT', isParent: true, images: [], basePrice: 99, totalStock: 0 }
   const children = ['xs', 'xxs'].map(id => ({ ...parent, id, sku: id, parentId: 'p', isParent: false, fulfillmentMethod: 'FBA' }))
   const products = [parent, ...children]
-  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent, products, languages: ['it'], destination: {},
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent, products, languages: ['it'], destination: { currency: 'EUR' },
     listings: products.map(p => ({ productId: p.id, externalListingId: `ASIN-${p.id}`, offers: [] })),
     resolved: [{ products: products.map(p => ({ productId: p.id, category: { channelCategoryId: 'COAT' }, cells: {
       color: { value: 'Black', errors: [] }, apparel_size__size: { value: p.id === 'xxs' ? 'xx_s' : 'x_s', errors: [] },

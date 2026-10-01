@@ -27,6 +27,7 @@ import { readEbayInventoryListing, type EbayInventoryDestination, type EbayInven
 import type { ServerLiveRead } from '../live-read/types.js'
 import type { EbayInventoryOurs } from './studio-publication-ebay-inventory-changes.js'
 import { ebayInventoryReads } from './studio-publication-ebay-inventory.js'
+import { NO_LISTING_PRICE_FACTS, currencyCode, listingSendPrice } from './follower-price.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
 export interface EbayPublication {
@@ -135,6 +136,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   const galleries = new Map<string, string[]>()
   let settings: Record<string, any> = {}
   const exclusionsFor = pushExclusionsCache()
+  // Round 6 — the currency this publication sends its prices in (the destination market's; `listingSendPrice` below).
+  const marketCur = currencyCode(facts.destination.currency)
   for (const product of products) {
     const listing = listings.find(l => l.productId === product.id)
     if (listing?.fulfillmentMethod === 'FBA') throw new Error('This eBay listing uses Amazon fulfillment. Its fulfillment publication workflow is required.')
@@ -167,7 +170,14 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     if (pa.listingFormat && pa.listingFormat !== 'FIXED_PRICE') throw new Error('Direct publication supports fixed-price eBay listings.')
     if (products.length > 1 && pa.bestOffer === true) throw new Error('eBay does not support Best Offer on a variation listing. Turn it off in Information before publishing.')
     if (product.id === parent.id) settings = pa
-    const price = Number(resolved.cells.price?.value ?? (listing?.followMasterPrice === false ? listing.priceOverride ?? listing.price : product.basePrice))
+    // Round 6 — THE send price (`listingSendPrice`): a pin's own price, a follower's rule price from the current master in
+    // the master currency, else the price the listing holds. It sent a follower the master price (the resolved price cell
+    // of a follower IS the master): "master +10%" went live at the master, and eBay UK was sent the EUR number as pounds.
+    // Nothing to send is refused for that SKU, by name. A variation parent sells nothing itself.
+    const send = listingSendPrice(listing ?? NO_LISTING_PRICE_FACTS, { masterPrice: product.basePrice, marketCurrency: marketCur, where: `eBay ${scope.marketplace}` })
+    // A market with no currency is refused by name further on ("No currency was resolved…"): nothing is sent either way.
+    if (send.price == null && !product.isParent && marketCur) throw new Error(`${product.sku}: ${send.reason}`)
+    const price = Number(send.price ?? resolved.cells.price?.value ?? product.basePrice)
     const ledger = ledgers.get(product.id)
     const tracked = !!ledger && (ledger.ledger.length > 0 || ledger.uncountedIsZero)
     const following = listing?.followMasterQuantity !== false

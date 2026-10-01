@@ -5,7 +5,7 @@
  * decision surface in one screen:
  *
  *   - Channel / market label + currency it operates in
- *   - Effective price (followMasterPrice resolved) — formatted in
+ *   - Effective price (followMasterPrice + the pricing rule resolved) — formatted in
  *     the market's native currency (GBP for UK, USD for US, EUR
  *     elsewhere; VAT-inclusive per EU + UK marketplace convention)
  *   - Sale price when set (G.3)
@@ -31,9 +31,11 @@
 
 import { prisma } from '@nexus/database'
 import Link from '@/lib/workspaces/Link'
+import { Pill } from '@/design-system/primitives'
 import { Activity, AlertTriangle } from 'lucide-react'
 import { prettyChannelMarketplace } from '@/lib/marketplace-code'
 import type { getServerT } from '@/lib/i18n/server'
+import { marketCurrencyOf, masterCurrencyFrom, pricingTabPrice, type MarketCurrencyRow } from './pricing-tab-price'
 
 interface PricingTabProps {
   productId: string
@@ -90,7 +92,7 @@ export default async function PricingTab({
   locale,
   t,
 }: PricingTabProps) {
-  const [master, listings] = await Promise.all([
+  const [master, listings, marketRows] = await Promise.all([
     prisma.product
       .findUnique({
         where: { id: productId },
@@ -129,6 +131,13 @@ export default async function PricingTab({
         console.error('[atm.8] channelListings fetch failed', e)
         return [] as never[]
       }),
+    // The currency each market sells in, from its Marketplace row — the fact the API prices by (refuse, don't convert).
+    prisma.marketplace
+      .findMany({ select: { channel: true, code: true, currency: true } })
+      .catch((e: unknown) => {
+        console.error('[atm.8] marketplace currencies fetch failed', e)
+        return [] as MarketCurrencyRow[]
+      }),
   ])
 
   if (listings.length === 0) {
@@ -157,12 +166,15 @@ export default async function PricingTab({
   }
 
   const masterBase = master?.basePrice == null ? null : Number(master.basePrice)
+  const masterCurrency = masterCurrencyFrom(process.env.NEXUS_MASTER_CURRENCY)
+  // The market's configured currency; a market with none shows in the conventional one, and is never the master's.
+  const displayCurrency = (channel: string, marketplace: string) => marketCurrencyOf(channel, marketplace, marketRows) ?? currencyFor(marketplace)
 
-  const fmtCurrency = (v: number | null, marketplace: string) => {
+  const fmtCurrency = (v: number | null, channel: string, marketplace: string) => {
     if (v == null) return '—'
     return new Intl.NumberFormat(numLocale, {
       style: 'currency',
-      currency: currencyFor(marketplace),
+      currency: displayCurrency(channel, marketplace),
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(v)
@@ -183,7 +195,7 @@ export default async function PricingTab({
               ? '—'
               : new Intl.NumberFormat(numLocale, {
                   style: 'currency',
-                  currency: 'EUR',
+                  currency: masterCurrency,
                 }).format(masterBase)}
           </span>
         </div>
@@ -218,15 +230,12 @@ export default async function PricingTab({
           </thead>
           <tbody>
             {listings.map((l) => {
-              const effective = l.followMasterPrice
-                ? l.masterPrice == null
-                  ? null
-                  : Number(l.masterPrice)
-                : l.priceOverride == null
-                  ? l.price == null
-                    ? null
-                    : Number(l.price)
-                  : Number(l.priceOverride)
+              // A following listing carries its RULE's price (FIXED = master, PERCENT_OF_MASTER = master × (1 + %)),
+              // computed by the API's own maths — in the master currency only. A market that sells in another currency
+              // is refused, not converted: it shows the price it holds, in its own currency, and says the rule's price
+              // is not sent there (`pricingTabPrice`). Match Amazon takes no price from the master: its stored price.
+              const shown = pricingTabPrice(l, masterBase, marketCurrencyOf(l.channel, l.marketplace, marketRows), masterCurrency)
+              const effective = shown.value
               const sale =
                 l.salePrice == null ? null : Number(l.salePrice)
               const competitor =
@@ -268,14 +277,24 @@ export default async function PricingTab({
                       {prettyChannelMarketplace(l.channel, l.marketplace)}
                     </div>
                     <div className="text-[10px] text-slate-500 font-mono">
-                      {currencyFor(l.marketplace)}
+                      {displayCurrency(l.channel, l.marketplace)}
                       {!l.isPublished && ` · ${t('products.datasheetHub.pricing.tab.unpublished')}`}
                     </div>
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums align-middle">
                     <span className="text-slate-900 dark:text-slate-100 font-semibold">
-                      {fmtCurrency(effective, l.marketplace)}
+                      {fmtCurrency(effective, l.channel, l.marketplace)}
                     </span>
+                    {shown.currencyRefused && (
+                      <>
+                        <Pill tone="warning">{t('products.datasheetHub.pricing.tab.currencyRefusedShort')}</Pill>
+                        <div>
+                          {shown.currencyRefused.market
+                            ? t('products.datasheetHub.pricing.tab.currencyRefused', { currency: shown.currencyRefused.market, master: shown.currencyRefused.master })
+                            : t('products.datasheetHub.pricing.tab.currencyMissing', { master: shown.currencyRefused.master })}
+                        </div>
+                      </>
+                    )}
                     {!l.followMasterPrice && (
                       <span
                         className="block text-[10px] text-blue-600 dark:text-blue-400 uppercase tracking-wider"
@@ -292,7 +311,7 @@ export default async function PricingTab({
                       <span className="text-slate-300">—</span>
                     ) : (
                       <span className="text-red-600 dark:text-red-400 font-medium">
-                        {fmtCurrency(sale, l.marketplace)}
+                        {fmtCurrency(sale, l.channel, l.marketplace)}
                       </span>
                     )}
                   </td>
@@ -306,7 +325,8 @@ export default async function PricingTab({
                       }
                     >
                       {l.pricingRule}
-                      {adjPct != null && adjPct !== 0 && (
+                      {/* The percent belongs to PERCENT_OF_MASTER only: a FIXED rule keeps a stored percent unused. */}
+                      {l.pricingRule === 'PERCENT_OF_MASTER' && adjPct != null && adjPct !== 0 && (
                         <span className="ml-0.5 tabular-nums">
                           {adjPct > 0 ? '+' : ''}
                           {adjPct}%
@@ -335,7 +355,7 @@ export default async function PricingTab({
                         {competitorBelow && (
                           <AlertTriangle className="w-3 h-3" />
                         )}
-                        {fmtCurrency(competitor, l.marketplace)}
+                        {fmtCurrency(competitor, l.channel, l.marketplace)}
                       </span>
                     )}
                     {l.competitorFetchedAt && (
@@ -350,7 +370,7 @@ export default async function PricingTab({
                       <span className="text-slate-700 dark:text-slate-300">
                         {fbaFee != null && (
                           <span title="FBA fee">
-                            {fmtCurrency(fbaFee, l.marketplace)}
+                            {fmtCurrency(fbaFee, l.channel, l.marketplace)}
                           </span>
                         )}
                         {fbaFee != null && referralPct != null && ' · '}
@@ -365,7 +385,7 @@ export default async function PricingTab({
                           'products.datasheetHub.pricing.tab.bestOfferFloor',
                         )}
                       >
-                        ≥ {fmtCurrency(bestOffer, l.marketplace)}
+                        ≥ {fmtCurrency(bestOffer, l.channel, l.marketplace)}
                       </span>
                     ) : (
                       <span className="text-slate-300">—</span>

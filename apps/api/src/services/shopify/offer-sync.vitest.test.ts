@@ -1,6 +1,6 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'graphql'
-const state = vi.hoisted(() => ({ listing: {} as any, product: {} as any, colour: null as any, remoteIdentity: 'workspace:family:c:colour', policies: [] as any[], policyReadFailed: false, routes: [] as string[], quantity: 3, price: '10.00', sku: 'BLUE-M', warehouse: 7, writes: [] as any[], stale: false }))
+const state = vi.hoisted(() => ({ market: { currency: 'EUR' } as any, listing: {} as any, product: {} as any, colour: null as any, remoteIdentity: 'workspace:family:c:colour', policies: [] as any[], policyReadFailed: false, routes: [] as string[], quantity: 3, price: '10.00', sku: 'BLUE-M', warehouse: 7, writes: [] as any[], stale: false }))
 // Shared stock — the offer follows the product's ledger (loadSyncLedgers): its own WAREHOUSE rows here
 // (12 on the shelf, 7 available), no pool, no link history.
 vi.mock('../../db.js', () => ({ default: {
@@ -10,6 +10,8 @@ vi.mock('../../db.js', () => ({ default: {
   stockLevel: { findMany: async () => [{ productId: 'child', quantity: 12, available: state.warehouse, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: state.routes } }] },
   syncChannelPolicy: { findMany: async () => { if (state.policyReadFailed) throw new Error('Policy read failed'); return state.policies } },
   stockPoolLink: { findMany: async () => [] },
+  // The market's currency (`marketCurrency`): the send price and the floor/ceiling read it.
+  marketplace: { findFirst: async () => state.market },
   $queryRaw: async () => [],
 } }))
 vi.mock('./content-workspace.service.js', () => ({ object: (v: any) => v, digest: JSON.stringify }))
@@ -40,7 +42,7 @@ beforeEach(() => {
   vi.stubEnv('NEXUS_OVERSELL_CLAMP', '1')
   state.quantity = 3; state.price = '10.00'; state.sku = 'BLUE-M'; state.warehouse = 7; state.writes = []; state.stale = false
   state.product = { id: 'child', sku: 'BLUE-M', parentId: 'family', deletedAt: null }
-  state.policies = []; state.routes = []; state.policyReadFailed = false
+  state.policies = []; state.routes = []; state.policyReadFailed = false; state.market = { currency: 'EUR' }
   state.remoteIdentity = 'workspace:family:c:colour'
   state.colour = { id: 'colour', workspaceId: 'workspace', familyId: 'family', channelConnectionId: 'account', marketplace: 'GLOBAL', aliasKey: '', state: 'LINKED', shopifyProductId: 'gid://shopify/Product/1' }
   state.listing = { productId: 'child', channelConnectionId: 'account', isPublished: true, followMasterQuantity: true, followMasterPrice: true, quantityOverride: 99, priceOverride: '99.00', stockBuffer: 2, platformAttributes: { nexusFamilyId: 'family', variantId: '2', inventoryItemId: '3', shopifyProductId: '1', inventoryLocationId: 'gid://shopify/Location/4' } }
@@ -118,9 +120,34 @@ it('does not report stock verification when the remote readback differs', async 
   state.stale = true
   await expect(syncNativeShopifyOffer(item)).rejects.toThrow('inventory changed during readback')
 })
-it('follows the canonical price even when an old override remains stored', async () => {
+it('a row with no price (the bulk channel batch): a follower is sent its rule\'s price — an old override stored is not its price', async () => {
   await syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE' })
   expect(state.price).toBe('19.50')
+})
+
+// Round 6 — the native sender sends the price the price door queued, as every other channel's dispatcher does.
+describe('🔴 a PRICE_UPDATE sends the door\'s price, not the master', () => {
+  it('a follower at "master +10%": the row\'s 21.45 is sent (it sent the master 19.50)', async () => {
+    Object.assign(state.listing, { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: '10', price: '21.45' })
+    await syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE', payload: { price: 21.45 } })
+    expect(state.price).toBe('21.45')
+  })
+  it('a row with no price: a "master +10%" follower is sent the rule\'s price from the current master', async () => {
+    Object.assign(state.listing, { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: '10', price: '20.00' })
+    await syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE', payload: {} })
+    expect(state.price).toBe('21.45')
+  })
+  it('a row with no price, in a market that sells in GBP, for a follower that holds no price: refused, nothing written', async () => {
+    state.market = { currency: 'GBP' }
+    Object.assign(state.listing, { marketplace: 'UK', price: null })
+    await expect(syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE', payload: {} })).rejects.toMatchObject({ code: 'NO_PRICE_TO_SEND', message: expect.stringContaining('Nexus does not convert it') })
+    expect(state.writes).toEqual([])
+  })
+  it('a price outside the product\'s own ceiling (master currency) is refused, as the other senders refuse it', async () => {
+    state.product = { ...state.product, maxPrice: 20 }
+    await expect(syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE', payload: { price: 21.45 } })).rejects.toMatchObject({ code: 'PRICE_OUT_OF_BOUNDS' })
+    expect(state.writes).toEqual([])
+  })
 })
 
 it.each([{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD', 'WITHDRAWN', 'ENDED', 'DISCONTINUED', 'RELEASED'].map(presenceIntent => ({ presenceIntent }))])('refuses locked native Shopify price and stock pushes %j', async lock => {

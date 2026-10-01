@@ -243,7 +243,8 @@ describe('set-price', { timeout: DB_TEST_TIMEOUT }, () => {
   it('refuses a price outside the floor or ceiling set on the product, in the preview and when it runs', async () => {
     const low = await dryRun('set-price', { productId: ids.bounded, price: 30 })
     expect(low).toMatchObject({ ok: false })
-    expect(low.error).toBe('REV-BOUNDED would go to 30.00, but 30.00 is below its pricing floor of 40.00. Change the price, or the floor or ceiling on the product in Nexus. Nothing was queued.')
+    // The shared verdict (`storedPriceReason`), in the master-price write's own words: the preview says what the run would.
+    expect(low.error).toBe('Not changed: 30.00 is below its pricing floor of 40.00.')
     const high = await dryRun('set-price', { productId: ids.bounded, price: 90 })
     expect(high.error).toContain('90.00 is above its pricing ceiling of 80.00')
     expect(await dryRun('set-price', { productId: ids.bounded, price: 60 })).toMatchObject({ ok: true, preview: { changes: { 'base price': { from: 50, to: 60 } } } })
@@ -251,7 +252,7 @@ describe('set-price', { timeout: DB_TEST_TIMEOUT }, () => {
     // Approved at 60, then the floor rose to 70: the run refuses and changes nothing.
     await inside(() => database.client.product.update({ where: { id: ids.bounded }, data: { minPrice: '70.00' } }))
     const ran = (await inside(() => executeTool(ALL, 'set-price', { productId: ids.bounded, price: 60 }))).raw
-    expect(ran).toMatchObject({ ok: false, error: 'REV-BOUNDED would go to 60.00, but 60.00 is below its pricing floor of 70.00. Nothing changed.' })
+    expect(ran).toMatchObject({ ok: false, error: 'Not changed: 60.00 is below its pricing floor of 70.00.' })
     expect(await basePrice(ids.bounded)).toBe(50)
     await inside(() => database.client.product.update({ where: { id: ids.bounded }, data: { minPrice: '40.00' } }))
   })
@@ -265,19 +266,39 @@ describe('bulk-price-change and the product’s own floor and ceiling', { timeou
     expect(out.error).toMatch(/Nothing was queued\.$/)
   })
 
-  it('names a listing its pricing rule takes outside them: the push will refuse it', async () => {
-    // Master 20 → 22 is inside the ceiling of 25; the IT listing at master + 50 % would be 33.
+  it('🔴 names a listing its pricing rule takes outside them: refused at the write — not changed, not sent — and not counted as sent', async () => {
+    // Master 20 → 22 is inside the ceiling of 25; the IT listing at master + 50 % would be 33. Since 2026-10-01 the
+    // master-price cascade refuses that listing (neither stored nor queued), so the preview says so and does not count
+    // it among the listings sent (it said "refused when sent" and counted it as sent).
     const out = await dryRun('bulk-price-change', { products: ['REV-PERCENT'], operation: 'percent', value: 10 })
     expect(out.ok, out.error).toBe(true)
-    expect(out.preview).toMatchObject({ totals: { listingsSent: 1, listingsRefusedAtPush: 1 } })
-    expect(out.preview!.warning).toContain('1 listing would be sent a price outside the pricing floor or ceiling set on the product')
-    expect(out.preview!.listings).toEqual(['REV-PERCENT · Amazon IT: 30.00 → 33.00 (refused when sent: 33.00 is above its pricing ceiling of 25.00)'])
+    expect(out.preview).toMatchObject({ totals: { listingsSent: 0, listingsRefused: 1 } })
+    expect(out.preview!.totals).not.toHaveProperty('listingsRefusedAtPush')
+    expect(out.preview!.warning).toContain('1 listing would follow the new master price outside the pricing floor or ceiling set on the product')
+    expect(out.preview!.warning).toContain('not changed and not sent')
+    expect(out.preview!.listings).toEqual(['REV-PERCENT · Amazon IT: refused, not changed and not sent — it would follow at 33.00, but 33.00 is above its pricing ceiling of 25.00; it keeps 30.00'])
+  })
+
+  it('🔴 the preview matches what MasterPriceService.update then does: the refused listing is neither stored nor queued, the counts are equal', async () => {
+    const out = await dryRun('bulk-price-change', { products: ['REV-PERCENT'], operation: 'percent', value: 10 })
+    const totals = out.preview!.totals as Record<string, number>
+    const percent = await inside(() => database.client.product.findFirstOrThrow({ where: { sku: 'REV-PERCENT' } }))
+    const before = await inside(() => database.client.outboundSyncQueue.count({ where: { productId: percent.id } }))
+    const { MasterPriceService } = await import('../../master-price.service.js')
+    const r = await inside(() => new MasterPriceService(database.client as never).update(percent.id, 22, { actor: 'review-test', reason: 'preview-vs-write' }))
+    expect(r.boundsRefused.map((b) => b.listingId)).toEqual([ids.percentListing])
+    expect(r.boundsRefused.length).toBe(totals.listingsRefused)
+    expect(r.queuedSyncIds.length).toBe(totals.listingsSent)
+    expect(await inside(() => database.client.outboundSyncQueue.count({ where: { productId: percent.id } }))).toBe(before)
+    expect(Number((await inside(() => database.client.channelListing.findUniqueOrThrow({ where: { id: ids.percentListing } }))).price)).toBe(30)
+    // Back to where the other arms expect it.
+    await inside(() => new MasterPriceService(database.client as never).update(percent.id, 20, { actor: 'review-test', reason: 'preview-vs-write' }))
   })
 
   it('a change with no bound in play reads as before: no new keys', async () => {
     const out = await dryRun('bulk-price-change', { products: ['REV-MULTI'], operation: 'percent', value: 10 })
     expect(out.ok, out.error).toBe(true)
-    expect(out.preview!.totals).not.toHaveProperty('listingsRefusedAtPush')
+    expect(out.preview!.totals).not.toHaveProperty('listingsRefused')
     expect(out.preview).not.toHaveProperty('warning')
   })
 })

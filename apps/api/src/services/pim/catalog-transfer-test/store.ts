@@ -64,7 +64,13 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     const result = (row: Row | undefined, args: Row = {}) => {
       if (!row) return null
       const out = clone(row)
-      if (args.select?.product) out.product = row.productId ? { parentId: data.product.get(row.productId)?.parentId ?? null } : null
+      if (args.select?.product) {
+        const parent = row.productId ? data.product.get(row.productId) : undefined
+        // The fields a nested product select names (the price door reads sku, basePrice, minPrice and maxPrice); a select
+        // without a field list keeps the old answer, the parent id.
+        const fields = args.select.product?.select ? Object.keys(args.select.product.select) : ['parentId']
+        out.product = row.productId ? Object.fromEntries(fields.map((f) => [f, parent?.[f] ?? null])) : null
+      }
       // LX.F R-LX-13 — a selected TO-MANY relation is always an array in Prisma's
       // answer, never undefined. LX reads `translations` on products and listings
       // (`catalog-product-transfer.ts:36,41`), and this store returned `undefined`
@@ -135,6 +141,16 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     if (sql.includes('information_schema.columns') && sql.includes('salePriceStart')) return [{ n: raw.saleWindowColumns ? 2 : 0 }]
     if (sql.includes('information_schema.columns') && sql.includes('presenceIntent')) return [{ n: raw.presenceColumns ? 3 : 0 }]
     if (sql.includes('to_char("salePriceStart"')) return (values[0] as string[]).flatMap(id => data.channelListing.has(id) ? [{ id, start: raw.saleWindows.get(id)?.start ?? null, end: raw.saleWindows.get(id)?.end ?? null }] : [])
+    throw new Error(`Unsupported fixture raw query: ${sql}`)
+  }
+  // The price door reads its product's master price, floor and ceiling FOR SHARE before it writes (channel-price-write).
+  db.$queryRaw = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const sql = strings.join('?')
+    raw.statements.push({ sql, values })
+    if (sql.includes('FROM "Product" WHERE id =') && sql.includes('FOR SHARE')) {
+      const p = data.product.get(values[0] as string)
+      return p ? [{ basePrice: p.basePrice ?? null, minPrice: p.minPrice ?? null, maxPrice: p.maxPrice ?? null }] : []
+    }
     throw new Error(`Unsupported fixture raw query: ${sql}`)
   }
   db.$executeRawUnsafe = async (sql: string, ...values: unknown[]) => {

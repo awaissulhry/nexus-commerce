@@ -139,8 +139,11 @@ describe('who changed the price — a bulk job acts for the signed-in person', (
 
   it('🔴 a retry of failed rows acts for the person who retried, not for whoever ran the original', async () => {
     await seedListing('actor-retry')
-    // A row that fails in the database (5000 does not fit the 5,2 adjustment column), so there is a failed row to retry.
-    const original = await scoped(() => prisma.bulkActionJob.create({ data: { jobName: 'to retry', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', targetProductIds: ['actor-retry'], targetVariationIds: [], actionPayload: { priceOverride: 12, priceAdjustmentPercent: 5000 }, status: 'PENDING', totalItems: 1, createdBy: PEOPLE.a } }))
+    // A row that fails, so there is a failed row to retry: master +50% (15.00) is above the product's own ceiling, so the
+    // price door refuses that listing. (It used to be a percent of 5000 failing in the 5,2 column; since 2026-10-01 such a
+    // payload is refused before a job exists, and a retry of it would be refused the same way.)
+    await scoped(() => prisma.product.update({ where: { id: 'actor-retry' }, data: { maxPrice: 10.5 } }))
+    const original = await scoped(() => prisma.bulkActionJob.create({ data: { jobName: 'to retry', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', targetProductIds: ['actor-retry'], targetVariationIds: [], actionPayload: { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 50 }, status: 'PENDING', totalItems: 1, createdBy: PEOPLE.a } }))
     await post(`/api/bulk-operations/${original.id}/process`, {}, as(PEOPLE.a))
     expect(await finished(original.id)).toMatchObject({ status: 'FAILED' })
     const retry = await post(`/api/bulk-operations/${original.id}/retry-failed`, { createdBy: 'forged-name' }, as(PEOPLE.b))

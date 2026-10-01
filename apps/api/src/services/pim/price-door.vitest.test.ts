@@ -11,6 +11,8 @@ vi.mock('../../db.js', () => ({
       // row back inside the transaction, and a stub that only has `updateMany` fails there and
       // nowhere else. The ratchet caught exactly that.
       channelListing: { updateMany: db.updateMany, findMany: db.findMany, findUnique: vi.fn(async () => null) },
+      // The product row the door reads FOR SHARE first: no row in a stub, so nothing to compare.
+      $queryRaw: vi.fn(async () => []),
       channelListingOverride: { create: vi.fn(async () => ({})) },
       priceChangeEvent: { create: vi.fn(async () => ({})) },
       outboundSyncQueue: { create: vi.fn(async () => ({ id: 'q1' })), findFirst: vi.fn(async () => null), updateMany: vi.fn(async () => ({ count: 0 })) },

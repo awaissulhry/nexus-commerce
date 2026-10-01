@@ -16,7 +16,6 @@ import { logger } from '../utils/logger.js'
 import { variationSyncProcessor } from '../services/variation-sync-processor.service.js'
 import OutboundSyncService, { computeFailureDisposition, completedSyncQueueData, startAfterAnswer } from '../services/outbound-sync.service.js'
 import { dispatchChannelDelist, applyDelistResultToQueue } from '../services/channel-delist.service.js'
-import { calculateTargetPrice } from '../services/repricer.service.js'
 import { productEventService } from '../services/product-event.service.js'
 
 // Worker statistics
@@ -276,79 +275,13 @@ async function processOutboundSyncJobInner(job: Job) {
       }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // PHASE 28: PRICING CALCULATION
-    // Calculate target price based on pricing rules before sync
-    // ─────────────────────────────────────────────────────────────────────
-    if (channelListingId) {
-      try {
-        const product = await prisma.product.findUnique({
-          where: { id: productId },
-          select: {
-            basePrice: true,
-            costPrice: true,
-            minMargin: true,
-          },
-        })
-
-        const listing = await prisma.channelListing.findUnique({
-          where: { id: channelListingId },
-          select: {
-            pricingRule: true,
-            priceAdjustmentPercent: true,
-            priceOverride: true,
-            // TECH_DEBT #48 — without this we'd recompute even when
-            // the seller has explicitly opted out of following the
-            // master, and silently overwrite their per-marketplace
-            // override with a rule-based value.
-            followMasterPrice: true,
-          },
-        })
-
-        if (product && listing && listing.followMasterPrice) {
-          const pricingResult = calculateTargetPrice({
-            masterPrice: product.basePrice,
-            costPrice: product.costPrice,
-            minMargin: product.minMargin,
-            pricingRule: listing.pricingRule as 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER',
-            priceAdjustmentPercent: listing.priceAdjustmentPercent,
-          })
-
-          logger.info('💰 Pricing calculated', {
-            queueId,
-            channelListingId,
-            finalPrice: pricingResult.finalPrice.toString(),
-            rule: pricingResult.rule,
-            floorPrice: pricingResult.floorPrice.toString(),
-            adjustmentApplied: pricingResult.adjustmentApplied,
-            reason: pricingResult.reason,
-          })
-
-          // Update the listing with calculated price
-          await prisma.channelListing.update({
-            where: { id: channelListingId },
-            data: {
-              price: pricingResult.finalPrice,
-            },
-          })
-        } else if (product && listing && !listing.followMasterPrice) {
-          // followMasterPrice=false → seller has set a per-marketplace
-          // price override. Skip the recompute so we don't trash it on
-          // the next sync. The push uses listing.price as-is.
-          logger.debug('💰 Skipping pricing recompute (followMasterPrice=false)', {
-            queueId,
-            channelListingId,
-          })
-        }
-      } catch (pricingError) {
-        logger.warn('⚠️ Pricing calculation failed, continuing with sync', {
-          queueId,
-          channelListingId,
-          error: pricingError instanceof Error ? pricingError.message : String(pricingError),
-        })
-        // Don't fail the entire sync if pricing calculation fails
-      }
-    }
+    // 2026-10-01 — the PHASE 28 "pricing calculation" that stood here is gone. On a job carrying `channelListingId`
+    // (the queue page's retries, the matrix's retry) it rewrote `ChannelListing.price` with the repricer's
+    // `calculateTargetPrice` — a cost-margin floor no edit applies, and MATCH_AMAZON read as the master price — while
+    // the dispatch below sends the row's own `payload.price`. So it stored a price that was never sent, and the next
+    // reader saw a number the channel did not have. A following listing's price is computed when it changes — by the
+    // master-price cascade and the channel price door, with the same rules (`services/pim/follower-price.ts`) — and
+    // the row carries exactly the price that is stored.
 
     // ─────────────────────────────────────────────────────────────────────
     // SYNC PROCESSING

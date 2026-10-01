@@ -25,7 +25,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import type { PrismaClient } from '@prisma/client'
-import { FxRateMissingError, storedFxRate } from './fx-rate.service.js'
+import { FxRateMissingError, masterCurrency, storedFxRate } from './fx-rate.service.js'
+import { followerListingPrice, pricingRuleLabel, roundCents } from '@nexus/shared/listing-price'
 import { marketCurrency } from './pim/market-currency.js'
 import { primaryConnectionIds } from './connection-resolver.service.js'
 
@@ -36,7 +37,23 @@ export type PriceSource =
   | 'CHANNEL_RULE'
   | 'PRICING_RULE'
   | 'MASTER_INHERIT'
+  /** 2026-10-01 — the price the listing holds, and nothing computed it: Match Amazon, or a market in another currency. */
+  | 'LISTING_PRICE'
   | 'FALLBACK'
+
+/**
+ * A number the engine works out that is NOT the listing's price and is never sent by Nexus's own rules (2026-10-01):
+ * a PricingRule's price, or Match Amazon's undercut of the lowest competitor. Shown labelled as a suggestion.
+ */
+export interface PriceSuggestion {
+  kind: 'PRICING_RULE' | 'MATCH_AMAZON'
+  price: number
+  /** The suggestion before the engine's floor/ceiling clamp, when it was clamped. */
+  clampedFrom?: number
+  ruleId?: string
+  ruleType?: string
+  reason: string
+}
 
 export interface PriceResolutionInput {
   sku: string
@@ -74,6 +91,8 @@ export interface PriceBreakdown {
   effectiveCostBasis: number | null
   minMarginPercent: number | null
   salePriceWindow?: { startsAt: Date | null; endsAt: Date | null }
+  /** A number that is not the listing's price (`PriceSuggestion`). */
+  suggestion?: PriceSuggestion
 }
 
 export interface PriceResolution {
@@ -361,58 +380,69 @@ export async function resolvePrice(
     }
   }
 
-  // 3. CHANNEL_OVERRIDE — explicit priceOverride with followMasterPrice = false.
-  if (
-    !resolved &&
-    channelListing &&
-    channelListing.followMasterPrice === false &&
-    channelListing.priceOverride != null
-  ) {
-    resolved = {
-      price: Number(channelListing.priceOverride),
-      source: 'CHANNEL_OVERRIDE',
+  // ── 3–4. A LISTING's price is the price Nexus's own rules give it (2026-10-01) ─────────────────────────────────
+  // What this engine shows as a listing's price must be what the listing carries — the price the master-price cascade
+  // and the channel price door store and send (`@nexus/shared/listing-price`, one maths), never a number of its own:
+  //   - a PINNED listing (followMasterPrice = false) keeps its own price (priceOverride, else price). No rule applies:
+  //     the channel rule used to price a pinned listing that had no priceOverride.
+  //   - a FOLLOWING listing carries its rule's price from the master — FIXED = the master, PERCENT_OF_MASTER = master
+  //     × (1 + percent/100) — rounded to cents. No FX: a market in another currency than the master is never sent a
+  //     converted master (refuse, don't convert), so it keeps its own price and this says why. No VAT on top: the
+  //     cascade sends the master number as the channel's price.
+  //   - MATCH_AMAZON takes no price from the master: the listing keeps the price it holds, and the competitor undercut
+  //     is a SUGGESTION (`breakdown.suggestion`), never the listing's price.
+  // The engine's other numbers (a PricingRule's price, the competitor undercut) are suggestions; a cost, MAP or product
+  // floor or ceiling the listing's price breaks is a warning, not a changed price.
+  const master = masterCurrency()
+  let suggestion: PriceSuggestion | undefined
+  if (!resolved && channelListing && channelListing.followMasterPrice === false) {
+    const own = channelListing.priceOverride ?? channelListing.price
+    if (own != null) {
+      resolved = { price: Number(own), source: 'CHANNEL_OVERRIDE' }
+      reasoning.push(`Pinned listing: its own price ${Number(own).toFixed(2)} ${currency}`)
+    } else {
+      warnings.push('This listing is pinned at its own price but holds none.')
     }
-    reasoning.push(
-      `Manual channel override: ${resolved.price.toFixed(2)} ${currency}`,
-    )
   }
-
-  // 4. CHANNEL_RULE — pricingRule × priceAdjustmentPercent.
-  if (!resolved && channelListing && masterPrice != null) {
+  if (!resolved && channelListing && channelListing.followMasterPrice !== false) {
     const rule = channelListing.pricingRule
-    if (rule === 'PERCENT_OF_MASTER' && channelListing.priceAdjustmentPercent != null) {
-      const adj = Number(channelListing.priceAdjustmentPercent)
-      const masterInMp = masterPrice * fxRate
-      const computed = masterInMp * (1 + adj / 100)
-      resolved = {
-        price: computed,
-        source: 'CHANNEL_RULE',
-        ruleAppliedType: 'PERCENT_OF_MASTER',
-        ruleAdjustment: adj,
+    const stored = channelListing.price != null ? Number(channelListing.price) : null
+    if (rule === 'MATCH_AMAZON') {
+      if (channelListing.lowestCompetitorPrice != null) {
+        const competitor = Number(channelListing.lowestCompetitorPrice)
+        suggestion = { kind: 'MATCH_AMAZON', price: roundCents(Math.max(0, competitor - 0.01)), reason: `Match Amazon suggestion: the lowest competitor ${competitor.toFixed(2)} − 0.01` }
       }
-      reasoning.push(
-        `Channel rule PERCENT_OF_MASTER ${adj >= 0 ? '+' : ''}${adj}%: ${computed.toFixed(2)} ${currency}`,
-      )
-    } else if (rule === 'MATCH_AMAZON' && channelListing.lowestCompetitorPrice != null) {
-      const competitor = Number(channelListing.lowestCompetitorPrice)
-      // Match-Amazon: sit €0.01 (or 0.01 in marketplace currency) below.
-      resolved = {
-        price: Math.max(0, competitor - 0.01),
-        source: 'CHANNEL_RULE',
-        ruleAppliedType: 'MATCH_AMAZON',
+      if (stored != null) {
+        resolved = { price: stored, source: 'LISTING_PRICE', ruleAppliedType: 'MATCH_AMAZON' }
+        reasoning.push(`Match Amazon: the listing keeps the price it holds, ${stored.toFixed(2)} ${currency} (Amazon's pricing drives it, not the master)`)
       }
-      reasoning.push(
-        `Channel rule MATCH_AMAZON: ${competitor.toFixed(2)} − 0.01 = ${resolved.price.toFixed(2)} ${currency}`,
-      )
+    } else if (masterPrice == null) {
+      if (stored != null) resolved = { price: stored, source: 'LISTING_PRICE' }
+    } else if (currency !== master) {
+      warnings.push(`Not converted: the master price is ${master} ${masterPrice.toFixed(2)} and this market sells in ${currency}. Nexus does not send a market a converted master price (refuse, don't convert), so the listing keeps its own price.`)
+      if (stored != null) {
+        resolved = { price: stored, source: 'LISTING_PRICE' }
+        reasoning.push(`The listing's own price: ${stored.toFixed(2)} ${currency}`)
+      }
+    } else {
+      const next = followerListingPrice(masterPrice, rule, channelListing.priceAdjustmentPercent as never)!
+      if (rule === 'PERCENT_OF_MASTER') {
+        const adj = channelListing.priceAdjustmentPercent == null ? 0 : Number(channelListing.priceAdjustmentPercent)
+        resolved = { price: next, source: 'CHANNEL_RULE', ruleAppliedType: 'PERCENT_OF_MASTER', ruleAdjustment: adj }
+        reasoning.push(`Follows ${pricingRuleLabel(rule, adj)}: ${next.toFixed(2)} ${currency}`)
+      } else {
+        resolved = { price: next, source: 'MASTER_INHERIT' }
+        reasoning.push(`Follows the master price: ${next.toFixed(2)} ${currency}`)
+      }
     }
-    // FIXED rule has no price source on its own — it's just "use ChannelListing.price";
-    // that's handled by the MASTER_INHERIT branch which reads price/priceOverride.
   }
 
   // 5. PRICING_RULE — variant-level rules from PricingRule table.
   // Walks the priority chain; first applicable rule wins. Margin clamp
   // happens inline with the rule.
-  if (!resolved && variant && masterPrice != null) {
+  // A listing's price is decided above; a PricingRule's price for it is a SUGGESTION. Without a listing (an estimate
+  // for a market the SKU is not on) the rule prices the estimate, as before.
+  if (variant && masterPrice != null && (!resolved || channelListing)) {
     const variantRules = await prisma.pricingRuleVariation.findMany({
       where: { variationId: variant.id, rule: { isActive: true } },
       include: { rule: true },
@@ -459,22 +489,27 @@ export async function resolvePrice(
         }
       }
       if (rulePrice != null && Number.isFinite(rulePrice) && rulePrice > 0) {
-        resolved = {
-          price: rulePrice,
-          source: 'PRICING_RULE',
-          ruleAppliedId: r.id,
-          ruleAppliedType: r.type,
+        if (channelListing) {
+          suggestion = { kind: 'PRICING_RULE', price: rulePrice, ruleId: r.id, ruleType: r.type, reason: `Pricing rule "${r.name}" (${r.type}) suggests ${rulePrice.toFixed(2)} ${currency}` }
+        } else {
+          resolved = {
+            price: rulePrice,
+            source: 'PRICING_RULE',
+            ruleAppliedId: r.id,
+            ruleAppliedType: r.type,
+          }
+          reasoning.push(
+            `Pricing rule "${r.name}" (${r.type}): ${rulePrice.toFixed(2)} ${currency}`,
+          )
         }
-        reasoning.push(
-          `Pricing rule "${r.name}" (${r.type}): ${rulePrice.toFixed(2)} ${currency}`,
-        )
         break
       }
     }
   }
 
-  // 6. MASTER_INHERIT — Product.basePrice × FX rate.
-  if (!resolved && masterPrice != null) {
+  // 6. MASTER_INHERIT — Product.basePrice × FX rate: an ESTIMATE for a market the SKU has no listing on. A listing's
+  // price was decided above, and a following listing's in another currency is never converted.
+  if (!resolved && masterPrice != null && !channelListing) {
     const inherited = masterPrice * fxRate
     resolved = { price: inherited, source: 'MASTER_INHERIT' }
     reasoning.push(
@@ -497,7 +532,10 @@ export async function resolvePrice(
   // values, we add VAT here. If it came from CHANNEL_OVERRIDE / SCHEDULED_SALE,
   // those are seller-entered values which we treat as the final displayed
   // price (already inclusive). Caller can opt out via marketplace settings.
+  // 2026-10-01 — only an ESTIMATE (no listing) and a PricingRule SUGGESTION are grossed up: a listing's price is what it
+  // carries and is sent as it is (the cascade sends the master number as the channel's price).
   if (
+    !channelListing &&
     taxInclusive &&
     vatRate > 0 &&
     (resolved.source === 'MASTER_INHERIT' ||
@@ -510,12 +548,30 @@ export async function resolvePrice(
     )
     resolved.price = withTax
   }
+  if (suggestion?.kind === 'PRICING_RULE' && taxInclusive && vatRate > 0) {
+    suggestion.price = suggestion.price * (1 + vatRate / 100)
+    suggestion.reason += ` (VAT ${vatRate}% added: tax-inclusive market)`
+  }
 
   // ── Constraint clamping ────────────────────────────────────────
+  // 2026-10-01 — a LISTING's price is never changed here: the price it carries is the price it carries. A floor or
+  // ceiling it breaks is a warning. Only an estimate (no listing) and a suggestion are clamped, as before.
+  if (suggestion) {
+    const raw = suggestion.price
+    const cut = Math.min(ceiling ?? Infinity, Math.max(floor, raw))
+    if (cut !== raw) { suggestion.clampedFrom = roundCents(raw); suggestion.reason += ` — clamped to ${roundCents(cut).toFixed(2)}` }
+    suggestion.price = roundCents(cut)
+  }
+  // In the master currency only: the floor and ceiling are master-currency numbers (refuse, don't convert).
+  if (channelListing && resolved.source !== 'FALLBACK' && currency === master) {
+    const own = roundCents(resolved.price)
+    if (floor > 0 && own < floor) warnings.push(`The listing's price ${own.toFixed(2)} is below the floor ${roundCents(floor).toFixed(2)} ${currency} (the product's floor, MAP, or cost + ${minMarginPercent}% + fees). It is not changed here.`)
+    if (ceiling != null && own > ceiling) warnings.push(`The listing's price ${own.toFixed(2)} is above the product's ceiling ${roundCents(ceiling).toFixed(2)} ${currency}. It is not changed here.`)
+  }
   const preClamp = resolved.price
   let isClamped = false
   let clamped = preClamp
-  if (clamped < floor) {
+  if (!channelListing && clamped < floor) {
     clamped = floor
     isClamped = true
     if (mapPriceInMp > 0 && preClamp < mapPriceInMp) {
@@ -525,14 +581,15 @@ export async function resolvePrice(
       reasoning.push(`Clamped to floor ${floor.toFixed(2)} (was ${preClamp.toFixed(2)})`)
     }
   }
-  if (ceiling != null && clamped > ceiling) {
+  if (!channelListing && ceiling != null && clamped > ceiling) {
     clamped = ceiling
     isClamped = true
     reasoning.push(`Clamped to ceiling ${ceiling.toFixed(2)} (was ${preClamp.toFixed(2)})`)
   }
 
-  // Round to 2 decimals (currency precision).
-  const finalPrice = Math.round(clamped * 100) / 100
+  // Round to cents with the one cents helper the cascade, the door and the screens use (1.005 → 1.01).
+  const finalPrice = roundCents(clamped)
+  if (suggestion) reasoning.push(`${suggestion.reason}: ${suggestion.price.toFixed(2)} ${currency} — a suggestion, not the listing's price`)
 
   return {
     price: finalPrice,
@@ -557,6 +614,7 @@ export async function resolvePrice(
       effectiveCostBasis,
       minMarginPercent,
       salePriceWindow: resolved.salePriceWindow,
+      ...(suggestion ? { suggestion } : {}),
     },
     constraints: {
       floor,

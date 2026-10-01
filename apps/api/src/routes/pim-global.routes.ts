@@ -1,4 +1,6 @@
 import { applyProductBulkEdits } from '../services/products/bulk-edit.service.js'
+import { ListingPricingError, resetListingToMaster, type ResettableField } from '../services/listings/listing-pricing-edit.service.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { contentField, isLocalizableContent } from '../services/pim/content-resolver.js'
 import { marketplaceForLanguage } from '../services/pim/market-languages.js'
@@ -476,8 +478,8 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── POST /products/:id/channel-listing/:clId/reset ──────────────
   // PIM B.2 — Reset one (or all) SSOT fields to inherit from master.
-  // Sets followMasterX=true + nulls xOverride. Idempotent: a field
-  // already inheriting returns ok without a write.
+  // Sets followMasterX=true + nulls xOverride; the price through the channel price door, which recomputes it by the
+  // listing's rule and sends it. Idempotent: a field already inheriting returns ok without a write.
   fastify.post<{
     Params: { id: string; clId: string }
     Body: { field: 'title' | 'description' | 'price' | 'quantity' | 'bulletPoints' | 'all' }
@@ -501,53 +503,20 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ error: 'field must be one of title|description|price|quantity|bulletPoints|all' })
       }
 
-      const cl = await prisma.channelListing.findUnique({ where: { id: clId }, include: { translations: true } })
-      if (!cl || cl.productId !== id) {
-        return reply.status(404).send({ error: 'Channel listing not found for product' })
+      // 2026-10-01 — the price goes back to the master through the ONE channel price door: recomputed by the
+      // listing's rule and queued for the channel (30 s to undo), or refused by name with nothing written. The other
+      // fields' flags and overrides land in the same transaction (`resetListingToMaster`).
+      const fields: ResettableField[] = field === 'all' ? ['title', 'description', 'price', 'quantity', 'bulletPoints'] : [field]
+      let reset: Awaited<ReturnType<typeof resetListingToMaster>>
+      try {
+        reset = await resetListingToMaster({ productId: id, listingId: clId, fields, actor: bulkActorOf(request) ?? 'channel-listing-reset' })
+      } catch (err) {
+        if (err instanceof ListingPricingError) return reply.status(err.statusCode).send({ error: err.message, ...err.details })
+        throw err
       }
-
-      const data: Record<string, unknown> = {}
-      const apply = (key: 'title' | 'description' | 'price' | 'quantity' | 'bulletPoints') => {
-        switch (key) {
-          case 'title':
-            data.followMasterTitle = true
-            data.titleOverride = null
-            break
-          case 'description':
-            data.followMasterDescription = true
-            data.descriptionOverride = null
-            break
-          case 'price':
-            data.followMasterPrice = true
-            data.priceOverride = null
-            break
-          case 'quantity':
-            data.followMasterQuantity = true
-            data.quantityOverride = null
-            break
-          case 'bulletPoints':
-            data.followMasterBulletPoints = true
-            data.bulletPointsOverride = []
-            break
-        }
-      }
-      if (field === 'all') {
-        apply('title')
-        apply('description')
-        apply('price')
-        apply('quantity')
-        apply('bulletPoints')
-      } else {
-        apply(field)
-      }
-
-      const quantityWillChange =
-        (field === 'quantity' || field === 'all') && cl.followMasterQuantity === false
-
-      await prisma.channelListing.update({ where: { id: clId }, data })
 
       // A2 — journal followMasterQuantity toggle (best-effort, fail-open).
-      if (quantityWillChange) {
+      if (reset.quantityFollowTurnedOn) {
         try {
           await prisma.auditLog.create({
             data: {
@@ -565,7 +534,7 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      return reply.send({ ok: true, field })
+      return reply.send({ ok: true, field, ...(reset.notSent ? { notSent: reset.notSent } : {}), ...(reset.quantitySkipped ? { quantityNote: reset.quantitySkipped } : {}) })
     },
   )
 

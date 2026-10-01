@@ -1735,6 +1735,14 @@ export async function applyControlColumns(
       where: { productId: { in: [...resumeProducts] }, syncPaused: true },
       data: { syncPaused: false },
     }).catch(() => {})
+    // Round 5 (2026-10-01) — a resume like Sync Control's: the prices held while those listings were paused are sent
+    // once now, at the price each carries (the price door's `sendHeldPrices`; it never throws).
+    try {
+      const { sendHeldPrices } = await import('./pim/channel-price-write.service.js')
+      await sendHeldPrices({ productIds: [...resumeProducts], actor, cause: 'resume' })
+    } catch (error) {
+      logger.warn('stock import: held prices not sent after the resume; the next resume or price change sends them', { error: error instanceof Error ? error.message : String(error) })
+    }
   }
 
   for (const [key, g] of groups) {

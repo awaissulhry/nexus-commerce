@@ -96,7 +96,8 @@ async function runJob(channel: string, actionPayload: Record<string, unknown>, e
 /** What a queue row says, without the fields that name the row itself or when it was made. */
 const rowShape = (row: Record<string, any>) => {
   // The row names its own product's SKU (`productSku`); the twins are different products, so it is checked apart.
-  const { actor: _actor, productSku: _sku, ...payload } = row.payload
+  // A follower row (a hand-back, 2026-10-01) also carries the cascade's `productId` and the caller's `reason`.
+  const { actor: _actor, productSku: _sku, productId: _product, reason: _reason, ...payload } = row.payload
   return { targetChannel: row.targetChannel, targetRegion: row.targetRegion, syncStatus: row.syncStatus, syncType: row.syncType,
     maxRetries: row.maxRetries, externalListingId: row.externalListingId, channelConnectionId: row.channelConnectionId, payload }
 }
@@ -178,7 +179,9 @@ describe('a bulk channel price override goes through the ONE channel price write
     await writeChannelPrices({ targets: [{ listingId: single['AMAZON:IT'].id, price: null, expectedVersion: single['AMAZON:IT'].version }], actor: 'person-1', source: 'MANUAL_OVERRIDE' })
 
     const expected = listingShape(await listing(single['AMAZON:IT'].id))
-    expect(expected).toMatchObject({ price: null, priceOverride: null, followMasterPrice: true })
+    // 2026-10-01 — the hand-back stores the price it sends (the follower price, the master's 12 under FIXED); it used
+    // to store `price: null` while sending 12.
+    expect(expected).toMatchObject({ price: 12, priceOverride: null, followMasterPrice: true })
     const singleRow = (await queueOf(single['AMAZON:IT'].id)).map(rowShape)
     expect(singleRow).toEqual([expect.objectContaining({ syncType: 'PRICE_UPDATE', payload: expect.objectContaining({ price: 12 }) })])
     for (const l of [viaNull['AMAZON:IT'], viaFollow['AMAZON:IT']]) {
@@ -224,14 +227,25 @@ describe('a bulk channel price override goes through the ONE channel price write
     expect(items.map((i) => [i.status, i.errorMessage])).toEqual([['FAILED', 'No listing with this id']])
     expect((await listing(gone.id)).followMasterTitle).toBe(true)
 
-    // 🔴 The other way round: the price is written, then the other column fails (5000 does not fit the 5,2 column).
-    // The price is rolled back with it, and nothing was queued or sent for a price that is not there.
+    // 2026-10-01 — a percent the column cannot hold (5000; Decimal 5,2) used to reach the database and fail there, after
+    // the price was written. It is now refused before a job exists, by the same check the price door makes.
+    await expect(service.createJob({ jobName: 'late', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', targetProductIds: ['together'],
+      actionPayload: { priceOverride: 15, priceAdjustmentPercent: 5000 } })).rejects.toThrow('at most 999.99')
+
+    // 🔴 The other way round: the price AND the rule are written by the door, then something later fails. The price,
+    // the rule columns, the audit and the queue row roll back together, and nothing is sent for a price that is not there.
     const late = (await seed('together-late', [CHANNELS[0]]))['AMAZON:IT']
     const lateBefore = await listing(late.id)
     state.fired = []
-    const failedLate = await runJob('AMAZON', { priceOverride: 15, priceAdjustmentPercent: 5000 }, { targetProductIds: ['together-late'] })
-    expect(failedLate.items.map((i) => i.status)).toEqual(['FAILED'])
-    expect(door).toHaveBeenLastCalledWith(expect.objectContaining({ targets: [expect.objectContaining({ listingId: late.id, price: 15 })] }))
+    const real = (await vi.importActual<typeof import('./pim/channel-price-write.service.js')>('./pim/channel-price-write.service.js')).writeChannelPrices
+    door.mockImplementationOnce(async (input) => {
+      const written = await real(input)
+      expect(written.results[0].outcome).toBe('applied')
+      throw new Error('a later write failed')
+    })
+    const failedLate = await runJob('AMAZON', { priceOverride: 15, pricingRule: 'percent_of_master', priceAdjustmentPercent: 5 }, { targetProductIds: ['together-late'] })
+    expect(failedLate.items.map((i) => [i.status, i.errorMessage])).toEqual([['FAILED', 'a later write failed']])
+    expect(door).toHaveBeenLastCalledWith(expect.objectContaining({ targets: [expect.objectContaining({ listingId: late.id, price: 15, rule: { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 5 } })] }))
     expect(await listing(late.id)).toEqual(lateBefore)
     expect(await queueOf(late.id)).toEqual([])
     expect(await overridesOf(late.id)).toEqual([])
@@ -323,7 +337,8 @@ describe('per-row errors are reported, never swallowed', () => {
     const stored = await prisma.bulkActionJob.create({ data: { jobName: 'stored', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', targetProductIds: ['bad-payload'], targetVariationIds: [], actionPayload: { priceOverride: -5 }, status: 'PENDING', totalItems: 1 } })
     const result = await service.processJob(stored.id)
     expect(result).toMatchObject({ status: 'FAILED', failedItems: 1 })
-    expect(result.errors.map((e) => e.error)).toEqual(['priceOverride must be zero or more.'])
+    // 2026-10-01 — a typed price must be above 0 (the price door's rule); the sentence says so.
+    expect(result.errors.map((e) => e.error)).toEqual(['priceOverride must be above 0.'])
     const row = await prisma.channelListing.findFirstOrThrow({ where: { productId: 'bad-payload' } })
     expect(listingShape(row)).toMatchObject({ price: 10, priceOverride: null, followMasterPrice: true })
     expect(await queueOf(row.id)).toEqual([])
@@ -413,13 +428,14 @@ describe('the source scan — the bulk action writes no channel price itself', (
     ['A-17 own price as read', 'const override = listing.priceOverride == null ? null : Number(listing.priceOverride);'],
     ['A-17 own price as read', 'if (listing.followMasterPrice === false) return override ?? (listing.price == null ? null : Number(listing.price));'],
     ['the plan\'s own variable (a type annotation)', 'let price: number | null | undefined;'],
+    ['the door target: the price goes THROUGH writeChannelPrices', '...(plan.price !== undefined ? { price: plan.price } : {}),'],
     ['the list of fields a payload may carry', "'priceOverride', 'followMasterPrice', 'quantityOverride', 'followMasterQuantity', 'stockBuffer',"],
     ['the list of fields a payload may carry', "const OVERRIDE_FIELD_HINTS: Record<string, string> = { price: 'priceOverride',"],
     ['the plan checks a flag is a boolean', "for (const flag of ['followMasterPrice', 'followMasterQuantity'] as const) {"],
     ['the plan reads the payload', "if ('priceOverride' in payload) {"],
     ['the plan reads the payload', 'const v = numOrNull(payload.priceOverride);'],
     ['the plan reads the payload', "throw new BulkActionInputError('priceOverride must be a number, or null to follow the master price again.');"],
-    ['the plan reads the payload', "throw new BulkActionInputError('priceOverride must be zero or more.');"],
+    ['the plan reads the payload', "throw new BulkActionInputError('priceOverride must be above 0.');"],
     ['the plan reads the payload', 'if (payload.followMasterPrice === true) {'],
     ['the plan reads the payload', "throw new BulkActionInputError('priceOverride and followMasterPrice: true contradict each other: send one of them.');"],
     ['the plan reads the payload', '} else if (payload.followMasterPrice === false && price == null) {'],
@@ -428,6 +444,8 @@ describe('the source scan — the bulk action writes no channel price itself', (
     ['preview display', '? Number(listing.priceOverride ?? listing.price)'],
     ['CHANNEL_BATCH reads the listing', 'price: true,'],
     ['CHANNEL_BATCH sends through its account', 'await syncShopifyLinkedListing(shopifyRow, accountId, { price: value });'],
+    // Round 7 — the batch's send price held to the product's floor/ceiling: a check of the price it sends, not a write.
+    ['CHANNEL_BATCH checks the floor and ceiling', 'const outside = priceBoundsRefusal({ price: send.price,'],
   ]
   const source = readFileSync(fileURLToPath(new URL('./bulk-action.service.ts', import.meta.url)), 'utf8')
   const lines = source.split('\n').map((text, i) => ({ line: i + 1, text: text.trim() }))

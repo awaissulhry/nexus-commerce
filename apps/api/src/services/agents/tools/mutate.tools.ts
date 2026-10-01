@@ -24,7 +24,7 @@ import { createOutboundRow } from '../../outbound-rows.js'
 import { Prisma } from '@nexus/database'
 import prisma from '../../../db.js'
 import { outboundSyncQueue, addJobSafely } from '../../../lib/queue.js'
-import { masterPriceService } from '../../master-price.service.js'
+import { MasterPriceRefusedError, masterPriceService } from '../../master-price.service.js'
 import { getAmazonPublishMode } from '../../amazon-publish-gate.service.js'
 import { isEmailSuppressed } from '../../reviews/email-suppression.service.js'
 import { sendEmail } from '../../email/transport.js'
@@ -32,7 +32,8 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
-import { masterPriceBoundsReason, priceBoundsOf } from '../../price-bounds.service.js'
+import { priceBoundsOf, storedPriceReason } from '../../price-bounds.service.js'
+import { roundCents } from '@nexus/shared/listing-price'
 
 const SUPPRESSION_CHANNEL = 'agent-customer-message'
 
@@ -65,14 +66,15 @@ const setPrice: AgentTool = {
     const proposed = Number(args.price)
     if (!id || !Number.isFinite(proposed))
       return { ok: false, error: 'productId and numeric price are required' }
-    if (proposed <= 0) return { ok: false, error: 'A price must be above 0. Nothing was queued.' }
     const p = await prisma.product.findFirst({
       where: liveProduct(id),
       select: { sku: true, basePrice: true, minPrice: true, maxPrice: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }
-    const outside = masterPriceBoundsReason(proposed, priceBoundsOf(p))
-    if (outside) return { ok: false, error: `${p.sku} would go to ${proposed.toFixed(2)}, but ${outside}. Change the price, or the floor or ceiling on the product in Nexus. Nothing was queued.` }
+    // The shared verdict on a master price (`storedPriceReason`: above 0, inside the product's own floor/ceiling), on
+    // the cents the write stores, in the master-price write's own words — the sentence the run would refuse with.
+    const refusal = storedPriceReason(roundCents(proposed), priceBoundsOf(p))
+    if (refusal) return { ok: false, error: `Not changed: ${refusal}.` }
     const current = p.basePrice != null ? Number(p.basePrice) : null
     return {
       ok: true,
@@ -99,17 +101,22 @@ const setPrice: AgentTool = {
       return { ok: false, error: 'productId and a price above 0 are required' }
     const before = await prisma.product.findFirst({
       where: liveProduct(id),
-      select: { sku: true, basePrice: true, minPrice: true, maxPrice: true },
+      select: { sku: true, basePrice: true },
     })
     if (!before) return { ok: false, error: 'Product not found' }
-    // The floor or ceiling may have changed since the preview: checked again before anything is written.
-    const outside = masterPriceBoundsReason(proposed, priceBoundsOf(before))
-    if (outside) return { ok: false, error: `${before.sku} would go to ${proposed.toFixed(2)}, but ${outside}. Nothing changed.` }
     const oldBasePrice = before.basePrice != null ? Number(before.basePrice) : null
-    const res = await masterPriceService.update(id, proposed, {
-      actor: ctx.userId ?? null,
-      reason: 'agent:set-price',
-    })
+    // The floor or ceiling may have changed since the preview: the master-price write itself refuses the whole edit
+    // (MasterPriceRefusedError, the same "Not changed: …" sentence) before anything is written.
+    let res: Awaited<ReturnType<typeof masterPriceService.update>>
+    try {
+      res = await masterPriceService.update(id, proposed, {
+        actor: ctx.userId ?? null,
+        reason: 'agent:set-price',
+      })
+    } catch (err) {
+      if (err instanceof MasterPriceRefusedError) return { ok: false, error: err.message }
+      throw err
+    }
     return {
       ok: true,
       data: {

@@ -22,13 +22,18 @@ import type {
 import { logger } from '../utils/logger.js';
 import { publishListingEvent } from './listing-events.service.js';
 import { isFbaListing } from './outbound-sync.service.js';
-import { MasterPriceService } from './master-price.service.js';
+import { MasterPriceRefusedError, MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
 import { listActiveConnections, tryResolveConnection } from './connection-resolver.service.js';
 import { assertPushAllowed } from '@nexus/shared/push-lock';
+import { listingSendPrice } from './pim/follower-price.js';
+import { marketCurrency } from './pim/market-currency.js';
+import { priceBoundsOf, priceBoundsRefusal, zeroPriceReason } from './price-bounds.service.js';
+import { masterCurrency } from './fx-rate.service.js';
 // The ONE channel price write: a bulk price override goes through it like every other channel price edit.
 import { writeChannelPrices } from './pim/channel-price-write.service.js';
+import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULES, type PricingRuleName } from '@nexus/shared/listing-price';
 import { activeDatabaseTransaction, inDatabaseTransaction } from '../lib/database-context.js';
 import { bulkActorNames } from './bulk-action-actor.js';
 // The quantity and buffer primitives the Studio matrix and Sync Control use (the single-listing edit's path).
@@ -299,13 +304,17 @@ export interface ConflictingJob {
  *   - `buffer` → the stock-buffer primitive (`setStockBuffer`), as the matrix's buffer cell.
  *   - `isPublished` is refused, as the single-listing edit refuses it (`PATCH /listings/:id`): a local flag cannot
  *     confirm a marketplace change; publishing and withdrawing go through the listing channel workflow.
- *   - `columns` — the content follow flags and the pricing rule — are written as before and queue nothing. The
- *     single-listing edit of the pricing rule queues nothing either (reported, not guessed at).
+ *   - `rule` — the pricing rule and the adjustment percent — goes through the same door (its follower mode, 2026-10-01):
+ *     written in the price's compare-and-set, and a following listing's price is recomputed by the new rule and sent,
+ *     as the single-listing edit now does. Before, they were plain columns and nothing was sent.
+ *   - `columns` — the content follow flags — are written as before and queue nothing.
  */
 /** `follow: true` rejoins the stock pool; `follow: false` fixes it — at `value` when given, else at the number it shows now. */
 export type OverrideQuantity = { follow: boolean; value?: number };
 export interface MarketplaceOverridePlan {
   price?: number | null;
+  /** The pricing rule (upper case) and/or the adjustment percent, for the price door's follower mode. */
+  rule?: { pricingRule?: PricingRuleName; priceAdjustmentPercent?: number };
   quantity?: OverrideQuantity;
   buffer?: number;
   columns: Prisma.ChannelListingUpdateInput;
@@ -334,7 +343,6 @@ const OVERRIDE_FOLLOW_KEYS = [
   'followMasterImages',
   'followMasterBulletPoints',
 ] as const;
-const OVERRIDE_PRICING_RULES = ['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER'] as const;
 /** Every field an override payload may carry (`isPublished` is known, and refused by its own sentence). */
 const OVERRIDE_FIELDS = [
   'priceOverride', 'followMasterPrice', 'quantityOverride', 'followMasterQuantity', 'stockBuffer',
@@ -373,8 +381,9 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
     if (v === undefined) {
       throw new BulkActionInputError('priceOverride must be a number, or null to follow the master price again.');
     }
-    if (v !== null && (!Number.isFinite(v) || v < 0)) {
-      throw new BulkActionInputError('priceOverride must be zero or more.');
+    // A typed price is above 0, as the price door requires (2026-10-01; 0 used to be accepted here).
+    if (v !== null && (!Number.isFinite(v) || v <= 0)) {
+      throw new BulkActionInputError('priceOverride must be above 0.');
     }
     price = v;
   }
@@ -425,26 +434,29 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
     if (typeof payload[k] !== 'boolean') throw new BulkActionInputError(`${k} must be true or false.`);
     (columns as Record<string, unknown>)[k] = payload[k];
   }
+  // The pricing rule and percent: checked by the functions the price door checks with (a rule in any case, stored upper
+  // case; a percent with at most 2 decimals, above -100 and within the column), then sent through the door.
+  let rule: MarketplaceOverridePlan['rule'];
   if ('pricingRule' in payload) {
-    if (!(OVERRIDE_PRICING_RULES as readonly string[]).includes(payload.pricingRule)) {
-      throw new BulkActionInputError(`pricingRule must be one of ${OVERRIDE_PRICING_RULES.join(', ')}.`);
-    }
-    columns.pricingRule = payload.pricingRule as Prisma.ChannelListingUpdateInput['pricingRule'];
+    const name = normalisePricingRule(payload.pricingRule);
+    if (!name) throw new BulkActionInputError(`pricingRule must be one of ${PRICING_RULES.join(', ')}.`);
+    rule = { ...rule, pricingRule: name };
   }
   if ('priceAdjustmentPercent' in payload) {
-    if (typeof payload.priceAdjustmentPercent !== 'number' || !Number.isFinite(payload.priceAdjustmentPercent)) {
-      throw new BulkActionInputError('priceAdjustmentPercent must be a number.');
-    }
-    columns.priceAdjustmentPercent = payload.priceAdjustmentPercent.toFixed(2);
+    if (typeof payload.priceAdjustmentPercent !== 'number') throw new BulkActionInputError('priceAdjustmentPercent must be a number.');
+    const problem = adjustmentPercentProblem(payload.priceAdjustmentPercent);
+    if (problem) throw new BulkActionInputError(problem);
+    rule = { ...rule, priceAdjustmentPercent: payload.priceAdjustmentPercent };
   }
 
-  if (price === undefined && quantity === undefined && buffer === undefined && Object.keys(columns).length === 0) {
+  if (price === undefined && rule === undefined && quantity === undefined && buffer === undefined && Object.keys(columns).length === 0) {
     throw new BulkActionInputError(
       'Invalid MARKETPLACE_OVERRIDE_UPDATE payload: at least one override field required',
     );
   }
   return {
     ...(price !== undefined ? { price } : {}),
+    ...(rule !== undefined ? { rule } : {}),
     ...(quantity !== undefined ? { quantity } : {}),
     ...(buffer !== undefined ? { buffer } : {}),
     columns,
@@ -2065,6 +2077,16 @@ export class BulkActionService {
               : FOLLOWS;
           newValue.price = plan.price === null ? FOLLOWS : Math.round(plan.price * 100) / 100;
         }
+        // The rule and percent: what the door will be asked for. A following listing's price is recomputed by them
+        // (or refused by name) when the job runs, and the job's items say which.
+        if (plan.rule?.pricingRule !== undefined) {
+          currentValue.pricingRule = listing.pricingRule ?? null;
+          newValue.pricingRule = plan.rule.pricingRule;
+        }
+        if (plan.rule?.priceAdjustmentPercent !== undefined) {
+          currentValue.priceAdjustmentPercent = listing.priceAdjustmentPercent == null ? null : Number(listing.priceAdjustmentPercent);
+          newValue.priceAdjustmentPercent = plan.rule.priceAdjustmentPercent;
+        }
         // Quantity and buffer: what the follow/pin and buffer primitives will be asked for. Whether a row is FBA
         // (refused), an Amazon EU market outside the job's scope (refused) or already so (a no-op) is decided when
         // the job runs, and the job's items say which.
@@ -2617,14 +2639,15 @@ export class BulkActionService {
    *
    * Skips when:
    *   - no ChannelListing for this product on the requested channel/marketplace
-   *   - the listing has no priceOverride (for price ops) or no
-   *     resolved stock (for stock ops)
+   *   - (price ops) the listing has no price to send — its send price, as the price door answers it — or its market
+   *     has no currency, or the price is not above 0 or is outside the product's floor/ceiling: said by name on the
+   *     item (`reason`, the item's message)
    */
   private async processChannelBatch(
     item: Product,
     payload: Record<string, any>,
     jobChannel: string | null,
-  ): Promise<{ status: 'processed' | 'skipped' }> {
+  ): Promise<{ status: 'processed' | 'skipped'; reason?: string }> {
     const channel = String(payload.channel ?? jobChannel ?? '').toUpperCase();
     if (!['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) {
       throw new Error(
@@ -2650,13 +2673,36 @@ export class BulkActionService {
     });
     if (!listing) return { status: 'skipped' };
 
-    // Defaults derived from product / env so we don't reach for
-    // ChannelListing columns that don't exist on this schema:
-    //   - sku is read from Product.sku
-    //   - currency defaults to 'EUR' (Xavia's primary market is IT)
-    //   - quantity / price fall back to master totals
+    // The SKU is read from Product.sku; a stock op's quantity falls back to the product's sellable total.
     const sku = item.sku;
-    const currency = 'EUR';
+    // Round 7 (2026-10-01) — a price op sends THE send price (`listingSendPrice`: a pin's own price, a follower's rule
+    // price from the current master in the master currency, else the price it holds — the price door's and the
+    // publishers' answer), in the listing market's OWN currency, held to the product's floor and ceiling as every
+    // other price sender holds it (`priceBoundsRefusal`, the check `priceRefusalFor` makes; read through this job's own
+    // client). It sent `listing.price ?? product.basePrice` in a hard-coded EUR: a pin's own price could be ignored, a
+    // "master +10%" follower could get the master, and eBay UK the EUR number. Nothing to send is a skip with its
+    // reason (the item's message), never a guess.
+    const channelName = channel === 'AMAZON' ? 'Amazon' : channel === 'EBAY' ? 'eBay' : 'Shopify';
+    const sendable = async (row: ChannelListing): Promise<{ value: number; currency: string } | { skip: string }> => {
+      const where = `${channelName} ${row.marketplace}`;
+      // Unreadable or unconfigured, the market has no currency: nothing is sent there (refuse, don't guess).
+      let marketCur: string | null = null;
+      try {
+        const rows = await this.prisma.marketplace.findMany({ where: { channel: row.channel }, select: { channel: true, code: true, currency: true } });
+        marketCur = marketCurrency(row.channel, row.marketplace, rows);
+      } catch { marketCur = null; }
+      const send = listingSendPrice(row, { masterPrice: item.basePrice, marketCurrency: marketCur, where });
+      if (send.price == null) return { skip: `${sku}: ${send.reason} Nothing was sent.` };
+      if (!marketCur) return { skip: `${sku}: no currency is configured for ${where}. Set the market's currency. Nothing was sent.` };
+      const zero = zeroPriceReason(send.price);
+      if (zero) return { skip: `${sku}: ${zero}. Nothing was sent.` };
+      // A floor or ceiling that cannot be read is no bound, as `loadPriceBounds` treats it (it guards one that exists).
+      let bounds: { minPrice?: unknown; maxPrice?: unknown } | null = null;
+      try { bounds = await this.prisma.product.findUnique({ where: { id: item.id }, select: { minPrice: true, maxPrice: true } }); } catch { bounds = null; }
+      const outside = priceBoundsRefusal({ price: send.price, bounds: priceBoundsOf(bounds ?? {}), channel: channelName, sku, currency: marketCur, masterCurrency: masterCurrency() });
+      if (outside) return { skip: outside };
+      return { value: send.price, currency: marketCur };
+    };
 
     if (channel === 'AMAZON') {
       const { submitAmazonListingsBatch } = await import(
@@ -2676,14 +2722,12 @@ export class BulkActionService {
       }
       const marketplaceIds = marketplace ? [marketplace] : [];
       if (operation === 'price') {
-        const value = Number(listing.price ?? item.basePrice ?? 0);
-        if (!Number.isFinite(value) || value <= 0) {
-          return { status: 'skipped' };
-        }
+        const sent = await sendable(listing);
+        if ('skip' in sent) return { status: 'skipped', reason: sent.skip };
         await submitAmazonListingsBatch({
           marketplaceIds,
           sellerId,
-          operations: [{ type: 'price', sku, currency, value }],
+          operations: [{ type: 'price', sku, currency: sent.currency, value: sent.value }],
         });
       } else {
         // FBA-flip fix — a batch stock op emits fulfillment_channel_code:DEFAULT,
@@ -2724,10 +2768,11 @@ export class BulkActionService {
       let batch: Awaited<ReturnType<typeof submitEbayParallelBatch>>;
       if (operation === 'price') {
         if (!offerId) return { status: 'skipped' };
-        const value = String(listing.price ?? item.basePrice ?? 0);
+        const sent = await sendable(listing);
+        if ('skip' in sent) return { status: 'skipped', reason: sent.skip };
         batch = await submitEbayParallelBatch({
           connectionId: connection.id,
-          operations: [{ type: 'price', sku, offerId, currency, value }],
+          operations: [{ type: 'price', sku, offerId, currency: sent.currency, value: sent.value.toFixed(2) }],
         });
       } else {
         const qty = Number(listing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0);
@@ -2774,8 +2819,9 @@ export class BulkActionService {
     }
     const { syncShopifyLinkedListing } = await import('./shopify/listing-write.service.js');
     if (operation === 'price') {
-      const value = Number(shopifyListing.price ?? item.basePrice ?? 0);
-      if (!Number.isFinite(value) || value <= 0) return { status: 'skipped' };
+      const sent = await sendable(shopifyListing);
+      if ('skip' in sent) return { status: 'skipped', reason: sent.skip };
+      const value = sent.value;
       await syncShopifyLinkedListing(shopifyRow, accountId, { price: value });
     } else {
       await syncShopifyLinkedListing(shopifyRow, accountId, { quantity: Number(shopifyListing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0) });
@@ -3001,11 +3047,18 @@ export class BulkActionService {
     const outcome = pricingUpdateOutcome(item, payload);
     if (outcome.status === 'skipped') return { status: 'skipped', reason: outcome.reason };
 
-    await this.masterPriceService.update(item.id, outcome.newPrice, {
-      actor: 'bulk-action',
-      reason: 'bulk-pricing-job',
-      idempotencyKey: `${jobId}:${item.id}`,
-    });
+    try {
+      await this.masterPriceService.update(item.id, outcome.newPrice, {
+        actor: 'bulk-action',
+        reason: 'bulk-pricing-job',
+        idempotencyKey: `${jobId}:${item.id}`,
+      });
+    } catch (err) {
+      // The product's floor or ceiling changed after this job read the row: the master-price write refuses the whole
+      // edit with the same "Not changed: …" sentence, and the row is skipped with it, as the preview skips it.
+      if (err instanceof MasterPriceRefusedError) return { status: 'skipped', reason: err.message };
+      throw err;
+    }
 
     return { status: 'processed' };
   }
@@ -3322,6 +3375,10 @@ export class BulkActionService {
    *     FBA is never touched (refused by name); an Amazon EU quantity is one number for every EU market, so it
    *     changes the SKU's whole EU group at once, and only when the job holds every row of that group.
    *
+   *   - the pricing rule and percent through the same door's follower mode (2026-10-01): written in the price's
+   *     compare-and-set; a following listing's price is recomputed by them and sent, or refused by name (outside the
+   *     product's floor or ceiling) with nothing written. Before, they were plain columns and nothing was sent.
+   *
    * Every refusal is decided BEFORE anything is written. The price and the other columns then land in one
    * transaction (the queue row is sent after the commit); the quantity and buffer follow through their primitives'
    * own transactions. The price's compare-and-set is against the listing as this job read it (the matrix verb's
@@ -3347,14 +3404,14 @@ export class BulkActionService {
       })
 
     let changed = false
-    if (plan.price !== undefined) {
-      const price = plan.price
+    if (plan.price !== undefined || plan.rule !== undefined) {
       const seen = ownPriceAsRead(item)
       changed = await inDatabaseTransaction(this.prisma, async () => {
         const written = await writeChannelPrices({
           targets: [{
             listingId: item.id,
-            price,
+            ...(plan.price !== undefined ? { price: plan.price } : {}),
+            ...(plan.rule !== undefined ? { rule: plan.rule } : {}),
             expectedVersion: item.version,
             ...(seen !== undefined ? { expectedPrice: seen } : {}),
           }],

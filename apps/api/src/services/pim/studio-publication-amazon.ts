@@ -29,6 +29,7 @@ import { effectiveFulfilment } from './matrix-cells.js'
 import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { mediaLayoutFor } from '../images/media-plan.service.js'
 import { amazonSlotsFor, type AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
+import { NO_LISTING_PRICE_FACTS, currencyCode, listingSendPrice } from './follower-price.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -90,6 +91,9 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     if (!projection.theme || errors.length) throw new Error(errors.map(i => i.message).join('; ') || 'Set the Amazon variation theme in Information before publishing.')
   }
   const feed: AmazonPublication['feed'] = { header: {}, messages: [] }
+  // Round 6 — the currency this publication sends its prices in (the destination market's): a follower is sent its rule's
+  // price only in the master currency, never the master number into another currency (`listingSendPrice`).
+  const marketCur = currencyCode(facts.destination.currency)
   const exclusionsFor = pushExclusionsCache()
   // CHMAP M7 (B2) — the row builder's own maps know five markets and fall back to Italy; give it this market's own.
   const market = { marketplaceId, languageTag: facts.languages[0] ? languageTag(facts.languages[0], scope.marketplace) : '' }
@@ -100,7 +104,12 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const ledger = ledgers.get(product.id)
     // Tracked = warehouse rows to draw from (own or pooled), or it left a pool (then own stock is 0).
     const tracked = !!ledger && (ledger.ledger.length > 0 || ledger.uncountedIsZero)
-    const current = { ...listing, priceOverride: listing?.followMasterPrice !== false ? product.basePrice : listing.priceOverride ?? listing.price,
+    // Round 6 — THE send price (`listingSendPrice`): a pin's own price, a follower's rule price from the current master in
+    // the master currency, else the price the listing holds. It sent a follower the master price: "master +10%" went live
+    // at the master, and Amazon UK was sent the EUR number as pounds. Nothing to send is refused for that SKU, by name.
+    const send = listingSendPrice(listing ?? NO_LISTING_PRICE_FACTS, { masterPrice: product.basePrice, marketCurrency: marketCur, where: `Amazon ${scope.marketplace}` })
+    if (send.price == null && !product.isParent) throw new Error(`${product.sku}: ${send.reason}`)
+    const current = { ...listing, priceOverride: send.price,
       quantityOverride: listing?.followMasterQuantity !== false ? (tracked ? ledger!.quantity : product.totalStock) : listing.quantityOverride ?? listing.quantity }
     // `data.category` is resolveBatch's answer for this listing (the #82 rule); the row builder takes it, no second read.
     const row = buildRow({ listing: current, product, marketplace: scope.marketplace, parentSku: sellerSkus.get(parent.id), productType: data.category.channelCategoryId })

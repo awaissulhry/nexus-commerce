@@ -28,10 +28,13 @@ const db = {
     findFirst: vi.fn(async () => h.listings[0] ?? null),
     findMany: vi.fn(async () => h.listings),
   },
+  // Round 7 — a price push reads its market's currency and the product's floor/ceiling (none here).
+  marketplace: { findMany: vi.fn(async () => [{ channel: 'SHOPIFY', code: 'GLOBAL', currency: 'EUR' }]) },
+  product: { findUnique: vi.fn(async () => null) },
 }
 const service = new BulkActionService(db as any) as unknown as { processChannelBatch: (item: any, payload: any, channel: string | null) => Promise<{ status: string }> }
 const product = { id: 'p1', sku: 'SKU-1', basePrice: 10, totalStock: 4 }
-const listing = (extra: Record<string, unknown> = {}) => ({ id: 'L1', productId: 'p1', channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'shop-B', price: 12.5, quantity: 7, platformAttributes: { variantId: '11', inventoryItemId: '22', shopifyProductId: '33', inventoryLocationId: 'gid://shopify/Location/9' }, syncPaused: false, ...extra })
+const listing = (extra: Record<string, unknown> = {}) => ({ id: 'L1', productId: 'p1', channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'shop-B', followMasterPrice: false, priceOverride: 12.5, price: 12.5, quantity: 7, platformAttributes: { variantId: '11', inventoryItemId: '22', shopifyProductId: '33', inventoryLocationId: 'gid://shopify/Location/9' }, syncPaused: false, ...extra })
 const run = (operation: string) => service.processChannelBatch(product, { channel: 'SHOPIFY', operation }, null)
 
 beforeEach(() => {

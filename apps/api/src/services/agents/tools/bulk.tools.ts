@@ -36,8 +36,9 @@ import {
 import { computeListingPrice, holdsCascadedPrice } from '../../master-price.service.js'
 import { masterCurrency } from '../../fx-rate.service.js'
 import { marketCurrency, type MarketCurrencyRow } from '../../pim/market-currency.js'
-import { masterPriceBoundsReason, priceBoundsOf, type PriceBounds } from '../../price-bounds.service.js'
+import { masterPriceBoundsReason, priceBoundsOf, storedPriceReason, type PriceBounds } from '../../price-bounds.service.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
+import { roundCents } from '@nexus/shared/listing-price'
 
 /** The most products one bulk change may name. */
 export const BULK_MAX_PRODUCTS = 250
@@ -82,8 +83,8 @@ const listed = (items: string[]) =>
 const money = (n: number | null) => (n == null ? '—' : n.toFixed(2))
 /** A refusal, then what did not happen: one full stop between them, never two. */
 const refused = (reason: string, nothing: string) => `${reason.trim().replace(/[.\s]+$/, '')}. ${nothing}`
-/** Rounded to cents; `toPrecision` first so 1.005 is 1.01 and not the float 1.00. */
-const cents = (n: number) => Math.round(Number((n * 100).toPrecision(12))) / 100
+/** Rounded to cents by the one helper the cascade and the price door use: 1.005 is 1.01, not the float 1.00. */
+const cents = roundCents
 const holdText = () => `${Math.round(MASTER_PRICE_HOLD_MS / 1000)} seconds`
 /**
  * A short fingerprint of EVERYTHING a preview was worked out from, not only the lines it shows. The approval
@@ -285,24 +286,29 @@ async function planPrices(args: Record<string, unknown>, nothing: string): Promi
 
 /** One shape, not a union: apps/api is not strict, so a union would not narrow. */
 interface ListingFate {
-  kind: 'queued' | 'paused' | 'draft' | 'own-price' | 'already' | 'other-currency'
-  /** queued / paused / draft: the listing price before and after. */
+  kind: 'queued' | 'paused' | 'draft' | 'own-price' | 'already' | 'other-currency' | 'refused'
+  /** queued / paused / draft / refused: the listing price before and after (refused: the price it would follow at). */
   from?: number | null
   to?: number
   /** other-currency: what the market sells in (null = not configured). */
   currency?: string | null
+  /** refused: why (`storedPriceReason`: outside the product's own floor or ceiling, or not above 0). */
+  reason?: string
 }
 
 /**
  * What `masterPriceService.update` does to one listing when the master becomes `master`: the same
- * exported `computeListingPrice`, the same currency refusal, and the same paused/draft rule. The tests compare this
- * with the rows the service really queues.
+ * exported `computeListingPrice`, the same currency refusal, the same per-listing floor/ceiling refusal (2026-10-01:
+ * a follower price outside the product's own bounds is neither stored nor queued — `storedPriceReason`, master-currency
+ * markets only, paused and drafts included) and the same paused/draft rule. The tests compare this with what the
+ * service really stores and queues.
  */
 function listingFate(
   listing: { price: unknown; pricingRule: Parameters<typeof computeListingPrice>[1]; followMasterPrice: boolean; priceAdjustmentPercent: Parameters<typeof computeListingPrice>[3]; syncPaused: boolean; listingStatus: string | null; isPublished: boolean; externalListingId: string | null; channel: string; marketplace: string },
   master: number,
   currencies: MarketCurrencyRow[],
   masterCurrencyCode: string,
+  bounds: PriceBounds,
 ): ListingFate {
   const next = computeListingPrice(master, listing.pricingRule, listing.followMasterPrice, listing.priceAdjustmentPercent)
   const old = listing.price != null ? Number(listing.price) : null
@@ -315,6 +321,8 @@ function listingFate(
     currency = null
   }
   if (currency !== masterCurrencyCode) return { kind: 'other-currency', currency }
+  const outside = storedPriceReason(next, bounds)
+  if (outside) return { kind: 'refused', from: old, to: next, reason: outside }
   if (holdsCascadedPrice(listing)) return { kind: listing.syncPaused ? 'paused' : 'draft', from: old, to: next }
   return { kind: 'queued', from: old, to: next }
 }
@@ -348,20 +356,24 @@ async function pricePreview(plan: PricePlan) {
   const counts = { queued: 0, paused: 0, draft: 0, ownPrice: 0, otherCurrency: 0, alreadyAtPrice: 0 }
   const lines: string[] = []
   const fates: unknown[] = []
-  /** Listings sent a price (a percent rule) outside the product's floor or ceiling: the push will refuse them. */
-  const refusedAtPush: unknown[] = []
+  /**
+   * Listings whose pricing rule would take them outside the product's floor or ceiling: refused at the write — not
+   * changed, not sent (each keeps its price). Counted apart from the sent, paused and draft ones, as the service does.
+   */
+  const refused: unknown[] = []
   for (const listing of listings) {
     const item = itemById.get(listing.productId)
     if (!item) continue
-    const fate = listingFate(listing, item.to, currencies, plan.currency)
+    const fate = listingFate(listing, item.to, currencies, plan.currency, item.bounds)
     fates.push([listing.id, fate.kind, fate.from ?? null, fate.to ?? null, fate.currency ?? null])
     const where = `${item.sku} · ${channelLabel(listing.channel)} ${listing.marketplace}`
     if (fate.kind === 'queued' || fate.kind === 'paused' || fate.kind === 'draft') {
       counts[fate.kind]++
-      const outside = fate.kind === 'queued' && fate.to != null ? masterPriceBoundsReason(fate.to, item.bounds) : null
-      if (outside) refusedAtPush.push([listing.id, outside])
-      const held = fate.kind === 'queued' ? (outside ? ` (refused when sent: ${outside})` : '') : ` (${fate.kind}: stored, not sent)`
+      const held = fate.kind === 'queued' ? '' : ` (${fate.kind}: stored, not sent)`
       lines.push(`${where}: ${money(fate.from ?? null)} → ${money(fate.to ?? null)}${held}`)
+    } else if (fate.kind === 'refused') {
+      refused.push([listing.id, fate.reason])
+      lines.push(`${where}: refused, not changed and not sent — it would follow at ${money(fate.to ?? null)}, but ${fate.reason}; it keeps ${money(fate.from ?? null)}`)
     } else if (fate.kind === 'own-price') counts.ownPrice++
     else if (fate.kind === 'already') counts.alreadyAtPrice++
     else {
@@ -401,25 +413,26 @@ async function pricePreview(plan: PricePlan) {
       listingsOtherCurrency: counts.otherCurrency,
       listingsAlreadyAtPrice: counts.alreadyAtPrice,
       // Only when there are some, so a preview without any reads (and fingerprints) as it did before.
-      ...(refusedAtPush.length ? { listingsRefusedAtPush: refusedAtPush.length } : {}),
+      ...(refused.length ? { listingsRefused: refused.length } : {}),
     },
-    ...(refusedAtPush.length
+    ...(refused.length
       ? {
           warning:
-            `${plural(refusedAtPush.length, 'listing')} would be sent a price outside the pricing floor or ceiling set on the product ` +
-            '(its pricing rule adjusts the master price), so the marketplace push refuses it and that listing keeps its old price there.',
+            `${plural(refused.length, 'listing')} would follow the new master price outside the pricing floor or ceiling set on the product ` +
+            '(its pricing rule adjusts the master price), so it is refused: not changed and not sent, and it keeps its current price.',
         }
       : {}),
     basis: basisOf({
       items: plan.items.map((item) => [item.id, item.from, item.to]),
       unchanged: plan.unchanged,
       fates,
-      ...(refusedAtPush.length ? { refusedAtPush } : {}),
+      ...(refused.length ? { refused } : {}),
     }),
     note:
       'Nothing changes until a person approves this in Nexus. It sets each master price through the master price service: every listing that ' +
       `follows the master price is updated and queued to its marketplace, held for ${holdText()} (the undo window), then sent on the outbound ` +
-      "queue's next pass. A listing with its own price, a paused listing, or a market that sells in another currency is not sent." +
+      "queue's next pass. A listing with its own price, a paused listing, or a market that sells in another currency is not sent; " +
+      "a listing whose pricing rule would take it outside the product's floor or ceiling is not changed either." +
       (plan.operation === 'set' ? '' : " A percent or amount change is worked out again from each product's base price when it runs."),
   }
 }

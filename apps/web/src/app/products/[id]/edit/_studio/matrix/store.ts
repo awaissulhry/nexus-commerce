@@ -17,6 +17,7 @@ import {
   type VerbPreview,
 } from './contract'
 import { followQty } from './preview'
+import { roundCents } from '@nexus/shared/listing-price'
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
@@ -88,8 +89,9 @@ function applyOne(read: MatrixRead, w: MatrixWriteCell): { read: MatrixRead; out
     case 'price': {
       const p = next.price; if (!p) break
       const n = typeof w.value === 'number' ? w.value : Number(w.value)
-      if (!Number.isFinite(n) || n < 0) return { read, outcome: { ...base, outcome: 'refused', reason: 'A price is zero or more', version: cells.version } }
-      const v = Math.round(n * 100) / 100
+      // As the API's matrix door (2026-10-01): a typed price is above 0.
+      if (!Number.isFinite(n) || n <= 0) return { read, outcome: { ...base, outcome: 'refused', reason: 'A price must be above 0', version: cells.version } }
+      const v = roundCents(n)
       if (p.value === v && p.source === 'override') break
       p.value = v; p.source = 'override'; p.formula = null; p.clamped = null
       changed = true; break

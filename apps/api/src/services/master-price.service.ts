@@ -47,7 +47,9 @@
  *   cascade: the push lock refused that row at dispatch anyway. A still-draft
  *   (`isStillDraftListing`: DRAFT, never published, no channel id) is treated the
  *   same even when it is not paused: it is not on the channel, and only Publish
- *   sends it — with the price stored here.
+ *   sends it — with the price stored here. Round 5 (2026-10-01): such a price is
+ *   recorded as a HELD row (SKIPPED, never dispatched; `pim/follower-price.ts`) and
+ *   sent once when the listing resumes or is published (`sendHeldPrices`).
  *
  * Audit:
  *   AuditLog row written with slim before/after diff (changed fields only — not
@@ -77,14 +79,22 @@ import prisma from '../db.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { masterCurrency } from './fx-rate.service.js'
-import { marketCurrency, type MarketCurrencyRow } from './pim/market-currency.js'
-import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { roundCents } from '@nexus/shared/listing-price'
+import { type MarketCurrencyRow } from './pim/market-currency.js'
+// The follower rules the channel price door applies too — one module, so the cascade and the door cannot drift.
+import {
+  FOLLOWER_PRICE_HOLD_MS, HELD_PRICE_ROWS, computeListingPrice, followerPricePayload, heldPriceCode, heldPriceRowData, holdsCascadedPrice, listingMarketCurrency,
+  logFollowerBoundsRefusals, logMasterCurrencyRefusals, type FollowerBoundsRefusal, type MasterCurrencyRefusal,
+} from './pim/follower-price.js'
+import { priceBoundsOf, storedPriceReason } from './price-bounds.service.js'
+import { lockProductStock } from './stock-lock.js'
+export { computeListingPrice, holdsCascadedPrice }
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
 // should reach channels within ~1 minute. The route layer debounces
 // rapid consecutive edits before calling this service.
 // Exported so a surface that states the hold (a preview, a note) reads it from here rather than retyping it.
-export const DEFAULT_HOLD_MS = 30 * 1000
+export const DEFAULT_HOLD_MS = FOLLOWER_PRICE_HOLD_MS
 
 export interface MasterPriceUpdateContext {
   /** Who initiated the change. Surfaces in AuditLog.userId; null for system writes. */
@@ -118,7 +128,9 @@ export interface MasterPriceUpdateResult {
   /** OutboundSyncQueue row IDs enqueued for marketplace push. */
   queuedSyncIds: string[]
   /** Listings NOT sent the master price because their market's currency is not the master currency (null = not configured). */
-  currencyRefused: Array<{ listingId: string; channel: string; marketplace: string; currency: string | null; masterCurrency: string }>
+  currencyRefused: MasterCurrencyRefusal[]
+  /** Listings NOT sent the follower price because it is outside the product's floor or ceiling, or not above 0. */
+  boundsRefused: FollowerBoundsRefusal[]
   /** AuditLog row id. */
   auditLogId: string | null
 }
@@ -139,41 +151,18 @@ interface ChannelListingForCascade {
   isPublished: boolean
 }
 
-/**
- * Whether a cascaded price stays in Nexus instead of being queued for the channel: a paused listing (an operator's
- * pause, or a draft kept inert by its pause) and a still-draft (`isStillDraftListing`), paused or not. A draft started
- * before drafts were born paused is not paused, and sending it a price would write to the channel before Publish.
- * A DRAFT row with a channel id has reached the channel, so it is not a still-draft and is queued.
- */
-export function holdsCascadedPrice(listing: Pick<ChannelListingForCascade, 'syncPaused' | 'listingStatus' | 'isPublished' | 'externalListingId'>): boolean {
-  return listing.syncPaused || isStillDraftListing(listing)
-}
+// ChannelListing.price is Decimal(10, 2): the one cents rounding (`@nexus/shared/listing-price`), the same the price
+// door, the agent tools and the screens use, so 1.005 is 1.01 everywhere.
+const roundCurrency = roundCents
 
-/**
- * Compute what a ChannelListing's `price` should become given a new master price.
- * Returns null when the price should NOT be touched (only the masterPrice snapshot
- * updates). Pure function — no side effects, easy to unit-test in isolation.
- */
-export function computeListingPrice(
-  newMasterPrice: number,
-  rule: ChannelListingForCascade['pricingRule'],
-  followMasterPrice: boolean,
-  adjustmentPercent: Prisma.Decimal | null,
-): number | null {
-  if (!followMasterPrice) return null
-  if (rule === 'MATCH_AMAZON') return null
-  if (rule === 'PERCENT_OF_MASTER') {
-    const adj = adjustmentPercent != null ? Number(adjustmentPercent) : 0
-    return roundCurrency(newMasterPrice * (1 + adj / 100))
+/** A master price the product's own rules refuse (not above 0, or outside its floor/ceiling). Nothing was written. */
+export class MasterPriceRefusedError extends Error {
+  readonly statusCode = 400
+  readonly code = 'MASTER_PRICE_REFUSED'
+  constructor(message: string) {
+    super(message)
+    this.name = 'MasterPriceRefusedError'
   }
-  // FIXED + followMasterPrice=true → match master.
-  return roundCurrency(newMasterPrice)
-}
-
-function roundCurrency(value: number): number {
-  // ChannelListing.price is Decimal(10, 2). Round to 2dp to avoid Prisma rejecting
-  // a value like 19.99000000000004 from a JS float multiply.
-  return Math.round(value * 100) / 100
 }
 
 export class MasterPriceService {
@@ -206,9 +195,14 @@ export class MasterPriceService {
     const runner = async (
       tx: Prisma.TransactionClient | PrismaClient,
     ): Promise<MasterPriceUpdateResult> => {
+      // 2026-10-01 — the product row is locked FIRST (the lock every stock writer takes, `lockProductStock`), so the
+      // master price, its floor and ceiling, and the listings read below cannot move under this cascade; the price door
+      // reads them FOR SHARE inside its own transaction, so a door write and this cascade never interleave on a
+      // product (a door write computed from the old master is re-done with the new one).
+      await lockProductStock(tx as Prisma.TransactionClient, [productId])
       const product = await tx.product.findUnique({
         where: { id: productId },
-        select: { id: true, basePrice: true, sku: true },
+        select: { id: true, basePrice: true, sku: true, minPrice: true, maxPrice: true },
       })
       if (!product) {
         throw new Error(`MasterPriceService.update: product ${productId} not found`)
@@ -228,9 +222,18 @@ export class MasterPriceService {
           snapshottedListingIds: [],
           queuedSyncIds: [],
           currencyRefused: [],
+          boundsRefused: [],
           auditLogId: null,
         }
       }
+
+      // 2026-10-01 — THE master price is above 0 and inside the product's own floor and ceiling (`storedPriceReason`, the
+      // verdict the bulk PRICING_UPDATE preview, the agent price tools, the price door and the cascade share). Outside
+      // them the whole edit is refused before anything is written: no master price, no listing, no queue row. Every
+      // caller names it — the products grid and drawer, the product sheet, the bulk job (its "Not changed: …"), the
+      // agent tools, the FF2 import, the scheduled changes and the assortment copy.
+      const refusal = storedPriceReason(rounded, priceBoundsOf(product))
+      if (refusal) throw new MasterPriceRefusedError(`Not changed: ${refusal}.`)
 
       const listings = (await tx.channelListing.findMany({
         where: { productId },
@@ -263,14 +266,18 @@ export class MasterPriceService {
       const cascadedListingIds: string[] = []
       const snapshottedListingIds: string[] = []
       const currencyRefused: MasterPriceUpdateResult['currencyRefused'] = []
+      const boundsRefused: MasterPriceUpdateResult['boundsRefused'] = []
       const master = masterCurrency()
       let currencyRows: MarketCurrencyRow[] | null = null
       /** The listing market's configured currency, or null (not configured → never the master currency). */
       const currencyOf = async (listing: ChannelListingForCascade): Promise<string | null> => {
         currencyRows ??= await tx.marketplace.findMany({ select: { channel: true, code: true, currency: true } }) as MarketCurrencyRow[]
-        try { return marketCurrency(listing.channel, listing.marketplace, currencyRows) } catch { return null }
+        return listingMarketCurrency(listing, currencyRows)
       }
       const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
+      // Round 5 — the follower prices a paused listing (or a draft whose Publish does not carry them) keeps in Nexus:
+      // held rows, never dispatched, sent once on resume or publish (`sendHeldPrices`, the price door's module).
+      const heldRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
       const holdUntil =
         ctx.applyGrace === false
           ? null
@@ -290,8 +297,16 @@ export class MasterPriceService {
         if (listingCurrency !== master) {
           currencyRefused.push({ listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace, currency: listingCurrency, masterCurrency: master })
         }
+        // 2026-10-01 — as the channel price door refuses it at the edit: a follower price outside the product's own floor
+        // or ceiling (master-currency numbers; this listing sells in the master currency here), or not above 0, is
+        // neither stored nor queued. The listing keeps its price; the refusal is recorded like the currency refusal.
+        const outOfBounds = newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master
+          ? storedPriceReason(newListingPrice, priceBoundsOf(product)) : null
+        if (outOfBounds) {
+          boundsRefused.push({ listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace, price: newListingPrice!, reason: outOfBounds })
+        }
 
-        if (newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master) {
+        if (newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master && !outOfBounds) {
           // Real cascade: update both snapshot + computed price + flag for sync.
           await tx.channelListing.update({
             where: { id: listing.id },
@@ -306,11 +321,32 @@ export class MasterPriceService {
           cascadedListingIds.push(listing.id)
           // A paused listing (an operator's pause, or an inert draft) keeps the stored price but is
           // not queued, the way the stock cascade treats it. Dispatch refused its row anyway
-          // (PUSH_SYNC_PAUSED, terminal), so nothing sent changes; resume never replayed those rows.
-          // A still-draft is not queued either, paused or not. An unpaused one passes the push lock, and
-          // only the BullMQ worker skips an unpublished listing: the cron backstop, which dispatches every
-          // row that has no job (each row written inside a caller's transaction), sent its price.
-          if (holdsCascadedPrice(listing)) continue
+          // (PUSH_SYNC_PAUSED, terminal). A still-draft is not queued either, paused or not. An unpaused
+          // one passes the push lock, and only the BullMQ worker skips an unpublished listing: the cron
+          // backstop, which dispatches every row that has no job (each row written inside a caller's
+          // transaction), sent its price. Round 5 (2026-10-01): the price kept here is a HELD row (SKIPPED,
+          // never dispatched), and the resume or the publish sends it once (`sendHeldPrices`) — before,
+          // nothing replayed it.
+          const payload = followerPricePayload({
+            source: 'MASTER_PRICE_CHANGE',
+            productId,
+            productSku: product.sku,
+            channel: listing.channel,
+            marketplace: listing.marketplace,
+            price: newListingPrice,
+            oldPrice: oldListingPrice,
+            masterPrice: rounded,
+            oldMasterPrice: oldBasePrice,
+            pricingRule: listing.pricingRule,
+            priceAdjustmentPercent: listing.priceAdjustmentPercent,
+            reason: ctx.reason ?? null,
+            idempotencyKey: ctx.idempotencyKey ?? null,
+          })
+          if (holdsCascadedPrice(listing)) {
+            const code = heldPriceCode(listing, { pin: false, sale: false, followerPrice: newListingPrice })
+            if (code) heldRowsToCreate.push(heldPriceRowData({ ...listing, productId }, code, payload) as Prisma.OutboundSyncQueueCreateManyInput)
+            continue
+          }
           queueRowsToCreate.push({
             productId,
             channelListingId: listing.id,
@@ -320,24 +356,7 @@ export class MasterPriceService {
             syncType: 'PRICE_UPDATE',
             holdUntil,
             externalListingId: listing.externalListingId,
-            payload: {
-              source: 'MASTER_PRICE_CHANGE',
-              productId,
-              productSku: product.sku,
-              channel: listing.channel,
-              marketplace: listing.marketplace,
-              price: newListingPrice,
-              oldPrice: oldListingPrice,
-              masterPrice: rounded,
-              oldMasterPrice: oldBasePrice,
-              pricingRule: listing.pricingRule,
-              priceAdjustmentPercent:
-                listing.priceAdjustmentPercent != null
-                  ? Number(listing.priceAdjustmentPercent)
-                  : null,
-              reason: ctx.reason ?? null,
-              idempotencyKey: ctx.idempotencyKey ?? null,
-            },
+            payload: payload as Prisma.InputJsonValue,
           })
         } else {
           // Snapshot-only path: masterPrice tracks the new master so the
@@ -349,6 +368,20 @@ export class MasterPriceService {
           })
           snapshottedListingIds.push(listing.id)
         }
+      }
+
+      if (heldRowsToCreate.length > 0) {
+        // Round 6 — ONE held row per listing, as the price door keeps it: the newer master price replaces the older held
+        // row (so a listing paused for months does not pile up a row per master change), carrying forward an Amazon sale
+        // removal that row recorded.
+        const heldListingIds = heldRowsToCreate.map((row) => row.channelListingId as string)
+        const removing = new Set((await tx.outboundSyncQueue.findMany({
+          where: { ...HELD_PRICE_ROWS, channelListingId: { in: heldListingIds }, payload: { path: ['saleRemoved'], equals: true } },
+          select: { channelListingId: true },
+        })).map((row) => row.channelListingId))
+        await tx.outboundSyncQueue.updateMany({ where: { ...HELD_PRICE_ROWS, channelListingId: { in: heldListingIds } }, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
+        for (const row of heldRowsToCreate) if (removing.has(row.channelListingId ?? null)) row.payload = { ...(row.payload as Record<string, unknown>), saleRemoved: true } as Prisma.InputJsonValue
+        await createOutboundRows(tx, { data: heldRowsToCreate })
       }
 
       // Step 4: enqueue all the OutboundSyncQueue rows in one createMany.
@@ -392,6 +425,7 @@ export class MasterPriceService {
             snapshottedListingIds,
             queuedSyncIds,
             currencyRefusedListingIds: currencyRefused.map((r) => r.listingId),
+            boundsRefusedListingIds: boundsRefused.map((r) => r.listingId),
             graceMs: holdUntil
               ? holdUntil.getTime() - Date.now()
               : 0,
@@ -409,6 +443,7 @@ export class MasterPriceService {
         snapshottedListingIds,
         queuedSyncIds,
         currencyRefused,
+        boundsRefused,
         auditLogId: audit.id,
       }
     }
@@ -458,22 +493,11 @@ export class MasterPriceService {
     // live in the result and the audit row, which commit or roll back with it). Best effort: never undoes the edit.
     if (result.currencyRefused.length > 0) {
       logger.warn('MasterPriceService.update: master price not sent to a different-currency market', { productId, refused: result.currencyRefused })
-      if (!ctx.tx) {
-        const { syncHealthService } = await import('./sync-health.service.js')
-        for (const refusal of result.currencyRefused) {
-          const where = `${refusal.channel} ${refusal.marketplace}`
-          await syncHealthService.logConflict({
-            channel: refusal.channel,
-            conflictType: 'MASTER_PRICE_CURRENCY_REFUSED',
-            message: refusal.currency
-              ? `The master price ${refusal.masterCurrency} ${result.newBasePrice.toFixed(2)} was not sent to ${where}: that market sells in ${refusal.currency}. Set this listing's own ${refusal.currency} price. Nothing was queued.`
-              : `The master price ${refusal.masterCurrency} ${result.newBasePrice.toFixed(2)} was not sent to ${where}: no currency is configured for that market. Nothing was queued.`,
-            productId,
-            localData: { masterPrice: result.newBasePrice, masterCurrency: refusal.masterCurrency },
-            remoteData: { listingId: refusal.listingId, marketplace: refusal.marketplace, marketCurrency: refusal.currency },
-          }).catch(() => { /* observability best-effort — the refusal already holds */ })
-        }
-      }
+      if (!ctx.tx) await logMasterCurrencyRefusals(productId, result.newBasePrice, result.currencyRefused)
+    }
+    if (result.boundsRefused.length > 0) {
+      logger.warn('MasterPriceService.update: a follower price outside the product\'s floor or ceiling was not sent', { productId, refused: result.boundsRefused })
+      if (!ctx.tx) await logFollowerBoundsRefusals(productId, result.newBasePrice, result.boundsRefused)
     }
 
     if (result.changed) {

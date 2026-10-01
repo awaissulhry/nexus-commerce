@@ -75,6 +75,20 @@ function fillPromotedAsins(listingIds: string[]) {
     .catch(error => logger.warn('studio publication: ASIN read after promotion failed; the ASIN sweep retries it', { error: error instanceof Error ? error.message : String(error) }))
 }
 
+/**
+ * Round 5 (2026-10-01) — the drafts that just went live: the price changes their publication did not carry (a following
+ * draft's rule price that is not the master price, a sale) were kept in Nexus as held rows; the price door sends each
+ * ONCE now (`sendHeldPrices`). Loaded here, not at the top: the door's module loads the outbound queue. Never throws.
+ */
+async function heldPricesAfterGoLive(listingIds: string[], userId: string | null) {
+  try {
+    const { sendHeldPrices } = await import('./channel-price-write.service.js')
+    await sendHeldPrices({ listingIds, actor: userId ?? 'publish', cause: 'publish' })
+  } catch (error) {
+    logger.warn('studio publication: held prices not sent after go-live; the next resume or price change sends them', { error: error instanceof Error ? error.message : String(error) })
+  }
+}
+
 /** Receipt and accepted baseline move together; legacy operations never acquire an invented send record. */
 async function storeResult(id: string, data: Record<string, any>, userId: string | null, result: StudioPublishResult, statuses: string[]) {
   let promoted: string[] = []
@@ -88,11 +102,16 @@ async function storeResult(id: string, data: Record<string, any>, userId: string
     }
     return stored
   })
-  if (promoted.length) fillPromotedAsins(promoted)
+  if (promoted.length) {
+    fillPromotedAsins(promoted)
+    // Round 5 — a price change the publication did not carry (a following draft's rule price, a sale), kept in Nexus
+    // while the row was a draft, is sent once now that it is live. Never throws.
+    await heldPricesAfterGoLive(promoted, userId)
+  }
   return stored
 }
 
-async function reconcileEbayReceipt(data: Record<string, any>, previous: StudioPublishResult): Promise<StudioPublishResult> {
+async function reconcileEbayReceipt(data: Record<string, any>, previous: StudioPublishResult, userId: string | null): Promise<StudioPublishResult> {
   const reference = previous.results[0]?.reference
   if (!reference || !data.delivery) return previous
   const receipt = await readEbayPublication(reference, data.scope.accountId, data.scope.marketplace)
@@ -105,10 +124,14 @@ async function reconcileEbayReceipt(data: Record<string, any>, previous: StudioP
   const live = { externalListingId: reference, isPublished: true, listingStatus: 'ACTIVE', version: { increment: 1 } } as const
   // A still-draft becomes the live listing and loses the pause that kept it inert. It runs first: once promoted, a row
   // no longer matches the second write, so no row is bumped twice. Any other row keeps its own pause.
+  const drafts = (await prisma.channelListing.findMany({ where: { ...destination, ...STILL_DRAFT_LISTING }, select: { id: true } })).map(row => row.id)
   await prisma.channelListing.updateMany({ where: { ...destination, ...STILL_DRAFT_LISTING }, data: { ...live, syncPaused: false } })
   await prisma.channelListing.updateMany({ where: { ...destination,
     OR: [{ externalListingId: null }, { externalListingId: { not: reference } }, { isPublished: false }, { listingStatus: { not: 'ACTIVE' } }] },
     data: live })
+  // Round 5 — a held price change the publication did not carry is sent once the drafts are live (only those still held
+  // rows whose listing is live now are sent; a second reconcile finds none left). Never throws.
+  if (drafts.length) await heldPricesAfterGoLive(drafts, userId)
   const projected = await prisma.channelListing.count({ where: { productId: { in: data.delivery.productIds }, channel: 'EBAY',
     marketplace: data.scope.marketplace, channelConnectionId: data.scope.accountId, aliasKey: data.delivery.aliasKey,
     externalListingId: reference, isPublished: true, listingStatus: 'ACTIVE' } })
@@ -233,7 +256,7 @@ export async function studioPublicationResult(productId: string, id: string, use
   if (data.result) {
     const previous = data.result as StudioPublishResult
     if (operation.status === 'UNVERIFIED' && data.scope.channel === 'EBAY' && data.inventory !== true && previous.results[0]?.reference) {
-      const result = await reconcileEbayReceipt(data, previous)
+      const result = await reconcileEbayReceipt(data, previous, userId)
       await storeResult(id, data, userId, result, ['UNVERIFIED'])
       return result
     }
@@ -385,7 +408,7 @@ export async function submitStudioPublication(productId: string, id: string, bod
           message: `eBay acknowledged item ${sent.reference}. Its active listing status still needs checking.`,
           results: ebay.products.map(row => ({ sku: row.sku, status: 'ACCEPTED', reference: sent.reference, message: 'Acknowledged by eBay' })) }
         await checkpoint(result)
-        result = await reconcileEbayReceipt(data, result)
+        result = await reconcileEbayReceipt(data, result, userId)
       }
     }
   } catch (error) {

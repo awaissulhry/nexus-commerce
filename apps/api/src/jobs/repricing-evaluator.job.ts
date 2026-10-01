@@ -7,13 +7,10 @@
  * price, calls repricingEngineService.evaluate(), and logs a
  * RepricingDecision row.
  *
- * Important: applyToProduct=false at this stage. The cron LOGS
- * decisions; it does NOT push prices to marketplaces yet. That
- * integration (calling the per-channel price-override path on
- * applied=true decisions) is W4.10b once the channel-override flow
- * is formalised. Until then, operators see what the engine WOULD
- * do via the drawer's decision-history modal + decide manually
- * whether to push.
+ * The cron LOGS decisions. With NEXUS_REPRICER_LIVE=1 it also applies them (applyToProduct): the engine pins the
+ * price on the listing through the ONE channel price door (2026-10-01), which writes the timeline row and queues the
+ * one PRICE_UPDATE row. This job queued a row of its own and recorded the timeline itself; both are the door's now,
+ * so a live reprice is queued once.
  *
  * Behaviour summary:
  *   - For each enabled RepricingRule:
@@ -36,14 +33,12 @@
  * Default-on; opt out via NEXUS_ENABLE_REPRICING_EVALUATOR=0.
  */
 
-import { createOutboundRow } from '../services/outbound-rows.js'
 import cron from '../lib/cron/clustered.js'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { repricingEngineService } from '../services/repricing-engine.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { recordPriceChange } from '../services/price-history.service.js'
 
 interface RunSummary {
   enabledRules: number
@@ -195,58 +190,11 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
         { applyToProduct: repricerLive },
       )
 
-      // CE.3: when live and applied, enqueue PRICE_UPDATE to OutboundSyncQueue.
-      if (repricerLive && result.changed) {
-        // 🔴 P4.4b — two defects, both invisible because this lane is off by
-        // default (NEXUS_REPRICER_LIVE=1):
-        //
-        //  1. the row named NO listing, although `listing.id` is right here —
-        //     so the price went out without the listing's own pricing rule, its
-        //     market, or its stored sale window;
-        //  2. the payload key was `newPrice`, and the dispatcher reads
-        //     `payload.price`. `SyncPayload` has an `[key: string]: any` index
-        //     signature, so TypeScript never said a word. The row would dispatch
-        //     with no price at all and report SUCCESS — a repricer that records
-        //     a live reprice and sends nothing.
-        //
-        // "It has never run" was the only reason neither had cost anything yet.
-        await createOutboundRow(prisma, {
-          data: {
-            productId: rule.productId,
-            channelListingId: listing.id,
-            targetChannel: rule.channel as never,
-            targetRegion: rule.marketplace ?? listing.marketplace ?? 'IT',
-            syncType: 'PRICE_UPDATE',
-            payload: { price: result.price, ruleId: rule.id, source: 'REPRICER' },
-            syncStatus: 'PENDING',
-          },
-        }).catch((error) => {
-          // Still non-fatal — the decision was applied to the ChannelListing —
-          // but no longer SILENT. A swallowed enqueue is how "the repricer is
-          // live" and "nothing reached the channel" look identical.
-          logger.error('repricing-evaluator: PRICE_UPDATE enqueue failed', {
-            ruleId: rule.id, productId: rule.productId, channelListingId: listing.id,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        })
-
-        // PH.1 — record the live reprice on the unified timeline. Only when
-        // the price actually changed (result.changed) and was applied live.
-        // Best-effort: never breaks the apply/enqueue above.
-        if (listing.product?.sku) {
-          await recordPriceChange(prisma, {
-            productId: rule.productId,
-            sku: listing.product.sku,
-            channel: rule.channel,
-            marketplace: rule.marketplace ?? listing.marketplace ?? 'IT',
-            oldPrice: Number(listing.price as unknown as Prisma.Decimal),
-            newPrice: result.price,
-            reason: result.reason,
-            source: 'REPRICER',
-            ruleId: rule.id,
-            actor: 'repricer',
-          })
-        }
+      // CE.3 / 2026-10-01 — a live reprice is queued, audited and put on the price timeline by the price door inside
+      // the engine's apply (once). This job no longer creates a second PRICE_UPDATE row or timeline row of its own;
+      // it reports a requested apply that did not land.
+      if (repricerLive && result.changed && !result.applied) {
+        logger.warn('repricing-evaluator: reprice not applied', { ruleId: rule.id, productId: rule.productId, channelListingId: listing.id, reason: result.notApplied })
       }
 
       summary.evaluated++

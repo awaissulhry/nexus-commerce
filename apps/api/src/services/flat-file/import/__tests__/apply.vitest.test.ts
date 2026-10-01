@@ -5,8 +5,9 @@
  * The mock records every write call into arrays so tests can assert on them.
  *
  * Suites:
- *   1.   Governed write-back (price update → priceOverride + followMasterPrice=false)
- *   2.   Follow-flag true (price_follows_master@IT=true → followMasterPrice=true, priceOverride=null)
+ *   1.   A price cell pins the listing THROUGH the channel price door (2026-10-01; was a raw priceOverride write)
+ *   2.   price_follows_master@IT=true hands the listing back through the door (was a raw flag write)
+ *   P.   pricing_rule / price_adj_pct cells go through the door; a door refusal is the row's FAILED detail
  *   3.   Non-governed field (sale_price → salePrice column)
  *   4.   Master field (brand → product.updateMany with deletedAt:null guard)
  *   5.   SKU guard (base=sku → SKIPPED, no write)
@@ -24,6 +25,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { applyChanges } from '../apply.js'
+import type { PriceWriteOutcome } from '../../../pim/channel-price-write.service.js'
 import type { ImportDiff, CellChange } from '../diff.js'
 import type { ImportScope } from '../scope.js'
 
@@ -53,7 +55,7 @@ function makeMockPrisma(opts: MockPrismaOpts = {}) {
       },
       create: async (args: { data: any }) => {
         calls.channelListingCreate.push(args)
-        return {}
+        return { id: 'created-listing' }
       },
     },
     product: {
@@ -68,6 +70,21 @@ function makeMockPrisma(opts: MockPrismaOpts = {}) {
   }
 
   return prisma
+}
+
+/**
+ * A stand-in for the ONE channel price door: records what each pricing cell asks of it and answers `outcome`.
+ * The real door is exercised against a database in `flat-file-import-prices.vitest.test.ts`.
+ */
+function fakeDoor(outcome: Partial<PriceWriteOutcome> = {}) {
+  const calls: any[] = []
+  const writePrices = (async (input: any) => {
+    calls.push(input)
+    const result = { listingId: input.targets[0].listingId, productId: null, channel: null, marketplace: null,
+      outcome: 'applied', version: 2, guarded: false, queueId: 'queue-1', ...outcome }
+    return { results: [result], applied: result.outcome === 'applied' ? 1 : 0, refused: result.outcome === 'refused' ? 1 : 0, noop: 0, conflict: 0 }
+  }) as any
+  return { calls, writePrices }
 }
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -123,9 +140,11 @@ function makeMasterChange(overrides: Partial<CellChange>): CellChange {
 
 describe('applyChanges', () => {
   // ── 1. Governed write-back ─────────────────────────────────────────────────
-  it('1 — governed price update writes priceOverride + sets followMasterPrice=false', async () => {
+  // 2026-10-01 — this arm pinned the old write: `priceOverride` + `followMasterPrice: false` as raw columns, `price`
+  // untouched and nothing queued, so an imported price never reached the channel. Now the cell is a door pin.
+  it('1 — a price cell pins the listing through the channel price door; no raw column write', async () => {
     const prisma = makeMockPrisma({
-      channelListingRow: { followMasterPrice: true, priceOverride: null },
+      channelListingRow: { id: 'listing-1', followMasterPrice: true, priceOverride: null },
       productRow: { sku: 'GALE-M', deletedAt: null },
     })
     const diff: ImportDiff = {
@@ -134,21 +153,24 @@ describe('applyChanges', () => {
         makeChannelChange({ column: 'price@IT', base: 'price', to: '199.9', kind: 'update' }),
       ],
     }
+    const door = fakeDoor()
 
-    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT, actor: 'person-1', writePrices: door.writePrices })
 
     expect(result.applied).toBe(1)
     expect(result.failed).toBe(0)
-    expect(prisma._calls.channelListingUpdateMany).toHaveLength(1)
-    const written = prisma._calls.channelListingUpdateMany[0].data
-    expect(written.priceOverride).toBe(199.9)
-    expect(written.followMasterPrice).toBe(false)
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
+    expect(door.calls).toHaveLength(1)
+    expect(door.calls[0]).toMatchObject({ actor: 'person-1', source: 'BULK_OVERRIDE', tx: prisma })
+    expect(door.calls[0].targets).toEqual([{ listingId: 'listing-1', price: 199.9, unguardedReason: 'flat-file-import' }])
   })
 
   // ── 2. Follow-flag true ────────────────────────────────────────────────────
-  it('2 — follow-flag to=true writes followMasterPrice=true and priceOverride=null', async () => {
+  // 2026-10-01 — this arm pinned a raw flag write (`followMasterPrice: true`, `priceOverride: null`) with nothing
+  // recomputed or sent. Now the flag is the door's follower mode: the price is recomputed by the rule and sent.
+  it('2 — price_follows_master=true hands the listing back through the door', async () => {
     const prisma = makeMockPrisma({
-      channelListingRow: { followMasterPrice: false, priceOverride: 250.0 },
+      channelListingRow: { id: 'listing-2', followMasterPrice: false, priceOverride: 250.0 },
       productRow: { sku: 'GALE-M', deletedAt: null },
     })
     const diff: ImportDiff = {
@@ -163,13 +185,51 @@ describe('applyChanges', () => {
       ],
     }
 
-    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+    const door = fakeDoor()
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT, writePrices: door.writePrices })
 
     expect(result.applied).toBe(1)
-    expect(prisma._calls.channelListingUpdateMany).toHaveLength(1)
-    const written = prisma._calls.channelListingUpdateMany[0].data
-    expect(written.followMasterPrice).toBe(true)
-    expect(written.priceOverride).toBeNull()
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
+    expect(door.calls.map((c) => c.targets)).toEqual([[{ listingId: 'listing-2', follow: true, unguardedReason: 'flat-file-import' }]])
+
+    // 'false' stops following: the door keeps the price (flags only).
+    const unfollow = fakeDoor()
+    await applyChanges(prisma, { ...diff, changes: [{ ...diff.changes[0], to: 'false' }] }, { scope: SCOPE_AMAZON_IT, writePrices: unfollow.writePrices })
+    expect(unfollow.calls[0].targets).toEqual([{ listingId: 'listing-2', follow: false, unguardedReason: 'flat-file-import' }])
+  })
+
+  it('P — a pricing rule or percent cell goes through the door; an emptied price hands back; a refusal is the FAILED detail', async () => {
+    const prisma = makeMockPrisma({
+      channelListingRow: { id: 'listing-p', followMasterPrice: true, priceOverride: null },
+      productRow: { sku: 'TEST-FF2-P', deletedAt: null },
+    })
+    const cells = [
+      makeChannelChange({ sku: 'TEST-FF2-P', column: 'pricing_rule@IT', base: 'pricing_rule', to: 'PERCENT_OF_MASTER', kind: 'update' }),
+      makeChannelChange({ sku: 'TEST-FF2-P', column: 'price_adj_pct@IT', base: 'price_adj_pct', to: '12.5', kind: 'update' }),
+      makeChannelChange({ sku: 'TEST-FF2-P', column: 'price@IT', base: 'price', to: '', kind: 'delete' }),
+    ]
+    const door = fakeDoor()
+    const result = await applyChanges(prisma, { ...makeEmptyDiff(), changes: cells }, { scope: SCOPE_AMAZON_IT, writePrices: door.writePrices })
+    expect(result).toMatchObject({ applied: 3, failed: 0 })
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
+    expect(door.calls.map((c) => c.targets[0])).toEqual([
+      { listingId: 'listing-p', rule: { pricingRule: 'PERCENT_OF_MASTER' }, unguardedReason: 'flat-file-import' },
+      { listingId: 'listing-p', rule: { priceAdjustmentPercent: 12.5 }, unguardedReason: 'flat-file-import' },
+      { listingId: 'listing-p', price: null, unguardedReason: 'flat-file-import' },
+    ])
+
+    // The door refuses (outside the floor): the row FAILS with the door's sentence; nothing is written around it.
+    const refusing = fakeDoor({ outcome: 'refused', reason: 'This listing on AMAZON IT would follow the master price +12.5% at 112.50, but 112.50 is above its pricing ceiling of 100.00.' })
+    const refused = await applyChanges(prisma, { ...makeEmptyDiff(), changes: [cells[1]] }, { scope: SCOPE_AMAZON_IT, writePrices: refusing.writePrices })
+    expect(refused).toMatchObject({ applied: 0, failed: 1 })
+    expect(refused.rows[0]).toEqual({ sku: 'TEST-FF2-P', status: 'FAILED', detail: expect.stringContaining('pricing ceiling') })
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
+
+    // An emptied rule cell cannot be stored (the column always holds one): FAILED by name, the door not asked.
+    const empty = fakeDoor()
+    const emptied = await applyChanges(prisma, { ...makeEmptyDiff(), changes: [makeChannelChange({ sku: 'TEST-FF2-P', column: 'pricing_rule@IT', base: 'pricing_rule', to: '', kind: 'delete' })] }, { scope: SCOPE_AMAZON_IT, writePrices: empty.writePrices })
+    expect(emptied.rows[0]).toMatchObject({ status: 'FAILED', detail: expect.stringContaining('cannot be empty') })
+    expect(empty.calls).toHaveLength(0)
   })
 
   // ── 3. Non-governed field ──────────────────────────────────────────────────
@@ -218,6 +278,38 @@ describe('applyChanges', () => {
     // M4: where includes deletedAt:null so soft-deleted products are not updated
     expect(call.where).toEqual({ sku: 'GALE-M', deletedAt: null })
     expect(call.data).toEqual({ brand: 'Xavia New' })
+  })
+
+  // ── M. Master price ────────────────────────────────────────────────────────
+  it('M — a Products-sheet base_price cell goes through the master-price writer, never a plain Product write', async () => {
+    const prisma = makeMockPrisma({ productRow: { id: 'product-m', sku: 'SKU-M', deletedAt: null, basePrice: 189.9 } })
+    const calls: Array<[string, number, { actor: string; reason: string }]> = []
+    const updateMasterPrice = async (productId: string, price: number, ctx: { tx: unknown; actor: string; reason: string }) => { calls.push([productId, price, { actor: ctx.actor, reason: ctx.reason }]); expect(ctx.tx).toBe(prisma) }
+    const cell = makeMasterChange({ sku: 'SKU-M', column: 'base_price', base: 'base_price', from: 189.9, to: '199.9' })
+    const result = await applyChanges(prisma, { ...makeEmptyDiff(), masterChanges: [cell] }, { scope: SCOPE_AMAZON_IT, actor: 'person-1', updateMasterPrice })
+    expect(result).toMatchObject({ applied: 1, failed: 0 })
+    expect(calls).toEqual([['product-m', 199.9, { actor: 'person-1', reason: 'Flat-file import base_price' }]])
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
+    expect(result.inverseDiff).toEqual([{ model: 'Product', sku: 'SKU-M', data: { basePrice: 189.9 } }])
+
+    // An emptied master price is refused by name; nothing is written.
+    const emptied = await applyChanges(prisma, { ...makeEmptyDiff(), masterChanges: [{ ...cell, to: '', kind: 'delete' }] }, { scope: SCOPE_AMAZON_IT, updateMasterPrice })
+    expect(emptied.rows[0]).toMatchObject({ status: 'FAILED', detail: expect.stringContaining('cannot be emptied') })
+    expect(calls).toHaveLength(1)
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
+  })
+
+  it('🔴 M2 — a base_price the master-price writer refuses whole (outside the floor/ceiling, or 0) is a FAILED row with its sentence; no inverse', async () => {
+    const prisma = makeMockPrisma({ productRow: { id: 'product-m2', sku: 'SKU-M2', deletedAt: null, basePrice: 10 } })
+    const sentence = 'Not changed: 19.90 is above its pricing ceiling of 15.00.'
+    // MasterPriceRefusedError's shape (its module loads the queue, so it is not imported here).
+    const updateMasterPrice = async () => { throw Object.assign(new Error(sentence), { name: 'MasterPriceRefusedError', statusCode: 400, code: 'MASTER_PRICE_REFUSED' }) }
+    const cell = makeMasterChange({ sku: 'SKU-M2', column: 'base_price', base: 'base_price', from: 10, to: '19.9' })
+    const result = await applyChanges(prisma, { ...makeEmptyDiff(), masterChanges: [cell] }, { scope: SCOPE_AMAZON_IT, actor: 'person-1', updateMasterPrice })
+    expect(result).toMatchObject({ applied: 0, failed: 1 })
+    expect(result.rows).toEqual([{ sku: 'SKU-M2', status: 'FAILED', detail: sentence }])
+    expect(result.inverseDiff).toEqual([])
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
   })
 
   // ── 5. SKU guard ──────────────────────────────────────────────────────────
@@ -274,7 +366,9 @@ describe('applyChanges', () => {
       ],
     }
 
-    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+    // The cell goes through the price door (a fake one here); only a cell that was applied has an inverse (2026-10-01:
+    // a failed cell rolls back to its savepoint, so there is nothing to undo).
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT, writePrices: fakeDoor().writePrices })
 
     expect(result.inverseDiff).toHaveLength(1)
     const inv = result.inverseDiff[0]
@@ -306,7 +400,8 @@ describe('applyChanges', () => {
       ],
     }
 
-    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+    const door = fakeDoor()
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT, writePrices: door.writePrices })
 
     expect(result.applied).toBe(1)
     expect(prisma._calls.channelListingCreate).toHaveLength(1)
@@ -315,9 +410,9 @@ describe('applyChanges', () => {
     expect(created.product).toEqual({ connect: { sku: 'NEW-CHILD' } })
     expect(created.channel).toBe('AMAZON')
     expect(created.marketplace).toBe('IT')
-    // Governed field write-back: sets priceOverride + followMasterPrice=false
-    expect(created.priceOverride).toBe(150)
-    expect(created.followMasterPrice).toBe(false)
+    // 2026-10-01 — the new listing is created without a price; the door then pins it (was a raw priceOverride).
+    expect(created.priceOverride).toBeUndefined()
+    expect(door.calls[0].targets).toEqual([{ listingId: 'created-listing', price: 150, unguardedReason: 'flat-file-import' }])
   })
 
   // ── 8. Conflict policy: db-wins and out-of-scope both skip ──────────────────
@@ -352,7 +447,7 @@ describe('applyChanges', () => {
   // ── 8a. Conflict with file-wins → APPLIED ─────────────────────────────────
   it('8a — conflict with file-wins applies the file value (governed write-back)', async () => {
     const prisma = makeMockPrisma({
-      channelListingRow: { followMasterPrice: true, priceOverride: null },
+      channelListingRow: { id: 'listing-8a', followMasterPrice: true, priceOverride: null },
       productRow: { sku: 'GALE-M', deletedAt: null },
     })
     const diff: ImportDiff = {
@@ -366,17 +461,18 @@ describe('applyChanges', () => {
       ],
     }
 
+    const door = fakeDoor()
     const result = await applyChanges(prisma, diff, {
       scope: SCOPE_AMAZON_IT,
       conflictPolicy: 'file-wins',
+      writePrices: door.writePrices,
     })
 
     expect(result.applied).toBe(1)
     expect(result.skipped).toBe(0)
-    expect(prisma._calls.channelListingUpdateMany).toHaveLength(1)
-    const written = prisma._calls.channelListingUpdateMany[0].data
-    expect(written.priceOverride).toBe(199.9)
-    expect(written.followMasterPrice).toBe(false)
+    // The file's price, through the door (2026-10-01; was a raw priceOverride write).
+    expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
+    expect(door.calls[0].targets).toEqual([{ listingId: 'listing-8a', price: 199.9, unguardedReason: 'flat-file-import' }])
   })
 
   // ── 8b. Conflict file-wins on out-of-scope market → still not written ──────
@@ -477,7 +573,7 @@ describe('applyChanges', () => {
           if (!args.data.channelMarket) throw new Error('channelMarket is required (non-null)')
           if (!args.data.region) throw new Error('region is required (non-null)')
           createdArgs.push(args)
-          return {}
+          return { id: 'new-listing' }
         },
       },
       product: {
@@ -499,7 +595,7 @@ describe('applyChanges', () => {
       ],
     }
 
-    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT, writePrices: fakeDoor().writePrices })
 
     // Must succeed (not fall into failed)
     expect(result.applied).toBe(1)

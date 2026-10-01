@@ -31,7 +31,7 @@ import {
 } from '../services/sp-api-pricing.service.js'
 import { pushPriceUpdate } from '../services/pricing-outbound.service.js'
 import { writeChannelPrices } from '../services/pim/channel-price-write.service.js'
-import { runPromotionScheduler } from '../services/promotion-scheduler.service.js'
+import { endPromotionSales, runPromotionScheduler } from '../services/promotion-scheduler.service.js'
 import { Prisma } from '@prisma/client'
 
 const pricingRoutes: FastifyPluginAsync = async (fastify) => {
@@ -1069,10 +1069,11 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     '/pricing/promotions/:id',
     async (request, reply) => {
       try {
+        let eventName = ''
         await prisma.$transaction(async (tx) => {
           const event = await tx.retailEvent.findUnique({
             where: { id: request.params.id },
-            select: { id: true },
+            select: { id: true, name: true },
           })
           if (!event) {
             throw Object.assign(new Error('not found'), { code: 'P2025' })
@@ -1085,18 +1086,12 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
             where: { eventId: event.id },
             data: { isActive: false },
           })
-          // Clear any salePrice rows the scheduler stamped under this
-          // event's marker so the listings revert next snapshot refresh.
-          await tx.channelListing.updateMany({
-            where: { lastOverrideBy: `promotion:${event.id}` },
-            data: {
-              salePrice: null,
-              lastOverrideAt: new Date(),
-              lastOverrideBy: `promotion-clear:${event.id}`,
-            },
-          })
+          eventName = event.name
         })
-        return { ok: true }
+        // 2026-10-01 — every sale this promotion set ends through the channel price door (cleared and queued; on Amazon
+        // with `saleRemoved`). It was a raw `updateMany` of `salePrice` to null: nothing queued, the channels kept the sale.
+        const salesEnded = await endPromotionSales(prisma, request.params.id, eventName)
+        return { ok: true, salesEnded }
       } catch (error: any) {
         if (error?.code === 'P2025') {
           return reply.code(404).send({ error: 'event not found' })

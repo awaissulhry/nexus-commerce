@@ -29,6 +29,10 @@ import { AmbiguousConnectionError, tryResolveConnection } from '../services/conn
 import { DraftListingError, ensureDraftListingsInTransaction } from '../services/pim/draft-listing.service.js'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
+import { applyListingBulkPricing, ListingPricingError, parseListingPricingEdit, patchListing, PRICE_ABOVE_ZERO, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
+import { listingVersionOf, setListingQuantityFollow, writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
+import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -707,6 +711,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           quantity: true, masterQuantity: true,
           externalListingId: true, isPublished: true,
           followMasterPrice: true, followMasterQuantity: true,
+          // The matrix's price drift is rule-aware (a listing following at "master +10%" is on its rule, not drift).
+          pricingRule: true, priceAdjustmentPercent: true,
           // C.9 — title + override fields for cross-channel diff. The
           // matrix's drift indicators read these directly; we send the
           // effective channel title (override || stored title) plus the
@@ -740,6 +746,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           price: l.price == null ? null : Number(l.price),
           masterPrice: l.masterPrice == null ? null : Number(l.masterPrice),
           followMasterPrice: l.followMasterPrice,
+          pricingRule: l.pricingRule,
+          priceAdjustmentPercent: l.priceAdjustmentPercent == null ? null : Number(l.priceAdjustmentPercent),
           quantity: l.quantity,
           masterQuantity: l.masterQuantity,
           followMasterQuantity: l.followMasterQuantity,
@@ -969,6 +977,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           followMasterTitle: true, followMasterPrice: true,
           followMasterQuantity: true, followMasterDescription: true,
           externalListingId: true, isPublished: true,
+          // The comparison's price drift is rule-aware: the rule and percent say what a following listing should carry.
+          pricingRule: true, priceAdjustmentPercent: true,
         },
         orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
       })
@@ -1111,6 +1121,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           masterTitle: c.masterTitle,
           masterPrice: c.masterPrice == null ? null : Number(c.masterPrice),
           masterQuantity: c.masterQuantity,
+          pricingRule: c.pricingRule,
+          priceAdjustmentPercent: c.priceAdjustmentPercent == null ? null : Number(c.priceAdjustmentPercent),
           // Override indicators for per-marketplace customization view —
           // surfaces "this channel's price/qty/title is explicitly
           // overridden" without forcing a follow-up drawer-load.
@@ -1181,7 +1193,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         followMasterQuantity?: boolean
         followMasterImages?: boolean
         followMasterBulletPoints?: boolean
-        pricingRule?: 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER'
+        pricingRule?: string
         priceAdjustmentPercent?: number
         stockBuffer?: number
         expectedVersion?: number
@@ -1190,39 +1202,81 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
          *  (and future per-listing platform-specific attrs) without
          *  clobbering siblings the schema editor owns. */
         platformAttributes?: Record<string, unknown>
-        /** AC.9.2 — direct price override + sale-price write.
-         *  PricingCard's inline editor sends these as numbers (or
-         *  null to clear). Decimal columns; we coerce + Number-
-         *  validate before storing. */
+        /** A number pins the listing at it (the grid's price cell, the cockpit's PricingCard); null hands it back
+         *  to the master. Through the channel price door, like the rule, the percent and the follow flag. */
         priceOverride?: number | string | null
+        /** 2026-10-01 — a typed quantity (the grid's stock cell) PINS the listing at it, and a sale (value + both
+         *  dates, or null) is scheduled: each through the Studio matrix's own write, with its rules. On its own. */
+        quantity?: number | string
         salePrice?: number | string | null
+        salePriceStart?: string | null
+        salePriceEnd?: string | null
       }
 
       if (Object.prototype.hasOwnProperty.call(body, 'isPublished')) return reply.code(409).send({
         code: 'CHANNEL_WORKFLOW_REQUIRED', error: 'Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.',
         reviewHref: `/products/listing-readiness?${new URLSearchParams({ listingIds: id })}`,
       })
+      // A quantity or a sale goes through the Studio matrix's write (FBA refused, the Amazon EU group, eBay/Etsy have
+      // no sale, the price permission) — the very rules of the matrix cell. Alone: that write is its own transaction.
+      const MATRIX_KEYS = ['quantity', 'salePrice', 'salePriceStart', 'salePriceEnd']
+      const hasQuantity = Object.prototype.hasOwnProperty.call(body, 'quantity')
+      const hasSale = ['salePrice', 'salePriceStart', 'salePriceEnd'].some((k) => Object.prototype.hasOwnProperty.call(body, k))
+      if (hasQuantity || hasSale) {
+        const others = Object.keys(body).filter((k) => !MATRIX_KEYS.includes(k) && k !== 'expectedVersion')
+        if (others.length || (hasQuantity && hasSale)) {
+          return reply.code(400).send({ error: 'Save the quantity or the sale on its own, then save the other changes.' })
+        }
+        let write: ListingMatrixCell
+        if (hasQuantity) {
+          const n = typeof body.quantity === 'number' ? body.quantity : typeof body.quantity === 'string' && body.quantity.trim() !== '' ? Number(body.quantity) : Number.NaN
+          if (!Number.isInteger(n) || n < 0) return reply.code(400).send({ error: 'The quantity must be a whole number, 0 or more.' })
+          write = { cell: 'syncQty', value: n }
+        } else {
+          const raw = body.salePrice
+          const value = raw === null || raw === undefined || raw === '' ? null : Number(raw)
+          if (value !== null && (!Number.isFinite(value) || value <= 0)) return reply.code(400).send({ error: 'The sale price must be above 0.' })
+          const date = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
+          write = { cell: 'salePrice', value: { value, start: value === null ? null : date(body.salePriceStart), end: value === null ? null : date(body.salePriceEnd) } }
+        }
+        let written: Awaited<ReturnType<typeof writeListingCellThroughMatrix>>
+        try {
+          written = await writeListingCellThroughMatrix({
+            listingId: id, write, actor: bulkActorOf(request) ?? 'listing-edit', can: permissionCheckerFor(request),
+            ...(body.expectedVersion != null ? { expectedVersion: Number(body.expectedVersion) } : {}),
+          })
+        } catch (err) {
+          if (err instanceof ListingPricingError) return reply.code(err.statusCode).send({ error: err.message, ...err.details })
+          throw err
+        }
+        publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
+        void productEventService.emit({
+          aggregateId: id, aggregateType: 'ChannelListing', eventType: 'CHANNEL_LISTING_UPDATED',
+          data: Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'expectedVersion')),
+          metadata: { source: 'OPERATOR', ip: request.ip ?? undefined },
+        })
+        return { ok: true, listing: { id: written.id, version: written.version }, changed: written.outcome === 'applied', ...(written.expandedTo ? { expandedTo: written.expandedTo } : {}) }
+      }
+
       const data: any = {}
+      // The price's follow flag is a pricing edit (below): it recomputes and sends the price. The quantity's follow
+      // flag is the Studio matrix's Mode write (after the rest): the quantity is recomputed or pinned and sent.
       const boolFields = [
-        'followMasterTitle', 'followMasterDescription', 'followMasterPrice',
-        'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints',
+        'followMasterTitle', 'followMasterDescription',
+        'followMasterImages', 'followMasterBulletPoints',
       ] as const
+      const quantityFollow = typeof body.followMasterQuantity === 'boolean' ? body.followMasterQuantity : undefined
       for (const k of boolFields) {
         if (typeof body[k] === 'boolean') data[k] = body[k]
       }
-      if (body.pricingRule) {
-        const valid = ['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER']
-        if (!valid.includes(body.pricingRule)) {
-          return reply.code(400).send({ error: `pricingRule must be ${valid.join('|')}` })
-        }
-        data.pricingRule = body.pricingRule
-      }
-      if (body.priceAdjustmentPercent != null) {
-        const n = Number(body.priceAdjustmentPercent)
-        if (!Number.isFinite(n)) {
-          return reply.code(400).send({ error: 'priceAdjustmentPercent must be a number' })
-        }
-        data.priceAdjustmentPercent = n
+      // 2026-10-01 — the rule, the percent, the price's follow flag and a typed price go through the ONE channel price
+      // door: the price is recomputed (or pinned) and queued, or refused by name with nothing written.
+      let pricing: ListingPricingEdit | undefined
+      try {
+        pricing = parseListingPricingEdit(body as Record<string, unknown>)
+      } catch (err) {
+        if (err instanceof ListingPricingError) return reply.code(err.statusCode).send({ error: err.message, ...err.details })
+        throw err
       }
       if (body.stockBuffer != null) {
         const n = Math.floor(Number(body.stockBuffer))
@@ -1231,41 +1285,10 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         }
         data.stockBuffer = n
       }
-      // AC.9.2 — price override + sale price. null clears the
-      // column; numbers must parse and be >= 0 (Amazon rejects
-      // negative offer prices outright).
-      if ('priceOverride' in body) {
-        if (body.priceOverride === null) {
-          data.priceOverride = null
-        } else if (body.priceOverride != null) {
-          const n = Number(body.priceOverride)
-          if (!Number.isFinite(n) || n < 0) {
-            return reply
-              .code(400)
-              .send({ error: 'priceOverride must be a non-negative number or null' })
-          }
-          data.priceOverride = n
-        }
-      }
-      if ('salePrice' in body) {
-        if (body.salePrice === null) {
-          data.salePrice = null
-        } else if (body.salePrice != null) {
-          const n = Number(body.salePrice)
-          if (!Number.isFinite(n) || n < 0) {
-            return reply
-              .code(400)
-              .send({ error: 'salePrice must be a non-negative number or null' })
-          }
-          data.salePrice = n
-        }
-      }
-
       // AC.7.2 — platformAttributes shallow-merge. The JSON column
       // is owned by multiple writers (schema editor, channel adapter,
       // cockpit cards), so we never overwrite the whole blob — we
-      // read-merge-write the keys the caller sent. Single round-trip
-      // because we already fetch `current` below for version checks.
+      // read-merge-write the keys the caller sent, under the version.
       const mergePlatformAttrs =
         body.platformAttributes &&
         typeof body.platformAttributes === 'object' &&
@@ -1277,39 +1300,39 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         code: 'SHOPIFY_WORKSPACE_REQUIRED', error: 'Use the Shopify family workspace to change family rules, automation or synchronization progress.',
       })
 
-      if (Object.keys(data).length === 0 && !mergePlatformAttrs) {
+      if (Object.keys(data).length === 0 && !mergePlatformAttrs && !pricing && quantityFollow === undefined) {
         return reply.code(400).send({ error: 'No updatable fields provided' })
       }
+      const quantityOnly = quantityFollow !== undefined && Object.keys(data).length === 0 && !mergePlatformAttrs && !pricing
 
-      // Optimistic concurrency: if the client tells us what version it
-      // saw, refuse to write over a newer one. Without expectedVersion
-      // we still increment, just no concurrent-edit detection.
-      const current = await prisma.channelListing.findUnique({
-        where: { id },
-        select: { translations: true, id: true, version: true, platformAttributes: true },
-      })
-      if (!current) return reply.code(404).send({ error: 'Listing not found' })
-      if (
-        body.expectedVersion != null &&
-        Number(body.expectedVersion) !== current.version
-      ) {
-        return reply.code(409).send({
-          error: 'Version conflict — another tab edited this listing. Refresh and retry.',
-          currentVersion: current.version,
-        })
+      // Optimistic concurrency: the version the client saw is checked by the price door's compare-and-set and by the
+      // other columns' `updateMany … where version`. Without expectedVersion the door names why it has none.
+      let updated: Awaited<ReturnType<typeof patchListing>> | null = null
+      let quantity: Awaited<ReturnType<typeof setListingQuantityFollow>> | null = null
+      try {
+        if (!quantityOnly) {
+          updated = await patchListing({
+            id,
+            actor: bulkActorOf(request) ?? 'listing-edit',
+            ...(body.expectedVersion != null ? { expectedVersion: Number(body.expectedVersion) } : {}),
+            ...(pricing ? { pricing } : {}),
+            columns: data,
+            mergePlatformAttributes: mergePlatformAttrs,
+          })
+        }
+        if (quantityFollow !== undefined) {
+          // Alone, an Amazon-managed listing is refused by the matrix's sentence; beside other fields (a "reset every
+          // field" button) its quantity is left to Amazon and the answer says so.
+          quantity = await setListingQuantityFollow({
+            listingId: id, follow: quantityFollow, actor: bulkActorOf(request) ?? 'listing-edit', onFba: quantityOnly ? 'refuse' : 'skip',
+            ...(quantityOnly && body.expectedVersion != null ? { expectedVersion: Number(body.expectedVersion) } : {}),
+          })
+        }
+      } catch (err) {
+        if (err instanceof ListingPricingError) return reply.code(err.statusCode).send({ error: err.message, ...err.details })
+        throw err
       }
-
-      data.version = { increment: 1 }
-      if (mergePlatformAttrs) {
-        const existing =
-          current.platformAttributes &&
-          typeof current.platformAttributes === 'object' &&
-          !Array.isArray(current.platformAttributes)
-            ? (current.platformAttributes as Record<string, unknown>)
-            : {}
-        data.platformAttributes = { ...existing, ...mergePlatformAttrs }
-      }
-      const updated = await prisma.channelListing.update({ where: { id }, data })
+      const fresh = await listingVersionOf(id)
       // S.4 — broadcast so other tabs / cells refresh within 200ms.
       publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
       // ES.2 — persist the change to the immutable event log.
@@ -1322,7 +1345,15 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         ),
         metadata: { source: 'OPERATOR', ip: request.ip ?? undefined },
       })
-      return { ok: true, listing: { id: updated.id, version: updated.version } }
+      return {
+        ok: true,
+        listing: { id, version: fresh ?? updated?.version ?? null },
+        // A price change that was saved but not sent says why (another currency, paused, a draft, Match Amazon…).
+        ...(updated?.notSent ? { notSent: updated.notSent } : {}),
+        queued: updated?.queueId != null,
+        // The quantity's follow flag: applied (on Amazon EU, for the whole EU group), or left to Amazon (FBA).
+        ...(quantity ? { quantity: { outcome: quantity.outcome, ...(quantity.expandedTo ? { expandedTo: quantity.expandedTo } : {}), ...(quantity.skipped ? { note: quantity.skipped } : {}) } } : {}),
+      }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/:id PATCH] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -3315,10 +3346,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // actions:
   // Publication uses the channel workflows; this route cannot submit or withdraw a listing.
   //   - "resync"           → syncStatus=PENDING, syncRetryCount=0
-  //   - "set-price"        → price = payload.price (Decimal)
-  //   - "follow-master"    → followMaster* = true (cascade master fields)
-  //   - "unfollow-master"  → followMaster* = false (freeze current values)
-  //   - "set-pricing-rule" → pricingRule = payload.pricingRule
+  //   - "set-price"        → pins each listing at payload.price through the channel price door (queued, 30 s hold)
+  //   - "follow-master"    → followMaster* = true; the price is recomputed by its rule and sent through the door
+  //   - "unfollow-master"  → followMaster* = false (freeze current values; nothing is sent)
+  //   - "set-pricing-rule" → pricingRule (+ priceAdjustmentPercent) through the door: a following listing's price
+  //                          is recomputed and sent. A refusal (floor/ceiling, currency) fails that listing by name.
   // Returns 202 with jobId — poll GET /api/listings/bulk-action/:jobId
   // ─────────────────────────────────────────────────────────────────
   fastify.post('/listings/bulk-action', {
@@ -3350,14 +3382,19 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // a malformed request doesn't leave a half-baked job in the DB.
       if (action === 'set-price') {
         const p = Number(body.payload?.price)
-        if (!Number.isFinite(p) || p < 0) {
-          return reply.code(400).send({ error: 'payload.price must be a non-negative number' })
+        if (!Number.isFinite(p) || p <= 0) {
+          return reply.code(400).send({ error: PRICE_ABOVE_ZERO })
         }
       }
       if (action === 'set-pricing-rule') {
-        const rule = String(body.payload?.pricingRule ?? '').toUpperCase()
-        if (!['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER'].includes(rule)) {
-          return reply.code(400).send({ error: 'payload.pricingRule must be FIXED|MATCH_AMAZON|PERCENT_OF_MASTER' })
+        const rule = normalisePricingRule(body.payload?.pricingRule)
+        if (!rule) {
+          return reply.code(400).send({ error: PRICING_RULE_REFUSAL })
+        }
+        const pct = body.payload?.priceAdjustmentPercent
+        if (rule === 'PERCENT_OF_MASTER' && pct != null && pct !== '') {
+          const problem = adjustmentPercentProblem(pct)
+          if (problem) return reply.code(400).send({ error: problem })
         }
       }
 
@@ -3401,6 +3438,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         let succeeded = 0
         let failed = 0
         const errors: Array<{ listingId: string; reason: string }> = []
+        const quantityNotes: Array<{ listingId: string; reason: string }> = []
 
         // A2 — pre-read followMasterQuantity for follow/unfollow actions so
         // we can skip no-op audit writes and capture accurate before values.
@@ -3419,51 +3457,34 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
         for (const id of ids) {
           try {
-            const data: any = {}
-            switch (action) {
-              case 'resync':
-                data.syncStatus = 'PENDING'
-                data.lastSyncStatus = 'PENDING'
-                data.syncRetryCount = 0
-                data.lastSyncError = null
-                break
-              case 'set-price': {
-                data.price = Number(body.payload?.price)
-                data.followMasterPrice = false
-                break
-              }
-              case 'follow-master':
-                data.followMasterTitle = true
-                data.followMasterDescription = true
-                data.followMasterPrice = true
-                data.followMasterQuantity = true
-                data.followMasterImages = true
-                data.followMasterBulletPoints = true
-                break
-              case 'unfollow-master':
-                data.followMasterTitle = false
-                data.followMasterDescription = false
-                data.followMasterPrice = false
-                data.followMasterQuantity = false
-                data.followMasterImages = false
-                data.followMasterBulletPoints = false
-                break
-              case 'set-pricing-rule': {
-                const rule = String(body.payload?.pricingRule ?? '').toUpperCase()
-                data.pricingRule = rule
-                if (rule === 'PERCENT_OF_MASTER') {
-                  const pct = Number(body.payload?.priceAdjustmentPercent)
-                  if (Number.isFinite(pct)) data.priceAdjustmentPercent = pct
-                }
-                break
-              }
+            if (action === 'resync') {
+              const data: any = {}
+              data.syncStatus = 'PENDING'
+              data.lastSyncStatus = 'PENDING'
+              data.syncRetryCount = 0
+              data.lastSyncError = null
+              data.version = { increment: 1 }
+              await prisma.channelListing.update({ where: { id }, data })
+            } else {
+              // 2026-10-01 — set-price, set-pricing-rule, follow-master and unfollow-master go through the ONE
+              // channel price door: a pinned price or a recomputed follower price is queued (30 s hold), and a refusal
+              // (outside the product's floor/ceiling, …) fails this listing by name with nothing written.
+              const priced = await applyListingBulkPricing({
+                action: action as 'set-price' | 'set-pricing-rule' | 'follow-master' | 'unfollow-master',
+                listingId: id,
+                actor: job.createdBy ?? 'listings-bulk-action',
+                payload: body.payload,
+              })
+              // The quantity of an Amazon-managed (FBA) listing is Amazon's: the rest of the change is applied, the
+              // quantity is not, and the job says so by listing (not a failure). Likewise a price kept in Nexus and not
+              // sent (a paused listing or a draft, a market in another currency): the job names it.
+              if (priced.notSent) quantityNotes.push({ listingId: id, reason: `Not sent: ${priced.notSent}` })
+              if (priced.quantitySkipped) quantityNotes.push({ listingId: id, reason: `Quantity not changed: ${priced.quantitySkipped}` })
             }
-            data.version = { increment: 1 }
-            await prisma.channelListing.update({ where: { id }, data })
             succeeded += 1
 
             // A2 — journal followMasterQuantity toggle when it actually changed.
-            if (action === 'follow-master' || action === 'unfollow-master') {
+            if ((action === 'follow-master' || action === 'unfollow-master') && !quantityNotes.some((n) => n.listingId === id && n.reason.startsWith('Quantity not changed: '))) {
               const newVal = action === 'follow-master'
               const oldVal = followQtyBefore.get(id) ?? true // default is true
               if (oldVal !== newVal) {
@@ -3498,8 +3519,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
                 processedItems: succeeded,
                 failedItems: failed,
                 progressPercent: Math.floor((processedTotal / ids.length) * 100),
-                errorLog: errors as any,
-                lastError: errors.length > 0 ? errors[errors.length - 1].reason : null,
+                errorLog: [...errors, ...quantityNotes] as any,
+                lastError: errors.length > 0 ? errors[errors.length - 1].reason : quantityNotes.length > 0 ? quantityNotes[quantityNotes.length - 1].reason : null,
               },
             })
             .catch((e) => {

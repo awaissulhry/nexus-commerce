@@ -13,6 +13,7 @@
  */
 import { Prisma } from '@prisma/client'
 import { describe, expect, it } from 'vitest'
+import { roundCents } from '@nexus/shared/listing-price'
 import { currentBasePrice, pricingUpdateOutcome } from './pricing-update.js'
 
 /** A product row as the job loads it: the master price and the product's own floor and ceiling. */
@@ -54,7 +55,8 @@ describe('pricingUpdateOutcome — each mode', () => {
   })
 
   it('skips below zero and outside the job\'s minPrice / maxPrice, testing the computed price as before', () => {
-    expect(pricingUpdateOutcome(product(1), { adjustmentType: 'DELTA', value: -1.995 })).toEqual({ newPrice: -1, status: 'skipped', reason: 'Not changed: the new price would be -1.00, and a price must be above 0.' })
+    // 1 − 1.995 = −0.995, in the one cents helper every price write uses (`roundCents`, half-up): −0.99.
+    expect(pricingUpdateOutcome(product(1), { adjustmentType: 'DELTA', value: -1.995 })).toEqual({ newPrice: -0.99, status: 'skipped', reason: 'Not changed: the new price would be -0.99, and a price must be above 0.' })
     expect(pricingUpdateOutcome(product(90), { adjustmentType: 'PERCENT', value: 15, maxPrice: 100 })).toEqual({ newPrice: 103.5, status: 'skipped', reason: "Not changed: 103.50 is above this job's maximum price of 100.00." })
     // 9.996 is below the job's floor of 10 even though its stored cents would be 10.00: skipped, as the run always did,
     // and the reason shows the price the bound tested.
@@ -95,7 +97,10 @@ describe('pricingUpdateOutcome — each mode', () => {
 
 describe('🔴 the run writes what it wrote before this change, except the two intended skips', () => {
   type Run = { status: 'processed' | 'skipped'; stored?: number }
-  /** The run before 2026-10-01 (`processPricingUpdate`), and the cents MasterPriceService then stored. */
+  /**
+   * The run before 2026-10-01 (`processPricingUpdate`), and the cents MasterPriceService stores — its rounding is the
+   * one cents helper (`roundCents`: 63.375 is 63.38, where `Math.round(x * 100)` read the float 6337.4999… as 63.37).
+   */
   function before(current: number, payload: Record<string, any>): Run {
     const value = typeof payload.value === 'number' ? payload.value : Number(payload.value)
     let newPrice!: number
@@ -107,13 +112,13 @@ describe('🔴 the run writes what it wrote before this change, except the two i
     if (newPrice < 0) return { status: 'skipped' }
     if (typeof payload.minPrice === 'number' && newPrice < payload.minPrice) return { status: 'skipped' }
     if (typeof payload.maxPrice === 'number' && newPrice > payload.maxPrice) return { status: 'skipped' }
-    return { status: 'processed', stored: Math.round(newPrice * 100) / 100 }
+    return { status: 'processed', stored: roundCents(newPrice) }
   }
   /** The run now: the shared rule, then the same write, whose rounding meets an already-rounded price. */
   function now(row: ReturnType<typeof product>, payload: Record<string, any>): Run {
     const outcome = pricingUpdateOutcome(row, payload)
     if (outcome.status === 'skipped') return { status: 'skipped' }
-    return { status: 'processed', stored: Math.round(outcome.newPrice * 100) / 100 }
+    return { status: 'processed', stored: roundCents(outcome.newPrice) }
   }
 
   it('same status and same stored price for every mode over 30,000 inputs, except exactly differences 1 and 2', () => {

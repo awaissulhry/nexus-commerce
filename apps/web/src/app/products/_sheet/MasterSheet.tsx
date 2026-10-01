@@ -346,8 +346,8 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
               const pinned = Object.entries(l.follows).filter(([, v]) => !v).map(([f]) => f.replace(/^followMaster/, ''))
               const others = pinned.filter((f) => f !== 'Price')
               const head = l.follows.followMasterPrice === false
-                ? `Price is PINNED on ${c.label} — the master no longer drives it. Setting this back publishes the master's price on the NEXT publish; nothing is sent now.`
-                : `Price follows the master on ${c.label}.`
+                ? `Price is PINNED on ${c.label} — the master no longer drives it. Setting this back to "Follows master" recomputes the price by the listing's rule and sends it to ${c.label} after a 30-second hold (a market in another currency keeps its own price).`
+                : `Price follows the master on ${c.label}. Pinning keeps the price it has now; nothing is sent.`
               return others.length ? `${head}\nAlso pinned (not editable here): ${others.join(', ')}` : head
             },
           },
