@@ -1944,12 +1944,13 @@ export class BulkActionService {
   ): { currentValue: unknown; newValue: unknown; status: 'processed' | 'skipped' } {
     switch (actionType) {
       case 'PRICING_UPDATE': {
-        // The run's own rule on the run's own column (`bulk-action/pricing-update.ts`): a PRICING_UPDATE item is a
-        // Product, priced from `basePrice`. Reading `variation.price` here showed "NaN" before.
-        const current = currentBasePrice(item as Product);
-        const outcome = pricingUpdateOutcome(current, payload);
+        // The run's own rule on the run's own row (`bulk-action/pricing-update.ts`): a PRICING_UPDATE item is a whole
+        // Product row (`getItemsForJob`) — `basePrice` and its own floor / ceiling (`minPrice` / `maxPrice`). Reading
+        // `variation.price` here showed "NaN" before.
+        const product = item as Product;
+        const outcome = pricingUpdateOutcome(product, payload);
         return {
-          currentValue: current.toFixed(2),
+          currentValue: currentBasePrice(product).toFixed(2),
           newValue: outcome.newPrice.toFixed(2),
           status: outcome.status,
         };
@@ -2967,6 +2968,9 @@ export class BulkActionService {
    * ROUND_DOWN_TO_99: the largest X.99 at or below the current price
    * (`bulk-action/price-rounding.ts`); skipped when there is none
    * (under 0.99) or the price already ends in .99.
+   * Every mode also skips a price it would store as 0 or below, and a
+   * price outside the product's own floor / ceiling (Product.minPrice /
+   * maxPrice) — the push would refuse it after Nexus stored it.
    * Every mode's rule: `bulk-action/pricing-update.ts`, shared with
    * the preview.
    */
@@ -2975,12 +2979,14 @@ export class BulkActionService {
     payload: Record<string, any>,
     jobId: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    // The preview's own rule (`computePreview`) on the same column: the
-    // new price in stored cents, or a skip (below zero, outside
-    // minPrice / maxPrice, or nothing to round). Soft constraints skip
+    // The preview's own rule (`computePreview`) on the same row (a whole
+    // Product: basePrice, minPrice, maxPrice): the new price in stored
+    // cents, or a skip — below zero, outside the job's minPrice /
+    // maxPrice, nothing to round, a stored price of 0 or below, or
+    // outside the product's own floor / ceiling. Soft constraints skip
     // rather than fail so the rest of the job continues; a payload no
     // row can run throws (the item fails).
-    const outcome = pricingUpdateOutcome(currentBasePrice(item), payload);
+    const outcome = pricingUpdateOutcome(item, payload);
     if (outcome.status === 'skipped') return { status: 'skipped' };
 
     await this.masterPriceService.update(item.id, outcome.newPrice, {

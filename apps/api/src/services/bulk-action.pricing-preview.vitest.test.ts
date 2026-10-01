@@ -8,6 +8,9 @@
  * call one rule on the same column (`bulk-action/pricing-update.ts`).
  *
  * Each arm: preview, check nothing was written, run the same job, and compare the preview with what the run wrote.
+ * Two skips every mode shares, preview and run alike (2026-10-01): a price that would be stored as 0 or below, and a
+ * price outside the PRODUCT's own floor / ceiling (`Product.minPrice` / `maxPrice`) — the push refuses such a price
+ * after Nexus stored it, so Nexus and the channel would disagree (the agent price tools' rule, #225).
  * Real PostgreSQL in-process (PGlite): these arms test what a write stores, not a race.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest'
@@ -37,9 +40,11 @@ const price = async (id: string) => Number((await prisma.product.findUniqueOrThr
  * Preview the job, then run it. Returns, per product: the preview's current price, new price and status, and the
  * price before, the price the run wrote and the run's item status.
  */
-async function previewThenRun(prices: Record<string, number>, actionPayload: Record<string, unknown>) {
-  for (const [id, basePrice] of Object.entries(prices)) {
-    await prisma.product.create({ data: { id, sku: id.toUpperCase(), name: id, basePrice, totalStock: 3 } })
+type Seed = number | { basePrice: number; minPrice?: number; maxPrice?: number }
+async function previewThenRun(prices: Record<string, Seed>, actionPayload: Record<string, unknown>) {
+  for (const [id, seed] of Object.entries(prices)) {
+    const row = typeof seed === 'number' ? { basePrice: seed } : seed
+    await prisma.product.create({ data: { id, sku: id.toUpperCase(), name: id, totalStock: 3, ...row } })
   }
   const ids = Object.keys(prices)
   const before = Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await price(id)])))
@@ -87,5 +92,48 @@ describe('🔴 a PRICING_UPDATE preview shows what the run then writes', () => {
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 1, skippedItems: 1, failedItems: 0 })
     expect(rows['round-a']).toEqual({ preview: ['25.40', '24.99', 'processed'], run: ['25.40', '24.99', 'processed'] })
     expect(rows['round-b']).toEqual({ preview: ['25.99', '25.99', 'skipped'], run: ['25.99', '25.99', 'skipped'] })
+  }), 60_000)
+
+  it('🔴 every mode: a price that would be stored as 0 or below is skipped in both — a bulk change never stores 0', () => scoped(async () => {
+    const cases: Array<[string, number, Record<string, unknown>]> = [
+      ['zero-absolute', 5, { adjustmentType: 'ABSOLUTE', value: 0 }],
+      ['zero-delta', 5, { adjustmentType: 'DELTA', value: -5 }],
+      ['zero-percent', 5, { adjustmentType: 'PERCENT', value: -100 }],
+      // 10 × (1 − 99.9999 %) = 0.00001, stored as 0.00.
+      ['zero-cents', 10, { adjustmentType: 'PERCENT', value: -99.9999 }],
+    ]
+    for (const [id, basePrice, payload] of cases) {
+      const { result, rows } = await previewThenRun({ [id]: basePrice }, payload)
+      expect(result, id).toMatchObject({ status: 'COMPLETED', processedItems: 0, skippedItems: 1, failedItems: 0 })
+      expect(rows[id], id).toEqual({ preview: [basePrice.toFixed(2), '0.00', 'skipped'], run: [basePrice.toFixed(2), basePrice.toFixed(2), 'skipped'] })
+    }
+  }), 60_000)
+
+  it('🔴 every mode: a new price outside the product\'s own floor or ceiling is skipped in both; inside or on it is written', () => scoped(async () => {
+    const { result, rows } = await previewThenRun({
+      'bounds-floor': { basePrice: 50, minPrice: 46 },
+      'bounds-ceiling': { basePrice: 50, maxPrice: 44 },
+      'bounds-crossed': { basePrice: 50, minPrice: 60, maxPrice: 40 },
+      'bounds-inside': { basePrice: 50, minPrice: 40, maxPrice: 60 },
+      'bounds-on-floor': { basePrice: 50, minPrice: 45 },
+    }, { adjustmentType: 'PERCENT', value: -10 })
+    expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 2, skippedItems: 3, failedItems: 0 })
+    expect(rows).toEqual({
+      'bounds-floor': { preview: ['50.00', '45.00', 'skipped'], run: ['50.00', '50.00', 'skipped'] },
+      'bounds-ceiling': { preview: ['50.00', '45.00', 'skipped'], run: ['50.00', '50.00', 'skipped'] },
+      'bounds-crossed': { preview: ['50.00', '45.00', 'skipped'], run: ['50.00', '50.00', 'skipped'] },
+      'bounds-inside': { preview: ['50.00', '45.00', 'processed'], run: ['50.00', '45.00', 'processed'] },
+      'bounds-on-floor': { preview: ['50.00', '45.00', 'processed'], run: ['50.00', '45.00', 'processed'] },
+    })
+    for (const [id, actionPayload, seed] of [
+      ['bounds-absolute', { adjustmentType: 'ABSOLUTE', value: 12 }, { basePrice: 20, maxPrice: 10 }],
+      ['bounds-delta', { adjustmentType: 'DELTA', value: 5 }, { basePrice: 20, maxPrice: 24 }],
+      ['bounds-round', { adjustmentType: 'ROUND_DOWN_TO_99' }, { basePrice: 25.4, minPrice: 25 }],
+    ] as const) {
+      const one = await previewThenRun({ [id]: seed }, { ...actionPayload })
+      expect(one.result, id).toMatchObject({ status: 'COMPLETED', processedItems: 0, skippedItems: 1, failedItems: 0 })
+      expect(one.rows[id].preview[2], id).toBe('skipped')
+      expect(one.rows[id].run, id).toEqual([seed.basePrice.toFixed(2), seed.basePrice.toFixed(2), 'skipped'])
+    }
   }), 60_000)
 })
