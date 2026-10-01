@@ -278,3 +278,18 @@ export function inViewCount(
   const shown = nonStructural.filter((c) => locks.has(c.key) || value.visibleColumns.includes(c.key)).length
   return { shown, total: nonStructural.length }
 }
+
+/**
+ * A drag's drop (2026-10-01, the Customise dialog's dnd-kit drag): move one column or a ticked set, in their order,
+ * right before a column, right after one, or to the end of a group (an empty group, or a closed one). Each step is
+ * `moveAttributeColumn` / `moveAttributesToGroup`, so the group rules are the ones Customise already keeps.
+ */
+export type ColumnDropTarget = { before: string } | { after: string } | { group: string }
+export function placeColumns(
+  allColumns: readonly PreferencesColumnSpec[], value: PreferencesValue, keys: readonly string[], target: ColumnDropTarget | null,
+): PreferencesValue {
+  if (!target || !keys.length) return value
+  if ('group' in target) return moveAttributesToGroup(allColumns, value, keys, target.group)
+  if ('before' in target) return keys.reduce((draft, key) => (key === target.before ? draft : moveAttributeColumn(allColumns, draft, key, target.before, false)), value)
+  return [...keys].reverse().reduce((draft, key) => (key === target.after ? draft : moveAttributeColumn(allColumns, draft, key, target.after, true)), value)
+}

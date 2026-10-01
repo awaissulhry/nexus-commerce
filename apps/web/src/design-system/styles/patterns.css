@@ -1646,13 +1646,141 @@
 .nds-prefs-group[data-tone] > .nds-prefs-groupempty {
   padding-left: var(--nds-space-26);
 }
-.nds-prefs-group[data-tone='slate'] { --nds-prefs-tone-bg: var(--nds-grid-tone-slate-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-slate-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-slate-rule); }
-.nds-prefs-group[data-tone='purple'] { --nds-prefs-tone-bg: var(--nds-grid-tone-purple-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-purple-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-purple-rule); }
-.nds-prefs-group[data-tone='emerald'] { --nds-prefs-tone-bg: var(--nds-grid-tone-emerald-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-emerald-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-emerald-rule); }
-.nds-prefs-group[data-tone='pink'] { --nds-prefs-tone-bg: var(--nds-grid-tone-pink-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-pink-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-pink-rule); }
-.nds-prefs-group[data-tone='orange'] { --nds-prefs-tone-bg: var(--nds-grid-tone-orange-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-orange-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-orange-rule); }
-.nds-prefs-group[data-tone='blue'] { --nds-prefs-tone-bg: var(--nds-grid-tone-blue-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-blue-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-blue-rule); }
-.nds-prefs-group[data-tone='yellow'] { --nds-prefs-tone-bg: var(--nds-grid-tone-yellow-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-yellow-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-yellow-rule); }
-.nds-prefs-group[data-tone='red'] { --nds-prefs-tone-bg: var(--nds-grid-tone-red-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-red-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-red-rule); }
-.nds-prefs-group[data-tone='violet'] { --nds-prefs-tone-bg: var(--nds-grid-tone-violet-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-violet-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-violet-rule); }
-.nds-prefs-group[data-tone='cyan'] { --nds-prefs-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-cyan-rule); }
+.nds-prefs-group[data-tone='slate'], .nds-prefs-dragcard[data-tone='slate'], .nds-prefs-row[data-tone='slate'] { --nds-prefs-tone-bg: var(--nds-grid-tone-slate-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-slate-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-slate-rule); }
+.nds-prefs-group[data-tone='purple'], .nds-prefs-dragcard[data-tone='purple'], .nds-prefs-row[data-tone='purple'] { --nds-prefs-tone-bg: var(--nds-grid-tone-purple-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-purple-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-purple-rule); }
+.nds-prefs-group[data-tone='emerald'], .nds-prefs-dragcard[data-tone='emerald'], .nds-prefs-row[data-tone='emerald'] { --nds-prefs-tone-bg: var(--nds-grid-tone-emerald-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-emerald-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-emerald-rule); }
+.nds-prefs-group[data-tone='pink'], .nds-prefs-dragcard[data-tone='pink'], .nds-prefs-row[data-tone='pink'] { --nds-prefs-tone-bg: var(--nds-grid-tone-pink-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-pink-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-pink-rule); }
+.nds-prefs-group[data-tone='orange'], .nds-prefs-dragcard[data-tone='orange'], .nds-prefs-row[data-tone='orange'] { --nds-prefs-tone-bg: var(--nds-grid-tone-orange-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-orange-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-orange-rule); }
+.nds-prefs-group[data-tone='blue'], .nds-prefs-dragcard[data-tone='blue'], .nds-prefs-row[data-tone='blue'] { --nds-prefs-tone-bg: var(--nds-grid-tone-blue-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-blue-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-blue-rule); }
+.nds-prefs-group[data-tone='yellow'], .nds-prefs-dragcard[data-tone='yellow'], .nds-prefs-row[data-tone='yellow'] { --nds-prefs-tone-bg: var(--nds-grid-tone-yellow-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-yellow-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-yellow-rule); }
+.nds-prefs-group[data-tone='red'], .nds-prefs-dragcard[data-tone='red'], .nds-prefs-row[data-tone='red'] { --nds-prefs-tone-bg: var(--nds-grid-tone-red-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-red-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-red-rule); }
+.nds-prefs-group[data-tone='violet'], .nds-prefs-dragcard[data-tone='violet'], .nds-prefs-row[data-tone='violet'] { --nds-prefs-tone-bg: var(--nds-grid-tone-violet-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-violet-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-violet-rule); }
+.nds-prefs-group[data-tone='cyan'], .nds-prefs-dragcard[data-tone='cyan'], .nds-prefs-row[data-tone='cyan'] { --nds-prefs-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-cyan-rule); }
+
+/* 2026-10-01 — the Customise dialog's drag (dnd-kit, `patterns/preferencesDnd.tsx`). The Owner: "absolutely stunning
+   and very responsive … without any compromise on speed and quality". Only `transform` moves while dragging. */
+.nds-prefs-row.draggable,
+.nds-prefs-viewgrouphd {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.nds-prefs-row.draggable {
+  cursor: grab;
+}
+.nds-prefs-cols.is-sorting,
+.nds-prefs-cols.is-sorting * {
+  cursor: grabbing !important;
+}
+/* The slot it will land in: the row's place, outlined in its group's colour, its content hidden. */
+.nds-prefs-row.is-drag-source,
+.nds-prefs-viewgrouphd.is-drag-source {
+  background: color-mix(in srgb, var(--nds-prefs-tone-rule, var(--nds-primary)) 14%, var(--nds-surface));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--nds-prefs-tone-rule, var(--nds-primary)) 70%, transparent);
+  border-radius: var(--nds-radius-sm);
+}
+.nds-prefs-row.is-drag-source > *,
+.nds-prefs-viewgrouphd.is-drag-source > * {
+  visibility: hidden;
+}
+/* The other ticked rows that travel with the lifted one. */
+.nds-prefs-row.is-drag-companion {
+  opacity: 0.35;
+}
+/* A folded group a column is held over: it opens after a moment; until then its heading says it is the target. */
+.nds-prefs-viewgrouphd.is-drop-target {
+  box-shadow: inset 3px 0 0 var(--nds-prefs-tone-rule, var(--nds-primary)), inset 0 0 0 2px var(--nds-prefs-tone-rule, var(--nds-primary));
+}
+/* The lifted card under the pointer: above the dialog, a soft shadow, its group's colour edge. */
+.nds-prefs-dragcard {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  border: 1px solid var(--nds-border);
+  border-left: 3px solid var(--nds-prefs-tone-rule, var(--nds-primary));
+  border-radius: var(--nds-radius-lg);
+  box-shadow: var(--nds-shadow-pop);
+  font-size: var(--nds-font-size-base);
+  font-weight: 600;
+  cursor: grabbing;
+  transform: scale(1.02);
+}
+.nds-prefs-dragcard.is-group {
+  background: var(--nds-prefs-tone-bg, var(--nds-surface-sunken));
+  color: var(--nds-prefs-tone-fg, var(--nds-text));
+  font-weight: 700;
+}
+.nds-prefs-dragcard > svg {
+  flex: none;
+  color: var(--nds-prefs-tone-rule, var(--nds-text-muted));
+}
+.nds-prefs-dragcard-lbl {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nds-prefs-dragcard-count {
+  flex: none;
+  padding: 1px var(--nds-space-8);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-prefs-tone-bg, var(--nds-surface-sunken));
+  color: var(--nds-prefs-tone-fg, var(--nds-text));
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+}
+/* What just landed glows once, so the eye finds it. */
+@keyframes nds-prefs-landed {
+  from { outline-color: var(--nds-prefs-tone-rule, var(--nds-primary)); }
+  to { outline-color: transparent; }
+}
+.nds-prefs-row.just-moved,
+.nds-prefs-viewgrouphd.just-moved {
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  animation: nds-prefs-landed 900ms var(--nds-easing-standard);
+}
+/* The grip is the keyboard's way in: Space lifts, arrows move, Space drops, Escape cancels. */
+.nds-prefs-griphandle {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--nds-radius-sm);
+  cursor: grab;
+}
+.nds-prefs-griphandle:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+/* The up / down buttons show on hover or keyboard focus only (Owner, 2026-10-01); always on a touch screen. */
+.nds-prefs-row .nds-prefs-orderbtns,
+.nds-prefs-viewgrouphd .nds-prefs-orderbtns {
+  opacity: 0;
+  transition: opacity 120ms var(--nds-easing-standard);
+}
+.nds-prefs-row:hover .nds-prefs-orderbtns,
+.nds-prefs-row:focus-within .nds-prefs-orderbtns,
+.nds-prefs-viewgrouphd:hover .nds-prefs-orderbtns,
+.nds-prefs-viewgrouphd:focus-within .nds-prefs-orderbtns {
+  opacity: 1;
+}
+.nds-prefs-cols.is-sorting .nds-prefs-orderbtns {
+  opacity: 0;
+}
+@media (hover: none) {
+  .nds-prefs-row .nds-prefs-orderbtns,
+  .nds-prefs-viewgrouphd .nds-prefs-orderbtns {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nds-prefs-row.just-moved,
+  .nds-prefs-viewgrouphd.just-moved {
+    animation: none;
+  }
+  .nds-prefs-dragcard {
+    transform: none;
+  }
+}
