@@ -150,6 +150,8 @@ export function withPick(layout: ColumnsViewPayload | null, pick: SheetPick): Wo
 const sessionPicks = new Map<string, SheetPick>()
 export function rememberPick(surface: string, pick: SheetPick): void { sessionPicks.set(surface, pick) }
 export function recalledPick(surface: string): SheetPick | null { return sessionPicks.get(surface) ?? null }
+/** A newer record from another tab replaces this tab's pick: the saved layout is the one truth (2026-10-01). */
+export function forgetPick(surface: string): void { sessionPicks.delete(surface) }
 /** Tests only. */
 export function forgetSessionPicks(): void { sessionPicks.clear() }
 

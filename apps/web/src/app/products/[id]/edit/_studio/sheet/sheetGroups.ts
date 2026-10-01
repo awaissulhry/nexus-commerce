@@ -4,8 +4,7 @@
  * The SERVER puts every column in its group — the Amazon group names, order and one colour each, on every sheet
  * (`@nexus/shared/sheet-groups`). This file does the rest, on the sheet only:
  *   1. the columns the sheet adds itself join those groups — Progress leads Offer Identity, Product media leads Images;
- *   2. a layout saved before the current groups keeps its columns and pins but drops its old ORDER, so the groups' order
- *      shows (its group keys name groups that no longer exist);
+ *   2. a column a saved layout has never seen shows in its group, and a saved order is never dropped;
  *   3. each column NAME in the header takes its group's tint and a slight indent, and the first column of a group
  *      draws its group's edge — there is no band row (the Owner: Customise manages what shows).
  */
@@ -25,9 +24,6 @@ interface Groupable {
   /** A language column's own field group (its `groupKey` is the language split's). */
   sourceGroupKey?: string
 }
-
-/** Every key the sheet's groups use. */
-const SHEET_GROUP_KEYS: ReadonlySet<string> = new Set(Object.values(SHEET_GROUPS).map((g) => g.key))
 
 /** True when the server put this sheet's columns in the sheet groups (every sheet since 2026-10-01). */
 export const sheetGrouped = (columns: readonly { groupKey?: string; sourceGroupKey?: string }[]): boolean =>
@@ -49,14 +45,16 @@ export function withSheetGroups<T extends Groupable>(columns: readonly T[]): T[]
 }
 
 /**
- * A layout saved before the current groups: its columns, hidden columns and pins stay; its column ORDER, group order and
- * group moves are dropped — they name groups that no longer exist, and keeping them would scatter the groups' order. A
- * layout saved since (its group order names today's groups and no retired one) is the operator's and is kept as it is.
+ * The Owner, 2026-10-01: a column the saved layout has never seen (a new attribute, another product type) shows in its
+ * group, after the columns already arranged there; everything the operator arranged stays where it is. "Never seen" =
+ * not in the layout's full column order, which lists every column — hidden ones too — the layout was saved with.
+ * A saved order is never dropped (groups that no longer exist are simply skipped by the group resolution).
  */
-export function withoutPreGroupingOrder<P extends ColumnsViewPayload>(payload: P, grouped: boolean): P {
-  if (!grouped || payload.v !== 3) return payload
-  const current = payload.groupOrder.some((k) => SHEET_GROUP_KEYS.has(k)) && !payload.groupOrder.some((k) => isSheetGroupKey(k) && !SHEET_GROUP_KEYS.has(k))
-  return current ? payload : { ...payload, columnOrder: [], groupOrder: [], groupOverrides: {} }
+export function withNewColumnsShown<P extends ColumnsViewPayload>(payload: P, columns: readonly { key: string; locked?: boolean }[]): P {
+  if (payload.v !== 3) return payload
+  const seen = new Set([...payload.columnOrder, ...payload.columns])
+  const fresh = columns.filter((c) => !c.locked && !seen.has(c.key)).map((c) => c.key)
+  return fresh.length ? { ...payload, columns: [...payload.columns, ...fresh] } : payload
 }
 
 /**

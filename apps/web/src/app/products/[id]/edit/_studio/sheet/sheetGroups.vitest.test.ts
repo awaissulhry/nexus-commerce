@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SheetTone } from '@nexus/shared/sheet-groups'
-import { insertInNaturalOrder, sheetHeaderClasses, withGroupHeaderClass, withoutPreGroupingOrder, withSheetGroups, SHEET_MEDIA_COLUMN, type SheetHeaderClassParams } from './sheetGroups'
+import { insertInNaturalOrder, sheetHeaderClasses, withGroupHeaderClass, withNewColumnsShown, withSheetGroups, SHEET_MEDIA_COLUMN, type SheetHeaderClassParams } from './sheetGroups'
 import { sheetLayoutPayload, columnsViewPayload } from '@/design-system/grid/views/viewPayload'
 
 const col = (key: string, groupKey: string, group: string, groupTone?: SheetTone, managedBy?: string, sourceGroupKey?: string) =>
@@ -38,24 +38,21 @@ describe('withSheetGroups', () => {
   })
 })
 
-describe('withoutPreGroupingOrder', () => {
-  const old = sheetLayoutPayload({ columns: ['price', 'name'], columnOrder: ['price', 'name'], lockedColumns: ['price'], groupOrder: ['progress', 'variation-theme', 'EBAY:offer', 'EBAY:content'], groupOverrides: { name: 'EBAY:offer' } })
+describe('withNewColumnsShown (Owner, 2026-10-01: a column the layout has never seen shows in its group)', () => {
+  const saved = sheetLayoutPayload({ columns: ['price', 'name'], columnOrder: ['price', 'name', 'hiddenOne'], lockedColumns: ['price'], groupOrder: ['progress', 'EBAY:offer'], groupOverrides: { name: 'EBAY:offer' } })
+  const specs = [{ key: 'identity', locked: true }, { key: 'price' }, { key: 'name' }, { key: 'hiddenOne' }, { key: 'brandNew' }]
 
-  it('keeps an old layout\'s columns and pins but drops its order and group moves', () => {
-    expect(withoutPreGroupingOrder(old, true)).toMatchObject({ columns: ['price', 'name'], lockedColumns: ['price'], columnOrder: [], groupOrder: [], groupOverrides: {} })
+  it('shows a never-seen column and keeps everything saved — order, pins, hidden columns and group moves', () => {
+    const out = withNewColumnsShown(saved, specs)
+    expect(out.columns).toEqual(['price', 'name', 'brandNew'])
+    expect(out).toMatchObject({ columnOrder: ['price', 'name', 'hiddenOne'], lockedColumns: ['price'], groupOrder: ['progress', 'EBAY:offer'], groupOverrides: { name: 'EBAY:offer' } })
   })
 
-  it('also drops the order of a layout saved under the first, flat-file names (a retired sheet group)', () => {
-    const interim = sheetLayoutPayload({ columns: ['name'], columnOrder: ['name'], lockedColumns: [], groupOrder: ['sheet:identifiers', 'sheet:listing', 'sheet:images'], groupOverrides: {} })
-    expect(withoutPreGroupingOrder(interim, true)).toMatchObject({ columnOrder: [], groupOrder: [] })
-  })
-
-  it('keeps a layout saved under today\'s groups, a layout on a sheet the server did not group, and a plain view', () => {
-    const since = sheetLayoutPayload({ columns: ['name'], columnOrder: ['name'], lockedColumns: [], groupOrder: ['sheet:offer-identity', 'sheet:product-details'], groupOverrides: {} })
-    expect(withoutPreGroupingOrder(since, true)).toBe(since)
-    expect(withoutPreGroupingOrder(old, false)).toBe(old)
+  it('keeps a column the operator hid hidden, and returns the same layout when nothing is new', () => {
+    expect(withNewColumnsShown(saved, specs).columns).not.toContain('hiddenOne')
+    expect(withNewColumnsShown(saved, specs.filter((c) => c.key !== 'brandNew'))).toBe(saved)
     const plain = columnsViewPayload(['name'])
-    expect(withoutPreGroupingOrder(plain, true)).toBe(plain)
+    expect(withNewColumnsShown(plain, specs)).toBe(plain)
   })
 })
 

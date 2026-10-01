@@ -30,7 +30,10 @@ const hooks = vi.hoisted(() => {
 })
 vi.mock('react', async original => ({ ...await original<typeof import('react')>(), ...hooks.react }))
 
-const fixture = vi.hoisted(() => ({ actor: 'owner-a', business: 'business-a', gridLoaded: false, save: vi.fn(), paint: vi.fn(), markActive: vi.fn() }))
+const fixture = vi.hoisted(() => ({ actor: 'owner-a', business: 'business-a', gridLoaded: false, save: vi.fn(), paint: vi.fn(), markActive: vi.fn(), loadOwn: vi.fn() }))
+/** The person's own layout record (2026-10-01, `/api/sheet-layouts`); per actor and business here, so each owner's replies are told apart. */
+const ownRecord = () => ({ id: `${fixture.actor}:${fixture.business}:record`, name: 'Current layout', updatedAt: '2026-09-30T10:00:00Z',
+  filters: { v: 2, kind: 'columns', columns: fixture.actor === 'owner-a' && fixture.business === 'business-a' ? ['brand'] : ['brand', 'name'] } })
 vi.mock('@/lib/workspaces/navigation', () => ({ useParams: () => ({ workspaceId: fixture.business }) }))
 vi.mock('@/lib/auth/AuthProvider', () => ({ useAuth: () => ({ user: { id: fixture.actor } }) }))
 vi.mock('@/design-system/grid/hooks/useGridState', async original => ({
@@ -45,9 +48,12 @@ vi.mock('@/design-system/grid/views/savedViewTransport', async original => ({
       updatedAt: '2026-09-30T10:00:00Z', filters: { v: 2, kind: 'columns', columns: fixture.actor === 'owner-a' && fixture.business === 'business-a' ? ['brand'] : ['brand', 'name'] } }] },
   ] }),
   saveWorkingLayout: (...args: unknown[]) => fixture.save(fixture.actor, ...args),
+  loadUserSheetLayout: (...args: unknown[]) => fixture.loadOwn(...args),
+  saveUserSheetLayout: (...args: unknown[]) => fixture.save(fixture.actor, ...args),
 }))
 
 import { useSheetColumns, type UseSheetColumnsArgs } from './useSheetColumns'
+import { forgetSessionPicks } from './sheetLayoutMemory'
 
 const columns = ['brand', 'name'].map(key => ({ key, label: key, kind: 'text', group: 'General', groupKey: 'general', requiredBy: [], editable: true, defaultVisible: true, writeField: key }))
 const options = { apiRef: { current: null }, gridReady: null, columns, identityColumn: 'sku', activeChip: null,
@@ -66,6 +72,8 @@ const preferences = (keys: string[]) => ({ stickyFirstColumn: false, stickyLastC
 beforeEach(() => {
   hooks.state.slots = []; hooks.state.effects = []
   fixture.actor = 'owner-a'; fixture.business = 'business-a'; fixture.gridLoaded = false; options.apiRef.current = null; options.gridReady = null; fixture.save.mockReset(); fixture.markActive.mockClear()
+  fixture.loadOwn.mockReset(); fixture.loadOwn.mockImplementation(async () => ownRecord())
+  forgetSessionPicks()
 })
 afterEach(() => { for (const slot of hooks.state.slots) slot.cleanup?.(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers() })
 
@@ -97,15 +105,15 @@ describe('working layout replies stay with the requesting owner', () => {
   })
 
   it('keeps a confirmed layout when an older empty read answers afterward', async () => {
-    let finish!: (response: Response) => void
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve })))
+    let finish!: (record: null) => void
     fixture.save.mockImplementation(async (_actor, _base, _surface, filters) => ({ id: 'confirmed-record', name: 'Current layout', updatedAt: '2026-09-30T12:00:00Z', filters }))
     render(); await settle()
     const current = render()
+    fixture.loadOwn.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
     const older = current.reloadSavedPreferences().catch(() => null)
     await settle()
     await current.savePreferences(preferences(['name']))
-    finish(new Response(JSON.stringify({ items: [] })))
+    finish(null)
     await older; await settle()
     await render().savePreferences(preferences(['brand']))
     expect(fixture.save.mock.calls[1][4]?.id).toBe('confirmed-record')
@@ -154,3 +162,45 @@ describe('working layout replies stay with the requesting owner', () => {
     expect(render().myLayout).toEqual({ count: 2 })
   })
 })
+
+describe('a person\'s own layout (2026-10-01: the same after a reload, in every profile)', () => {
+  const landOn = async () => {
+    vi.useFakeTimers()
+    fixture.gridLoaded = true
+    const api = { isDestroyed: () => false, getColumnState: () => [{ colId: 'sku' }, { colId: 'brand' }, { colId: 'name' }],
+      applyColumnState: fixture.paint, getState: () => ({}), refreshHeader: () => {} } as unknown as NonNullable<typeof options.gridReady>
+    options.apiRef.current = api; options.gridReady = api
+    fixture.save.mockImplementation(async (_actor, _base, _surface, filters) => ({ id: 'own', name: 'Current layout', updatedAt: '2026-10-01T12:00:00Z', filters }))
+    render(); await settle(); render()
+    const landed = render()
+    expect(landed.landed).toBe(true)
+    return landed
+  }
+
+  it('makes what the person sees their own on the first landing, when they have no record yet', async () => {
+    fixture.loadOwn.mockImplementation(async () => null)
+    await landOn()
+    await vi.advanceTimersByTimeAsync(400)
+    expect(fixture.save).toHaveBeenCalledTimes(1)
+    const [, , surface, filters, previous] = fixture.save.mock.calls[0]
+    expect(surface).toBe('product-edit:layout:master')
+    expect(previous).toBeNull() // created, not written over another record
+    expect(filters).toMatchObject({ columns: ['brand'], picked: { kind: 'custom' }, density: 'compact' }) // this profile's layout, kept
+  })
+
+  it('keeps a width the operator changes, and not one the sheet applies itself', async () => {
+    const sheet = await landOn()
+    await vi.advanceTimersByTimeAsync(400)
+    expect(fixture.save).not.toHaveBeenCalled() // a person with a record: landing writes nothing
+    sheet.onColumnResized({ finished: true, source: 'api' })
+    sheet.onSortChanged({ source: 'api' })
+    await vi.advanceTimersByTimeAsync(400)
+    expect(fixture.save).not.toHaveBeenCalled()
+    sheet.onColumnResized({ finished: true, source: 'uiColumnResized' })
+    sheet.onSortChanged({ source: 'uiColumnSorted' })
+    await vi.advanceTimersByTimeAsync(400)
+    expect(fixture.save).toHaveBeenCalledTimes(1) // a burst saves once
+    expect(fixture.save.mock.calls[0][3]).toMatchObject({ columnWidths: {}, sort: [], density: 'compact' })
+  })
+})
+

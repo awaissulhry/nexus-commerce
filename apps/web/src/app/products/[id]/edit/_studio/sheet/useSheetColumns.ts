@@ -29,25 +29,41 @@ import {
 import type { GridDensityName } from '@/design-system/tokens/grid'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns/PreferencesModal'
 import { moveAttributeColumn, resolveAttributeGroups } from '@/design-system/patterns/preferencesLogic'
-import { loadWorkingLayout, parseWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
+import { loadUserSheetLayout, loadWorkingLayout, parseWorkingLayout, saveUserSheetLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
 import { createInitialSavedViewRead } from './initialSavedViewRead'
 import { isUserColumnPin, readSheetWorkingLayout } from './sheetWorkingLayoutRead'
 import { viewChipColumns, type ViewChip } from '../contracts'
 import type { SheetColumn } from './master/types'
 import { alwaysColumnsFor, GAPS_VIEW_ID, orderColumnKeys, REQUIRED_VIEW_ID, sheetViews, structuralColumnKeys, type ViewContext } from './views'
 import { defaultViewKeys } from './slotListColumns'
-import { insertInNaturalOrder, sheetGrouped, sheetHeaderClasses, withoutPreGroupingOrder, type SheetHeaderClassParams, type SheetHeaderGroup } from './sheetGroups'
+import { insertInNaturalOrder, sheetHeaderClasses, withNewColumnsShown, type SheetHeaderClassParams, type SheetHeaderGroup } from './sheetGroups'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 import {
   chooseLanding, fieldPayload, FRONT_GROUP_KEYS, hasMyLayout, languageKeyMap, layoutPart, pickOf, progressShown,
-  recalledPick, rememberPick, withPick, type SheetPick, type WorkingLayoutPayload,
+  forgetPick, recalledPick, rememberPick, withPick, type SheetPick, type WorkingLayoutPayload,
 } from './sheetLayoutMemory'
 
 /**
  * Widths and sort remain lightweight browser preferences for the WORKING layout. A NAMED view also
  * carries them, with the row height (2026-09-26, `ViewDisplay`), and applying one restores all three.
  */
-export const SHEET_PERSIST_KEYS: readonly GridStateKey[] = ['columnSizing', 'columnPinning', 'sort']
+export const SHEET_PERSIST_KEYS: readonly GridStateKey[] = ['columnSizing', 'sort']
+/**
+ * 2026-10-01 — what the sheet keeps across a remount in this tab (a language switch). Pins are kept here but no longer in
+ * the browser: a pin lives in the saved layout (My layout or a named view), the same in every browser and profile;
+ * widths, sort and row height live in the person's own saved layout too (`/api/sheet-layouts`), and the browser's copy
+ * only seeds a person's first record.
+ */
+const SHEET_RECOVERY_KEYS: readonly GridStateKey[] = ['columnSizing', 'columnPinning', 'sort']
+
+/** The view on screen, as the pick the saved layout remembers. */
+function pickOfActive(active: ActiveColumns): SheetPick {
+  if (active.kind === 'preset') return { kind: 'preset', id: active.id }
+  if (active.kind === 'saved') return { kind: 'saved', id: active.id }
+  return active.kind === 'custom' ? { kind: 'custom' } : { kind: 'all' }
+}
+/** A width, sort or row height the OPERATOR changed — not one the sheet applied itself (`api`, `flex`, …). */
+const USER_DISPLAY_SOURCES = new Set(['uiColumnResized', 'uiColumnSorted', 'uiColumnDragged', 'autosizeColumns', 'columnMenu', 'contextMenu'])
 
 /**
  * The sheet's row height, per operator and browser — one choice for every product and scope, like
@@ -134,6 +150,9 @@ export interface SheetColumnsApi<TPage> {
   onColumnMoved: (event: { finished?: boolean; source?: string; column?: { getColId: () => string } | null }) => void
   /** The grid's `onColumnPinned`: a pin from a header menu is saved the same way. */
   onColumnPinned: (event: { source?: string }) => void
+  /** 2026-10-01 — the grid's `onColumnResized` / `onSortChanged`: an operator's width or sort is kept in their saved layout. */
+  onColumnResized: (event: { finished?: boolean; source?: string }) => void
+  onSortChanged: (event: { source?: string }) => void
   /** 2026-10-01 — a column name's group classes (tint, indent, the group's edge); see `sheetGroups.ts`. */
   headerClass: (params: SheetHeaderClassParams) => string[]
   /** The grid's `onDisplayedColumnsChanged` / `onDragStarted` / `onDragStopped`: redraw the header so its colours follow. */
@@ -170,7 +189,12 @@ export interface SheetColumnsApi<TPage> {
   viewColumnCount: (view: SavedGridView<TPage>) => number | null
 }
 
-type Working = { surface: string; record: StoredSheetLayout<WorkingLayoutPayload> | null; layout: ColumnsViewPayload | null; ready: boolean }
+/**
+ * `record` — the person's own layout for this sheet (the same in every business profile). `seed` — while they have none
+ * yet: this profile's old record (or this market's, before 2026-09-27), whose pick and layout open the sheet until the
+ * first write makes them their own.
+ */
+type Working = { surface: string; record: StoredSheetLayout<WorkingLayoutPayload> | null; layout: ColumnsViewPayload | null; ready: boolean; seed?: StoredSheetLayout<WorkingLayoutPayload> | null }
 
 /** A teammate's view or an old shared template: applied and copied, never overwritten. */
 const isOwnView = (view: SavedGridView<unknown>) => view.owned !== false && !view.teamShared && !view.legacyShared
@@ -211,8 +235,6 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   /* R-VT-1 (2026-09-13): a STRUCTURAL column joins the always-columns, so a saved view that predates
      it cannot silently drop it. Derived from the live column set by KIND — see `structuralColumnKeys`. */
   const structural = useMemo(() => structuralColumnKeys(fieldColumns), [fieldColumns])
-  /** The server put this sheet's columns in the sheet groups (`sheetGroups.ts`). */
-  const grouped = useMemo(() => sheetGrouped(fieldColumns), [fieldColumns])
   const alwaysColumns = useMemo(() => alwaysColumnsFor(addressable, structural), [addressable, structural])
   const allColumnKeys = useMemo(() => [...new Set([...alwaysColumns, ...progressKeys, ...orderedKeys])], [alwaysColumns, progressKeys, orderedKeys])
   const gridOrderedKeys = useMemo(() => columns.filter((c) => c.managedBy !== 'progress').map((c) => c.key), [columns])
@@ -286,7 +308,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const recoveryState = recovery?.surface === layoutSurface ? recovery.state : undefined
   const captureGridState = useCallback(() => {
     const api = apiRef.current
-    if (api && !api.isDestroyed()) setRecovery({ surface: layoutSurface, state: pickGridState(api.getState(), SHEET_PERSIST_KEYS) })
+    if (api && !api.isDestroyed()) setRecovery({ surface: layoutSurface, state: pickGridState(api.getState(), SHEET_RECOVERY_KEYS) })
   }, [apiRef, layoutSurface])
 
   /* ── the row filter's narrowing (D1 = A) ──────────────────────────────────────────────────── */
@@ -310,11 +332,16 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       const read = (surface: string) => initial
         ? initialViews.read(surface).then(body => parseWorkingLayout<WorkingLayoutPayload>(body))
         : loadWorkingLayout<WorkingLayoutPayload>(baseUrl, surface)
-      /* Before 2026-09-27 the layout was kept per market. A scope with no record of its own starts from the one this
-         market had; the first pick or save writes the scope's record and leaves the old row as it was. */
-      const { record, layout, error } = await readSheetWorkingLayout(read, layoutSurface, legacyLayoutSurface)
+      /* 2026-10-01 — the person's own layout comes first: the same in every business profile, market, browser and device.
+         When they have none yet for this sheet, this profile's record opens it (or, before 2026-09-27, this market's), and
+         the first write makes it their own; the old rows are left as they were. */
+      const own = await loadUserSheetLayout<WorkingLayoutPayload>(baseUrl, layoutSurface)
+      const fallback = own ? null : await readSheetWorkingLayout(read, layoutSurface, legacyLayoutSurface)
+      const record = own
+      const layout = own ? layoutPart(own.filters) : fallback!.layout
+      const error = own ? null : fallback!.error
       if (scopeRef.current !== scopeKey || sequence !== requestSequence.current) throw new Error('The sheet scope changed. Reopen Customise in the current scope.')
-      setWorking({ surface: layoutSurface, record, layout, ready: true })
+      setWorking({ surface: layoutSurface, record, layout, ready: true, seed: fallback?.record ?? null })
       setLoadState({ surface: layoutSurface, ready: true, error })
       return { record, layout }
     } catch (error) {
@@ -336,10 +363,13 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   }, [layoutSurface, fetchLayout, setWorking])
 
   /**
-   * Rule 2 — write "Current layout": My layout plus the last pick. Writes run one after another, each on the record
-   * the previous one returned; a stale record (another tab saved) is re-read once and the write retried.
+   * Rule 2 — write "Current layout": My layout plus the last pick, and (2026-10-01) the widths, sort and row height on
+   * screen, to the person's own record. Writes run one after another, each on the record the previous one returned; a
+   * stale record (another tab saved) is re-read once and the write retried, so the last change wins. A failure is said.
    */
   const writes = useRef<Promise<unknown>>(Promise.resolve())
+  /** The display on screen (widths, sort, row height), or null before the sheet has landed; set below `captureDisplay`. */
+  const displayRef = useRef<() => ViewDisplay | null>(() => null)
   const writeWorking = useCallback((build: (layout: ColumnsViewPayload | null) => WorkingLayoutPayload, opts: { throwOnError?: boolean } = {}) => {
     const surface = layoutSurface
     const attempt = async (retry: boolean): Promise<void> => {
@@ -349,11 +379,12 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
         return
       }
       try {
-        const stored = await saveWorkingLayout<WorkingLayoutPayload>(baseUrl, surface, build(w.layout), w.record)
+        const display = displayRef.current() ?? viewDisplayOf(w.record?.filters ?? w.seed?.filters)
+        const stored = await saveUserSheetLayout<WorkingLayoutPayload>(baseUrl, surface, { ...build(w.layout), ...display }, w.record)
         if (scopeRef.current === scopeKey && workingRef.current.surface === surface) {
           // The confirmed modern record supersedes any older empty/failed fallback read.
           requestSequence.current += 1
-          setWorking({ surface, record: stored, layout: layoutPart(stored.filters), ready: true })
+          setWorking({ surface, record: stored, layout: layoutPart(stored.filters), ready: true, seed: null })
           setLoadState({ surface, ready: true, error: null })
         }
         if (scopeRef.current === scopeKey) setMemoryError((previous) => (previous?.surface === surface ? null : previous))
@@ -363,7 +394,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
           return attempt(false)
         }
         const message = error instanceof Error ? error.message : 'Could not save your layout'
-        if (scopeRef.current === scopeKey) setMemoryError({ surface, message: `Your view choice was not saved: ${message}` })
+        if (scopeRef.current === scopeKey) setMemoryError({ surface, message: `Your layout was not saved: ${message}` })
         if (opts.throwOnError) throw error
       }
     }
@@ -426,7 +457,8 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
    * variation theme, then the payload's own columns.
    */
   const shownKeys = useCallback((payload: ColumnsViewPayload) => {
-    const applied = withViewRules(payload, specs, preferencesFromLayout(payload, specs), ruleFactsRef.current)
+    const seen = withNewColumnsShown(payload, specs)
+    const applied = withViewRules(seen, specs, preferencesFromLayout(seen, specs), ruleFactsRef.current)
     const own = visibleLayoutKeys(applied, specs)
     const placed = new Set(own)
     const progress = progressShown(payload, progressKeys).filter((k) => !placed.has(k))
@@ -442,8 +474,8 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
    * on a column that has only now arrived must hold; `false` keeps the screen's pins.
    */
   const activate = useCallback((next: ActiveColumns, stored: ColumnsViewPayload, restoreLocks: boolean | 'merge' = true) => {
-    // A layout saved before the current groups keeps its columns and pins, not its old order (`sheetGroups.ts`).
-    const payload = withoutPreGroupingOrder(stored, grouped)
+    // A column this layout has never seen shows in its group; nothing the operator arranged moves (`sheetGroups.ts`).
+    const payload = withNewColumnsShown(stored, specs)
     // The STORED payload is kept (its rules too); what shows is its keys plus what its rules match here today.
     layoutRef.current = payload
     const keys = shownKeys(payload)
@@ -454,7 +486,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     paint(true, !saved || !restoreLocks ? undefined
       : restoreLocks === 'merge' && api && !api.isDestroyed() ? [...new Set([...gridLocks(api), ...saved])] : saved)
     gridState.markDirty()
-  }, [shownKeys, paint, gridState, apiRef, gridLocks, grouped])
+  }, [shownKeys, paint, gridState, apiRef, gridLocks, specs])
   /** An explicit column choice stops a filter's narrowing: the columns follow what was asked for last. */
   const stopNarrowing = useCallback(() => { narrowRef.current = false; setNarrowState(false) }, [])
   const presetPayload = useCallback((preset: GridViewPreset) => columnsViewPayload(resolvePreset(preset, addressable, alwaysColumns).columns.filter((k) => attributeKeys.has(k))), [addressable, alwaysColumns, attributeKeys])
@@ -510,6 +542,35 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       density: densityRef.current,
     }
   }, [apiRef, identityColumn, keyMap, addressableSet])
+  /* ── 2026-10-01 — widths, sort and row height are part of the person's own saved layout ────────────────────────
+     Every change the OPERATOR makes is written there (one write ~0.4 s after the last change, and at once when the page
+     is hidden or closed), whatever view is on; landing applies them last, so a reload shows exactly what was left. */
+  const landedRef = useRef(false)
+  landedRef.current = landed
+  displayRef.current = () => {
+    const api = apiRef.current
+    return landedRef.current && api && !api.isDestroyed() ? captureDisplay() : null
+  }
+  const displayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const writeDisplay = useCallback(() => {
+    if (displayTimer.current) clearTimeout(displayTimer.current)
+    displayTimer.current = null
+    if (scopeRef.current !== scopeKey || !landedRef.current) return
+    void writeWorking((layout) => withPick(layout, pickOfActive(activeRef.current)))
+  }, [writeWorking, scopeKey])
+  const saveDisplaySoon = useCallback(() => {
+    if (displayTimer.current) clearTimeout(displayTimer.current)
+    displayTimer.current = setTimeout(writeDisplay, 400)
+  }, [writeDisplay])
+  useEffect(() => () => { if (displayTimer.current) clearTimeout(displayTimer.current) }, [scopeKey])
+  const onColumnResized = useCallback((event: { finished?: boolean; source?: string }) => {
+    if (event.finished && USER_DISPLAY_SOURCES.has(event.source ?? '')) saveDisplaySoon()
+  }, [saveDisplaySoon])
+  const onSortChanged = useCallback((event: { source?: string }) => {
+    if (USER_DISPLAY_SOURCES.has(event.source ?? '')) saveDisplaySoon()
+  }, [saveDisplaySoon])
+  /** The toolbar's row height: kept in the saved layout too. */
+  const setDensityByOperator = useCallback((next: GridDensityName) => { setDensity(next); saveDisplaySoon() }, [setDensity, saveDisplaySoon])
   const applySaved = useCallback((stored: ColumnsViewPayload, view: SavedGridView<TPage>) => {
     const payload = fieldPayload(stored)
     activate({ kind: 'saved', id: view.id, name: view.name, missing: payload.columns.filter((k) => !knownKeys.has(k)) }, payload)
@@ -547,7 +608,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       return
     }
     const working = workingRef.current
-    const pick = recalledPick(layoutSurface) ?? pickOf(working.record?.filters)
+    const pick = recalledPick(layoutSurface) ?? pickOf(working.record?.filters) ?? pickOf(working.seed?.filters)
     const typeView = productTypeDefaultView(gridState.views, productTypeCode)
     const dv = gridState.defaultView
     const choice = chooseLanding({
@@ -576,9 +637,14 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       activate({ kind: 'all' }, columnsViewPayload(landingKeys), false)
       gridState.markActive(null)
     }
+    // 2026-10-01 — the widths, sort and row height the person left this sheet with win over a view's and this browser's.
+    applyDisplay(viewDisplayOf((working.record ?? working.seed)?.filters))
     setLandedScope(layoutSurface)
     setLandedGrid(api)
-  }, [recoveryState, landedScope, paint, landed, apiRef, gridReady, orderedKeys, landingKeys, gridState, loadState, layoutSurface, toGrid, activate, applySaved, knownKeys, countOf, presetPayload, views.presets, productTypeCode, a.productType])
+    // No record of their own yet: the first write makes what they see now — this profile's layout, this browser's widths —
+    // their own, the same everywhere from then on.
+    if (!working.record) saveDisplaySoon()
+  }, [recoveryState, landedScope, paint, landed, apiRef, gridReady, orderedKeys, landingKeys, gridState, loadState, layoutSurface, toGrid, activate, applySaved, applyDisplay, saveDisplaySoon, knownKeys, countOf, presetPayload, views.presets, productTypeCode, a.productType])
 
   /* The column set moved under a landed sheet. A new FIELD set (another product type, a schema refresh) re-resolves
      the active view; a new GRID set with the same fields (languages switched, progress columns arrived) repaints it. */
@@ -590,6 +656,12 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const last = lastSignature.current
     if (last.field === fieldSignature && last.grid === gridSignature) return
     lastSignature.current = { field: fieldSignature, grid: gridSignature }
+    // 2026-10-01 — a column that arrived after landing (progress, readiness) takes the width the person saved for it.
+    const before = new Set(JSON.parse(last.grid) as string[])
+    const arrived = columns.map((c) => c.key).filter((key) => !before.has(key))
+    const saved = viewDisplayOf((workingRef.current.record ?? workingRef.current.seed)?.filters).columnWidths ?? {}
+    const widths = Object.fromEntries(keyMap.toFields(arrived).flatMap((key) => (saved[key] ? [[key, saved[key]]] : [])))
+    if (Object.keys(widths).length) applyDisplay({ columnWidths: widths })
     if (active.kind === 'all') { activate(active, columnsViewPayload(landingKeys), false); return }
     if (active.kind === 'preset') {
       const preset = views.presets.find((p) => p.id === active.id)
@@ -599,7 +671,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     }
     const payload = layoutRef.current
     if (payload) activate(active.kind === 'saved' ? { ...active, missing: payload.columns.filter((k) => !knownKeys.has(k)) } : { kind: 'custom', count: countOf(payload) }, payload, 'merge')
-  }, [landed, fieldSignature, gridSignature, active, activate, landingKeys, views.presets, presetPayload, knownKeys, countOf])
+  }, [landed, fieldSignature, gridSignature, active, activate, landingKeys, views.presets, presetPayload, knownKeys, countOf, columns, keyMap, applyDisplay])
 
   useEffect(() => {
     if (!landed || !gridState.loaded || active.kind !== 'saved') return
@@ -703,8 +775,10 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const payload = hasMyLayout(layout) ? layout : columnsViewPayload(landingKeys)
     activate(hasMyLayout(layout) ? { kind: 'custom', count: countOf(layout) } : { kind: 'all' }, payload)
     gridState.markActive(null)
+    // What is on screen is what opens next time (2026-10-01: a reload never brings back an older pick).
+    remember(hasMyLayout(layout) ? { kind: 'custom' } : { kind: 'all' })
     return preferencesFromLayout(payload, specs)
-  }, [fetchLayout, gridState, layoutSurface, landingKeys, activate, countOf, specs, scopeKey])
+  }, [fetchLayout, gridState, layoutSurface, landingKeys, activate, countOf, specs, scopeKey, remember])
 
   const describeView = useCallback((view: SavedGridView<TPage>) => {
     if (!isColumnsViewPayload(view.payload)) return view.payload ? { note: 'Saved in an older format — open it to convert' } : { note: 'Holds no columns' }
@@ -740,24 +814,27 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
 
   /**
    * A column dragged by its header is KEPT (2026-09-27: "it should remember always") — saved exactly as Customise's
-   * Save would: into the operator's own view when one is on, else as My layout. Not while a row filter narrows the
-   * columns: that order is the filter's, not a layout's. A burst of moves saves once.
+   * Save would: into the operator's own view when one is on, else as My layout. A burst of moves saves once.
+   * 2026-10-01 (Owner: "whenever I reorder something … the view [is] always saved"): also while a row filter narrows
+   * the columns (the move is placed among the layout's own columns), never dropped because a save is still running (it
+   * waits for it), and written at once when the page is hidden or closed.
    */
-  const moveLive = useRef({ landed, ownActiveView, currentPreferences, savePreferences, updatePreferences, layoutSurface, narrowed: () => narrowedKeys() !== null })
-  moveLive.current = { landed, ownActiveView, currentPreferences, savePreferences, updatePreferences, layoutSurface, narrowed: () => narrowedKeys() !== null }
+  const moveLive = useRef({ landed, ownActiveView, currentPreferences, savePreferences, updatePreferences, layoutSurface })
+  moveLive.current = { landed, ownActiveView, currentPreferences, savePreferences, updatePreferences, layoutSurface }
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const movedKeys = useRef(new Set<string>())
   useEffect(() => () => { if (moveTimer.current) clearTimeout(moveTimer.current); movedKeys.current = new Set() }, [scopeKey])
-  const saveArrangementSoon = useCallback(() => {
-    if (moveTimer.current) clearTimeout(moveTimer.current)
-    moveTimer.current = setTimeout(() => {
-      if (scopeRef.current !== scopeKey) return
+  const runArrangement = useCallback((): void => {
+      if (moveTimer.current) clearTimeout(moveTimer.current)
       moveTimer.current = null
+      if (scopeRef.current !== scopeKey) return
+      // A save still running: try again once it has had time to finish, keeping the moves made so far.
+      if (saving.current) { moveTimer.current = setTimeout(runArrangement, 300); return }
       const live = moveLive.current
       const moved = keyMap.toFields([...movedKeys.current])
       movedKeys.current = new Set()
       const api = apiRef.current
-      if (!live.landed || live.narrowed() || !api || api.isDestroyed()) return
+      if (!live.landed || !api || api.isDestroyed()) return
       /* The Customise rule for a dropped row: a column dropped among another group's columns joins that group, so the
          order it was dropped in is the order it is kept in (groups would otherwise pull it back on save). */
       const onScreen = keyMap.toFields(api.getColumnState().filter((c) => !c.hide).map((c) => c.colId)).filter((k) => knownKeys.has(k))
@@ -769,8 +846,48 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       }, live.currentPreferences())
       void (live.ownActiveView ? live.updatePreferences(live.ownActiveView, value) : live.savePreferences(value))
         .catch((error: unknown) => { if (scopeRef.current === scopeKey) setMemoryError({ surface: live.layoutSurface, message: `Your column order was not saved: ${error instanceof Error ? error.message : String(error)}` }) })
-    }, 400)
   }, [keyMap, apiRef, knownKeys, specs, scopeKey])
+  const saveArrangementSoon = useCallback(() => {
+    if (moveTimer.current) clearTimeout(moveTimer.current)
+    moveTimer.current = setTimeout(runArrangement, 400)
+  }, [runArrangement])
+  /* Leaving the page (or its tab going to the background) writes what is still waiting, so nothing is lost on a reload. */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const flush = () => {
+      if (moveTimer.current) runArrangement()
+      if (displayTimer.current) writeDisplay()
+    }
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush() }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [runArrangement, writeDisplay])
+  /* Another tab changed this layout: coming back to this tab shows the newer one (the last change wins everywhere). */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let checking = false
+    const check = async () => {
+      if (checking || document.visibilityState !== 'visible' || saving.current || moveTimer.current || displayTimer.current) return
+      checking = true
+      try {
+        await writes.current
+        const w = workingRef.current
+        if (!w.ready || w.surface !== layoutSurface || scopeRef.current !== scopeKey) return
+        const own = await loadUserSheetLayout<WorkingLayoutPayload>(baseUrl, layoutSurface)
+        if (!own || own.updatedAt === workingRef.current.record?.updatedAt || scopeRef.current !== scopeKey) return
+        requestSequence.current += 1
+        setWorking({ surface: layoutSurface, record: own, layout: layoutPart(own.filters), ready: true, seed: null })
+        forgetPick(layoutSurface)
+        layoutRef.current = null
+        setLandedScope(null)
+      } catch { /* the next save or reload reads it again */ } finally { checking = false }
+    }
+    const onVisibility = () => { void check() }
+    window.addEventListener('focus', onVisibility)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { window.removeEventListener('focus', onVisibility); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [baseUrl, layoutSurface, scopeKey, setWorking])
   const onColumnMoved = useCallback((event: { finished?: boolean; source?: string; column?: { getColId: () => string } | null }) => {
     if (!event.finished || (event.source !== 'uiColumnMoved' && event.source !== 'uiColumnDragged')) return
     const colId = event.column?.getColId()
@@ -788,12 +905,12 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     activePresetId: active.kind === 'all' ? ALL_VIEW_ID : active.kind === 'preset' ? active.id : null,
     emptyLabel: MY_LAYOUT_LABEL,
     activeViewName: active.kind === 'saved' ? active.name : null,
-    activeCount, ownActiveView, myLayout, applyMyLayout, narrowToMatches, setNarrowToMatches, onColumnMoved, onColumnPinned,
+    activeCount, ownActiveView, myLayout, applyMyLayout, narrowToMatches, setNarrowToMatches, onColumnMoved, onColumnPinned, onColumnResized, onSortChanged,
     headerClass, onDisplayedColumnsChanged: redrawHeaderSoon, onDragStarted: onHeaderDragStarted, onDragStopped: onHeaderDragStopped,
     landed, loadError: loadError ?? (memoryError?.surface === layoutSurface ? memoryError.message : null) ?? gridState.loadError,
     orderedKeys: gridOrderedKeys, preferenceColumns: specs, alwaysColumns, allColumnKeys, gridKeysOf: keyMap.gridKeysOf,
     applyPreset, currentPreferences, currentPayload, savePreferences, savePreferencesAs,
     updatePreferences, reloadSavedPreferences, saveCurrentAs, updateView, describeView, visibleAttributeKeys,
-    density, setDensity, productType, viewColumnCount,
+    density, setDensity: setDensityByOperator, productType, viewColumnCount,
   }
 }
