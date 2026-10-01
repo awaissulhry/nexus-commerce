@@ -12,6 +12,7 @@ import { marketLanguages } from './market-languages.js'
 import { resolveWriteRouting } from './studio-sheet.service.js'
 import { checkForStorage, parseSlotField, withSlotValue } from './sheet-values.js'
 import { writeContent } from './content-write.js'
+import { nestedContentReceipts, recordContentWrite, recordOwnerProof } from './content-version-receipt-capture.js'
 import { DraftListingError, ensureDraftListings } from './draft-listing.service.js'
 import { productWriteRefusal } from '../../lib/product-bulk-error.js'
 import type { SheetColumn } from './sheet-columns.service.js'
@@ -33,7 +34,8 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
   const warnings: Array<{ id: string; field: string; warning: string }> = [...priorWarnings]
   const withWarnings = (rest: { warnings?: typeof warnings }) => { const all = [...warnings, ...(rest.warnings ?? [])]; return all.length ? { warnings: all } : {} }
   // `draft`: a PIN on a coordinate where the product has no listing yet — its draft is started when the write runs.
-  const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number; draft?: true }> = []
+  // `contentVersion`: the content row's version as read here (0 = no row), the before pair's half for a receipt.
+  const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number; contentVersion: number; draft?: true }> = []
   const contexts = input.marketplaceContexts ?? (input.marketplaceContext ? [input.marketplaceContext] : [])
   const { ProductBulkError } = await import('../products/bulk-edit.service.js')
   for (const edit of edits) {
@@ -59,7 +61,7 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       // a channel scope never touches the listing, so it needs none (it resolves from the shared tiers). A pin on the
       // primary listing of a coordinate with no row starts that draft when the write runs (`ensureDraftListings`);
       // version 0 means "I saw no listing", so it is a conflict against a listing that exists.
-      let listing: any = null, listingVersion: number | undefined, draft = false
+      let listing: any = null, listingVersion: number | undefined, draft = false, listingTranslations: Array<{ language: string; version: number }> = []
       if (coordinate && address.tier === 'pin') {
         const listings = await prisma.channelListing.findMany({ where: { productId: product.id, channel: coordinate.channel, marketplace: coordinate.market,
           ...(coordinate.accountId ? { channelConnectionId: coordinate.accountId } : {}), aliasKey: coordinate.aliasId ?? '' }, include: { translations: true } })
@@ -69,6 +71,7 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
         if (listings.length !== 1 && !draft) throw new Error(`${column.label} needs one existing listing and account.`)
         if (!draft) {
           listingVersion = listings[0].version
+          listingTranslations = listings[0].translations
           listing = contentListing(product, listings[0], coordinate, await marketLanguages(coordinate.channel, coordinate.market))
         }
       }
@@ -90,7 +93,9 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       if (checked.ok === false) throw new Error(checked.error)
       const value = checked.value
       for (const found of checked.findings) warnings.push({ id: change.id, field: change.field, warning: found.message })
-      plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version, ...(draft ? { draft: true as const } : {}) })
+      const contentVersion = address.tier === 'pin' ? listingTranslations.find(row => row.language === address.language)?.version ?? 0
+        : address.tier === 'language' ? product.translations.find(row => row.language === address.language)?.version ?? 0 : 0
+      plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version, contentVersion, ...(draft ? { draft: true as const } : {}) })
     } catch (error) {
       if (error instanceof ProductBulkError) throw error
       errors.push({ id: change.id, field: change.field, error: error instanceof Error ? error.message : String(error) })
@@ -106,7 +111,9 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     return { ...rest, success: updated > 0, updated, errors: [...errors, ...(rest.errors ?? [])], ...withWarnings(rest) }
   }
   if (input.dryRun) return { success: true, dryRun: true, updated: 0, validated: plans.length, errors: perRow ? errors : [], ...withWarnings({}) }
-  return inDatabaseTransaction(prisma, async () => {
+  // A formula's own write inside a sheet operation: its content writes count for the operation's receipts only if it succeeds.
+  const nested = !!currentFormulaWrite(context.formulaWriteToken)
+  const write = () => inDatabaseTransaction(prisma, async () => {
     const groups = new Map<string, typeof plans>()
     for (const plan of plans) { const key = `${plan.edit.change.id}:${JSON.stringify(plan.address)}`; groups.set(key, [...(groups.get(key) ?? []), plan]) }
     const ownerVersions = new Map<string, () => Promise<number>>()
@@ -157,6 +164,19 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       }
       const written = await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
         expectedVersion: guardVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined })
+      // Qualified receipts (`content-version-receipts.ts`): the content row this group actually wrote (a byte-identical
+      // language write writes nothing) and the pair it held just before — its owner as this group's CAS saw it, its
+      // content as read above. A draft's row did not exist for any reader. The caller's own token, when it guarded this
+      // write, also proves that owner's version at the start of the unit (never a continuation or a formula's write).
+      if (!first.draft && first.address.tier !== 'source' && 'version' in written && written.version !== first.contentVersion) {
+        const language = (written as { language?: string }).language ?? first.address.language
+        recordContentWrite(first.address.tier === 'language' ? { tier: 'language', productId: change.id, language }
+          : { tier: 'pin', productId: change.id, listingId: first.listingId!, language },
+        { ownerVersion: continued ?? first.ownerVersion, contentVersion: first.contentVersion })
+      }
+      if (!nested && !first.draft && continued === undefined && input.expectedVersion !== undefined && guardVersion === input.expectedVersion) {
+        recordOwnerProof(first.address.tier === 'pin' ? { kind: 'listing', id: first.listingId! } : { kind: 'product', id: change.id }, input.expectedVersion)
+      }
       // Only a successful canonical pin write grants an own continuation. Keep the first CAS origin across groups.
       if (familyOperation && first.address.tier === 'pin' && first.listingId && !first.draft && !pinOrigins.has(ownerKey)) {
         pinOrigins.set(ownerKey, { listingId: first.listingId, before: guardVersion })
@@ -251,4 +271,5 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       ...(contentVersions.length ? { contentVersions } : {}), ...(familyReply.length ? { familyListings: familyReply.map(finalListing) } : {}),
       currentVersion: currentVersion ?? rest.currentVersion, versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [], ...withWarnings(rest) }
   })
+  return nested ? nestedContentReceipts(write) : write()
 }

@@ -5,6 +5,7 @@
 
 import { createOutboundRow } from './outbound-rows.js'
 import { produceReadiness } from './pim/readiness-index.service.js'
+import { recordContentWrite } from './pim/content-version-receipt-capture.js'
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -144,6 +145,8 @@ export class MasterContentService {
         if (pin) await tx.channelListingTranslation.update({ where: { id: pin.id }, data: { follows, version: { increment: 1 } } })
         else await tx.channelListingTranslation.create({ data: { channelListingId: listing.id, language, follows, version: 1 } })
         await tx.channelListing.update({ where: { id: listing.id }, data: { version: { increment: 1 }, lastSyncStatus: 'PENDING', lastSyncedAt: null } })
+        // Qualified receipts: this following listing's own content row moved, from the pair read above.
+        recordContentWrite({ tier: 'pin', productId: listing.productId, listingId: listing.id, language }, { ownerVersion: listing.version, contentVersion: pin?.version ?? 0 })
         cascadedListingIds.push(listing.id)
         // The existing content sync queue consumes a language-qualified payload.
         // Caller transactions leave scheduling to the drain after commit.

@@ -149,6 +149,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'transaction commit conflict (real adapter error, fresh snapshot and committed effects)', file: 'src/lib/database-context-postgres.vitest.test.ts', expect: 1 },
   { name: 'one sheet operation = one transaction (250 rows, one readiness rebuild, row savepoints, RLS, two operations at once)', file: 'src/services/products/bulk-save-postgres.vitest.test.ts', expect: 5 },
   { name: 'platform batch saves (SQL budget, per-unit receipts, rollback, content, formulas, runtime RLS and same-token race)', file: 'src/services/products/bulk-save-platform.vitest.test.ts', expect: 14 },
+  { name: 'qualified content receipts (final pairs after the real producer, producer failure, restarted attempts, a Name B race, unit rollback)', file: 'src/services/pim/content-version-receipts-postgres.vitest.test.ts', expect: 5 },
   { name: 'product cache batch writes (exact values, parents, deletion, full rollback, runtime RLS and retry races)', file: 'src/services/product-read-cache-batch.vitest.test.ts', expect: 7 },
   { name: 'category tree races (moves, creates, memberships and workspace commands serialize on the tree lock)', file: 'src/services/category-tree-concurrency.vitest.test.ts', expect: 5 },
   { name: 'Amazon Ads drift closes on evidence, per profile (structural reconcile under row security)', file: 'src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts', expect: 1 },
