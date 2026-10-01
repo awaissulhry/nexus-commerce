@@ -20,6 +20,7 @@ import { computeAvailableToPublish } from '../services/available-to-publish.serv
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
 import { applyChannelFollows, isFollowableField, FOLLOWABLE_FIELDS } from '../services/pim/channel-follows.service.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
 import { categoryForListing, resolveCategoriesForProducts, type ResolvedCategory } from '../services/pim/mapping/category-mapping.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
@@ -550,8 +551,10 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
   // and ignores `price: null`, so nothing could put a field back under the master. That made
   // breaking inheritance a one-way door, which is why the sheet showed divergence read-only.
   //
-  // This flips flags and NOTHING ELSE: no channel call, no publish. The live listing changes only
-  // on the next publish, and the response says so, because "now follows master" and "the channel
+  // A content field's flag is a flag and nothing else: the live listing changes on the next publish.
+  // The PRICE's flag (2026-10-01) goes through the ONE channel price door: following again recomputes
+  // the price by the listing's rule and queues it for the channel (30 s to undo), or is refused by name
+  // with nothing written. Each result says what happened, because "now follows master" and "the channel
   // now shows the master's value" are different facts and conflating them would be a lie.
   //
   // Body: { updates: [{ marketplace, channel?, field, follows }] }
@@ -573,13 +576,13 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
     }
 
     try {
-      const results = await applyChannelFollows(id, updates as Parameters<typeof applyChannelFollows>[1])
+      const results = await applyChannelFollows(id, updates as Parameters<typeof applyChannelFollows>[1], bulkActorOf(request) ?? 'master-sheet')
 
       return reply.send({
         results,
-        // The distinction that matters: the flag decides what the NEXT publish sends. Nothing has
-        // been sent to a channel by this call.
-        note: 'Flags only — nothing was published. The live listing changes on the next publish.',
+        // The distinction that matters, said per result: a price that follows the master again is queued for the
+        // channel now (`queued`), or kept and explained (`notSent`); a content flag changes the NEXT publish.
+        note: 'A price that follows the master again is recomputed by its rule and queued for the channel (30 s to undo). Content fields change on the next publish.',
       })
     } catch (error: any) {
       request.log?.error({ err: error, id }, '[products/channel-follows] failed')

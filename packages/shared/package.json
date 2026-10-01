@@ -42,6 +42,10 @@
       "types": "./dist/push-lock.d.ts",
       "default": "./dist/push-lock.js"
     },
+    "./listing-price": {
+      "types": "./dist/listing-price.d.ts",
+      "default": "./dist/listing-price.js"
+    },
     "./cell-provenance": {
       "types": "./dist/cell-provenance.d.ts",
       "default": "./dist/cell-provenance.js"

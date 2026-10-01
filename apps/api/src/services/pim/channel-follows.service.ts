@@ -8,9 +8,13 @@
  * accident and had no way back — which is why MS.6 shipped read-only.
  *
  * What flipping a flag does, precisely, because the distinction matters:
- *   `follows: true`  — the MASTER becomes the source for that field again. The channel's own value
- *                      is left in place (see below); nothing is sent anywhere. The live listing only
- *                      changes on the next publish.
+ *   `follows: true`  — the MASTER becomes the source for that field again. For a content field the
+ *                      channel's own value is left in place (see below) and nothing is sent: the live
+ *                      listing changes on the next publish. For the PRICE (2026-10-01) the flag goes
+ *                      through the ONE channel price door: the price is recomputed by the listing's rule
+ *                      and queued for the channel now (30 s to undo), or refused by name — outside the
+ *                      product's floor or ceiling — with nothing written; a market in another currency
+ *                      keeps its price and the result says why (`notSent`).
  *   `follows: false` — the channel keeps whatever it is carrying, and the master stops driving it.
  *
  * **The channel's value is never destroyed.** For price/quantity/title/description the pinned value
@@ -81,6 +85,10 @@ export interface FollowUpdateResult {
   reason?: string
   follows?: boolean
   stillPinned?: FollowableField[]
+  /** Price only: the flag was saved but no price was sent, and why (another currency, paused, Match Amazon…). */
+  notSent?: string
+  /** Price only: a PRICE_UPDATE row was queued for the channel. */
+  queued?: boolean
 }
 
 /**
@@ -96,8 +104,10 @@ export interface FollowUpdateResult {
 export async function applyChannelFollows(
   productId: string,
   updates: FollowUpdateRequest[],
+  actor = 'master-sheet',
 ): Promise<FollowUpdateResult[]> {
   const { default: prisma } = await import('../../db.js')
+  const { writeChannelPrices } = await import('./channel-price-write.service.js')
   const results: FollowUpdateResult[] = []
 
   for (const u of updates) {
@@ -113,13 +123,37 @@ export async function applyChannelFollows(
       continue
     }
 
+    const FLAGS = {
+      id: true, followMasterTitle: true, followMasterDescription: true, followMasterPrice: true,
+      followMasterQuantity: true, followMasterImages: true, followMasterBulletPoints: true,
+    } as const
+    if (u.field === 'price') {
+      // The price's flag is the price door's follower mode: the same columns `followUpdateData('price', …)` names,
+      // and the price it gives is sent. A coordinate names no version, so the door is told why it has none.
+      const written = await writeChannelPrices({
+        targets: [{ listingId: listing.id, follow: u.follows, unguardedReason: 'channel-follows' }],
+        actor, source: 'MANUAL_OVERRIDE', reason: 'Master sheet: price follows',
+      })
+      const outcome = written.results[0]
+      if (!outcome || outcome.outcome === 'refused' || outcome.outcome === 'conflict') {
+        results.push({ marketplace, channel, field: u.field, ok: false, reason: outcome?.reason ?? 'The price write refused this listing.' })
+        continue
+      }
+      const flags = await prisma.channelListing.findUnique({ where: { id: listing.id }, select: FLAGS })
+      results.push({
+        marketplace, channel, field: u.field, ok: true,
+        follows: u.follows,
+        stillPinned: pinnedFields((flags ?? {}) as unknown as Record<string, unknown>),
+        queued: outcome.queueId != null,
+        ...(outcome.notSent ? { notSent: outcome.notSent } : {}),
+      })
+      continue
+    }
+
     const updated = await prisma.channelListing.update({
       where: { id: listing.id },
       data: followUpdateData(u.field, u.follows),
-      select: {
-        id: true, followMasterTitle: true, followMasterDescription: true, followMasterPrice: true,
-        followMasterQuantity: true, followMasterImages: true, followMasterBulletPoints: true,
-      },
+      select: FLAGS,
     })
 
     results.push({

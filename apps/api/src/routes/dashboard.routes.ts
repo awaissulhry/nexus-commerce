@@ -22,6 +22,9 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import { createOutboundRow } from '../services/outbound-rows.js'
+import { writeChannelPrices } from '../services/pim/channel-price-write.service.js'
+import { bulkActorOf } from '../services/bulk-action-actor.js'
+import { followerListingPrice } from '@nexus/shared/listing-price'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
@@ -3194,10 +3197,12 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   // pushes immediately.
   //
   // Body: { kind: 'quantity' | 'price' }. The quantity case sets
-  // ChannelListing.quantity = masterQuantity - stockBuffer; the price
-  // case sets price = masterPrice when pricingRule=FIXED. Other rules
-  // are intentional divergence (PERCENT_OF_MASTER, MATCH_AMAZON) and
-  // get a 409.
+  // ChannelListing.quantity = masterQuantity - stockBuffer. The price case
+  // (2026-10-01) goes through the ONE channel price door's follower mode:
+  // the price is recomputed by the listing's rule (FIXED or
+  // PERCENT_OF_MASTER) and queued with the door's 30 s hold, or refused by
+  // name (outside the product's floor/ceiling, another currency). A pinned
+  // listing or MATCH_AMAZON has no rule price and gets a 409.
   fastify.post<{
     Params: { id: string }
     Body: { kind?: 'quantity' | 'price' }
@@ -3285,44 +3290,24 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             'Listing has followMasterPrice=false; price divergence is intentional.',
         })
       }
-      if (listing.pricingRule !== 'FIXED') {
+      if (listing.pricingRule === 'MATCH_AMAZON') {
         return reply.code(409).send({
-          error: `pricingRule=${listing.pricingRule} intentionally diverges from master; only FIXED is a literal-follow rule.`,
+          error: 'pricingRule=MATCH_AMAZON takes its price from Amazon, not from the master; there is no master price to resync to.',
         })
       }
-      if (listing.masterPrice == null) {
-        return reply.code(409).send({
-          error: 'Master price not snapshotted yet; cannot resync.',
-        })
-      }
-      const newPrice = Number(listing.masterPrice)
-      const priceRow = await prisma.$transaction(async (tx) => {
-        await tx.channelListing.update({
-          where: { id },
-          data: {
-            price: newPrice.toFixed(2),
-            lastSyncStatus: 'PENDING',
-            version: { increment: 1 },
-          },
-        })
-        return createOutboundRow(tx, {
-          select: { id: true, productId: true, syncType: true, holdUntil: true },
-          data: {
-            productId: listing.productId,
-            channelListingId: listing.id,
-            targetChannel: listing.channel as any,
-            targetRegion: listing.region,
-            syncStatus: 'PENDING' as any,
-            syncType: 'PRICE_UPDATE',
-            holdUntil: null,
-            externalListingId: listing.externalListingId,
-            payload: { price: newPrice } as any,
-          },
-        })
+      const written = await writeChannelPrices({
+        targets: [{ listingId: listing.id, follow: true, unguardedReason: 'dashboard-drift-resync' }],
+        actor: bulkActorOf(request) ?? 'dashboard-resync', source: 'MANUAL_OVERRIDE', reason: 'Drift resync',
       })
-      // RT.2 — instant lane, fired post-commit.
-      void fireOutboundJobs([priceRow], { source: 'DASHBOARD_RESYNC' })
-      return reply.send({ success: true, kind, newValue: newPrice })
+      const outcome = written.results[0]
+      if (!outcome || outcome.outcome === 'refused' || outcome.outcome === 'conflict') {
+        return reply.code(409).send({ error: outcome?.reason ?? 'The price write refused this listing.' })
+      }
+      const after = await prisma.channelListing.findUnique({ where: { id }, select: { price: true } })
+      return reply.send({
+        success: true, kind, newValue: after?.price == null ? null : Number(after.price),
+        queued: outcome.queueId != null, ...(outcome.notSent ? { notSent: outcome.notSent } : {}),
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       fastify.log.error({ err }, '[dashboard/stock-drift/:id/resync] failed')
@@ -3339,8 +3324,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   // Two drift classes:
   //   1. quantityDrift: followMasterQuantity=true AND
   //      |masterQuantity - quantity| > 0
-  //   2. priceDrift: followMasterPrice=true AND pricingRule=FIXED AND
-  //      |masterPrice - price| > 0.01
+  //   2. priceDrift: followMasterPrice=true AND |price - the rule's price| > 0.01, the rule's price computed from
+  //      masterPrice by the one function the cascade and the price door use (`@nexus/shared/listing-price`):
+  //      FIXED = the master, PERCENT_OF_MASTER = master × (1 + percent/100). MATCH_AMAZON has no master price.
   //
   // Returns up to 100 of each, sorted by largest absolute drift first.
   fastify.get<{
@@ -3370,6 +3356,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         masterPrice: string | null
         price: string | null
         priceDelta: number | null
+        /** Price rows: what the listing's rule gives from masterPrice; `priceDelta` = price − this. */
+        expectedPrice?: number | null
+        priceAdjustmentPercent?: string | null
         followMasterQuantity: boolean
         followMasterPrice: boolean
         pricingRule: string | null
@@ -3409,10 +3398,11 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         LIMIT 100
       `
 
-      // Price drift: only relevant when pricingRule=FIXED (the rule
-      // explicitly says "follow master price, no transformation").
-      // PERCENT_OF_MASTER and MATCH_AMAZON intentionally diverge.
-      const priceDriftRows = await prisma.$queryRaw<DriftRow[]>`
+      // Price drift: a following listing whose price is not its RULE's price. The SQL only narrows (a FIXED listing
+      // within the threshold of the master is never drift); the rule's price decides, computed by the one function
+      // the cascade and the price door use — never a second copy of the maths in SQL. MATCH_AMAZON has no master
+      // price to drift from.
+      const priceCandidates = await prisma.$queryRaw<DriftRow[]>`
         SELECT
           cl.id,
           cl.channel,
@@ -3425,7 +3415,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           NULL::int AS "quantityDelta",
           cl."masterPrice"::text AS "masterPrice",
           cl.price::text AS price,
-          (COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0))::numeric AS "priceDelta",
+          NULL::numeric AS "priceDelta",
+          cl."priceAdjustmentPercent"::text AS "priceAdjustmentPercent",
           cl."followMasterQuantity",
           cl."followMasterPrice",
           cl."pricingRule",
@@ -3435,13 +3426,18 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         FROM "ChannelListing" cl
         JOIN "Product" p ON p.id = cl."productId"
         WHERE cl."followMasterPrice" = true
-          AND cl."pricingRule" = 'FIXED'
+          AND cl."pricingRule" <> 'MATCH_AMAZON'
           AND cl."masterPrice" IS NOT NULL
           AND cl.price IS NOT NULL
-          AND ABS(COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0)) > ${priceThreshold}
-        ORDER BY ABS(COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0)) DESC
-        LIMIT 100
+          AND (cl."pricingRule" = 'PERCENT_OF_MASTER' OR ABS(COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0)) > ${priceThreshold})
       `
+      const priceDrifts = priceCandidates.flatMap((row) => {
+        const expectedPrice = followerListingPrice(row.masterPrice, row.pricingRule, row.priceAdjustmentPercent)
+        if (expectedPrice === null) return []
+        const priceDelta = Math.round((Number(row.price) - expectedPrice) * 100) / 100
+        return Math.abs(priceDelta) > priceThreshold ? [{ ...row, expectedPrice, priceDelta }] : []
+      }).sort((a, b) => Math.abs(b.priceDelta) - Math.abs(a.priceDelta))
+      const priceDriftRows = priceDrifts.slice(0, 100)
 
       // Total counts (unbounded by limit) for the headline KPIs.
       const [qtyTotalRow] = await prisma.$queryRaw<Array<{ c: bigint }>>`
@@ -3451,14 +3447,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           AND cl.quantity IS NOT NULL
           AND ABS(COALESCE(cl.quantity, 0) - COALESCE(cl."masterQuantity", 0)) > ${qtyThreshold}
       `
-      const [priceTotalRow] = await prisma.$queryRaw<Array<{ c: bigint }>>`
-        SELECT COUNT(*)::bigint AS c FROM "ChannelListing" cl
-        WHERE cl."followMasterPrice" = true
-          AND cl."pricingRule" = 'FIXED'
-          AND cl."masterPrice" IS NOT NULL
-          AND cl.price IS NOT NULL
-          AND ABS(COALESCE(cl.price, 0) - COALESCE(cl."masterPrice", 0)) > ${priceThreshold}
-      `
+      const priceTotalRow = { c: BigInt(priceDrifts.length) }
 
       return {
         quantityDrift: {

@@ -29,6 +29,7 @@ import { listActiveConnections, tryResolveConnection } from './connection-resolv
 import { assertPushAllowed } from '@nexus/shared/push-lock';
 // The ONE channel price write: a bulk price override goes through it like every other channel price edit.
 import { writeChannelPrices } from './pim/channel-price-write.service.js';
+import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULES, type PricingRuleName } from '@nexus/shared/listing-price';
 import { activeDatabaseTransaction, inDatabaseTransaction } from '../lib/database-context.js';
 import { bulkActorNames } from './bulk-action-actor.js';
 // The quantity and buffer primitives the Studio matrix and Sync Control use (the single-listing edit's path).
@@ -299,13 +300,17 @@ export interface ConflictingJob {
  *   - `buffer` → the stock-buffer primitive (`setStockBuffer`), as the matrix's buffer cell.
  *   - `isPublished` is refused, as the single-listing edit refuses it (`PATCH /listings/:id`): a local flag cannot
  *     confirm a marketplace change; publishing and withdrawing go through the listing channel workflow.
- *   - `columns` — the content follow flags and the pricing rule — are written as before and queue nothing. The
- *     single-listing edit of the pricing rule queues nothing either (reported, not guessed at).
+ *   - `rule` — the pricing rule and the adjustment percent — goes through the same door (its follower mode, 2026-10-01):
+ *     written in the price's compare-and-set, and a following listing's price is recomputed by the new rule and sent,
+ *     as the single-listing edit now does. Before, they were plain columns and nothing was sent.
+ *   - `columns` — the content follow flags — are written as before and queue nothing.
  */
 /** `follow: true` rejoins the stock pool; `follow: false` fixes it — at `value` when given, else at the number it shows now. */
 export type OverrideQuantity = { follow: boolean; value?: number };
 export interface MarketplaceOverridePlan {
   price?: number | null;
+  /** The pricing rule (upper case) and/or the adjustment percent, for the price door's follower mode. */
+  rule?: { pricingRule?: PricingRuleName; priceAdjustmentPercent?: number };
   quantity?: OverrideQuantity;
   buffer?: number;
   columns: Prisma.ChannelListingUpdateInput;
@@ -334,7 +339,6 @@ const OVERRIDE_FOLLOW_KEYS = [
   'followMasterImages',
   'followMasterBulletPoints',
 ] as const;
-const OVERRIDE_PRICING_RULES = ['FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER'] as const;
 /** Every field an override payload may carry (`isPublished` is known, and refused by its own sentence). */
 const OVERRIDE_FIELDS = [
   'priceOverride', 'followMasterPrice', 'quantityOverride', 'followMasterQuantity', 'stockBuffer',
@@ -425,26 +429,29 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
     if (typeof payload[k] !== 'boolean') throw new BulkActionInputError(`${k} must be true or false.`);
     (columns as Record<string, unknown>)[k] = payload[k];
   }
+  // The pricing rule and percent: checked by the functions the price door checks with (a rule in any case, stored upper
+  // case; a percent with at most 2 decimals, above -100 and within the column), then sent through the door.
+  let rule: MarketplaceOverridePlan['rule'];
   if ('pricingRule' in payload) {
-    if (!(OVERRIDE_PRICING_RULES as readonly string[]).includes(payload.pricingRule)) {
-      throw new BulkActionInputError(`pricingRule must be one of ${OVERRIDE_PRICING_RULES.join(', ')}.`);
-    }
-    columns.pricingRule = payload.pricingRule as Prisma.ChannelListingUpdateInput['pricingRule'];
+    const name = normalisePricingRule(payload.pricingRule);
+    if (!name) throw new BulkActionInputError(`pricingRule must be one of ${PRICING_RULES.join(', ')}.`);
+    rule = { ...rule, pricingRule: name };
   }
   if ('priceAdjustmentPercent' in payload) {
-    if (typeof payload.priceAdjustmentPercent !== 'number' || !Number.isFinite(payload.priceAdjustmentPercent)) {
-      throw new BulkActionInputError('priceAdjustmentPercent must be a number.');
-    }
-    columns.priceAdjustmentPercent = payload.priceAdjustmentPercent.toFixed(2);
+    if (typeof payload.priceAdjustmentPercent !== 'number') throw new BulkActionInputError('priceAdjustmentPercent must be a number.');
+    const problem = adjustmentPercentProblem(payload.priceAdjustmentPercent);
+    if (problem) throw new BulkActionInputError(problem);
+    rule = { ...rule, priceAdjustmentPercent: payload.priceAdjustmentPercent };
   }
 
-  if (price === undefined && quantity === undefined && buffer === undefined && Object.keys(columns).length === 0) {
+  if (price === undefined && rule === undefined && quantity === undefined && buffer === undefined && Object.keys(columns).length === 0) {
     throw new BulkActionInputError(
       'Invalid MARKETPLACE_OVERRIDE_UPDATE payload: at least one override field required',
     );
   }
   return {
     ...(price !== undefined ? { price } : {}),
+    ...(rule !== undefined ? { rule } : {}),
     ...(quantity !== undefined ? { quantity } : {}),
     ...(buffer !== undefined ? { buffer } : {}),
     columns,
@@ -2065,6 +2072,16 @@ export class BulkActionService {
               : FOLLOWS;
           newValue.price = plan.price === null ? FOLLOWS : Math.round(plan.price * 100) / 100;
         }
+        // The rule and percent: what the door will be asked for. A following listing's price is recomputed by them
+        // (or refused by name) when the job runs, and the job's items say which.
+        if (plan.rule?.pricingRule !== undefined) {
+          currentValue.pricingRule = listing.pricingRule ?? null;
+          newValue.pricingRule = plan.rule.pricingRule;
+        }
+        if (plan.rule?.priceAdjustmentPercent !== undefined) {
+          currentValue.priceAdjustmentPercent = listing.priceAdjustmentPercent == null ? null : Number(listing.priceAdjustmentPercent);
+          newValue.priceAdjustmentPercent = plan.rule.priceAdjustmentPercent;
+        }
         // Quantity and buffer: what the follow/pin and buffer primitives will be asked for. Whether a row is FBA
         // (refused), an Amazon EU market outside the job's scope (refused) or already so (a no-op) is decided when
         // the job runs, and the job's items say which.
@@ -3322,6 +3339,10 @@ export class BulkActionService {
    *     FBA is never touched (refused by name); an Amazon EU quantity is one number for every EU market, so it
    *     changes the SKU's whole EU group at once, and only when the job holds every row of that group.
    *
+   *   - the pricing rule and percent through the same door's follower mode (2026-10-01): written in the price's
+   *     compare-and-set; a following listing's price is recomputed by them and sent, or refused by name (outside the
+   *     product's floor or ceiling) with nothing written. Before, they were plain columns and nothing was sent.
+   *
    * Every refusal is decided BEFORE anything is written. The price and the other columns then land in one
    * transaction (the queue row is sent after the commit); the quantity and buffer follow through their primitives'
    * own transactions. The price's compare-and-set is against the listing as this job read it (the matrix verb's
@@ -3347,14 +3368,14 @@ export class BulkActionService {
       })
 
     let changed = false
-    if (plan.price !== undefined) {
-      const price = plan.price
+    if (plan.price !== undefined || plan.rule !== undefined) {
       const seen = ownPriceAsRead(item)
       changed = await inDatabaseTransaction(this.prisma, async () => {
         const written = await writeChannelPrices({
           targets: [{
             listingId: item.id,
-            price,
+            ...(plan.price !== undefined ? { price: plan.price } : {}),
+            ...(plan.rule !== undefined ? { rule: plan.rule } : {}),
             expectedVersion: item.version,
             ...(seen !== undefined ? { expectedPrice: seen } : {}),
           }],

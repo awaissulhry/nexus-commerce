@@ -77,14 +77,19 @@ import prisma from '../db.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { masterCurrency } from './fx-rate.service.js'
-import { marketCurrency, type MarketCurrencyRow } from './pim/market-currency.js'
-import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { type MarketCurrencyRow } from './pim/market-currency.js'
+// The follower rules the channel price door applies too — one module, so the cascade and the door cannot drift.
+import {
+  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, holdsCascadedPrice, listingMarketCurrency,
+  logMasterCurrencyRefusals, type MasterCurrencyRefusal,
+} from './pim/follower-price.js'
+export { computeListingPrice, holdsCascadedPrice }
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
 // should reach channels within ~1 minute. The route layer debounces
 // rapid consecutive edits before calling this service.
 // Exported so a surface that states the hold (a preview, a note) reads it from here rather than retyping it.
-export const DEFAULT_HOLD_MS = 30 * 1000
+export const DEFAULT_HOLD_MS = FOLLOWER_PRICE_HOLD_MS
 
 export interface MasterPriceUpdateContext {
   /** Who initiated the change. Surfaces in AuditLog.userId; null for system writes. */
@@ -118,7 +123,7 @@ export interface MasterPriceUpdateResult {
   /** OutboundSyncQueue row IDs enqueued for marketplace push. */
   queuedSyncIds: string[]
   /** Listings NOT sent the master price because their market's currency is not the master currency (null = not configured). */
-  currencyRefused: Array<{ listingId: string; channel: string; marketplace: string; currency: string | null; masterCurrency: string }>
+  currencyRefused: MasterCurrencyRefusal[]
   /** AuditLog row id. */
   auditLogId: string | null
 }
@@ -137,37 +142,6 @@ interface ChannelListingForCascade {
   syncPaused: boolean
   listingStatus: string | null
   isPublished: boolean
-}
-
-/**
- * Whether a cascaded price stays in Nexus instead of being queued for the channel: a paused listing (an operator's
- * pause, or a draft kept inert by its pause) and a still-draft (`isStillDraftListing`), paused or not. A draft started
- * before drafts were born paused is not paused, and sending it a price would write to the channel before Publish.
- * A DRAFT row with a channel id has reached the channel, so it is not a still-draft and is queued.
- */
-export function holdsCascadedPrice(listing: Pick<ChannelListingForCascade, 'syncPaused' | 'listingStatus' | 'isPublished' | 'externalListingId'>): boolean {
-  return listing.syncPaused || isStillDraftListing(listing)
-}
-
-/**
- * Compute what a ChannelListing's `price` should become given a new master price.
- * Returns null when the price should NOT be touched (only the masterPrice snapshot
- * updates). Pure function — no side effects, easy to unit-test in isolation.
- */
-export function computeListingPrice(
-  newMasterPrice: number,
-  rule: ChannelListingForCascade['pricingRule'],
-  followMasterPrice: boolean,
-  adjustmentPercent: Prisma.Decimal | null,
-): number | null {
-  if (!followMasterPrice) return null
-  if (rule === 'MATCH_AMAZON') return null
-  if (rule === 'PERCENT_OF_MASTER') {
-    const adj = adjustmentPercent != null ? Number(adjustmentPercent) : 0
-    return roundCurrency(newMasterPrice * (1 + adj / 100))
-  }
-  // FIXED + followMasterPrice=true → match master.
-  return roundCurrency(newMasterPrice)
 }
 
 function roundCurrency(value: number): number {
@@ -268,7 +242,7 @@ export class MasterPriceService {
       /** The listing market's configured currency, or null (not configured → never the master currency). */
       const currencyOf = async (listing: ChannelListingForCascade): Promise<string | null> => {
         currencyRows ??= await tx.marketplace.findMany({ select: { channel: true, code: true, currency: true } }) as MarketCurrencyRow[]
-        try { return marketCurrency(listing.channel, listing.marketplace, currencyRows) } catch { return null }
+        return listingMarketCurrency(listing, currencyRows)
       }
       const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
       const holdUntil =
@@ -320,7 +294,7 @@ export class MasterPriceService {
             syncType: 'PRICE_UPDATE',
             holdUntil,
             externalListingId: listing.externalListingId,
-            payload: {
+            payload: followerPricePayload({
               source: 'MASTER_PRICE_CHANGE',
               productId,
               productSku: product.sku,
@@ -331,13 +305,10 @@ export class MasterPriceService {
               masterPrice: rounded,
               oldMasterPrice: oldBasePrice,
               pricingRule: listing.pricingRule,
-              priceAdjustmentPercent:
-                listing.priceAdjustmentPercent != null
-                  ? Number(listing.priceAdjustmentPercent)
-                  : null,
+              priceAdjustmentPercent: listing.priceAdjustmentPercent,
               reason: ctx.reason ?? null,
               idempotencyKey: ctx.idempotencyKey ?? null,
-            },
+            }) as Prisma.InputJsonValue,
           })
         } else {
           // Snapshot-only path: masterPrice tracks the new master so the
@@ -458,22 +429,7 @@ export class MasterPriceService {
     // live in the result and the audit row, which commit or roll back with it). Best effort: never undoes the edit.
     if (result.currencyRefused.length > 0) {
       logger.warn('MasterPriceService.update: master price not sent to a different-currency market', { productId, refused: result.currencyRefused })
-      if (!ctx.tx) {
-        const { syncHealthService } = await import('./sync-health.service.js')
-        for (const refusal of result.currencyRefused) {
-          const where = `${refusal.channel} ${refusal.marketplace}`
-          await syncHealthService.logConflict({
-            channel: refusal.channel,
-            conflictType: 'MASTER_PRICE_CURRENCY_REFUSED',
-            message: refusal.currency
-              ? `The master price ${refusal.masterCurrency} ${result.newBasePrice.toFixed(2)} was not sent to ${where}: that market sells in ${refusal.currency}. Set this listing's own ${refusal.currency} price. Nothing was queued.`
-              : `The master price ${refusal.masterCurrency} ${result.newBasePrice.toFixed(2)} was not sent to ${where}: no currency is configured for that market. Nothing was queued.`,
-            productId,
-            localData: { masterPrice: result.newBasePrice, masterCurrency: refusal.masterCurrency },
-            remoteData: { listingId: refusal.listingId, marketplace: refusal.marketplace, marketCurrency: refusal.currency },
-          }).catch(() => { /* observability best-effort — the refusal already holds */ })
-        }
-      }
+      if (!ctx.tx) await logMasterCurrencyRefusals(productId, result.newBasePrice, result.currencyRefused)
     }
 
     if (result.changed) {

@@ -65,7 +65,10 @@ it.each([false, true])('cleans a dirty reset when already following = %s; a clea
   const result = await reset(listing.version)
   const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
   expect(result.results[0]).toMatchObject({ outcome: 'applied', guarded: true, version: listing.version + 1 })
-  expect(stored).toMatchObject({ price: null, priceOverride: null, followMasterPrice: true, overrideData: { unrelated: 'keep' } })
+  // 2026-10-01 — a hand-back is the door's follower mode: it STORES the price it sends (the rule's price from the
+  // master, 10 here), where it used to store `price: null` and send the master number. Still no own price.
+  expect(stored).toMatchObject({ priceOverride: null, followMasterPrice: true, overrideData: { unrelated: 'keep' } })
+  expect(Number(stored.price)).toBe(10)
   expect(stored.overrideData).toEqual({ unrelated: 'keep' })
   expect(resolveAttributes({ product: product as any, parent: null, channelListing: stored as any, marketLanguages: ['de'], locale: 'de' }).price).toBeUndefined()
   expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(1)
@@ -102,9 +105,11 @@ it.each(['ebay_price', 'attr_price'])('both sheet wire paths clean dirty resets,
     const { product, listing } = await seed(`sheet-reset-${field}-${following}`, following)
     const result = await sheetWrite(product.id, field, null, listing.version, 'reset')
     expect(result).toMatchObject({ updated: 1, currentVersion: listing.version + 1, versionOf: 'channelListing' })
+    // The follower price it sends is the price it stores (2026-10-01; was `price: null`).
     expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })).toMatchObject({
-      price: null, priceOverride: null, followMasterPrice: true, overrideData: { unrelated: 'keep' },
+      priceOverride: null, followMasterPrice: true, overrideData: { unrelated: 'keep' },
     })
+    expect(Number((await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })).price)).toBe(10)
     expect((await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })).overrideData).toEqual({ unrelated: 'keep' })
     expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(1)
     expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: listing.id } })).toBe(1)
@@ -201,7 +206,9 @@ it('the sheet set, pin and reset use the price door and report the listing versi
   const reset = await save(null, stored.version + 1, 'reset')
   expect(reset).toMatchObject({ updated: 1, currentVersion: stored.version + 2 })
   const resetRow = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
-  expect(resetRow).toMatchObject({ price: null, priceOverride: null, followMasterPrice: true })
+  // The reset stores the follower price it sends (the master's 10), where it used to store `price: null`.
+  expect(resetRow).toMatchObject({ priceOverride: null, followMasterPrice: true })
+  expect(Number(resetRow.price)).toBe(10)
   const repeat = await save(null, resetRow.version, 'reset')
   expect(repeat).toMatchObject({ updated: 0, unchanged: 1, currentVersion: resetRow.version, versionOf: 'channelListing' })
   expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })).toEqual(resetRow)

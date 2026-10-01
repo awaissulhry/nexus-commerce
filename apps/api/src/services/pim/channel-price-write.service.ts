@@ -24,6 +24,20 @@
  *
  * `channel-pricing` PATCH, `pricing/bulk-override` and the Matrix door delegate here. No snapshot refresh: the
  * pricing engine's chain is in no publish path (M8) and its hourly cron re-materialises the snapshot.
+ *
+ * FOLLOWER MODE (2026-10-01, "pricing rules reach the channels") — every change to a listing's pricing rule, its
+ * adjustment percent or its follow-master flag comes here too, and a hand-back (`price: null`) is one of them. The
+ * columns are written in the same compare-and-set transaction; then, for a listing that follows the master, the
+ * price is recomputed by the rules the master-price cascade applies (`follower-price.ts`, one module for both):
+ *   - MATCH_AMAZON (no price from the master), or no master price → the price stays, nothing is queued;
+ *   - the market sells in another currency than the master → the price stays, nothing is queued, and the cascade's
+ *     refusal sentence comes back (`notSent`) and is logged as a sync-health conflict after the commit;
+ *   - outside the product's own floor or ceiling, or zero or less → REFUSED, nothing is written;
+ *   - a paused listing or a still-draft → the price is stored, nothing is queued (`notSent` says why);
+ *   - the same price and no follow flag turned on → nothing to send (a no-op when nothing else changed);
+ *   - otherwise `price` = the computed price, `masterPrice` = the master, and ONE PRICE_UPDATE row exactly as the
+ *     cascade queues it (its payload fields, its 30 s hold) plus this door's sale window and `saleRemoved` handling.
+ * A listing that stops following (`follow: false`) keeps the price it carries: flags only, nothing is sent.
  */
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
@@ -36,12 +50,20 @@ import { decimalToNumber } from './sheet-rows.service.js'
 import { CHANNEL_FIELD_MAP, channelOverrideKeys } from './channel-field-map.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
 import { storedCompareAt, withCompareAt } from './compare-at-price.js'
+import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL, pricingRuleLabel, type PricingRuleName } from '@nexus/shared/listing-price'
+import {
+  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, heldPriceSentence, holdsCascadedPrice, listingMarketCurrency,
+  logMasterCurrencyRefusals, masterCurrencyRefusal, type MasterCurrencyRefusal,
+} from './follower-price.js'
+import { masterCurrency } from '../fx-rate.service.js'
+import { masterPriceBoundsReason, priceBoundsOf } from '../price-bounds.service.js'
+import type { MarketCurrencyRow } from './market-currency.js'
 
 // ETSY since 2026-09-30: `syncToEtsy` sends a PRICE_UPDATE (P4.6e). It was left off while Etsy was read-only (D6,
 // overridden 2026-09-21), so an Etsy price was saved here and never queued.
 const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
-/** The same operator grace window the FOLLOW/PIN primitives use: 30 s to undo before the push leaves. */
-const PRICE_HOLD_MS = 30 * 1000
+/** The same operator grace window the FOLLOW/PIN primitives and the master-price cascade use: 30 s to undo before the push leaves. */
+const PRICE_HOLD_MS = FOLLOWER_PRICE_HOLD_MS
 
 /**
  * 🔴 PLAN Step 2.2 — the reasons a price write may run with NO version guard.
@@ -59,6 +81,18 @@ const PRICE_HOLD_MS = 30 * 1000
 export type PriceWriteUnguardedReason =
   /** `pricing.routes.ts` bulk override: a run over price SNAPSHOTS. No per-row version was shown to anyone. */
   | 'bulk-override-snapshot'
+  /** `POST /api/listings/bulk-action` (set price, pricing rule, follow / unfollow master): a SELECTION of listings, no version per row. */
+  | 'listings-bulk-action'
+  /** `PATCH /api/listings/:id` from a caller that sends no version (the flat files' and OverrideBadge's reset buttons). */
+  | 'listing-patch-unversioned'
+  /** `PATCH /api/products/:id/channel-follows` — the master sheet's "price follows" cell names a coordinate, not a version. */
+  | 'channel-follows'
+  /** `POST /api/products/:id/channel-listing/:clId/reset` — a reset to the master names a field, not a version. */
+  | 'channel-listing-reset'
+  /** The FF2 flat-file import's apply: a diff of a FILE, no version per row was shown to anyone. */
+  | 'flat-file-import'
+  /** `POST /api/dashboard/stock-drift/:id/resync` — the drift panel's Resync names a listing, not a version. */
+  | 'dashboard-drift-resync'
 
 /**
  * CFI-6 (R-CFI-1 Q2, BUILD.md D2) — the reasons a price may be RECORDED without being sent. A closed set, like
@@ -77,6 +111,16 @@ interface PriceWriteFields {
   sale?: { value: number | null; start: string | null; end: string | null }
   /** NCF D2 A — Shopify's compare-at price. `undefined` = untouched; `null` = Shopify holds none. Record-only. */
   compareAt?: number | null
+  /**
+   * Follower mode — the pricing rule (any case; stored upper case) and/or the adjustment percent (2 decimals, above
+   * -100, at most 999.99), written in this compare-and-set; a following listing's price is recomputed with them.
+   */
+  rule?: { pricingRule?: string; priceAdjustmentPercent?: number }
+  /**
+   * Follower mode — `true` hands the listing back to the master (the same as `price: null`): its price is recomputed
+   * by its rule and sent. `false` stops following and keeps the price the listing carries: flags only, nothing sent.
+   */
+  follow?: boolean
 }
 
 /**
@@ -115,6 +159,12 @@ export interface PriceWriteOutcome {
   retried?: true
   /** The PRICE_UPDATE queue row id when one was enqueued (null on a channel with no outbound lane). */
   queueId: string | null
+  /**
+   * Follower mode — the change was written, but no price was sent, and why: the market sells in another currency
+   * (the cascade's refusal sentence), the listing is paused or a draft (the price is kept in Nexus), the rule takes
+   * no price from the master, or the listing does not follow the master.
+   */
+  notSent?: string
 }
 
 export interface PriceWriteResult { results: PriceWriteOutcome[]; applied: number; refused: number; noop: number; conflict: number }
@@ -123,8 +173,11 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 
 const LISTING_SELECT = {
   id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true,
-  overrideData: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true, product: { select: { sku: true, basePrice: true } },
+  overrideData: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true,
+  product: { select: { sku: true, basePrice: true, minPrice: true, maxPrice: true } },
   platformAttributes: true,
+  // Follower mode: the rule, the master snapshot and the facts that hold a price in Nexus (`holdsCascadedPrice`).
+  pricingRule: true, priceAdjustmentPercent: true, masterPrice: true, syncPaused: true, listingStatus: true, isPublished: true,
 } satisfies Prisma.ChannelListingSelect
 
 /** A-18 — the storage contract's historical `overrideData` keys that still carry this channel's price. */
@@ -137,7 +190,8 @@ function legacyPriceKeys(channel: string): string[] {
 /** A-17 — is the stored own price exactly the one the caller saw? Anything ambiguous answers no. */
 function priceAsSeen(t: PriceWriteTarget, row: { channel: string; price: unknown; priceOverride: unknown; followMasterPrice: boolean | null; overrideData: unknown }): boolean {
   // A compare-at write is never retried: its value lives in the platform bag another writer may have changed in the gap.
-  if (t.expectedPrice === undefined || t.sale !== undefined || t.compareAt !== undefined) return false
+  // A rule or follow change is never retried either: it is not a price-only write.
+  if (t.expectedPrice === undefined || t.sale !== undefined || t.compareAt !== undefined || t.rule !== undefined || t.follow !== undefined) return false
   const bag = row.overrideData && typeof row.overrideData === 'object' ? row.overrideData : {}
   // A legacy key is a price the columns do not show; the caller cannot have seen it.
   if (legacyPriceKeys(row.channel).some(key => Object.prototype.hasOwnProperty.call(bag, key))) return false
@@ -187,10 +241,15 @@ export async function writeChannelPrices(input: {
   // chunks; tsc was perfectly happy with it.
   const windows = new Map(windowChunks.flatMap((part) => [...part]))
   const byId = new Map(listings.map((l) => [l.id, l]))
-  const marketKeys = [...new Set(listings.map((l) => `${l.channel}|${l.marketplace}`))]
-  const marketplaces = await db.marketplace.findMany({ where: { OR: marketKeys.map((k) => ({ channel: k.split('|')[0], code: k.split('|')[1] })) }, select: { channel: true, code: true, currency: true } })
-  const currencyOf = new Map(marketplaces.map((m) => [`${m.channel}|${m.code}`, m.currency]))
+  // Every market row of the channels involved: `listingMarketCurrency` reads a market the way the cascade does (GB is
+  // UK, `EBAY_IT` is IT), and an unconfigured market is never the master currency.
+  const channels = [...new Set(listings.map((l) => l.channel))]
+  const currencyRows: MarketCurrencyRow[] = channels.length
+    ? await db.marketplace.findMany({ where: { channel: { in: channels } }, select: { channel: true, code: true, currency: true } })
+    : []
+  const master = masterCurrency()
   const queued: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
+  const refusals: Array<{ productId: string | null; masterPrice: number; refusal: MasterCurrencyRefusal }> = []
 
   targets: for (const t of input.targets) {
     const found = byId.get(t.listingId)
@@ -214,66 +273,162 @@ export async function writeChannelPrices(input: {
     for (let attempt = 0; attempt < 2; attempt++) {
       const l = current
       const base = { productId: l.productId, channel: l.channel, marketplace: l.marketplace, queueId: null as string | null }
-      if (t.price === undefined && t.sale === undefined && t.compareAt === undefined) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
-      if (t.compareAt !== undefined && l.channel !== 'SHOPIFY') { push({ ...base, outcome: 'refused', reason: 'Only a Shopify listing has a compare-at price', version: l.version }); continue targets }
-      if (t.compareAt !== undefined && !input.recordOnly) { push({ ...base, outcome: 'refused', reason: 'A compare-at price is recorded from Shopify’s own file only; change it in the Shopify tab.', version: l.version }); continue targets }
+      const refuse = (reason: string) => push({ ...base, outcome: 'refused', reason, version: l.version })
+      if (t.price === undefined && t.sale === undefined && t.compareAt === undefined && t.rule === undefined && t.follow === undefined) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
+      if (t.compareAt !== undefined && l.channel !== 'SHOPIFY') { refuse('Only a Shopify listing has a compare-at price'); continue targets }
+      if (t.compareAt !== undefined && !input.recordOnly) { refuse('A compare-at price is recorded from Shopify’s own file only; change it in the Shopify tab.'); continue targets }
+      if (input.recordOnly && (t.rule !== undefined || t.follow !== undefined)) { refuse('A price recorded from the channel’s own file carries no pricing rule or follow-master change.'); continue targets }
+      if ((t.follow === true && typeof t.price === 'number') || (t.follow === false && t.price === null)) {
+        refuse('A listing cannot follow the master and be pinned at its own price in the same change.')
+        continue targets
+      }
       const nextCompare = t.compareAt === undefined ? undefined : t.compareAt === null ? null : round2(Number(t.compareAt))
-      if (nextCompare !== undefined && nextCompare !== null && (!Number.isFinite(nextCompare) || nextCompare < 0)) { push({ ...base, outcome: 'refused', reason: 'A compare-at price is zero or more', version: l.version }); continue targets }
+      if (nextCompare !== undefined && nextCompare !== null && (!Number.isFinite(nextCompare) || nextCompare < 0)) { refuse('A compare-at price is zero or more'); continue targets }
       const currentCompare = storedCompareAt(l.platformAttributes)
-      const currency = currencyOf.get(`${l.channel}|${l.marketplace}`) ?? 'EUR'
+      const currency = listingMarketCurrency(l, currencyRows) ?? 'EUR'
       const currentPrice = decimalToNumber(l.price)
       const currentOverride = decimalToNumber(l.priceOverride)
       const nextPrice = t.price === undefined ? undefined : t.price == null ? null : round2(Number(t.price))
-      if (nextPrice !== undefined && nextPrice !== null && (!Number.isFinite(nextPrice) || nextPrice < 0)) { push({ ...base, outcome: 'refused', reason: 'A price is zero or more', version: l.version }); continue targets }
+      if (nextPrice !== undefined && nextPrice !== null && (!Number.isFinite(nextPrice) || nextPrice < 0)) { refuse('A price is zero or more'); continue targets }
       const currentSale: { value: number | null } & SaleWindow = { value: decimalToNumber(l.salePrice), ...(windows.get(l.id) ?? { start: null, end: null }) }
       const nextSale = t.sale === undefined ? undefined : { value: t.sale.value == null ? null : round2(Number(t.sale.value)), start: t.sale.value == null ? null : t.sale.start, end: t.sale.value == null ? null : t.sale.end }
       if (nextSale) {
         const problem = validateSaleWindow(nextSale.value, nextSale)
-        if (problem) { push({ ...base, outcome: 'refused', reason: problem, version: l.version }); continue targets }
-        if (nextSale.value != null && !hasWindow) { push({ ...base, outcome: 'refused', reason: 'This database has no sale-window columns yet — the sale cannot be scheduled', version: l.version }); continue targets }
+        if (problem) { refuse(problem); continue targets }
+        if (nextSale.value != null && !hasWindow) { refuse('This database has no sale-window columns yet — the sale cannot be scheduled'); continue targets }
       }
+
+      // ── Follower mode: the rule columns, the follow flag, and the price they give ──────────────────────────────
+      let nextRule: PricingRuleName | undefined
+      if (t.rule?.pricingRule !== undefined) {
+        const name = normalisePricingRule(t.rule.pricingRule)
+        if (!name) { refuse(PRICING_RULE_REFUSAL); continue targets }
+        nextRule = name
+      }
+      let nextAdj: number | undefined
+      if (t.rule?.priceAdjustmentPercent !== undefined) {
+        const problem = adjustmentPercentProblem(t.rule.priceAdjustmentPercent)
+        if (problem) { refuse(problem); continue targets }
+        nextAdj = round2(Number(t.rule.priceAdjustmentPercent))
+      }
+      const basePrice = decimalToNumber(l.product?.basePrice)
+      const wasFollowing = l.followMasterPrice !== false
+      const currentRule = (l.pricingRule ?? 'FIXED') as string
+      const currentAdj = decimalToNumber(l.priceAdjustmentPercent)
+      const ruleAfter = nextRule ?? currentRule
+      const adjAfter = nextAdj !== undefined ? nextAdj : currentAdj
+      const handBack = t.price === null || t.follow === true
+      const pin = typeof nextPrice === 'number'
+      const unfollow = t.follow === false && t.price === undefined
+      const followAfter = handBack ? true : pin || unfollow ? false : wasFollowing
+      const ruleColumns: { pricingRule?: PricingRuleName; priceAdjustmentPercent?: number } = {}
+      if (nextRule !== undefined && nextRule !== currentRule) ruleColumns.pricingRule = nextRule
+      if (nextAdj !== undefined && nextAdj !== currentAdj) ruleColumns.priceAdjustmentPercent = nextAdj
+      const ruleChanges = Object.keys(ruleColumns).length > 0
+
       // A-18: the storage contract owns the historical keys. A dirty reset is a write even
       // when the explicit columns already follow master; the resolver still reads the JSON bag.
       const priceKeys = legacyPriceKeys(l.channel)
       const dirtyPrice = priceKeys.some(key => Object.prototype.hasOwnProperty.call(l.overrideData ?? {}, key))
-      const priceChanges = nextPrice !== undefined && (dirtyPrice || !(nextPrice === null ? l.followMasterPrice !== false && currentOverride == null : currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
+      const followColumns: { followMasterPrice?: boolean; priceOverride?: null } = {}
+      if (handBack && (!wasFollowing || currentOverride != null)) Object.assign(followColumns, { followMasterPrice: true, priceOverride: null })
+      if (unfollow && wasFollowing) followColumns.followMasterPrice = false
+      const clearLegacy = (handBack || pin) && dirtyPrice
+
+      // The price a following listing carries under its (new) rule — the cascade's rules, from the one module.
+      let follower: { next: number; store: boolean; send: boolean } | null = null
+      let notSent: string | undefined
+      // Recorded only once the change is written (a lost compare-and-set records nothing).
+      let currencyRefusal: MasterCurrencyRefusal | null = null
+      const followerMode = !pin && (handBack || t.rule !== undefined || t.follow !== undefined)
+      if (followerMode && followAfter) {
+        const next = basePrice == null ? null : computeListingPrice(basePrice, ruleAfter, true, adjAfter)
+        if (next === null) {
+          notSent = basePrice == null
+            ? 'This product has no master price, so no price was sent.'
+            : 'Match Amazon takes this listing’s price from Amazon’s pricing, not from the master, so no price was sent.'
+        } else {
+          const marketCur = listingMarketCurrency(l, currencyRows)
+          if (marketCur !== master) {
+            // Refuse, don't convert — exactly as the cascade: the price stays, nothing is queued, and it is recorded.
+            currencyRefusal = { listingId: l.id, channel: l.channel, marketplace: l.marketplace, currency: marketCur, masterCurrency: master }
+            notSent = masterCurrencyRefusal(currencyRefusal, basePrice!)
+          } else {
+            const who = `${l.product?.sku ?? 'This listing'} on ${l.channel} ${l.marketplace}`
+            if (next <= 0) { refuse(`${who} would follow ${pricingRuleLabel(ruleAfter, adjAfter)} at ${next.toFixed(2)}: a price must be above 0. Nothing was changed.`); continue targets }
+            const outside = masterPriceBoundsReason(next, priceBoundsOf(l.product ?? {}))
+            if (outside) { refuse(`${who} would follow ${pricingRuleLabel(ruleAfter, adjAfter)} at ${next.toFixed(2)}, but ${outside}. Change the rule, or the floor or ceiling on the product. Nothing was changed.`); continue targets }
+            const held = holdsCascadedPrice(l)
+            const moves = next !== currentPrice
+            follower = { next, store: moves, send: !held && (moves || !wasFollowing) }
+            if (held && moves) notSent = heldPriceSentence(l, next)
+          }
+        }
+      } else if (ruleChanges && !followAfter && !pin) {
+        notSent = `This listing keeps its own price ${money(currentPrice, currency)}: it does not follow the master. The rule applies once it follows the master again.`
+      }
+
+      const priceChanges = pin && (dirtyPrice || !(currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
       const saleChanges = nextSale !== undefined && (nextSale.value !== currentSale.value || nextSale.start !== currentSale.start || nextSale.end !== currentSale.end)
       const compareChanges = nextCompare !== undefined && (currentCompare.state !== 'stored' || currentCompare.value !== nextCompare)
-      if (!priceChanges && !saleChanges && !compareChanges) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
+      const followChanges = Object.keys(followColumns).length > 0
+      const followerWrites = !!follower?.store || !!follower?.send || followChanges || ruleChanges || (handBack && clearLegacy)
+      if (!priceChanges && !saleChanges && !compareChanges && !followerWrites) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
 
-      const basePrice = decimalToNumber(l.product?.basePrice)
-      const effectivePrice = priceChanges ? (nextPrice ?? basePrice) : (currentPrice ?? (l.followMasterPrice !== false ? basePrice : currentOverride))
+      const sendsPrice = priceChanges || !!follower?.send
+      const effectivePrice = priceChanges ? nextPrice! : follower?.store || follower?.send ? follower.next
+        : (currentPrice ?? (wasFollowing && basePrice != null ? computeListingPrice(basePrice, currentRule, true, currentAdj) : currentOverride))
       const effectiveSale = saleChanges ? nextSale! : currentSale
       const sentences: string[] = []
-      if (priceChanges) sentences.push(nextPrice == null ? `price cleared (was ${money(currentPrice, currency)}) — follows the base price` : `price ${money(currentPrice, currency)} → ${money(nextPrice, currency)}`)
+      if (priceChanges) sentences.push(`price ${money(currentPrice, currency)} → ${money(nextPrice!, currency)}`)
+      if (ruleChanges) {
+        if (ruleColumns.pricingRule) sentences.push(`pricing rule ${currentRule} → ${ruleColumns.pricingRule}`)
+        if (ruleColumns.priceAdjustmentPercent !== undefined) sentences.push(`adjustment ${currentAdj == null ? '—' : `${currentAdj}%`} → ${ruleColumns.priceAdjustmentPercent}%`)
+      }
+      if (handBack) sentences.push(follower?.store ? `price ${money(currentPrice, currency)} → ${money(follower.next, currency)} — follows ${pricingRuleLabel(ruleAfter, adjAfter)}` : `follows ${pricingRuleLabel(ruleAfter, adjAfter)} (price ${money(currentPrice, currency)} kept)`)
+      else if (follower?.store) sentences.push(`price ${money(currentPrice, currency)} → ${money(follower.next, currency)} — follows ${pricingRuleLabel(ruleAfter, adjAfter)}`)
+      if (unfollow && followChanges) sentences.push(`stops following the master (keeps ${money(currentPrice, currency)})`)
       if (saleChanges) sentences.push(nextSale!.value == null ? `sale cleared (was ${money(currentSale.value, currency)})` : `sale ${money(nextSale!.value, currency)} ${nextSale!.start} → ${nextSale!.end}`)
       if (compareChanges) sentences.push(`compare-at ${money(currentCompare.value, currency)} → ${money(nextCompare!, currency)}`)
+      if (notSent) sentences.push(`not sent: ${notSent}`)
       const reason = [input.reason, sentences.join(' · ')].filter(Boolean).join(': ')
       if (input.recordOnly && await db.outboundSyncQueue.count({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' } })) {
-        push({ ...base, outcome: 'refused', reason: `A price change is waiting to be sent to ${l.channel}. Send or cancel it before importing the channel's price.`, version: l.version })
+        refuse(`A price change is waiting to be sent to ${l.channel}. Send or cancel it before importing the channel's price.`)
         continue targets
       }
+      // A follower change that sends nothing (a rule on a pinned listing, a refused currency, a held listing, MATCH_AMAZON)
+      // leaves the sync state alone: nothing is waiting to be sent.
+      const queues = !input.recordOnly && (sendsPrice || saleChanges)
 
       const written = await inTransaction(async (tx) => {
         // A recorded channel price leaves the sync state alone: nothing is queued, so nothing is pending.
-        const data: Prisma.ChannelListingUpdateManyMutationInput = input.recordOnly ? { version: { increment: 1 } } : { syncStatus: 'PENDING', lastSyncStatus: 'PENDING', version: { increment: 1 } }
-        if (priceChanges) {
-          if (nextPrice == null) Object.assign(data, { price: null, priceOverride: null, followMasterPrice: true, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
-          else Object.assign(data, { price: nextPrice, priceOverride: nextPrice, followMasterPrice: false, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
-        }
+        const data: Prisma.ChannelListingUpdateManyMutationInput = queues ? { syncStatus: 'PENDING', lastSyncStatus: 'PENDING', version: { increment: 1 } } : { version: { increment: 1 } }
+        if (priceChanges) Object.assign(data, { price: nextPrice, priceOverride: nextPrice, followMasterPrice: false, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
+        if (follower?.store) Object.assign(data, { price: follower.next, masterPrice: basePrice })
+        if (followChanges || ruleChanges) Object.assign(data, followColumns, ruleColumns, { lastOverrideAt: new Date(), lastOverrideBy: input.actor })
         if (saleChanges) data.salePrice = effectiveSale.value
         // The bag as read with this version: the compare-and-set below proves nobody changed it since.
         if (compareChanges) data.platformAttributes = withCompareAt(l.platformAttributes, nextCompare!) as Prisma.InputJsonValue
         const guarded = await tx.channelListing.updateMany({ where: { id: l.id, version: l.version }, data })
         if (guarded.count !== 1) return null
-        if (priceChanges && dirtyPrice) await tx.$executeRaw`
+        if (clearLegacy) await tx.$executeRaw`
           UPDATE "ChannelListing" SET "overrideData" = COALESCE("overrideData", '{}'::jsonb) - ${priceKeys}::text[]
           WHERE id = ${l.id}
         `
         if (saleChanges) await writeSaleWindow(tx, l.id, { start: effectiveSale.start, end: effectiveSale.end })
+        const previousOwn = currentOverride == null ? (currentPrice == null ? null : String(currentPrice)) : String(currentOverride)
         if (priceChanges) {
-          await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'price', previousValue: currentOverride == null ? (currentPrice == null ? null : String(currentPrice)) : String(currentOverride), newValue: nextPrice == null ? null : String(nextPrice), reason, changedBy: input.actor } })
-          await tx.priceChangeEvent.create({ data: priceChangeData({ productId: l.productId, sku: l.product?.sku ?? '', channel: l.channel, marketplace: l.marketplace, fulfillmentMethod: l.fulfillmentMethod ?? null, oldPrice: currentPrice, newPrice: nextPrice ?? basePrice, currency, source: input.source, reason, actor: input.actor }) })
+          await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'price', previousValue: previousOwn, newValue: String(nextPrice), reason, changedBy: input.actor } })
+        } else if (handBack || follower?.store) {
+          // A hand-back, or a follower price that moved: the listing's own price is gone, the rule's price is what it carries.
+          await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'price', previousValue: previousOwn, newValue: follower?.store ? String(follower.next) : null, reason, changedBy: input.actor } })
+        }
+        if (ruleColumns.pricingRule) await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'pricingRule', previousValue: currentRule, newValue: ruleColumns.pricingRule, reason, changedBy: input.actor } })
+        if (ruleColumns.priceAdjustmentPercent !== undefined) await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'priceAdjustmentPercent', previousValue: currentAdj == null ? null : String(currentAdj), newValue: String(ruleColumns.priceAdjustmentPercent), reason, changedBy: input.actor } })
+        if (unfollow && followChanges) await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'followMasterPrice', previousValue: 'true', newValue: 'false', reason, changedBy: input.actor } })
+        if (priceChanges || follower?.store) {
+          const newPrice = priceChanges ? nextPrice! : follower!.next
+          await tx.priceChangeEvent.create({ data: priceChangeData({ productId: l.productId, sku: l.product?.sku ?? '', channel: l.channel, marketplace: l.marketplace, fulfillmentMethod: l.fulfillmentMethod ?? null, oldPrice: currentPrice, newPrice, currency, source: input.source, reason, actor: input.actor }) })
         }
         if (compareChanges) {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'compareAtPrice', previousValue: currentCompare.value == null ? null : String(currentCompare.value), newValue: nextCompare == null ? null : String(nextCompare), reason, changedBy: input.actor } })
@@ -282,7 +437,7 @@ export async function writeChannelPrices(input: {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'salePrice', previousValue: currentSale.value == null ? null : `${currentSale.value} ${currentSale.start ?? ''}→${currentSale.end ?? ''}`.trim(), newValue: effectiveSale.value == null ? null : `${effectiveSale.value} ${effectiveSale.start}→${effectiveSale.end}`, reason, changedBy: input.actor } })
         }
         let queueId: string | null = null
-        if (!input.recordOnly && VALID_SYNC_TARGETS.has(l.channel)) {
+        if (queues && VALID_SYNC_TARGETS.has(l.channel)) {
           // Amazon — with NEXUS_AMAZON_OFFER_MERGE on, a price push leaves the sale Amazon holds alone (a merge,
           // `amazon/purchasable-offer.ts`), so a person REMOVING Nexus's own sale (a value with both dates: the only sale
           // Nexus sends) must say so on the row, and keep saying so when a later write in the grace window cancels that
@@ -293,17 +448,33 @@ export async function writeChannelPrices(input: {
             || !!(await tx.outboundSyncQueue.findFirst({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { path: ['saleRemoved'], equals: true } }, select: { id: true } })))
           await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
           const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
+          const sale = {
+            salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
+            ...(saleRemoved ? { saleRemoved: true } : {}),
+          }
+          // A follower price is queued with the cascade's payload fields (`followerPricePayload`), so a row from the
+          // cascade and a row from this door say the same things; a pin keeps this door's own payload.
+          const payload = follower?.send && !priceChanges
+            ? {
+                ...followerPricePayload({
+                  source: 'CHANNEL_PRICE_WRITE', productId: l.productId, productSku: l.product?.sku ?? null, channel: l.channel,
+                  marketplace: l.marketplace, price: follower.next, oldPrice: currentPrice, masterPrice: basePrice!,
+                  oldMasterPrice: decimalToNumber(l.masterPrice), pricingRule: ruleAfter, priceAdjustmentPercent: adjAfter,
+                  reason, idempotencyKey: null,
+                }),
+                actor: input.actor, ...sale,
+              }
+            : {
+                source: 'CHANNEL_PRICE_WRITE', marketplace: l.marketplace, actor: input.actor,
+                productSku: l.product?.sku ?? null,
+                price: effectivePrice ?? undefined,
+                ...sale,
+              }
           const row = await createOutboundRow(tx, {
             data: {
               productId: l.productId, channelListingId: l.id, targetChannel: l.channel as never, targetRegion: l.region,
               syncStatus: 'PENDING' as never, syncType: 'PRICE_UPDATE', holdUntil, externalListingId: l.externalListingId, maxRetries: 3,
-              payload: {
-                source: 'CHANNEL_PRICE_WRITE', marketplace: l.marketplace, actor: input.actor,
-                productSku: l.product?.sku ?? null,
-                price: effectivePrice ?? undefined,
-                salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
-                ...(saleRemoved ? { saleRemoved: true } : {}),
-              } as Prisma.InputJsonValue,
+              payload: payload as Prisma.InputJsonValue,
             },
             select: { id: true, productId: true, syncType: true, holdUntil: true },
           })
@@ -326,13 +497,17 @@ export async function writeChannelPrices(input: {
         push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: fresh?.version ?? l.version })
         continue targets
       }
-      push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId })
+      if (currencyRefusal) refusals.push({ productId: l.productId, masterPrice: basePrice!, refusal: currencyRefusal })
+      push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId, ...(notSent ? { notSent } : {}) })
       continue targets
     }
   }
   // Post-commit: the instant lane honours each row's own holdUntil; the drain cron is the fallback (never hangs).
   if (queued.length) await afterDatabaseCommit(`channel-prices:${queued.map(row => row.id).join(',')}`,
     () => fireOutboundJobs(queued, { source: 'CHANNEL_PRICE_WRITE' }))
+  // The cascade's currency refusals, recorded the same way once the change is committed. Best effort.
+  if (refusals.length) await afterDatabaseCommit(`channel-price-currency:${refusals.map(r => r.refusal.listingId).join(',')}`,
+    async () => { for (const r of refusals) await logMasterCurrencyRefusals(r.productId, r.masterPrice, [r.refusal]) })
   logger.info('channel-price-write: applied', { actor: input.actor, source: input.source, ...(input.recordOnly ? { recordOnly: input.recordOnly } : {}), applied: result.applied, refused: result.refused, noop: result.noop, conflict: result.conflict })
   return result
 }
