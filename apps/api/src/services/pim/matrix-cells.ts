@@ -309,7 +309,17 @@ export interface WritableInput {
   fulfilment: { method: FulfilmentMethod | null; guard: 'FBA' | 'FBM' | null } | null
   price: PriceCell | null
   canEditPrice: boolean
+  /** Shared stock by SKU: the business whose lent stock this SKU sells from, or null (its own stock). */
+  sharedFrom?: string | null
 }
+
+/**
+ * Owner 2026-10-01: "I should not be able to change the quantity unless it's deriving from its own pool or unless I'm
+ * changing it directly from the profile we are sourcing from." The database refuses a fixed number on such a SKU
+ * (stock-pool.sql, nexus_stock_pool_quantity_guard); the Matrix holds the cells that would make one, with this sentence.
+ */
+export const sharedStockReason = (lender: string) =>
+  `Sells from ${lender}'s stock, so the quantity follows it. Change the stock in ${lender}, or disconnect it first (Stock source).`
 
 export const PARENT_REASON = 'Set on the variants — the parent has no listing of its own'
 export const PARENT_PRICE_REASON = 'The parent is not buyable — set prices on the variants'
@@ -339,6 +349,8 @@ export function writableFor(input: WritableInput): Pick<MatrixCells, 'writable' 
       hold(k, input.fulfilment?.method === 'FBM' && input.fulfilment.guard === 'FBA' ? MATRIX_COPY.guardFba : MATRIX_COPY.amazonManaged)
       continue
     }
+    // Shared stock by SKU: no typed or fixed quantity; a fixed number it still has may only go back to Follow.
+    if (input.sharedFrom && (k === 'syncQty' || (k === 'syncMode' && input.sync?.mode !== 'PINNED'))) { hold(k, sharedStockReason(input.sharedFrom)); continue }
     if (k === 'syncBuffer' && input.sync?.mode === 'PINNED') { hold(k, PINNED_BUFFER_REASON); continue }
     if (k === 'price' && input.price?.source === 'formula') { hold(k, FORMULA_REASON); continue }
     writable[k] = true

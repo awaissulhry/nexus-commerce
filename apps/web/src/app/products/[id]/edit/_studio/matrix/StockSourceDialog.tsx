@@ -128,6 +128,12 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
   }, [open, choice, loadPreview])
 
   const plan = useMemo(() => stockSourcePlan(targets, choice ?? OWN, preview), [targets, choice, preview])
+  // Listings whose fixed number ends when they join the lent stock (a shared SKU has no fixed number; the API does it).
+  const endsFixed = useMemo(() => {
+    if (!preview || to !== 'pool') return 0
+    const willIds = new Set(plan.will.map((t) => t.id))
+    return preview.filter((p) => willIds.has(p.productId)).reduce((n, p) => n + p.listings.filter((l) => l.wasFixed).length, 0)
+  }, [preview, plan.will, to])
   const rows = useMemo<PreviewRow[]>(() => {
     if (!preview) return []
     const willIds = new Set(plan.will.map((t) => t.id))
@@ -172,6 +178,7 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
       : `${oneSku ? plan.will[0]!.sku : count(plan.will.length, 'SKU')} will use this business’s own stock again.`),
     plan.already.length > 0 && `${count(plan.already.length, 'SKU')} ${plan.already.length === 1 ? 'already does' : 'already do'}.`,
     plan.refused.length > 0 && `${count(plan.refused.length, 'SKU')} cannot.`,
+    endsFixed > 0 && `${count(endsFixed, 'listing')} with a fixed number will follow the shared stock instead: a shared SKU's quantity is changed only in the business that lends it.`,
   ].filter(Boolean).join(' ')
 
   return (

@@ -167,7 +167,7 @@ function StockCell(p: ICellRendererParams<StudioRow> & { rowOf?: (id: string) =>
 /**
  * Shared stock by SKU (Owner 2026-10-01): a Qty or Mode cell whose number follows ANOTHER business's stock right now —
  * the row sells from a lent stock and the listing follows it (a fixed, paused or Amazon-managed listing does not). Such a
- * cell carries the DS state `nds-cell-is-shared-stock` (teal) and says the lender in its tooltip: never colour alone.
+ * cell carries the DS state `nds-cell-is-shared-stock` (violet) and says the lender in its tooltip: never colour alone.
  */
 export const SHARED_STOCK_CELL = 'nds-cell-is-shared-stock'
 export function sharedStockOf(sync: MatrixCells['sync'] | null | undefined, source: MatrixRowRead['stock']['source']): NonNullable<MatrixRowRead['stock']['source']> | null {

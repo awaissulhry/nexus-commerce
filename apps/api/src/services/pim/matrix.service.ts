@@ -367,7 +367,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     }) : null
     const window = saleWindows.get(primary.id)
     const sale = serves('salePrice') ? (isParent ? { value: null, start: null, end: null } : { value: decimalToNumber(primary.salePrice), start: window?.start ?? null, end: window?.end ?? null }) : null
-    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice })
+    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom: sourceOf(member.id)?.lenderName ?? null })
     return {
       listingId: primary.id, version: primary.version, listing, fulfilment, sync, queue, price, sale,
       writable: gate.writable, writeBlockedReason: { ...gate.writeBlockedReason, ...extra },

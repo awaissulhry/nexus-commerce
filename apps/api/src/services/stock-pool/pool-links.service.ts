@@ -69,6 +69,11 @@ export interface ListingPreview {
   willShow: number | null
   /** Why nothing is sent, or what the number follows. */
   rule: 'follows' | 'fixed' | 'paused' | 'excluded' | 'amazon-managed' | 'offer-closed' | 'not-counted'
+  /**
+   * Shared stock by SKU (Owner 2026-10-01): the listing has a fixed number now, and switching to shared stock turns it
+   * back to follow — a product that sells from a lent stock has no fixed number (stock-pool.sql quantity guard).
+   */
+  wasFixed?: boolean
 }
 
 export interface SwitchPreview {
@@ -237,9 +242,11 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
       for (const l of own) perCoordinate.set(coordinate(l), (perCoordinate.get(coordinate(l)) ?? 0) + 1)
       for (const listing of own) {
         const method = resolveCascadePushMethod({ listingFulfillmentMethod: listing.fulfillmentMethod, channel: listing.channel, fbaBucket: after.fbaBucket, productFulfillmentMethod: product.fulfillmentMethod })
+        // Joining a lent stock turns a fixed number back to follow (switchProducts) — the preview shows exactly that.
+        const unpins = joinsNow && !listing.followMasterQuantity && listing.fulfillmentMethod !== 'FBA'
         const r = resolveIntendedQuantity({
           channel: listing.channel, marketplace: listing.marketplace, isFba: method === 'FBA', offerClosed: !!listing.offerClosedAt,
-          followMasterQuantity: listing.followMasterQuantity, syncPaused: listing.syncPaused, pinnedQuantity: listing.quantity,
+          followMasterQuantity: unpins ? true : listing.followMasterQuantity, syncPaused: listing.syncPaused, pinnedQuantity: listing.quantity,
           stockBuffer: listing.stockBuffer ?? 0, channelPolicy: policyFor(policies, listing.channel, listing.marketplace, listing.channelConnectionId),
           ...ledgerInputs(after, listing.sourceLocationCodes ?? []),
         })
@@ -249,12 +256,14 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
           listingMark: (perCoordinate.get(coordinate(listing)) ?? 1) > 1 ? (listing.aliasKey ? listing.alias?.position ?? null : 0) : null,
           aliasLabel: listing.aliasKey ? listing.alias?.label ?? null : null,
           showsNow: listing.quantity, willShow: r.kind === 'FOLLOW' ? r.quantity : null, rule: listingRule(r),
+          ...(unpins ? { wasFixed: true } : {}),
         })
       }
       for (const m of memberships.filter((x) => x.productId === productId)) {
         const inputs = ledgerInputs(after)
+        const unpins = joinsNow && m.pinnedQuantity != null
         const r = resolveMembershipIntended({
-          marketplace: m.marketplace, followPool: m.followPool, pinnedQuantity: m.pinnedQuantity, stockBuffer: m.stockBuffer ?? 0,
+          marketplace: m.marketplace, followPool: m.followPool, pinnedQuantity: unpins ? null : m.pinnedQuantity, stockBuffer: m.stockBuffer ?? 0,
           channelPolicy: policyFor(policies, 'EBAY', m.marketplace, m.channelConnectionId), ledger: inputs.ledger, uncountedIsZero: inputs.uncountedIsZero,
         })
         rows.push({
@@ -262,6 +271,7 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
           accountId: m.channelConnectionId, accountLabel: m.channelConnection ? connectionLabel(m.channelConnection).label : null, listingMark: null, aliasLabel: null,
           showsNow: m.lastQtyPushed,
           willShow: r.kind === 'FOLLOW' ? r.quantity : null, rule: !m.followPool ? 'excluded' : listingRule(r),
+          ...(unpins ? { wasFixed: true } : {}),
         })
       }
     }
@@ -300,6 +310,17 @@ export async function switchProducts(input: { productIds?: unknown; to?: unknown
       const skuOf = new Map(products.map((p) => [p.id, p.sku]))
       // The lender's product with the same SKU — the database checks it again on insert (the link guard).
       const matches = await loadSkuMatches(tx, grant!.id, ids)
+      // A product that sells from a lent stock has no fixed number (Owner 2026-10-01; stock-pool.sql quantity guard):
+      // the listings and shared eBay variants of the products joining now turn back to follow. Amazon-managed listings
+      // keep Amazon's number. The link's recascade then sends the shared number.
+      const joining = ids.filter((productId) => activeByProduct.get(productId)?.grantId !== grant!.id)
+      if (joining.length > 0) {
+        await tx.channelListing.updateMany({
+          where: { productId: { in: joining }, followMasterQuantity: false, listingStatus: { notIn: ['ENDED', 'REMOVED'] }, OR: [{ fulfillmentMethod: null }, { fulfillmentMethod: { not: 'FBA' } }] },
+          data: { followMasterQuantity: true, quantityOverride: null, version: { increment: 1 } },
+        })
+        await tx.sharedListingMembership.updateMany({ where: { productId: { in: joining }, pinnedQuantity: { not: null } }, data: { pinnedQuantity: null } })
+      }
       for (const productId of ids) {
         const existing = activeByProduct.get(productId)
         if (existing?.grantId === grant!.id) { unchanged++; continue }

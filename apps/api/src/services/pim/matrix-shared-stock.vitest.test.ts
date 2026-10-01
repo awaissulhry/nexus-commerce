@@ -22,6 +22,9 @@ vi.mock('../../lib/queue.js', () => {
   return { addJobSafely: vi.fn(async () => undefined), outboundSyncQueue: queue, readCacheQueue: queue, searchIndexQueue: queue, channelSyncQueue: queue, bulkJobQueue: queue, redis: { connection: null } }
 })
 
+vi.mock('../product-event.service.js', () => ({ productEventService: { emit: vi.fn(), emitMany: vi.fn(), emitManyTx: vi.fn() } }))
+vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(async () => undefined), refreshMany: vi.fn(async () => undefined), refreshInTransaction: vi.fn(async () => undefined) } }))
+
 import { withWorkspace } from '../../lib/workspace-context.js'
 import type { MatrixRead } from '@nexus/shared/matrix-contract'
 
@@ -36,6 +39,7 @@ describe('the Matrix says where a SKU takes its stock from', () => {
   let grantId = ''
   let links: typeof import('../stock-pool/pool-links.service.js')
   let matrix: typeof import('./matrix.service.js')
+  let writes: typeof import('./matrix-write.service.js')
   const sql = async (text: string, params: unknown[] = []) => (await state.db.db.query(text, params)).rows as Array<Record<string, unknown>>
   const as = <T>(workspaceId: string, actor: string | null, work: () => Promise<T>) =>
     withWorkspace({ workspaceId, actorUserId: actor, membershipId: null, roleKeys: [] }, work)
@@ -48,6 +52,7 @@ describe('the Matrix says where a SKU takes its stock from', () => {
     process.env.NEXUS_PROCESS_ROLE = 'api'
     links = await import('../stock-pool/pool-links.service.js')
     matrix = await import('./matrix.service.js')
+    writes = await import('./matrix-write.service.js')
     await sql(`ALTER TABLE "StockLevel" ADD CONSTRAINT "StockLevel_available_invariant" CHECK ("available" = "quantity" - "reserved")`)
     const owner = randomUUID()
     await sql(`INSERT INTO "Role" (id, key, name, "isSystem", "updatedAt") VALUES ($1,'OWNER','Owner',true,now())`, [owner])
@@ -123,5 +128,52 @@ describe('the Matrix says where a SKU takes its stock from', () => {
     expect(rowOf(r, id.bM).cells[ebayIt(r)]!.sync).toMatchObject({ kind: 'FOLLOW', intended: 0, poolAvailable: 0 })
     // The parent: one variation lent (3), one counted at 0 — counted, no single lender.
     expect(rowOf(r, id.bParent).stock).toMatchObject({ available: 3, uncounted: false, source: null })
+  })
+
+  // ── The quantity of a shared SKU is changed only in the business that lends it (Owner 2026-10-01) ──────────────────
+  const ebayListing = async (productId: string) => (await sql(`SELECT id, "followMasterQuantity", quantity FROM "ChannelListing" WHERE "productId" = $1 AND channel = 'EBAY'`, [productId]))[0]!
+  const dbError = async (work: Promise<unknown>) => { try { await work } catch (error) { return String((error as Error).message) } return 'NO ERROR' }
+
+  it('a fixed number ends when the SKU joins a lent stock — and the preview says so first', async () => {
+    const listing = await ebayListing(id.bM)
+    await sql(`UPDATE "ChannelListing" SET "followMasterQuantity" = false, quantity = 4 WHERE id = $1`, [listing.id])
+    const preview = await as(B, user.ownerB, () => links.previewSwitch({ productIds: [id.bM], to: 'pool', grantId, withVariations: false }))
+    expect(preview.products[0]!.listings.find((l) => l.listingId === listing.id)).toMatchObject({ rule: 'follows', willShow: 6, wasFixed: true })
+    await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bM], to: 'pool', grantId, withVariations: false }))
+    expect(await ebayListing(id.bM)).toMatchObject({ followMasterQuantity: true })
+  })
+
+  it('while connected, the Matrix holds Qty and Mode with the reason, keeps Buffer, and refuses a typed quantity', async () => {
+    const r = await read()
+    const cells = rowOf(r, id.bM).cells[ebayIt(r)]!
+    expect(cells.writable).toMatchObject({ syncQty: false, syncMode: false, syncBuffer: true })
+    expect(cells.writeBlockedReason.syncQty).toBe("Sells from Lender A's stock, so the quantity follows it. Change the stock in Lender A, or disconnect it first (Stock source).")
+    const result = await as(B, user.ownerB, () => writes.writeMatrixCells({ productId: id.bParent, actor: 'studio@example.test', can: () => true }, [
+      { rowId: id.bM, coordinateKey: ebayIt(r), cell: 'syncQty', value: 5, expectedVersion: cells.version },
+    ]))
+    expect(result.results[0]).toMatchObject({ outcome: 'refused', reason: cells.writeBlockedReason.syncQty })
+    expect(await ebayListing(id.bM)).toMatchObject({ followMasterQuantity: true })
+  })
+
+  it('the database refuses a fixed number on any listing or shared eBay variant of it — not on an Amazon-managed listing', async () => {
+    const listing = await ebayListing(id.bM)
+    expect(await dbError(as(B, user.ownerB, () => state.db.client.channelListing.update({ where: { id: listing.id }, data: { followMasterQuantity: false } }))))
+      .toMatch(/JACKET-M sells from the stock of Lender A, so its quantity follows that stock\. Change the stock in Lender A, or disconnect it first/)
+    const membership = randomUUID()
+    await sql(`INSERT INTO "SharedListingMembership" (id, "workspaceId", marketplace, sku, "itemId", "parentSku", "productId", "variationSpecifics", "updatedAt") VALUES ($1,$2,'IT','JACKET-M','ITEM-1','JACKET',$3,'{}'::jsonb,now())`, [membership, B, id.bM])
+    expect(await dbError(as(B, user.ownerB, () => state.db.client.sharedListingMembership.update({ where: { id: membership }, data: { pinnedQuantity: 3 } }))))
+      .toMatch(/sells from the stock of Lender A/)
+    // Amazon-managed (FBA): Amazon's own number; the rule does not touch it.
+    const fba = randomUUID()
+    await sql(`INSERT INTO "ChannelListing" ("workspaceId", id, "productId", channel, marketplace, region, "channelMarket", "listingStatus", "fulfillmentMethod", quantity, "followMasterQuantity", "updatedAt") VALUES ($1,$2,$3,'AMAZON','IT','IT','AMAZON_IT','ACTIVE','FBA',6,true,now())`, [B, fba, id.bM])
+    expect(await dbError(as(B, user.ownerB, () => state.db.client.channelListing.update({ where: { id: fba }, data: { followMasterQuantity: false } })))).toBe('NO ERROR')
+  })
+
+  it('after a disconnect, the SKU may have a fixed number again', async () => {
+    await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bM], to: 'own', grantId: null, withVariations: false }))
+    const listing = await ebayListing(id.bM)
+    expect(await dbError(as(B, user.ownerB, () => state.db.client.channelListing.update({ where: { id: listing.id }, data: { followMasterQuantity: false } })))).toBe('NO ERROR')
+    const r = await read()
+    expect(rowOf(r, id.bM).cells[ebayIt(r)]!.writable).toMatchObject({ syncQty: true, syncMode: true })
   })
 })
