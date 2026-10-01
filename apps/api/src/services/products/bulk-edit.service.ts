@@ -2761,11 +2761,16 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       } else if (childIdSet.has(v.id)) {
         // Direct edit on a child Product field — also remove the
         // field from cascadedFields if it's there (override).
+        // 2026-10-01 — the value goes through the model update, as the parent's does: raw SQL sent a JS array to a Json
+        // column as a Postgres array literal (22P02, Impact protectors on a variation never saved).
         updates.push(
+          prisma.product.update({
+            where: { id: v.id },
+            data: { [v.field]: v.value } as any,
+          }),
           prisma.$executeRaw`
             UPDATE "Product"
-            SET ${Prisma.raw(`"${v.field}"`)} = ${v.value as any},
-                "cascadedFields" = array_remove("cascadedFields", ${v.field})
+            SET "cascadedFields" = array_remove("cascadedFields", ${v.field})
             WHERE id = ${v.id}
           `
         )
