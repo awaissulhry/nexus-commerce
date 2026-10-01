@@ -31,6 +31,7 @@ import SyncProductsGrid from './SyncProductsGrid'
 import {
   listingTarget,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
+  QUANTITY_CHANNELS, policyMarketOptions, policyMarketFor, marketFilterOptions,
   type Mode, type Row, type Density,
 } from './sync-control-shared'
 
@@ -46,6 +47,8 @@ interface Overview {
     routedLocations: number
     policies: number
   }
+  /** Every market the rows are on (GLOBAL for Shopify and Etsy included): the Market filter's options. */
+  markets?: string[]
   locations: Array<{
     code: string
     name: string
@@ -467,16 +470,12 @@ export default function SyncControlClient() {
     {
       key: 'channel', label: <TipText help={CONTROL_HELP.filterChannel}>Channel</TipText>, kind: 'multiselect', value: channels,
       onChange: (v) => { setPage(1); setChannels(v) },
-      options: [
-        { value: 'AMAZON', label: 'Amazon' },
-        { value: 'EBAY', label: 'eBay' },
-        { value: 'SHOPIFY', label: 'Shopify' },
-      ],
+      options: [...QUANTITY_CHANNELS],
     },
     {
       key: 'market', label: <TipText help={CONTROL_HELP.filterMarket}>Market</TipText>, kind: 'multiselect', value: markets,
       onChange: (v) => { setPage(1); setMarkets(v) },
-      options: ['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m })),
+      options: marketFilterOptions(overview?.markets ?? [], markets),
     },
     {
       key: 'mode', label: <TipText help={CONTROL_HELP.filterMode}>Mode</TipText>, kind: 'multiselect', value: modes,
@@ -801,12 +800,8 @@ export default function SyncControlClient() {
                 <Listbox
                   ariaLabel="Policy channel"
                   value={polChannel}
-                  onChange={setPolChannel}
-                  options={[
-                    { value: 'AMAZON', label: 'Amazon' },
-                    { value: 'EBAY', label: 'eBay' },
-                    { value: 'SHOPIFY', label: 'Shopify' },
-                  ]}
+                  onChange={(channel) => { setPolChannel(channel); setPolMarket((market) => policyMarketFor(channel, market)) }}
+                  options={[...QUANTITY_CHANNELS]}
                 />
               </Tip>
               <Tip help={CONTROL_HELP.policyMarketSelect} width={120}>
@@ -814,7 +809,7 @@ export default function SyncControlClient() {
                   ariaLabel="Policy market"
                   value={polMarket}
                   onChange={setPolMarket}
-                  options={[{ value: '*', label: 'All markets' }, ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ value: m, label: m }))]}
+                  options={policyMarketOptions(polChannel)}
                 />
               </Tip>
               <Tooltip content={CONTROL_HELP.policyAddPause}>

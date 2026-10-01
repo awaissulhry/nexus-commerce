@@ -10,7 +10,7 @@ import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
 // EV.2 — the stock fact, published inside the movement's own transaction.
 import { publishEvent } from '../lib/events/publish.js'
-import { resolveIntendedQuantity } from './sync-control-core.js'
+import { QUANTITY_PUSH_CHANNELS, resolveIntendedQuantity } from './sync-control-core.js'
 import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
@@ -754,10 +754,9 @@ interface CascadeResult {
  *         enqueue OutboundSyncQueue (syncType='QUANTITY_UPDATE')
  *   FBA listings are Amazon-managed: master snapshot only, no quantity push.
  *
- * The ['AMAZON','EBAY','SHOPIFY','WOOCOMMERCE'] gate matches the
- * SyncChannel enum's accepted values for OutboundSyncQueue.targetChannel —
- * unknown channels are skipped (we still snapshot masterQuantity for them
- * but don't enqueue a marketplace push).
+ * Only a listing on a QUANTITY_PUSH_CHANNELS channel (sync-control-core.ts — the one set every quantity producer
+ * shares, Etsy included since 2026-10-01) gets a queue row; any other channel still has its quantity and
+ * masterQuantity written, but no marketplace push is enqueued.
  */
 async function cascadeQuantityToListings(
   tx: Prisma.TransactionClient,
@@ -822,7 +821,6 @@ async function cascadeQuantityToListings(
   const cascadedListingIds: string[] = []
   const snapshottedListingIds: string[] = []
   const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
-  const validTargets = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
   // RT.12 — order/return-driven cascades skip the 30s grace window so
   // cross-channel pushes go out within ~5s of the inbound trigger.
   // Manual edits keep the grace for operator "undo" patterns.
@@ -886,7 +884,7 @@ async function cascadeQuantityToListings(
         },
       })
       cascadedListingIds.push(listing.id)
-      if (validTargets.has(listing.channel)) {
+      if (QUANTITY_PUSH_CHANNELS.has(listing.channel)) {
         queueRowsToCreate.push({
           productId,
           channelListingId: listing.id,
@@ -932,7 +930,7 @@ async function cascadeQuantityToListings(
     // Scope cancel + re-query to exactly these (cancel-scope == replace-scope)
     // so coalesce can never cancel a pending row for a channel that isn't
     // getting a replacement — e.g. a cascaded listing on a non-syncable channel
-    // (outside validTargets) is in cascadedListingIds but has no fresh row.
+    // (outside QUANTITY_PUSH_CHANNELS) is in cascadedListingIds but has no fresh row.
     const replacedListingIds = queueRowsToCreate
       .map((r) => r.channelListingId)
       .filter((id): id is string => Boolean(id))

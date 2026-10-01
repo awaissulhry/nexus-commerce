@@ -4,7 +4,7 @@
  * PostgreSQL with the generated policies, profiles ON. No product share and no catalog link anywhere.
  *
  * One story: A lends its main warehouse to B and to C → B previews and connects two jacket SKUs by SKU, C one →
- * every listing that follows moves (eBay main and copy, Amazon IT and DE, Shopify; FBA keeps Amazon's own) →
+ * every listing that follows moves (eBay main and copy, Amazon IT and DE, Shopify, Etsy; FBA keeps Amazon's own) →
  * a sale in A and a pool sale in B, both written by the API process (which never kicks the worker), reach the
  * other businesses' listings through the database's wake signal in under 2 s → a connected SKU cannot be renamed
  * in either business (D1) → B disconnects and its listings follow its own stock again.
@@ -64,9 +64,12 @@ describe.skipIf(!serverUrl)(`Shared stock by SKU end to end (needs ${CONCURRENT_
   const qty = async (listingId: string) => Number((await q<{ quantity: number | null }>(`SELECT quantity FROM "ChannelListing" WHERE id = $1`, [listingId]))[0].quantity)
   const snapshot = async () => {
     const out: Record<string, number> = {}
-    for (const key of ['bEbayM', 'bEbayCopyM', 'bAmazonItM', 'bAmazonDeM', 'bAmazonFbaM', 'bShopifyM', 'bEbayS', 'aEbayM', 'cEbayM']) out[key] = await qty(id[key])
+    for (const key of ['bEbayM', 'bEbayCopyM', 'bAmazonItM', 'bAmazonDeM', 'bAmazonFbaM', 'bShopifyM', 'bEtsyM', 'bEbayS', 'aEbayM', 'cEbayM']) out[key] = await qty(id[key])
     return out
   }
+  /** The newest pending quantity row for a listing: the number the channel will be sent. */
+  const lastPush = async (listingId: string) =>
+    (await q<{ quantity: number }>(`SELECT (payload->>'quantity')::int AS quantity FROM "OutboundSyncQueue" WHERE "channelListingId" = $1 AND "syncType" = 'QUANTITY_UPDATE' AND "syncStatus" = 'PENDING' ORDER BY "createdAt" DESC LIMIT 1`, [listingId]))[0]?.quantity ?? null
   const pendingTasks = async () => Number((await q<{ n: string }>(`SELECT count(*)::text AS n FROM "StockPoolTask"`))[0].n)
   /** Run the pool worker until no task is left (what the wake signal, the kicks and the poll do in the worker). */
   const drain = async () => {
@@ -153,6 +156,8 @@ describe.skipIf(!serverUrl)(`Shared stock by SKU end to end (needs ${CONCURRENT_
     id.bAmazonDeM = await listing(B, id.bM, 'AMAZON', 'DE', { fulfillmentMethod: 'FBM' })
     id.bAmazonFbaM = await listing(B, id.bM, 'AMAZON', 'FR', { fulfillmentMethod: 'FBA', quantity: 6 })
     id.bShopifyM = await listing(B, id.bM, 'SHOPIFY', 'GLOBAL')
+    // 2026-10-01 — Etsy joins the stock cascade: it follows the pool like the others, less its own hold-back of 2.
+    id.bEtsyM = await listing(B, id.bM, 'ETSY', 'GLOBAL', { stockBuffer: 2 })
     id.bEbayS = await listing(B, id.bS, 'EBAY', 'IT', { channelConnectionId: id.bStore })
     id.aEbayM = await listing(A, id.aM, 'EBAY', 'IT', { quantity: 12 })
     id.cEbayM = await listing(C, id.cM, 'EBAY', 'IT')
@@ -202,6 +207,7 @@ describe.skipIf(!serverUrl)(`Shared stock by SKU end to end (needs ${CONCURRENT_
       'AMAZON:DE': ['follows', 10],
       'AMAZON:FR': ['amazon-managed', null],
       'SHOPIFY:GLOBAL': ['follows', 10],
+      'ETSY:GLOBAL': ['follows', 8],
     })
     expect(await q(`SELECT count(*)::int AS n FROM "StockPoolLink"`)).toEqual([{ n: 0 }])
   })
@@ -210,7 +216,10 @@ describe.skipIf(!serverUrl)(`Shared stock by SKU end to end (needs ${CONCURRENT_
     const before = await snapshot()
     expect(await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bM, id.bS], to: 'pool', grantId: grantB, withVariations: false }))).toEqual({ switched: 2, unchanged: 0 })
     await drain()
-    expect(await snapshot()).toEqual({ ...before, bEbayM: 9, bEbayCopyM: 10, bAmazonItM: 10, bAmazonDeM: 10, bShopifyM: 10, bEbayS: 4 })
+    expect(await snapshot()).toEqual({ ...before, bEbayM: 9, bEbayCopyM: 10, bAmazonItM: 10, bAmazonDeM: 10, bShopifyM: 10, bEtsyM: 8, bEbayS: 4 })
+    // The Etsy listing is not only written: its quantity row is queued (before 2026-10-01 none was), with the pool's number.
+    expect(await lastPush(id.bEtsyM)).toBe(8)
+    expect(await lastPush(id.bShopifyM)).toBe(10)
     const made = await q(`SELECT "productId", sku, "catalogLinkId", "sourceProductId" FROM "StockPoolLink" ORDER BY sku`)
     expect(made).toEqual([
       { productId: id.bM, sku: 'GALE-JACKET-BLACK-M', catalogLinkId: null, sourceProductId: id.aM },
@@ -239,15 +248,16 @@ describe.skipIf(!serverUrl)(`Shared stock by SKU end to end (needs ${CONCURRENT_
       }
       await as(A, null, () => movement.applyStockMovement({ productId: id.aM, locationId: id.aMain, change: -3, reason: 'ORDER_PLACED', orderId: 'A-ORDER-1' }))
       // 7 lent: B's main listing 7 − 1, its copy, Amazon and Shopify 7; C 7. A's own listing: 7 + 2 at the outlet.
-      latency.lenderSaleToBorrowers = await until({ bEbayM: 6, bEbayCopyM: 7, bAmazonItM: 7, bAmazonDeM: 7, bShopifyM: 7, cEbayM: 7 }, 10_000)
+      latency.lenderSaleToBorrowers = await until({ bEbayM: 6, bEbayCopyM: 7, bAmazonItM: 7, bAmazonDeM: 7, bShopifyM: 7, bEtsyM: 5, cEbayM: 7 }, 10_000)
       expect(latency.lenderSaleToBorrowers).toBeLessThan(REAL_TIME_MS)
 
       // The other way: B sells 2 from the pool (an eBay order, written by the API process).
       const taken = await as(B, null, () => doors.poolTake(database.client as never, { productId: id.bM, quantity: 2, orderRef: 'B-EBAY-1', actor: 'ebay-orders-sync' }))
       expect(taken).toMatchObject({ ok: true, taken: 2 })
-      latency.borrowerSaleToLenderAndOthers = await until({ aEbayM: 7, cEbayM: 5, bEbayM: 4, bAmazonItM: 5 }, 10_000)
+      latency.borrowerSaleToLenderAndOthers = await until({ aEbayM: 7, cEbayM: 5, bEbayM: 4, bAmazonItM: 5, bEtsyM: 3 }, 10_000)
       expect(latency.borrowerSaleToLenderAndOthers).toBeLessThan(REAL_TIME_MS)
       expect((await snapshot()).bAmazonFbaM).toBe(6)
+      expect(await lastPush(id.bEtsyM)).toBe(3)
     } finally {
       await stopWorker()
       if (roleBefore === undefined) delete process.env.NEXUS_PROCESS_ROLE
@@ -274,8 +284,9 @@ describe.skipIf(!serverUrl)(`Shared stock by SKU end to end (needs ${CONCURRENT_
     const before = await snapshot()
     expect(await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bM], to: 'own', grantId: null, withVariations: false }))).toEqual({ switched: 1, unchanged: 0 })
     await drain()
-    // B's own warehouse holds 1: eBay main 1 − 1, the copy, Amazon and Shopify 1; FBA unchanged.
-    expect(await snapshot()).toEqual({ ...before, bEbayM: 0, bEbayCopyM: 1, bAmazonItM: 1, bAmazonDeM: 1, bShopifyM: 1 })
+    // B's own warehouse holds 1: eBay main 1 − 1, the copy, Amazon and Shopify 1, Etsy 1 − 2 → 0; FBA unchanged.
+    expect(await snapshot()).toEqual({ ...before, bEbayM: 0, bEbayCopyM: 1, bAmazonItM: 1, bAmazonDeM: 1, bShopifyM: 1, bEtsyM: 0 })
+    expect(await lastPush(id.bEtsyM)).toBe(0)
     await as(B, user.ownerB, () => database.client.product.update({ where: { id: id.bM }, data: { sku: 'GALE-JACKET-BLACK-M2' } }))
     await as(B, user.ownerB, () => database.client.product.update({ where: { id: id.bM }, data: { sku: 'GALE-JACKET-BLACK-M' } }))
     // A still lends M to C.
