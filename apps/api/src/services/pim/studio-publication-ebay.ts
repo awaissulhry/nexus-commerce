@@ -47,6 +47,55 @@ function setPath(target: Record<string, any>, path: string[], value: unknown) {
   node[path[path.length - 1]] = value
 }
 
+// #36 (2026-10-01) — eBay Trading takes a listing's package type, weight and size as ONE item-level ShippingPackageDetails.
+// The sheet stores eBay's Inventory names (PACKAGE_THICK_ENVELOPE); Trading names them differently (ShippingPackageCodeType).
+const TRADING_PACKAGES: Readonly<Record<string, string>> = {
+  LETTER: 'Letter', BULKY_GOODS: 'BulkyGoods', CARAVAN: 'Caravan', CARS: 'Cars', EUROPALLET: 'Europallet', EXPANDABLE_TOUGH_BAGS: 'ExpandableToughBags',
+  EXTRA_LARGE_PACK: 'ExtraLargePack', FURNITURE: 'Furniture', INDUSTRY_VEHICLES: 'IndustryVehicles', LARGE_CANADA_POSTBOX: 'LargeCanadaPostBox',
+  LARGE_CANADA_POST_BUBBLE_MAILER: 'LargeCanadaPostBubbleMailer', LARGE_ENVELOPE: 'LargeEnvelope', MAILING_BOX: 'MailingBoxes', MEDIUM_CANADA_POST_BOX: 'MediumCanadaPostBox',
+  MEDIUM_CANADA_POST_BUBBLE_MAILER: 'MediumCanadaPostBubbleMailer', MOTORBIKES: 'Motorbikes', ONE_WAY_PALLET: 'OneWayPallet', PACKAGE_THICK_ENVELOPE: 'PackageThickEnvelope',
+  PADDED_BAGS: 'PaddedBags', PARCEL_OR_PADDED_ENVELOPE: 'ParcelOrPaddedEnvelope', ROLL: 'Roll', SMALL_CANADA_POST_BOX: 'SmallCanadaPostBox',
+  SMALL_CANADA_POST_BUBBLE_MAILER: 'SmallCanadaPostBubbleMailer', TOUGH_BAGS: 'ToughBags', UPS_LETTER: 'UPSLetter', USPS_FLAT_RATE_ENVELOPE: 'USPSFlatRateEnvelope',
+  USPS_LARGE_PACK: 'USPSLargePack', VERY_LARGE_PACK: 'VeryLargePack', WINE_PAK: 'Winepak',
+}
+const GRAMS: Readonly<Record<string, number>> = { KILOGRAM: 1000, GRAM: 1, POUND: 453.59237, OUNCE: 28.349523125 }
+const CENTIMETERS: Readonly<Record<string, number>> = { CENTIMETER: 1, METER: 100, INCH: 2.54, FEET: 30.48 }
+const measure = (value: unknown) => {
+  const n = value && typeof value === 'object' ? Number((value as { value?: unknown }).value) : value === '' || value == null ? NaN : Number(value)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * A listing's saved package as eBay Trading XML, in metric (eBay wants whole numbers: kg + g, cm). '' when nothing is set.
+ * Throws, by name, on a value it cannot send — silently omitting one would publish a different product.
+ */
+export function ebayPackageXml(pa: Record<string, any>, sku: string): string {
+  const parts: string[] = []
+  const type = typeof pa.packageType === 'string' ? pa.packageType.trim() : ''
+  if (type) {
+    const code = TRADING_PACKAGES[type.toUpperCase()] ?? (Object.values(TRADING_PACKAGES).includes(type) ? type : null)
+    if (!code) throw new Error(`${sku}: eBay does not know the package type "${type}". Choose one from the list.`)
+    parts.push(`<ShippingPackage>${code}</ShippingPackage>`)
+  }
+  const weight = measure(pa.packageWeight)
+  if (weight != null) {
+    const unit = String((pa.packageWeight && typeof pa.packageWeight === 'object' ? pa.packageWeight.unit : pa.weightUnit) ?? '').toUpperCase()
+    if (!GRAMS[unit]) throw new Error(`${sku}: set the package weight unit (kilogram, gram, pound or ounce).`)
+    const grams = Math.max(1, Math.round(weight * GRAMS[unit]))
+    parts.push(`<WeightMajor unit="kg">${Math.floor(grams / 1000)}</WeightMajor><WeightMinor unit="gr">${grams % 1000}</WeightMinor>`)
+  }
+  const sides = (['packageDepth', 'packageLength', 'packageWidth'] as const).map(key => [key, measure(pa[key === 'packageDepth' ? 'packageHeight' : key])] as const)
+  if (sides.some(([, n]) => n != null)) {
+    const unit = String(pa.dimensionUnit ?? '').toUpperCase()
+    if (!CENTIMETERS[unit]) throw new Error(`${sku}: set the package dimension unit (centimeter, meter, inch or feet).`)
+    for (const [key, n] of sides) if (n != null) {
+      const tag = key === 'packageDepth' ? 'PackageDepth' : key === 'packageLength' ? 'PackageLength' : 'PackageWidth'
+      parts.push(`<${tag} unit="cm">${Math.max(1, Math.ceil(n * CENTIMETERS[unit]))}</${tag}>`)
+    }
+  }
+  return parts.length ? `<ShippingPackageDetails><MeasurementUnit>Metric</MeasurementUnit>${parts.join('')}</ShippingPackageDetails>` : ''
+}
+
 /** Trading revisions preserve fields outside the submitted product payload. */
 export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string | null, single: boolean, settings: Record<string, any> = {}) {
   let xml = buildAddFixedPriceItemXml(input)
@@ -60,6 +109,8 @@ export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string
     settings.vatRate != null ? `<VATDetails><VATPercent>${Number(settings.vatRate)}</VATPercent></VATDetails>` : '',
     single && settings.bestOffer != null ? `<BestOfferDetails><BestOfferEnabled>${settings.bestOffer === true}</BestOfferEnabled></BestOfferDetails>` : '',
     settings.quantityLimitPerBuyer != null ? `<QuantityRestrictionPerBuyer><MaximumQuantity>${Number(settings.quantityLimitPerBuyer)}</MaximumQuantity></QuantityRestrictionPerBuyer>` : '',
+    // A revision keeps eBay's package (#36 sends it only when the listing is created).
+    !itemId ? ebayPackageXml(settings, input.sku ?? 'This listing') : '',
   ].join('')
   xml = xml.replace('</Item>', `${extra}</Item>`)
   // Missing saved origin on a revision means preserve eBay's existing origin.
@@ -135,6 +186,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   let channelValues: MediaChannelValues | undefined
   const rows = []
   const identities: Array<{ productId: string; sku: string }> = []
+  const packages = new Map<string, string>()
   const galleries = new Map<string, string[]>()
   let settings: Record<string, any> = {}
   const exclusionsFor = pushExclusionsCache()
@@ -166,9 +218,11 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     }
     const pa = effective.platformAttributes
     // These saved fields require transport support; silently omitting them would publish a different product.
-    for (const key of ['videoId', 'compatibility', 'regulatory', 'packageType', 'packageWeight', 'packageLength', 'packageWidth', 'packageHeight', 'bestOfferFloor', 'bestOfferCeiling']) {
+    for (const key of ['videoId', 'compatibility', 'regulatory', 'bestOfferFloor', 'bestOfferCeiling']) {
       if (!itemId && pa[key] != null && pa[key] !== '' && pa[key] !== 0 && pa[key] !== false) throw new Error(`${product.sku}: ${key} needs the eBay offer publication workflow before this listing can be sent.`)
     }
+    // #36 — eBay takes ONE package per listing (item level): every row must hold the main row's package, or none.
+    if (!itemId) packages.set(product.id, ebayPackageXml(pa, product.sku))
     if (pa.listingFormat && pa.listingFormat !== 'FIXED_PRICE') throw new Error('Direct publication supports fixed-price eBay listings.')
     if (products.length > 1 && pa.bestOffer === true) throw new Error('eBay does not support Best Offer on a variation listing. Turn it off in Information before publishing.')
     if (product.id === parent.id) settings = pa
@@ -231,6 +285,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     channelValues = { byProduct: Object.fromEntries((input.family.variants ?? []).map(v => [v.id, v.axisValues])), axisNames: Object.fromEntries(axes.map(a => [a.familyKey, a.channelName ?? null])) }
   }
   const shared = buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency)
+  const differing = products.filter(p => p.id !== parent.id && (packages.get(p.id) ?? '') !== '' && packages.get(p.id) !== (packages.get(parent.id) ?? ''))
+  if (differing.length) throw new Error(`eBay takes one package type, weight and size for the whole listing. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds' : 'hold'} a different package than the main row: make them the same as the main row, or leave them blank.`)
   return { shared, itemId, parentListing, settings, galleries, variants, identities, media: onPlan ? { channelValues } : null }
 }
 
