@@ -29,29 +29,37 @@ const test = baseTest.extend({
 /** Layout setup only. Every value edit below uses the real DOM editor and keyboard/mouse handlers. */
 async function fieldCell(page: Page, id: string, key: string) {
   await expect(page.locator('.ag-row .ag-cell').first()).toBeVisible({ timeout: 90_000 })
-  const index = await page.evaluate(({ id, key }) => {
-    interface Grid { forEachNode(visit: (row: { rowIndex: number | null; data?: { id: string } }) => void): void; setColumnsVisible(keys: string[], show: boolean): void; ensureIndexVisible(index: number, where: string): void; ensureColumnVisible(key: string, where: string): void; setFocusedCell(index: number, key: string): void }
-    interface Fiber { memoizedProps?: { api?: Grid }; return?: Fiber }
-    for (const cell of document.querySelectorAll('.ag-cell, .ag-cell *')) {
-      const name = Object.keys(cell).find(name => name.startsWith('__reactFiber$'))
-      for (let fiber = name ? (cell as unknown as Record<string, Fiber>)[name] : undefined; fiber; fiber = fiber.return) {
-        const api = fiber.memoizedProps?.api
-        if (!api?.forEachNode) continue
-        let index = -1
-        api.forEachNode(row => { if (row.data?.id === id && row.rowIndex !== null) index = row.rowIndex })
-        if (index < 0) continue
-        api.setColumnsVisible([key], true)
-        api.ensureIndexVisible(index, 'middle')
-        api.ensureColumnVisible(key, 'middle')
-        api.setFocusedCell(index, key)
-        return index
+  // At phone width the grid is still scrolling to the column when the cell is focused, and AG's focus can land on its
+  // neighbour. Setup only: repeat focusing (at most 3 times) until AG's focused cell IS the target; the checks below stay.
+  let index = -1
+  for (let attempt = 0; attempt < 3; attempt++) {
+    index = await page.evaluate(({ id, key }) => {
+      interface Grid { forEachNode(visit: (row: { rowIndex: number | null; data?: { id: string } }) => void): void; setColumnsVisible(keys: string[], show: boolean): void; ensureIndexVisible(index: number, where: string): void; ensureColumnVisible(key: string, where: string): void; setFocusedCell(index: number, key: string): void }
+      interface Fiber { memoizedProps?: { api?: Grid }; return?: Fiber }
+      for (const cell of document.querySelectorAll('.ag-cell, .ag-cell *')) {
+        const name = Object.keys(cell).find(name => name.startsWith('__reactFiber$'))
+        for (let fiber = name ? (cell as unknown as Record<string, Fiber>)[name] : undefined; fiber; fiber = fiber.return) {
+          const api = fiber.memoizedProps?.api
+          if (!api?.forEachNode) continue
+          let index = -1
+          api.forEachNode(row => { if (row.data?.id === id && row.rowIndex !== null) index = row.rowIndex })
+          if (index < 0) continue
+          api.setColumnsVisible([key], true)
+          api.ensureIndexVisible(index, 'middle')
+          api.ensureColumnVisible(key, 'middle')
+          api.setFocusedCell(index, key)
+          return index
+        }
       }
-    }
-    throw new Error('Fixture row not found on the real grid')
-  }, { id, key })
+      throw new Error('Fixture row not found on the real grid')
+    }, { id, key })
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const target = page.locator(`.ag-row[row-index="${index}"] .ag-cell[col-id="${key}"]`)
+    if (!(await target.isVisible())) continue
+    await target.focus()
+    if (await page.locator('.ag-cell-focus').getAttribute('col-id').catch(() => null) === key) break
+  }
   const cell = page.locator(`.ag-row[row-index="${index}"] .ag-cell[col-id="${key}"]`)
-  await expect(cell).toBeVisible()
-  await cell.focus()
   await expect(cell).toBeFocused()
   await expect(page.locator('.ag-cell-focus')).toHaveAttribute('col-id', key)
   expect(await cell.evaluate(el => el.closest('.ag-row')?.getAttribute('row-id'))).toContain(id)
@@ -166,6 +174,9 @@ test.describe('Amazon attribute drafts', () => {
         if (key === fields[fields.length - 1]) await page.screenshot({ path: info.outputPath(`amazon-draft-${theme}-${width}.png`), fullPage: true })
         // The DS dialog has a header × and a footer button, both named Close: use the footer one.
         await dialog.getByRole('button', { name: 'Close', exact: true }).last().click()
+        // The dialog returns focus to the cell that opened it; wait for that before driving the next field.
+        await expect(dialog).toBeHidden()
+        await expect(reloaded).toBeFocused()
         const sent = saves.slice(requestCount)
         expect(sent).toHaveLength(1)
         expect(sent[0].method()).toBe('POST')

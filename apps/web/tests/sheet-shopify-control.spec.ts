@@ -20,7 +20,8 @@ import { ACCOUNT, FAMILY, LABEL, NOTE, WORKSPACE, column, familyListingId, membe
 
 const isLocal = (raw: string) => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(raw).hostname)
 const noteColumn = column('note'), labelColumn = column('label')
-/** A Shopify text metafield is language content: every cell names its ContentAddress (information-database.vitest.test.ts). */
+/** A single-cell save names the cell's ContentAddress (channelSheetWriter.ts); a column action sends none. The route accepts
+ *  both and takes the language from the scope, so the bodies are compared exactly as each path sends them. */
 const contentAddress = { coordinate: { accountId: ACCOUNT, channel: 'SHOPIFY', market: 'GLOBAL' }, language: 'en', tier: 'pin' }
 const [family, blue, red] = members
 type SheetValue = { ownerId: string; fieldId: string; locale: string; value: string | null; inherited?: true }
@@ -167,7 +168,7 @@ test.describe('Shopify draft control against the real local writer', () => {
       await page.keyboard.press('Enter')
       const setRequest = await setSent
       const setBody = setRequest.postDataJSON()
-      const setCell = (owner: typeof family, baseline: string) => ({ ownerId: owner.id, fieldId: LABEL, token: expect.any(String), baseline, colId: labelColumn, contentAddress, intent: 'set', value: 'Unified label', receiptKey: expect.any(String) })
+      const setCell = (owner: typeof family, baseline: string) => ({ ownerId: owner.id, fieldId: LABEL, token: expect.any(String), baseline, colId: labelColumn, intent: 'set', value: 'Unified label', receiptKey: expect.any(String) })
       // Detach both followers (their tokens hold the source's state) before the source itself changes.
       expect(setBody).toEqual({ operationId: expect.any(String), cells: [setCell(family, 'Original'), setCell(red, 'Other'), setCell(blue, 'Shared source')] })
       expect(new Set(setBody.cells.map((cell: { receiptKey: string }) => cell.receiptKey)).size).toBe(3)
@@ -184,7 +185,7 @@ test.describe('Shopify draft control against the real local writer', () => {
       const undoSent = cellsRequest(page)
       await page.keyboard.press('ControlOrMeta+z')
       const undoRequest = await undoSent
-      const resetCell = (owner: typeof family, baseline: string) => ({ ownerId: owner.id, fieldId: LABEL, token: expect.any(String), baseline, colId: labelColumn, contentAddress, intent: 'reset', value: null, receiptKey: expect.any(String) })
+      const resetCell = (owner: typeof family, baseline: string) => ({ ownerId: owner.id, fieldId: LABEL, token: expect.any(String), baseline, colId: labelColumn, intent: 'reset', value: null, receiptKey: expect.any(String) })
       expect(undoRequest.postDataJSON()).toEqual({ operationId: expect.any(String), cells: [resetCell(blue, 'Shared source'), resetCell(red, 'Other')] })
       expect(undoRequest.postDataJSON().operationId).not.toBe(setBody.operationId)
       await confirmed(undoRequest)
