@@ -33,6 +33,7 @@ test('@sheet speed · production load, one edit, compact bytes and horizontal sc
   const sheetRequests = load.requests.filter(request => request.url().includes('/studio/sheet?'))
   expect(sheetRequests, 'one actual browser sheet read').toHaveLength(1)
   expect(new URL(sheetRequests[0].url()).searchParams.get('cells'), 'the browser asks for compact cells').toBe('compact')
+  expect(new URL(sheetRequests[0].url()).searchParams.get('patches'), 'the browser asks for pooled patches').toBe('pooled')
   const compact = await sheetRequests[0].response()
   expect(compact, 'the browser sheet read finished').toBeTruthy()
   expect(compact!.status()).toBe(200)
