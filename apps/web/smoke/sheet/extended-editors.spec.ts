@@ -1,7 +1,7 @@
 import { expect, test as base } from './fixture'
-import { elsewhereInRow, focusCell, readSheet } from './grid'
-import { assertEditorTheme, editorSeed, editorScope, openEditorFixture, restoreEditorValue, rowIn, storedEditorProducts } from './extendedFixture'
-import { assertSaved, Wire } from './wire'
+import { focusCell, readSheet } from './grid'
+import { clickAway, editorSeed, editorScope, openEditorFixture, reloadEditorFixture, restoreEditorValue, rowIn, storedEditorProducts, storedReceipt, truthfulCleanup } from './extendedFixture'
+import { assertSaved, Wire, type Save } from './wire'
 import type { ProductMediaWorkspace } from '@nexus/shared/product-media'
 import type { Request } from '@playwright/test'
 import { browserMutation } from './browserRequest'
@@ -44,9 +44,12 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
     const original = rowIn(initial, product).values[key].value
     const allBefore = await storedEditorProducts(seed)
     const sqlBefore = allBefore.find(row => row.id === product)!
+    // An axis value is also kept in the variant's one variation store (R-23; seed-sheet-editor-fixture.mts).
+    const isAxis = allBefore.find(row => row.id === seed.family)!.variationAxes.includes(key)
     const wire = new Wire(page)
     const quiet = new NetworkMetrics(page)
     let lastExpected: unknown = original
+    let bodyFailed = true
     try {
       for (const [index, gesture] of ['keyboard', 'mouse', 'paste'].entries()) {
         const before = await readSheet(page, scope, seed.workspace)
@@ -62,8 +65,19 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
         const cell = await focusCell(page, product, key)
         const mark = wire.mark()
         if (editor === 'record' && gesture === 'paste') {
-          // This branch has a real JSON valueParser. Pasting a full record array is a cell gesture.
+          // This branch has a real JSON valueParser. Pasting a full record array is a cell gesture: the operator selects
+          // the cell, then pastes (drivers.ts `paste`). AG pastes ONE value into the active cell RANGE, not the focused
+          // cell (ag-grid-enterprise ClipboardService.isPasteSingleValueIntoRange), so the range must be this cell alone —
+          // an api focus leaves the range where the mouse arm clicked away to.
+          await cell.click({ position: { x: 6, y: 6 } })
+          await expect.poll(() => page.evaluate(() => {
+            const api = (window as unknown as { __sweepApi: { getCellRanges(): Array<{ startRow?: { rowIndex: number }; endRow?: { rowIndex: number }; columns: Array<{ getColId(): string }> }> | null
+              getDisplayedRowAtIndex(index: number): { data?: { id?: string } } | undefined } }).__sweepApi
+            return (api.getCellRanges() ?? []).map(range => ({ start: api.getDisplayedRowAtIndex(range.startRow?.rowIndex ?? -1)?.data?.id,
+              end: api.getDisplayedRowAtIndex(range.endRow?.rowIndex ?? -1)?.data?.id, columns: range.columns.map(column => column.getColId()) }))
+          }), { message: 'the paste target is the one selected cell' }).toEqual([{ start: product, end: product, columns: [key] }])
           await page.evaluate(value => navigator.clipboard.writeText(value), JSON.stringify(expected))
+          await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(JSON.stringify(expected))
           await page.keyboard.press('ControlOrMeta+V')
         } else {
           if (gesture === 'mouse') await cell.dblclick()
@@ -89,7 +103,7 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
             await page.evaluate(value => navigator.clipboard.writeText(value), String(editor === 'native long text' ? expected : text))
             await page.keyboard.press('ControlOrMeta+V')
           } else await input.fill(String(editor === 'native long text' ? expected : text))
-          if (gesture === 'mouse') await (await elsewhereInRow(page, cell)).click()
+          if (gesture === 'mouse') await clickAway(page, cell)
           // Native AG large text commits on Enter; Ctrl/Meta+Enter is its selected-range bulk command.
           else await page.keyboard.press('Enter')
         }
@@ -103,20 +117,29 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
           contentAddress: wireCell.contentAddress, contentVersion: 'contentVersion' in wireCell ? wireCell.contentVersion : undefined })))
         expect(saved.request.headers()['x-nexus-workspace-id']).toBe(seed.workspace)
         expect(saved.body.units[0].marketplaceContexts).toEqual([{ marketplace: 'IT', locale: 'it' }])
+        expect((saved.answer as Save['answer'] & { operationId?: string }).operationId).toBe(saved.body.operationId)
         expect(saved.answer.units[0].key).toBe(saved.body.units[0].key)
         expect(rowIn(await readSheet(page, scope, seed.workspace), product).values[key].value).toEqual(expected)
         const allStored = await storedEditorProducts(seed)
         const stored = allStored.find(row => row.id === product)!
-        expect(editor === 'protectors' ? stored.impactProtectors : stored.categoryAttributes?.[key]).toEqual(expected)
+        // The exact stored row: only this value moved (and, for an axis, its copy in the variation store); one version step.
+        const attributes = sqlBefore.categoryAttributes ?? {}
+        expect(stored.categoryAttributes).toEqual(editor === 'protectors' ? sqlBefore.categoryAttributes : { ...attributes, [key]: expected,
+          ...(isAxis ? { variations: { ...(attributes.variations as Record<string, unknown>), [key]: expected } } : {}) })
+        expect(stored.impactProtectors).toEqual(editor === 'protectors' ? expected : sqlBefore.impactProtectors)
+        expect(stored.localizedContent).toEqual(sqlBefore.localizedContent)
+        expect(stored.version).toBe(expectedVersion + 1)
         expect(allStored.filter(row => row.id !== product)).toEqual(allBefore.filter(row => row.id !== product))
-        expect(saved.answer.units[0].body).toMatchObject({ currentVersion: stored.version, versionOf: 'product' })
+        expect(saved.answer.units[0].body).toMatchObject({ success: true, updated: 1, cascadeCount: 0, affectedChildren: 0, currentVersion: stored.version, versionOf: 'product' })
+        const receipt = await storedReceipt(seed, saved.answer.units[0].body.operationId)
+        expect(receipt).toMatchObject({ workspaceId: seed.workspace, status: 'SUCCESS', changeCount: 1, productCount: 1, expectedVersion, cascadeCount: 0, affectedChildren: [] })
+        expect(receipt.changes).toHaveLength(1)
+        expect(receipt.changes[0]).toMatchObject({ id: product, field: column!.writeField, value: expected })
         expect(rowIn(await readSheet(page, scope, seed.workspace), product).version).toBe(stored.version)
         lastExpected = expected
         await page.screenshot({ path: test.info().outputPath(`${editor.replace(/ /g, '-')}-${gesture}.png`), fullPage: false })
       }
-      await page.reload()
-      await expect(page.getByText(seed.name, { exact: true }).first()).toBeVisible()
-      await assertEditorTheme(page)
+      await reloadEditorFixture(page, seed)
       const readOnlyMark = wire.mark()
       await focusCell(page, product, key)
       await page.keyboard.press('Enter')
@@ -138,15 +161,18 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
       await wire.none(readOnlyMark, 'reopen and cancel must not write')
       expect(wire.mark()).toBe(3)
       wire.assertLoopback()
+      bodyFailed = false
     } finally {
-      await page.keyboard.press('Escape').catch(() => {})
-      await quiet.settle()
-      await restoreEditorValue(page, seed, product, key, original)
-      const allRestored = await storedEditorProducts(seed), restored = allRestored.find(row => row.id === product)!
-      expect(allRestored.filter(row => row.id !== product)).toEqual(allBefore.filter(row => row.id !== product))
-      expect(restored.categoryAttributes).toEqual(sqlBefore.categoryAttributes)
-      expect(restored.impactProtectors).toEqual(sqlBefore.impactProtectors)
-      expect(restored.localizedContent).toEqual(sqlBefore.localizedContent)
+      await truthfulCleanup(bodyFailed, async () => {
+        await page.keyboard.press('Escape').catch(() => {})
+        await quiet.settle()
+        await restoreEditorValue(page, seed, product, key, original)
+        const allRestored = await storedEditorProducts(seed), restored = allRestored.find(row => row.id === product)!
+        expect(allRestored.filter(row => row.id !== product)).toEqual(allBefore.filter(row => row.id !== product))
+        expect(restored.categoryAttributes).toEqual(sqlBefore.categoryAttributes)
+        expect(restored.impactProtectors).toEqual(sqlBefore.impactProtectors)
+        expect(restored.localizedContent).toEqual(sqlBefore.localizedContent)
+      })
     }
   })
 
@@ -167,6 +193,7 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
     page.on('request', request => { if (request.method() === 'PATCH' && new URL(request.url()).pathname.endsWith('/studio/variation-axes')) writes.push(request) })
     expect(before.axes).toHaveLength(2)
     const expected = [...before.axes].reverse()
+    let bodyFailed = true
     try {
       const cell = await focusCell(page, seed.family, column!.key)
       await page.keyboard.press('Enter')
@@ -186,9 +213,7 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
       expect((await response.json()).version).toBe(after.find(row => row.id === seed.family)?.version)
       expect(after.filter(row => row.parentId)).toEqual(storedBefore.filter(row => row.parentId))
       await expect(cell).toBeVisible()
-      await page.reload()
-      await expect(page.getByText(seed.name, { exact: true }).first()).toBeVisible()
-      await assertEditorTheme(page)
+      await reloadEditorFixture(page, seed)
       await focusCell(page, seed.family, column!.key)
       await page.keyboard.press('Enter')
       const reopened = page.getByRole('group', { name: 'Variation theme — Shared product', exact: true })
@@ -201,17 +226,20 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
       expect(writes, 'only one axis write, including after reload/reopen/cancel').toHaveLength(1)
       expect((await writes[0].response())?.status()).toBe(200)
       await expect(page.locator('.nds-grid-sheet-status-refused')).toHaveCount(0)
+      bodyFailed = false
     } finally {
-      await page.keyboard.press('Escape').catch(() => {})
-      await quiet.settle()
-      const fresh = await readAxes()
-      if (JSON.stringify(fresh.axes) !== JSON.stringify(before.axes)) {
-        const response = await browserMutation(page, seed.workspace, endpoint, 'PATCH',
-          { version: fresh.product.version, axes: before.axes, childIds: fresh.childIds, market: 'IT' })
-        expect(response.status, 'restore original family axis order').toBe(200)
-      }
-      expect((await readAxes()).axes).toEqual(before.axes)
-      expect((await storedEditorProducts(seed)).filter(row => row.parentId)).toEqual(storedBefore.filter(row => row.parentId))
+      await truthfulCleanup(bodyFailed, async () => {
+        await page.keyboard.press('Escape').catch(() => {})
+        await quiet.settle()
+        const fresh = await readAxes()
+        if (JSON.stringify(fresh.axes) !== JSON.stringify(before.axes)) {
+          const response = await browserMutation(page, seed.workspace, endpoint, 'PATCH',
+            { version: fresh.product.version, axes: before.axes, childIds: fresh.childIds, market: 'IT' })
+          expect(response.status, 'restore original family axis order').toBe(200)
+        }
+        expect((await readAxes()).axes).toEqual(before.axes)
+        expect((await storedEditorProducts(seed)).filter(row => row.parentId)).toEqual(storedBefore.filter(row => row.parentId))
+      })
     }
   })
 
@@ -243,6 +271,7 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
       await page.getByRole('menuitem', { name: 'Move later', exact: true }).click()
       return dialog
     }
+    let bodyFailed = true
     try {
       const canceled = await changeOrder()
       await canceled.press('Escape')
@@ -265,9 +294,7 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
       const allStored = await storedEditorProducts(seed), sql = allStored.find(row => row.id === product)!
       expect(allStored.filter(row => row.id !== product)).toEqual(allBefore.filter(row => row.id !== product))
       expect((sql.localizedContent?.it as Record<string, unknown>)._productMedia).toEqual(expected)
-      await page.reload()
-      await expect(page.getByText(seed.name, { exact: true }).first()).toBeVisible()
-      await assertEditorTheme(page)
+      await reloadEditorFixture(page, seed)
       await focusCell(page, product, 'productMedia')
       await page.keyboard.press('Enter')
       const reopened = page.getByRole('dialog', { name: /^Product media:/ })
@@ -281,21 +308,24 @@ for (const mode of modes) test.describe(`@sheet supplemental editors · ${mode.n
       await quiet.settle()
       expect(writes, 'no duplicate write or write from reload/reopen/cancel').toHaveLength(1)
       await expect(page.locator('.nds-grid-sheet-status-refused')).toHaveCount(0)
+      bodyFailed = false
     } finally {
-      await page.keyboard.press('Escape').catch(() => {})
-      await quiet.settle()
-      const fresh = await readMedia()
-      if (fresh.revision !== before.revision) {
-        const response = await browserMutation(page, seed.workspace, endpoint, 'PUT',
-          { expectedRevision: fresh.revision, collection: before.hasOverride ? before.collection : null })
-        expect(response.status, 'restore original media value and inheritance').toBe(200)
-      }
-      const restored = await readMedia()
-      expect(restored.collection).toEqual(before.collection)
-      expect(restored.hasOverride).toBe(before.hasOverride)
-      const allRestored = await storedEditorProducts(seed)
-      expect(allRestored.find(row => row.id === product)?.localizedContent).toEqual(sqlBefore.localizedContent)
-      expect(allRestored.filter(row => row.id !== product)).toEqual(allBefore.filter(row => row.id !== product))
+      await truthfulCleanup(bodyFailed, async () => {
+        await page.keyboard.press('Escape').catch(() => {})
+        await quiet.settle()
+        const fresh = await readMedia()
+        if (fresh.revision !== before.revision) {
+          const response = await browserMutation(page, seed.workspace, endpoint, 'PUT',
+            { expectedRevision: fresh.revision, collection: before.hasOverride ? before.collection : null })
+          expect(response.status, 'restore original media value and inheritance').toBe(200)
+        }
+        const restored = await readMedia()
+        expect(restored.collection).toEqual(before.collection)
+        expect(restored.hasOverride).toBe(before.hasOverride)
+        const allRestored = await storedEditorProducts(seed)
+        expect(allRestored.find(row => row.id === product)?.localizedContent).toEqual(sqlBefore.localizedContent)
+        expect(allRestored.filter(row => row.id !== product)).toEqual(allBefore.filter(row => row.id !== product))
+      })
     }
   })
 })

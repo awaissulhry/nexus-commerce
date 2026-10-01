@@ -72,8 +72,13 @@ try {
     VALUES ($1,$2,$3,49.90,true,$4,$5,now())`, [family, `E2E-EDITORS-${nonce}`, name, dictionary, ['p3note', 'p3size']])
   for (const [index, id] of children.entries()) {
     const note = `Original note ${index + 1}\nKeep this second line`, size = index ? 'L' : 'M'
+    // R-23: a variant's axis values live in ONE store, `categoryAttributes.variations` (category-attributes-write.ts
+    // `writeVariationValues`); the sheet's attribute write keeps the flat key and mirrors an axis edit into that store
+    // (bulk-edit.service.ts `writeAttrMerge` → `variationAttributePatch`). Seed the shape the app itself writes, so an
+    // edit and its restore round-trip to the exact seeded bag.
+    const attributes = { p3composition: records, p3note: note, p3size: size, variations: { p3note: note, p3size: size } }
     await client.query(`INSERT INTO "Product" (id,sku,name,"basePrice","parentId","familyId","categoryAttributes","impactProtectors","localizedContent","updatedAt")
-      VALUES ($1,$2,$3,49.90,$4,$5,$6::jsonb,$7::jsonb,'{"it":{}}'::jsonb,now())`, [id, `E2E-EDITORS-${nonce}-${index + 1}`, `${name} ${size}`, family, dictionary, JSON.stringify({ p3composition: records, p3note: note, p3size: size }), JSON.stringify(protectors)])
+      VALUES ($1,$2,$3,49.90,$4,$5,$6::jsonb,$7::jsonb,'{"it":{}}'::jsonb,now())`, [id, `E2E-EDITORS-${nonce}-${index + 1}`, `${name} ${size}`, family, dictionary, JSON.stringify(attributes), JSON.stringify(protectors)])
     for (const [position, ink] of ['black', '#2458d6'].entries()) {
       await client.query(`INSERT INTO "ProductImage" (id,"productId",url,alt,type,"sortOrder",width,height,"mimeType","updatedAt")
         VALUES ($1,$2,$3,$4,$5,$6,200,200,'image/svg+xml',now())`, [`${id}_photo_${position + 1}`, id, picture(ink), `P3 jacket view ${position + 1}`, position ? 'ALT' : 'MAIN', position])
