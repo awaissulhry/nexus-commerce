@@ -179,6 +179,9 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
           const sectionActive = childRouteActive
           const active = exactActive
           const isOpen = hasChildren && !!open[it.href]
+          /* Step 4 (2026-10-01) — the resting rail shows only icons; its labels fade in on hover. The link carries its
+             name itself, so it is named however the label is drawn ("Products, 4 pending"). */
+          const itemName = it.badge !== undefined && it.badge > 0 ? `${it.label}, ${it.badge} pending` : it.label
 
           const bodyInner = (
             <>
@@ -204,6 +207,7 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
                   target="_blank"
                   rel="noopener noreferrer"
                   className="h10-item"
+                  aria-label={`${itemName} (opens in a new tab)`}
                 >
                   {bodyInner}
                   <ExternalLink className="ext" size={14} aria-hidden="true" />
@@ -218,6 +222,7 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
                     href={it.href}
                     className="h10-parent-link"
                     aria-current={active ? 'page' : undefined}
+                    aria-label={itemName}
                   >
                     {bodyInner}
                   </Link>
@@ -244,6 +249,7 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
                   href={it.href}
                   className={`h10-item ${active ? 'on' : ''}`}
                   aria-current={active ? 'page' : undefined}
+                  aria-label={itemName}
                 >
                   {bodyInner}
                 </Link>
