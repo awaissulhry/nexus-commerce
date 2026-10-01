@@ -1647,14 +1647,12 @@
   padding-left: var(--nds-space-26);
 }
 .nds-prefs-group[data-tone='slate'] { --nds-prefs-tone-bg: var(--nds-grid-tone-slate-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-slate-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-slate-rule); }
-.nds-prefs-group[data-tone='blue'] { --nds-prefs-tone-bg: var(--nds-grid-tone-blue-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-blue-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-blue-rule); }
 .nds-prefs-group[data-tone='purple'] { --nds-prefs-tone-bg: var(--nds-grid-tone-purple-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-purple-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-purple-rule); }
 .nds-prefs-group[data-tone='emerald'] { --nds-prefs-tone-bg: var(--nds-grid-tone-emerald-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-emerald-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-emerald-rule); }
+.nds-prefs-group[data-tone='pink'] { --nds-prefs-tone-bg: var(--nds-grid-tone-pink-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-pink-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-pink-rule); }
 .nds-prefs-group[data-tone='orange'] { --nds-prefs-tone-bg: var(--nds-grid-tone-orange-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-orange-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-orange-rule); }
-.nds-prefs-group[data-tone='cyan'] { --nds-prefs-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-cyan-rule); }
-.nds-prefs-group[data-tone='teal'] { --nds-prefs-tone-bg: var(--nds-grid-tone-teal-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-teal-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-teal-rule); }
-.nds-prefs-group[data-tone='sky'] { --nds-prefs-tone-bg: var(--nds-grid-tone-sky-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-sky-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-sky-rule); }
-.nds-prefs-group[data-tone='amber'] { --nds-prefs-tone-bg: var(--nds-grid-tone-amber-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-amber-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-amber-rule); }
+.nds-prefs-group[data-tone='blue'] { --nds-prefs-tone-bg: var(--nds-grid-tone-blue-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-blue-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-blue-rule); }
 .nds-prefs-group[data-tone='yellow'] { --nds-prefs-tone-bg: var(--nds-grid-tone-yellow-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-yellow-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-yellow-rule); }
 .nds-prefs-group[data-tone='red'] { --nds-prefs-tone-bg: var(--nds-grid-tone-red-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-red-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-red-rule); }
 .nds-prefs-group[data-tone='violet'] { --nds-prefs-tone-bg: var(--nds-grid-tone-violet-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-violet-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-violet-rule); }
+.nds-prefs-group[data-tone='cyan'] { --nds-prefs-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-cyan-rule); }

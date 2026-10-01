@@ -1938,14 +1938,12 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   box-shadow: inset 2px 0 0 var(--nds-ag-tone-rule);
 }
 .nds-ag-head-tone--slate { --nds-ag-tone-bg: var(--nds-grid-tone-slate-bg); --nds-ag-tone-fg: var(--nds-grid-tone-slate-fg); --nds-ag-tone-rule: var(--nds-grid-tone-slate-rule); }
-.nds-ag-head-tone--blue { --nds-ag-tone-bg: var(--nds-grid-tone-blue-bg); --nds-ag-tone-fg: var(--nds-grid-tone-blue-fg); --nds-ag-tone-rule: var(--nds-grid-tone-blue-rule); }
 .nds-ag-head-tone--purple { --nds-ag-tone-bg: var(--nds-grid-tone-purple-bg); --nds-ag-tone-fg: var(--nds-grid-tone-purple-fg); --nds-ag-tone-rule: var(--nds-grid-tone-purple-rule); }
 .nds-ag-head-tone--emerald { --nds-ag-tone-bg: var(--nds-grid-tone-emerald-bg); --nds-ag-tone-fg: var(--nds-grid-tone-emerald-fg); --nds-ag-tone-rule: var(--nds-grid-tone-emerald-rule); }
+.nds-ag-head-tone--pink { --nds-ag-tone-bg: var(--nds-grid-tone-pink-bg); --nds-ag-tone-fg: var(--nds-grid-tone-pink-fg); --nds-ag-tone-rule: var(--nds-grid-tone-pink-rule); }
 .nds-ag-head-tone--orange { --nds-ag-tone-bg: var(--nds-grid-tone-orange-bg); --nds-ag-tone-fg: var(--nds-grid-tone-orange-fg); --nds-ag-tone-rule: var(--nds-grid-tone-orange-rule); }
-.nds-ag-head-tone--cyan { --nds-ag-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-ag-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-ag-tone-rule: var(--nds-grid-tone-cyan-rule); }
-.nds-ag-head-tone--teal { --nds-ag-tone-bg: var(--nds-grid-tone-teal-bg); --nds-ag-tone-fg: var(--nds-grid-tone-teal-fg); --nds-ag-tone-rule: var(--nds-grid-tone-teal-rule); }
-.nds-ag-head-tone--sky { --nds-ag-tone-bg: var(--nds-grid-tone-sky-bg); --nds-ag-tone-fg: var(--nds-grid-tone-sky-fg); --nds-ag-tone-rule: var(--nds-grid-tone-sky-rule); }
-.nds-ag-head-tone--amber { --nds-ag-tone-bg: var(--nds-grid-tone-amber-bg); --nds-ag-tone-fg: var(--nds-grid-tone-amber-fg); --nds-ag-tone-rule: var(--nds-grid-tone-amber-rule); }
+.nds-ag-head-tone--blue { --nds-ag-tone-bg: var(--nds-grid-tone-blue-bg); --nds-ag-tone-fg: var(--nds-grid-tone-blue-fg); --nds-ag-tone-rule: var(--nds-grid-tone-blue-rule); }
 .nds-ag-head-tone--yellow { --nds-ag-tone-bg: var(--nds-grid-tone-yellow-bg); --nds-ag-tone-fg: var(--nds-grid-tone-yellow-fg); --nds-ag-tone-rule: var(--nds-grid-tone-yellow-rule); }
 .nds-ag-head-tone--red { --nds-ag-tone-bg: var(--nds-grid-tone-red-bg); --nds-ag-tone-fg: var(--nds-grid-tone-red-fg); --nds-ag-tone-rule: var(--nds-grid-tone-red-rule); }
 .nds-ag-head-tone--violet { --nds-ag-tone-bg: var(--nds-grid-tone-violet-bg); --nds-ag-tone-fg: var(--nds-grid-tone-violet-fg); --nds-ag-tone-rule: var(--nds-grid-tone-violet-rule); }
+.nds-ag-head-tone--cyan { --nds-ag-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-ag-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-ag-tone-rule: var(--nds-grid-tone-cyan-rule); }

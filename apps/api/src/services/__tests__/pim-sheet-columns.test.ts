@@ -607,8 +607,6 @@ describe('buildSheetColumns — scope, kind, groups, order', () => {
     expect(columns.map((c) => c.key)).toEqual(['name', 'zeta', 'alpha', 'seasons_1', 'seasons_2', 'basePrice', 'list_price'])
     expect(groups.map((g) => g.label)).toEqual(['Identity', 'Product details', 'Pricing', 'Offer'])
     expect(groups.find((g) => g.label === 'Offer')!.channelLabel).toBe('Offerta')
-    // The schema's own order rides along: the product sheet colours an Amazon group by it, as the flat file did.
-    expect(groups.filter((g) => g.key.startsWith('AMAZON:')).map((g) => [g.label, g.sourceOrder])).toEqual([['Product details', 1], ['Offer', 0]])
   })
 
   it('keeps canonical master IDs distinct from identically labelled channel groups', () => {

@@ -893,8 +893,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             setExportNote(e instanceof GridExportRefused ? e.message : 'Could not build the file.');
         }
     }, [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns]);
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
-        family: { productId, channel: channel.toUpperCase(), columns: () => dataRef.current?.columns ?? [] } });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
     const getDataPath = useCallback((d: ChannelSheetRow) => dataPathFor(d), []);
     const getRowId = useCallback((p: {
         data: ChannelSheetRow;

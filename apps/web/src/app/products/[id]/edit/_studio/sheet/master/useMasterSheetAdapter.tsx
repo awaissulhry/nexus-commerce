@@ -524,8 +524,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onDone: onFamilyChanged,
         onCollectVariation: setNewVariation,
     });
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
-        family: { productId, channel: null, columns: () => [...columnByKeyRef.current.values()] } });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
     const [exportNote, setExportNote] = useState<string | null>(null);
     const onExport = useCallback((mode: SheetExportMode) => {
         const api = getGridApi();

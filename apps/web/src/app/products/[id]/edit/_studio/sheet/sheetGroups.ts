@@ -1,16 +1,15 @@
 /**
  * The product sheet's column groups on the web side (2026-10-01, `docs/product-sheet-groups/PLAN-2026-10-01.md`).
  *
- * The SERVER groups, orders and colours the columns like the old flat file (`@nexus/shared/sheet-groups`). This file
- * does the rest, on the sheet only:
- *   1. the columns the sheet adds itself join those groups — Progress the first group, Product media the Images group;
- *   2. a layout saved before the regrouping keeps its columns and pins but drops its old ORDER, so the flat file's order
+ * The SERVER puts every column in its group — the Amazon group names, order and one colour each, on every sheet
+ * (`@nexus/shared/sheet-groups`). This file does the rest, on the sheet only:
+ *   1. the columns the sheet adds itself join those groups — Progress leads Offer Identity, Product media leads Images;
+ *   2. a layout saved before the current groups keeps its columns and pins but drops its old ORDER, so the groups' order
  *      shows (its group keys name groups that no longer exist);
  *   3. each column NAME in the header takes its group's tint and a slight indent, and the first column of a group
  *      draws its group's edge — there is no band row (the Owner: Customise manages what shows).
  */
-import { IMAGES_GROUP_SUFFIX, isFlatFileGroupKey, sheetGroupTone, type SheetTone } from '@nexus/shared/sheet-groups'
-import { PRODUCT_ROLE_COLUMN } from '@nexus/shared/master-sheet'
+import { SHEET_GROUPS, isSheetGroupKey, sheetGroupRank, type SheetGroupDef, type SheetTone } from '@nexus/shared/sheet-groups'
 import type { ColDef, ColGroupDef } from '@/design-system/grid'
 import type { ColumnsViewPayload } from '@/design-system/grid/views/viewPayload'
 
@@ -23,44 +22,46 @@ interface Groupable {
   groupKey?: string
   groupTone?: SheetTone
   managedBy?: string
+  /** A language column's own field group (its `groupKey` is the language split's). */
+  sourceGroupKey?: string
 }
 
-/** True when the server grouped this sheet like the old flat file (eBay, Amazon). */
-export const flatFileGrouped = (columns: readonly { groupKey?: string }[]): boolean => columns.some((c) => isFlatFileGroupKey(c.groupKey))
+/** Every key the sheet's groups use. */
+const SHEET_GROUP_KEYS: ReadonlySet<string> = new Set(Object.values(SHEET_GROUPS).map((g) => g.key))
+
+/** True when the server put this sheet's columns in the sheet groups (every sheet since 2026-10-01). */
+export const sheetGrouped = (columns: readonly { groupKey?: string; sourceGroupKey?: string }[]): boolean =>
+  columns.some((c) => isSheetGroupKey(c.groupKey) || isSheetGroupKey(c.sourceGroupKey))
 
 /**
- * Every column with its group's colour; on a flat-file sheet the progress columns join the first group (Identifiers /
- * Offer Identity, where the relationship columns are) and Product media leads the Images group. Idempotent.
+ * The sheet's own columns in the groups — Progress leads Offer Identity, Product media leads Images — and every column
+ * in its group's place. Idempotent; a sheet the server did not group is returned as it is.
  */
 export function withSheetGroups<T extends Groupable>(columns: readonly T[]): T[] {
-  const toned = (c: T): T => (c.groupTone ? c : { ...c, groupTone: sheetGroupTone(c.groupKey, c.group) })
-  if (!flatFileGrouped(columns)) return columns.map(toned)
-  const home = columns.find((c) => c.key === PRODUCT_ROLE_COLUMN) ?? columns.find((c) => c.managedBy !== 'progress' && isFlatFileGroupKey(c.groupKey))
-  const images = columns.find((c) => c.key !== SHEET_MEDIA_COLUMN && isFlatFileGroupKey(c.groupKey) && c.groupKey!.endsWith(IMAGES_GROUP_SUFFIX))
-  const join = (c: T, to: T): T => ({ ...c, group: to.group, groupKey: to.groupKey, groupTone: to.groupTone })
-  const placed = columns.map((c) => c.managedBy === 'progress' && home ? join(c, home)
-    : c.key === SHEET_MEDIA_COLUMN && images ? join(c, images)
-      : toned(c))
-  const media = placed.findIndex((c) => c.key === SHEET_MEDIA_COLUMN)
-  if (media < 0 || !images) return placed
-  const [column] = placed.splice(media, 1)
-  placed.splice(placed.findIndex((c) => c.groupKey === images.groupKey), 0, column)
-  return placed
+  if (!sheetGrouped(columns)) return [...columns]
+  const join = (c: T, to: SheetGroupDef): T => ({ ...c, group: to.label, groupKey: to.key, groupTone: to.tone })
+  const placed = columns.map((c, index) => {
+    const column = c.managedBy === 'progress' ? join(c, SHEET_GROUPS.offerIdentity) : c.key === SHEET_MEDIA_COLUMN ? join(c, SHEET_GROUPS.images) : c
+    const leads = c.managedBy === 'progress' || c.key === SHEET_MEDIA_COLUMN
+    return { column, index, rank: sheetGroupRank(column.sourceGroupKey ?? column.groupKey) * 2 + (leads ? 0 : 1) }
+  })
+  return placed.sort((a, b) => a.rank - b.rank || a.index - b.index).map(({ column }) => column)
 }
 
 /**
- * A layout saved before the sheet took the flat file's groups: its columns, hidden columns and pins stay; its column
- * ORDER, group order and group moves are dropped — they name the old groups, and keeping them would scatter the flat
- * file's order. A layout saved since (it lists a flat-file group) is the operator's and is returned as it is.
+ * A layout saved before the current groups: its columns, hidden columns and pins stay; its column ORDER, group order and
+ * group moves are dropped — they name groups that no longer exist, and keeping them would scatter the groups' order. A
+ * layout saved since (its group order names today's groups and no retired one) is the operator's and is kept as it is.
  */
-export function withoutPreGroupingOrder<P extends ColumnsViewPayload>(payload: P, flatFile: boolean): P {
-  if (!flatFile || payload.v !== 3 || payload.groupOrder.some(isFlatFileGroupKey)) return payload
-  return { ...payload, columnOrder: [], groupOrder: [], groupOverrides: {} }
+export function withoutPreGroupingOrder<P extends ColumnsViewPayload>(payload: P, grouped: boolean): P {
+  if (!grouped || payload.v !== 3) return payload
+  const current = payload.groupOrder.some((k) => SHEET_GROUP_KEYS.has(k)) && !payload.groupOrder.some((k) => isSheetGroupKey(k) && !SHEET_GROUP_KEYS.has(k))
+  return current ? payload : { ...payload, columnOrder: [], groupOrder: [], groupOverrides: {} }
 }
 
 /**
  * `keys` with each of `extra` put back where `natural` has it: after the last key that comes before it in `natural`
- * (first when none does). How the always-shown variation theme keeps its seat in Listing / Variations.
+ * (first when none does). How the always-shown variation theme keeps its seat in its group.
  */
 export function insertInNaturalOrder(keys: readonly string[], extra: readonly string[], natural: readonly string[]): string[] {
   const out = keys.filter((k) => !extra.includes(k))

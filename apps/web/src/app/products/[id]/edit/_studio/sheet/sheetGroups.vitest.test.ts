@@ -3,52 +3,55 @@ import type { SheetTone } from '@nexus/shared/sheet-groups'
 import { insertInNaturalOrder, sheetHeaderClasses, withGroupHeaderClass, withoutPreGroupingOrder, withSheetGroups, SHEET_MEDIA_COLUMN, type SheetHeaderClassParams } from './sheetGroups'
 import { sheetLayoutPayload, columnsViewPayload } from '@/design-system/grid/views/viewPayload'
 
-const col = (key: string, groupKey: string, group: string, groupTone?: SheetTone, managedBy?: string) => ({ key, group, groupKey, ...(groupTone ? { groupTone } : {}), ...(managedBy ? { managedBy } : {}) })
+const col = (key: string, groupKey: string, group: string, groupTone?: SheetTone, managedBy?: string, sourceGroupKey?: string) =>
+  ({ key, group, groupKey, ...(groupTone ? { groupTone } : {}), ...(managedBy ? { managedBy } : {}), ...(sourceGroupKey ? { sourceGroupKey } : {}) })
 
-/** An eBay sheet as the server now sends it (flat-file groups), plus the columns the web adds. */
-const ebay = [
+/** A Shared sheet as the server now sends it (sheet groups), plus the columns the web adds. */
+const shared = [
   col('progress:scope', 'progress', 'Progress', undefined, 'progress'),
-  col('__productRole', 'sheet:identifiers', 'Identifiers', 'slate'),
-  col('__parentSku', 'sheet:identifiers', 'Identifiers', 'slate'),
-  col('name', 'sheet:listing', 'Listing', 'blue'),
-  col('description', 'sheet:content', 'Content', 'purple'),
+  col('variation_theme', 'sheet:offer-identity', 'Offer Identity', 'slate'),
+  col('__productRole', 'sheet:offer-identity', 'Offer Identity', 'slate'),
+  col('basePrice', 'sheet:offer', 'Offer', 'emerald'),
+  col('description', 'sheet:product-details', 'Product Details', 'blue'),
   col(SHEET_MEDIA_COLUMN, 'media', 'Media'),
-  col('price', 'sheet:pricing', 'Pricing', 'emerald'),
-  col('imageUrls', 'sheet:images', 'Images', 'teal'),
-  col('videoId', 'sheet:images', 'Images', 'teal'),
-  col('brand', 'sheet:item-specifics', 'Item Specifics', 'teal'),
+  col('name@it', 'language:name', 'Name', 'blue', undefined, 'sheet:product-details'),
+  col('material', 'sheet:product-details', 'Product Details', 'blue'),
 ]
 
 describe('withSheetGroups', () => {
-  it('puts Progress in the first group and Product media at the front of Images, in their colours', () => {
-    const out = withSheetGroups(ebay)
-    expect(out.map((c) => c.key)).toEqual(['progress:scope', '__productRole', '__parentSku', 'name', 'description', 'price', SHEET_MEDIA_COLUMN, 'imageUrls', 'videoId', 'brand'])
-    expect(out[0]).toMatchObject({ group: 'Identifiers', groupKey: 'sheet:identifiers', groupTone: 'slate' })
-    expect(out.find((c) => c.key === SHEET_MEDIA_COLUMN)).toMatchObject({ group: 'Images', groupKey: 'sheet:images', groupTone: 'teal' })
+  it('puts Progress at the front of Offer Identity and Product media in Images, in the groups\' order', () => {
+    const out = withSheetGroups(shared)
+    expect(out.map((c) => c.key)).toEqual(['progress:scope', 'variation_theme', '__productRole', 'basePrice', SHEET_MEDIA_COLUMN, 'description', 'name@it', 'material'])
+    expect(out[0]).toMatchObject({ group: 'Offer Identity', groupKey: 'sheet:offer-identity', groupTone: 'slate' })
+    expect(out.find((c) => c.key === SHEET_MEDIA_COLUMN)).toMatchObject({ group: 'Images', groupKey: 'sheet:images', groupTone: 'pink' })
   })
 
-  it('is idempotent', () => {
-    const once = withSheetGroups(ebay)
+  it('keeps a language column with its field\'s group, and is idempotent', () => {
+    const once = withSheetGroups(shared)
+    expect(once.find((c) => c.key === 'name@it')?.groupKey).toBe('language:name')
     expect(withSheetGroups(once)).toEqual(once)
   })
 
-  it('leaves a sheet the flat file never grouped (Shared, Shopify) in place, colouring each group by what it holds', () => {
-    const shared = [col('progress:scope', 'progress', 'Progress', undefined, 'progress'), col('description', 'master:content', 'Content'), col(SHEET_MEDIA_COLUMN, 'media', 'Media')]
-    const out = withSheetGroups(shared)
-    expect(out.map((c) => [c.key, c.groupKey, c.groupTone])).toEqual([['progress:scope', 'progress', 'slate'], ['description', 'master:content', 'purple'], [SHEET_MEDIA_COLUMN, 'media', 'teal']])
+  it('leaves a sheet the server did not group as it is', () => {
+    const old = [col('progress:scope', 'progress', 'Progress', undefined, 'progress'), col('description', 'master:content', 'Content')]
+    expect(withSheetGroups(old)).toEqual(old)
   })
 })
 
 describe('withoutPreGroupingOrder', () => {
   const old = sheetLayoutPayload({ columns: ['price', 'name'], columnOrder: ['price', 'name'], lockedColumns: ['price'], groupOrder: ['progress', 'variation-theme', 'EBAY:offer', 'EBAY:content'], groupOverrides: { name: 'EBAY:offer' } })
 
-  it('keeps an old layout\'s columns and pins but drops its order and group moves, on a flat-file sheet', () => {
-    const out = withoutPreGroupingOrder(old, true)
-    expect(out).toMatchObject({ columns: ['price', 'name'], lockedColumns: ['price'], columnOrder: [], groupOrder: [], groupOverrides: {} })
+  it('keeps an old layout\'s columns and pins but drops its order and group moves', () => {
+    expect(withoutPreGroupingOrder(old, true)).toMatchObject({ columns: ['price', 'name'], lockedColumns: ['price'], columnOrder: [], groupOrder: [], groupOverrides: {} })
   })
 
-  it('keeps a layout saved since the regrouping, a layout on any other sheet, and a plain view as they are', () => {
-    const since = sheetLayoutPayload({ columns: ['name'], columnOrder: ['name'], lockedColumns: [], groupOrder: ['sheet:identifiers', 'sheet:listing'], groupOverrides: {} })
+  it('also drops the order of a layout saved under the first, flat-file names (a retired sheet group)', () => {
+    const interim = sheetLayoutPayload({ columns: ['name'], columnOrder: ['name'], lockedColumns: [], groupOrder: ['sheet:identifiers', 'sheet:listing', 'sheet:images'], groupOverrides: {} })
+    expect(withoutPreGroupingOrder(interim, true)).toMatchObject({ columnOrder: [], groupOrder: [] })
+  })
+
+  it('keeps a layout saved under today\'s groups, a layout on a sheet the server did not group, and a plain view', () => {
+    const since = sheetLayoutPayload({ columns: ['name'], columnOrder: ['name'], lockedColumns: [], groupOrder: ['sheet:offer-identity', 'sheet:product-details'], groupOverrides: {} })
     expect(withoutPreGroupingOrder(since, true)).toBe(since)
     expect(withoutPreGroupingOrder(old, false)).toBe(old)
     const plain = columnsViewPayload(['name'])

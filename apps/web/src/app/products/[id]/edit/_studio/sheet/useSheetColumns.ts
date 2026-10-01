@@ -36,7 +36,7 @@ import { viewChipColumns, type ViewChip } from '../contracts'
 import type { SheetColumn } from './master/types'
 import { alwaysColumnsFor, GAPS_VIEW_ID, orderColumnKeys, REQUIRED_VIEW_ID, sheetViews, structuralColumnKeys, type ViewContext } from './views'
 import { defaultViewKeys } from './slotListColumns'
-import { flatFileGrouped, insertInNaturalOrder, sheetHeaderClasses, withoutPreGroupingOrder, type SheetHeaderClassParams, type SheetHeaderGroup } from './sheetGroups'
+import { insertInNaturalOrder, sheetGrouped, sheetHeaderClasses, withoutPreGroupingOrder, type SheetHeaderClassParams, type SheetHeaderGroup } from './sheetGroups'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 import {
   chooseLanding, fieldPayload, FRONT_GROUP_KEYS, hasMyLayout, languageKeyMap, layoutPart, pickOf, progressShown,
@@ -211,8 +211,8 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   /* R-VT-1 (2026-09-13): a STRUCTURAL column joins the always-columns, so a saved view that predates
      it cannot silently drop it. Derived from the live column set by KIND — see `structuralColumnKeys`. */
   const structural = useMemo(() => structuralColumnKeys(fieldColumns), [fieldColumns])
-  /** The server grouped this sheet like the old flat file (eBay, Amazon): no front groups, the flat file's order. */
-  const flatFile = useMemo(() => flatFileGrouped(fieldColumns), [fieldColumns])
+  /** The server put this sheet's columns in the sheet groups (`sheetGroups.ts`). */
+  const grouped = useMemo(() => sheetGrouped(fieldColumns), [fieldColumns])
   const alwaysColumns = useMemo(() => alwaysColumnsFor(addressable, structural), [addressable, structural])
   const allColumnKeys = useMemo(() => [...new Set([...alwaysColumns, ...progressKeys, ...orderedKeys])], [alwaysColumns, progressKeys, orderedKeys])
   const gridOrderedKeys = useMemo(() => columns.filter((c) => c.managedBy !== 'progress').map((c) => c.key), [columns])
@@ -230,9 +230,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     // move and pin; it sits in a group of its own right after Progress — where the sheet shows it until it is moved
     // (2026-09-27: the Customise order and the sheet order must be one order).
     const spec = (c: SheetColumn): PreferencesColumnSpec => ({ key: c.key, label: c.label, group: c.group, groupKey: c.groupKey, ...(c.groupTone ? { groupTone: c.groupTone } : {}), ...(c.managedBy === 'progress' ? { uncounted: true } : {}) })
-    /* 2026-10-01 — the variation theme stays in ITS group, still always shown: Listing / Variations on eBay and Amazon
-       (where the flat file had it), Identity everywhere else (the Owner folded Variation theme, Product relationships,
-       Identity and Identifiers into one Identity group). Progress leads; on eBay and Amazon it is already in the first group. */
+    /* 2026-10-01 — the variation theme stays in ITS group, still always shown: Variations on eBay and Amazon, Offer
+       Identity everywhere else (the Owner folded Variation theme, Product relationships, Identity and Identifiers into
+       one identity group). Progress leads Offer Identity on every sheet. */
     return [
       { key: identityColumn, label: 'Identity (SKU, readiness)', locked: true },
       ...fieldColumns.filter((c) => c.managedBy === 'progress').map(spec),
@@ -244,7 +244,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const views = useMemo(() => {
     const built = sheetViews(attributeColumns, fieldCtx, serverViews)
     const lead = structural.filter((k) => attributeKeys.has(k))
-    // The variation theme keeps its seat in its group (Listing, Variations or Identity) instead of leading.
+    // The variation theme keeps its seat in its group (Variations or Offer Identity) instead of leading.
     return lead.length ? { ...built, presets: built.presets.map((p) => ({ ...p, columns: insertInNaturalOrder(p.columns, lead, orderedKeys) })) } : built
   }, [attributeColumns, fieldCtx, serverViews, structural, attributeKeys, orderedKeys])
   /* SHEET-VIEWS step 5 — the row facts a rule view follows. Read through a ref when a view is applied, so a
@@ -442,8 +442,8 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
    * on a column that has only now arrived must hold; `false` keeps the screen's pins.
    */
   const activate = useCallback((next: ActiveColumns, stored: ColumnsViewPayload, restoreLocks: boolean | 'merge' = true) => {
-    // A layout saved before the flat-file groups keeps its columns and pins, not its old order (`sheetGroups.ts`).
-    const payload = withoutPreGroupingOrder(stored, flatFile)
+    // A layout saved before the current groups keeps its columns and pins, not its old order (`sheetGroups.ts`).
+    const payload = withoutPreGroupingOrder(stored, grouped)
     // The STORED payload is kept (its rules too); what shows is its keys plus what its rules match here today.
     layoutRef.current = payload
     const keys = shownKeys(payload)
@@ -454,7 +454,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     paint(true, !saved || !restoreLocks ? undefined
       : restoreLocks === 'merge' && api && !api.isDestroyed() ? [...new Set([...gridLocks(api), ...saved])] : saved)
     gridState.markDirty()
-  }, [shownKeys, paint, gridState, apiRef, gridLocks, flatFile])
+  }, [shownKeys, paint, gridState, apiRef, gridLocks, grouped])
   /** An explicit column choice stops a filter's narrowing: the columns follow what was asked for last. */
   const stopNarrowing = useCallback(() => { narrowRef.current = false; setNarrowState(false) }, [])
   const presetPayload = useCallback((preset: GridViewPreset) => columnsViewPayload(resolvePreset(preset, addressable, alwaysColumns).columns.filter((k) => attributeKeys.has(k))), [addressable, alwaysColumns, attributeKeys])

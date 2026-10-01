@@ -192,7 +192,7 @@ export function chooseLanding(input: LandingChoiceInput): LandingChoice {
 /**
  * The groups the sheet shows FIRST by default. A layout saved before one of them existed never ordered it; Customise then
  * lists it first too (not at the bottom), so the dialog and the sheet agree. (Until 2026-10-01 the variation theme had a
- * front group of its own; it now sits in its group — Identity, or Listing / Variations on eBay and Amazon.)
+ * front group of its own; it now sits in its group — Offer Identity, or Variations on eBay and Amazon.)
  */
 export const FRONT_GROUP_KEYS = ['progress'] as const
 

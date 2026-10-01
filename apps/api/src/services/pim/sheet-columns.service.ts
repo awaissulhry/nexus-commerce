@@ -210,8 +210,6 @@ export interface SheetGroup {
   /** The channel's localised title where the group is a channel's (`Offerta`). */
   channelLabel: string | null
   order: number
-  /** The group's position in the channel's own schema (Amazon's `__propertyGroups`); `order` is the display order. */
-  sourceOrder?: number
   /** The group's colour on the product sheet (`@nexus/shared/sheet-groups`). */
   tone?: SheetTone
 }
@@ -677,7 +675,7 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       const gk = `${spec.channel}:${g.key}`
       if (seenGroup.has(gk)) continue
       seenGroup.add(gk)
-      channelGroups.push({ key: gk, label: g.label, channelLabel: g.channelLabel, order: g.order, sourceOrder: g.order })
+      channelGroups.push({ key: gk, label: g.label, channelLabel: g.channelLabel, order: g.order })
     }
     for (const f of spec.fields) {
       const listingOnly = !!f.channelStore && !f.masterKey
