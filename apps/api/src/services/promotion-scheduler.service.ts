@@ -40,7 +40,10 @@ interface PromotionTickResult {
   exitedEvents: number
   /** Sales actually written through the price door (set or ended). */
   listingsUpdated: number
-  /** Listings in a promotion's scope that got no sale, each logged with its reason (see `skipPromotion`). */
+  /**
+   * Listings in a promotion's scope that got no sale and were logged with their reason in THIS tick (see
+   * `recordPromotionSkips`): a skip is logged and counted once per listing per event, not again on every later tick.
+   */
   listingsSkipped: number
   snapshotsRefreshed: number
   durationMs: number
@@ -91,12 +94,12 @@ export async function runPromotionScheduler(
   })
 
   let listingsUpdated = 0
-  let listingsSkipped = 0
   const skusTouched = new Set<string>()
-  // A listing in scope that gets no sale: said by name, and counted.
+  // A listing in scope that gets no sale: said by name — once per listing per event (`recordPromotionSkips`, after the
+  // pass). The event stays in its start window for a whole day of ticks, and a listing in two of its actions is met twice.
+  const skips: PromotionSkip[] = []
   const skipPromotion = (l: { id: string; channel: string; marketplace: string }, eventId: string, reason: string, extra: Record<string, unknown> = {}) => {
-    listingsSkipped++
-    logger.info('promotion skipped on a listing', { listingId: l.id, channel: l.channel, marketplace: l.marketplace, eventId, reason, ...extra })
+    skips.push({ listingId: l.id, channel: l.channel, marketplace: l.marketplace, eventId, phase: 'start', reason, extra })
   }
   // Every market's currency (the door reads them the same way), and the master currency the product's floor and
   // ceiling are in. Read once per tick, only when a promotion starts.
@@ -196,7 +199,7 @@ export async function runPromotionScheduler(
       })
       const outcome = written.results[0]
       if (!outcome || outcome.outcome !== 'applied') {
-        if (outcome?.outcome === 'refused') skipPromotion(l, action.eventId, outcome.reason ?? 'The price door refused the sale.')
+        if (outcome?.outcome === 'refused') skipPromotion(l, action.eventId, outcome.reason ?? 'The sale was not set.')
         continue
       }
       // PH.1 — record the promo start on the unified timeline. oldPrice is
@@ -226,9 +229,12 @@ export async function runPromotionScheduler(
     }
   }
 
+  const listingsSkipped = await recordPromotionSkips(prisma, skips)
+
   // ── EXIT: events whose end window has passed ────────────────────
   // The end date is INCLUSIVE (a one-day event has startDate == endDate; the sale's window ends on that day, as the
   // door sends it): the event is over once its end day is, not at that day's first second.
+  const endSkips: PromotionSkip[] = []
   const exitingActions = await prisma.retailEventPriceAction.findMany({
     where: {
       isActive: true,
@@ -264,7 +270,9 @@ export async function runPromotionScheduler(
     const listings = await promotionSales(prisma, action.eventId, candidates)
     for (const l of listings) {
       const ended = await endPromotionSale(l.id, action.eventId, action.event.name)
-      if (!ended) continue
+      // A refused end stays this promotion's sale, so every later tick meets it again: said once per listing per event.
+      if (ended.refused) endSkips.push({ listingId: l.id, channel: l.channel, marketplace: l.marketplace, eventId: action.eventId, phase: 'end', reason: ended.refused, extra: {} })
+      if (!ended.applied) continue
       // PH.1 — record the promo end. oldPrice is the sale price being
       // cleared; newPrice is the standing price the listing reverts to.
       if (l.product?.sku) {
@@ -290,6 +298,8 @@ export async function runPromotionScheduler(
       for (const v of l.product?.variations ?? []) skusTouched.add(v.sku)
     }
   }
+
+  await recordPromotionSkips(prisma, endSkips)
 
   // ── Refresh snapshots for affected SKUs ─────────────────────────
   let snapshotsRefreshed = 0
@@ -320,6 +330,71 @@ export async function runPromotionScheduler(
 
 const isoDay = (d: Date) => new Date(d).toISOString().slice(0, 10)
 
+/** A listing a promotion did not put on sale (`start`), or whose promotion sale the door would not end (`end`). */
+interface PromotionSkip {
+  listingId: string
+  channel: string
+  marketplace: string
+  eventId: string
+  phase: 'start' | 'end'
+  reason: string
+  extra: Record<string, unknown>
+}
+
+/** The audit action a promotion's skip is recorded under: the record that it has been said, for this listing and event. */
+export const PROMOTION_SKIP_ACTION = 'promotion-skipped'
+
+/**
+ * Say each skip ONCE per listing per event (per phase): a log line and an audit row on the listing. A skip already
+ * recorded by an earlier tick — the event re-enters on every tick of its start window, and an ended event is met on
+ * every tick after it — is not said again, nor a second meeting in the same pass (a listing in two actions of one event).
+ * The listing is still judged on every tick (a skip can lift: a ceiling raised, a currency configured); only the saying
+ * is once. Returns how many skips were said now. Best effort: a failed audit write never stops the tick (that skip is
+ * then said again next tick).
+ */
+async function recordPromotionSkips(prisma: PrismaClient, skips: readonly PromotionSkip[]): Promise<number> {
+  if (!skips.length) return 0
+  const key = (s: { listingId: string; eventId: unknown; phase: unknown }) => `${String(s.eventId)}|${s.listingId}|${String(s.phase)}`
+  const seen = new Set<string>()
+  let recorded: Array<{ entityId: string; metadata: unknown }> = []
+  try {
+    recorded = await prisma.auditLog.findMany({
+      where: { entityType: 'ChannelListing', action: PROMOTION_SKIP_ACTION, entityId: { in: [...new Set(skips.map((s) => s.listingId))] } },
+      select: { entityId: true, metadata: true },
+    })
+  } catch (error) {
+    // Unread, a skip may be said twice; never a tick that stops.
+    logger.warn('promotion skips: the record of skips already said could not be read', { error: error instanceof Error ? error.message : String(error) })
+  }
+  for (const row of recorded) {
+    const m = (row.metadata ?? {}) as { eventId?: unknown; phase?: unknown }
+    seen.add(key({ listingId: row.entityId, eventId: m.eventId, phase: m.phase ?? 'start' }))
+  }
+  const fresh: PromotionSkip[] = []
+  for (const s of skips) {
+    if (seen.has(key(s))) continue
+    seen.add(key(s))
+    fresh.push(s)
+  }
+  for (const s of fresh) {
+    if (s.phase === 'start') logger.info('promotion skipped on a listing', { listingId: s.listingId, channel: s.channel, marketplace: s.marketplace, eventId: s.eventId, reason: s.reason, ...s.extra })
+    else logger.warn('promotion sale not ended on a listing', { listingId: s.listingId, channel: s.channel, marketplace: s.marketplace, eventId: s.eventId, reason: s.reason })
+  }
+  if (fresh.length) {
+    try {
+      await prisma.auditLog.createMany({
+        data: fresh.map((s) => ({
+          userId: null, entityType: 'ChannelListing', entityId: s.listingId, action: PROMOTION_SKIP_ACTION,
+          metadata: { eventId: s.eventId, phase: s.phase, reason: s.reason, channel: s.channel, marketplace: s.marketplace, ...s.extra } as never,
+        })),
+      })
+    } catch (error) {
+      logger.warn('promotion skips: audit write failed; they are said again next tick', { error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return fresh.filter((s) => s.phase === 'start').length
+}
+
 /**
  * The listings among `candidates` whose sale this promotion set and nobody changed since: the latest sale change on
  * each is the door's audit row by `promotion:<event>` — or, for a sale set before the door, the old
@@ -341,15 +416,17 @@ async function promotionEntered(prisma: PrismaClient, eventId: string, l: { id: 
   return row !== null
 }
 
-/** End a promotion's sale on one listing through the door (the sale cleared, queued; on Amazon with `saleRemoved`). */
-async function endPromotionSale(listingId: string, eventId: string, eventName: string): Promise<boolean> {
+/**
+ * End a promotion's sale on one listing through the door (the sale cleared, queued; on Amazon with `saleRemoved`).
+ * `refused` is the door's sentence when it would not end it; the caller says it (the tick, once per listing per event).
+ */
+async function endPromotionSale(listingId: string, eventId: string, eventName: string): Promise<{ applied: boolean; refused?: string }> {
   const written = await writeChannelPrices({
     targets: [{ listingId, sale: { value: null, start: null, end: null }, unguardedReason: 'promotion' }],
     actor: `promotion-clear:${eventId}`, source: 'PROMO_END', reason: `Promotion "${eventName}" ended`,
   })
   const outcome = written.results[0]
-  if (outcome?.outcome === 'refused') logger.warn('promotion sale not ended on a listing', { listingId, eventId, reason: outcome.reason })
-  return outcome?.outcome === 'applied'
+  return { applied: outcome?.outcome === 'applied', ...(outcome?.outcome === 'refused' ? { refused: outcome.reason ?? 'The sale was not ended.' } : {}) }
 }
 
 /**
@@ -359,6 +436,11 @@ async function endPromotionSale(listingId: string, eventId: string, eventName: s
 export async function endPromotionSales(prisma: PrismaClient, eventId: string, eventName: string): Promise<number> {
   const candidates = await prisma.channelListing.findMany({ where: { salePrice: { not: null } }, select: { id: true, lastOverrideBy: true } })
   let ended = 0
-  for (const l of await promotionSales(prisma, eventId, candidates)) if (await endPromotionSale(l.id, eventId, eventName)) ended++
+  for (const l of await promotionSales(prisma, eventId, candidates)) {
+    const done = await endPromotionSale(l.id, eventId, eventName)
+    // An operator's one delete: said here, once.
+    if (done.refused) logger.warn('promotion sale not ended on a listing', { listingId: l.id, eventId, reason: done.refused })
+    if (done.applied) ended++
+  }
   return ended
 }

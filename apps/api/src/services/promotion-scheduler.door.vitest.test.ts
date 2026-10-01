@@ -340,6 +340,108 @@ describe('🔴 a promotion\'s sale: one currency, the product\'s own floor/ceili
     expect(result.listingsUpdated).toBe(1)
     expect(vi.mocked(recordPriceChange).mock.calls.length - before).toBe(1)
   }))
+
+  // ── Round 5: a skip is said ONCE per listing per event ─────────────────────────────────────────────────────────────
+  describe('🔴 a promotion\'s skip is logged once per listing per event — not on every tick, not per action', () => {
+    /** Every log line of `message` for these listings, over one tick: [listingId, reason]. */
+    async function linesOf(message: string, level: 'info' | 'warn', ids: string[], run: () => Promise<unknown>) {
+      const spy = vi.spyOn(logger, level)
+      try {
+        const result = await run()
+        const lines = spy.mock.calls.filter((c) => c[0] === message).map((c) => c[1] as { listingId: string; reason: string }).filter((l) => ids.includes(l.listingId))
+        return { result, lines }
+      } finally {
+        spy.mockRestore()
+      }
+    }
+    const skipAudits = (listingId: string) => prisma.auditLog.findMany({ where: { entityType: 'ChannelListing', entityId: listingId, action: 'promotion-skipped' } })
+    const seedMarket = async (id: string, channel: string, marketplace: string, product: Record<string, unknown> = {}, listing: Record<string, unknown> = {}) => {
+      await prisma.product.upsert({ where: { id }, create: { id, sku: id.toUpperCase(), name: id, basePrice: 20, productType: `TYPE_${id.toUpperCase()}`, ...product } as never, update: {} })
+      return prisma.channelListing.create({ data: {
+        productId: id, channel, channelConnectionId: accounts[channel], channelMarket: `${channel}_${marketplace}`, marketplace, region: 'EU',
+        listingStatus: 'ACTIVE', isPublished: true, externalListingId: `ITEM-${id}-${channel}-${marketplace}`,
+        price: 20, priceOverride: 20, followMasterPrice: false, masterPrice: 20, ...listing,
+      } as never })
+    }
+
+    it('🔴 Shopify, another currency and a ceiling: each said once on the first tick; the next ticks and a second action of the event say nothing; a second event says it once more', () => scoped(async () => {
+      const id = 'promo-skip-once'
+      const shopify = await seedMarket(id, 'SHOPIFY', 'GLOBAL', { maxPrice: 12 })
+      const uk = await seedMarket(id, 'AMAZON', 'UK')
+      const it = await seedMarket(id, 'AMAZON', 'IT')
+      const ids = [shopify.id, uk.id, it.id]
+      // ONE event, TWO actions that both reach the Amazon listings (every channel, and Amazon).
+      const start = enteringStart()
+      const event = await prisma.retailEvent.create({ data: { name: `Promo ${id}`, startDate: start, endDate: new Date(start.getTime() + 2 * DAY), source: 'CUSTOM' } })
+      for (const channel of [null, 'AMAZON']) {
+        await prisma.retailEventPriceAction.create({ data: { eventId: event.id, channel, productType: `TYPE_${id.toUpperCase()}`, action: 'FIXED_PRICE', value: 15 } as never })
+      }
+
+      const first = await linesOf('promotion skipped on a listing', 'info', ids, () => runPromotionScheduler(prisma as never))
+      expect(first.lines.map((l) => l.listingId).sort()).toEqual([...ids].sort())
+      expect(first.lines.find((l) => l.listingId === shopify.id)?.reason).toBe("Shopify's price sender does not send a sale price, so a promotion is not set on Shopify listings.")
+      expect(first.lines.find((l) => l.listingId === uk.id)?.reason).toBe('The fixed price EUR 15.00 is not set on a market that sells in GBP.')
+      expect(first.lines.find((l) => l.listingId === it.id)?.reason).toBe('Not changed: 15.00 is above its pricing ceiling of 12.00.')
+      // Counted as said: the tick's count is its lines.
+      expect((first.result as { listingsSkipped: number }).listingsSkipped).toBeGreaterThanOrEqual(3)
+      // Recorded once on each listing, for this event, with its reason.
+      for (const l of ids) {
+        const audits = await skipAudits(l)
+        expect(audits, l).toHaveLength(1)
+        expect(audits[0].metadata).toMatchObject({ eventId: event.id, phase: 'start' })
+      }
+
+      // The event is still in its start window: the next ticks judge the listings again, and say nothing again.
+      for (let n = 0; n < 2; n++) {
+        const again = await linesOf('promotion skipped on a listing', 'info', ids, () => runPromotionScheduler(prisma as never))
+        expect(again.lines, `tick ${n + 2}`).toEqual([])
+      }
+      for (const l of ids) expect(await skipAudits(l), l).toHaveLength(1)
+      for (const l of ids) {
+        expect((await listingRow(l)).salePrice, l).toBeNull()
+        expect(await rows(l), l).toEqual([])
+      }
+
+      // Judged on every tick still: the ceiling raised, the Italian listing gets the sale on the next tick.
+      await prisma.product.update({ where: { id }, data: { maxPrice: 30 } })
+      await runPromotionScheduler(prisma as never)
+      expect(Number((await listingRow(it.id)).salePrice)).toBe(15)
+
+      // Another event over the same Shopify listing is another skip: said once.
+      const other = await prisma.retailEvent.create({ data: { name: `Promo ${id} 2`, startDate: start, endDate: new Date(start.getTime() + 2 * DAY), source: 'CUSTOM' } })
+      await prisma.retailEventPriceAction.create({ data: { eventId: other.id, channel: 'SHOPIFY', productType: `TYPE_${id.toUpperCase()}`, action: 'FIXED_PRICE', value: 14 } as never })
+      const third = await linesOf('promotion skipped on a listing', 'info', [shopify.id], () => runPromotionScheduler(prisma as never))
+      expect(third.lines).toHaveLength(1)
+      const fourth = await linesOf('promotion skipped on a listing', 'info', [shopify.id], () => runPromotionScheduler(prisma as never))
+      expect(fourth.lines).toEqual([])
+      expect((await skipAudits(shopify.id)).map((a) => (a.metadata as { eventId: string }).eventId).sort()).toEqual([event.id, other.id].sort())
+    }))
+
+    it('🔴 a promotion sale the door will not end (a GBP follower that holds no price of its own) is said once, not on every tick after the event', () => scoped(async () => {
+      const id = 'promo-skip-end'
+      const uk = await seedMarket(id, 'AMAZON', 'UK', {}, { price: null, priceOverride: null, followMasterPrice: true, salePrice: 15 })
+      const start = new Date(enteringStart().getTime() - 6 * DAY)
+      const end = new Date(enteringStart().getTime() - 2 * DAY)
+      const event = await promotion(id, { start, end }, { action: 'FIXED_PRICE', value: 15 })
+      // The promotion's sale, as an older writer left it (the door refuses to set a sale beside no price).
+      await prisma.$executeRawUnsafe(`UPDATE "ChannelListing" SET "salePriceStart" = $1::date, "salePriceEnd" = $2::date WHERE id = $3`, iso(start), iso(end), uk.id)
+      await prisma.channelListingOverride.create({ data: { channelListingId: uk.id, fieldName: 'salePrice', previousValue: null, newValue: `15 ${iso(start)}→${iso(end)}`, changedBy: `promotion:${event.id}` } })
+
+      const first = await linesOf('promotion sale not ended on a listing', 'warn', [uk.id], () => runPromotionScheduler(prisma as never))
+      expect(first.lines).toHaveLength(1)
+      expect(first.lines[0].reason).toContain('this listing holds none')
+      for (let n = 0; n < 2; n++) {
+        const again = await linesOf('promotion sale not ended on a listing', 'warn', [uk.id], () => runPromotionScheduler(prisma as never))
+        expect(again.lines, `tick ${n + 2}`).toEqual([])
+      }
+      const audits = await skipAudits(uk.id)
+      expect(audits).toHaveLength(1)
+      expect(audits[0].metadata).toMatchObject({ eventId: event.id, phase: 'end' })
+      // Still not ended, and nothing queued: the refusal stands, only its saying is once.
+      expect(Number((await listingRow(uk.id)).salePrice)).toBe(15)
+      expect(await rows(uk.id)).toEqual([])
+    }))
+  })
 })
 
 describe('a promotion ends: its sale is removed through the price door', () => {
