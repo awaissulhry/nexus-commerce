@@ -20,10 +20,10 @@ export default function MatrixResult({
   if (!product.isParent) {
     return (
       <div className="max-w-2xl mx-auto py-16 px-6 text-center space-y-3">
-        <h1 className="text-2xl font-semibold text-slate-900">
+        <h1 className="text-2xl font-semibold text-primary">
           No matrix for this product
         </h1>
-        <p className="text-md text-slate-600">
+        <p className="text-md text-secondary">
           The matrix view is for parent SKUs that have variations across
           colour / size / etc. <span className="font-mono">{product.sku}</span>{' '}
           is a standalone — open it directly to edit master fields.
