@@ -84,6 +84,7 @@ import insightsRoutes from "./routes/insights.routes.js";
 import customerSegmentsRoutes from "./routes/customer-segments.routes.js";
 import ordersRoutingRoutes from "./routes/orders-routing.routes.js";
 import productsRoutes from "./routes/products.routes.js";
+import productCreateRoutes from "./routes/product-create.routes.js";
 import productsBulkSaveRoutes from "./routes/products-bulk-save.routes.js";
 import listingRecoveryRoutes from "./routes/listing-recovery.routes.js";
 import familiesRoutes from "./routes/families.routes.js";
@@ -634,6 +635,7 @@ app.register(insightsRoutes, { prefix: '/api' });
 app.register(customerSegmentsRoutes, { prefix: '/api' });
 app.register(ordersRoutingRoutes, { prefix: '/api' });
 app.register(productsRoutes, { prefix: '/api' });
+app.register(productCreateRoutes, { prefix: '/api' }); // the Products page's "New product" dialog: one DRAFT product
 app.register(productsBulkSaveRoutes, { prefix: '/api' }); // one sheet operation (fill, paste, undo) = one request, one transaction
 app.register(listingRecoveryRoutes, { prefix: '/api' });
 app.register(familiesRoutes, { prefix: '/api' });

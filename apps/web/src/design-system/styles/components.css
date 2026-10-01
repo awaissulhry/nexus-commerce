@@ -2256,6 +2256,18 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   line-height: 1.4;
   color: var(--nds-text-muted);
 }
+/* `Field`'s error: what is wrong with the value, under the control and above the hint. The sentence is the signal;
+   the danger text colour (the required marker's, 7.36:1) and the control's danger border repeat it. */
+.nds-field-error {
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.4;
+  color: var(--nds-danger-text);
+}
+.nds-field-w.invalid > .nds-field,
+.nds-field-w.invalid > .nds-field-row > .nds-field {
+  border-color: var(--nds-danger);
+}
 
 /* A Card that is a <button> — a KPI tile that filters a chart, a card that scrolls to its
    section. Four surfaces hand-rolled this. Resets the button chrome and inherits type, so the

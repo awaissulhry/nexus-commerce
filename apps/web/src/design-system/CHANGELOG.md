@@ -1,3 +1,7 @@
+## Field shows what is wrong with a value — 2026-10-01
+
+**`Field`** takes **`error`**: a sentence under the control in `--nds-danger-text` (7.36:1, the required marker's colour), read with the control through `aria-describedby` (before the hint). While it is set the control gets `aria-invalid` (unless it states its own) and an `Input` inside gets a `--nds-danger` border (`.nds-field-error`, `.nds-field-w.invalid`, `styles/components.css`). Unset, the field renders exactly as before. First user: the Products page's "New product" dialog. Catalog: the SKU example under Input. Mirrored in Factory (`Field.tsx`, `components.css`).
+
 ## The accent identity chip reads in light mode again — 2026-10-01
 
 Older pages' dark-mode audit (`fix/dark-mode-older-pages`). **`.nds-cell-chip-accent`** (the "P" parent pill in the product sheet's identity band, `grid/theme/grid.css`) filled with `--nds-rail-text`. Since the rail joined the dark chrome (TB, 2026-08-31) that token is the chrome's LIGHT ink in light mode, so the white "P" sat on #aab6c2 at 2.06:1. It now fills with **`--nds-text-2`**: white on #3a4452 is 9.9:1 light, and the dark-mode inverse ink on #c3ccd6 is 9.8:1. Mirrored in Factory.

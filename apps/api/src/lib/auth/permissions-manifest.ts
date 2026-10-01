@@ -221,6 +221,9 @@ export const ENTRIES: Entry[] = [
   P(F.marketingPublish, pfx('/api/image-publish-jobs')),
 
   // ── S2 coverage: catalog / PIM sub-resources ───────────────────
+  // The Products page's "New product" dialog creates one DRAFT product: `products.create`, not the `/api/products`
+  // prefix rule's products.edit below (GET /api/products, the list, stays products.view there).
+  P(F.productsCreate, (m, p) => m === 'POST' && p === '/api/products'),
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/studio-publication(?:\/|$)/.test(p)),
   // Sheet pop-up P3 A3 — "New attribute" from the variation pop-up creates a dictionary attribute and places it in a family:
   // what `/api/attributes` and `/api/families` require, never the `/api/products` rule's products.edit below.

@@ -2429,7 +2429,7 @@ function RightRail({ tab }: { tab: Tab }) {
         <ul className="text-base text-slate-700 dark:text-slate-300 space-y-1">
           <li>
             <Link
-              href="/products/new"
+              href="/products?new=1"
               className="inline-flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-300"
             >
               <PackagePlus className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />

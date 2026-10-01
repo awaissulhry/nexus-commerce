@@ -57,7 +57,7 @@ export default async function DraftsPage() {
         title="Complete Your Drafts"
         subtitle={`${drafts.length} product${drafts.length !== 1 ? "s" : ""} need attention`}
         breadcrumbs={[
-          { label: "Catalog", href: "/catalog/add" },
+          { label: "Catalog", href: "/products" },
           { label: "Complete Your Drafts" },
         ]}
       />
