@@ -1095,7 +1095,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               const [recorded] = await recordLiveListingsInTransaction({
                 channel: 'EBAY', market: mp, accountId: accountId as string, aliasKey: existing?.aliasKey ?? '',
                 rows: [{ productId, listingStatus: status ?? 'ACTIVE', externalListingId: liveItemId, fields: liveFields }],
-              });
+              }, 'ebay-flat-file');
               listingId = recorded.id;
             } catch (err) {
               if (!(err instanceof LiveListingError)) throw err;

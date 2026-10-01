@@ -33,7 +33,7 @@ import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { whereCoordinate } from '../../lib/listing-coordinate.js'
 import { amazonDiscountedPrice } from './discounted-price.js'
 import { primaryConnectionIds } from '../connection-resolver.service.js'
-import { recordLiveListings } from '../pim/live-listing.service.js'
+import { recordLiveListings, sendHeldPricesAfterGoLive } from '../pim/live-listing.service.js'
 
 /** PR-PRESENCE-SANCTIONED-PAIR: offerActive:false => skip_offer:true is the ONE
  * sanctioned two-flag pairing. Acknowledged close owns offerClosedAt + offerActive;
@@ -3594,6 +3594,8 @@ export class AmazonFlatFileService {
                 // A3 — optimistic concurrency on the version the grid was pulled at, as the save below.
                 expectedVersion: existing && row._version != null ? Number(row._version) : undefined }],
             }))
+            // Round 6 — a still-draft this sync made live: its held price changes are sent once (after the commit above).
+            await sendHeldPricesAfterGoLive([recorded], 'amazon-flat-file')
             if (recorded.keptExternalListingId) {
               logger.warn('flat-file sync: the stored ASIN differs from the row — kept, not replaced', { sku, marketplace: mp, ...recorded.keptExternalListingId })
             }

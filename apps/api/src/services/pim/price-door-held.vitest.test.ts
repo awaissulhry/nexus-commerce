@@ -36,6 +36,7 @@ import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.
 import { sendHeldPrices, writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
 import { MasterPriceService } from '../master-price.service.js'
 import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
+import { recordLiveListingsInTransaction } from './live-listing.service.js'
 import { resetSaleWindowColumnCache } from './sale-window.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -131,7 +132,9 @@ describe('🔴 a change made while a live listing is paused is sent ONCE when it
     await master.update(l.productId, 14, { reason: 'test' })
     expect(Number((await listing(l.id)).price)).toBe(15.4)
     expect(await pending(l.id)).toEqual([])
-    expect((await held(l.id)).map((row) => (row.payload as { price: number }).price)).toEqual([13.2, 15.4])
+    // Round 6 — ONE held row per listing: the newer master price replaced the older held row (no pile-up while paused).
+    expect((await held(l.id)).map((row) => (row.payload as { price: number }).price)).toEqual([15.4])
+    expect((await priceRows(l.id)).map((row) => row.syncStatus)).toEqual(['CANCELLED', 'SKIPPED'])
 
     expect((await resume(l)).heldPricesSent).toBe(1)
     const sent = await pending(l.id)
@@ -275,6 +278,35 @@ describe('🔴 a draft\'s held change is sent ONCE when it goes live — only wh
   }))
 })
 
+describe('🔴 round 6 — the hook waits for every lock, and every go-live runs it', () => {
+  it('a resumed listing whose offer is closed keeps its held change waiting: nothing is queued into a skip', () => scoped(async () => {
+    const l = await seed('held-closed', { pinned: 20, paused: true })
+    await write({ listingId: l.id, price: 27, expectedVersion: l.version })
+    await prisma.channelListing.update({ where: { id: l.id }, data: { syncPaused: false, offerClosedAt: new Date() } })
+    const r = await sendHeldPrices({ listingIds: [l.id], actor: 'person-2', cause: 'resume' })
+    expect([r.sent, r.stillHeld]).toEqual([[], [l.id]])
+    expect(await pending(l.id)).toEqual([])
+    expect(await held(l.id)).toHaveLength(1)
+    // The offer restored: the next run sends it, once.
+    await prisma.channelListing.update({ where: { id: l.id }, data: { offerClosedAt: null } })
+    expect((await sendHeldPrices({ listingIds: [l.id], actor: 'person-2', cause: 'resume' })).sent).toEqual([l.id])
+    expect((await pending(l.id)).map((row) => (row.payload as { price: number }).price)).toEqual([27])
+  }))
+
+  it('a draft made live by the live-listing recorder (flat files, the wizard, reconciliation, eBay pushes) sends its held Amazon sale once', () => scoped(async () => {
+    const l = await seed('held-recorder', { pinned: 30, draft: true })
+    await write({ listingId: l.id, sale: SALE, expectedVersion: l.version })
+    expect((await held(l.id)).map((row) => row.errorCode)).toEqual(['PRICE_HELD_DRAFT'])
+    const [recorded] = await recordLiveListingsInTransaction({ channel: 'AMAZON', market: 'IT', accountId: accounts.AMAZON,
+      rows: [{ productId: l.productId, listingStatus: 'ACTIVE', externalListingId: 'TEST-ASIN-RECORDER' }] }, 'person-2')
+    expect(recorded).toMatchObject({ id: l.id, unpaused: true })
+    const sent = await pending(l.id)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].payload).toMatchObject({ price: 30, salePrice: 8, salePriceStart: SALE.start, salePriceEnd: SALE.end })
+    expect(await held(l.id)).toEqual([])
+  }))
+})
+
 describe('the hooks that run it', () => {
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   it('every resume\'s recascade sends the held prices of the products it re-works', () => {
@@ -284,6 +316,16 @@ describe('the hooks that run it', () => {
   it('the stock import\'s FOLLOW/PINNED column clears a pause, and sends the held prices of those products', () => {
     const body = source('../stock-import.service.ts').split('export async function applyControlColumns')[1]!.split('\nexport ')[0]!
     expect(body).toMatch(/data: \{ syncPaused: false \}[\s\S]*sendHeldPrices\(\{ productIds: \[\.\.\.resumeProducts\], actor, cause: 'resume' \}\)/)
+  })
+  it('round 6 — every caller of the live-listing recorder sends the held prices after its transaction commits', () => {
+    for (const [file, call] of [
+      ['../amazon/flat-file-pull.service.ts', "sendHeldPricesAfterGoLive([recorded], 'amazon-pull')"],
+      ['../amazon/flat-file.service.ts', "sendHeldPricesAfterGoLive([recorded], 'amazon-flat-file')"],
+      ['../ebay-variation-push.service.ts', "sendHeldPricesAfterGoLive(recorded, 'ebay-push')"],
+      ['../listing-wizard/submission.service.ts', "sendHeldPricesAfterGoLive(recorded, 'listing-wizard')"],
+      ['../listing-reconciliation.service.ts', 'sendHeldPricesAfterGoLive(wentLive, reviewedBy)'],
+      ['./live-listing.service.ts', 'await sendHeldPricesAfterGoLive(recorded, actor)'],
+    ] as const) expect(source(file), file).toContain(call)
   })
   it('Publish sends the held prices of the drafts that went live: Amazon\'s acceptance and eBay\'s receipt', () => {
     const body = source('./studio-publication.service.ts')

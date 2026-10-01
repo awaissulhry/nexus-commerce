@@ -83,7 +83,7 @@ import { roundCents } from '@nexus/shared/listing-price'
 import { type MarketCurrencyRow } from './pim/market-currency.js'
 // The follower rules the channel price door applies too — one module, so the cascade and the door cannot drift.
 import {
-  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, heldPriceCode, heldPriceRowData, holdsCascadedPrice, listingMarketCurrency,
+  FOLLOWER_PRICE_HOLD_MS, HELD_PRICE_ROWS, computeListingPrice, followerPricePayload, heldPriceCode, heldPriceRowData, holdsCascadedPrice, listingMarketCurrency,
   logFollowerBoundsRefusals, logMasterCurrencyRefusals, type FollowerBoundsRefusal, type MasterCurrencyRefusal,
 } from './pim/follower-price.js'
 import { priceBoundsOf, storedPriceReason } from './price-bounds.service.js'
@@ -370,7 +370,19 @@ export class MasterPriceService {
         }
       }
 
-      if (heldRowsToCreate.length > 0) await createOutboundRows(tx, { data: heldRowsToCreate })
+      if (heldRowsToCreate.length > 0) {
+        // Round 6 — ONE held row per listing, as the price door keeps it: the newer master price replaces the older held
+        // row (so a listing paused for months does not pile up a row per master change), carrying forward an Amazon sale
+        // removal that row recorded.
+        const heldListingIds = heldRowsToCreate.map((row) => row.channelListingId as string)
+        const removing = new Set((await tx.outboundSyncQueue.findMany({
+          where: { ...HELD_PRICE_ROWS, channelListingId: { in: heldListingIds }, payload: { path: ['saleRemoved'], equals: true } },
+          select: { channelListingId: true },
+        })).map((row) => row.channelListingId))
+        await tx.outboundSyncQueue.updateMany({ where: { ...HELD_PRICE_ROWS, channelListingId: { in: heldListingIds } }, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
+        for (const row of heldRowsToCreate) if (removing.has(row.channelListingId ?? null)) row.payload = { ...(row.payload as Record<string, unknown>), saleRemoved: true } as Prisma.InputJsonValue
+        await createOutboundRows(tx, { data: heldRowsToCreate })
+      }
 
       // Step 4: enqueue all the OutboundSyncQueue rows in one createMany.
       // Note: createMany doesn't return ids, so we follow up with a findMany

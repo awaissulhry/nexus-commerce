@@ -198,9 +198,33 @@ export async function recordLiveListings(tx: Tx, input: RecordLiveListingsInput)
   })
 }
 
-/** For a caller that holds no transaction (a route): the same rule, in a transaction of its own. */
-export function recordLiveListingsInTransaction(input: RecordLiveListingsInput): Promise<RecordedLiveListing[]> {
-  return prisma.$transaction(tx => recordLiveListings(tx, input))
+/**
+ * For a caller that holds no transaction (a route): the same rule, in a transaction of its own — and, once it has
+ * committed, the go-live's held prices are sent (`sendHeldPricesAfterGoLive`).
+ */
+export async function recordLiveListingsInTransaction(input: RecordLiveListingsInput, actor = 'live-listing'): Promise<RecordedLiveListing[]> {
+  const recorded = await prisma.$transaction(tx => recordLiveListings(tx, input))
+  await sendHeldPricesAfterGoLive(recorded, actor)
+  return recorded
+}
+
+/**
+ * Round 6 (2026-10-01) — a still-draft this recorder made live (`unpaused`): a price change it held while it was a draft
+ * and its publication does not carry (`PRICE_HELD_DRAFT`: an Amazon sale) is sent ONCE now, through the price door
+ * (`sendHeldPrices`; nothing held → nothing sent). The same hook Publish's acceptance runs. Call it AFTER the
+ * transaction that recorded the listings has COMMITTED: the hook reads the listing as live. Never throws.
+ */
+export async function sendHeldPricesAfterGoLive(recorded: ReadonlyArray<Pick<RecordedLiveListing, 'id' | 'unpaused'>>, actor: string): Promise<void> {
+  const listingIds = recorded.filter(row => row.unpaused).map(row => row.id)
+  if (!listingIds.length) return
+  try {
+    // Loaded here: the price door's module loads the outbound queue, which a recorder's other callers do not need.
+    const { sendHeldPrices } = await import('./channel-price-write.service.js')
+    await sendHeldPrices({ listingIds, actor, cause: 'publish' })
+  } catch (error) {
+    const { logger } = await import('../../utils/logger.js')
+    logger.warn('live listing: held prices not sent after go-live; the next resume or price change sends them', { error: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 /** Every rule-owned field of a created live listing is decided here, and only here. */

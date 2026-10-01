@@ -40,6 +40,7 @@
  * A listing that stops following (`follow: false`) keeps the price it carries: flags only, nothing is sent.
  */
 import { createOutboundRow } from '../outbound-rows.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger.js'
@@ -658,7 +659,7 @@ export async function writeChannelPrices(input: {
 export interface HeldPriceSendResult {
   /** Listings whose held change was sent now: ONE PRICE_UPDATE each, through this door's SEND mode. */
   sent: string[]
-  /** Listings still paused or still a draft: their held change keeps waiting. */
+  /** Listings still paused, still a draft, or locked (a closed offer, an ended listing): their held change keeps waiting. */
   stillHeld: string[]
   /** Listings whose held change a later price row had already replaced: closed, nothing sent. */
   superseded: string[]
@@ -669,8 +670,9 @@ export interface HeldPriceSendResult {
 /**
  * ROUND 5 (2026-10-01) — send, ONCE, each price change kept in Nexus while its listing could not be sent to (the held
  * rows of `follower-price.ts`): on resume (Sync Control's Resume, the Matrix's resume and a pause's end time, all of
- * which run `recascadeAfterSyncControlChange`) and when a draft goes live (Publish's acceptance). Before, nothing did:
- * the changes stayed in Nexus until some unrelated change pushed a price.
+ * which run `recascadeAfterSyncControlChange`, and the stock import's FOLLOW/PINNED column) and when a draft goes live
+ * (Publish's acceptance, and — round 6 — every caller of the live-listing recorder: `sendHeldPricesAfterGoLive`).
+ * Before, nothing did: the changes stayed in Nexus until some unrelated change pushed a price.
  *
  * Exactly once, and never stale:
  *   - only a listing that holds a held row AND is no longer held (`holdsCascadedPrice`) is sent; one still paused or
@@ -699,13 +701,15 @@ export async function sendHeldPrices(input: { listingIds?: string[]; productIds?
     if (!newestByListing.size) return result
     const listings = await prisma.channelListing.findMany({
       where: { id: { in: [...newestByListing.keys()] } },
-      select: { id: true, syncPaused: true, listingStatus: true, isPublished: true, externalListingId: true },
+      select: { id: true, syncPaused: true, listingStatus: true, isPublished: true, externalListingId: true, offerClosedAt: true },
     })
     const close = (listingId: string, errorMessage: string) => prisma.outboundSyncQueue.updateMany({
       where: { ...HELD_PRICE_ROWS, channelListingId: listingId }, data: { syncStatus: 'CANCELLED', errorMessage },
     })
     for (const l of listings) {
-      if (holdsCascadedPrice(l)) { result.stillHeld.push(l.id); continue }
+      // Paused, a draft, or locked another way (a closed offer, an ended listing): the dispatcher would skip the send
+      // (and its row would not be a held row any more), so the change keeps waiting until the lock lifts.
+      if (holdsCascadedPrice(l) || assertPushAllowed({ ...l, syncPaused: false })) { result.stillHeld.push(l.id); continue }
       // A price row that left after the newest held change carried a newer price: the held change is spent.
       const later = await prisma.outboundSyncQueue.findFirst({
         where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: { in: ['PENDING', 'IN_PROGRESS', 'SUCCESS', 'FAILED'] }, createdAt: { gt: newestByListing.get(l.id)! } },

@@ -25,7 +25,7 @@ import { marketLanguages, type MarketLanguageRow } from '../pim/market-languages
 import type { PrismaClient } from '@nexus/database'
 import { primaryConnectionIds } from '../connection-resolver.service.js'
 import { sellableQuantity } from '../stock-pool/sync-ledgers.js'
-import { recordLiveListings, type LiveListingRow } from '../pim/live-listing.service.js'
+import { recordLiveListings, sendHeldPricesAfterGoLive, type LiveListingRow } from '../pim/live-listing.service.js'
 import { logger } from '../../utils/logger.js'
 
 export type SliceStatus = 'complete' | 'incomplete' | 'skipped' | 'unknown'
@@ -1445,6 +1445,8 @@ export class SubmissionService {
       })),
     ]
     const recorded = await this.prisma.$transaction((tx) => recordLiveListings(tx, { channel: 'AMAZON', market: marketplace, accountId: wizardConn as string, rows }))
+    // Round 6 — the still-drafts this submission made live: their held price changes are sent once (after the commit above).
+    await sendHeldPricesAfterGoLive(recorded, 'listing-wizard')
     const kept = recorded.filter((r) => r.keptExternalListingId || r.keptExternalParentId)
     if (kept.length > 0) {
       logger.warn('writeAsinsBack: a stored ASIN differs from the one Amazon reported — kept, not replaced', {

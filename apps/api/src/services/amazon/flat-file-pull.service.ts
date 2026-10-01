@@ -29,7 +29,7 @@ import { AmazonFlatFileService } from './flat-file.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { MARKETPLACE_ID_MAP, LANGUAGE_TAG_MAP } from './flat-file.service.js'
 import { primaryConnectionIds } from '../connection-resolver.service.js'
-import { recordLiveListings } from '../pim/live-listing.service.js'
+import { recordLiveListings, sendHeldPricesAfterGoLive } from '../pim/live-listing.service.js'
 
 // ── Job types ──────────────────────────────────────────────────────────────
 
@@ -291,6 +291,8 @@ async function runJob(job: PullJob): Promise<void> {
         channel: 'AMAZON', market: mp, accountId,
         rows: [{ productId: product.id, listingStatus: listingStatus ?? 'ACTIVE', externalListingId: asin, fields: listingFields, createFields: createOnlyQty }],
       }))
+      // Round 6 — a still-draft this pull found live: its held price changes are sent once (after the commit above).
+      await sendHeldPricesAfterGoLive([recorded], 'amazon-pull')
       if (recorded.keptExternalListingId) {
         job.errors.push({ sku: product.sku, error: `Amazon reports ASIN ${asin}, but this listing is linked to ${recorded.keptExternalListingId.stored}: the stored ASIN was kept.` })
       }

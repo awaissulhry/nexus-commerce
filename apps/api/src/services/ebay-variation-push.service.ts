@@ -17,7 +17,7 @@ import { reconcileEbayPolicies } from './ebay-policy-reconcile.service.js'
 // P4.2b — only eBay's OWN verdicts are filed on a listing; our validation is not.
 import { recordEbayOfferRejection } from './listing-issue-recorder.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
-import { recordLiveListings } from './pim/live-listing.service.js'
+import { recordLiveListings, sendHeldPricesAfterGoLive } from './pim/live-listing.service.js'
 import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey, storedPresentationValues } from './ebay-theme-axes.js'
 import { ebayDeclaredAxes } from './pim/variation-rules.service.js'
 import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-axis.pure.js'
@@ -2146,6 +2146,8 @@ export async function pushVariationGroup(
         })),
       }))
       for (const r of recorded) if (r.keptExternalListingId) keptItemIds.set(r.productId, r.keptExternalListingId.stored)
+      // Round 6 — the still-drafts this push made live: their held price changes are sent once (after the commit above).
+      await sendHeldPricesAfterGoLive(recorded, 'ebay-push')
       if (keptItemIds.size > 0) console.warn(`[ebay-push] ItemID ${listingId} NOT recorded on ${keptItemIds.size} listing(s) already linked to another ItemID — re-link them in the Item ID column`)
       // FFT.3c — Lane-A parity with the shared lane: snapshot-less CLs (incl.
       // the ones this publish just created) persist the PUSHED row as their

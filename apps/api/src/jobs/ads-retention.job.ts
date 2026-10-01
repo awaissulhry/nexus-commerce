@@ -30,6 +30,7 @@ import { OutboundSyncStatus } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { NOT_HELD_PRICE_ROW } from '../services/pim/follower-price.js'
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -110,11 +111,15 @@ export async function runAdsRetentionOnce(opts: { dryRun?: boolean } = {}): Prom
   // Typed against the enum rather than strings, so an invented status is a compile error
   // instead of a filter that silently matches nothing.
   const settledStatuses: OutboundSyncStatus[] = [OutboundSyncStatus.SUCCESS, OutboundSyncStatus.CANCELLED, OutboundSyncStatus.SKIPPED]
+  // A HELD price change is SKIPPED but not settled: it is the price a paused listing (or a draft) is sent when it resumes
+  // or goes live (`pim/follower-price.ts`, `sendHeldPrices`), so it is kept at any age — a listing paused for longer than
+  // this window must not lose it. Count, pick and delete with the same rule, so they cannot disagree.
+  const settled = { syncStatus: { in: settledStatuses }, createdAt: { lt: cutoff(RETENTION_DAYS.outboundSettled) }, AND: [NOT_HELD_PRICE_ROW] }
   await sweep(
     'outboundSyncQueue.settled',
-    () => prisma.outboundSyncQueue.count({ where: { syncStatus: { in: settledStatuses }, createdAt: { lt: cutoff(RETENTION_DAYS.outboundSettled) } } }),
-    (ids) => prisma.outboundSyncQueue.deleteMany({ where: { id: { in: ids } } }).then((r) => r.count),
-    () => prisma.outboundSyncQueue.findMany({ where: { syncStatus: { in: settledStatuses }, createdAt: { lt: cutoff(RETENTION_DAYS.outboundSettled) } }, select: { id: true }, take: BATCH }),
+    () => prisma.outboundSyncQueue.count({ where: settled }),
+    (ids) => prisma.outboundSyncQueue.deleteMany({ where: { id: { in: ids }, AND: [NOT_HELD_PRICE_ROW] } }).then((r) => r.count),
+    () => prisma.outboundSyncQueue.findMany({ where: settled, select: { id: true }, take: BATCH }),
   )
   await sweep(
     'outboundSyncQueue.failed',
