@@ -96,6 +96,9 @@ export function planSavedCellPatch({ row, changes, column, body, sent }: PlanInp
   if (Number(answer.cascadeCount ?? 0) > 0 || Number(answer.affectedChildren ?? 0) > 0) return read('the save cascaded')
   if (Array.isArray(answer.createdListings) && answer.createdListings.length) return read('the save started a draft')
   if (Array.isArray(answer.normalizedChanges) && answer.normalizedChanges.length) return read('the server normalised a value')
+  // A formula the save fed, or a content row it moved (qualified receipts): those values are only on the server.
+  if (Array.isArray(answer.recalculated) && answer.recalculated.length) return read('a formula recalculated')
+  if (Array.isArray(answer.contentVersionReceipts) && answer.contentVersionReceipts.length) return read('the save moved content')
   if (answer.versionOf !== 'channelListing' || typeof answer.currentVersion !== 'number' || !row.listing) return read('no listing version in the answer')
   if (!changes.length) return read('nothing stored')
   const rootId = row.parentId ?? row.id
