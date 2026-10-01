@@ -270,3 +270,24 @@ describe('lockSide — a right-side lock (an actions bookend) reads in SCREEN or
     expect(inViewCount(COLS_R, V({ visibleColumns: ['brand'], lockedColumns: ['product', 'actions'] }), DEF)).toEqual({ shown: 3, total: 4 })
   })
 })
+
+describe('a group\'s colour (2026-10-01 — the product sheet\'s groups wear the old flat file\'s colours)', () => {
+  const toned: PreferencesColumnSpec[] = [
+    { key: 'title', label: 'Title', group: 'Listing', groupKey: 'sheet:listing', groupTone: 'blue' },
+    { key: 'note', label: 'Note', group: 'Listing', groupKey: 'sheet:listing' },
+    { key: 'price', label: 'Price', group: 'Pricing', groupKey: 'sheet:pricing', groupTone: 'emerald' },
+    { key: 'misc', label: 'Misc', group: 'Other' },
+  ]
+  const value: PreferencesValue = { visibleColumns: ['title', 'note', 'price', 'misc'], stickyFirstColumn: true, stickyLastColumn: false, pageSize: 0, sortBy: '', sortDir: 'asc' }
+
+  it('is the colour its columns name; a group that names none has none', () => {
+    expect(resolveAttributeGroups(toned, value).map((g) => [g.key, g.tone])).toEqual([['sheet:listing', 'blue'], ['sheet:pricing', 'emerald'], ['Other', undefined]])
+  })
+
+  it('stays the group\'s colour when a column is moved into it from another group', () => {
+    const moved = moveAttributesToGroup(toned, value, ['price'], 'sheet:listing')
+    const listing = resolveAttributeGroups(toned, moved).find((g) => g.key === 'sheet:listing')!
+    expect(listing.tone).toBe('blue')
+    expect(listing.columns.map((c) => c.key)).toContain('price')
+  })
+})

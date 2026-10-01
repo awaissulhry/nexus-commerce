@@ -15,6 +15,8 @@ import type { PreferencesColumnSpec, PreferencesValue } from './PreferencesModal
 export interface AttributeGroup {
   key: string
   label: string
+  /** The group's colour, from its first column that names one (`PreferencesColumnSpec.groupTone`). */
+  tone?: string
   columns: PreferencesColumnSpec[]
 }
 
@@ -35,7 +37,9 @@ export function resolveAttributeGroups(
   const columns = allColumns.filter((c) => !c.locked)
   for (const c of columns) {
     const key = groupOf(c)
-    if (!groups.has(key)) groups.set(key, { key, label: c.group?.trim() || listLabel, columns: [] })
+    const group = groups.get(key)
+    if (!group) groups.set(key, { key, label: c.group?.trim() || listLabel, ...(c.groupTone ? { tone: c.groupTone } : {}), columns: [] })
+    else if (!group.tone && c.groupTone) group.tone = c.groupTone
   }
   const byKey = new Map(columns.map((c) => [c.key, c]))
   const order = [...new Set([...(value.columnOrder ?? []), ...value.visibleColumns, ...columns.map((c) => c.key)])]

@@ -49,6 +49,7 @@ import type { SheetColumn, StudioRow } from './types';
 import { useMasterSheet } from './useMasterSheet';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { productMediaColumn, useProductMediaEditor, withProductMediaColumn, PRODUCT_MEDIA_COLUMN } from '../../media/productMediaColumn';
+import { withSheetGroups } from '../sheetGroups';
 import { useReferenceNames } from '../useReferenceNames';
 import { referenceSearchText } from '../referenceLabels';
 import { flaggedColumnKeys, IDENTITY_COLUMN, orderColumnKeys, rankOfColumn, RESERVED_COLUMN_IDS } from '../views';
@@ -301,7 +302,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         progressSheetColumn<SheetColumn>(SCOPE_PROGRESS_COLUMN, 'Shared product', SHARED_PROGRESS_TIP),
         ...coordinateColumns.map((c) => progressSheetColumn<SheetColumn>(progressKeyOf(c.colId), c.label, marketProgressTip(c.label, languageLabel(c.language), c.computedAt))),
     ] : []), [sheet, coordinateColumns]);
-    const schemaColumns = useMemo(() => [...progressSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))], [sheet, progressSpecs]);
+    const schemaColumns = useMemo(() => withSheetGroups([...progressSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))]), [sheet, progressSpecs]);
     const viewCtx = useMemo(() => ({
         variationAxes: sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes,
         locale,

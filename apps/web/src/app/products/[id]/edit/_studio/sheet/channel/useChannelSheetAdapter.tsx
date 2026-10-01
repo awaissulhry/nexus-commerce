@@ -38,6 +38,7 @@ import { sheetEmptyState } from '../sheetGridStates';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
+import { withSheetGroups } from '../sheetGroups';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
 import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, saveNote, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
@@ -749,7 +750,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
        Customise, in the views; never a server column, never a write field. */
-    const gridColumns = useMemo(() => withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never))), [stableColumns]);
+    /* 2026-10-01 — the media column joins the sheet's groups (Images, on eBay and Amazon) and every column carries its
+       group's colour (`../sheetGroups`). */
+    const gridColumns = useMemo(() => withSheetGroups(withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never)))), [stableColumns]);
     const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
         data: scopePage, gridColumns, formulaWiring, accountId, openCellDetails: openCellDetailsLive, productLevelOnly,
         refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth: authLive,
@@ -813,7 +816,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const crossChannelCols = useMemo(() => crossChannelColumnCount(rows.find((r) => r.rowKind === 'variant')), [rows]);
     /* Progress column (2026-09-26) — a member of the column model (Customise, views, locks), built above by the shared
        builder; the channel builder never sees it. */
-    const modelColumns = useMemo(() => data ? [progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), ...gridColumns] : gridColumns, [data, gridColumns]);
+    const modelColumns = useMemo(() => data ? withSheetGroups([progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), ...gridColumns]) : gridColumns, [data, gridColumns]);
     const schemaColumns = useMemo(() => modelColumns as never as StudioSheetColumn[], [modelColumns]);
     const prefsBridge = useMemo<PrefsBridgeOptions>(() => ({
         columns: [{ key: '__identity', locked: true }, ...modelColumns.map((c) => ({ key: c.key }))],

@@ -116,7 +116,7 @@ describe('working layout replies stay with the requesting owner', () => {
     const timers = vi.spyOn(globalThis, 'setTimeout')
     fixture.gridLoaded = true
     const api = { isDestroyed: () => false, getColumnState: () => [{ colId: 'sku' }, { colId: 'brand' }, { colId: 'name' }],
-      applyColumnState: fixture.paint, getState: () => ({}) } as unknown as NonNullable<typeof options.gridReady>
+      applyColumnState: fixture.paint, getState: () => ({}), refreshHeader: () => {} } as unknown as NonNullable<typeof options.gridReady>
     options.apiRef.current = api; options.gridReady = api
     fixture.save.mockImplementation(async (_actor, _base, _surface, filters) => ({ id: 'saved', name: 'Current layout', updatedAt: '2026-09-30T12:00:00Z', filters }))
     render(); await settle(); render()

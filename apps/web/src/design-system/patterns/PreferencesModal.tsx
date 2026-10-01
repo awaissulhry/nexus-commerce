@@ -84,6 +84,12 @@ export interface PreferencesColumnSpec {
   /** Stable schema-owned group identity; labels are for display only. */
   groupKey?: string
   /**
+   * The group's colour, a `--nds-grid-tone-<tone>-*` name (2026-10-01: the product sheet's groups wear the old flat
+   * file's colours). The group heading takes its tint, so the dialog and the grid header match colour for colour.
+   * Absent ⇒ the heading is drawn as before.
+   */
+  groupTone?: string
+  /**
    * Listed and tickable, but left out of every count the dialog prints ("240 columns", "In view · n of N") —
    * a column that is not one of the things the host counts (2026-09-27: the sheet's progress columns, so the dialog
    * and the toolbar agree on "236 attributes").
@@ -331,10 +337,10 @@ export function usePreferencesPanes({
     if (attributeGroups) {
       const structural = allColumns.filter((c) => c.locked)
       return [
-        ...(structural.length ? [{ key: '__grid_fixed', heading: 'Fixed columns', columns: structural }] : []),
+        ...(structural.length ? [{ key: '__grid_fixed', heading: 'Fixed columns', columns: structural, tone: undefined as string | undefined }] : []),
         // A group whose every column was moved into another lists nothing to tick: it is left out here (2026-09-27).
         // The In-view pane keeps it as a drop target, marked Empty.
-        ...attributeSections.filter((g) => g.columns.length > 0).map((g) => ({ key: g.key, heading: g.label, columns: g.columns })),
+        ...attributeSections.filter((g) => g.columns.length > 0).map((g) => ({ key: g.key, heading: g.label, columns: g.columns, tone: g.tone })),
       ]
     }
     const byHeading = new Map<string, PreferencesColumnSpec[]>()
@@ -344,7 +350,7 @@ export function usePreferencesPanes({
       if (bucket) bucket.push(c)
       else byHeading.set(heading, [c])
     }
-    return [...byHeading.entries()].map(([heading, columns]) => ({ key: heading, heading, columns }))
+    return [...byHeading.entries()].map(([heading, columns]) => ({ key: heading, heading, columns, tone: undefined as string | undefined }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allColumns, listLabel, attributeGroups, attributeSections])
 
@@ -374,6 +380,7 @@ export function usePreferencesPanes({
       .map((section) => ({
         key: section.key,
         heading: section.heading,
+        tone: section.tone,
         columns: section.columns.filter(
           (c) => c.label.toLowerCase().includes(needle) || c.key.toLowerCase().includes(needle) || (attributeGroups && section.heading.toLowerCase().includes(needle)),
         ),
@@ -700,7 +707,7 @@ export function usePreferencesPanes({
                   const groupKeys = section.columns.filter((c) => !isLocked(c) && !c.alwaysShown).map((c) => c.key)
                   const groupAllIn = groupKeys.length > 0 && groupKeys.every((k) => draft.visibleColumns.includes(k))
                   return (
-                  <div key={section.key} className="nds-prefs-group" {...groupProps(section.heading)}>
+                  <div key={section.key} className="nds-prefs-group" data-tone={section.tone} {...groupProps(section.heading)}>
                     {showHeadings && groupToggles && groupKeys.length > 0 ? (
                       <div className="nds-prefs-grouprow">
                         {headingButton}
@@ -840,7 +847,7 @@ export function usePreferencesPanes({
           const target = attributeSections[groupIndex + direction]
           if (target) setDraft((d) => moveAttributeGroup(allColumns, d, group.key, target.key, direction === 1))
         }
-        return <div key={group.key} className="nds-prefs-group" role="group" aria-label={`${group.label} in view`}
+        return <div key={group.key} className="nds-prefs-group" data-tone={group.tone} role="group" aria-label={`${group.label} in view`}
           onDragOver={(e) => { if (groupDrag || dragKey) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
           onDrop={(e) => { e.preventDefault(); if (groupDrag) setDraft((d) => moveAttributeGroup(allColumns, d, groupDrag, group.key)); else if (dragKey) setDraft((d) => moveAttributesToGroup(allColumns, d, selected.has(dragKey) ? selectedKeys : [dragKey], group.key)); setGroupDrag(null); setDragKey(null) }}>
           <div className="nds-prefs-viewgrouphd" draggable onDragStart={(e) => { setGroupDrag(group.key); setDragKey(null); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', group.key) }} onDragEnd={() => setGroupDrag(null)}>

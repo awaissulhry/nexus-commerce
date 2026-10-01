@@ -28,7 +28,7 @@ import {
 } from '@/design-system/grid'
 import type { GridDensityName } from '@/design-system/tokens/grid'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns/PreferencesModal'
-import { moveAttributeColumn } from '@/design-system/patterns/preferencesLogic'
+import { moveAttributeColumn, resolveAttributeGroups } from '@/design-system/patterns/preferencesLogic'
 import { loadWorkingLayout, parseWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
 import { createInitialSavedViewRead } from './initialSavedViewRead'
 import { isUserColumnPin, readSheetWorkingLayout } from './sheetWorkingLayoutRead'
@@ -36,6 +36,7 @@ import { viewChipColumns, type ViewChip } from '../contracts'
 import type { SheetColumn } from './master/types'
 import { alwaysColumnsFor, GAPS_VIEW_ID, orderColumnKeys, REQUIRED_VIEW_ID, sheetViews, structuralColumnKeys, type ViewContext } from './views'
 import { defaultViewKeys } from './slotListColumns'
+import { flatFileGrouped, insertInNaturalOrder, sheetHeaderClasses, withoutPreGroupingOrder, type SheetHeaderClassParams, type SheetHeaderGroup } from './sheetGroups'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 import {
   chooseLanding, fieldPayload, FIXED_GROUP_KEY, FIXED_GROUP_LABEL, FRONT_GROUP_KEYS, hasMyLayout, languageKeyMap, layoutPart, pickOf, progressShown,
@@ -133,6 +134,12 @@ export interface SheetColumnsApi<TPage> {
   onColumnMoved: (event: { finished?: boolean; source?: string; column?: { getColId: () => string } | null }) => void
   /** The grid's `onColumnPinned`: a pin from a header menu is saved the same way. */
   onColumnPinned: (event: { source?: string }) => void
+  /** 2026-10-01 — a column name's group classes (tint, indent, the group's edge); see `sheetGroups.ts`. */
+  headerClass: (params: SheetHeaderClassParams) => string[]
+  /** The grid's `onDisplayedColumnsChanged` / `onDragStarted` / `onDragStopped`: redraw the header so its colours follow. */
+  onDisplayedColumnsChanged: () => void
+  onDragStarted: () => void
+  onDragStopped: () => void
   landed: boolean
   loadError: string | null
   /** The GRID keys of every attribute column, in the sheet's order — what "export all" writes. */
@@ -204,6 +211,8 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   /* R-VT-1 (2026-09-13): a STRUCTURAL column joins the always-columns, so a saved view that predates
      it cannot silently drop it. Derived from the live column set by KIND — see `structuralColumnKeys`. */
   const structural = useMemo(() => structuralColumnKeys(fieldColumns), [fieldColumns])
+  /** The server grouped this sheet like the old flat file (eBay, Amazon): no front groups, the flat file's order. */
+  const flatFile = useMemo(() => flatFileGrouped(fieldColumns), [fieldColumns])
   const alwaysColumns = useMemo(() => alwaysColumnsFor(addressable, structural), [addressable, structural])
   const allColumnKeys = useMemo(() => [...new Set([...alwaysColumns, ...progressKeys, ...orderedKeys])], [alwaysColumns, progressKeys, orderedKeys])
   const gridOrderedKeys = useMemo(() => columns.filter((c) => c.managedBy !== 'progress').map((c) => c.key), [columns])
@@ -220,21 +229,30 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     // attributes, like the toolbar. A structural column (the variation theme) is always on screen yet the operator's to
     // move and pin; it sits in a group of its own right after Progress — where the sheet shows it until it is moved
     // (2026-09-27: the Customise order and the sheet order must be one order).
-    const spec = (c: SheetColumn): PreferencesColumnSpec => ({ key: c.key, label: c.label, group: c.group, groupKey: c.groupKey, ...(c.managedBy === 'progress' ? { uncounted: true } : {}) })
+    const spec = (c: SheetColumn): PreferencesColumnSpec => ({ key: c.key, label: c.label, group: c.group, groupKey: c.groupKey, ...(c.groupTone ? { groupTone: c.groupTone } : {}), ...(c.managedBy === 'progress' ? { uncounted: true } : {}) })
+    /* 2026-10-01 — on a sheet grouped like the old flat file (eBay, Amazon) the variation theme stays in ITS group
+       (Listing / Variations), where the flat file had it, still always shown; Progress is already in the first group. */
+    if (flatFile) return [
+      { key: identityColumn, label: 'Identity (SKU, readiness)', locked: true },
+      ...fieldColumns.filter((c) => c.managedBy === 'progress').map(spec),
+      ...fieldColumns.filter((c) => c.managedBy !== 'progress').map((c) => (structural.includes(c.key) ? { ...spec(c), alwaysShown: true } : spec(c))),
+    ]
     return [
       { key: identityColumn, label: 'Identity (SKU, readiness)', locked: true },
       ...fieldColumns.filter((c) => c.managedBy === 'progress').map(spec),
       ...fieldColumns.filter((c) => structural.includes(c.key)).map((c) => ({ ...spec(c), alwaysShown: true, group: FIXED_GROUP_LABEL, groupKey: FIXED_GROUP_KEY })),
       ...fieldColumns.filter((c) => c.managedBy !== 'progress' && !structural.includes(c.key)).map(spec),
     ]
-  }, [fieldColumns, identityColumn, structural])
+  }, [fieldColumns, identityColumn, structural, flatFile])
   /* A view's count is the attributes it shows. The variation theme is on screen in every view, so every preset names it
      first — which is also where it shows (`shownKeys`). */
   const views = useMemo(() => {
     const built = sheetViews(attributeColumns, fieldCtx, serverViews)
     const lead = structural.filter((k) => attributeKeys.has(k))
-    return lead.length ? { ...built, presets: built.presets.map((p) => ({ ...p, columns: [...new Set([...lead, ...p.columns])] })) } : built
-  }, [attributeColumns, fieldCtx, serverViews, structural, attributeKeys])
+    // On a flat-file sheet the variation theme keeps its seat in its group instead of leading.
+    const withLead = (columns: readonly string[]) => flatFile ? insertInNaturalOrder(columns, lead, orderedKeys) : [...new Set([...lead, ...columns])]
+    return lead.length ? { ...built, presets: built.presets.map((p) => ({ ...p, columns: withLead(p.columns) })) } : built
+  }, [attributeColumns, fieldCtx, serverViews, structural, attributeKeys, flatFile, orderedKeys])
   /* SHEET-VIEWS step 5 — the row facts a rule view follows. Read through a ref when a view is applied, so a
      gap fixed while editing does not pull its column off screen: a rule resolves at APPLY time, not live. */
   const ruleFacts = useMemo<ViewRuleFacts>(() => ({
@@ -365,14 +383,45 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     void writeWorking((layout) => withPick(layout, pick))
   }, [layoutSurface, writeWorking])
 
+  /* ── 2026-10-01 — the header's group colours (`sheetGroups.ts`) ───────────────────────────────────────────────
+     A column's group is the one Customise resolves for the layout on screen, so a column moved into another group takes
+     that group's colour. Resolved once per layout; AG asks per header cell. AG keeps a header cell's classes until the
+     header is redrawn, so the header is redrawn (once, after the change; never mid-drag) whenever the columns on it change. */
+  const headerGroupsRef = useRef<{ payload: ColumnsViewPayload | null; specs: readonly PreferencesColumnSpec[]; byKey: Map<string, SheetHeaderGroup> } | null>(null)
+  const headerGroupOf = useCallback((colId: string): SheetHeaderGroup | undefined => {
+    const payload = layoutRef.current
+    let cache = headerGroupsRef.current
+    if (!cache || cache.payload !== payload || cache.specs !== specs) {
+      const byKey = new Map<string, SheetHeaderGroup>()
+      for (const g of resolveAttributeGroups(specs, preferencesFromLayout(payload, specs))) for (const c of g.columns) byKey.set(c.key, { group: g.key, tone: g.tone })
+      cache = headerGroupsRef.current = { payload, specs, byKey }
+    }
+    return cache.byKey.get(keyMap.toFields([colId])[0] ?? colId)
+  }, [specs, keyMap])
+  const headerClass = useCallback((params: SheetHeaderClassParams) => sheetHeaderClasses(params, headerGroupOf), [headerGroupOf])
+  const headerFrame = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const headerDragging = useRef(false)
+  const redrawHeaderSoon = useCallback(() => {
+    if (headerFrame.current !== null || headerDragging.current) return
+    headerFrame.current = setTimeout(() => {
+      headerFrame.current = null
+      const api = apiRef.current
+      if (api && !api.isDestroyed()) api.refreshHeader()
+    }, 0)
+  }, [apiRef])
+  useEffect(() => () => { if (headerFrame.current !== null) clearTimeout(headerFrame.current) }, [])
+  const onHeaderDragStarted = useCallback(() => { headerDragging.current = true }, [])
+  const onHeaderDragStopped = useCallback(() => { headerDragging.current = false; redrawHeaderSoon() }, [redrawHeaderSoon])
+
   const gridLocks = useCallback((api: GridApi<TRow>) => keyMap.toFields(columnStateToPrefs(api.getColumnState(), preferencesFromLayout(null, specs), prefsBridge).lockedColumns ?? []), [keyMap, specs, prefsBridge])
   const applyToGrid = useCallback((keys: readonly string[], order: boolean, locks?: readonly string[]) => {
     const api = apiRef.current
     if (!api || api.isDestroyed()) return false
     const value = { ...preferencesFromLayout(null, specs), visibleColumns: toGrid(keys), lockedColumns: toGrid(locks ?? gridLocks(api)) }
     api.applyColumnState({ state: prefsToColumnState(value, prefsBridge), applyOrder: order })
+    redrawHeaderSoon()
     return true
-  }, [apiRef, specs, toGrid, gridLocks, prefsBridge])
+  }, [apiRef, specs, toGrid, gridLocks, prefsBridge, redrawHeaderSoon])
   /** Put the active view on the grid — or, while a row filter narrows, the columns with matches. */
   const paint = useCallback((order: boolean, locks?: readonly string[]) => applyToGrid(narrowedKeys() ?? activeColumnsRef.current, order, locks), [applyToGrid, narrowedKeys])
 
@@ -388,8 +437,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const placed = new Set(own)
     const progress = progressShown(payload, progressKeys).filter((k) => !placed.has(k))
     const fixed = structural.filter((k) => alwaysColumns.includes(k) && !placed.has(k))
+    if (flatFile) return insertInNaturalOrder([...new Set([...identityKeys, ...progress, ...own])], fixed, [...identityKeys, ...progressKeys, ...orderedKeys])
     return [...new Set([...identityKeys, ...progress, ...fixed, ...own])]
-  }, [specs, progressKeys, structural, alwaysColumns, identityKeys])
+  }, [specs, progressKeys, structural, alwaysColumns, identityKeys, flatFile, orderedKeys])
   /** The attributes a payload shows here — the number beside it everywhere (trigger, menu, Customise). */
   const countOf = useCallback((payload: ColumnsViewPayload) => shownKeys(payload).filter((k) => attributeKeys.has(k)).length, [shownKeys, attributeKeys])
   /**
@@ -397,7 +447,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
    * the ones on screen — the columns changed under the sheet (progress columns arrive after it opens), and a saved pin
    * on a column that has only now arrived must hold; `false` keeps the screen's pins.
    */
-  const activate = useCallback((next: ActiveColumns, payload: ColumnsViewPayload, restoreLocks: boolean | 'merge' = true) => {
+  const activate = useCallback((next: ActiveColumns, stored: ColumnsViewPayload, restoreLocks: boolean | 'merge' = true) => {
+    // A layout saved before the flat-file groups keeps its columns and pins, not its old order (`sheetGroups.ts`).
+    const payload = withoutPreGroupingOrder(stored, flatFile)
     // The STORED payload is kept (its rules too); what shows is its keys plus what its rules match here today.
     layoutRef.current = payload
     const keys = shownKeys(payload)
@@ -408,7 +460,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     paint(true, !saved || !restoreLocks ? undefined
       : restoreLocks === 'merge' && api && !api.isDestroyed() ? [...new Set([...gridLocks(api), ...saved])] : saved)
     gridState.markDirty()
-  }, [shownKeys, paint, gridState, apiRef, gridLocks])
+  }, [shownKeys, paint, gridState, apiRef, gridLocks, flatFile])
   /** An explicit column choice stops a filter's narrowing: the columns follow what was asked for last. */
   const stopNarrowing = useCallback(() => { narrowRef.current = false; setNarrowState(false) }, [])
   const presetPayload = useCallback((preset: GridViewPreset) => columnsViewPayload(resolvePreset(preset, addressable, alwaysColumns).columns.filter((k) => attributeKeys.has(k))), [addressable, alwaysColumns, attributeKeys])
@@ -743,6 +795,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     emptyLabel: MY_LAYOUT_LABEL,
     activeViewName: active.kind === 'saved' ? active.name : null,
     activeCount, ownActiveView, myLayout, applyMyLayout, narrowToMatches, setNarrowToMatches, onColumnMoved, onColumnPinned,
+    headerClass, onDisplayedColumnsChanged: redrawHeaderSoon, onDragStarted: onHeaderDragStarted, onDragStopped: onHeaderDragStopped,
     landed, loadError: loadError ?? (memoryError?.surface === layoutSurface ? memoryError.message : null) ?? gridState.loadError,
     orderedKeys: gridOrderedKeys, preferenceColumns: specs, alwaysColumns, allColumnKeys, gridKeysOf: keyMap.gridKeysOf,
     applyPreset, currentPreferences, currentPayload, savePreferences, savePreferencesAs,

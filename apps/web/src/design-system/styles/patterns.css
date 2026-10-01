@@ -1619,3 +1619,42 @@
 /* Opt-in semantic theme for workspaces hosted in an older light-pinned shell. */
 .nds-theme-responsive.nds-theme-responsive { background: var(--nds-bg); color: var(--nds-text); color-scheme: light; }
 .dark .nds-theme-responsive.nds-theme-responsive { color-scheme: dark; }
+
+/* 2026-10-01 — a group that names a colour (`PreferencesColumnSpec.groupTone`; the product sheet's groups wear the old
+   flat file's colours): its heading takes the tint its columns wear on the sheet's header, with the group's edge, and
+   its columns sit a step in under it. A group with no colour is drawn as before. */
+.nds-prefs-group[data-tone] > .nds-prefs-grouphd,
+.nds-prefs-group[data-tone] > .nds-prefs-grouprow,
+.nds-prefs-group[data-tone] > .nds-prefs-viewgrouphd {
+  background: var(--nds-prefs-tone-bg);
+  color: var(--nds-prefs-tone-fg);
+  box-shadow: inset 3px 0 0 var(--nds-prefs-tone-rule);
+}
+.nds-prefs-group[data-tone] > .nds-prefs-grouprow .nds-prefs-grouphd {
+  background: transparent;
+  color: inherit;
+}
+.nds-prefs-group[data-tone] > .nds-prefs-grouphd:hover,
+.nds-prefs-group[data-tone] > .nds-prefs-grouprow .nds-prefs-grouphd:hover {
+  background: color-mix(in srgb, var(--nds-prefs-tone-fg) 8%, transparent);
+}
+.nds-prefs-group[data-tone] .nds-prefs-groupcount {
+  color: inherit;
+}
+.nds-prefs-group[data-tone] > .nds-prefs-pick,
+.nds-prefs-group[data-tone] > .nds-prefs-row,
+.nds-prefs-group[data-tone] > .nds-prefs-groupempty {
+  padding-left: var(--nds-space-26);
+}
+.nds-prefs-group[data-tone='slate'] { --nds-prefs-tone-bg: var(--nds-grid-tone-slate-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-slate-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-slate-rule); }
+.nds-prefs-group[data-tone='blue'] { --nds-prefs-tone-bg: var(--nds-grid-tone-blue-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-blue-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-blue-rule); }
+.nds-prefs-group[data-tone='purple'] { --nds-prefs-tone-bg: var(--nds-grid-tone-purple-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-purple-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-purple-rule); }
+.nds-prefs-group[data-tone='emerald'] { --nds-prefs-tone-bg: var(--nds-grid-tone-emerald-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-emerald-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-emerald-rule); }
+.nds-prefs-group[data-tone='orange'] { --nds-prefs-tone-bg: var(--nds-grid-tone-orange-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-orange-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-orange-rule); }
+.nds-prefs-group[data-tone='cyan'] { --nds-prefs-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-cyan-rule); }
+.nds-prefs-group[data-tone='teal'] { --nds-prefs-tone-bg: var(--nds-grid-tone-teal-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-teal-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-teal-rule); }
+.nds-prefs-group[data-tone='sky'] { --nds-prefs-tone-bg: var(--nds-grid-tone-sky-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-sky-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-sky-rule); }
+.nds-prefs-group[data-tone='amber'] { --nds-prefs-tone-bg: var(--nds-grid-tone-amber-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-amber-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-amber-rule); }
+.nds-prefs-group[data-tone='yellow'] { --nds-prefs-tone-bg: var(--nds-grid-tone-yellow-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-yellow-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-yellow-rule); }
+.nds-prefs-group[data-tone='red'] { --nds-prefs-tone-bg: var(--nds-grid-tone-red-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-red-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-red-rule); }
+.nds-prefs-group[data-tone='violet'] { --nds-prefs-tone-bg: var(--nds-grid-tone-violet-bg); --nds-prefs-tone-fg: var(--nds-grid-tone-violet-fg); --nds-prefs-tone-rule: var(--nds-grid-tone-violet-rule); }
