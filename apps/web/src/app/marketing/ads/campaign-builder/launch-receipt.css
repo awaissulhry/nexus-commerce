@@ -1,6 +1,7 @@
 /**
- * AX-VT.4 — launch receipt styling. Tokens only, no raw hex: every colour resolves to the
- * platform-semantic alias layer so it tracks light/dark and any future palette change.
+ * AX-VT.4 — launch receipt styling. Tokens only, no raw hex: every colour is an `--nds-*` token,
+ * which has one form in every scope and which the ads shell pins light (see reporting.css R0 for
+ * why not the `--text-*` / `--surface-*` / `--border-*` aliases).
  */
 
 .h10-vt-receipt {
@@ -19,18 +20,18 @@
 .h10-vt-receipt-errors {
   margin: 0;
   padding: 8px 12px 8px 28px;
-  border: 1px solid rgb(var(--border-subtle));
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-sm);
-  background: rgb(var(--surface-sunken));
-  color: rgb(var(--text-secondary));
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
   font-size: 11px;
   line-height: 1.55;
 }
 
 .h10-vt-receipt-body {
-  border: 1px solid rgb(var(--border-subtle));
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-sm);
-  background: rgb(var(--surface-card));
+  background: var(--nds-surface);
   overflow: hidden;
 }
 
@@ -60,13 +61,13 @@
    column — a variable list of field → value pairs — would expand and shove the
    rest off-screen. Column `width` is only a hint under auto layout; this is the
    proven scoped fix, not a repaint. */
-.h10-vt-receipt-grid { border-top: 1px solid rgb(var(--border-subtle)); border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; }
+.h10-vt-receipt-grid { border-top: 1px solid var(--nds-border-subtle); border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; }
 .h10-vt-receipt-grid .nds-dg-td { overflow: hidden; }
 /* the grid is `white-space: nowrap`; the deltas column is a stacked list of
    field → value pairs and must wrap, or fixed layout clips it. */
 .h10-vt-receipt-grid .nds-dg-td { white-space: normal; }
 
-.h10-vt-t { color: rgb(var(--text-secondary)); white-space: nowrap; }
+.h10-vt-t { color: var(--nds-text-2); white-space: nowrap; }
 
 .h10-vt-l {
   font-weight: 600;
@@ -77,11 +78,11 @@
 
 .h10-vt-d { display: flex; flex-direction: column; gap: 3px; }
 
-.h10-vt-muted { color: rgb(var(--text-secondary)); }
+.h10-vt-muted { color: var(--nds-text-2); }
 
 .h10-vt-delta { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
 
-.h10-vt-delta b { color: rgb(var(--text-secondary)); font-weight: 600; }
+.h10-vt-delta b { color: var(--nds-text-2); font-weight: 600; }
 
 .h10-vt-want {
   padding: 1px 5px;
@@ -91,7 +92,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.h10-vt-arrow { color: rgb(var(--text-tertiary)); }
+.h10-vt-arrow { color: var(--nds-text-3); }
 
 .h10-vt-got {
   padding: 1px 5px;

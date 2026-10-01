@@ -51,21 +51,22 @@
      either extreme and much harder to notice in review.
 
      ⚠ TWO shipped pins exist and they are NOT interchangeable. `.h10-shell`
-     (ads.css) writes Tailwind triplets (`--border-default: 203 213 225`);
-     primitives.css consumes these WHOLE (`border: 1px solid var(--border-default)`),
-     so under the triplet convention the shorthand is invalid, the declaration
-     is dropped, and Tailwind preflight's `border: 0px solid` wins — which is
-     why DS buttons have no border across the ads console. This copies
+     (shared-shell.css) writes RGB triplets (`--border-default: 203 213 225`);
+     a stylesheet that reads these WHOLE (`border: 1px solid var(--border-default)`)
+     gets an invalid shorthand there, the declaration is dropped, and Tailwind
+     preflight's `border: 0px solid` wins — which is why DS buttons once had no
+     border across the ads console (the DS reads --nds-* since Phase 9.0b). This copies
      `.productsNextLight` instead: semantic aliases expressed through the
      `--nds-*` primitive ramp, which the `.dark` block never touches, so there
      is one source of truth for the hex. See
      `reference_ds_token_triplet_collision` and Study 0 of
      docs/2026-08-07-naf-sbw-section-studies.md.
 
-     Corollary, and it is a rule for this subtree: inside `.fleet-surface`
-     semantic tokens are WHOLE COLOURS. Do not use Tailwind colour utilities
-     that read them as triplets (text-primary, surface-card, border-default…)
-     anywhere under it. Nothing here does today; keep it that way. */
+     Corollary: inside `.fleet-surface` the platform aliases are WHOLE COLOURS,
+     so never read them as `rgb(var(--x))` here. Tailwind's semantic colour
+     utilities (text-primary, bg-card, border-default…) no longer read them:
+     since 2026-10-01 they read the `--nds-*` tokens pinned below, so they render
+     light here like everything else — though new fleet code uses the DS. */
 
   /* surfaces */
   --surface-canvas: var(--nds-grey-50);

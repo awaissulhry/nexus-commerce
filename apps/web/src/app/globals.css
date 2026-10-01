@@ -35,7 +35,8 @@
   --surface-overlay: 15 23 42;   /* scrim base (used at /60) */
 
   /* Status — SOLID soft surfaces (replace bg-*-950/40). soft=fill,
-     line=border, strong=text; strong-on-soft passes AA. */
+     line=border, strong=text; strong-on-soft passes AA, light and dark
+     (held by scripts/check-nds-contrast.mjs, group tw-status). */
   --success-soft: 236 253 245; --success-line: 167 243 208; --success-strong: 4 120 87;
   --warning-soft: 255 251 235; --warning-line: 253 230 138; --warning-strong: 180 83 9;
   --danger-soft:  255 241 242; --danger-line:  254 205 211; --danger-strong:  190 18 60;

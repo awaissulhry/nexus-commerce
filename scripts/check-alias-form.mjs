@@ -17,7 +17,9 @@
  * Verified on production, not inferred — every row of the table below was read out of a live
  * page's computed styles:
  *
- *   marketing/ads/**   `.h10-shell` alone           text/surface/border are CHANNELS
+ *   marketing/ads/**   `.h10-shell` alone           text/surface/border are CHANNELS, but a
+ *                      portal (Modal, Menu, HoverCard) renders at <body> → WHOLE. Neither form
+ *                      works for both, so under ads they are not read at all: use --nds-*.
  *   products/next/**   `.h10-shell productsNextLight` on ONE element; the light pin wins → WHOLE
  *   fleet/**           `.fleet-surface` + `.fleet-portal`                                → WHOLE
  *   everything else    `:root` (tokens.css; globals.css no longer defines them)          → WHOLE
@@ -37,7 +39,8 @@
  * now read `--nds-*`. Two more checks hold it:
  *   - `apps/web/tailwind.config.ts` may not read one of the eleven, and may not wrap an `--nds-*`
  *     token (a whole colour) in `rgb()`;
- *   - `apps/web/src/app/globals.css` may not define or read one of the eleven at all.
+ *   - `apps/web/src/app/globals.css` may not define or read one of the eleven at all;
+ *   - under app/marketing/ads/ none of the eleven may be read in any form (see `adsViolations`).
  *
  *   node scripts/check-alias-form.mjs              # census
  *   node scripts/check-alias-form.mjs --check      # non-zero exit on any violation
@@ -70,7 +73,6 @@ const DEFINERS = ['app/_shared/shared-shell.css', 'app/globals.css',
                   'app/products/next/products-next-shell.css', 'app/fleet/fleet-pages.css',
                   'design-system/styles/'];
 
-const BARE = /(?<!rgb\(\s*)var\((--[a-z0-9-]+)\)/g;
 const WRAPPED = /rgb\(\s*var\((--[a-z0-9-]+)\)\s*\)/g;
 
 const walk = (dir, out = []) => {
@@ -111,6 +113,24 @@ function tailwindViolations(raw, rel) {
   return out;
 }
 
+/**
+ * Under the ads console the eleven have no form that works everywhere: `.h10-shell` pins them as
+ * CHANNELS (so `var(--x)` is invalid inside it) while a Modal, Menu or HoverCard portals to <body>,
+ * where tokens.css makes them WHOLE COLOURS (so `rgb(var(--x))` is invalid there). Until 2026-10-01
+ * reporting.css wrote `rgb(var(--x))` 242 times and 241 were invalid in its dialogs (the other,
+ * `--surface-raised`, turned dark there under a dark OS). The same holds for the three channel names
+ * tokens.css does not define (inverse, raised, overlay): unpinned on <body>, they follow `.dark`. Read the
+ * `--nds-*` token: one form everywhere, pinned light on `.h10-shell` and `body:has(.h10-shell)`.
+ */
+function adsViolations(src, rel) {
+  const out = [];
+  for (const name of CHANNEL_TIER) {
+    for (const m of src.matchAll(new RegExp(`var\\(\\s*${name}(?![a-z0-9-])`, 'g')))
+      out.push([rel, lineAt(src, m.index), `${name} under the ads console — channels inside .h10-shell, a whole colour in a portal; read its --nds-* token`]);
+  }
+  return out;
+}
+
 /** globals.css loads on every route, before tokens.css: it may neither define nor read the eleven. */
 function globalsViolations(raw, rel) {
   const src = stripBlockComments(raw);
@@ -135,6 +155,9 @@ if (process.argv.includes('--self-test')) {
     ['globals: a prefix is not the name', globalsViolations('.x { --surface-card-hover: 1 2 3; color: rgb(var(--text-primary-ish)); }', 'g'), 0],
     ['globals: the new body rule', globalsViolations('body { background-color: var(--nds-bg); color: var(--nds-text); }', 'g'), 0],
     ['globals: a mention in a comment', globalsViolations('/* rgb(var(--text-primary)) */ body { color: var(--nds-text); }', 'g'), 0],
+    ['ads: the channel form a portal cannot read', adsViolations('.rpt-modal-p { color: rgb(var(--text-secondary)); }', 'a'), 1],
+    ['ads: the bare form, with a fallback', adsViolations('.x { border: 1px solid var(--border-default, var(--nds-grey-200)); }', 'a'), 1],
+    ['ads: the --nds-* token', adsViolations('.rpt-modal-p { color: var(--nds-text-2); border-color: var(--nds-border); }', 'a'), 0],
   ];
   let bad = 0;
   for (const [label, got, want] of cases) {
@@ -162,11 +185,7 @@ for (const file of walk(ROOT)) {
   const channelsHere = rel.startsWith(CHANNEL_SCOPE);
   const lineOf = (i) => src.slice(0, i).split('\n').length;
 
-  for (const m of src.matchAll(BARE)) {
-    const t = m[1];
-    if (CHANNEL_TIER.has(t) && channelsHere)
-      violations.push([rel, lineOf(m.index), `bare var(${t}) — under .h10-shell this token is CHANNELS; write rgb(var(${t}))`]);
-  }
+  if (channelsHere) violations.push(...adsViolations(src, rel));
   for (const m of src.matchAll(WRAPPED)) {
     const t = m[1];
     if (WHOLE_TIER.has(t))

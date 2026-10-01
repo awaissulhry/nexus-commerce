@@ -16,11 +16,12 @@ import "./globals.css";
  * focus-visible and reduced-motion rules win. Do not reorder these five lines.
  *
  * `tokens-global.css`, NOT `tokens.css`: the global file withholds the eleven platform-alias
- * names (--text-*, --surface-*, --border-*) that globals.css also defines as RGB channels for
- * Tailwind. Publishing those app-wide as colours would make `rgb(var(--border-default))`
- * resolve to `rgb(#d8dde4)` — invalid — and kill the utilities behind 636 files. Pages that
- * genuinely want them as colours import `tokens.css` themselves, as they already did.
- * Phase 9.0b is what made this possible: see docs/PHASE-9-0B-TOKEN-FORM.md.
+ * names (--text-*, --surface-*, --border-*). That protected Tailwind while globals.css defined
+ * them as RGB channels for `rgb(var(--x) / <alpha-value>)`. Since 2026-10-01 globals.css does not
+ * define them and Tailwind's text-primary / bg-card / border-default read `--nds-*` instead; only
+ * the ads shell (`_shared/shared-shell.css`) still pins them as channels. Pages that import
+ * `tokens.css` get them as colours. Whether this file can now publish them is an open follow-up.
+ * Phase 9.0b is what made a global token file possible: see docs/PHASE-9-0B-TOKEN-FORM.md.
  */
 import "@/design-system/styles/tokens-global.css";
 import "@/design-system/styles/primitives.css";

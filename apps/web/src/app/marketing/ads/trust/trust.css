@@ -1,5 +1,6 @@
 /**
- * AX-VT.6 — trust surface. Tokens only; no raw hex, so light/dark and any palette change follow.
+ * AX-VT.6 — trust surface. Tokens only; no raw hex, so any palette change follows. Colours are
+ * `--nds-*` tokens, never the `--text-*` / `--surface-*` / `--border-*` aliases (reporting.css R0).
  */
 
 .h10-vt-trust {
@@ -11,7 +12,7 @@
 
 .h10-vt-loading {
   padding: 24px;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
   font-size: 12px;
 }
 
@@ -22,10 +23,10 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border: 1px solid rgb(var(--border-subtle));
+  border: 1px solid var(--nds-border-subtle);
   border-left-width: 3px;
   border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  background: var(--nds-surface);
 }
 
 .h10-vt-verdict.t-success { border-left-color: var(--status-success-strong); }
@@ -49,14 +50,14 @@
 
 .h10-vt-verdict-when {
   font-size: 11px;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 
 .h10-vt-verdict-head {
   margin: 6px 0 0;
   font-size: 13px;
   line-height: 1.5;
-  color: rgb(var(--text-primary));
+  color: var(--nds-text);
 }
 
 /* ── cards ──────────────────────────────────────────────────────── */
@@ -72,9 +73,9 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px 14px;
-  border: 1px solid rgb(var(--border-subtle));
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  background: var(--nds-surface);
   min-width: 0;
 }
 
@@ -84,7 +85,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 
 /* ── stats ──────────────────────────────────────────────────────── */
@@ -106,7 +107,7 @@
   font-size: 22px;
   font-weight: 600;
   line-height: 1.1;
-  color: rgb(var(--text-primary));
+  color: var(--nds-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -117,7 +118,7 @@
 
 .h10-vt-stat-l {
   font-size: 10px;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
   white-space: nowrap;
 }
 
@@ -134,17 +135,17 @@
   justify-content: space-between;
   gap: 10px;
   font-size: 11px;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
 }
 
-.h10-vt-kv b { color: rgb(var(--text-primary)); font-weight: 600; }
+.h10-vt-kv b { color: var(--nds-text); font-weight: 600; }
 
 .h10-vt-pre {
   margin: 0;
   padding: 8px 10px;
   border-radius: var(--nds-radius-sm);
-  background: rgb(var(--surface-sunken));
-  color: rgb(var(--text-secondary));
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
   font-size: 10px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -156,7 +157,7 @@
   margin: 0;
   font-size: 11px;
   line-height: 1.55;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
 }
 
 .h10-vt-link {
@@ -195,8 +196,8 @@
   min-width: 0;
 }
 
-.h10-vt-findings b { font-size: 12px; color: rgb(var(--text-primary)); font-weight: 600; }
-.h10-vt-findings span { font-size: 11px; line-height: 1.5; color: rgb(var(--text-secondary)); }
+.h10-vt-findings b { font-size: 12px; color: var(--nds-text); font-weight: 600; }
+.h10-vt-findings span { font-size: 11px; line-height: 1.5; color: var(--nds-text-2); }
 
 .h10-spin { animation: h10-vt-trust-spin 0.9s linear infinite; }
 
