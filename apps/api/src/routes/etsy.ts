@@ -29,7 +29,9 @@ interface AddFulfillmentNoteBody {
 }
 
 export async function estyRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: { accountId?: string; field?: string } }>('/etsy/information/references', async (request, reply) => {
+  // The sheet reads this under /api (`referenceOptions.ts`); index.ts registers estyRoutes without a prefix, so the path
+  // names it in full. It was '/etsy/information/references' and the sheet's request answered 404 (2026-10-01).
+  app.get<{ Querystring: { accountId?: string; field?: string } }>('/api/etsy/information/references', async (request, reply) => {
     const { etsyReferenceChoices, isEtsyReference } = await import('../services/etsy/information-references.js')
     const { accountId, field } = request.query
     if (!accountId || !field || !isEtsyReference(field)) return reply.code(400).send({ error: 'Choose an Etsy account and supported resource.' })

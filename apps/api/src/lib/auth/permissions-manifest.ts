@@ -450,6 +450,8 @@ export const ENTRIES: Entry[] = [
   RW(F.listingsView, F.channelsSync, pfx('/marketplaces')),
   // P3b S1 — which channels and markets the business uses; read by the sheet and readiness screens.
   P(F.listingsView, (m, p) => isRead(m) && p === '/api/channel-footprint'),
+  // The sheet's Etsy resource names (shipping profile, return policy, shop section, readiness state).
+  P(F.listingsView, (m, p) => isRead(m) && p === '/api/etsy/information/references'),
   RW(F.listingsView, F.channelsSync, pfx('/api/marketplaces')),
   RW(F.listingsView, F.channelsSync, pfx('/shopify')),
   RW(F.listingsView, F.channelsSync, pfx('/woocommerce')),
