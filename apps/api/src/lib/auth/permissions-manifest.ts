@@ -377,6 +377,9 @@ export const ENTRIES: Entry[] = [
 
   // ── Fulfillment / inventory ─────────────────────────────────────
   P(F.fulfillmentExport, (m, p) => p.startsWith('/api/fulfillment') && has('/export')(m, p)),
+  // Issuing or retrying a refund from a return sends money to the buyer: orders.refund, as on /api/orders. Before the
+  // returns rule below, which would otherwise match first. Refund READS stay with returns.view.
+  P(F.ordersRefund, (m, p) => !isRead(m) && p.startsWith('/api/fulfillment/returns/') && /\/refund(\/retry)?$/.test(p)),
   RW(F.returnsView, F.returnsProcess, pfx('/api/fulfillment/returns')),
   RW(F.returnsView, F.returnsProcess, pfx('/api/returns')),
   RW(F.poView, F.poCreate, pfx('/api/fulfillment/purchase-orders')),
