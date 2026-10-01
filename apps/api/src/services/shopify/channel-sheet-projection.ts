@@ -18,14 +18,20 @@ function pendingRecord(draft: ShopifyLinkedDraft, ownerId: string, field: Inform
     : draft.nativeEdits?.find(e => e.ownerId === ownerId && e.field === field.id) ?? null
 }
 const fieldSignatures = new WeakMap<InformationField, string>()
-export function shopifyCellToken(workspace: ShopifyLinkedWorkspace, ownerId: string, field: InformationField, locale?: string) {
+/**
+ * A cell's draft token: everything a save must find unchanged. The family root is its PHYSICAL listing id; an absent root
+ * is named by its exact normalized alias key ('' for the primary listing), so two absent aliases with equal cells never
+ * share a token. The same alias value is used by the projection, the save check, the continuation and the returned token.
+ */
+export function shopifyCellToken(workspace: ShopifyLinkedWorkspace, ownerId: string, field: InformationField, locale?: string, aliasKey = '') {
   let signature = fieldSignatures.get(field)
   if (!signature) { signature = linkedDigest(field); fieldSignatures.set(field, signature) }
   const rule = !locale && field.owner === 'PRODUCT' && field.definition ? workspace.draft.sharedFields?.find(r => r.namespace === field.definition!.namespace && r.key === field.definition!.key) : undefined
   const follows = rule && rule.sourceProductId !== ownerId && !rule.excludedProductIds.includes(ownerId)
   const shared = rule ? [rule.sourceProductId, rule.excludedProductIds.includes(ownerId), rule.baseline.find(v => v.ownerId === ownerId) ?? null,
     follows ? pendingRecord(workspace.draft, rule.sourceProductId, field) : null] : null
-  return linkedDigest([shared, workspace.destination.accountId, workspace.destination.listingId, workspace.familyId, ownerId, locale ?? '', signature, pendingRecord(workspace.draft, ownerId, field, locale), workspace.draft.sheetValues?.find(v => v.ownerId === ownerId && v.fieldId === field.id && v.locale === (locale ?? '')) ?? null])
+  const root = workspace.destination.listingId ?? ['absent-root', aliasKey]
+  return linkedDigest([shared, workspace.destination.accountId, root, workspace.familyId, ownerId, locale ?? '', signature, pendingRecord(workspace.draft, ownerId, field, locale), workspace.draft.sheetValues?.find(v => v.ownerId === ownerId && v.fieldId === field.id && v.locale === (locale ?? '')) ?? null])
 }
 
 /** Keep the common sheet's Nexus identities and hierarchy. Shopify owners are cell addresses,
@@ -130,7 +136,7 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
         resettable: pinned || pending !== undefined || mapped, linkGroupId: null, mapped: rule || ownValue ? null : base.mapped, affectsAllChannels: false,
         ...(ownValue ? { needsTranslation: false, requestedLocale: undefined, effectiveLocale: undefined, translationState: undefined } : {}),
         writeField: column.writeField, writeTarget: 'channelListing', writeVerb: 'channel', editable: !reason, writable: !reason, writeBlockedReason: reason,
-        shopifyWrite: { ownerId: remote.id, fieldId: field.id, token: shopifyCellToken(workspace, remote.id, field, remote.locale), baseline, sharing: informationSharingFacts(remote, field, workspace.draft) },
+        shopifyWrite: { ownerId: remote.id, fieldId: field.id, token: shopifyCellToken(workspace, remote.id, field, remote.locale, aliasId ?? ''), baseline, sharing: informationSharingFacts(remote, field, workspace.draft) },
       }
       if (sharedConflict) fieldIssues.push({ key: column.key, label: column.label, message: conflictMessage, severity: 'warn' })
       if (ownValue || sharedValue) {

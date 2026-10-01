@@ -14,6 +14,8 @@ import { shopifyAdmin } from './admin-client.js'
 import { readInformation } from './information-gateway.js'
 import { AUTOMATION_KEY, LINKED_KEY, getLinkedWorkspace, linkedState, linkedTransaction, writeLinkedState } from './linked-products.service.js'
 import { readTaxonomyAttributeValues, resolveLinkedReferenceNames } from './linked-products-gateway.js'
+import { matchesRootCreationProof, recordRootCreationProof, type RootProofScope } from './channel-sheet-root-proof.js'
+import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 
 export async function enrichShopifyChannelSheet(page: StudioSheet): Promise<StudioSheet> {
   if (page.scope.channel !== 'SHOPIFY' || !page.scope.connectionId) return page
@@ -71,7 +73,11 @@ export const shopifySheetChangesSchema = z.object({ operationId: z.string().min(
 /** The key a cell's answer is reported under: its receipt key, else its column (the old single-row wire). */
 export const shopifyReceiptKey = (cell: { colId: string; receiptKey?: string }) => cell.receiptKey ?? cell.colId
 export async function saveShopifySheetCells(productId: string, scope: ContentScope & { locale?: string }, body: unknown, actorUserId: string | null) {
-  const input = shopifySheetChangesSchema.parse(body), destination = await contentDestination(productId, scope)
+  const input = shopifySheetChangesSchema.parse(body)
+  /* The primary listing's alias is '' on `aliasKey` but NULL on the `aliasId` foreign key. A destination resolved from a
+     listing reports '' — which `writeLinkedState` would write as `aliasId: ''` when it creates a missing family root, and
+     the foreign key refuses it. Normalize it here: every read below already treats null as ''. */
+  const resolved = await contentDestination(productId, scope), destination = { ...resolved, aliasKey: resolved.aliasKey || null }
   const observed = await getLinkedWorkspace(productId, scope), schema = await readShopifyMappingSchema(destination.accountId, true)
   const ids = observed.draft.members.length ? observed.draft.members.map(m => m.id) : observed.suggestedProductIds
   const { graphql } = await shopifyAdmin(destination.accountId)
@@ -132,9 +138,22 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
       resetValues.set(shopifyReceiptKey(change), raw == null ? null : typeof raw === 'string' ? raw : JSON.stringify(raw))
     }
   }
+  const aliasKey = destination.aliasKey ?? ''
   return linkedTransaction(async tx => {
     const current = await linkedState(tx, destination)
     if (object(current.pa?.[PUBLISH_KEY]).status === 'PUBLISHING') throw new WorkspaceScopeError('A Shopify publication is running. Reconcile its status before editing.')
+    /* Root-creation proof (channel-sheet-root-proof.ts): a later request of the SAME action may present a token minted
+       while the family root was absent. Only if this exact action created this exact root is that token compared — with
+       the root shown as absent — against the CURRENT cell state. Every other token is strict. */
+    const proofScope: RootProofScope | null = input.operationId ? { workspaceId: workspaceIdForQuery(), accountId: destination.accountId, familyId: destination.familyId,
+      market: destination.marketplace, aliasKey, actorUserId, operationId: input.operationId } : null
+    let createdByThisAction: Promise<boolean> | undefined
+    const continuesAbsentRoot = async (token: string, row: InformationRow, field: InformationField) => {
+      if (!proofScope || !current.listing) return false
+      createdByThisAction ??= matchesRootCreationProof(tx, proofScope, { id: current.listing.id, createdAt: current.listing.createdAt })
+      const absent = { ...current.workspace, destination: { ...current.workspace.destination, listingId: null } }
+      return await createdByThisAction && token === shopifyCellToken(absent, row.id, field, row.locale, aliasKey)
+    }
     if (active(current.workspace)) throw new WorkspaceScopeError('Resume or reconcile the pending synchronization before editing.')
     if (JSON.stringify(current.workspace.suggestedProductIds) !== JSON.stringify(observed.suggestedProductIds) || JSON.stringify(current.draft.members) !== JSON.stringify(observed.draft.members)) throw new WorkspaceScopeError('The listing identities changed. Reload before editing.')
     let draft = structuredClone(current.draft)
@@ -151,7 +170,7 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
         // "Custom product needs a ContentAddress before it can be saved."). The content
         // refusal below is the one rule that belongs here, and it names the writer to use.
         if (['title', 'description', 'bodyHtml', 'descriptionHtml'].includes(field.id)) throw new Error(`${field.label} must be saved through the sheet's content address writer.`)
-        if (change.token !== shopifyCellToken(current.workspace, row.id, field, row.locale)) throw new Error('Another editor changed this draft cell. Your input is retained; review the saved value before retrying.')
+        if (change.token !== shopifyCellToken(current.workspace, row.id, field, row.locale, aliasKey) && !await continuesAbsentRoot(change.token, row, field)) throw new Error('Another editor changed this draft cell. Your input is retained; review the saved value before retrying.')
         const reason = informationRestriction(row, field, draft, false)
         if (reason) throw new Error(reason)
         const referenceRefusal = referenceRefusals.get(receipt)
@@ -201,6 +220,8 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
       await writeLinkedState(tx, destination, current, { [LINKED_KEY]: draft, [AUTOMATION_KEY]: { ...current.workspace.automation, mode: 'PAUSED', status: 'IDLE', message: 'Information draft changed. Review before synchronizing.' } })
     }
     const saved = await linkedState(tx, destination)
+    // Same transaction as the root's creation: a failure after this point rolls back root, proof and audit together.
+    if (proofScope && !current.listing && saved.listing && Object.values(cells).some(c => c.ok)) await recordRootCreationProof(tx, proofScope, null, { id: saved.listing.id, createdAt: saved.listing.createdAt })
     if (Object.values(cells).some(c => c.ok)) await tx.auditLog.create({ data: { userId: actorUserId, entityType: 'ChannelListing', entityId: saved.listing!.id, action: 'shopify.draft.cells.saved', before: current.draft as any, after: draft as any, metadata: { source: 'channel-sheet', accountId: destination.accountId, aliasKey: destination.aliasKey ?? '', locale: scope.locale ?? '' } } })
     const attributedListings = Object.values(cells).some(c => c.ok) ? await tx.channelListing.findMany({ where: { channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '', product: { OR: [{ id: destination.familyId }, { parentId: destination.familyId }] } }, select: { productId: true, externalListingId: true, platformAttributes: true } }) : []
     for (const change of input.cells) if (cells[shopifyReceiptKey(change)].ok) {
@@ -217,7 +238,7 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
           after: { field: change.colId, value: afterShared ? afterShared.value : next ? next.value : change.value },
           metadata: { layer: 'channel', source: 'manual', channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: destination.accountId, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '', locale: scope.locale ?? '', ownerId: row.id, providerFieldId: field.id, deliveryState: 'nexusDraft', beforeSource: beforeShared ? 'sharedField' : previous ? 'nexusDraft' : 'providerBaseline', afterSource: afterShared ? 'sharedField' : next ? 'nexusDraft' : 'providerBaseline' } } })
       }
-      cells[shopifyReceiptKey(change)].shopifyWrite = { ownerId: row.id, fieldId: field.id, token: shopifyCellToken(saved.workspace, row.id, field, row.locale), baseline: informationStoredValue(row, field),
+      cells[shopifyReceiptKey(change)].shopifyWrite = { ownerId: row.id, fieldId: field.id, token: shopifyCellToken(saved.workspace, row.id, field, row.locale, aliasKey), baseline: informationStoredValue(row, field),
         sharing: informationSharingFacts(row, field, draft) }
     }
     return { ok: Object.values(cells).every(c => c.ok), cells, listing: saved.listing ? { id: saved.listing.id, version: saved.listing.version } : null }
