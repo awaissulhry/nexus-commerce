@@ -327,13 +327,6 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     }
   }
   const shared = problems.attempt(() => buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency))
-  // Audit P10 — the condition, named before eBay sees it (the pre-flight `ebay-shared-listing-push.service.ts` runs): a word
-  // eBay does not know is a problem; an empty condition is sent as New, as before, and the review says so.
-  if (shared && !itemId) {
-    const condition = settings.conditionId
-    if (!filled(condition)) problems.note(`${ebayFieldLabel('conditionId')} is empty, so Nexus sends New. Choose another condition on the main row if the item is not new.`)
-    else if (!shared.conditionId) problems.add(`${ebayFieldLabel('conditionId')}: eBay does not know "${String(condition)}". Choose a condition from the list on the main row.`, { productId: parent.id, sku: parent.sku, field: 'conditionId' })
-  }
   const differing = products.filter(p => p.id !== parent.id && (packages.get(p.id) ?? '') !== '' && packages.get(p.id) !== (packages.get(parent.id) ?? ''))
   if (differing.length) problems.add(`eBay takes one package type, weight and size for the whole listing. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds' : 'hold'} a different package than the main row: make them the same as the main row, or leave them blank.`, { field: 'package' })
   if (!options.problems || !shared) problems.throwIfAny()
@@ -433,6 +426,15 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   const { scope, parent, products } = facts
   const { shared, itemId, parentListing, settings, galleries, variants } = built
   const main = { productId: parent.id, sku: parent.sku }
+  // Audit P10 — the condition, named before eBay sees it (the pre-flight `ebay-shared-listing-push.service.ts` runs). A new
+  // listing needs one on its main row (Owner 2026-10-01: required there, never a silent New); a word eBay does not know is
+  // named too. Readiness's own "required" finding on the main row already says it: then it is not said twice.
+  if (!itemId) {
+    const condition = settings.conditionId
+    const named = (facts.issues ?? []).some(issue => issue.severity === 'error' && issue.productId === parent.id && issue.field === 'conditionId')
+    if (!filled(condition)) { if (!named) problems.add(`${ebayFieldLabel('conditionId')} is empty. Choose a condition on this listing's main row.`, { ...main, field: 'conditionId' }) }
+    else if (!shared.conditionId) problems.add(`${ebayFieldLabel('conditionId')}: eBay does not know "${String(condition)}". Choose a condition from the list on the main row.`, { ...main, field: 'conditionId' })
+  }
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   // A blank cell falls through to the account's default, then the server's (`resolveEbayItemLocation`). Audit P3 — the
   // account's default is the location Nexus last read from eBay; a new listing without one reads it now.

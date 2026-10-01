@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({
   mode: 'live' as string, stock: 3, pa: {} as Record<string, Record<string, unknown>>, listing: {} as Record<string, Record<string, unknown>>,
   category: {} as Record<string, string | null>, metadata: {} as Record<string, unknown>, products: ['p', 'c1', 'c2'],
-  snapshot: vi.fn(), specs: [] as string[], trading: vi.fn(), created: [] as unknown[],
+  snapshot: vi.fn(), specs: [] as string[], trading: vi.fn(), created: [] as unknown[], factsIssues: [] as unknown[],
 }))
 
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false }))
@@ -83,7 +83,7 @@ function facts(): any {
     scope: { channel: 'EBAY', marketplace: 'IT', accountId: 'acc' },
     destination: { aliasKey: null, currency: 'EUR', familyId: rows[0].id },
     account: { displayName: 'Motovento eBay', connectionMetadata: m.metadata },
-    aliasLabel: 'Primary listing', excluded: 0, skipped: [], issues: [], revision: 'facts-1',
+    aliasLabel: 'Primary listing', excluded: 0, skipped: [], issues: m.factsIssues, revision: 'facts-1',
     parent: rows[0], products: rows, listings: rows.map(p => listing(p.id)),
     resolved: [{ catalogue: { fields: single ? [] : AXIS_FIELDS }, products: rows.map(p => ({ productId: p.id,
       category: { channelCategoryId: p.id in m.category ? m.category[p.id] : '57988' }, cells: { title: { value: 'Giacca FAM', errors: [] } } })) }],
@@ -104,7 +104,7 @@ async function problemsOf(promise: Promise<unknown>) {
 beforeEach(() => {
   process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX
   delete process.env.EBAY_ITEM_COUNTRY; delete process.env.EBAY_ITEM_LOCATION; delete process.env.EBAY_ITEM_POSTAL_CODE
-  m.mode = 'live'; m.stock = 3; m.pa = {}; m.listing = {}; m.category = {}; m.metadata = structuredClone(DEFAULTS); m.products = ['p', 'c1', 'c2']
+  m.mode = 'live'; m.stock = 3; m.pa = {}; m.listing = {}; m.category = {}; m.metadata = structuredClone(DEFAULTS); m.products = ['p', 'c1', 'c2']; m.factsIssues = []
   m.snapshot.mockReset().mockResolvedValue(structuredClone(SNAPSHOT)); m.specs = []; m.created = []
   m.trading.mockReset().mockResolvedValue({ ack: 'Success', errors: [], raw: '<VerifyAddFixedPriceItemResponse><Ack>Success</Ack></VerifyAddFixedPriceItemResponse>' })
 })
@@ -182,11 +182,18 @@ describe('defaults Nexus fills (P2, P3, P7, P10)', () => {
     expect(issues.filter(i => i.field === 'categoryId')).toEqual([expect.objectContaining({ sku: 'FAM', message: 'Category is empty. Choose an eBay category on this listing\'s main row.' })])
   })
 
-  it('P10: an empty condition is sent as New, and the review says so in a note', async () => {
+  it('P10: a main row without a condition is ONE problem, on the main row; nothing is sent as New', async () => {
     m.pa = { p: { conditionId: '' } }
-    const plan = await prepareEbayPublication(facts())
-    expect(plan.xml).toContain('<ConditionID>1000</ConditionID>')
-    expect(plan.notices).toEqual(['Condition is empty, so Nexus sends New. Choose another condition on the main row if the item is not new.'])
+    const issues = await problemsOf(prepareEbayPublication(facts()))
+    expect(issues).toEqual([{ productId: 'p', sku: 'FAM', field: 'conditionId', severity: 'error', message: 'Condition is empty. Choose a condition on this listing\'s main row.' }])
+  })
+  it('P10: the review names it once, with no note, whether readiness already named it or not', async () => {
+    m.pa = { p: { conditionId: '' } }
+    for (const named of [[], [{ productId: 'p', sku: 'FAM', field: 'conditionId', severity: 'error', message: 'Condition: Field \'Condition\' is required.' }]]) {
+      m.factsIssues = named
+      const review = await previewStudioPublication('p', { channel: 'EBAY', marketplace: 'IT', accountId: 'acc' }, 'user')
+      expect(review.issues.filter(i => i.field === 'conditionId' || /Condition/.test(i.message))).toEqual([expect.objectContaining({ sku: 'FAM', field: 'conditionId', severity: 'error' })])
+    }
   })
 })
 
