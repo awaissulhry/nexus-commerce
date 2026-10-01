@@ -17,6 +17,7 @@ import { variationSyncProcessor } from '../services/variation-sync-processor.ser
 import OutboundSyncService, { computeFailureDisposition, completedSyncQueueData, startAfterAnswer } from '../services/outbound-sync.service.js'
 import { dispatchChannelDelist, applyDelistResultToQueue } from '../services/channel-delist.service.js'
 import { productEventService } from '../services/product-event.service.js'
+import { recordListingSyncOutcome } from '../services/listing-sync-outcome.js'
 
 // Worker statistics
 let processedCount = 0
@@ -319,6 +320,8 @@ async function processOutboundSyncJobInner(job: Job) {
           },
         },
       })
+      // 2026-10-01 — the listing's own status follows the send (it stayed "Pending" after a successful send).
+      if (completion.syncStatus === 'SUCCESS') await recordListingSyncOutcome(prisma, { channelListingId: queueRecord.channelListingId, productId: queueRecord.productId, outcome: 'sent' })
       // CX (review 2026-09-26) — report-only follow-up (the eBay price read-back) only once the row is written.
       startAfterAnswer(syncResult)
 
@@ -401,6 +404,7 @@ async function processOutboundSyncJobInner(job: Job) {
       })
 
       if (terminal) {
+        await recordListingSyncOutcome(prisma, { channelListingId: queueRecord.channelListingId, productId: queueRecord.productId, outcome: 'failed', error: syncResult.error || 'Unknown error' })
         productEventService.emit({
           aggregateId: queueRecord.productId ?? queueId,
           aggregateType: 'ChannelListing',
