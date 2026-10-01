@@ -47,7 +47,9 @@ const updatedAt = new Date('2026-09-01T00:00:00Z')
 const product = (id: string, sku: string, extra: Record<string, unknown> = {}) => ({ id, sku, name: `Nome ${sku}`, ean: null, parentId: null, isParent: false,
   variationTheme: null, categoryAttributes: {}, variantAttributes: {}, brand: 'Xavia', images: [], basePrice: 99, totalStock: m.stock, updatedAt, ...extra })
 const listing = (productId: string) => ({ id: `l-${productId}`, productId,
-  channel: 'EBAY', marketplace: 'IT', region: 'IT', channelConnectionId: 'acc', aliasKey: '', externalListingId: null, platformAttributes: { ...(productId === 'p' ? { categoryId: '57988' } : {}), ...(m.pa[productId] ?? {}) }, fulfillmentMethod: null,
+  channel: 'EBAY', marketplace: 'IT', region: 'IT', channelConnectionId: 'acc', aliasKey: '', externalListingId: null,
+  // The main row holds a condition: an empty one is sent as New with a review note of its own (audit P10), not this file's subject.
+  platformAttributes: { ...(productId === 'p' ? { categoryId: '57988', conditionId: 'NEW' } : {}), ...(m.pa[productId] ?? {}) }, fulfillmentMethod: null,
   title: 'Titolo', description: 'Descrizione', price: null, quantity: 0, priceOverride: null, quantityOverride: null, stockBuffer: 0, listingStatus: 'DRAFT',
   syncStatus: 'IN_SYNC', followMasterPrice: true, followMasterQuantity: true, followMasterTitle: true, followMasterDescription: true, followMasterBulletPoints: true,
   masterPrice: null, masterTitle: null, masterDescription: null, masterQuantity: null, updatedAt })

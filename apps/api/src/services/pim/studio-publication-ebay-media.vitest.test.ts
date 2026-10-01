@@ -19,6 +19,8 @@ vi.mock('../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: as
 vi.mock('../ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: async (_db: unknown, input: { body: string }) => ({ html: `<p>${input.body}</p>`, warnings: [] }) }))
 vi.mock('./studio-publication-media.js', () => ({ publicationImages: () => ['https://img.example/old-gallery.jpg'] }))
 vi.mock('../stock-pool/sync-ledgers.js', () => ({ loadSyncLedgers: async () => new Map() }))
+// Audit P3 — a new listing with no location reads the account's from eBay; this account has none there.
+vi.mock('../ebay-account.service.js', () => ({ ebayAccountService: { getSnapshot: async () => ({ fulfillmentPolicies: [], paymentPolicies: [], returnPolicies: [], locations: [] }) } }))
 vi.mock('./channel-specs/index.js', async original => ({
   ...(await original<typeof import('./channel-specs/index.js')>()),
   loadEbaySpec: async () => ({ absent: false, fields: [{ key: 'title', channelStore: { kind: 'listingColumn', column: 'title' } }] }),

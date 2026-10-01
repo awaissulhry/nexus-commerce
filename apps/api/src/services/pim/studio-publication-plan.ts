@@ -43,11 +43,16 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: scope.channel,
     marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: destination.aliasKey ?? '' }, include: { translations: true, offers: true } })
   const excludedIds = await readExcludedListingIds(listings.map(l => l.id))
+  // Audit P4 (2026-10-01) — an eBay family never started here (its main listing, no variant has a row at this destination
+  // and nothing of it is live) publishes all its variants: "no included variants" was a dead end, and the send starts their
+  // draft rows itself (`ensureDraftListings`, `family: false`). The review lists every product it sends and says why.
+  const unstarted = scope.channel === 'EBAY' && !destination.aliasKey && products.length > 1
+    && !listings.some(l => l.externalListingId) && !listings.some(l => l.productId !== parent.id)
   // VTR step 0 — the one "included" rule Information and the dock use (`studio-sheet.service.ts`, `family-projection.service.ts`):
   // a VARIANT is in this listing only with its own row here that is not excluded. A variant with no row is not sent.
   const selected = products.filter(p => {
     const rows = listings.filter(l => l.productId === p.id)
-    return (p.id === parent.id || rows.length > 0) && !rows.some(l => excludedIds.has(l.id))
+    return (p.id === parent.id || rows.length > 0 || unstarted) && !rows.some(l => excludedIds.has(l.id))
   })
     .sort(familyPublicationOrder(p => p.id === parent.id))
   const closed = scope.channel === 'AMAZON' ? await closedMarketSet(selected.map(p => p.id)) : new Set<string>()
@@ -60,8 +65,10 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   if (!selected.some(p => p.id === parent.id)) error('The parent listing is excluded. Include it before publishing this family.')
   if ((parent.isParent || parent.isMaster) && selected.length < 2) error('This family has no included variants to publish.')
   for (const skip of skipped) issues.push({ ...skip, message: skip.reason, severity: 'warning' })
+  if (unstarted) issues.push({ severity: 'warning', message: `No variant had an eBay row here yet, so all ${selected.length - 1} variants are included. Publishing starts their eBay rows.` })
   if (included.length > 200) error('This family exceeds the publication limit of 200 products.')
-  if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error('Reconnect this account before publishing.')
+  // Audit P12 — say WHICH account and where (the studio footer says the same).
+  if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error(`Reconnect ${account.displayName?.trim() || 'this account'} in Settings → Channels before publishing.`)
   // Publish's lock: a paused still-draft may be sent (Publish is what makes it live); any other paused listing is refused.
   for (const listing of listings.filter(l => included.some(p => p.id === l.productId))) {
     const refusal = assertPublishAllowed(listing)
