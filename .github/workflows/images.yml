@@ -118,8 +118,9 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           load: true
           provenance: false
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,scope=${{ matrix.image }},mode=max,ignore-error=true
+          # No GitHub Actions layer cache since 2026-10-01: every release changes the source, so a new commit reused
+          # almost nothing from it (1–6 steps), while saving it took 28–115 s per image (deploy runs 36856679191 and
+          # 36878007487). Only a rebuild of the same commit gained from it.
 
       - name: No secret in the image
         run: scripts/ci/check-image-secrets.sh "$IMAGE"
