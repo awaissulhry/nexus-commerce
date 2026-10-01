@@ -49,7 +49,7 @@ export function channelResetOffer(row: ChannelSheetRow | undefined, colId: strin
   return {
     intent: list ? 'reset-list' : 'reset',
     formula,
-    label: label(formula, cell.source === 'channelSnapshot' ? 'Follow Master' : list ? 'Reset list to inherited…' : 'Reset to inherited'),
+    label: label(formula, cell.source === 'channelSnapshot' ? 'Follow Shared' : list ? 'Reset list to inherited…' : 'Reset to inherited'),
   }
 }
 

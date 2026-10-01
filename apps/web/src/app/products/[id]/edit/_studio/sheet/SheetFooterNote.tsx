@@ -66,10 +66,11 @@ function SavedLayoutNote({ retry }: { retry: () => Promise<unknown> }) {
   }
   return (
     <span className="nds-grid-sheet-noteslot">
-      <GridSheetNote kind="provenance" title="Your saved column order and visibility settings could not be loaded. Retry to restore them.">
+      <GridSheetNote kind="provenance" title="Your saved column order and visibility settings could not be loaded. Try again to restore them.">
         Saved column layout unavailable
       </GridSheetNote>
-      <Button inline variant="link" disabled={busy} onClick={() => void reload()}>{busy ? 'Retrying…' : 'Retry layout'}</Button>
+      {/* Step 4 (D7) — one wording for a retry, "Try again"; the note beside it says what is tried. */}
+      <Button inline variant="link" disabled={busy} onClick={() => void reload()} aria-label="Try loading the saved column layout again">{busy ? 'Trying again…' : 'Try again'}</Button>
     </span>
   )
 }
@@ -100,7 +101,7 @@ export function SheetFooterNote({ source, ...props }: SheetFooterNoteProps) {
         <GridSheetNote kind="refusal" count={refused} noun="cell" lead={showRefusedOnly ? 'showing only the affected rows' : undefined} onShow={onToggleRefused} />
         {/* The count is the note's ("2 cells blocked"); the short label is what fits beside it at phone width. */}
         {retryable > 0 && onRetry && (
-          <Button inline variant="link" onClick={onRetry} aria-label={`Retry ${retryable} failed ${retryable === 1 ? 'cell' : 'cells'}`} title={`Send the ${retryable} refused ${retryable === 1 ? 'edit' : 'edits'} again`}>Retry</Button>
+          <Button inline variant="link" onClick={onRetry} aria-label={`Send the ${retryable} failed ${retryable === 1 ? 'cell' : 'cells'} again`} title={`Send the ${retryable} refused ${retryable === 1 ? 'edit' : 'edits'} again`}>Try again</Button>
         )}
       </span>
     )
@@ -109,8 +110,8 @@ export function SheetFooterNote({ source, ...props }: SheetFooterNoteProps) {
     <GridSheetNote kind="provenance" title={discovery.note}>{discovery.note}</GridSheetNote>
     {/* Audit P12 — a login that needs reconnecting blocks publishing: the note says where, and this goes there. */}
     {discovery.link && <Button asChild inline variant="link"><Link href={discovery.link.href}>{discovery.link.label}</Link></Button>}
-    {discovery.failed && discovery.retry && <Button inline variant="link" disabled={discovery.retrying} onClick={() => void discovery.retry?.()}>
-      {discovery.retrying ? 'Retrying…' : 'Retry channel availability'}
+    {discovery.failed && discovery.retry && <Button inline variant="link" disabled={discovery.retrying} onClick={() => void discovery.retry?.()} aria-label="Try reading channel availability again">
+      {discovery.retrying ? 'Trying again…' : 'Try again'}
     </Button>}
   </span>
   if (layoutRecovery) return <SavedLayoutNote retry={layoutRecovery.retry} />

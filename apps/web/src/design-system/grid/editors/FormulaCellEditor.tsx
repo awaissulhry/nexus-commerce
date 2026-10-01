@@ -484,7 +484,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
             {line.kind === 'idle' ? 'The result shows here' : line.kind === 'checking' ? 'Checking…'
               : line.kind === 'error' ? (refused ? <><b>Not saved.</b> {line.message}{/[.!?]$/.test(line.message.trim()) ? '' : '.'} Fix it, or press Esc to cancel.</> : line.message)
               : line.kind === 'empty' ? '= empty' : <>= <b>{String(line.value)}</b></>}
-            {response?.retryable && <Button size="xs" variant="quiet" disabled={submitting} onClick={retry}>Retry</Button>}
+            {response?.retryable && <Button size="xs" variant="quiet" disabled={submitting} onClick={retry}>Try again</Button>}
           </div>}
         </div>
       </div>
@@ -657,6 +657,6 @@ export function scalarValueEditor(kind: 'text' | 'number') {
 function FormulaUnavailableEditor(props: { message: string; retry?: () => void; api: { stopEditing: (cancel?: boolean) => void } }) {
   useGridCellEditor({ isCancelAfterEnd: () => true })
   return <div className="nds-formula-editor"><p role="status">{props.message}</p>
-    <Button size="sm" onClick={() => { props.retry?.(); props.api.stopEditing(true) }}>Retry</Button>
+    <Button size="sm" onClick={() => { props.retry?.(); props.api.stopEditing(true) }}>Try again</Button>
     <Button size="sm" onClick={() => props.api.stopEditing(true)}>Close</Button></div>
 }

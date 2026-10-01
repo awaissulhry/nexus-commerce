@@ -288,7 +288,7 @@ export function ShopifyLinkedWorkspace({ path, accountLabel, view }: { path: str
       {mergeInformationDraft(mergeReview.base, mergeReview.local, mergeReview.latest.draft).conflicts.map(conflict => <Field key={conflict.key} label={conflict.label}><Select size="sm" value={mergeReview.choices[conflict.key] ?? ''} onChange={event => setMergeReview({ ...mergeReview, choices: { ...mergeReview.choices, [conflict.key]: event.target.value as 'local' | 'saved' } })}><option value="">Choose a value</option><option value="local">Keep my change</option><option value="saved">Keep saved change</option></Select><Disclosure summary="Compare values"><p>My change</p><pre className={styles.value}>{JSON.stringify(conflict.local ?? null, null, 2)}</pre><p>Saved change</p><pre className={styles.value}>{JSON.stringify(conflict.saved ?? null, null, 2)}</pre></Disclosure></Field>)}
       {!mergeInformationDraft(mergeReview.base, mergeReview.local, mergeReview.latest.draft).conflicts.length && <p>The drafts have no conflicting cell changes. Your edits and the latest saved work will both be retained.</p>}
     </div></Modal>}
-    {schemaError && <Banner tone="warning" title="Store attributes could not refresh" action={<Button size="sm" onClick={() => { void refreshSchema() }}>Retry attributes</Button>}>{schemaError} Your draft is preserved.</Banner>}
+    {schemaError && <Banner tone="warning" title="Store attributes could not refresh" action={<Button size="sm" onClick={() => { void refreshSchema() }}>Try again</Button>}>{schemaError} Your draft is preserved.</Banner>}
     {liveNotice}
     {!schema && !schemaError && <p role="status">Discovering this store’s fields and reusable content…</p>}
     <p role="status" className={styles.hint}>{busy ? 'Working with Shopify…' : dirty ? 'Unsaved draft changes' : 'Draft matches saved Nexus data'}</p>
@@ -322,7 +322,7 @@ export function ShopifyLinkedWorkspace({ path, accountLabel, view }: { path: str
           <nav className={styles.fieldNavigation} aria-label="Content fields">{visibleFields.map(def => <Button key={def.id} size="sm" block variant={activeField?.id === def.id ? 'tonal' : 'quiet'} aria-current={activeField?.id === def.id ? 'true' : undefined} onClick={() => setFieldSelection(def.id)}>{def.name}</Button>)}</nav>
           <Button size="sm" disabled={busy || !canPublish} onClick={() => setEntry({ id: null })}>Create reusable entry</Button>
         </div></Card><Card header={activeField?.name ?? 'Product content'} description={owner?.ownerType === 'PRODUCTVARIANT' ? `${draft.members.find(m => m.id === productId)?.title} · ${owner.title}` : owner?.title}>
-        {ownerLoading && <p role="status">Reading current Shopify values…</p>}{ownerError && <Banner tone="danger" action={<Button size="sm" onClick={() => setOwnerRefresh(v => v + 1)}>Retry</Button>}>{ownerError}</Banner>}
+        {ownerLoading && <p role="status">Reading current Shopify values…</p>}{ownerError && <Banner tone="danger" action={<Button size="sm" onClick={() => setOwnerRefresh(v => v + 1)}>Try again</Button>}>{ownerError}</Banner>}
         {owner && (activeField ? [activeField] : []).map(def => {
           const field = owner.fields.find(f => f.namespace === def.namespace && f.key === def.key), edit = draft.edits.find(e => e.ownerId === owner.id && e.namespace === def.namespace && e.key === def.key)
           const value = edit ? edit.nextValue : field?.value ?? null, isRelationship = owner.ownerType === 'PRODUCT' && draft.relationship?.namespace === def.namespace && draft.relationship.key === def.key

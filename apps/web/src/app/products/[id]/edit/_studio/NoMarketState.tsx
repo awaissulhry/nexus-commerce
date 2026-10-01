@@ -48,7 +48,7 @@ export function NoMarketView({ gate, onRetry, retrying, canSetUp, onSetUp, setti
           description="Nexus could not read this business's markets, so the product sheet has no market to open in."
           action={onRetry ? (
             <Button size="sm" variant="secondary" disabled={retrying} onClick={onRetry}>
-              {retrying ? 'Retrying…' : 'Try again'}
+              {retrying ? 'Trying again…' : 'Try again'}
             </Button>
           ) : undefined}
         />

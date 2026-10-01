@@ -208,7 +208,7 @@ function RecordFieldImpl({
     cell?.writeBlockedReason ??
     lockedReason ??
     (layer === 'locked'
-      ? 'An identity field pinned to master — it cannot diverge per channel.'
+      ? 'An identity field pinned to the Shared product — it cannot diverge per channel.'
       : layer === 'mapped'
         ? 'Derived by the mapping engine. Change the rule at /channels/mapping, not the value here.'
         : !(cell?.editable ?? column.editable)
@@ -571,11 +571,11 @@ function RecordFieldImpl({
 
       {/* 🔴 The blast radius, stated before the edit rather than confirmed after it.
           On a channel scope only six field names actually route to the ChannelListing; every
-          other cell writes to the shared master record, so editing "the eBay value" here changes
+          other cell writes to the Shared product, so editing "the eBay value" here changes
           Amazon, Shopify and every other channel too. Measured on eBay·IT: 399 of 441 cells. */}
       {crossChannel && (
         <div className={`${styles.issue} ${styles.issueWarn}`}>
-          Writes to the master record — this changes every channel, not just this one.
+          Writes to the Shared product — this changes every channel, not just this one.
         </div>
       )}
 

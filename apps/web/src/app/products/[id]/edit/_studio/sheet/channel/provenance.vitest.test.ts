@@ -81,14 +81,14 @@ describe('describeCascade — the ACTION clause only', () => {
   })
 
   it('names the actual reset destination without promising parent-listing inheritance', () => {
-    expect(describeCascade('alias').actionHint({ ...ctx, kind: 'parent' })).toBe('Click to reset this listing row to Master.')
-    expect(describeCascade('aliasVariant').actionHint(ctx)).toContain('variant’s Master value')
+    expect(describeCascade('alias').actionHint({ ...ctx, kind: 'parent' })).toBe('Click to reset this listing row to the Shared product.')
+    expect(describeCascade('aliasVariant').actionHint(ctx)).toContain('variant’s Shared value')
   })
 
   it('names the alias for the substrate tooltip rather than writing its own sentence', () => {
     expect(describeCascade('alias').fromLabel(ctx)).toBe('② Giacca Moto Uomo')
     expect(describeCascade('aliasVariant').fromLabel(ctx)).toBe('② Giacca Moto Uomo · GALE-JACKET-BLACK-MEN-M')
-    expect(describeCascade('master').fromLabel(ctx)).toBe('the master record')
+    expect(describeCascade('master').fromLabel(ctx)).toBe('the Shared product')
   })
 })
 
@@ -166,7 +166,7 @@ describe('cascadeOf — prefers the server layer, falls back honestly', () => {
     }
   })
 
-  it('offers "Follow Master" (a reset) on an old listing text, never another pin (P1, report 2 I-3)', () => {
+  it('offers "Follow Shared" (a reset) on an old listing text, never another pin (P1, report 2 I-3)', () => {
     // The server folded it into `master` until P1; the source decides, whatever layer an older read carries.
     for (const layer of ['master', 'channel', 'alias'] as const) {
       const snapshot = cell({ source: 'channelSnapshot', layer, pinned: false, follows: true, inherited: true })

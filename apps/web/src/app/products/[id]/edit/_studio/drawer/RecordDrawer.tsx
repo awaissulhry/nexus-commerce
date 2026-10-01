@@ -188,7 +188,7 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
   const scopeLabel =
     scope.label ??
     (scope.kind === 'master'
-      ? 'Master'
+      ? 'Shared product'
       : [scope.channel, scope.marketplace, scope.aliasLabel].filter(Boolean).join(' · '))
 
   // History is asked for by the COLUMN key (PES.5 §3.5 `fieldKey`), scoped to this row — a family

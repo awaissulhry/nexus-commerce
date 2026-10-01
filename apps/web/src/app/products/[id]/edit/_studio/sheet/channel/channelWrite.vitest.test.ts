@@ -513,7 +513,7 @@ describe('unanswered writes', () => {
 })
 
 
-describe('whole-list Follow Master', () => {
+describe('whole-list Follow Shared', () => {
   it('sends one list reset at the exact alias and returns errors to the clicked slot', async () => {
     const seen = captureBody({ updated: 0, errors: [{ id: 'p1', field: 'amazon_bulletPoints', error: 'List refused' }] })
     const r = row({ aliasId: 'alias-2', values: { bulletPoints_2: cell({ writeField: 'amazon_bulletPoints[2]' }) } })

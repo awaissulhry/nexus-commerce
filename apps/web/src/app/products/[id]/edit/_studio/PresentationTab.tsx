@@ -125,7 +125,7 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
     <p className={styles.intro}>{mode === 'description'
       ? 'Choose how this listing looks to buyers. Each alias can use its own description and theme.'
       : 'Arrange the options buyers see in this listing. Each alias can use its own axis and value order.'}</p></header>
-    {(error || sheet.error) && <Banner tone="danger" action={<Button disabled={pending} onClick={() => { setError(null); setRefresh(n => n + 1); sheet.reload() }}>Retry</Button>}>{error || sheet.error}</Banner>}
+    {(error || sheet.error) && <Banner tone="danger" action={<Button disabled={pending} onClick={() => { setError(null); setRefresh(n => n + 1); sheet.reload() }}>Try again</Button>}>{error || sheet.error}</Banner>}
     {sheet.data && <Card padded>
       <div className={styles.destination}>
         <Field label="Listing alias"><Listbox ariaLabel="Presentation listing" value={row ? aliasKey : undefined} disabled={pending || sheet.loading} onChange={selectListing}
