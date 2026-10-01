@@ -152,7 +152,10 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
   let locations: StudioPublishReview['locations'], visibility: string | undefined
   try {
     if (scope.channel === 'AMAZON') prepared = await prepareAmazonPublication(facts)
-    else if (scope.channel === 'EBAY') prepared = usesEbayInventory(facts) ? await prepareEbayInventoryPublication(facts) : await prepareEbayPublication(facts)
+    else if (scope.channel === 'EBAY') {
+      prepared = usesEbayInventory(facts) ? await prepareEbayInventoryPublication(facts) : await prepareEbayPublication(facts)
+      if (prepared.kind === 'ebay') for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
+    }
     else if (scope.channel === 'SHOPIFY') {
       if (facts.excluded) throw new Error('This Shopify family has excluded variants. Review the family selection before publishing.')
       const { previewContentSync } = await import('../shopify/content-sync.service.js')

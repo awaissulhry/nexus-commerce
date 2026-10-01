@@ -36,6 +36,8 @@ export interface EbayPublication {
   liveContent?: Record<string, unknown> | null
   liveReadError?: string
   fieldWrites?: Record<string, StudioPublishFieldWrite[]>
+  /** Review notes that block nothing (a new listing at stock 0). */
+  notices?: string[]
 }
 export interface EbayPublicationReceipt { reference: string; warnings: string[]; verified?: boolean }
 
@@ -299,7 +301,7 @@ export async function prepareEbayInventoryPublication(facts: PublicationFacts): 
 }
 
 /** Origin, pictures, policies and the rendered description — the same for a Trading and an Inventory listing. */
-async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<ReturnType<typeof buildEbayListingInput>>) {
+async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<ReturnType<typeof buildEbayListingInput>>, notices: string[] = []) {
   const { scope, parent, products } = facts
   const { shared, itemId, parentListing, settings, galleries, variants } = built
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
@@ -339,7 +341,16 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   if (!itemId && Object.values(shared.policies).some(v => !v)) throw new Error('Choose shipping, payment and return policies in Information before publishing.')
   if (!itemId && (!shared.title.trim() || !shared.description.trim() || !shared.pictureUrls?.length)) throw new Error('A title, description and product image are required for eBay.')
   if (!itemId && shared.variations.some(v => v.price == null || !Number.isFinite(v.price) || v.price <= 0 || !Number.isSafeInteger(v.quantity))) throw new Error('Every included variation needs a valid price and quantity.')
-  if (!itemId && !shared.variations.some(v => v.quantity > 0)) throw new Error('This eBay listing has no available stock to publish.')
+  // Owner 2026-10-01: a new listing may start at 0 and get its stock later. eBay keeps a listing at 0 alive (hidden from
+  // search) only while the account's out-of-stock option is on; without it a listing cannot wait at 0. eBay's own dry
+  // run (`sendEbayPublication`) still decides before anything is created.
+  if (!itemId && !shared.variations.some(v => v.quantity > 0)) {
+    const { readEbayOutOfStockPreference } = await import('../channel-delist.service.js')
+    const outOfStock = await readEbayOutOfStockPreference(scope.accountId, scope.marketplace)
+    if (outOfStock === 'OFF') throw new Error('The stock is 0, and this eBay account\'s out-of-stock option is off, so eBay cannot hold the listing at 0. Turn on the out-of-stock option in eBay (Account › Site Preferences › Selling preferences), then refresh this review.')
+    if (outOfStock !== 'ON') throw new Error('The stock is 0, and Nexus could not read this eBay account\'s out-of-stock option. Refresh this review.')
+    notices.push('The stock is 0. eBay keeps this listing hidden from search until it has stock.')
+  }
   const rendered = await renderListingDescriptionSafe(prisma, { productId: parent.id, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
     aliasKey: facts.destination.aliasKey ?? '', mode: products.length > 1 ? 'group' : 'single', body: shared.description, title: shared.title })
   if (rendered.warnings.length) throw new Error(rendered.warnings.join('; '))
@@ -352,13 +363,14 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
   assertLiveEbay()
   const built = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined })
   const { itemId, settings, identities } = built
-  const shared = await finishEbayListingInput(facts, built)
+  const notices: string[] = []
+  const shared = await finishEbayListingInput(facts, built, notices)
   let liveRevision: string | null = null, liveContent: Record<string, unknown> | null = null, liveReadError: string | undefined
   if (itemId) {
     try { const live = await readLiveItem(itemId, scope.accountId, scope.marketplace); liveRevision = live.revision; liveContent = live.content }
     catch (error) { liveReadError = error instanceof Error ? error.message : String(error) }
   }
-  return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, liveContent, ...(liveReadError ? { liveReadError } : {}), products: identities,
+  return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, liveContent, ...(liveReadError ? { liveReadError } : {}), ...(notices.length ? { notices } : {}), products: identities,
     xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings) }
 }
 
