@@ -691,8 +691,9 @@ export async function startScheduler(): Promise<void> {
 
   // Shared stock (plan 2026-09-19) — the pool worker: updates listings in every business when a
   // pool changes where no code of ours kicked it (a lender's own sale, an import), and finishes the
-  // lender's bookkeeping for pool sales. Polls every 2 s while busy, 10 s when quiet; kicked at once
-  // after every stock movement and by the pool doors' own callers. Idle-safe: one indexed query per poll. Opt out via
+  // lender's bookkeeping for pool sales. Woken at once by the database's notify (nexus_stock_pool) after
+  // every write that queues pool work; polls every 2 s while busy, 10 s when quiet as the backstop. It
+  // runs in the worker process (runtime/worker.ts). Idle-safe: one indexed query per poll. Opt out via
   // NEXUS_ENABLE_STOCK_POOL_WORKER=0.
 
 

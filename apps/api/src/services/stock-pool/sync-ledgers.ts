@@ -130,8 +130,8 @@ export function ledgerInputs(product: ProductLedger | undefined, sourceLocationC
 /**
  * For the product switch's preview: the two ledgers a product could follow — its own stock (a product
  * leaving the pool: uncounted means 0) and the pool of `grantId` as it would be if the product were
- * switched now (nexus_pool_preview: through its catalog link, before any pool link exists). A product
- * with no active catalog link to that lender has no pool choice.
+ * switched now (nexus_pool_preview: the lender's product with the same SKU, before any pool link exists).
+ * A product whose SKU the lender does not have has no pool choice.
  */
 export async function loadLedgerChoices(db: Db, productIds: Iterable<string>, grantId: string | null): Promise<Map<string, { own: ProductLedger; pool: ProductLedger | null }>> {
   const ids = [...new Set([...productIds].filter((id): id is string => typeof id === 'string' && id.length > 0))]

@@ -1,3 +1,23 @@
+-- Shared stock by SKU (Owner 2026-10-01; plan docs/shared-stock-by-sku/PLAN-2026-10-01.md).
+--
+-- (1) A pool link no longer needs a product share: a new link names the SKU that the borrower's product
+--     and the lender's product BOTH have (StockPoolLink.sku). catalogLinkId becomes optional; the links
+--     made before today keep theirs and work exactly as before. Additive only: one nullable column, one
+--     NOT NULL relaxed, a check that every existing row passes (catalogLinkId set, sku null).
+-- (2) The shared policy file packages/database/workspaces/stock-pool.sql, which this migration ENDS WITH
+--     byte for byte (policy-migrations.json):
+--     - the link guard checks the SKU on a SKU link (both products alive, exactly that SKU);
+--     - nexus_pool_effective_link (every new sale) and nexus_pool_preview find the lender product by SKU;
+--     - nexus_pool_sku_matches / nexus_pool_sku_candidates: which products can connect, and why not;
+--     - nexus_stock_pool_product_guard (Owner D1): a product that shares stock keeps its SKU and is not
+--       deleted or moved, in either business, until it is disconnected;
+--     - nexus_stock_pool_task_wake: every write that queues pool work wakes the worker at commit, so the
+--       other business follows a sale in about a second whichever process wrote it.
+
+-- Two statements, not Prisma's combined one: both only expand (a nullable column; a NOT NULL relaxed).
+ALTER TABLE "StockPoolLink" ADD COLUMN "sku" TEXT;
+ALTER TABLE "StockPoolLink" ALTER COLUMN "catalogLinkId" DROP NOT NULL;
+
 -- Shared stock between business profiles — the lending permission, the product links, the work
 -- queue and the safe doors. Plan: docs/2026-09-19-shared-stock-plan.md; contract:
 -- docs/2026-09-19-shared-stock-build.md §1.

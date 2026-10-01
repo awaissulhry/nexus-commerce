@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { requireWorkspace, withWorkspace } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
+import { listenUrlFrom, startWakeListener } from '../../lib/pg-wake-listener.js'
 import { publishEvent } from '../../lib/events/publish.js'
 import { lockProductStock } from '../stock-lock.js'
 import { consumeLayersInTx } from '../cost-layers.service.js'
@@ -27,8 +28,9 @@ import { evaluateOversellRisk } from '../inventory-oversell-watchdog.service.js'
  *               own stock or the pool). Pool changes use the instant lane: every second a listing
  *               shows a number the pool no longer has is an oversell window.
  *
- * Who runs it: `kickStockPoolWork()` right after our own code commits a pool change, and a poller
- * (`startStockPoolWorker`) for changes made elsewhere — a lender's own sale, an import, a trigger. A
+ * Who runs it: `kickStockPoolWork()` right after our own code commits a pool change, and the worker
+ * (`startStockPoolWorker`: woken by the database's notify, with a poll behind it) for changes made
+ * elsewhere — a lender's own sale, an import, a trigger, a sale written by the API process. A
  * task is claimed with SKIP LOCKED, so two runners never do the same task; a claim older than two
  * minutes is taken again (a runner that died). After MAX_ATTEMPTS failures the owners are told.
  */
@@ -289,17 +291,32 @@ export function afterPoolChange(): void {
   void kickStockPoolWork()
 }
 
+/** The channel stock-pool.sql's nexus_stock_pool_task_wake notifies on every write that queues pool work. */
+export const POOL_WAKE_CHANNEL = 'nexus_stock_pool'
+
+export interface StockPoolWorkerOptions {
+  /** The connection to LISTEN on. Default listenUrlFrom(process.env). null: poll only. */
+  listenUrl?: string | null
+}
+
 /**
- * The poller: finds work written by the database where no code of ours was there to kick it (a
- * lender's own sale, an import, a trigger). Polls every 2 s while there was work in the last minute,
- * 10 s when quiet. Every stock movement also kicks it after commit (afterStockMovementCommit), so a
- * lender's own sale reaches the borrowers in about a second; the poll covers writers that do not
- * pass through there (the stock import, reservations).
+ * The worker. LISTENs for the database's wake signal (POOL_WAKE_CHANNEL, sent at the commit of every
+ * write that queues pool work, whichever process wrote it — the API process does not kick, see
+ * afterPoolChange), and runs at once: a sale reaches the other business's listings in about a second
+ * (Owner 2026-10-01: "in real time"). The poll stays as the backstop for a lost connection: every 2 s
+ * while there was work in the last minute, 10 s when quiet. Our own commits also kick it directly
+ * (afterStockMovementCommit, afterPoolChange).
  */
-export function startStockPoolWorker(): () => Promise<void> {
+export function startStockPoolWorker(options: StockPoolWorkerOptions = {}): () => Promise<void> {
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastWorkAt = 0
+  const stopListening = startWakeListener({
+    channel: POOL_WAKE_CHANNEL,
+    url: options.listenUrl === undefined ? listenUrlFrom(process.env) : options.listenUrl,
+    label: 'stock-pool',
+    wake: () => { if (!stopped) void kickStockPoolWork().then((found) => { if (found > 0) lastWorkAt = Date.now() }) },
+  })
   const tick = async () => {
     if (stopped) return
     const found = await kickStockPoolWork()
@@ -311,7 +328,7 @@ export function startStockPoolWorker(): () => Promise<void> {
   }
   timer = setTimeout(tick, 5_000)
   timer.unref?.()
-  return async () => { stopped = true; if (timer) clearTimeout(timer); await running }
+  return async () => { stopped = true; if (timer) clearTimeout(timer); await stopListening(); await running }
 }
 
 function stateUuid(text: string): string {
