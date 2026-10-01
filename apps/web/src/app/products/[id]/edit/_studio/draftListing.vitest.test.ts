@@ -8,7 +8,7 @@ import * as pushLock from '@nexus/shared/push-lock'
 import {
   ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, asinPendingCount,
   connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, isStillDraftListing,
-  mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence, notListedSentence,
+  draftStartSentence, mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence, noAccountTitle, notListedSentence, notListedTitle,
 } from './draftListing'
 import { startedDraftListing } from './sheet/channel/useChannelSheet'
 
@@ -62,6 +62,13 @@ describe('the header and the chip', () => {
   it('names the market, what the first edit does, and that nothing is sent', () => {
     expect(notListedSentence('AMAZON', 'SE')).toBe('Not listed on Amazon · SE yet. Your first edit here starts a draft. Nothing is sent to Amazon until you publish.')
     expect(notListedSentence('EBAY', 'DE')).toBe('Not listed on eBay · DE yet. Your first edit here starts a draft. Nothing is sent to eBay until you publish.')
+  })
+
+  it('the sheet and the media tabs share one title and one body shape (step 4, D3)', () => {
+    expect(notListedTitle('AMAZON', 'SE')).toBe('Not listed on Amazon · SE yet')
+    expect(draftStartSentence('EBAY', 'edit')).toBe('Your first edit here starts a draft. Nothing is sent to eBay until you publish.')
+    expect(notListedSentence('EBAY', 'DE')).toBe(`${notListedTitle('EBAY', 'DE')}. ${draftStartSentence('EBAY', 'edit')}`)
+    expect(noAccountTitle('EBAY')).toBe('No eBay account')
   })
 
   it('with no account says the API\'s own refusal, word for word', () => {
@@ -119,8 +126,10 @@ describe('the media galleries on a market with no listing', () => {
   })
 
   it('says what the first save does, and what it did', () => {
-    expect(mediaDraftStartSentence('EBAY', 'DE')).toBe('Your first save here starts a draft on eBay · DE. Nothing is sent to eBay until you publish.')
-    expect(mediaDraftStartSentence('AMAZON', 'SE')).toBe('Your first save here starts a draft on Amazon · SE. Nothing is sent to Amazon until you publish.')
+    // The title names the market (`notListedTitle`); the body says what the first save does.
+    expect(notListedTitle('EBAY', 'DE')).toBe('Not listed on eBay · DE yet')
+    expect(mediaDraftStartSentence('EBAY')).toBe('Your first save here starts a draft. Nothing is sent to eBay until you publish.')
+    expect(mediaDraftStartSentence('AMAZON')).toBe('Your first save here starts a draft. Nothing is sent to Amazon until you publish.')
     expect(mediaDraftStartedMessage('EBAY', 'DE')).toBe('Started a draft on eBay · DE and saved this gallery to it. Nothing was sent to eBay.')
   })
 })

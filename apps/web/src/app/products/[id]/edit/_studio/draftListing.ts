@@ -38,10 +38,27 @@ export function coordinateListingState(
   return listings.every((listing) => isStillDraftListing(listing)) ? 'draft' : 'listed'
 }
 
-/** The header on a coordinate with no listing. Replaces "Not listed · 1 listing · 20 variations". */
-export function notListedSentence(channel: string, market: string): string {
-  return `Not listed on ${coordinateName(channel, market)} yet. Your first edit here starts a draft. Nothing is sent to ${channelLabel(channel)} until you publish.`
+/**
+ * Step 4 (D2/D3, 2026-10-01) — ONE wording for "there is no listing here": the sheet's notice, the media tabs' notice
+ * and the scope chip's hover all start with this title, and the row pill and the toolbar say its short form
+ * (`readinessMeta('unlisted', 'row').label`, "Not listed yet").
+ */
+export function notListedTitle(channel: string, market: string): string {
+  return `Not listed on ${coordinateName(channel, market)} yet`
 }
+
+/** What the first edit (the sheet) or the first save (a media tab) does on a coordinate with no listing. */
+export function draftStartSentence(channel: string, action: 'edit' | 'save'): string {
+  return `Your first ${action} here starts a draft. Nothing is sent to ${channelLabel(channel)} until you publish.`
+}
+
+/** The notice as one sentence (the scope chip's hover). Replaces "Not listed · 1 listing · 20 variations". */
+export function notListedSentence(channel: string, market: string): string {
+  return `${notListedTitle(channel, market)}. ${draftStartSentence(channel, 'edit')}`
+}
+
+/** The notice's title when there is no account to start a draft under; its body is `connectAccountSentence`. */
+export const noAccountTitle = (channel: string): string => `No ${channelLabel(channel)} account`
 
 /** "an Amazon", "an eBay", "a Shopify" — the article the API's refusal uses. */
 const withArticle = (label: string) => `${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label}`
@@ -96,9 +113,9 @@ export function draftStartedMessage(input: {
   return `Started a draft of ${input.rootSku} on ${coordinateName(input.channel, input.market)}${what}. Nothing was sent to ${channelLabel(input.channel)}.`
 }
 
-/** The media galleries' sentence on a coordinate with no listing. */
-export function mediaDraftStartSentence(channel: string, market: string): string {
-  return `Your first save here starts a draft on ${coordinateName(channel, market)}. Nothing is sent to ${channelLabel(channel)} until you publish.`
+/** The media galleries' sentence on a coordinate with no listing (under `notListedTitle`, which names the market). */
+export function mediaDraftStartSentence(channel: string): string {
+  return draftStartSentence(channel, 'save')
 }
 
 /** The message after the gallery save that started the draft. */

@@ -1,5 +1,6 @@
 import { readinessMeta } from '@/design-system/grid/renderers/readiness'
 import type { ScopeBarItem } from '@/design-system/patterns/ScopeBar'
+import { draftStartSentence, notListedTitle } from './draftListing'
 import { connectionScopePolicy } from './presence/connection'
 import { channelLabel, languageLabel } from './scopes'
 import { sharedReadiness } from './sharedReadiness'
@@ -54,7 +55,15 @@ export interface ScopeItemsInput {
   locale: string | null
   discoveryFailed: boolean
   destination: DestinationState['status']
+  /**
+   * The open channel scope has no listing on this market (its destination resolved with none). Step 4 (D2): the chip
+   * then says what the sheet's notice says — "Not listed yet" — instead of an unmeasured "Not computed".
+   */
+  unlisted?: boolean
 }
+
+/** The chip on a channel · market with no listing and no verdict: the row pill's words, the sheet notice's short form. */
+export const NOT_LISTED_SUMMARY = readinessMeta('unlisted', 'row').label
 
 export function scopeItems(i: ScopeItemsInput): ScopeBarItem[] {
   const { market, marketplaces, readiness, scope, save, locale } = i
@@ -64,10 +73,15 @@ export function scopeItems(i: ScopeItemsInput): ScopeBarItem[] {
     if (id === scope && save.kind === 'error') return { pct: null, state: 'blocked', note: save.message }
     if (id === scope && save.kind === 'saving') return 'loading'
     if (readiness.status === 'loading') return 'loading'
+    // Step 4 (D2) — no listing here and no verdict: ONE wording with the sheet's notice. A real verdict (Blocked,
+    // Warnings…) still wins: the rules can be judged before the first listing exists.
+    const notListed = id === scope && id !== MASTER_SCOPE && i.unlisted && market
+      ? { pct: null, state: 'notComputed' as const, summary: NOT_LISTED_SUMMARY, note: `${notListedTitle(id, market)}. ${draftStartSentence(id, 'edit')}` } : null
     if (readiness.status === 'ready') {
       const value = readiness.byScope[id]
       // R-LX-9 — a scope the response did not score is unmeasured, not empty.
-      if (!value) return { pct: null, state: 'notComputed', note: 'This scope was not scored in this response.' }
+      if (!value) return notListed ?? { pct: null, state: 'notComputed', note: `Nexus has not checked ${id === MASTER_SCOPE ? 'the Shared product' : `${channelLabel(id)} · ${market}`} yet.` }
+      if (notListed && value.state === 'notComputed' && value.pct == null) return notListed
       const others = (shown: string | null) => value.languages?.filter(entry => entry.language !== shown).map(entry => `${entry.language.toUpperCase()}: ${readinessMeta(entry.state, 'scope').label} ${entry.pct === null ? '—' : `${entry.pct}%`}`) ?? []
       const own = id === MASTER_SCOPE ? undefined : ownLanguageVerdict(value, participation?.languages ?? [], locale)
       if (own) return { pct: own.pct, state: own.state, note: [`Shown in ${languageLabel(own.language)}: ${languageLabel(locale ?? '')} is not sold on ${channelLabel(id)} · ${market}.`, ...others(own.language)].join(' · ') }

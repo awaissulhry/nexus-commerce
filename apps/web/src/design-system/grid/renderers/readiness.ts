@@ -58,7 +58,8 @@ const ROW: Record<RowReadinessState, ReadinessMeta> = {
   pending: { tone: 'info', label: 'Published · ASIN pending', vocabulary: 'row', hint: 'Amazon accepted this listing. Its ASIN has not been read back yet; Nexus reads it from Amazon.' },
   missing: { tone: 'warning', label: 'Missing', vocabulary: 'row', hint: 'Required fields are empty — publishing would be refused' },
   errors: { tone: 'danger', label: 'Errors', vocabulary: 'row', hint: 'A value breaks this channel’s rules — publishing would be refused' },
-  unlisted: { tone: 'neutral', label: 'No listing here', vocabulary: 'row', hint: 'We hold no listing record for this coordinate. Nothing has been checked against the channel.' },
+  // Step 4 (D2) — the one wording for "no listing here" everywhere: the sheet's notice says its long form, "Not listed on eBay · IT yet".
+  unlisted: { tone: 'neutral', label: 'Not listed yet', vocabulary: 'row', hint: 'Nexus has no listing here yet, so nothing has been checked against the channel.' },
 }
 
 /**
