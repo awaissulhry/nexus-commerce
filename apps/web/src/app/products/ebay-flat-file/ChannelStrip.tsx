@@ -77,7 +77,7 @@ export function ChannelStrip({ channel, marketplace, familyId }: Props) {
 
   return (
     <div className="px-3 h-8 flex items-center gap-1 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/60 dark:bg-slate-900/40">
-      <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1 flex-shrink-0">
+      <span className="text-[10px] font-medium text-tertiary uppercase tracking-wider mr-1 flex-shrink-0">
         Channel
       </span>
 
@@ -116,7 +116,7 @@ export function ChannelStrip({ channel, marketplace, familyId }: Props) {
       </div>
 
       {/* Navigation hint */}
-      <span className="ml-2 text-[10px] text-slate-300 dark:text-slate-600 select-none">
+      <span className="ml-2 text-[10px] text-tertiary select-none">
         Switch channel to transfer your data
       </span>
     </div>

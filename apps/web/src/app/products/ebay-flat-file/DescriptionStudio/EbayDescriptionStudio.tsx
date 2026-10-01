@@ -794,7 +794,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
       overlay={confirmOverlay}
       footer={
         <>
-          <span className="mr-auto text-[10.5px] text-slate-400">
+          <span className="mr-auto text-[10.5px] text-tertiary">
             {pushBusy ? 'Pushing to eBay — the Studio stays open until every listing has reported.' : '⌘S / Ctrl+S saves'}
           </span>
           <Button size="sm" variant="ghost" onClick={requestClose} disabled={busy || pushBusy || confirmOpen}>Close</Button>
@@ -815,7 +815,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
             <div className="flex items-center gap-2">
               <ProductLookup onSelect={addProduct} disabled={pushBusy}
                 placeholder="Add a product — search by SKU or title…" />
-              <span className="shrink-0 text-[10px] text-slate-400" title={`Server cap: ${MAX_PUSH_PRODUCTS} products per push`}>
+              <span className="shrink-0 text-[10px] text-tertiary" title={`Server cap: ${MAX_PUSH_PRODUCTS} products per push`}>
                 {products.length}/{MAX_PUSH_PRODUCTS}
               </span>
               {(seedProducts?.length ?? 0) > 0 && (
@@ -884,7 +884,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
               <p className="text-[11px] text-amber-600 dark:text-amber-400">{seedCapNote}</p>
             )}
             {addFeedback && (
-              <p className={cn('text-[11px]', addFeedback.tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400')}>
+              <p className={cn('text-[11px]', addFeedback.tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-tertiary')}>
                 {addFeedback.text}
               </p>
             )}
@@ -971,7 +971,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
                 </Pill>
               </div>
             ) : usage ? (
-              <p className="mt-1 pt-1.5 border-t border-slate-200 dark:border-slate-700 text-[10px] leading-4 text-slate-400 px-1"
+              <p className="mt-1 pt-1.5 border-t border-slate-200 dark:border-slate-700 text-[10px] leading-4 text-tertiary px-1"
                 title={`Counts read from each ${market} eBay listing family's theme assignment`}>
                 {usage.total} {market} families in this selection · {usage.default} on default · {usage.raw} raw (no theme)
               </p>
@@ -1105,7 +1105,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-slate-400 px-2 py-6 text-center">
+                <p className="text-xs text-tertiary px-2 py-6 text-center">
                   {render.phase === 'rendering'
                     ? 'Rendering exactly what a push would send…'
                     : render.phase === 'failed'
@@ -1119,7 +1119,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
               )}
             </div>
             {frameScale < 1 && srcDoc && (
-              <p className="shrink-0 text-[10px] text-slate-400 text-center">Desktop frame is {frameW}px, scaled to {Math.round(frameScale * 100)}% to fit.</p>
+              <p className="shrink-0 text-[10px] text-tertiary text-center">Desktop frame is {frameW}px, scaled to {Math.round(frameScale * 100)}% to fit.</p>
             )}
             <StatusStrip
               render={render}
@@ -1149,7 +1149,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
               Push to eBay — {pushProducts.length} product{pushProducts.length === 1 ? '' : 's'} · {market}
             </span>
             {dockPill && <Pill tone={dockPill.tone}>{dockPill.label}</Pill>}
-            <span className="ml-auto text-[10px] text-slate-400">{dockOpen ? 'collapse' : 'expand'}</span>
+            <span className="ml-auto text-[10px] text-tertiary">{dockOpen ? 'collapse' : 'expand'}</span>
           </button>
 
           {dockOpen && (
@@ -1166,7 +1166,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
                   </div>
                 </Banner>
               )}
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-tertiary">
                 Each chip resolves to its whole family: the push revises the description of EVERY live eBay
                 listing of that family on {market} — the primary listing plus adopted shared listings. Price,
                 quantity, title and variations never change. Max {MAX_PUSH_PRODUCTS} products per push.
@@ -1191,7 +1191,7 @@ export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPub
                 {pushBlockReason ? (
                   <p className="text-xs text-amber-600 dark:text-amber-400">{pushBlockReason}</p>
                 ) : (
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-tertiary">
                     Revises LIVE listings after an explicit confirmation. The exact listing count is resolved at
                     push time — every ItemID then appears below with its outcome and every warning, verbatim.
                   </p>

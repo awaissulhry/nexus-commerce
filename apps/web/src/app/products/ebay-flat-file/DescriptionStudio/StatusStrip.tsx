@@ -89,7 +89,7 @@ export function StatusStrip({ render, onRetryRender, dirty, isNew, savedName, sa
             Rendered {render.renderedAt}
           </span>
         ) : (
-          <span className="text-[11px] text-slate-400">No render yet — star a product chip and add theme HTML.</span>
+          <span className="text-[11px] text-tertiary">No render yet — star a product chip and add theme HTML.</span>
         )}
       </div>
 

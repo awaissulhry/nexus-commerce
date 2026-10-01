@@ -2750,10 +2750,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       if (!displayVal) return <span className="text-slate-300 text-[10px]">—</span>
       if (!showStatusChips) {
         return <span className={cn('text-[10px] font-medium',
-          displayVal.toUpperCase() === 'ACTIVE' ? 'text-emerald-600 dark:text-emerald-400'
-          : displayVal.toUpperCase() === 'DRAFT' ? 'text-amber-600 dark:text-amber-400'
-          : displayVal.toUpperCase() === 'ERROR' ? 'text-red-600 dark:text-red-400'
-          : 'text-slate-500 dark:text-slate-400')}>{displayVal}</span>
+          displayVal.toUpperCase() === 'ACTIVE' ? 'text-success-strong'
+          : displayVal.toUpperCase() === 'DRAFT' ? 'text-warning-strong'
+          : displayVal.toUpperCase() === 'ERROR' ? 'text-danger-strong'
+          : 'text-tertiary')}>{displayVal}</span>
       }
       return <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium',
             displayVal.toUpperCase() === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300'
@@ -2779,14 +2779,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       return (
         <>
           <span className="flex-1 truncate">{displayVal}</span>
-          {len > 0 && <span className={cn('text-[10px] shrink-0', len > 80 ? 'text-red-500' : 'text-slate-400')}>{len}</span>}
+          {len > 0 && <span className={cn('text-[10px] shrink-0', len > 80 ? 'text-danger-strong' : 'text-tertiary')}>{len}</span>}
         </>
       )
     }
     // Description preview
     if (col.id === 'description') {
       return (
-        <span className="truncate text-slate-400 italic text-[10px]">
+        <span className="truncate text-tertiary italic text-[10px]">
           {displayVal ? displayVal.replace(/<[^>]+>/g, '').slice(0, 40) + '…' : 'Double-click to edit…'}
         </span>
       )
@@ -2821,7 +2821,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   <span className="shrink-0 font-mono text-[9px] text-blue-600/70 dark:text-blue-300/70">#{displayVal}</span>
                 </>
               : <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
-            : <span className="text-slate-300 text-[10px]">Click to search categories…</span>}
+            : <span className="text-placeholder text-[10px]">Click to search categories…</span>}
         </button>
       )
     }
@@ -2843,7 +2843,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     // last_pushed_at date
     if (col.id === 'last_pushed_at') {
       const d = displayVal ? new Date(displayVal) : null
-      return <span className="truncate text-slate-400 text-[10px]">
+      return <span className="truncate text-tertiary text-[10px]">
         {d ? d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
       </span>
     }
