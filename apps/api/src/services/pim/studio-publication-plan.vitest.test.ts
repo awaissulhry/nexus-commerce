@@ -193,7 +193,7 @@ describe('the publish verdict per cell', () => {
 
 // P1 (report 5 I-1/I-2/I-3, report 3 I-3.4/I-3.9) — eBay takes one value per listing for an item specific that is not an
 // axis, parent first, then the first variation in SKU order. The review judges that value once, on the row it comes
-// from, and names the rows whose own value is not sent.
+// from. A variation's own different value is not named (Owner, 2026-10-01: the sheet already shows eBay's value).
 describe('eBay listing-level item specifics in the publish review', () => {
   const store = (name: string) => ({ kind: 'platformAttributes', path: ['itemSpecifics', name] })
   const fields = [{ fieldKey: 'colore_specifico', sheetKey: 'colore_specifico', label: 'Specific color', channelStore: store('Colore specifico') },
@@ -206,7 +206,7 @@ describe('eBay listing-level item specifics in the publish review', () => {
       missingProductIds: [], catalogue: { fields } }))
     return (await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues
   }
-  it('a variation\'s own value that is not sent does not block, and is named once with the value eBay gets (report 5 I-2, I-3)', async () => {
+  it('a variation\'s own value that is not sent neither blocks nor warns (report 5 I-2)', async () => {
     const issues = await run({
       parent: { season: cell('Tutte le stagioni', [offList]) },
       child: { colore_specifico: cell('Giallo'), season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) },
@@ -214,8 +214,8 @@ describe('eBay listing-level item specifics in the publish review', () => {
     // the child's over-length season is not sent (the parent's is): no block for it; the parent's off-list one warns once
     expect(issues.filter(i => i.field === 'season')).toEqual([
       expect.objectContaining({ productId: 'parent', severity: 'warning', message: 'x: Season contains an unaccepted value. Allowed values: Estate.' }),
-      expect.objectContaining({ productId: 'parent', severity: 'warning', message: expect.stringContaining('will get "Tutte le stagioni" (from PARENT). 1 row holds another value that is not sent: CHILD') }),
     ])
+    expect(issues.filter(i => /not sent|one value for the whole listing/.test(i.message))).toEqual([])
     // no parent value: the first variation supplies it, and it is judged there
     expect(issues.filter(i => i.field === 'colore_specifico')).toEqual([])
   })
@@ -223,7 +223,7 @@ describe('eBay listing-level item specifics in the publish review', () => {
     const issues = await run({ parent: {}, child: { season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) } })
     expect(issues.filter(i => i.field === 'season')).toEqual([expect.objectContaining({ productId: 'child', severity: 'error' })])
   })
-  it('a stored item specific with no column (Genere): the rows whose own value is not sent are named; a value over 65 blocks', async () => {
+  it('a stored item specific with no column (Genere): a variation\'s own different value is not named; a value over 65 blocks', async () => {
     const { ebayStoredSpecificIssues } = await import('./studio-publication-plan.js')
     const { ebayAxisIdentities } = await import('./ebay-listing-level.js')
     const rows = [{ productId: 'p', sku: 'VENTRA', isParent: true }, { productId: 'a', sku: 'VENTRA-RED-MEN', isParent: false }, { productId: 'b', sku: 'VENTRA-YELLOW-WOMEN', isParent: false }]
@@ -232,8 +232,6 @@ describe('eBay listing-level item specifics in the publish review', () => {
       listings: [listing('p', { 'Body type': 'x'.repeat(70) }), listing('a', { Genere: 'Uomo', Colore: 'Rosso' }), listing('b', { Genere: 'Donna', Colore: 'Giallo' })] })
     expect(issues).toEqual([
       expect.objectContaining({ productId: 'p', field: 'itemSpecifics.Body type', severity: 'error', message: expect.stringContaining('eBay takes at most 65 characters per value') }),
-      expect.objectContaining({ productId: 'a', field: 'itemSpecifics.Genere', severity: 'warning',
-        message: 'Genere: eBay takes one value for the whole listing and will get "Uomo" (from VENTRA-RED-MEN). 1 row holds another value that is not sent: VENTRA-YELLOW-WOMEN ("Donna").' }),
     ])
   })
 })

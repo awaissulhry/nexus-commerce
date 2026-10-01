@@ -15,7 +15,14 @@ vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: m.mode }
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.mode }))
 vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: vi.fn(), sendAmazonPublication: vi.fn(), readAmazonPublication: vi.fn() }))
 vi.mock('./studio-publication-overwrite.js', () => ({ readPublicationOverwrite: async () => undefined }))
-vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map([[JSON.stringify(['family', 'title']), { state: 'value', value: 'Jacket' }]]), revision: 'baseline-1' }) }))
+// The accepted values are canned; the identity rule is the real one (no listing coordinates here, so no database read).
+vi.mock('./studio-publication-baseline.js', async () => {
+  const actual = await vi.importActual<typeof import('./studio-publication-baseline.js')>('./studio-publication-baseline.js')
+  return { readPublicationBaseline: async (facts: any, identities: any) => {
+    await actual.readPublicationBaseline({ ...facts, listings: [] }, identities)
+    return { values: new Map([[JSON.stringify(['family', 'title']), { state: 'value', value: 'Jacket' }]]), revision: 'baseline-1' }
+  } }
+})
 
 const liveGroup = { title: 'Jacket', description: '<p>Warm</p>', imageUrls: ['https://img.example/1.jpg'], aspects: { Marca: ['Brand'] }, variantSKUs: ['FAM-M'],
   variesBy: { specifications: [{ name: 'Taglia', values: ['M'] }] } }
@@ -77,6 +84,18 @@ it('reviews an Inventory listing field by field; the Nexus title change is SEND 
   expect(review.issues.filter(i => i.severity === 'error')).toEqual([])
   expect(review.changes!.find(c => c.field === 'title')).toMatchObject({ status: 'SEND', selectedByDefault: true, current: { state: 'value', value: 'Winter jacket' } })
   expect(review.changes!.find(c => c.field === 'description')).toMatchObject({ status: 'SAME', selectable: false })
+})
+
+// 2026-10-01 — the review asked every included product for an identity, but an Inventory listing names only its owner:
+// every family failed with "Every included publication product needs its exact provider identity" (GALE-JACKET, 21 rows).
+it('a family of a main product and 20 sizes reviews with no identity error', async () => {
+  const sizes = Array.from({ length: 20 }, (_, i) => ({ id: `v${i}`, sku: `FAM-${i}`, name: `Size ${i}` }))
+  m.facts.mockImplementation(async () => ({ ...facts(), products: [facts().products[0], ...sizes] }))
+  const review = await previewStudioPublication('family', scope, 'owner')
+  expect(review.issues).toEqual([])
+  expect(review.rows).toHaveLength(21)
+  expect(review.id).toBeTruthy()
+  expect(review.changes!.find(c => c.field === 'title')).toMatchObject({ status: 'SEND', selectedByDefault: true })
 })
 
 it('the exact payload shown is the whole-group PUT with only the ticked field changed', async () => {

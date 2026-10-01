@@ -12,7 +12,7 @@ import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
 import { familyPublicationOrder } from './family-publication-order.js'
-import { ebayListingLevelValues, isEbayListingLevel, listingLevelWarning, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
+import { ebayListingLevelValues, isEbayListingLevel, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
 
@@ -93,8 +93,6 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
     }
     if (result.missingProductIds.length) error('Some products could not be read. Refresh the product before publishing.')
-    if (!resolved.length) for (const level of levels.filter(level => level.differing.length)) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field: level.field.key,
-      severity: 'warning', message: listingLevelWarning(level.field.label, level.value, level.supplier.sku, level.differing) })
     resolved.push(result)
   }
   if (!languages.length) error('Configure a content language for this destination before publishing.')
@@ -127,9 +125,10 @@ function ebayFields(fields: ReadonlyArray<{ fieldKey: string; sheetKey?: string;
 }
 
 /**
- * P1 (report 3 I-3.4/I-3.9, report 5 I-3) — the stored item specifics no column serves still ship: `buildEbayListingInput`
- * starts from the stored bag. For those the review names the rows whose own value is not sent (eBay takes one per
- * listing), and blocks a value over eBay's 65 characters. (Column values are judged per cell by the verdict.)
+ * P1 (report 3 I-3.4/I-3.9) — the stored item specifics no column serves still ship: `buildEbayListingInput` starts from
+ * the stored bag. The review blocks a value over eBay's 65 characters on the row eBay's one value comes from. (Column
+ * values are judged per cell by the verdict.) A variation's own different value is not named: eBay takes one value per
+ * listing, the sheet shows that value on every row, and the note blocked nothing (Owner, 2026-10-01: noise).
  */
 export function ebayStoredSpecificIssues(input: {
   parentId: string
@@ -154,8 +153,6 @@ export function ebayStoredSpecificIssues(input: {
     valueOf: (row, field) => Object.entries(bagOf(row.productId)).find(([stored]) => aspectCanonicalName(stored) === field.key)?.[1] })
   for (const level of levels) {
     const field = `itemSpecifics.${level.field.label}`
-    if (level.differing.length) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field, severity: 'warning',
-      message: listingLevelWarning(level.field.label, level.value, level.supplier.sku, level.differing) })
     const long = ebayAspectValues(level.value).find(value => value.length > EBAY_ASPECT_VALUE_MAX)
     if (long) issues.push({ productId: level.supplier.productId, sku: level.supplier.sku, field, severity: 'error',
       message: `${level.field.label}: eBay takes at most ${EBAY_ASPECT_VALUE_MAX} characters per value; ${JSON.stringify(long.slice(0, 40) + '…')} has ${long.length}.` })

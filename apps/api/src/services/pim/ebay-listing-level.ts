@@ -2,8 +2,7 @@
  * P1 of fix/product-sheet-editing (report 5 I-1, I-3) — eBay takes ONE value per listing for every item specific that is
  * not a variation axis ("Paese di origine", "Marca", "Stagione", "Colore specifico", "Genere"…). The publisher builds it
  * parent first, then the first variation in SKU order that holds one (`buildSharedListingInput`). These helpers are that
- * rule, so the sheet shows on every row the value eBay receives, a write on any row lands where eBay reads it, and the
- * publish review names the rows whose own value is not sent.
+ * rule, so the sheet shows on every row the value eBay receives and a write on any row lands where eBay reads it.
  *
  * The axes are the family's variation projection for the listing — the included axes the publisher itself sends as
  * variation specifics (`buildEbayListingInput`). Per-row values of an aspect that is NOT an axis yet stay stored per row
@@ -92,18 +91,6 @@ export function ebayListingLevelValues<T extends Omit<FamilyRow, 'value'>>(input
     out.push({ field, supplier, value: supplier.value, differing })
   }
   return out
-}
-
-/**
- * The sentence the publish review shows when rows hold another value (report 5 I-3): eBay takes one value for the whole
- * listing, this one, from this row; these rows' own values are not sent. Bounded to ten rows by name.
- */
-export function listingLevelWarning(label: string, value: unknown, fromSku: string, differing: Array<{ sku: string; value: unknown }>): string {
-  const shown = (v: unknown) => JSON.stringify(Array.isArray(v) ? v.join(', ') : v)
-  const named = differing.slice(0, 10).map(row => `${row.sku} (${shown(row.value)})`).join(', ')
-  const more = differing.length > 10 ? ` and ${differing.length - 10} more` : ''
-  return `${label}: eBay takes one value for the whole listing and will get ${shown(value)} (from ${fromSku}). `
-    + `${differing.length} ${differing.length === 1 ? 'row holds' : 'rows hold'} another value that is not sent: ${named}${more}.`
 }
 
 interface SheetCellLike {

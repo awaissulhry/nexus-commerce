@@ -304,10 +304,13 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   const { shared, itemId, parentListing, settings, galleries, variants } = built
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   const origin = object(metadata.itemLocation)
-  shared.country = String(settings.itemLocationCountry ?? origin.country ?? process.env.EBAY_ITEM_COUNTRY ?? '')
-  shared.location = String(settings.itemLocation ?? origin.city ?? process.env.EBAY_ITEM_LOCATION ?? '')
-  shared.postalCode = String(settings.itemPostalCode ?? origin.postalCode ?? process.env.EBAY_ITEM_POSTAL_CODE ?? '')
-  if (!itemId && (!shared.country || !shared.location)) throw new Error('eBay needs the item location city and country to create a listing. Set "Item location (city)" and "Item location country" on this listing in the sheet, or give the eBay account a default location.')
+  // A blank cell falls through to the account's default, then the server's.
+  const firstText = (...values: unknown[]) => String(values.find(value => value != null && String(value).trim() !== '') ?? '').trim()
+  shared.country = firstText(settings.itemLocationCountry, origin.country, process.env.EBAY_ITEM_COUNTRY)
+  shared.location = firstText(settings.itemLocation, origin.city, process.env.EBAY_ITEM_LOCATION)
+  shared.postalCode = firstText(settings.itemPostalCode, origin.postalCode, process.env.EBAY_ITEM_POSTAL_CODE)
+  // eBay takes the country with a postal code OR a city (Trading `Item.PostalCode` / `Item.Location`: one of the two).
+  if (!itemId && (!shared.country || (!shared.location && !shared.postalCode))) throw new Error('eBay needs the item location country and a postal code or city to create a listing. Set "Item location country" and "Item location postal code" on this listing\'s main row in the sheet.')
   if (built.media) await ebayPicturesFromPlan(facts, shared, built.media.channelValues)
   else shared.pictureUrls = galleries.get(parent.id) ?? []
   if (!built.media && shared.variationPictures) {
