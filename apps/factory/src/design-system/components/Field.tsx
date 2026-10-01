@@ -9,6 +9,12 @@ export interface FieldProps {
   required?: boolean
   /** helper text under the control, wired to it with `aria-describedby` */
   hint?: ReactNode
+  /**
+   * What is wrong with the value, shown under the control in the danger text colour. While it is set the control is
+   * marked `aria-invalid` and the sentence is read with it (`aria-describedby`, before the hint). Leave it unset when
+   * the value is fine; a form-level failure (a server error) belongs in a `Banner`, not here.
+   */
+  error?: ReactNode
   /** slot beside the label — pass an `<InfoTip>` */
   info?: ReactNode
   /**
@@ -38,25 +44,27 @@ export interface FieldProps {
  * consistently — `.pf-fld` and `.h10-ai-field` label with a bare `<span>`, so clicking the text
  * does nothing and a screen reader announces the control unlabelled.
  */
-export function Field({ label, required, hint, info, htmlFor, children, className }: FieldProps) {
+export function Field({ label, required, hint, error, info, htmlFor, children, className }: FieldProps) {
   const auto = useId()
   const hintId = hint != null ? `${auto}-hint` : undefined
+  const errorId = error != null && error !== false ? `${auto}-error` : undefined
 
   // Associate the label without making the caller invent an id. Only a single element child is
   // cloned, and an id it already carries always wins.
   let control = children
   let forId = htmlFor
   if (!forId && isValidElement(children) && Children.count(children) === 1) {
-    const el = children as ReactElement<{ id?: string; 'aria-describedby'?: string }>
+    const el = children as ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean | 'true' | 'false' }>
     forId = el.props.id ?? auto
     control = cloneElement(el, {
       id: forId,
-      'aria-describedby': [el.props['aria-describedby'], hintId].filter(Boolean).join(' ') || undefined,
+      'aria-describedby': [el.props['aria-describedby'], errorId, hintId].filter(Boolean).join(' ') || undefined,
+      ...(errorId && el.props['aria-invalid'] === undefined ? { 'aria-invalid': true } : {}),
     })
   }
 
   return (
-    <div className={['nds-field-w', className].filter(Boolean).join(' ')}>
+    <div className={['nds-field-w', errorId ? 'invalid' : '', className].filter(Boolean).join(' ')}>
       <label className="nds-field-lbl" htmlFor={forId}>
         {label}
         {required && (
@@ -67,6 +75,11 @@ export function Field({ label, required, hint, info, htmlFor, children, classNam
         {info != null && <span className="nds-field-info">{info}</span>}
       </label>
       {control}
+      {errorId && (
+        <span className="nds-field-error" id={errorId}>
+          {error}
+        </span>
+      )}
       {hint != null && (
         <span className="nds-field-hint" id={hintId}>
           {hint}
