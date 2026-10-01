@@ -388,7 +388,8 @@ jobs:
     if: needs.sheet-changes.outputs.run == 'true'
     name: Sheet commit sweep (${{ matrix.part }}/6) — production build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The slowest part measured 24.5 min on the first six-part run (one chunk then timed out at 10 min); 40 leaves room.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       # Parts 1..5 deal the sweep's chunks in turn (editors.spec.ts, SHEET_SWEEP_PART), so Amazon's slow chunks spread

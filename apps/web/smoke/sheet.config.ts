@@ -28,7 +28,8 @@ export default defineConfig({
   workers: Number(process.env.SHEET_WORKERS ?? 1),
   // No retries: a commit that lands only on the second try is the defect this suite exists to catch.
   retries: 0,
-  // A chunk commits up to 24 values; every failure is tried and reported, so give it room.
+  // A chunk commits about 24 values; every failure is tried and reported, so give it room (a chunk holding a whole
+  // repeated attribute sets more itself, editors.spec.ts).
   timeout: 600_000,
   expect: { timeout: 15_000 },
   forbidOnly: !!process.env.CI,

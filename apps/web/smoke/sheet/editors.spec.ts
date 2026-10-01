@@ -140,6 +140,9 @@ for (const [scopeIndex, scopeName] of SCOPES.entries()) {
         const read = await readSheet(page, scope, seed.workspace)
         const mine = chunksOf(targets(read, scopeName).swept)[chunk] ?? []
         test.skip(mine.length === 0, `abstain: this scope's columns fill fewer than ${chunk + 1} chunks`)
+        // Room in proportion to the commits: a whole repeated attribute can make a chunk longer than CHUNK (Amazon's ten
+        // bullets = 30 commits). On a CI runner an Amazon commit takes ~20 s; the 10-minute floor stays for the rest.
+        test.setTimeout(Math.max(600_000, mine.length * PATHS.length * 30_000))
         const wire = new Wire(page)
         await stubNetworkReads(page)
         await openSheet(page, scope)
