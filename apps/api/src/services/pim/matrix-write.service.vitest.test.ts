@@ -7,7 +7,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { MatrixCells, VerbChange } from '@nexus/shared/matrix-contract'
 
 // The door's version bump runs in a transaction: a stand-in that lets every compare-and-set through (one row each).
-vi.mock('../../db.js', () => ({ default: { $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: async () => ({ count: 1 }) } }) } }))
+// No product here sells from another business's stock (shared stock by SKU: `sharedStockLender` asks the link).
+vi.mock('../../db.js', () => ({ default: { $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: async () => ({ count: 1 }) } }), stockPoolLink: { findFirst: async () => null } } }))
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null }))
 vi.mock('../follow-master.service.js', () => ({ setFollowMasterQuantity: vi.fn(), setStockBuffer: vi.fn(), amazonManagedListingIds: vi.fn(async () => new Set<string>()) }))
 vi.mock('../stock-movement.service.js', () => ({ recascadeAfterSyncControlChange: vi.fn() }))

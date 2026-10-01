@@ -68,7 +68,9 @@ const coordinatesOf = (listing: QuantityListing, targets: readonly Target[]) =>
  * (`writeQuantityMode`), for the listing drawer's toggle, the bulk bar's follow / unfollow master and the reset to
  * master (2026-10-01). Before, those wrote `followMasterQuantity` alone: nothing recomputed or sent the quantity.
  * An Amazon-managed (FBA) listing: `onFba: 'refuse'` (an explicit quantity change) throws the matrix's sentence;
- * `'skip'` (a change of every field at once) leaves the quantity to Amazon and says so in `skipped`.
+ * `'skip'` (a change of every field at once) leaves the quantity to Amazon and says so in `skipped`. The same for a
+ * PIN on a SKU that sells from another business's stock (shared stock by SKU, #230): refused, or skipped and named,
+ * with the matrix's `sharedStockReason` — its quantity follows the lender's stock.
  */
 export async function setListingQuantityFollow(input: {
   listingId: string
