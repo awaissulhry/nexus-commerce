@@ -416,6 +416,7 @@ jobs:
           echo "0.0.0.0 nexusapi-production-b7bb.up.railway.app api.xavia.it app.xavia.it" | sudo tee -a /etc/hosts
           echo "SMOKE_SEED=$RUNNER_TEMP/smoke.json" >> "$GITHUB_ENV"
           echo "SHEET_SEED=$RUNNER_TEMP/sheet.json" >> "$GITHUB_ENV"
+          echo "SHEET_EDITOR_SEED=$RUNNER_TEMP/sheet-editors.json" >> "$GITHUB_ENV"
 
       - name: Database, seeds (owner + sheet fixture) and restricted app login
         run: |
@@ -423,6 +424,7 @@ jobs:
           npx tsx scripts/ci/prepare-test-database.mts --url "$ADMIN_DATABASE_URL"
           npx tsx scripts/ci/seed-smoke.mts --url "$ADMIN_DATABASE_URL" --out "$SMOKE_SEED"
           npx tsx scripts/ci/seed-sheet-fixture.mts --url "$ADMIN_DATABASE_URL" --out "$SHEET_SEED"
+          npx tsx scripts/ci/seed-sheet-editor-fixture.mts --url "$ADMIN_DATABASE_URL" --smoke-seed "$SMOKE_SEED" --out "$SHEET_EDITOR_SEED"
           node -e 'const s = require(process.env.SMOKE_SEED); console.log("::add-mask::" + new URL(s.appDatabaseUrl).password); console.log("::add-mask::" + s.password)'
 
       - name: Start the API (NODE_ENV=production, restricted login, profiles ON, RBAC enforced)
@@ -471,6 +473,7 @@ jobs:
           SMOKE_BASE_URL: http://localhost:3000
           SHEET_STORAGE_STATE: ${{ runner.temp }}/sheet-state.json
           SHEET_WORKERS: '1'
+          SHEET_EDITOR_DATABASE_URL: ${{ env.ADMIN_DATABASE_URL }}
           SMOKE_OUTPUT_DIR: ${{ runner.temp }}/sheet-results
           SMOKE_REPORT_DIR: ${{ runner.temp }}/sheet-report
         run: npx playwright test -c smoke/sheet.config.ts --shard=${{ matrix.shard }}/3

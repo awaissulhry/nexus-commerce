@@ -95,6 +95,11 @@ export async function focusCell(page: Page, productId: string, colId: string): P
   const cell = page.locator(`.ag-row[row-index="${rowIndex}"] .ag-cell[col-id="${colId}"]`)
   await expect(cell).toBeVisible()
   await cell.evaluate((el: HTMLElement) => el.focus())
+  // A DOM focus alone does not establish AG's keyboard target. Refuse to type into a different row/column.
+  await expect.poll(() => page.evaluate(withApi(`
+    const focused = api.getFocusedCell()
+    return focused ? { id: api.getDisplayedRowAtIndex(focused.rowIndex)?.data?.id, column: focused.column.getColId() } : null
+  `)), { message: 'the real grid keyboard target must match the intended cell' }).toEqual({ id: productId, column: colId })
   return cell
 }
 
