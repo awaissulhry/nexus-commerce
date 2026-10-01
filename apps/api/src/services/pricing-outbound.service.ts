@@ -27,6 +27,7 @@ export interface PushPriceResult {
   channel: string
   marketplace: string
   pushedPrice: number | null
+  /** The currency of `pushedPrice`: the listing market's, as the door queues it (`sentCurrency`). `null` when nothing was queued, or the market has none configured. */
   currency: string | null
   error?: string
   refusal?: { code: string; sentence: string }
@@ -63,15 +64,9 @@ export async function pushPriceUpdate(
   const sku = args.sku
   const channel = args.channel.toUpperCase()
   const marketplace = args.marketplace.toUpperCase()
-  // The engine's currency for the answer only; the door decides the price.
-  const snapshot = await prisma.pricingSnapshot.findFirst({
-    where: { sku, channel, marketplace, fulfillmentMethod: args.fulfillmentMethod ?? null },
-    orderBy: { computedAt: 'desc' },
-    select: { currency: true },
-  })
-  const currency = snapshot?.currency ?? null
+  // Nothing was queued, so no price and no currency: the answer's currency is the one the door queues the price in.
   const fail = (error: string, refusal?: { code: string; sentence: string }): PushPriceResult => ({
-    ok: false, sku, channel, marketplace, pushedPrice: null, currency, error, ...(refusal ? { refusal } : {}), durationMs: Date.now() - startedAt,
+    ok: false, sku, channel, marketplace, pushedPrice: null, currency: null, error, ...(refusal ? { refusal } : {}), durationMs: Date.now() - startedAt,
   })
   if (!PRICED_CHANNELS.has(channel)) return fail(`${channel} is not a channel Nexus prices. Nothing was queued.`)
 
@@ -102,12 +97,13 @@ export async function pushPriceUpdate(
     actor: 'pricing-push', source: 'MANUAL_OVERRIDE', reason: 'Push price (/pricing)',
   })
   const outcome = written.results[0]
-  if (!outcome || outcome.outcome !== 'applied') return fail(outcome?.reason ?? 'The price write refused this listing. Nothing was queued.')
+  if (!outcome || outcome.outcome !== 'applied') return fail(outcome?.reason ?? 'The price was not sent.')
   logger.info('pricing-outbound: price queued through the channel price door', { sku, channel, marketplace, listingId: listing.id, queueId: outcome.queueId })
   return {
     ok: true, sku, channel, marketplace,
     pushedPrice: outcome.sentPrice ?? null,
-    currency,
+    // The listing market's currency, the one the door queued the price in (it was the engine snapshot's, often none).
+    currency: outcome.sentCurrency ?? null,
     queued: true,
     queueId: outcome.queueId,
     durationMs: Date.now() - startedAt,

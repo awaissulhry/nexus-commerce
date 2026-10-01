@@ -182,6 +182,11 @@ export interface PriceWriteOutcome {
   /** The price the queued PRICE_UPDATE row carries, when one was queued. */
   sentPrice?: number
   /**
+   * The currency of `sentPrice`: the listing market's own (the currency the channel is sent the price in), `null` when
+   * that market has no currency configured. Set with `sentPrice`.
+   */
+  sentCurrency?: string | null
+  /**
    * Follower mode — the change was written, but no price was sent, and why: the market sells in another currency
    * (the cascade's refusal sentence), the listing is paused or a draft (the price is kept in Nexus), the rule takes
    * no price from the master, or the listing does not follow the master.
@@ -613,7 +618,7 @@ export async function writeChannelPrices(input: {
         continue targets
       }
       if (currencyRefusal) refusals.push({ productId: l.productId, masterPrice: basePrice!, refusal: currencyRefusal })
-      push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId, ...(written.queueId ? { sentPrice: effectivePrice ?? undefined } : {}), ...(notSent ? { notSent } : {}) })
+      push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId, ...(written.queueId ? { sentPrice: effectivePrice ?? undefined, sentCurrency: listingMarketCurrency(l, currencyRows) } : {}), ...(notSent ? { notSent } : {}) })
       continue targets
     }
   }

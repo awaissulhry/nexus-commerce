@@ -33,7 +33,7 @@ describe('Push price: every channel goes through the price door', () => {
     m.snapshot.mockResolvedValue({ currency: 'EUR' })
     m.listings.mockResolvedValue([LISTING])
     m.allowed.mockReturnValue(null)
-    m.door.mockResolvedValue({ results: [{ listingId: 'cl-1', outcome: 'applied', queueId: 'q-1', sentPrice: 49.9 }] })
+    m.door.mockResolvedValue({ results: [{ listingId: 'cl-1', outcome: 'applied', queueId: 'q-1', sentPrice: 49.9, sentCurrency: 'EUR' }] })
   })
   const push = (over: Record<string, unknown> = {}) =>
     pushPriceUpdate(prisma, { sku: 'SKU-1', channel: 'EBAY', marketplace: 'IT', ...over } as never)
@@ -46,6 +46,15 @@ describe('Push price: every channel goes through the price door', () => {
       targets: [{ listingId: 'cl-1', resend: true, unguardedReason: 'pricing-push' }],
       actor: 'pricing-push', source: 'MANUAL_OVERRIDE', reason: 'Push price (/pricing)',
     })
+  })
+
+  it('🔴 the answer\'s currency is the one the door queued the price in (the listing market\'s), never the engine snapshot\'s', async () => {
+    m.door.mockResolvedValue({ results: [{ listingId: 'cl-1', outcome: 'applied', queueId: 'q-1', sentPrice: 25, sentCurrency: 'GBP' }] })
+    await expect(push({ marketplace: 'UK' })).resolves.toMatchObject({ ok: true, pushedPrice: 25, currency: 'GBP' })
+    expect(m.snapshot).not.toHaveBeenCalled()
+    // A market with no currency configured: said as none, not guessed.
+    m.door.mockResolvedValue({ results: [{ listingId: 'cl-1', outcome: 'applied', queueId: 'q-1', sentPrice: 25, sentCurrency: null }] })
+    await expect(push()).resolves.toMatchObject({ ok: true, currency: null })
   })
 
   it.each([['AMAZON'], ['SHOPIFY'], ['WOOCOMMERCE'], ['ETSY']])('%s takes the same road (Amazon too: no direct send)', async (channel) => {
@@ -94,9 +103,9 @@ describe('Push price: every channel goes through the price door', () => {
     expect(m.door).not.toHaveBeenCalled()
   })
 
-  it('no snapshot is no longer a refusal: the price is the listing\'s, so the push goes on (the currency is then unknown)', async () => {
+  it('no snapshot is no longer a refusal: the price is the listing\'s, so the push goes on — and the currency is still known, the market\'s from the door (it was null)', async () => {
     m.snapshot.mockResolvedValue(null)
-    await expect(push()).resolves.toMatchObject({ ok: true, queued: true, pushedPrice: 49.9, currency: null })
+    await expect(push()).resolves.toMatchObject({ ok: true, queued: true, pushedPrice: 49.9, currency: 'EUR' })
   })
 
   it('no outbound call is ever made from here', () => {

@@ -114,7 +114,8 @@ describe('🔴 Push price is ONE queued row from the price door — never a dire
   it('the push leaves an audit trace on the listing: who pushed, and which price', () => scoped(async () => {
     const l = await seed('TEST-PUSH-AUDIT', { pinned: 25 })
     const result = await push('TEST-PUSH-AUDIT')
-    expect(result).toMatchObject({ ok: true, queued: true, pushedPrice: 25 })
+    // No engine snapshot for this SKU: the currency is still the listing market's (it answered null).
+    expect(result).toMatchObject({ ok: true, queued: true, pushedPrice: 25, currency: 'EUR' })
     const audit = await prisma.channelListingOverride.findMany({ where: { channelListingId: l.id, changedBy: 'pricing-push' } })
     expect(audit.length).toBeGreaterThanOrEqual(1)
     expect(audit.map((a) => a.reason).join(' ')).toContain('Push price (/pricing)')
@@ -165,7 +166,8 @@ describe('🔴 Push price is ONE queued row from the price door — never a dire
   it('a GBP market pinned at 25 with that EUR ceiling of 20: queued — a GBP price is never compared with EUR bounds', () => scoped(async () => {
     const l = await seed('TEST-PUSH-GBP', { channel: 'EBAY', marketplace: 'UK', pinned: 25, product: { maxPrice: 20 } })
     const result = await push('TEST-PUSH-GBP', 'EBAY', 'UK')
-    expect(result).toMatchObject({ ok: true, queued: true, pushedPrice: 25, channel: 'EBAY' })
+    // 🔴 The answer names the currency the price is queued in: the market's GBP (it was the engine snapshot's, here none).
+    expect(result).toMatchObject({ ok: true, queued: true, pushedPrice: 25, currency: 'GBP', channel: 'EBAY' })
     const live = await pending(l.id)
     expect(live).toHaveLength(1)
     expect(live[0]).toMatchObject({ targetChannel: 'EBAY', payload: { price: 25, resend: true, marketplace: 'UK' } })
