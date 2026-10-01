@@ -161,7 +161,8 @@ export async function patchListing(input: {
 /** The listings bulk bar's pricing actions, one listing at a time. */
 export type ListingBulkPricingAction = 'set-price' | 'set-pricing-rule' | 'follow-master' | 'unfollow-master'
 
-const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints'] as const
+// The quantity's flag is not among them: it goes through the matrix's Mode write (`setListingQuantityFollow`).
+const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterImages', 'followMasterBulletPoints'] as const
 
 /**
  * `POST /api/listings/bulk-action` for one listing. A selection carries no version per row, so the door is told why
@@ -173,7 +174,7 @@ export async function applyListingBulkPricing(input: {
   listingId: string
   actor: string
   payload?: { price?: unknown; pricingRule?: unknown; priceAdjustmentPercent?: unknown }
-}): Promise<{ outcome: PriceWriteOutcome['outcome']; notSent?: string }> {
+}): Promise<{ outcome: PriceWriteOutcome['outcome']; notSent?: string; quantitySkipped?: string }> {
   const { action, listingId } = input
   const edit: ListingPricingEdit =
     action === 'set-price' ? { priceOverride: Number(input.payload?.price) }
@@ -192,12 +193,17 @@ export async function applyListingBulkPricing(input: {
     const outcome = written.results[0]
     const refusal = refusalOf(outcome)
     if (refusal) throw refusal
+    let quantitySkipped: string | undefined
     if (action === 'follow-master' || action === 'unfollow-master') {
       const follows = action === 'follow-master'
       const db = activeDatabaseTransaction() ?? prisma
       await db.channelListing.update({ where: { id: listingId }, data: { ...Object.fromEntries(FOLLOW_FLAGS.map(flag => [flag, follows])), version: { increment: 1 } } })
+      // The quantity: recomputed (follow) or pinned at what it shows (unfollow) and sent, as the matrix's Mode cell; an
+      // Amazon-managed (FBA) listing's quantity is Amazon's, so it is left alone and said.
+      const { setListingQuantityFollow } = await import('./listing-matrix-cell.service.js')
+      quantitySkipped = (await setListingQuantityFollow({ listingId, follow: follows, actor: input.actor, onFba: 'skip' })).skipped
     }
-    return { outcome: outcome.outcome, ...(outcome.notSent ? { notSent: outcome.notSent } : {}) }
+    return { outcome: outcome.outcome, ...(outcome.notSent ? { notSent: outcome.notSent } : {}), ...(quantitySkipped ? { quantitySkipped } : {}) }
   })
 }
 
@@ -214,7 +220,7 @@ export async function resetListingToMaster(input: {
   listingId: string
   fields: ResettableField[]
   actor: string
-}): Promise<{ notSent?: string; quantityFollowTurnedOn: boolean }> {
+}): Promise<{ notSent?: string; quantityFollowTurnedOn: boolean; quantitySkipped?: string }> {
   return inDatabaseTransaction(prisma, async () => {
     const db = activeDatabaseTransaction() ?? prisma
     const listing = await db.channelListing.findUnique({ where: { id: input.listingId }, select: { productId: true, followMasterQuantity: true } })
@@ -233,10 +239,16 @@ export async function resetListingToMaster(input: {
     for (const field of input.fields) {
       if (field === 'title') Object.assign(data, { followMasterTitle: true, titleOverride: null })
       if (field === 'description') Object.assign(data, { followMasterDescription: true, descriptionOverride: null })
-      if (field === 'quantity') Object.assign(data, { followMasterQuantity: true, quantityOverride: null })
       if (field === 'bulletPoints') Object.assign(data, { followMasterBulletPoints: true, bulletPointsOverride: [] })
     }
     if (Object.keys(data).length) await db.channelListing.update({ where: { id: input.listingId }, data })
-    return { quantityFollowTurnedOn: input.fields.includes('quantity') && listing.followMasterQuantity === false, ...(notSent ? { notSent } : {}) }
+    // The quantity follows the stock again through the matrix's Mode write: recomputed and sent. Reset alone, an
+    // Amazon-managed (FBA) listing is refused by the matrix's sentence; in "all" its quantity is left to Amazon.
+    let quantitySkipped: string | undefined
+    if (input.fields.includes('quantity')) {
+      const { setListingQuantityFollow } = await import('./listing-matrix-cell.service.js')
+      quantitySkipped = (await setListingQuantityFollow({ listingId: input.listingId, follow: true, actor: input.actor, onFba: input.fields.length === 1 ? 'refuse' : 'skip' })).skipped
+    }
+    return { quantityFollowTurnedOn: input.fields.includes('quantity') && listing.followMasterQuantity === false && !quantitySkipped, ...(notSent ? { notSent } : {}), ...(quantitySkipped ? { quantitySkipped } : {}) }
   })
 }

@@ -299,6 +299,19 @@ describe('applyChanges', () => {
     expect(prisma._calls.productUpdateMany).toHaveLength(0)
   })
 
+  it('🔴 M2 — a base_price the master-price writer refuses whole (outside the floor/ceiling, or 0) is a FAILED row with its sentence; no inverse', async () => {
+    const prisma = makeMockPrisma({ productRow: { id: 'product-m2', sku: 'SKU-M2', deletedAt: null, basePrice: 10 } })
+    const sentence = 'Not changed: 19.90 is above its pricing ceiling of 15.00.'
+    // MasterPriceRefusedError's shape (its module loads the queue, so it is not imported here).
+    const updateMasterPrice = async () => { throw Object.assign(new Error(sentence), { name: 'MasterPriceRefusedError', statusCode: 400, code: 'MASTER_PRICE_REFUSED' }) }
+    const cell = makeMasterChange({ sku: 'SKU-M2', column: 'base_price', base: 'base_price', from: 10, to: '19.9' })
+    const result = await applyChanges(prisma, { ...makeEmptyDiff(), masterChanges: [cell] }, { scope: SCOPE_AMAZON_IT, actor: 'person-1', updateMasterPrice })
+    expect(result).toMatchObject({ applied: 0, failed: 1 })
+    expect(result.rows).toEqual([{ sku: 'SKU-M2', status: 'FAILED', detail: sentence }])
+    expect(result.inverseDiff).toEqual([])
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
+  })
+
   // ── 5. SKU guard ──────────────────────────────────────────────────────────
   it('5 — base=sku is SKIPPED, no write recorded', async () => {
     const prisma = makeMockPrisma()

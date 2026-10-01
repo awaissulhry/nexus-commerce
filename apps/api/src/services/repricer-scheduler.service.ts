@@ -35,7 +35,9 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *      master, Match Amazon and a market in another currency the price they hold. So a delta can only be a FOLLOWING
  *      listing that is not at its rule's price (CHANNEL_RULE / MASTER_INHERIT snapshots) — and that is written through
  *      the ONE channel price door's follower mode, which recomputes, stores and queues it with every rule the cascade
- *      applies (currency, floor/ceiling, paused/draft hold, 30 s hold). It used to write `price` itself with its own
+ *      applies (currency, floor/ceiling, paused/draft hold, 30 s hold). A FOLLOWING Match Amazon listing is set to the
+ *      engine's Match Amazon suggestion (the lowest competitor − 0.01, within the engine's floor/ceiling) through the
+ *      door's MACHINE mode — the designed Match Amazon flow, now with the door's gates. It used to write `price` itself with its own
  *      queue row: a pinned listing without a priceOverride was overwritten by the channel rule's price, and a sale
  *      snapshot's price was written as the listing's regular price. Any other source is skipped.
  *
@@ -111,14 +113,17 @@ export async function runRepricerTick(
   let skippedNotFollower = 0
 
   for (const snap of snapshots) {
+    // Match Amazon: the engine's undercut of the lowest competitor (`breakdown.suggestion`) is the price a machine sets
+    // on a FOLLOWING Match Amazon listing — the designed flow, through the door's machine mode (2026-10-01).
+    const matchAmazon = matchAmazonSuggestion(snap.breakdown)
     // Defensive: never push from a fallback resolution. The engine
     // emitted 0 because it had no master / variant / rule.
-    if (snap.source === 'FALLBACK') {
+    if (snap.source === 'FALLBACK' && matchAmazon == null) {
       skippedFallback++
       continue
     }
-    const newPrice = Number(snap.computedPrice)
-    if (!Number.isFinite(newPrice) || newPrice <= 0) {
+    const snapshotPrice = Number(snap.computedPrice)
+    if (matchAmazon == null && (!Number.isFinite(snapshotPrice) || snapshotPrice <= 0)) {
       skippedZeroPrice++
       continue
     }
@@ -154,6 +159,7 @@ export async function runRepricerTick(
         externalListingId: true,
         region: true,
         followMasterPrice: true,
+        pricingRule: true,
       },
     })
     if (!listing) {
@@ -161,6 +167,8 @@ export async function runRepricerTick(
       continue
     }
 
+    const machine = matchAmazon != null && listing.followMasterPrice !== false && listing.pricingRule === 'MATCH_AMAZON'
+    const newPrice = machine ? matchAmazon! : snapshotPrice
     const currentPrice = listing.price != null ? Number(listing.price) : 0
     if (currentPrice <= 0) {
       // Listing never priced; engine will treat as new push when
@@ -175,8 +183,8 @@ export async function runRepricerTick(
       skippedSubThreshold++
       continue
     }
-    // Only a FOLLOWING listing's rule price is the repricer's to bring the listing back to (see 4. above).
-    if (!FOLLOWER_SOURCES.has(snap.source) || listing.followMasterPrice === false) {
+    // Only a FOLLOWING listing's rule price, or a following Match Amazon listing's machine price, is the repricer's.
+    if (!machine && (!FOLLOWER_SOURCES.has(snap.source) || listing.followMasterPrice === false)) {
       skippedNotFollower++
       continue
     }
@@ -199,8 +207,10 @@ export async function runRepricerTick(
     // Live: the ONE channel price door's follower mode recomputes the listing's rule price from the master, stores it
     // and queues it (or refuses by name: another currency, outside the floor/ceiling, paused or a draft held).
     try {
+      // Match Amazon: the door's MACHINE mode (stays following; above 0, the floor/ceiling in the master currency, a
+      // paused listing or a draft kept in Nexus). Any other follower: its rule price, recomputed by the follower mode.
       const written = await writeChannelPrices({
-        targets: [{ listingId: listing.id, follow: true, unguardedReason: 'repricer' }],
+        targets: [machine ? { listingId: listing.id, machinePrice: newPrice, unguardedReason: 'repricer' } : { listingId: listing.id, follow: true, unguardedReason: 'repricer' }],
         actor: `repricer:${runId}`, source: 'REPRICER', reason: `Repricer run ${runId}: the listing is not at its rule's price (${currentPrice.toFixed(2)} → ${newPrice.toFixed(2)})`,
       })
       const outcome = written.results[0]
@@ -269,4 +279,12 @@ export async function runRepricerTick(
   }
   logger.info('G.1 repricer tick complete', result)
   return result
+}
+
+/** The engine's Match Amazon suggestion in a snapshot's breakdown (`pricing-engine.service.ts`), or null. */
+function matchAmazonSuggestion(breakdown: unknown): number | null {
+  const suggestion = (breakdown as { suggestion?: { kind?: string; price?: unknown } } | null)?.suggestion
+  if (suggestion?.kind !== 'MATCH_AMAZON') return null
+  const price = Number(suggestion.price)
+  return Number.isFinite(price) && price > 0 ? price : null
 }

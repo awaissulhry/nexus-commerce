@@ -88,8 +88,9 @@ describe('🔴 a PRICING_UPDATE preview shows what the run then writes', () => {
     const { result, rows } = await previewThenRun({ 'delta-a': 3.04, 'delta-b': 1 }, { adjustmentType: 'DELTA', value: -1.995 })
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 1, skippedItems: 1, failedItems: 0 })
     expect(rows['delta-a']).toEqual({ preview: ['3.04', '1.05', 'processed', null], run: ['3.04', '1.05', 'processed', null] })
-    const zero = 'Not changed: the new price would be -1.00, and a price must be above 0.'
-    expect(rows['delta-b']).toEqual({ preview: ['1.00', '-1.00', 'skipped', zero], run: ['1.00', '1.00', 'skipped', zero] })
+    // 1 − 1.995 = −0.995, in the one cents helper every price write uses (`roundCents`, half-up): −0.99.
+    const zero = 'Not changed: the new price would be -0.99, and a price must be above 0.'
+    expect(rows['delta-b']).toEqual({ preview: ['1.00', '-0.99', 'skipped', zero], run: ['1.00', '1.00', 'skipped', zero] })
   }), 60_000)
 
   it('ROUND_DOWN_TO_99: the rounded price; already .99 is skipped in both', () => scoped(async () => {

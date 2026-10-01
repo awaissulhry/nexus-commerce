@@ -127,29 +127,39 @@ async function bumpTx(targets: readonly Target[], extra?: Prisma.ChannelListingU
 const asInt = (v: unknown): number | null => { const n = typeof v === 'number' ? v : Number(v); return Number.isInteger(n) ? n : null }
 
 /**
- * The quantity PIN of the matrix's Qty cell (D-MX3) — ONE implementation for every screen that types a listing's
- * quantity (the Studio matrix, the listings grid, 2026-10-01), so the two cannot drift:
+ * The quantity MODE writes of the matrix's Mode and Qty cells — ONE implementation for every screen that changes how a
+ * listing's quantity is set (the Studio matrix, the listings grid's stock cell, the listing drawer's and the bulk
+ * bar's follow toggles, the reset to master, 2026-10-01), so they cannot drift:
  *   1. Owner rule: FBA quantity is untouchable. Any Amazon-managed target refuses the whole write BEFORE anything is
  *      staged (`amazonManagedListingIds`, the primitive's own verdict), so neither the FBA row nor half of an EU group
  *      is written. `staged: false`.
- *   2. The typed value is staged into `quantity` on EVERY target under CAS (a lost one throws `Conflict`).
- *   3. The PIN primitive (`setFollowMasterQuantity`, follow=false) snapshots exactly that value into the three
- *      quantity columns and queues the QUANTITY_UPDATE. A target it still skips as FBA refuses with `staged: true`.
- * `coordinates` narrows the PIN to exactly the target listings (the grid); the matrix narrows by its markets.
+ *   2. Every target's version is bumped under CAS — with a typed quantity staged into `quantity` (D-MX3) — and a lost
+ *      one throws `Conflict`.
+ *   3. The follow/pin primitive (`setFollowMasterQuantity`): FOLLOW rejoins the stock and publishes it; PIN snapshots
+ *      the (typed) quantity into the three quantity columns. Either queues the QUANTITY_UPDATE. A target it still skips
+ *      as FBA refuses with `staged: true`.
+ * `coordinates` narrows the primitive to exactly the target listings (the listing screens); the matrix narrows by markets.
  */
-export async function pinTypedQuantity(input: {
+export async function writeQuantityMode(input: {
   productId: string
   channel: string
   targets: readonly Target[]
-  quantity: number
+  follow: boolean
+  /** PIN only: the typed quantity to pin at; without it a PIN keeps the number the listing shows now. */
+  quantity?: number
   actor: string
   coordinates?: ListingCoordinate[]
 }): Promise<{ refused?: string; staged?: boolean }> {
   if (input.channel === 'AMAZON' && (await amazonManagedListingIds(input.targets.map((t) => t.id))).size > 0) return { refused: MATRIX_COPY.amazonManaged, staged: false }
-  await bumpTx(input.targets, { quantity: input.quantity })
-  const r = await setFollowMasterQuantity({ productIds: [input.productId], channel: input.channel as 'AMAZON' | 'EBAY', markets: input.targets.map((t) => t.marketplace), follow: false, actor: input.actor, ...(input.coordinates ? { coordinates: input.coordinates } : {}) })
+  await bumpTx(input.targets, !input.follow && input.quantity !== undefined ? { quantity: input.quantity } : undefined)
+  const r = await setFollowMasterQuantity({ productIds: [input.productId], channel: input.channel as 'AMAZON' | 'EBAY', markets: input.targets.map((t) => t.marketplace), follow: input.follow, actor: input.actor, ...(input.coordinates ? { coordinates: input.coordinates } : {}) })
   if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { refused: MATRIX_COPY.amazonManaged, staged: true }
   return {}
+}
+
+/** The Qty cell's PIN at a typed quantity (`writeQuantityMode`, follow: false). */
+export function pinTypedQuantity(input: Omit<Parameters<typeof writeQuantityMode>[0], 'follow' | 'quantity'> & { quantity: number }) {
+  return writeQuantityMode({ ...input, follow: false })
 }
 
 /* ── one cell through the door ──────────────────────────────────────────────────────────────── */
@@ -186,10 +196,9 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         if (s.mode === mode) return noop()
         // Shared stock by SKU: a SKU that sells from a lent stock gets no fixed number (the database refuses it too).
         if (mode === 'PINNED' && row.stock?.source) return refuse(sharedStockReason(row.stock.source.lenderName))
-        if (await amazonManaged()) return managedRefusal()
-        await bumpTx(targets)
-        const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: mode === 'FOLLOW', actor: ctx.actor })
-        if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version + 1 }
+        /* `writeQuantityMode`: the one implementation the listing screens' follow toggles use too. */
+        const moded = await writeQuantityMode({ productId: row.id, channel, targets, follow: mode === 'FOLLOW', actor: ctx.actor })
+        if (moded.refused) return moded.staged ? { ...base, outcome: 'refused', reason: moded.refused, version: cells.version + 1 } : managedRefusal()
         return applied()
       }
       case 'syncQty': {

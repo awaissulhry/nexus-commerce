@@ -11,6 +11,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./connection-resolver.service.js', () => ({ primaryConnectionIds: vi.fn(async () => new Map()) }))
 vi.mock('./price-history.service.js', () => ({ recordPriceChange: vi.fn(async () => undefined) }))
+// The promotion's sale goes through the price door (2026-10-01); this file pins only which listings get one.
+const door = vi.hoisted(() => ({ writeChannelPrices: vi.fn(async ({ targets }: any) => ({ results: targets.map((t: any) => ({ listingId: t.listingId, outcome: 'applied' })) })) }))
+vi.mock('./pim/channel-price-write.service.js', () => door)
 
 const { resolvePrice } = await import('./pricing-engine.service.js')
 const { refreshSnapshotsForSkus } = await import('./pricing-snapshot.service.js')
@@ -38,6 +41,8 @@ function fakePrisma(opts: { rates?: Record<string, number> } = {}) {
       update: vi.fn(async () => ({})),
     },
     offer: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null) },
+    // The promotion's own audit rows (a listing it already put on sale is left alone): none here.
+    channelListingOverride: { findFirst: vi.fn(async () => null) },
     fxRate: { findFirst: vi.fn(async ({ where }: any) => (opts.rates?.[where.toCurrency] != null ? { rate: opts.rates[where.toCurrency] } : null)) },
     stockCostLayer: { findFirst: vi.fn(async () => null) },
     pricingRuleVariation: { findMany: vi.fn(async () => []) },
@@ -109,12 +114,14 @@ describe('callers refuse the one cell and carry on', () => {
   })
   it('promotion scheduler: a PERCENT_OFF listing in a market with no rate is skipped; the run goes on', async () => {
     const { client } = fakePrisma()
-    client.retailEventPriceAction.findMany.mockResolvedValueOnce([{ eventId: 'ev', action: 'PERCENT_OFF', value: 10, channel: 'AMAZON', event: { name: 'Sale' } }]).mockResolvedValueOnce([])
+    door.writeChannelPrices.mockClear()
+    const event = { name: 'Sale', startDate: new Date('2026-10-01T00:00:00Z'), endDate: new Date('2026-10-03T00:00:00Z') }
+    client.retailEventPriceAction.findMany.mockResolvedValueOnce([{ eventId: 'ev', action: 'PERCENT_OFF', value: 10, channel: 'AMAZON', event }]).mockResolvedValueOnce([])
     client.channelListing.findMany.mockResolvedValueOnce([
       { id: 'L-A', productId: 'p-A', channel: 'AMAZON', marketplace: 'UK', price: 10, priceOverride: null, salePrice: null, product: { sku: 'A', variations: [] } },
       { id: 'L-B', productId: 'p-B', channel: 'AMAZON', marketplace: 'IT', price: 10, priceOverride: null, salePrice: null, product: { sku: 'B', variations: [] } },
     ])
     await expect(runPromotionScheduler(client)).resolves.toMatchObject({ listingsUpdated: 1 })
-    expect(client.channelListing.update.mock.calls.map((c: any) => [c[0].where.id, c[0].data.salePrice])).toEqual([['L-B', '9.00']])
+    expect(door.writeChannelPrices.mock.calls.map((c: any) => [c[0].targets[0].listingId, c[0].targets[0].sale])).toEqual([['L-B', { value: 9, start: '2026-10-01', end: '2026-10-03' }]])
   })
 })

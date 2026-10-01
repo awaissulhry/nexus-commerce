@@ -19,7 +19,8 @@
  * The last two are the agent price tools' rules (#225, `price-bounds.service.ts`). Every skipped row says why, in plain
  * words: the job item keeps it as its message (`BulkActionItem.errorMessage`, status SKIPPED) and the preview shows it.
  */
-import { masterPriceBoundsReason, priceBoundsOf } from '../price-bounds.service.js'
+import { masterPriceBoundsReason, priceBoundsOf, zeroPriceReason } from '../price-bounds.service.js'
+import { roundCents } from '@nexus/shared/listing-price'
 import { ROUND_DOWN_TO_99, roundDownTo99Outcome } from './price-rounding.js'
 
 /** One row's result. A skipped row always says why, in plain words (the job item's message and the preview's). */
@@ -39,15 +40,13 @@ export function currentBasePrice(product: Pick<PricedProduct, 'basePrice'>): num
 }
 
 /**
- * The cents the master price write stores — MasterPriceService's own rounding (`roundCurrency`: Product.basePrice is
- * a Decimal(10,2)). Rounding an already-rounded price again changes nothing, so the run may pass this value on.
+ * The cents the master price write stores — MasterPriceService's own rounding, the one cents helper (`roundCents`,
+ * @nexus/shared/listing-price: 1.005 → 1.01). Rounding an already-rounded price again changes nothing, so the run may
+ * pass this value on.
  */
 function storedCents(value: number): number {
-  return Math.round(value * 100) / 100
+  return roundCents(value)
 }
-
-/** A price in the cents it is stored in. */
-const money = (n: number) => n.toFixed(2)
 
 /**
  * A price as the job's own bounds tested it: in cents when it is whole cents, otherwise to four places — those bounds
@@ -105,7 +104,10 @@ export function pricingUpdateOutcome(product: PricedProduct, payload: Record<str
   const { computed, newPrice } = mode
   const skip = (reason: string): PricingUpdateOutcome => ({ newPrice, status: 'skipped', reason: `Not changed: ${reason}.` })
 
-  if (newPrice <= 0) return skip(`the new price would be ${money(newPrice)}, and a price must be above 0`)
+  // The zero rule and the bounds clause are the ones the master-price write itself refuses with (`storedPriceReason`
+  // = `zeroPriceReason` + `masterPriceBoundsReason`), checked here in this mode's order so the preview names the reason.
+  const zero = zeroPriceReason(newPrice)
+  if (zero !== null) return skip(zero)
   if (typeof payload.minPrice === 'number' && computed < payload.minPrice) {
     return skip(`${asTested(computed)} is below this job's minimum price of ${asTested(payload.minPrice)}`)
   }

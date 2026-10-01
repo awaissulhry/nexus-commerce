@@ -81,10 +81,10 @@ import { roundCents } from '@nexus/shared/listing-price'
 import { type MarketCurrencyRow } from './pim/market-currency.js'
 // The follower rules the channel price door applies too — one module, so the cascade and the door cannot drift.
 import {
-  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerBoundsReason, followerPricePayload, holdsCascadedPrice, listingMarketCurrency,
+  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, holdsCascadedPrice, listingMarketCurrency,
   logFollowerBoundsRefusals, logMasterCurrencyRefusals, type FollowerBoundsRefusal, type MasterCurrencyRefusal,
 } from './pim/follower-price.js'
-import { priceBoundsOf } from './price-bounds.service.js'
+import { priceBoundsOf, storedPriceReason } from './price-bounds.service.js'
 export { computeListingPrice, holdsCascadedPrice }
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
@@ -152,6 +152,16 @@ interface ChannelListingForCascade {
 // door, the agent tools and the screens use, so 1.005 is 1.01 everywhere.
 const roundCurrency = roundCents
 
+/** A master price the product's own rules refuse (not above 0, or outside its floor/ceiling). Nothing was written. */
+export class MasterPriceRefusedError extends Error {
+  readonly statusCode = 400
+  readonly code = 'MASTER_PRICE_REFUSED'
+  constructor(message: string) {
+    super(message)
+    this.name = 'MasterPriceRefusedError'
+  }
+}
+
 export class MasterPriceService {
   constructor(private readonly client: PrismaClient = prisma) {}
 
@@ -208,6 +218,14 @@ export class MasterPriceService {
           auditLogId: null,
         }
       }
+
+      // 2026-10-01 — THE master price is above 0 and inside the product's own floor and ceiling (`storedPriceReason`, the
+      // verdict the bulk PRICING_UPDATE preview, the agent price tools, the price door and the cascade share). Outside
+      // them the whole edit is refused before anything is written: no master price, no listing, no queue row. Every
+      // caller names it — the products grid and drawer, the product sheet, the bulk job (its "Not changed: …"), the
+      // agent tools, the FF2 import, the scheduled changes and the assortment copy.
+      const refusal = storedPriceReason(rounded, priceBoundsOf(product))
+      if (refusal) throw new MasterPriceRefusedError(`Not changed: ${refusal}.`)
 
       const listings = (await tx.channelListing.findMany({
         where: { productId },
@@ -272,7 +290,7 @@ export class MasterPriceService {
         // or ceiling (master-currency numbers; this listing sells in the master currency here), or not above 0, is
         // neither stored nor queued. The listing keeps its price; the refusal is recorded like the currency refusal.
         const outOfBounds = newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master
-          ? followerBoundsReason(newListingPrice, priceBoundsOf(product)) : null
+          ? storedPriceReason(newListingPrice, priceBoundsOf(product)) : null
         if (outOfBounds) {
           boundsRefused.push({ listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace, price: newListingPrice!, reason: outOfBounds })
         }

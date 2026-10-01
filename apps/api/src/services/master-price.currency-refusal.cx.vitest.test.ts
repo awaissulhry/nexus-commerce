@@ -110,7 +110,9 @@ describe('master price cascade — a follower price outside the product\'s floor
   })
 
   it('a GBP market is refused for its currency only, never compared with the EUR bounds', async () => {
-    const f = fakeClient([listing('L-UK', 'EBAY', 'UK', { price: 17 })], { maxPrice: 15 })
+    // The master 19.90 is inside its own ceiling of 21 (a master outside it is refused whole); PERCENT +10 would be
+    // 21.89, above that EUR ceiling — but a GBP price is never compared with EUR bounds: refused for its currency only.
+    const f = fakeClient([listing('L-UK', 'EBAY', 'UK', { price: 17, pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 10 })], { maxPrice: 21 })
     const r = await new MasterPriceService(f.client).update('p1', 19.9)
     expect(r.boundsRefused).toEqual([])
     expect(r.currencyRefused.map((x) => x.listingId)).toEqual(['L-UK'])

@@ -375,8 +375,10 @@ export async function applyChanges(
               rows.push({ sku, status: 'FAILED', detail: 'A master price cannot be emptied by an import. Set a price.' })
               continue
             }
-            inverseDiff.push({ model: 'Product', sku, data: captureInverse({ basePrice: value }, before) })
+            // A price outside the product's own floor or ceiling, or 0, is refused whole by the writer ("Not changed: …",
+            // MasterPriceRefusedError, before anything is written): the row is FAILED with that sentence, below.
             await updateMasterPrice(String(before.id), value, { tx, actor: opts.actor ?? 'flat-file-import', reason: `Flat-file import ${change.column}` })
+            inverseDiff.push({ model: 'Product', sku, data: captureInverse({ basePrice: value }, before) })
             applied++
             rows.push({ sku, status: 'SUCCESS' })
             continue

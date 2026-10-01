@@ -155,6 +155,25 @@ export function masterPriceBoundsReason(price: number, bounds: PriceBounds): str
   return null
 }
 
+/**
+ * A price Nexus would STORE is above 0 — a master price, a typed (pinned) listing price, a follower price, a machine
+ * price. `null` = it is; otherwise the clause, in the words the bulk preview shows ("Not changed: …", #228).
+ */
+export function zeroPriceReason(price: number): string | null {
+  return price > 0 ? null : `the new price would be ${price.toFixed(2)}, and a price must be above 0`
+}
+
+/**
+ * THE verdict on a price Nexus would store (2026-10-01): above 0 (`zeroPriceReason`) and inside the product's own
+ * floor and ceiling (`masterPriceBoundsReason`). One function for the master-price write, the price door (pins,
+ * follower and machine prices), the cascade and the bulk PRICING_UPDATE, so the same case never gets two sentences.
+ * The bounds are master-currency numbers: a caller pricing a market in another currency asks `zeroPriceReason` only
+ * (`boundsApply`). `null` = the price may be stored; otherwise the clause.
+ */
+export function storedPriceReason(price: number, bounds: PriceBounds): string | null {
+  return zeroPriceReason(price) ?? masterPriceBoundsReason(price, bounds)
+}
+
 /** Decimal-or-null columns as the numbers `PriceBounds` holds. */
 export function priceBoundsOf(row: { minPrice?: unknown; maxPrice?: unknown }): PriceBounds {
   return { minPrice: asNumber(row.minPrice), maxPrice: asNumber(row.maxPrice) }

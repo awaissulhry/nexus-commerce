@@ -30,7 +30,7 @@ import { DraftListingError, ensureDraftListingsInTransaction } from '../services
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
 import { applyListingBulkPricing, ListingPricingError, parseListingPricingEdit, patchListing, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
-import { writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
+import { listingVersionOf, setListingQuantityFollow, writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
@@ -1259,11 +1259,13 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       }
 
       const data: any = {}
-      // The price's follow flag is a pricing edit (below): it recomputes and sends the price.
+      // The price's follow flag is a pricing edit (below): it recomputes and sends the price. The quantity's follow
+      // flag is the Studio matrix's Mode write (after the rest): the quantity is recomputed or pinned and sent.
       const boolFields = [
         'followMasterTitle', 'followMasterDescription',
-        'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints',
+        'followMasterImages', 'followMasterBulletPoints',
       ] as const
+      const quantityFollow = typeof body.followMasterQuantity === 'boolean' ? body.followMasterQuantity : undefined
       for (const k of boolFields) {
         if (typeof body[k] === 'boolean') data[k] = body[k]
       }
@@ -1298,26 +1300,39 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         code: 'SHOPIFY_WORKSPACE_REQUIRED', error: 'Use the Shopify family workspace to change family rules, automation or synchronization progress.',
       })
 
-      if (Object.keys(data).length === 0 && !mergePlatformAttrs && !pricing) {
+      if (Object.keys(data).length === 0 && !mergePlatformAttrs && !pricing && quantityFollow === undefined) {
         return reply.code(400).send({ error: 'No updatable fields provided' })
       }
+      const quantityOnly = quantityFollow !== undefined && Object.keys(data).length === 0 && !mergePlatformAttrs && !pricing
 
       // Optimistic concurrency: the version the client saw is checked by the price door's compare-and-set and by the
       // other columns' `updateMany … where version`. Without expectedVersion the door names why it has none.
-      let updated: Awaited<ReturnType<typeof patchListing>>
+      let updated: Awaited<ReturnType<typeof patchListing>> | null = null
+      let quantity: Awaited<ReturnType<typeof setListingQuantityFollow>> | null = null
       try {
-        updated = await patchListing({
-          id,
-          actor: bulkActorOf(request) ?? 'listing-edit',
-          ...(body.expectedVersion != null ? { expectedVersion: Number(body.expectedVersion) } : {}),
-          ...(pricing ? { pricing } : {}),
-          columns: data,
-          mergePlatformAttributes: mergePlatformAttrs,
-        })
+        if (!quantityOnly) {
+          updated = await patchListing({
+            id,
+            actor: bulkActorOf(request) ?? 'listing-edit',
+            ...(body.expectedVersion != null ? { expectedVersion: Number(body.expectedVersion) } : {}),
+            ...(pricing ? { pricing } : {}),
+            columns: data,
+            mergePlatformAttributes: mergePlatformAttrs,
+          })
+        }
+        if (quantityFollow !== undefined) {
+          // Alone, an Amazon-managed listing is refused by the matrix's sentence; beside other fields (a "reset every
+          // field" button) its quantity is left to Amazon and the answer says so.
+          quantity = await setListingQuantityFollow({
+            listingId: id, follow: quantityFollow, actor: bulkActorOf(request) ?? 'listing-edit', onFba: quantityOnly ? 'refuse' : 'skip',
+            ...(quantityOnly && body.expectedVersion != null ? { expectedVersion: Number(body.expectedVersion) } : {}),
+          })
+        }
       } catch (err) {
         if (err instanceof ListingPricingError) return reply.code(err.statusCode).send({ error: err.message, ...err.details })
         throw err
       }
+      const fresh = await listingVersionOf(id)
       // S.4 — broadcast so other tabs / cells refresh within 200ms.
       publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
       // ES.2 — persist the change to the immutable event log.
@@ -1332,10 +1347,12 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       })
       return {
         ok: true,
-        listing: { id: updated.id, version: updated.version },
+        listing: { id, version: fresh ?? updated?.version ?? null },
         // A price change that was saved but not sent says why (another currency, paused, a draft, Match Amazon…).
-        ...(updated.notSent ? { notSent: updated.notSent } : {}),
-        queued: updated.queueId != null,
+        ...(updated?.notSent ? { notSent: updated.notSent } : {}),
+        queued: updated?.queueId != null,
+        // The quantity's follow flag: applied (on Amazon EU, for the whole EU group), or left to Amazon (FBA).
+        ...(quantity ? { quantity: { outcome: quantity.outcome, ...(quantity.expandedTo ? { expandedTo: quantity.expandedTo } : {}), ...(quantity.skipped ? { note: quantity.skipped } : {}) } } : {}),
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/:id PATCH] failed')
@@ -3421,6 +3438,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         let succeeded = 0
         let failed = 0
         const errors: Array<{ listingId: string; reason: string }> = []
+        const quantityNotes: Array<{ listingId: string; reason: string }> = []
 
         // A2 — pre-read followMasterQuantity for follow/unfollow actions so
         // we can skip no-op audit writes and capture accurate before values.
@@ -3451,17 +3469,20 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               // 2026-10-01 — set-price, set-pricing-rule, follow-master and unfollow-master go through the ONE
               // channel price door: a pinned price or a recomputed follower price is queued (30 s hold), and a refusal
               // (outside the product's floor/ceiling, …) fails this listing by name with nothing written.
-              await applyListingBulkPricing({
+              const priced = await applyListingBulkPricing({
                 action: action as 'set-price' | 'set-pricing-rule' | 'follow-master' | 'unfollow-master',
                 listingId: id,
                 actor: job.createdBy ?? 'listings-bulk-action',
                 payload: body.payload,
               })
+              // The quantity of an Amazon-managed (FBA) listing is Amazon's: the rest of the change is applied, the
+              // quantity is not, and the job says so by listing (not a failure).
+              if (priced.quantitySkipped) quantityNotes.push({ listingId: id, reason: `Quantity not changed: ${priced.quantitySkipped}` })
             }
             succeeded += 1
 
             // A2 — journal followMasterQuantity toggle when it actually changed.
-            if (action === 'follow-master' || action === 'unfollow-master') {
+            if ((action === 'follow-master' || action === 'unfollow-master') && !quantityNotes.some((n) => n.listingId === id)) {
               const newVal = action === 'follow-master'
               const oldVal = followQtyBefore.get(id) ?? true // default is true
               if (oldVal !== newVal) {
@@ -3496,8 +3517,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
                 processedItems: succeeded,
                 failedItems: failed,
                 progressPercent: Math.floor((processedTotal / ids.length) * 100),
-                errorLog: errors as any,
-                lastError: errors.length > 0 ? errors[errors.length - 1].reason : null,
+                errorLog: [...errors, ...quantityNotes] as any,
+                lastError: errors.length > 0 ? errors[errors.length - 1].reason : quantityNotes.length > 0 ? quantityNotes[quantityNotes.length - 1].reason : null,
               },
             })
             .catch((e) => {

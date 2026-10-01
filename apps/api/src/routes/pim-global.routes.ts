@@ -534,7 +534,7 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      return reply.send({ ok: true, field, ...(reset.notSent ? { notSent: reset.notSent } : {}) })
+      return reply.send({ ok: true, field, ...(reset.notSent ? { notSent: reset.notSent } : {}), ...(reset.quantitySkipped ? { quantityNote: reset.quantitySkipped } : {}) })
     },
   )
 

@@ -22,7 +22,7 @@ import type {
 import { logger } from '../utils/logger.js';
 import { publishListingEvent } from './listing-events.service.js';
 import { isFbaListing } from './outbound-sync.service.js';
-import { MasterPriceService } from './master-price.service.js';
+import { MasterPriceRefusedError, MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
 import { listActiveConnections, tryResolveConnection } from './connection-resolver.service.js';
@@ -3019,11 +3019,18 @@ export class BulkActionService {
     const outcome = pricingUpdateOutcome(item, payload);
     if (outcome.status === 'skipped') return { status: 'skipped', reason: outcome.reason };
 
-    await this.masterPriceService.update(item.id, outcome.newPrice, {
-      actor: 'bulk-action',
-      reason: 'bulk-pricing-job',
-      idempotencyKey: `${jobId}:${item.id}`,
-    });
+    try {
+      await this.masterPriceService.update(item.id, outcome.newPrice, {
+        actor: 'bulk-action',
+        reason: 'bulk-pricing-job',
+        idempotencyKey: `${jobId}:${item.id}`,
+      });
+    } catch (err) {
+      // The product's floor or ceiling changed after this job read the row: the master-price write refuses the whole
+      // edit with the same "Not changed: …" sentence, and the row is skipped with it, as the preview skips it.
+      if (err instanceof MasterPriceRefusedError) return { status: 'skipped', reason: err.message };
+      throw err;
+    }
 
     return { status: 'processed' };
   }

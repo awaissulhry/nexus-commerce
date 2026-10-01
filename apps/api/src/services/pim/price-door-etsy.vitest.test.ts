@@ -167,10 +167,12 @@ describe('the other producers', () => {
     const { etsy } = await seed('A', 'TEST-ETSY-PUSH', { following: false })
     await prisma.pricingSnapshot.create({ data: { sku: 'TEST-ETSY-PUSH', channel: 'ETSY', marketplace: 'GLOBAL', computedPrice: 23.4, currency: 'EUR', source: 'CHANNEL_OVERRIDE' } })
     const response = await app.inject({ method: 'POST', url: '/pricing/push', payload: { sku: 'TEST-ETSY-PUSH', channel: 'ETSY', marketplace: 'GLOBAL' } })
-    expect(response.json()).toMatchObject({ ok: true, queued: true, channel: 'ETSY' })
+    // 2026-10-01 — the push goes through the price door (`resend`): it sends the price the LISTING holds (its pin, 25),
+    // not a snapshot number that may be stale (23.40 here), and says which price it queued.
+    expect(response.json()).toMatchObject({ ok: true, queued: true, channel: 'ETSY', pushedPrice: 25 })
     const rows = await pendingPriceRows(etsy.id)
     expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({ targetChannel: 'ETSY', payload: { source: 'PRICING_SNAPSHOT_PUSH', price: 23.4 } })
+    expect(rows[0]).toMatchObject({ targetChannel: 'ETSY', payload: { source: 'CHANNEL_PRICE_WRITE', price: 25, resend: true } })
   }))
 })
 

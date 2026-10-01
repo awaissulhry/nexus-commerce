@@ -15,6 +15,7 @@
  * Real PostgreSQL in-process (PGlite), the routes through Fastify inject. Every id is invented.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 import Fastify from 'fastify'
 
 const state = vi.hoisted(() => ({ db: null as any }))
@@ -218,6 +219,22 @@ describe('POST /api/listings/bulk-action', () => {
     expect(await run('follow-master', [c.id])).toMatchObject({ status: 'COMPLETED' })
     expect(await listing(c.id)).toMatchObject({ followMasterPrice: true, followMasterTitle: true, followMasterQuantity: true })
     expect(await prices(c.id)).toEqual([11])
+  })
+
+  it('🔴 follow-master on an Amazon-managed (FBA) listing: the price follows, the quantity is Amazon\'s — left alone and named on the job, not a failure', async () => {
+    const l = await scoped(async () => {
+      const row = await seed('bulk-follow-fba', { channel: 'AMAZON', follow: false, price: 25 })
+      return prisma.channelListing.update({ where: { id: row.id }, data: { fulfillmentMethod: 'FBA', followMasterQuantity: false, quantity: 4, quantityOverride: 4 } as never })
+    })
+    const job = await run('follow-master', [l.id])
+    expect(job).toMatchObject({ status: 'COMPLETED', processedItems: 1, failedItems: 0, lastError: `Quantity not changed: ${MATRIX_COPY.amazonManaged}` })
+    expect(job.errorLog).toEqual([{ listingId: l.id, reason: `Quantity not changed: ${MATRIX_COPY.amazonManaged}` }])
+    expect(await listing(l.id)).toMatchObject({ followMasterPrice: true, followMasterQuantity: false, quantity: 4, quantityOverride: 4 })
+    expect(await prices(l.id)).toEqual([10])
+    expect((await queued(l.id)).map((row) => row.syncType)).toEqual(['PRICE_UPDATE'])
+    // No "followMasterQuantity changed" journal row for a flag that did not change.
+    const journal = await scoped(() => prisma.auditLog.findMany({ where: { entityId: l.id } }))
+    expect(journal.filter((row) => (row.metadata as { field?: string } | null)?.field === 'followMasterQuantity')).toEqual([])
   })
 
   it('🔴 bulk Set price above a EUR ceiling fails that listing by name; 0 is a 400 before any job', async () => {

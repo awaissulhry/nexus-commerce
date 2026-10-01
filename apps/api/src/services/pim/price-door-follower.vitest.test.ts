@@ -326,7 +326,7 @@ describe('typed prices (pins) — above 0 and inside the floor/ceiling, in the m
     const l = await seed('pin-zero', { product: { maxPrice: 20 } })
     const before = await footprint(l)
     const r = await pin(l, 0)
-    expect(r.results[0]).toMatchObject({ outcome: 'refused', reason: 'A price must be above 0. Nothing was changed.' })
+    expect(r.results[0]).toMatchObject({ outcome: 'refused', reason: expect.stringMatching(/^PIN-ZERO on \w+ \w+ was not pinned: the new price would be 0\.00, and a price must be above 0\. Nothing was changed\.$/) })
     expect(await footprint(l)).toEqual(before)
     // Record-only (CFI-6): the channel already holds 25 — it is recorded, not refused for the ceiling, and nothing is sent.
     const recorded = await writeChannelPrices({ targets: [{ listingId: l.id, price: 25, expectedVersion: l.version }], actor: 'import', source: 'CHANNEL_FILE_IMPORT', recordOnly: 'channel-file-import' })

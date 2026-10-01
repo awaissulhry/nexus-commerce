@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { OPERATIONAL_IMPACT_TARGET_CAP, parseOperationalImpact, readHardDeletePreflight, readOperationalImpact } from '../services/products/operational-impact.service.js'
 import { assertRequestPermission, requestUserId } from '../lib/auth/request-permission.js'
 import prisma from '../db.js'
-import { masterPriceService } from '../services/master-price.service.js'
+import { MasterPriceRefusedError, masterPriceService } from '../services/master-price.service.js'
 import { masterStatusService } from '../services/master-status.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { enqueueContentSyncForProduct } from '../services/content-auto-publish.service.js'
@@ -1267,6 +1267,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           }
         })
       } catch (err: any) {
+        // A master price the product's own rules refuse (not above 0, outside its floor/ceiling): one plain sentence.
+        if (err instanceof MasterPriceRefusedError) return reply.code(400).send({ error: err.message, code: err.code })
         if (err?.code === 'VERSION_CONFLICT') {
           // Read the latest version so the client can refresh + retry.
           const latest = await prisma.product.findUnique({
