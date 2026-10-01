@@ -1977,7 +1977,7 @@ function GridLens(props: {
             </div>
             <button
               onClick={props.onClearFilters}
-              className="h-9 px-4 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-2"
+              className="h-9 px-4 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 inline-flex items-center gap-2"
             >
               <FilterX size={12} /> Clear filters
             </button>
@@ -6200,7 +6200,7 @@ function SavedViewsButton({
                       setOpen(false)
                     }
                   }}
-                  className="flex-1 h-8 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800"
+                  className="flex-1 h-8 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90"
                 >
                   {t('common.save')}
                 </button>

@@ -219,3 +219,23 @@ test('Tailwind status: a globals file with no pair is refused, never a silent pa
   assert.equal(factory.globals, null)
   assert.equal(twRows(factory).length, 0)
 })
+
+// ── Field placeholders (2026-10-01): their own token, AA 4.5:1 on every surface, both themes ───────────────────────────
+test('placeholder: --nds-placeholder is measured on every surface in both themes and clears 4.5:1', () => {
+  const { code, out } = run(['--max-failures', '0', '--max-aa-failures', '0'])
+  assert.equal(code, 0)
+  const surfaces = new Set(out.rows.filter((r) => r.group === 'text').map((r) => r.bg)).size
+  for (const mode of ['light', 'dark']) {
+    const rows = out.rows.filter((r) => r.group === 'placeholder' && r.mode === mode)
+    assert.equal(rows.length, surfaces, `${mode}: one row per surface`)
+    for (const r of rows) assert.ok(r.ratio >= 4.5 && !r.belowAA, `${mode} on ${r.bg}: ${r.ratio}`)
+  }
+  assert.equal(out.rows.find((r) => r.group === 'placeholder' && r.mode === 'light').fgHex, '#5b6573')
+  assert.equal(out.rows.find((r) => r.group === 'placeholder' && r.mode === 'dark').fgHex, '#97a3b1')
+})
+
+test('placeholder: the old disabled grey (2.04:1) fails the gate at 0 / 0', () => {
+  const r = run(['--tokens', variant('--nds-placeholder: var(--nds-grey-600);', '--nds-placeholder: var(--nds-grey-400);'), '--max-failures', '0', '--max-aa-failures', '0'])
+  assert.equal(r.code, 1)
+  assert.ok(r.out.failing.some((x) => x.group === 'placeholder' && x.mode === 'light' && x.belowAA))
+})

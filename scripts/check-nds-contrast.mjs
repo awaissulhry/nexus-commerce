@@ -19,6 +19,9 @@
  *   tag      foreground/background token pair in each actual `.nds-tag.X` CSS rule
  *   inverse  `--nds-text-inverse` on `--nds-primary`                (button labels)
  *   hover    `--nds-text-inverse` on `--nds-primary-hover`          (the same label on the hover fill — R-65)
+ *   placeholder  `--nds-placeholder` on every surface above (2026-10-01): field hints are read, so they meet AA 4.5:1,
+ *            counted in both columns. They are not body text — a hint must stay lighter than a value — and R-49 did
+ *            not rule them; 4.5:1 is the bar the lead set for them.
  *   tw-status  every `--X-strong` that has a `--X-soft` in apps/web/src/app/globals.css `:root` (and its `.dark` value):
  *            the RGB channels behind Tailwind's `text-X-strong` on `bg-X-soft` (Badge, Toast, ConfirmDialog, …). Ported
  *            2026-10-01 from the retired `check-contrast.mjs`, with ITS bar: AA 4.5:1, counted in both columns. These are
@@ -191,6 +194,8 @@ if (has('--nds-text-inverse') && has('--nds-primary')) PAIRS.push({ group: 'inve
 // resolves to null and counts as a failure; a theme with no hover of its own falls back to :root's (dark text on the light
 // fill measured 2.66 before the sweep); a hover lighter than the rest fill (blue-700 under blue-800: 5.98) fails the bar.
 if (has('--nds-text-inverse') && has('--nds-primary')) PAIRS.push({ group: 'hover', fg: '--nds-text-inverse', bg: '--nds-primary-hover' })
+// Field hints on every surface a field can sit on, at their own bar (AA in both columns — see the header).
+if (has('--nds-placeholder')) for (const s of SURFACES) PAIRS.push({ group: 'placeholder', fg: '--nds-placeholder', bg: s, tier: 'aa', bar: 4.5 })
 /** Stated, not measured: a `--nds-*-text` token with no derivable ground. */
 const UNPAIRED = NAMES.filter((n) => /^--nds-[a-z0-9]+-text$/.test(n) && !has(n.replace(/-text$/, '-soft')))
 /** The page ground a translucent background is composited over. */
@@ -200,8 +205,8 @@ function measure(mode) {
   const page = colorOf(PAGE, mode)
   const rows = []
   for (const p of PAIRS) {
-    const usage = USAGE[p.fg] ?? { tier: 'body' }
-    const counted = TIERS[usage.tier === 'to-rule' ? 'body' : usage.tier]
+    const usage = p.tier ? { tier: p.tier } : USAGE[p.fg] ?? { tier: 'body' }
+    const counted = p.bar ? { aaa: p.bar, aa: p.bar } : TIERS[usage.tier === 'to-rule' ? 'body' : usage.tier]
     const fgC = colorOf(p.fg, mode), bgC = colorOf(p.bg, mode)
     if (!fgC || !bgC || !page || page.a < 1) {
       rows.push({ mode, ...p, tier: usage.tier, ratio: null, unresolved: [!fgC && p.fg, !bgC && p.bg, (!page || page.a < 1) && PAGE].filter(Boolean), belowAAA: true, belowAA: true })
@@ -280,6 +285,8 @@ if (JSON_OUT) {
     const extra = r.ratio === null ? `missing ${r.unresolved.join(', ')}` : `${r.fgHex} on ${r.bgHex}${r.ifUi ? ` · tier TO RULE (as ui: ${r.ifUi.belowAAA ? (r.ifUi.belowAA ? 'below AA' : 'below AAA') : 'passes AAA'})` : ''}`
     console.log(`  ${tag}  ${r.ratio === null ? '   —  ' : r.ratio.toFixed(2).padStart(6)}  ${r.mode.padEnd(5)}  ${r.group.padEnd(7)}  ${r.fg} on ${r.bg}  ${extra}`)
   }
+  const ph = rows.filter((r) => r.group === 'placeholder' && r.ratio !== null)
+  if (ph.length) for (const m of ['light', 'dark']) { const mine = ph.filter((r) => r.mode === m); console.log(`placeholder (AA bar) ${m}: worst ${Math.min(...mine.map((r) => r.ratio)).toFixed(2)} over ${mine.length} surfaces (${mine[0].fgHex})`) }
   const tw = rows.filter((r) => r.group === 'tw-status' && r.ratio !== null)
   if (tw.length) console.log(`tailwind status (globals.css, text-X-strong on bg-X-soft, AA bar): ${tw.map((r) => `${r.mode} ${r.fg.slice(2, -7)} ${r.ratio.toFixed(2)}${r.atBody.belowAAA ? '*' : ''}`).join(' · ')}  (* below 7:1 — reported, not counted)`)
   for (const m of ['light', 'dark', 'total']) console.log(`${m.padEnd(5)}: ${result[m].pairs} pairs · ${result[m].belowAAA} below AAA · ${result[m].belowAA} below AA`)

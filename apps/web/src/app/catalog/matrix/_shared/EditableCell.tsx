@@ -236,8 +236,8 @@ export default function EditableCell(props: Props) {
         className={cn(
           'w-full text-left rounded px-1 py-0.5 truncate',
           'hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-blue-400',
-          ownValueAbsent && !renderingInherited && 'italic text-zinc-400',
-          renderingInherited && 'italic text-zinc-400 dark:text-zinc-500',
+          ownValueAbsent && !renderingInherited && 'italic text-tertiary',
+          renderingInherited && 'italic text-tertiary',
           props.kind === 'number' && 'text-right tabular-nums',
           canReset && 'pr-4',
           className,

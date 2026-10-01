@@ -308,7 +308,7 @@ export default function InboundWorkspace() {
             <button onClick={() => window.open('/fulfillment/fnsku-labels', '_blank', 'noopener,noreferrer')} className="h-8 px-3 text-base bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-900 rounded hover:bg-violet-100 dark:hover:bg-violet-900/60 inline-flex items-center gap-1.5">
               <Tag size={12} /> Get FNSKU Labels
             </button>
-            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 inline-flex items-center gap-1.5">
               <Plus size={12} /> {t('inbound.newInbound')}
             </button>
             <button
@@ -396,7 +396,7 @@ export default function InboundWorkspace() {
                   key={typ}
                   onClick={() => updateUrl({ type: typ === 'ALL' ? undefined : typ, page: undefined })}
                   className={`h-7 px-3 text-sm rounded-full font-medium border ${
-                    active ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    active ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
@@ -1545,7 +1545,7 @@ function LandedCostEditor({ shipment, onSaved }: { shipment: any; onSaved: () =>
         <button
           onClick={save}
           disabled={busy || !dirty}
-          className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+          className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50"
         >
           {busy ? 'Saving…' : dirty ? 'Save costs' : 'No changes'}
         </button>
@@ -1863,7 +1863,7 @@ function AttachmentComposer({
       </div>
       <div className="flex items-center justify-end gap-2">
         <button onClick={onCancel} className="h-7 px-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Cancel</button>
-        <button onClick={submit} disabled={busy} className="h-7 px-3 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50">
+        <button onClick={submit} disabled={busy} className="h-7 px-3 text-sm bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50">
           {busy ? 'Saving…' : 'Add'}
         </button>
       </div>
@@ -2338,7 +2338,7 @@ function CreateInboundModal({ onClose, onCreated }: { onClose: () => void; onCre
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-            <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50">
+            <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50">
               {busy ? 'Creating…' : 'Create draft'}
             </button>
           </div>
@@ -2355,7 +2355,7 @@ function SourceCard({
     <button
       onClick={onClick}
       className={`p-3 rounded text-left transition-colors border ${
-        active ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+        active ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
       }`}
     >
@@ -2847,7 +2847,7 @@ function SavedViewsBar({
           <button
             onClick={saveCurrent}
             disabled={busy || !newName.trim()}
-            className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+            className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50"
           >
             {busy ? 'Saving…' : 'Save'}
           </button>
@@ -3152,7 +3152,7 @@ function FbaLabelDownload({ shipmentId }: { shipmentId: string }) {
         <button
           onClick={fetchLabels}
           disabled={busy}
-          className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+          className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
         >
           {busy ? 'Fetching…' : downloadUrl ? 'Refresh' : 'Get labels →'}
         </button>

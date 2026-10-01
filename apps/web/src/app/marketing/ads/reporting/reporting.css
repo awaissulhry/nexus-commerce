@@ -17,8 +17,11 @@
  * dialogs get the same colours in both OS themes. `scripts/check-alias-form.mjs` refuses the
  * aliases anywhere under app/marketing/ads/.
  *
- * The status tokens are the exception: `--color-primary` and `--status-*-strong` are real hex in
- * every scope, so they are used bare and must stay that way.
+ * The same goes for the brand/status aliases (`--color-primary`, `--status-*`): read `--nds-primary`,
+ * `--nds-success-strong`, `--nds-warning-soft`… instead. The aliases are declared at `:root`, so they
+ * resolve there — under a dark OS to the DARK values — and the light pin on `body:has(.h10-shell)`
+ * re-pins the `--nds-*` targets, not the aliases. Until 2026-10-01 that put light-green "ahead"
+ * figures, the "Today so far" label and dark amber notes on this light console (1.4–1.5:1).
  *
  * ACR.1.6 — this file used to carry two `.dark` overrides. It no longer does: the ads console
  * is deliberately light and `.h10-shell` pins the DS tokens to prove it (shared-shell.css). Do not add
@@ -44,20 +47,20 @@
   padding: 12px 14px;
   border: 1px solid var(--nds-border-subtle);
   border-left-width: 3px;
-  border-left-color: var(--status-info-strong);
+  border-left-color: var(--nds-info-strong);
   border-radius: var(--nds-radius-lg);
   background: var(--nds-surface);
   font-size: 13px;
   line-height: 1.55;
   color: var(--nds-text-2);
 }
-.rpt-lede > svg { flex: 0 0 auto; margin-top: 2px; color: var(--status-info-strong); }
+.rpt-lede > svg { flex: 0 0 auto; margin-top: 2px; color: var(--nds-info-strong); }
 .rpt-lede b { color: var(--nds-text); font-weight: 650; }
 
-.rpt-lede.is-error { border-left-color: var(--status-danger-strong); }
-.rpt-lede.is-error > svg { color: var(--status-danger-strong); }
-.rpt-lede.is-warn { border-left-color: var(--status-warning-strong); }
-.rpt-lede.is-warn > svg { color: var(--status-warning-strong); }
+.rpt-lede.is-error { border-left-color: var(--nds-danger-strong); }
+.rpt-lede.is-error > svg { color: var(--nds-danger-strong); }
+.rpt-lede.is-warn { border-left-color: var(--nds-warning-strong); }
+.rpt-lede.is-warn > svg { color: var(--nds-warning-strong); }
 
 .rpt-group { display: flex; flex-direction: column; gap: 10px; }
 .rpt-group-hd {
@@ -87,7 +90,7 @@
   display: flex; flex-direction: column; gap: 8px;
   padding: 12px 14px;
   border: 1px solid var(--nds-border-subtle);
-  border-left: 3px solid var(--status-success-strong);
+  border-left: 3px solid var(--nds-success-strong);
   border-radius: var(--nds-radius-lg);
   background: var(--nds-surface);
 }
@@ -95,7 +98,7 @@
 .rpt-today .hd { display: flex; align-items: center; gap: 10px; }
 .rpt-today .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--status-success-strong);
+  text-transform: uppercase; color: var(--nds-success-strong);
 }
 /* The stream lags about an hour. A total labelled "today" that hides that reads as a slump. */
 .rpt-today .thru { font-size: 11.5px; color: var(--nds-text-3); }
@@ -103,10 +106,10 @@
   display: inline-flex; align-items: center; border: 0; background: transparent;
   cursor: pointer; padding: 2px; color: var(--nds-text-3); border-radius: 4px;
 }
-.rpt-today .rf:hover { color: var(--color-primary); background: var(--nds-surface-sunken); }
+.rpt-today .rf:hover { color: var(--nds-primary); background: var(--nds-surface-sunken); }
 .rpt-today .open {
   display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
-  font-size: 12px; font-weight: 600; text-decoration: none; color: var(--color-primary);
+  font-size: 12px; font-weight: 600; text-decoration: none; color: var(--nds-primary);
 }
 
 .rpt-today .figs { display: flex; flex-wrap: wrap; gap: 6px 26px; }
@@ -153,7 +156,7 @@
   display: inline-flex; flex: 0 0 auto; align-items: center;
   color: var(--nds-text-3);
 }
-.rpt-i:hover { color: var(--color-primary); }
+.rpt-i:hover { color: var(--nds-primary); }
 
 /* A report we cannot open should not read as an equal peer of one we can. */
 .rpt-open.is-off { color: var(--nds-text-3); }
@@ -189,10 +192,10 @@
 .rpt-mkt .code { font-weight: 700; color: var(--nds-text-2); letter-spacing: .02em; }
 .rpt-mkt .lag { font-variant-numeric: tabular-nums; }
 .rpt-mkt.is-lagging {
-  border-color: var(--status-warning-strong);
-  color: var(--status-warning-strong);
+  border-color: var(--nds-warning-strong);
+  color: var(--nds-warning-strong);
 }
-.rpt-mkt.is-lagging .code { color: var(--status-warning-strong); }
+.rpt-mkt.is-lagging .code { color: var(--nds-warning-strong); }
 
 
 
@@ -241,7 +244,7 @@
 
 .rpt-saved-err {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--status-danger-strong);
+  font-size: 12px; color: var(--nds-danger-strong);
 }
 .rpt-saved-err button { border: 0; background: transparent; cursor: pointer; color: inherit; padding: 0; }
 
@@ -252,7 +255,7 @@
   padding: 9px 11px;
   border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm);
 }
-.rpt-versions li.is-current { border-color: var(--status-success-strong); }
+.rpt-versions li.is-current { border-color: var(--nds-success-strong); }
 .rpt-versions .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--nds-text); }
 .rpt-versions .when { color: var(--nds-text-3); font-size: 11.5px; }
 .rpt-versions .note { margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--nds-text-2); }
@@ -313,9 +316,9 @@
 }
 .rpt-sched-row .stale {
   display: inline-flex; align-items: center; gap: 4px;
-  color: var(--status-warning-strong);
+  color: var(--nds-warning-strong);
 }
-.rpt-sched-row .err { color: var(--status-danger-strong); }
+.rpt-sched-row .err { color: var(--nds-danger-strong); }
 .rpt-sched-row .acts { display: inline-flex; gap: 6px; flex-shrink: 0; }
 
 .rpt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
@@ -355,8 +358,8 @@
   border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md);
   background: transparent; font: inherit;
 }
-.rpt-kpi:hover { border-color: var(--color-primary); }
-.rpt-kpi.on { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); }
+.rpt-kpi:hover { border-color: var(--nds-primary); }
+.rpt-kpi.on { border-color: var(--nds-primary); box-shadow: inset 0 0 0 1px var(--nds-primary); }
 .rpt-kpi .lbl {
   display: flex; align-items: center; gap: 6px;
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
@@ -438,7 +441,7 @@
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px;
   font-size: 12.5px; color: var(--nds-text-2);
 }
-.rpt-biz-waste .hd > svg { align-self: center; color: var(--status-warning-strong); }
+.rpt-biz-waste .hd > svg { align-self: center; color: var(--nds-warning-strong); }
 .rpt-biz-waste .amt {
   font-size: 18px; font-weight: 700; color: var(--nds-text);
   font-variant-numeric: tabular-nums;
@@ -474,7 +477,7 @@
   margin-right: 4px;
   font-size: 12.5px; font-weight: 600; text-decoration: none; color: var(--nds-text-2);
 }
-.rpt-back:hover { color: var(--color-primary); }
+.rpt-back:hover { color: var(--nds-primary); }
 
 /* Fields inside the console filter panel: same label treatment as .ffield. */
 
@@ -528,13 +531,13 @@
   background: var(--nds-surface-sunken); color: var(--nds-text-2);
 }
 .rpt-cm-list .hd > button { margin-left: auto; }
-.rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: var(--status-danger-strong); }
+.rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: var(--nds-danger-strong); }
 .rpt-cm-check {
   display: flex; align-items: center; gap: 5px;
   margin: 8px 0 0; font-size: 12px;
 }
-.rpt-cm-check.ok { color: var(--status-success-strong); }
-.rpt-cm-check.bad { color: var(--status-danger-strong); }
+.rpt-cm-check.ok { color: var(--nds-success-strong); }
+.rpt-cm-check.bad { color: var(--nds-danger-strong); }
 .rpt-cm-avail { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--nds-text-3); }
 .rpt-cm-avail code {
   font-size: 11px; padding: 1px 5px; margin-right: 4px; border-radius: 4px;
@@ -549,7 +552,7 @@
 
 .rpt-share-err {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12.5px; color: var(--status-danger-strong);
+  font-size: 12.5px; color: var(--nds-danger-strong);
 }
 
 .rpt-share-form { display: flex; flex-direction: column; gap: 10px; }
@@ -561,7 +564,7 @@
 .rpt-share-minted { display: flex; flex-direction: column; gap: 8px; }
 .rpt-share-once {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12.5px; font-weight: 600; color: var(--status-warning-strong);
+  font-size: 12.5px; font-weight: 600; color: var(--nds-warning-strong);
 }
 .rpt-share-copyrow { display: flex; gap: 8px; align-items: center; }
 /* The show-once token is the DS `Input` now that the primitive forwards refs — `tokenRef.current
@@ -593,7 +596,7 @@
 .rpt-iro-t svg.open { transform: rotate(180deg); }
 .rpt-iro-tag {
   display: inline-flex; align-items: center; gap: 4px;
-  color: var(--status-warning-strong); opacity: 1;
+  color: var(--nds-warning-strong); opacity: 1;
 }
 
 .rpt-iro {
@@ -614,7 +617,7 @@
 }
 /* Only the width: the DS `Input` owns the border, radius, padding and ink. */
 .rpt-iro-text { width: 180px; }
-.rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--color-primary); }
+.rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--nds-primary); }
 /* Only its place in the control row: the DS `Button` owns the rest. */
 .rpt-iro-csv { margin-left: auto; }
 
@@ -626,12 +629,12 @@
 }
 /* "est." rides in the label itself — a modelled figure that only says so in a
    tooltip is a modelled figure nobody knows is modelled. */
-.rpt-iro-k .lbl i { font-style: normal; color: var(--status-warning-strong); }
+.rpt-iro-k .lbl i { font-style: normal; color: var(--nds-warning-strong); }
 .rpt-iro-k .val {
   font-size: 22px; font-weight: 700; line-height: 1.2;
   color: var(--nds-text); font-variant-numeric: tabular-nums;
 }
-.rpt-iro-k .val.em { color: var(--status-info-strong); }
+.rpt-iro-k .val.em { color: var(--nds-info-strong); }
 .rpt-iro-k .sub { font-size: 11.5px; color: var(--nds-text-2); }
 
 /* The iROAS table is the DS `DataGrid` at `sm`: wrapper, header, padding, hover, right-align and
@@ -639,7 +642,7 @@
    are local, and they hang off spans now rather than `<td>`s. */
 .rpt-iro-tbl .nm { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; color: var(--nds-text); }
 .rpt-iro-tbl .dim { color: var(--nds-text-3); }
-.rpt-iro-tbl .em { color: var(--status-info-strong); }
+.rpt-iro-tbl .em { color: var(--nds-info-strong); }
 .rpt-iro-tbl .em.b { font-weight: 700; }
 .rpt-iro-b { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; }
 .rpt-iro-b.br { background: #ede9fe; color: var(--nds-purple-700); }
@@ -650,11 +653,11 @@
    The card is deliberately small and repeated: fourteen of them read as one
    instrument panel, where fourteen full-width panels would read as a list.
 
-   🔴 Every surface/border/text colour below is an `--nds-*` token — see the
-   header note (R0). `--color-primary` and the `--status-*-strong` tokens are
-   real hex and are used bare. Reading a `--text-*`/`--surface-*`/`--border-*`
-   alias instead is silent: the declaration is dropped and the element renders
-   with no background and a zero-width border. */
+   🔴 Every colour below is an `--nds-*` token — see the header note (R0).
+   Reading a `--text-*`/`--surface-*`/`--border-*` alias instead is silent: the
+   declaration is dropped and the element renders with no background and a
+   zero-width border; a `--status-*` / `--color-primary` alias turns dark under a
+   dark OS. */
 
 .rpt-bm {
   display: flex;
@@ -789,8 +792,8 @@
    `is-level` and `is-unknown` deliberately have no rule and keep the neutral
    fill: sitting exactly ON the median is not an achievement, and an absent
    figure is not a result. */
-.rpt-bm-bar.is-ahead .fill { background: var(--status-success-strong); }
-.rpt-bm-bar.is-behind .fill { background: var(--status-warning-strong); }
+.rpt-bm-bar.is-ahead .fill { background: var(--nds-success-strong); }
+.rpt-bm-bar.is-behind .fill { background: var(--nds-warning-strong); }
 
 /* The median's position on the same 0→top scale. `overflow:hidden` on the bar
    clips it at both ends, so a median sitting at 100% still reads as a tick. */
@@ -875,7 +878,7 @@
 
 /* The index bar's track IS its full domain (0–1), so it takes the primary accent
    rather than the ahead/behind ramp — there is no median to be ahead of. */
-.rpt-bm-bar.is-index .fill { background: var(--color-primary); }
+.rpt-bm-bar.is-index .fill { background: var(--nds-primary); }
 
 .rpt-bm-stage-counts {
   display: flex;
@@ -909,10 +912,10 @@
 .rpt-bm-foot b { color: var(--nds-text-2); font-weight: 650; }
 
 /* ══ RPX — the strategy tabs ═════════════════════════════════════════════════
-   Token forms follow this file's convention (R0 at the top): text/surface/border colours
-   are `--nds-*` tokens, the brand/status tier (`--color-primary`, `--status-*`) is whole
-   colours used bare. The `--text-*`/`--surface-*`/`--border-*` aliases have a different form
-   inside the shell and in a portal, so they are invalid in one or the other. */
+   Token forms follow this file's convention (R0 at the top): every colour is an `--nds-*`
+   token. The `--text-*`/`--surface-*`/`--border-*` aliases have a different form inside the
+   shell and in a portal, and the `--status-*` / `--color-primary` aliases resolve at `:root`
+   and follow a dark OS, so neither belongs under this light console. */
 
 .rpx-shell .nds-tabs { margin-bottom: 14px; }
 .rpx { display: flex; flex-direction: column; gap: 14px; }
@@ -949,8 +952,8 @@
   color: var(--nds-text); font-variant-numeric: tabular-nums;
 }
 .rpx-stat .sub { font-size: 11.5px; color: var(--nds-text-2); margin-top: 3px; font-variant-numeric: tabular-nums; }
-.rpx-stat.is-warn { border-color: var(--status-warning-strong); }
-.rpx-stat.is-warn .val { color: var(--status-warning-strong); }
+.rpx-stat.is-warn { border-color: var(--nds-warning-strong); }
+.rpx-stat.is-warn .val { color: var(--nds-warning-strong); }
 
 /* ── funnel ───────────────────────────────────────────────────────────────── */
 .rpx-funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
@@ -962,7 +965,7 @@
 .rpx-stage .hd .n { font-size: 13.5px; font-weight: 700; }
 .rpx-stage .hd .i { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rpx-stage .bar { height: 6px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); overflow: hidden; }
-.rpx-stage .bar span { display: block; height: 6px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-stage .bar span { display: block; height: 6px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-stage .cap { font-size: 11px; color: var(--nds-text-3); }
 .rpx-stage .rule { height: 1px; background: var(--nds-border-subtle); }
 .rpx-stage-metric { display: flex; flex-direction: column; gap: 3px; }
@@ -974,8 +977,8 @@
   color: var(--nds-text-3); font-variant-numeric: tabular-nums;
 }
 .rpx-stage-metric .cmp .vd { margin-left: auto; font-weight: 700; }
-.rpx-stage-metric .cmp .vd.is-ahead { color: var(--status-success-strong); }
-.rpx-stage-metric .cmp .vd.is-behind { color: var(--status-warning-strong); }
+.rpx-stage-metric .cmp .vd.is-ahead { color: var(--nds-success-strong); }
+.rpx-stage-metric .cmp .vd.is-behind { color: var(--nds-warning-strong); }
 .rpx-stage-metric .cmp .vd.is-level,
 .rpx-stage-metric .cmp .vd.is-mute,
 .rpx-stage-metric .cmp .vd.is-no-value,
@@ -1020,7 +1023,7 @@
 .rpx-idx .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--nds-text-2); }
 .rpx-idx .row b { color: var(--nds-text); font-variant-numeric: tabular-nums; }
 .rpx-idx .bar { height: 5px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); overflow: hidden; margin-top: 4px; }
-.rpx-idx .bar span { display: block; height: 5px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-idx .bar span { display: block; height: 5px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-ratio-grid { display: grid; gap: 0; }
 .rpx-ratio-grid .hd {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
@@ -1034,10 +1037,10 @@
 .rpx-ratio-grid .cell { padding: 10px; border-bottom: 1px solid var(--nds-border-subtle); }
 .rpx-ratio-grid .cell .mini { position: relative; height: 14px; margin: 0 auto 5px; max-width: 150px; }
 .rpx-ratio-grid .cell .mini .ax { position: absolute; left: 50%; top: 0; width: 1px; height: 14px; background: var(--nds-border); }
-.rpx-ratio-grid .cell .mini .fill { position: absolute; top: 3px; height: 8px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-ratio-grid .cell .mini .fill { position: absolute; top: 3px; height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-ratio-grid .cell .vd { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rpx-ratio-grid .cell .vd.is-ahead { color: var(--status-success-strong); }
-.rpx-ratio-grid .cell .vd.is-behind { color: var(--status-warning-strong); }
+.rpx-ratio-grid .cell .vd.is-ahead { color: var(--nds-success-strong); }
+.rpx-ratio-grid .cell .vd.is-behind { color: var(--nds-warning-strong); }
 .rpx-ratio-grid .cell .vd.is-level,
 .rpx-ratio-grid .cell .vd.is-mute,
 .rpx-ratio-grid .cell .vd.is-no-value,
@@ -1050,17 +1053,17 @@
 .rpx-share-stage {
   border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); padding: 13px 14px;
 }
-.rpx-share-stage.is-zero { border-color: var(--status-warning-strong); }
+.rpx-share-stage.is-zero { border-color: var(--nds-warning-strong); }
 .rpx-share-stage .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
   color: var(--nds-text-3);
 }
-.rpx-share-stage.is-zero .lbl { color: var(--status-warning-strong); }
+.rpx-share-stage.is-zero .lbl { color: var(--nds-warning-strong); }
 .rpx-share-stage .val { font-size: 26px; font-weight: 700; line-height: 1.2; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.rpx-share-stage.is-zero .val { color: var(--status-warning-strong); }
+.rpx-share-stage.is-zero .val { color: var(--nds-warning-strong); }
 .rpx-share-stage .sub { font-size: 12px; color: var(--nds-text-2); margin-top: 4px; font-variant-numeric: tabular-nums; }
 .rpx-share-stage .bar { height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); margin-top: 10px; overflow: hidden; }
-.rpx-share-stage .bar span { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-share-stage .bar span { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-buyshare .d { color: var(--nds-text-3); font-size: 11px; margin-left: 4px; }
 .rpx-q { font-weight: 600; }
 
@@ -1076,8 +1079,8 @@
 }
 .rpx-coverage .c b { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .rpx-coverage .c i { font-style: normal; font-size: 10px; color: var(--nds-text-3); }
-.rpx-coverage .c.is-thin { background: var(--status-warning-soft); }
-.rpx-coverage .c.is-thin b { color: var(--status-warning-strong); font-weight: 700; }
+.rpx-coverage .c.is-thin { background: var(--nds-warning-soft); }
+.rpx-coverage .c.is-thin b { color: var(--nds-warning-strong); font-weight: 700; }
 
 /* ── business tables ──────────────────────────────────────────────────────── */
 .rpx-weeks, .rpx-mktrows { display: flex; flex-direction: column; font-size: 13px; }
@@ -1112,8 +1115,8 @@
   display: flex; flex-direction: column; gap: 4px; margin-top: 12px;
   padding: 11px 12px; border-radius: var(--nds-radius-lg);
 }
-.rpx-blocked.is-warn { background: var(--status-warning-soft); }
-.rpx-blocked.is-danger { background: var(--status-danger-soft); }
+.rpx-blocked.is-warn { background: var(--nds-warning-soft); }
+.rpx-blocked.is-danger { background: var(--nds-danger-soft); }
 .rpx-blocked.is-neutral { background: var(--nds-surface-sunken); }
 .rpx-blocked .t { font-size: 12.5px; font-weight: 700; }
 .rpx-blocked.is-warn .t, .rpx-blocked.is-warn p { color: var(--nds-warning-text); }
@@ -1153,16 +1156,16 @@
 .rpx-mix .n { font-weight: 600; }
 .rpx-mix .c { font-size: 12px; color: var(--nds-text-2); }
 .rpx-mix .bar { height: 10px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); overflow: hidden; }
-.rpx-mix .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-mix .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-mix .s { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rpx-mix .row.is-idle .n, .rpx-mix .row.is-idle .s { color: var(--nds-text-2); }
 
 /* ── GX.3 · Explorer node cell ───────────────────────────────────────────── */
 .gx-node { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.gx-open { font-weight: 600; color: var(--color-primary); text-decoration: none; }
+.gx-open { font-weight: 600; color: var(--nds-primary); text-decoration: none; }
 .gx-open:hover { text-decoration: underline; }
 .gx-plain { font-weight: 600; color: var(--nds-text); }
-.gx-rem { font-weight: 600; color: var(--status-warning-strong); }
+.gx-rem { font-weight: 600; color: var(--nds-warning-strong); }
 .gx-sub {
   font-size: 11px; color: var(--nds-text-3); font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
@@ -1199,7 +1202,7 @@
   height: 8px; border-radius: var(--nds-radius-pill);
   background: var(--nds-surface-sunken); overflow: hidden;
 }
-.rpx-rows .bar i { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-rows .bar i { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 /* A thin week, or an idle market: recessive, and never hidden — the row is the answer. */
 .rpx-rows .row.is-thin .wk, .rpx-rows .row.is-thin .n { color: var(--nds-text-2); }
 .rpx-rows .row.is-thin .bar i { background: var(--nds-border-strong); }
@@ -1221,7 +1224,7 @@
 .rpx-pace .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: var(--nds-border-strong); }
 .rpx-pace .row.is-now .lbl { color: var(--nds-text); font-weight: 600; }
 .rpx-pace .row.is-now .n { font-weight: 700; }
-.rpx-pace .row.is-now .bar i { background: var(--color-primary); }
+.rpx-pace .row.is-now .bar i { background: var(--nds-primary); }
 .rpx-pace .row.is-ghost .lbl, .rpx-pace .row.is-ghost .n { color: var(--nds-text-3); }
 /* 🔴 Outlined, not filled — and measured, not judged by eye. `--color-primary-soft` is #e7f0fd,
    which is 1.15:1 against this card's white: a fill nobody can see, on the one bar that is a
@@ -1254,7 +1257,7 @@
 .rpx-organic .n.s { color: var(--nds-text-3); font-weight: 400; min-width: 40px; }
 .rpx-organic .bar { display: flex; gap: 2px; height: 10px; }
 .rpx-organic .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); }
-.rpx-organic .bar i.ad { background: var(--color-primary); }
+.rpx-organic .bar i.ad { background: var(--nds-primary); }
 /* Neutral, not a tint. Same reason as the pace marker above: the soft primary is 1.15:1 on this
    card and disappears. Accent for the part in question, grey for the remainder, is also the
    honest emphasis — the rest is usually the larger share and must not shout louder than it. */
@@ -1271,7 +1274,7 @@
 }
 .rpx-key { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; }
 .rpx-key i { display: inline-block; width: 18px; height: 8px; border-radius: var(--nds-radius-pill); }
-.rpx-key i.ad { background: var(--color-primary); }
+.rpx-key i.ad { background: var(--nds-primary); }
 .rpx-key i.or { background: var(--nds-border-strong); }
 
 /* Category nodes Amazon holds. */

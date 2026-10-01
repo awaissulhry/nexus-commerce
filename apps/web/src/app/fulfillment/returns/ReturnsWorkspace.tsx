@@ -646,7 +646,7 @@ export default function ReturnsWorkspace() {
               >
                 <Download size={12} /> Export
               </button>
-              <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+              <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 inline-flex items-center gap-1.5">
                 <Plus size={12} /> New return
               </button>
             </>
@@ -684,11 +684,11 @@ export default function ReturnsWorkspace() {
 
       {/* R1.2 — bulk action bar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 dark:bg-slate-100 text-white rounded-md text-base">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white rounded-md text-base">
           <span className="font-medium tabular-nums">{selected.size} selected</span>
           <button
             onClick={() => setSelected(new Set())}
-            className="h-7 px-2 text-sm text-slate-300 dark:text-slate-600 hover:text-white inline-flex items-center gap-1"
+            className="h-7 px-2 text-sm text-slate-300 hover:text-white inline-flex items-center gap-1"
           >
             <X size={11} /> Clear
           </button>
@@ -782,7 +782,7 @@ export default function ReturnsWorkspace() {
                     <td className="px-3 py-2 font-mono text-base text-slate-700 dark:text-slate-300">{r.rmaNumber ?? '—'}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700'}`}>{r.channel}</span>
-                      {r.isFbaReturn && <span className="ml-1.5 text-xs font-mono text-orange-700">FBA</span>}
+                      {r.isFbaReturn && <span className="ml-1.5 text-xs font-mono text-warning-strong">FBA</span>}
                     </td>
                     <td className="px-3 py-2">
                       <Badge variant={STATUS_TONE[r.status] ?? 'default'} size="sm">{r.status.replace(/_/g, ' ')}</Badge>
@@ -814,7 +814,7 @@ export default function ReturnsWorkspace() {
           </div>
 
           {/* R1.1 — pagination footer */}
-          <div className="flex items-center justify-between px-3 py-2 border-t border-default dark:border-slate-700 bg-slate-50/40 text-base">
+          <div className="flex items-center justify-between px-3 py-2 border-t border-default dark:border-slate-700 bg-sunken/40 text-base">
             <div className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">
               {total === 0 ? 'No results' : (
                 <>
@@ -1095,7 +1095,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ret.channel] ?? ''}`}>{ret.channel}</span>
                 <Badge variant={STATUS_TONE[ret.status] ?? 'default'} size="sm">{ret.status.replace(/_/g, ' ')}</Badge>
-                {ret.isFbaReturn && <span className="text-xs font-mono text-orange-700">FBA — managed by Amazon</span>}
+                {ret.isFbaReturn && <span className="text-xs font-mono text-warning-strong">FBA — managed by Amazon</span>}
                 {/* R6.2 — refund deadline countdown badge. Only renders
                     once the return has been received AND not yet
                     refunded; the colour tracks safe/approaching/
@@ -1492,7 +1492,7 @@ function CreateReturnModal({
         </div>
         <footer className="px-5 py-3 border-t border-default dark:border-slate-700 flex items-center gap-2 justify-end">
           <button onClick={onClose} className="h-8 px-3 text-base border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-          <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50">Create return</button>
+          <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50">Create return</button>
         </footer>
       </div>
     </div>
@@ -1803,7 +1803,7 @@ function ReturnNotesEditor({
         <button
           onClick={save}
           disabled={busy}
-          className="mt-1 h-7 px-2 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+          className="mt-1 h-7 px-2 text-sm bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
         >
           <Save size={11} /> Save
         </button>
@@ -2005,7 +2005,7 @@ function ReturnItemCard({
                 onClick={() => setChk({ signsOfUse: s })}
                 className={`h-6 px-2 text-sm rounded border ${
                   checklist.signsOfUse === s
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
@@ -2080,7 +2080,7 @@ function ReturnItemCard({
           <button
             onClick={saveItem}
             disabled={busy}
-            className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+            className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Save size={11} /> Save item
           </button>
@@ -2719,7 +2719,7 @@ function ReturnLabelPanel({
             <button
               onClick={handleAttach}
               disabled={busy}
-              className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <CheckCircle2 size={12} /> {busy ? 'Saving…' : 'Save'}
             </button>

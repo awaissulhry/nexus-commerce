@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import { Listbox } from '@/design-system/components/Listbox'
+import { SegmentedControl } from '@/design-system/primitives'
 import {
   VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit,
   DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell,
@@ -3606,26 +3607,20 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
 }
 
 function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
-  const tabs: Array<{ key: ViewMode; label: string; icon: any }> = [
-    { key: 'table', label: 'Table', icon: TableIcon },
-    { key: 'matrix', label: 'Matrix', icon: Grid },
-    { key: 'cards', label: 'Cards', icon: LayoutGrid },
-  ]
+  // DS SegmentedControl: the hand-rolled toggle had no dark track and painted its idle labels
+  // `dark:text-slate-100` on the light `bg-slate-100` track — invisible (1:1) in dark mode.
   return (
-    <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          className={`h-11 sm:h-7 px-2.5 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
-            view === t.key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 hover:text-slate-900 dark:text-slate-100'
-          }`}
-        >
-          <t.icon size={12} />
-          {t.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      ariaLabel="View"
+      size="sm"
+      value={view}
+      onChange={(v) => onChange(v as ViewMode)}
+      options={[
+        { value: 'table', label: 'Table', icon: <TableIcon size={12} /> },
+        { value: 'matrix', label: 'Matrix', icon: <Grid size={12} /> },
+        { value: 'cards', label: 'Cards', icon: <LayoutGrid size={12} /> },
+      ]}
+    />
   )
 }
 

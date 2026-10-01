@@ -128,6 +128,13 @@ function adsViolations(src, rel) {
     for (const m of src.matchAll(new RegExp(`var\\(\\s*${name}(?![a-z0-9-])`, 'g')))
       out.push([rel, lineAt(src, m.index), `${name} under the ads console — channels inside .h10-shell, a whole colour in a portal; read its --nds-* token`]);
   }
+  // The whole-colour aliases are declared at :root, so they resolve THERE — to the dark value
+  // under a dark OS — and the light pin on body:has(.h10-shell) re-pins their --nds-* targets,
+  // not them. Measured 2026-10-01: "1.2× ahead" 1.54:1, a warning note 1.37:1 on the console.
+  for (const name of WHOLE_TIER) {
+    for (const m of src.matchAll(new RegExp(`var\\(\\s*${name}(?![a-z0-9-])`, 'g')))
+      out.push([rel, lineAt(src, m.index), `${name} under the ads console — resolves at :root and follows a dark OS inside the light pin; read its --nds-* token`]);
+  }
   return out;
 }
 
@@ -158,6 +165,8 @@ if (process.argv.includes('--self-test')) {
     ['ads: the channel form a portal cannot read', adsViolations('.rpt-modal-p { color: rgb(var(--text-secondary)); }', 'a'), 1],
     ['ads: the bare form, with a fallback', adsViolations('.x { border: 1px solid var(--border-default, var(--nds-grey-200)); }', 'a'), 1],
     ['ads: the --nds-* token', adsViolations('.rpt-modal-p { color: var(--nds-text-2); border-color: var(--nds-border); }', 'a'), 0],
+    ['ads: a status alias that follows a dark OS', adsViolations('.vd.is-ahead { color: var(--status-success-strong); }', 'a'), 1],
+    ['ads: --color-primary (not -soft twice)', adsViolations('.l { color: var(--color-primary); background: var(--color-primary-soft); }', 'a'), 2],
   ];
   let bad = 0;
   for (const [label, got, want] of cases) {

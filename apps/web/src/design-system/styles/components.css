@@ -980,7 +980,7 @@ body.nds-drawer-resizing * {
   box-shadow: var(--nds-focus-ring);
 }
 .nds-combo-in::placeholder {
-  color: var(--nds-text-disabled);
+  color: var(--nds-placeholder);
 }
 .nds-combo .chev {
   position: absolute;
@@ -1077,7 +1077,7 @@ body.nds-drawer-resizing * {
   color: var(--nds-text);
 }
 .nds-combo-search input::placeholder {
-  color: var(--nds-text-disabled);
+  color: var(--nds-placeholder);
 }
 .nds-combo-pop button {
   position: relative;

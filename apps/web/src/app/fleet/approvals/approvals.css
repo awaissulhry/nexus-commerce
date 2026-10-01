@@ -1173,7 +1173,7 @@
   color: var(--nds-grey-900);
 }
 .aq-note::placeholder {
-  color: var(--nds-grey-450);
+  color: var(--nds-placeholder);
 }
 
 /* ── AQ.8 · edit-then-approve ───────────────────────────────────────────── */
@@ -1347,6 +1347,11 @@
  * count does not rise. */
 .aq-page {
   --nds-danger-strong: #a3211a;
+  /* 2026-10-01 — the precedent labels ("accepted" / "rejected", fleet-sections.css `.ap-plabel`) keep a
+     light literal ground but read these two text tokens, which `.dark` makes #6ee7a8 / #f3b7b0: 1.44:1
+     on this light page under a dark OS. Their light values are literals with no ramp step. */
+  --nds-success-text: #0b4b28;
+  --nds-danger-text: #7d2621;
   /* MCP.12 — the returned-request Banner's warning tone: `.dark` makes its fill #3a2e12 and its icon #f0b46a,
      a dark block on this light page. Pinned to the DS's light values; the fill has no ramp step, so it is
      its light literal, and the banner's own six literals left this file with it. */

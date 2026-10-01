@@ -436,7 +436,7 @@
   background: transparent;
 }
 .nds-range-in input::placeholder {
-  color: var(--nds-text-disabled);
+  color: var(--nds-placeholder);
 }
 .nds-range-in .ad {
   display: flex;

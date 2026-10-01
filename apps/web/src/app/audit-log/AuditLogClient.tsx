@@ -574,7 +574,7 @@ export default function AuditLogClient() {
                 className={cn(
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   active
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
@@ -596,7 +596,7 @@ export default function AuditLogClient() {
               className={cn(
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 !urlEntityType
-                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                  ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                   : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
@@ -610,7 +610,7 @@ export default function AuditLogClient() {
                 className={cn(
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlEntityType === f.value
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
@@ -633,7 +633,7 @@ export default function AuditLogClient() {
               className={cn(
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 !urlAction
-                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                  ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                   : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
@@ -647,7 +647,7 @@ export default function AuditLogClient() {
                 className={cn(
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlAction === f.value
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >

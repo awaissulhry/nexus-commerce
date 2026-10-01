@@ -87,8 +87,8 @@
 .h10-vt-want {
   padding: 1px 5px;
   border-radius: 3px;
-  background: var(--status-success-soft);
-  color: var(--status-success-strong);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-strong);
   font-variant-numeric: tabular-nums;
 }
 
@@ -97,8 +97,8 @@
 .h10-vt-got {
   padding: 1px 5px;
   border-radius: 3px;
-  background: var(--status-danger-soft);
-  color: var(--status-danger-strong);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-strong);
   font-variant-numeric: tabular-nums;
 }
 

@@ -154,7 +154,7 @@ export default function AnalyticsClient() {
                   key={d}
                   onClick={() => setDays(d)}
                   className={`h-7 px-3 text-base rounded transition-colors ${
-                    days === d ? 'bg-slate-900 dark:bg-slate-100 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    days === d ? 'bg-slate-900 dark:bg-slate-100 text-inverse' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   {t('analytics.days', { n: d })}
