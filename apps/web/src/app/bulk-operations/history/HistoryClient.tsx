@@ -26,6 +26,7 @@ import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import Link from '@/lib/workspaces/Link'
 import { getBackendUrl } from '@/lib/backend-url'
 import s from './history.module.css'
+import { ItemMessageBanner, ItemMessageText } from './ItemMessage'
 
 // ── Types (mirror the API response shapes) ─────────────────────────
 
@@ -353,7 +354,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                   </div>
                   <div className={s.itemChange}>
                     {it.errorMessage ? (
-                      <span className={s.errorText}>{it.errorMessage}</span>
+                      <ItemMessageText status={it.status} message={it.errorMessage} />
                     ) : changed.length === 0 ? (
                       <span className={s.subtle}>no change</span>
                     ) : (
@@ -395,7 +396,8 @@ function ItemsPanel({ jobId }: { jobId: string }) {
 //
 // W10.3 — side panel showing the full beforeState / afterState
 // JSON for a single BulkActionItem, plus its metadata (target,
-// status, durationMs, error). The inline table only shows changed
+// status, durationMs, and its message: the error of a FAILED item,
+// the reason of a SKIPPED one — ItemMessage.tsx). The inline table only shows changed
 // keys — operators that need to inspect the complete payload (eg.
 // to confirm a missing key wasn't touched) open this drawer.
 
@@ -418,11 +420,7 @@ function ItemDiffDrawer({
               { label: 'Target', value: <span className={s.sku}>{item.sku ?? '(deleted)'}</span>, hint: item.channelLabel ?? undefined },
             ]}
           />
-          {item.errorMessage && (
-            <Banner tone="danger" title="Error">
-              <pre className={s.pre}>{item.errorMessage}</pre>
-            </Banner>
-          )}
+          {item.errorMessage && <ItemMessageBanner status={item.status} message={item.errorMessage} />}
           <div className={s.states}>
             <section>
               <h3 className={s.stateHead}>Before</h3>
