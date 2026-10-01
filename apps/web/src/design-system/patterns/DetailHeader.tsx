@@ -42,6 +42,14 @@ export interface DetailHeaderProps {
 }
 
 /**
+ * A `dense` header that FOLDS to a 32px strip while its page scrolls (the Product Edit Studio's frame). The page puts
+ * `host` on an element that holds the header but NOT the scrolling body, and toggles `folded` on that same element —
+ * a class flip restyles the whole subtree it sits on, and the body is a grid. The fold's look is the DS's
+ * (`styles/patterns.css`), never the page's.
+ */
+export const DETAIL_HEADER_FOLD = { host: 'nds-detailhdr-fold', folded: 'is-folded' } as const
+
+/**
  * Drill-in detail header (H10 `.h10-cd-hdr`): back link + badge + title + actions.
  *
  * Two forms from one component. Default = the section head it always was, DOM-identical when the

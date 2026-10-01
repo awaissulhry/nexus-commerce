@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: vi.fn() } }))
-const db = vi.hoisted(() => ({ product: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() }, productListingAlias: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+const db = vi.hoisted(() => ({ product: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() }, productListingAlias: { updateMany: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   channelListing: { findFirst: vi.fn(), createMany: vi.fn() }, channelConnection: { findUnique: vi.fn(), findMany: vi.fn() }, $queryRawUnsafe: vi.fn(), $transaction: vi.fn() }))
 vi.mock('../../db.js', () => ({ default: db }))
 vi.mock('./studio-sheet.service.js', () => ({ UnknownProductError: class extends Error {} }))
-import { archiveAlias, createAlias, updateAlias, validateAliasWriteTargets } from './listing-alias.service.js'
+import { archiveAlias, createAlias, nameListingAlias, updateAlias, validateAliasWriteTargets } from './listing-alias.service.js'
 
 const alias = { id: 'alias-b', productId: 'family', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'b' }
 const target = { productId: 'variant', channel: 'EBAY', marketplace: 'IT', connectionId: 'b', aliasKey: 'alias-b' }
@@ -23,6 +23,7 @@ beforeEach(() => {
   db.channelListing.findFirst.mockResolvedValue(null)
   db.$queryRawUnsafe.mockResolvedValue([{ n: 0 }])
   db.$transaction.mockImplementation(callback => callback(db))
+  db.productListingAlias.updateMany.mockResolvedValue({ count: 1 })
 })
 
 describe('listing alias ownership', () => {
@@ -68,5 +69,32 @@ describe('listing alias ownership', () => {
     expect(db.productListingAlias.update).not.toHaveBeenCalled()
     await expect(mutate('variant', 'b')).resolves.toEqual(alias)
     expect(db.productListingAlias.update).toHaveBeenCalledOnce()
+  })
+})
+
+// 2026-10-01 — an extra listing has its own seller SKU (an eBay file names it by it), unique in the business.
+describe('listing SKU', () => {
+  it('creates an alias with its SKU, after an archived listing gives that SKU up', async () => {
+    db.product.findFirst.mockImplementation(async ({ where }: any) => where.sku ? null : { id: 'variant', parentId: 'family' })
+    await createAlias({ productId: 'variant', channel: 'EBAY', marketplace: 'IT', accountId: 'b', label: 'IT-FAM', sku: ' IT-FAM ' })
+    expect(db.productListingAlias.updateMany).toHaveBeenCalledWith({ where: { sku: 'IT-FAM', status: 'ARCHIVED' }, data: { sku: null } })
+    expect(db.productListingAlias.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ sku: 'IT-FAM', label: 'IT-FAM' }) }))
+  })
+  it('refuses a listing SKU that is a product SKU in the business, and writes nothing', async () => {
+    db.product.findFirst.mockImplementation(async ({ where }: any) => where.sku ? { id: 'p' } : { id: 'variant', parentId: 'family' })
+    await expect(createAlias({ productId: 'variant', channel: 'EBAY', marketplace: 'IT', accountId: 'b', sku: 'FAM' })).rejects.toThrow('FAM is already a product SKU in this business')
+    expect(db.productListingAlias.create).not.toHaveBeenCalled()
+  })
+  it('says which SKU is taken when another listing holds it', async () => {
+    db.product.findFirst.mockImplementation(async ({ where }: any) => where.sku ? null : { id: 'variant', parentId: 'family' })
+    db.productListingAlias.create.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002' }))
+    await expect(createAlias({ productId: 'variant', channel: 'EBAY', marketplace: 'IT', accountId: 'b', sku: 'IT-FAM' })).rejects.toThrow('IT-FAM is already the SKU of another listing in this business.')
+  })
+  it('names a listing only while it has no SKU', async () => {
+    db.product.findFirst.mockResolvedValue(null)
+    await nameListingAlias('alias-b', 'IT-FAM')
+    expect(db.productListingAlias.updateMany).toHaveBeenLastCalledWith({ where: { id: 'alias-b', sku: null, status: 'ACTIVE' }, data: { sku: 'IT-FAM' } })
+    db.productListingAlias.updateMany.mockResolvedValue({ count: 0 })
+    await expect(nameListingAlias('alias-b', 'IT-FAM')).rejects.toThrow('This listing changed, or already has a SKU.')
   })
 })

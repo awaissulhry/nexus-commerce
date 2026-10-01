@@ -8,6 +8,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import Link from '@/lib/workspaces/Link'
+import { productStudioPath } from '@/lib/products/studio-path'
 import { productWorkspaceHref } from '@/app/_shared/product-workspace-href'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, usePathname } from '@/lib/workspaces/navigation'
@@ -4462,7 +4463,7 @@ function EmptyMatrixCell({
   return (
     <Tooltip content={tooltipContent} delay={300}>
       <Link
-        href={`/products/${productId}/list-wizard?channel=${channel}&marketplace=${marketplace}`}
+        href={productStudioPath(productId, { channel, market: marketplace })}
         aria-label={`List on ${channel} ${marketplace}`}
         className="inline-flex items-center justify-center min-w-[100px] h-[44px] px-1.5 py-1 border border-dashed border-default dark:border-slate-700 rounded text-xs text-slate-300 dark:text-slate-600 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50/40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
       >
@@ -4836,7 +4837,7 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
                       <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{d.product.sku} · {d.marketplace}</div>
                     </div>
                     <Link
-                      href={`/products/${d.productId}/list-wizard?channel=${d.channel}&marketplace=${d.marketplace}`}
+                      href={productStudioPath(d.productId, { channel: d.channel, market: d.marketplace })}
                       className="h-7 px-3 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
                     >Publish →</Link>
                   </li>
@@ -4857,7 +4858,7 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
                       <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{p.sku}</div>
                     </div>
                     <Link
-                      href={`/products/${p.id}/list-wizard?channel=${activeChannel}`}
+                      href={productStudioPath(p.id, { channel: activeChannel })}
                       className="h-7 px-3 text-sm bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60"
                     >List on {activeChannel.charAt(0) + activeChannel.slice(1).toLowerCase()} →</Link>
                   </li>
@@ -5867,7 +5868,7 @@ function ChannelsTab({
           {t('listings.drawer.empty')}
           <div className="mt-2">
             <Link
-              href={`/products/${listing.productId}/list-wizard`}
+              href={productStudioPath(listing.productId)}
               className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline"
             >
               <Plus size={11} /> {t('listings.drawer.listOnAnother')}

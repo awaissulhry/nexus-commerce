@@ -22,9 +22,9 @@ describe('channel reset destination', () => {
 
 describe('reset words (P1)', () => {
   const subject = { sku: 'REGAL-JACKET-L-BLACK-MEN', listing: 'Primary' }
-  it('calls the reset of an old listing text "Follow Master"', () => {
+  it('calls the reset of an old listing text "Follow Shared"', () => {
     const words = resetActionWords(cell({ source: 'channelSnapshot', writeField: 'ebay_title', mapped: mapping({ sourcePath: 'title' }) }), subject)
-    expect(words.label).toBe('Follow Master')
+    expect(words.label).toBe('Follow Shared')
     expect(words.description).toBe('Stop using this listing’s own text for REGAL-JACKET-L-BLACK-MEN · Primary and follow Master.')
   })
   it('keeps the override words for an override and for a whole list', () => {

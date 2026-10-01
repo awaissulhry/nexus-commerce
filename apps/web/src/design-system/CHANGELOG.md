@@ -1,3 +1,14 @@
+## Product journey, step 4: one wording, a quiet page behind dialogs, the header fold in the DS — 2026-10-01
+
+- **`readinessMeta('unlisted', 'row')`** and presence **`NONE`** read **"Not listed yet"** (was "No listing here"), with the hint "Nexus has no listing here yet, so nothing has been checked against the channel." The studio's sheet notice, media tabs and scope chip say the same fact as "Not listed on eBay · IT yet". Mirrored in Factory.
+- **`Modal`** locks the page behind it: `.nds-modal-b` has `overscroll-behavior: contain`, and `html:has(> body > .nds-backdrop)` has `overscroll-behavior: none`, so a wheel past the end of a long dialog (the Import review) no longer moves the page. `styles/components.css`.
+- **`DetailHeader`** owns its fold: **`DETAIL_HEADER_FOLD`** (`{ host: 'nds-detailhdr-fold', folded: 'is-folded' }`) — a page puts `host` on an element that holds a `dense` header but not the scrolling body and toggles `folded` there; the 48 → 32 strip, the dropped identity pills and the smaller title are `styles/patterns.css` rules (small-screen height at the DS `sm` breakpoint, 760px). It replaces the studio's local restyle of the header. `DetailHeader.tsx` and the barrel mirrored in Factory (patterns.css is not shared).
+- **`FormulaCellEditor`** / **`FormulaComposer`**: a retry button says **"Try again"** (was "Retry" / "Retry preview"). Mirrored in Factory.
+
+## Field shows what is wrong with a value — 2026-10-01
+
+**`Field`** takes **`error`**: a sentence under the control in `--nds-danger-text` (7.36:1, the required marker's colour), read with the control through `aria-describedby` (before the hint). While it is set the control gets `aria-invalid` (unless it states its own) and an `Input` inside gets a `--nds-danger` border (`.nds-field-error`, `.nds-field-w.invalid`, `styles/components.css`). Unset, the field renders exactly as before. First user: the Products page's "New product" dialog. Catalog: the SKU example under Input. Mirrored in Factory (`Field.tsx`, `components.css`).
+
 ## The accent identity chip reads in light mode again — 2026-10-01
 
 Older pages' dark-mode audit (`fix/dark-mode-older-pages`). **`.nds-cell-chip-accent`** (the "P" parent pill in the product sheet's identity band, `grid/theme/grid.css`) filled with `--nds-rail-text`. Since the rail joined the dark chrome (TB, 2026-08-31) that token is the chrome's LIGHT ink in light mode, so the white "P" sat on #aab6c2 at 2.06:1. It now fills with **`--nds-text-2`**: white on #3a4452 is 9.9:1 light, and the dark-mode inverse ink on #c3ccd6 is 9.8:1. Mirrored in Factory.

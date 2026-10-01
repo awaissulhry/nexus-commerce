@@ -36,12 +36,12 @@ describe('NoMarketView', () => {
     expect(buttons(markup)).toEqual(['Set up markets'])
   })
 
-  it('failed: says the markets could not be loaded and offers "Try again", then "Retrying…"', () => {
+  it('failed: says the markets could not be loaded and offers "Try again", then "Trying again…"', () => {
     const markup = html({ gate: 'failed' })
     expect(markup).toContain('Markets could not be loaded')
     expect(markup).not.toContain('no markets yet')
     expect(buttons(markup)).toEqual(['Try again'])
-    expect(buttons(html({ gate: 'failed', retrying: true }))).toEqual(['Retrying…'])
+    expect(buttons(html({ gate: 'failed', retrying: true }))).toEqual(['Trying again…'])
   })
 
   it('outside a studio frame (no re-read): no button in either state', () => {

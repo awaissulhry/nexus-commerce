@@ -146,5 +146,5 @@ export function notRestorablePointReason(point: RestorePoint): string | null {
   }
   const shown = point.fields.slice(0, 3).join(', ')
   const more = point.fields.length > 3 ? ` and ${point.fields.length - 3} more` : ''
-  return `Changed ${shown}${more} — restore covers the master record’s own scalar fields, so none of these can be written back.`
+  return `Changed ${shown}${more} — restore covers the Shared product’s own scalar fields, so none of these can be written back.`
 }

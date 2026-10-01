@@ -1,0 +1,7 @@
+/* The "New product" dialog — layout only; every control, colour and type size comes from the design system. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}

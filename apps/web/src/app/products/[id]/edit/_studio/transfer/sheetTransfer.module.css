@@ -15,4 +15,3 @@
 /* A long SKU wraps (the row grows) — never cut: the SKU is how a person finds the row in the file. */
 .skuCol .mono { white-space: normal; overflow-wrap: anywhere; }
 .mono { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.link { color: var(--nds-text-link); white-space: nowrap; }

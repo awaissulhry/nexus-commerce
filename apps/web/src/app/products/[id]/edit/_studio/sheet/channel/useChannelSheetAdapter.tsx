@@ -38,12 +38,13 @@ import { sheetEmptyState } from '../sheetGridStates';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
+import { withSheetGroups } from '../sheetGroups';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
 import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, saveNote, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { SkuTag } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
-import { Banner, EmptyState, Modal, useToast, type MenuItemDef } from '@/design-system/components';
+import { Banner, Modal, useToast, type MenuItemDef } from '@/design-system/components';
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
 import { AliasBandCell, BandExpander } from './AliasBandCell';
 import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
@@ -61,7 +62,7 @@ import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
 import { addListingAlias, commitChannelRow, useChannelSheet, type CreatedListing } from './useChannelSheet';
-import { ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, asinPendingCount, connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, notListedSentence } from '../../draftListing';
+import { ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, asinPendingCount, connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, draftStartSentence, noAccountTitle, notListedTitle } from '../../draftListing';
 import { useReadinessRefresh, useSaveReporter, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
 import type { CompareTarget } from '../../drawer/types';
 import { useAuth } from '@/lib/auth/AuthProvider';
@@ -202,7 +203,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     };
     /* Step 4.3 #3 — a locked bullets cell says why: the first locked position's own reason. */
     refusalReason.current = (key, row) => isSlotListKey(key) ? slotListRefusal(key, row, data?.columns ?? [], channelRefusal) : channelRefusal(key, row);
-    const { bandWidth, bandWidthRef, bandDerivedRef, revealCell } = useSheetGeometry({ scope: 'channel', rows, getGridApi, gridReady, recordId: record.rowId });
+    const { bandWidthRef, bandDerivedRef, revealCell } = useSheetGeometry({ scope: 'channel', rows, getGridApi, gridReady, recordId: record.rowId });
     const dataRef = useRef(data);
     dataRef.current = data;
     const rowsRef = useRef(rows);
@@ -472,10 +473,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             const base = wholeListWriteField(cell.writeField)!;
             const slots = (data?.columns ?? []).filter(col => wholeListWriteField(row.values[col.key]?.writeField ?? '') === base);
             const followsMaster = !!cell.mapped?.sourcePath && !cell.mapped.usesExpression;
-            const confirmed = await listResetConfirm.ask({ level: 'confirm', title: followsMaster ? 'Follow Master for the whole list?' : 'Remove the whole list’s override?',
+            const confirmed = await listResetConfirm.ask({ level: 'confirm', title: followsMaster ? 'Follow Shared for the whole list?' : 'Remove the whole list’s override?',
                 consequences: [
                     `Remove the override for all ${slots.length} positions in this list for ${row.sku} on ${channel} · ${marketplace}, ${aliasLabel(row.aliasId)}.`,
-                    followsMaster ? 'Future Master changes will flow through its channel mapping.' : 'The list will use its configured mapping or default. It may become empty if no source is configured.',
+                    followsMaster ? 'Future changes to the Shared product will flow through its channel mapping.' : 'The list will use its configured mapping or default. It may become empty if no source is configured.',
                     'Current values being replaced:',
                     ...slots.map(col => `${col.label}: ${String(row.values[col.key]?.value ?? 'Empty')}`),
                 ] });
@@ -749,7 +750,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
        Customise, in the views; never a server column, never a write field. */
-    const gridColumns = useMemo(() => withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never))), [stableColumns]);
+    /* 2026-10-01 — the media column joins the sheet's groups (Images, on eBay and Amazon) and every column carries its
+       group's colour (`../sheetGroups`). */
+    const gridColumns = useMemo(() => withSheetGroups(withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never)))), [stableColumns]);
     const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
         data: scopePage, gridColumns, formulaWiring, accountId, openCellDetails: openCellDetailsLive, productLevelOnly,
         refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth: authLive,
@@ -813,7 +816,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const crossChannelCols = useMemo(() => crossChannelColumnCount(rows.find((r) => r.rowKind === 'variant')), [rows]);
     /* Progress column (2026-09-26) — a member of the column model (Customise, views, locks), built above by the shared
        builder; the channel builder never sees it. */
-    const modelColumns = useMemo(() => data ? [progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), ...gridColumns] : gridColumns, [data, gridColumns]);
+    const modelColumns = useMemo(() => data ? withSheetGroups([progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), ...gridColumns]) : gridColumns, [data, gridColumns]);
     const schemaColumns = useMemo(() => modelColumns as never as StudioSheetColumn[], [modelColumns]);
     const prefsBridge = useMemo<PrefsBridgeOptions>(() => ({
         columns: [{ key: '__identity', locked: true }, ...modelColumns.map((c) => ({ key: c.key }))],
@@ -890,8 +893,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             setExportNote(e instanceof GridExportRefused ? e.message : 'Could not build the file.');
         }
     }, [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns]);
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
-        family: { productId, channel: channel.toUpperCase(), columns: () => dataRef.current?.columns ?? [] } });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
     const getDataPath = useCallback((d: ChannelSheetRow) => dataPathFor(d), []);
     const getRowId = useCallback((p: {
         data: ChannelSheetRow;
@@ -1041,14 +1043,16 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             importDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.import'),
             loading: loading,
             unavailable: unavailable,
-            overflow: [liveRead.menuItem, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: data ? `${rulesStatus(channel, marketplace, data.meta.schemaMissing).label}…` : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
-            // 2026-09-27 — one wording for the chip, the dialog and the empty grid (`rulesStatus`).
+            overflow: [liveRead.menuItem, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            /* Step 4 (D2, 2026-10-01) — one message per fact: a missing field list or category is said ONCE, by its banner
+               above the grid (`useMissingFieldsBanner`, the Shopify notice). The chip, the ⋯ item and an empty-grid notice
+               no longer repeat it; the chip stays only as the neutral Requirements note while nothing is missing. */
             status: [
                 ...(switching ? [{ tone: 'info' as const, label: 'Loading languages…', detail: 'The sheet keeps the languages it shows until the new ones arrive; editing resumes then.' }] : []),
                 ...(data ? [
                 ...(listingState === 'draft' ? [{ tone: 'info' as const, label: DRAFT_CHIP_LABEL, detail: draftChipDetail(channel, marketplace) }] : []),
                 ...(asinPending ? [{ tone: 'info' as const, label: ASIN_PENDING_CHIP_LABEL, detail: asinPendingChipDetail(asinPending, marketplace) }] : []),
-                (({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing)),
+                ...(data.meta.schemaMissing.length ? [] : [(({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing))]),
             ] : []),
             ],
         },
@@ -1115,11 +1119,17 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             showRefusedOnly: showRefusedOnly,
             onToggleRefused: () => setShowRefusedOnly((v) => !v),
             onRetry: () => { writer.retryFailed(); },
-        }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
-              {crossChannelCols} of {data.columns.length} columns write the shared master record — every channel sees those edits
+        }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the Shared product — every channel sees those edits`}>
+              {crossChannelCols} of {data.columns.length} columns write the Shared product — every channel sees those edits
             </span>)}</>,
-        notice: <>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'}>{noAccount ? connectAccountSentence(channel, marketplace) : notListedSentence(channel, marketplace)}</Banner>}
-            {fieldsBanner}</>,
+        notice: <>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'} title={noAccount ? noAccountTitle(channel) : notListedTitle(channel, marketplace)}>{noAccount ? connectAccountSentence(channel, marketplace) : draftStartSentence(channel, 'edit')}</Banner>}
+            {fieldsBanner}
+            {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
+            {/* 2026-09-24 — never a silent short sheet: while the store's field list is not available, say so. The sheet reloads
+                itself when the list arrives (`schemaRevision`), and the metafield columns appear then. */}
+            {channel === 'SHOPIFY' && data && !loading && data.meta.schemaMissing.includes(SHOPIFY_FIELDS_UNREAD) && <Banner tone="info" title="Loading this store's Shopify fields">
+              Metafields and metaobject fields appear here as soon as Shopify answers. The sheet updates by itself.
+            </Banner>}</>,
         grid: {
             loading: loading,
             noRowsOverlayComponentParams: emptyState,
@@ -1144,9 +1154,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             getContextMenuItems: contextMenu,
             columnDialog: columnDialog,
         },
-        gridOverlay: <>    {!loading && data && data.meta.schemaMissing.length > 0 && sheetColumns.landed && sheetColumns.visibleAttributeKeys().length === 0 && (<div className="cs-contract-empty" style={{ left: bandWidth }} role="status">
-          <EmptyState title={rulesStatus(channel, marketplace, data.meta.schemaMissing).label} description={rulesStatus(channel, marketplace, data.meta.schemaMissing).detail}/>
-        </div>)}</>,
+        gridOverlay: null,
         drawer: data && !unavailable ? {
             resolveRow: (id) => rows.find((r) => r.rowId === id) ?? null,
             onRevealCell: revealCell,
@@ -1177,12 +1185,6 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             {listResetConfirm.element}
             {control.element}
             {reloadConfirm.element}</>, afterPreferences: <>
-    {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
-    {/* 2026-09-24 — never a silent short sheet: while the store's field list is not available, say so. The sheet reloads
-        itself when the list arrives (`schemaRevision`), and the metafield columns appear then. */}
-    {channel === 'SHOPIFY' && data && !loading && data.meta.schemaMissing.includes(SHOPIFY_FIELDS_UNREAD) && <Banner tone="info" title="Loading this store's Shopify fields">
-      Metafields and metaobject fields appear here as soon as Shopify answers. The sheet updates by itself.
-    </Banner>}
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
     {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
         {mediaEditor.element}

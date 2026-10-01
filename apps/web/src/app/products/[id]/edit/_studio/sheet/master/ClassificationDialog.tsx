@@ -63,7 +63,7 @@ export function ClassificationDialog({ productId, open, onClose, onChanged }: { 
               <option value="">No family selected</option>
               {data.families.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </Select>
-            <span className="nds-cell-muted">Defines the shared attributes in Master.</span>
+            <span className="nds-cell-muted">Defines the Shared product’s fields.</span>
           </label>
           <label className="nds-addvar-field"><span>Primary category</span>
             <Select value={primaryId} disabled={saving} onChange={e => { const id = e.target.value; setPrimaryId(id); setCategoryIds(ids => id ? [...new Set([...ids.filter(c => c !== primaryId), id])] : ids.filter(c => c !== primaryId)) }}>

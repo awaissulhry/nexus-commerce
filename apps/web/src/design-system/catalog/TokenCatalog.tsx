@@ -568,6 +568,9 @@ export function TokenCatalog() {
             <Field label="Daily budget" hint="Amazon's day starts at 00:00 UTC">
               <Input prefix="€" placeholder="0.00" style={{ flex: 'none', width: 90 }} />
             </Field>
+            <Field label="SKU" required error="GALE-JACKET already exists in this business." hint="Unique in this business">
+              <Input defaultValue="GALE-JACKET" />
+            </Field>
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Select</div>

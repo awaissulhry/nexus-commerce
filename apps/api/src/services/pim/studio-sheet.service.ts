@@ -56,7 +56,8 @@ import type { ResolvedCell } from './mapping/resolve-batch.service.js'
 import type { ResolvedCategory } from './mapping/category-mapping.service.js'
 import { buildCoordinateValidators, evaluateRow, type FlatRow } from './readiness.service.js'
 import { columnApplies, columnEditableOnRow, columnRequiredByAny, columnRequiredHere, columnForCategory, familyRowHoldsValue, productRoleOf } from '@nexus/shared/master-sheet'
-import { relationshipColumns, relationshipValues, RELATIONSHIP_GROUP } from './studio-relationships.js'
+import { relationshipColumns, relationshipValues } from './studio-relationships.js'
+import { groupSheetColumns } from '@nexus/shared/sheet-groups'
 import { storedChannelState } from './channel-value-mutation.js'
 import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { UnknownMarketError, VARIATION_THEME_KEY, type SheetColumn, type SheetCoordinate, type SheetGroup, type SheetSpecCoverage } from './sheet-columns.service.js'
@@ -1149,6 +1150,11 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     }
   }
 
+  // 2026-10-01 — the sheet's groups: the Amazon names, order and one colour each, on every sheet (`@nexus/shared/sheet-groups`).
+  // Here, before the rows are built, so each row's completeness counts by the groups the sheet shows. Presentation only:
+  // the channel specs keep their own groups for the mapping page and the sharing rules.
+  ;({ columns, groups: columnGroups } = groupSheetColumns(columns, coordinate?.channel))
+
   // ── 3b. what the MAPPING ENGINE would ship for these cells ────────
   // Composed IN-PROCESS (hub ruling #15.2 / #20.1): one payload, no second HTTP
   // hop, and PES.2/3 are barred from fetching PES.6 separately. `status` and
@@ -1866,7 +1872,21 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     }
   }
 
+  // Audit P5 (2026-10-01) — what eBay needs for a NEW listing beyond its category's fields (an item location, the three
+  // business policies), named on the main row only when Nexus KNOWS publish could not fill it (`ebay-publish-readiness.ts`).
+  if (coordinate?.channel === 'EBAY') {
+    const { addEbayPublishReadiness, judgeEbayItemLevelOnMainRow } = await import('./ebay-publish-readiness.js')
+    // Follow-up 2026-10-01 — Condition, policies, location… go to eBay once, from the main row: a variation row's own
+    // value is never sent, so it names no issue there (the publish review judges them the same way).
+    judgeEbayItemLevelOnMainRow({ rows, columns, label: coordinate.label,
+      recount: (row, kept) => completenessFor(kept as SheetColumn[], { isParent: row.isParent, productType: row.productType, familyId: row.familyId }, row.values as Record<string, SheetCellValue>),
+      restate: row => row.readiness.issues.some(issue => issue.severity === 'error') ? 'errors'
+        : listedState(row.listing, coordinate.channel) ?? (!row.listing ? 'unlisted' : row.readiness.issues.length ? 'missing' : 'ready') })
+    if (context?.connectionId) await addEbayPublishReadiness({ rows, columns, label: coordinate.label, market: coordinate.marketplace, accountId: context.connectionId })
+  }
+
   // ── 6. alias group summaries ──────────────────────────────────────
+  const itemLevelColumn = coordinate?.channel === 'EBAY' ? (await import('./ebay-publish-readiness.js')).isEbayItemLevelColumn : null
   const aliases: AliasGroup[] = coordinate
     ? groups.map((g) => {
         const mine = rows.filter((r) => r.aliasId === g.id)
@@ -1881,9 +1901,12 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         // Other marketplace requirements cannot affect this destination.
         let filled = 0
         let total = 0
+        // Follow-up 2026-10-01 — an eBay variation row does not hold the listing's item-level fields (its main row does).
+        const withMain = mine.some(r => r.parentId === null)
         for (const r of mine) {
           for (const c of columns) {
             if (!columnApplies(c, { isParent: r.isParent, productType: r.productType, familyId: r.familyId })) continue
+            if (itemLevelColumn && withMain && r.parentId !== null && itemLevelColumn(c, coordinate.label)) continue
             if (!r.values[c.key]?.mapped?.requiredByRule && !columnRequiredHere(c, coordinate.label, r.productType, r.familyId, r.values)) continue
             total++
             if ((!r.values[c.key]?.language || !translationMissing({ language: r.values[c.key].language }, locale)) && !isBlank(r.values[c.key]?.value)) filled++
@@ -1995,8 +2018,10 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       variationAxes: (root.variationAxes as string[]) ?? [],
       axes: familyAxes,
     },
-    columns: [...relationshipColumns.map(col => ({ ...col, ...resolveWriteRouting(col, coordinate, null), writable: false, affectsAllChannels: false, writeBlockedReason: col.helpText, formulaWritable: false, axis: false })), ...columnsWithRouting],
-    groups: [RELATIONSHIP_GROUP, ...(columnGroups ?? [])],
+    // The relationship columns join the sheet's groups too (Offer Identity, on every sheet).
+    ...groupSheetColumns(
+      [...relationshipColumns.map(col => ({ ...col, ...resolveWriteRouting(col, coordinate, null), writable: false, affectsAllChannels: false, writeBlockedReason: col.helpText, formulaWritable: false, axis: false })), ...columnsWithRouting],
+      coordinate?.channel),
     aliases,
     rows,
     // D14.3 — counts are SERVER-STATED. A client deriving them from the rows it

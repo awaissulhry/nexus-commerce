@@ -43,5 +43,5 @@ it('readinessPillLabel — the pill says the label exactly for a pending row, wi
   expect(readinessPillLabel({ state: 'live', issues: ['warn'] })).toBe('Listed')
   expect(readinessPillLabel({ state: 'missing', issues: ['a', 'b'] })).toBe('Missing · 2')
   expect(readinessPillLabel({ state: 'ready', issues: ['a'] })).toBe('Ready')
-  expect(readinessPillLabel({ state: 'unlisted' })).toBe('No listing here')
+  expect(readinessPillLabel({ state: 'unlisted' })).toBe('Not listed yet')
 })

@@ -6,6 +6,7 @@
     "WorkspaceInvitation",
     "WorkspaceAudit",
     "UserProfile",
+    "UserSheetLayout",
     "UserSession",
     "Role",
     "UserRole",

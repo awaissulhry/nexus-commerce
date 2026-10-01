@@ -61,7 +61,7 @@ export function ListingsPane({
 
   const errors = readiness?.issues?.filter((i) => i.severity === 'error') ?? []
   const warns = readiness?.issues?.filter((i) => i.severity === 'warn') ?? []
-  const label = scope.label ?? (scope.kind === 'master' ? 'Master' : [scope.channel, scope.marketplace].filter(Boolean).join(' · '))
+  const label = scope.label ?? (scope.kind === 'master' ? 'Shared product' : [scope.channel, scope.marketplace].filter(Boolean).join(' · '))
   const ref = listing?.externalListingId ?? readiness?.ref ?? null
   const url = listingUrl(scope.channel, scope.marketplace, ref)
 
@@ -70,7 +70,7 @@ export function ListingsPane({
       <div className={`${styles.note} ${styles.noteInfo}`}>
         <CircleDashed size={14} className={styles.noteIcon} aria-hidden />
         <span>
-          Master is the stored truth, not a channel — it has no listing of its own. Switch the scope bar to a channel
+          The Shared product is the stored truth, not a channel — it has no listing of its own. Switch the scope bar to a channel
           to see what that channel holds.
         </span>
       </div>

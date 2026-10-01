@@ -2,21 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SheetImportChange, SheetImportChangesPage, SheetImportStatus } from '@nexus/shared/catalog-transfer'
-import { Button, Checkbox, SegmentedControl, Tag } from '@/design-system/primitives'
-import { Banner, FileDropzone, FileRow, JobProgress, MetricStrip, Modal, Pagination, useToast } from '@/design-system/components'
+import { Button, Checkbox, SegmentedControl, Skeleton, Tag } from '@/design-system/primitives'
+import { Banner, Card, Disclosure, EmptyState, FileDropzone, FileRow, JobProgress, MetricStrip, Modal, Pagination, useToast } from '@/design-system/components'
 // The DS grid's DataGrid (AG Grid, identical props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import Link from '@/lib/workspaces/Link'
 import { useStudioSave } from '../contracts'
 import { PublishDialog } from '../publication/PublishDialog'
+import { saveFirstNotice } from '../saveFirst'
 import { sheetTransferApi } from './sheetTransferApi'
-import { applyLabel, cellValue, changeCells, doneView, formatLabel, IMPORT_ACCEPT, IMPORT_MAX_BYTES, isBusy, isFinished, STATUS_LABELS, summaryLine, whereInFile } from './importModel'
+import { acceptedFilesSentence, applyLabel, cellValue, changeCells, doneView, formatLabel, IMPORT_ACCEPT, IMPORT_FAILED, IMPORT_MAX_BYTES, isBusy, isFinished, openFamilyActions, STATUS_LABELS, summaryLine, whereInFile, type ImportStep } from './importModel'
 import styles from './sheetTransfer.module.css'
 
 const POLL_MS = 700
 type Filter = 'all' | 'problems'
 type Decisions = { links: Record<string, string>; confirmDeletes: string[] }
-const TONES: Record<SheetImportChange['status'], 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = { ready: 'info', problem: 'danger', saved: 'success', failed: 'danger', skipped: 'warning' }
+const TONES: Record<SheetImportChange['status'], 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = { ready: 'info', new: 'info', problem: 'danger', saved: 'success', failed: 'danger', skipped: 'warning' }
 /** A check or save still running when the page reloads is picked up again; a finished one never is. */
 const runningKey = (productId: string) => `psie:running-import:${productId}`
 const remember = (productId: string, jobId: string | null) => {
@@ -36,8 +38,10 @@ function ApplyButton({ label, needsConfirmation, onClick }: { label: string | nu
   return <Button size="sm" variant="primary" disabled={!label || unsaved || needsConfirmation} onClick={onClick}>{label ?? 'Nothing to apply'}</Button>
 }
 
+/** Step 4 (D3) — the same "save first" notice as the Publish dialog (`saveFirstNotice`). */
 function UnsavedEditsBanner() {
-  return useSheetUnsaved() ? <Banner tone="warning">Finish saving your edits in the sheet first. Then apply.</Banner> : null
+  const notice = saveFirstNotice(useStudioSave(), 'You can apply this file')
+  return notice ? <Banner tone={notice.tone} title={notice.title}>{notice.body}</Banner> : null
 }
 
 /**
@@ -50,7 +54,10 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   const [file, setFile] = useState<File | null>(null)
   const [reading, setReading] = useState<number | null>(null)
   const [status, setStatus] = useState<SheetImportStatus | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  /** What failed (`IMPORT_FAILED[step]`, the banner's title) and the server's reason. */
+  const [error, setErrorState] = useState<{ step: ImportStep; message: string } | null>(null)
+  const setError = (step: ImportStep, e: unknown) => setErrorState({ step, message: e instanceof Error ? e.message : String(e) })
+  const clearError = () => setErrorState(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [page, setPage] = useState(1)
   const [changes, setChanges] = useState<SheetImportChangesPage | null>(null)
@@ -62,7 +69,7 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   const openRef = useRef(open)
   openRef.current = open
 
-  const reset = () => { setFile(null); setReading(null); setStatus(null); setError(null); setFilter('all'); setPage(1); setChanges(null); setDecisions({ links: {}, confirmDeletes: [] }); setSavingSince(null) }
+  const reset = () => { setFile(null); setReading(null); setStatus(null); clearError(); setFilter('all'); setPage(1); setChanges(null); setDecisions({ links: {}, confirmDeletes: [] }); setSavingSince(null) }
   const close = () => {
     // A finished import is not shown again next time; one still running keeps going and is shown on reopening.
     if (isFinished(status) || !status && !reading) reset()
@@ -70,10 +77,10 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   }
 
   const upload = async (picked: File, chosen: Decisions = { links: {}, confirmDeletes: [] }) => {
-    setFile(picked); setError(null); setStatus(null); setChanges(null); setReading(Date.now())
+    setFile(picked); clearError(); setStatus(null); setChanges(null); setReading(Date.now())
     try {
       setStatus(await sheetTransferApi.startImport(productId, picked, market, { links: chosen.links, confirmDeletes: chosen.confirmDeletes.length ? chosen.confirmDeletes : undefined }))
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    } catch (e) { setError('read', e) }
     finally { setReading(null) }
   }
 
@@ -144,28 +151,30 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   // The summary's table: every changed cell and every problem, 100 per page.
   const loadChanges = useCallback(async (id: string, nextFilter: Filter, nextPage: number) => {
     try { setChanges(await sheetTransferApi.changes(id, { filter: nextFilter, page: nextPage })) }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    catch (e) { setErrorState({ step: 'changes', message: e instanceof Error ? e.message : String(e) }) }
   }, [])
   const state = status?.state
   useEffect(() => { if (jobId && state && !isBusy(status)) void loadChanges(jobId, filter, page) }, [jobId, state, filter, page, loadChanges]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const apply = async () => {
     if (!status?.reviewToken) return
-    setError(null)
+    clearError()
     setSavingSince(Date.now())
     try { setStatus(await sheetTransferApi.apply(status.jobId, status.reviewToken)) }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    catch (e) { setError('apply', e) }
   }
   const undo = async () => {
     if (!status) return
-    setError(null); setChanges(null); setFilter('all'); setPage(1); setSavingSince(Date.now())
+    clearError(); setChanges(null); setFilter('all'); setPage(1); setSavingSince(Date.now())
     try { setStatus(await sheetTransferApi.undo(status.jobId)) }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    catch (e) { setError('undo', e) }
   }
 
   const needsConfirmation = !!status && (status.links.length > 0 || status.deletes.some(d => !d.confirmed))
   const label = status?.state === 'READY' ? applyLabel(status) : null
   const done = isFinished(status) ? doneView(status!) : null
+  // A family the file created is another product: the done screen opens it, and it is published from there.
+  const opens = openFamilyActions(status)
   const columns: Column<SheetImportChange>[] = [
     { key: 'sku', label: 'SKU', width: 190, className: styles.skuCol, render: c => <span className={styles.mono} title={c.sku}>{c.sku}</span> },
     { key: 'where', label: 'Where', width: 120, className: styles.whereCol, render: c => c.destination },
@@ -186,19 +195,20 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
     </>}
     {done && <>
       {status?.canUndo && <Button size="sm" variant="secondary" onClick={undo}>Undo</Button>}
-      {status?.format !== 'undo' && (status?.receipt?.saved ?? 0) > 0 && <Button size="sm" variant="secondary" onClick={() => { setPublishing(true); close() }}>Publish…</Button>}
+      {status?.format !== 'undo' && (status?.receipt?.saved ?? 0) > 0 && !opens.length && <Button size="sm" variant="secondary" onClick={() => { setPublishing(true); close() }}>Publish…</Button>}
       <Button size="sm" variant="secondary" onClick={reset}>Import another file</Button>
       <span className="grow" />
-      <Button size="sm" variant="primary" onClick={close}>Done</Button>
+      {opens.map(action => <Button key={action.href} asChild size="sm" variant="primary"><Link href={action.href} onClick={close}>{action.label}</Link></Button>)}
+      <Button size="sm" variant={opens.length ? 'secondary' : 'primary'} onClick={close}>Done</Button>
     </>}
     {(!status || busy) && <><span className="grow" /><Button size="sm" variant="secondary" onClick={close}>{busy ? 'Close' : 'Cancel'}</Button></>}
   </>
 
   return <>
     <Modal open={open} onClose={close} size="xxl" title={status?.format === 'undo' ? 'Undo import' : 'Import'}
-      subtitle={status ? undefined : 'Drop a file you exported here, an Amazon template, an eBay file or a CSV.'} footer={footer}>
+      subtitle={status ? undefined : `Drop a file you exported here, an Amazon template or an eBay file. ${acceptedFilesSentence(IMPORT_ACCEPT, IMPORT_MAX_BYTES)}`} footer={footer}>
       <div className={styles.body}>
-        {error && <Banner tone="danger" title="This did not work" onDismiss={() => setError(null)}>{error}</Banner>}
+        {error && <Banner tone="danger" title={IMPORT_FAILED[error.step]} onDismiss={clearError}>{error.message}</Banner>}
         {!file && !status && <FileDropzone accept={IMPORT_ACCEPT} maxBytes={IMPORT_MAX_BYTES} onFiles={files => { if (files[0]) void upload(files[0]) }}
           hint="Only the cells you changed are saved. You see every change before anything is saved." />}
         {file && <FileRow name={file.name} size={file.size} disabled={!!reading || busy}
@@ -218,20 +228,25 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
           ]} />
           <UnsavedEditsBanner />
           {!status.summary.changes && !status.summary.problems && <Banner tone="info">Nothing to change: this file holds the values Nexus already has.</Banner>}
-          {status.summary.problems > 0 && <Banner tone="warning" title={`${status.summary.problems.toLocaleString('en')} ${status.summary.problems === 1 ? 'problem' : 'problems'}`}
-            action={<a className={styles.link} href={sheetTransferApi.problemsUrl(status.jobId)}>Download the list</a>}>
-            {status.format === 'undo' ? 'These values changed again after the import, or cannot be put back here. They are skipped; change them in the sheet.' : 'Rows with a problem are skipped. Fix them in your file and import it again.'}
+          {/* Step 4 (D4) — the count is the Problems tile's and the table filter's; this notice says what happens to them. */}
+          {status.summary.problems > 0 && <Banner tone="warning" title={status.format === 'undo' ? 'Some values cannot be put back' : 'Rows with a problem are skipped'}
+            action={<Button asChild size="sm" variant="link"><a href={sheetTransferApi.problemsUrl(status.jobId)}>Download the list</a></Button>}>
+            {status.format === 'undo' ? 'They changed again after the import, or cannot be put back here. Change them in the sheet.' : 'The table says what is wrong with each row. Fix them in your file and import it again.'}
           </Banner>}
-          {status.warnings.map(warning => <Banner key={warning} tone="info">{warning}</Banner>)}
-          {needsConfirmation && file && <Banner tone="warning" title="Confirm before applying"
-            action={<Button size="sm" variant="secondary" onClick={() => void upload(file, decisions)}>Check again</Button>}>
+          {/* One closed section for the notes (2026-10-01): they inform, they block nothing. */}
+          {status.warnings.length > 0 && <Disclosure summary={`${status.warnings.length} ${status.warnings.length === 1 ? 'note' : 'notes'}`}>
+            <ul className={styles.list}>{status.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>
+          </Disclosure>}
+          {/* Step 4 (D4) — choices sit in a card, never inside a Banner (a live region reads every change aloud). */}
+          {needsConfirmation && file && <Card header="Confirm before applying" headingLevel={3} description="Tick what the file should do, then check it again."
+            headerAction={<Button size="sm" variant="secondary" onClick={() => void upload(file, decisions)}>Check again</Button>}>
             <ul className={styles.list}>
               {status.links.map(link => <li key={link.fileSku}><Checkbox label={`${link.fileSku} in the file is ${link.proposedSku} in Nexus (${link.reason})`} checked={decisions.links[link.fileSku] === link.proposedSku}
                 onChange={() => setDecisions(d => { const links = { ...d.links }; if (links[link.fileSku]) delete links[link.fileSku]; else links[link.fileSku] = link.proposedSku; return { ...d, links } })} /></li>)}
               {status.deletes.filter(d => !d.confirmed).map(d => <li key={`${d.fileSku}${d.channel}${d.marketplace}`}><Checkbox label={`End the ${d.channel} ${d.marketplace} listing of ${d.sku}: the file deletes it`} checked={decisions.confirmDeletes.includes(d.fileSku)}
                 onChange={() => setDecisions(x => ({ ...x, confirmDeletes: x.confirmDeletes.includes(d.fileSku) ? x.confirmDeletes.filter(s => s !== d.fileSku) : [...x.confirmDeletes, d.fileSku] }))} /></li>)}
             </ul>
-          </Banner>}
+          </Card>}
         </>}
 
         {done && <Banner tone={done.tone} title={done.title}>{done.body}</Banner>}
@@ -247,7 +262,8 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
             {changes && <span className={styles.muted}>{changes.total.toLocaleString('en')} {changes.total === 1 ? 'row' : 'rows'}</span>}
           </div>
           <DataGrid ariaLabel="Changes in this file" size="sm" keyboardScroll columns={columns} rows={changes?.changes ?? []} rowKey={c => c.id}
-            emptyState={<p className={styles.muted}>{changes ? 'Nothing to show here.' : 'Loading…'}</p>} />
+            emptyState={changes ? <EmptyState title="Nothing to show here" />
+              : <div className={styles.loading} role="status" aria-label="Loading the changes"><Skeleton height={14} /><Skeleton height={14} width="80%" /><Skeleton height={14} width="60%" /></div>} />
           {changes && changes.total > changes.pageSize && <Pagination page={page} pageCount={Math.ceil(changes.total / changes.pageSize)} onPage={setPage} />}
         </>}
       </div>

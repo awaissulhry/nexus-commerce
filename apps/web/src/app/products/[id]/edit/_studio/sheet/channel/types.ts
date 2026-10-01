@@ -1,5 +1,6 @@
 import type { ListingPresenceFields } from '../../presence/fields'
 import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
+import type { SheetTone } from '@nexus/shared/sheet-groups'
 import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared/content-language'
 /**
  * PES.3 — the wire contract of a CHANNEL SCOPE of the Product Edit Studio sheet.
@@ -84,6 +85,8 @@ export interface SheetColumn {
   group: string
   /** Stable canonical group ID. Older server responses may omit it. */
   groupKey?: string
+  /** The group's colour on the sheet's header (`@nexus/shared/sheet-groups`, 2026-10-01). */
+  groupTone?: SheetTone
   kind: SheetColumnKind
   storage: SheetStorage
   scope: 'global' | 'per_variant'

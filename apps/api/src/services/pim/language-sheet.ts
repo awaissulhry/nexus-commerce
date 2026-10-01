@@ -58,7 +58,7 @@ export function widenLanguageSheets(sheets: StudioSheet[]): StudioSheet {
     }),
     groups: columns.reduce<StudioSheet['groups']>((groups, column) => {
       const key = column.groupKey ?? column.group
-      if (!groups.some(group => group.key === key)) groups.push({ key, label: column.group, channelLabel: null, order: groups.length })
+      if (!groups.some(group => group.key === key)) groups.push({ key, label: column.group, channelLabel: null, order: groups.length, ...(column.groupTone ? { tone: column.groupTone } : {}) })
       return groups
     }, []),
     meta: { ...base.meta, tookMs: sheets.reduce((sum, sheet) => sum + sheet.meta.tookMs, 0) },

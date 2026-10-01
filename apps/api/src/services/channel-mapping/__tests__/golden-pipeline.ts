@@ -98,7 +98,9 @@ export async function ebayGolden(bytes: Buffer, filename: string, specs: Map<str
   const v = (r: Record<string, string>, h: string) => (r[h] ?? '').trim()
   const targets: EbayWorkbookTarget[] = table.records.map(({ values: r }) => {
     const isParent = v(r, 'Parent/Child').toLowerCase() === 'parent', parent = isParent ? v(r, 'SKU') : v(r, 'Parent SKU')
-    return { id: `${v(r, 'Item ID')}|${v(r, 'SKU')}|${isParent}`, sku: v(r, 'SKU'), parentSku: parent, sourceParentSku: parent, isParent, itemId: v(r, 'Item ID'), accountId: 'fixture', marketplace: table.marketplace, aliasKey: parent, version: 1 }
+    return { id: `${v(r, 'Item ID')}|${v(r, 'SKU')}|${isParent}`, sku: v(r, 'SKU'), parentSku: parent, sourceParentSku: parent, isParent, itemId: v(r, 'Item ID'), accountId: 'fixture', marketplace: table.marketplace, aliasKey: parent, version: 1,
+      // The file is this business's own: its listings already use these policies (an imported policy ID must be the account's own).
+      policyIds: ['Fulfillment Policy ID', 'Payment Policy ID', 'Return Policy ID'].map(h => v(r, h)).filter(Boolean) }
   })
   const read = mapEbayWorkbook(table, targets, specs, { mapping: readerMapping({ id: 'golden', version: 1, status: 'DRAFT' }, 'golden', fields), mappingSpecs: specs })
   const ledger = checkEbayLedger(table, read)

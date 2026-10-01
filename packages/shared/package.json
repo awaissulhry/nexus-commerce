@@ -142,6 +142,10 @@
       "types": "./dist/master-sheet.d.ts",
       "default": "./dist/master-sheet.js"
     },
+    "./sheet-groups": {
+      "types": "./dist/sheet-groups.d.ts",
+      "default": "./dist/sheet-groups.js"
+    },
     "./amazon-media": {
       "types": "./dist/amazon-media.d.ts",
       "default": "./dist/amazon-media.js"
@@ -209,6 +213,10 @@
     "./readiness-wire": {
       "types": "./dist/readiness-wire.d.ts",
       "default": "./dist/readiness-wire.js"
+    },
+    "./product-create": {
+      "types": "./dist/product-create.d.ts",
+      "default": "./dist/product-create.js"
     }
   },
   "scripts": {

@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback, useMemo } from 'react'
 import { GridSheet, GridSheetStatus, NexusGrid, SHEET_GRID_OPTIONS, gridGeometry } from '@/design-system/grid'
 import { PreferencesModal } from '@/design-system/patterns'
 import { TooltipPortalProvider } from '@/design-system/primitives'
@@ -11,6 +12,8 @@ import { SheetFooterNote } from './SheetFooterNote'
 import { SheetLoadError } from './SheetLoadError'
 import { SHEET_STATE_OVERLAYS } from './sheetGridStates'
 import type { ProductSheetModel } from './productSheetModel'
+import { withGroupHeaderClass } from './sheetGroups'
+import { widthsAsDefaults } from './columnWidths'
 import './product-sheet.css'
 
 /** The only Information sheet renderer, for Shared product and every channel. */
@@ -19,6 +22,29 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
   const scope = useStudioScope()
   const columns = model.columns
   const channel = model.scope === 'channel'
+  /* 2026-10-01 — every column name wears its group's colour (`sheetGroups.ts`); a def's own header class is kept. */
+  const sourceDefs = model.grid.columnDefs
+  // A def's width is the column's default only: the operator's (and the saved layout's) width survives a rebuild (`columnWidths.ts`).
+  const columnDefs = useMemo(() => sourceDefs && widthsAsDefaults(withGroupHeaderClass(sourceDefs, columns.headerClass)), [sourceDefs, columns.headerClass])
+  const ownDisplayedChanged = model.grid.onDisplayedColumnsChanged
+  const redrawOnChange = columns.onDisplayedColumnsChanged
+  const onDisplayedColumnsChanged = useCallback((event: Parameters<NonNullable<typeof ownDisplayedChanged>>[0]) => {
+    ownDisplayedChanged?.(event)
+    redrawOnChange()
+  }, [ownDisplayedChanged, redrawOnChange])
+  /* 2026-10-01 — a width or sort the operator changes is kept in their saved layout (`useSheetColumns`). */
+  const ownResized = model.grid.onColumnResized
+  const keepResized = columns.onColumnResized
+  const onColumnResized = useCallback((event: Parameters<NonNullable<typeof ownResized>>[0]) => {
+    ownResized?.(event)
+    keepResized(event)
+  }, [ownResized, keepResized])
+  const ownSortChanged = model.grid.onSortChanged
+  const keepSort = columns.onSortChanged
+  const onSortChanged = useCallback((event: Parameters<NonNullable<typeof ownSortChanged>>[0]) => {
+    ownSortChanged?.(event)
+    keepSort(event)
+  }, [ownSortChanged, keepSort])
   /* 2026-09-26 — an EDITING grid: an empty cell is a value nobody entered, so it draws nothing
      (`emptyCells="blank"`; a cell that does not apply carries the engine's hatch instead). */
   /* 2026-09-27 — while only the languages change, the last sheet stays on screen: dimmed, and `inert`, so no edit can
@@ -28,6 +54,13 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
     {...SHEET_GRID_OPTIONS}
     {...SHEET_STATE_OVERLAYS}
     {...model.grid}
+    columnDefs={columnDefs}
+    /* The header keeps a cell's classes until it is redrawn; these redraw it so the group colours follow the columns. */
+    onDisplayedColumnsChanged={onDisplayedColumnsChanged}
+    onColumnResized={onColumnResized}
+    onSortChanged={onSortChanged}
+    onDragStarted={columns.onDragStarted}
+    onDragStopped={columns.onDragStopped}
     fill
     rows="media-line"
     emptyCells="blank"

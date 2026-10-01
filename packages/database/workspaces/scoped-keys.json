@@ -576,7 +576,9 @@
     ]
   },
   "ProductListingAlias": {
-    "scalar": {},
+    "scalar": {
+      "sku": "workspace_sku"
+    },
     "compound": {
       "productId_channel_marketplace_channelConnectionId_position": [
         "productId",

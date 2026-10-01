@@ -306,7 +306,7 @@ export function MediaPlanPage({ read: raw, plan }: { read: MediaRead; plan: Medi
     </header>
 
     {plan.writeError && <Banner tone="danger" title="Not saved" onDismiss={plan.clearWriteError}
-      action={plan.writeError.retry ? <Button size="sm" variant="secondary" onClick={plan.writeError.retry}>Retry</Button> : undefined}>{plan.writeError.message}</Banner>}
+      action={plan.writeError.retry ? <Button size="sm" variant="secondary" onClick={plan.writeError.retry}>Try again</Button> : undefined}>{plan.writeError.message}</Banner>}
     {plan.notice && <Banner tone="warning" onDismiss={plan.clearNotice}>{plan.notice}</Banner>}
     {read.family.unmapped.length > 0 && <Banner tone="warning" title="Some option values are not in the attribute dictionary">
       {read.family.unmapped.map(k => read.family.valueLabels[k] ?? k).join(', ')} — their photos cannot reach eBay until they are mapped in the variation theme.

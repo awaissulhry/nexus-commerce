@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection } from './model'
+import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems } from './model'
 import type { StudioPublishResult, StudioPublishReview } from '@nexus/shared/studio-publication'
 
 const market = { id: 'a', channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', language: 'it', accounts: [{ id: 'one', label: 'One', primary: true }, { id: 'two', label: 'Two', primary: false }] }
@@ -58,4 +58,22 @@ it('keeps an acknowledged receipt visible when status has not recorded it yet', 
   expect(retainPublicationReceipt(receipt, processed)).toBe(processed)
   const different = { ...processed, id: 'publish-2', results: [] }
   expect(retainPublicationReceipt(receipt, different)).toBe(different)
+})
+
+// Audit D4 — problems in one table (SKU · what to fix), notes apart; the channel's own words ride along as a detail.
+it('lists the review\'s problems as table rows and its warnings as notes', () => {
+  const { problems, notes } = publicationProblems([
+    { severity: 'error', sku: 'FAM', field: 'videoId', message: 'Video id: Nexus cannot send a video with a new eBay listing yet.' },
+    { severity: 'error', sku: 'FAM-L', message: 'FAM-L: Size is empty. Fill it in on this row.' },
+    { severity: 'error', field: 'itemPostalCode', message: 'Item location postal code: eBay says this is missing or not valid.', detail: 'Input data for tag <Item.PostalCode> is invalid. (eBay code 37)' },
+    { severity: 'warning', message: 'Condition is empty, so Nexus sends New.' },
+    { severity: 'warning', sku: 'FAM', message: 'Title: the Italian text is shown on DE.' },
+    { severity: 'warning', message: 'Condition is empty, so Nexus sends New.' },
+  ])
+  expect(problems).toEqual([
+    { id: '0', sku: 'FAM', message: 'Video id: Nexus cannot send a video with a new eBay listing yet.' },
+    { id: '1', sku: 'FAM-L', message: 'Size is empty. Fill it in on this row.' },
+    { id: '2', sku: 'Whole listing', message: 'Item location postal code: eBay says this is missing or not valid.', detail: 'Input data for tag <Item.PostalCode> is invalid. (eBay code 37)' },
+  ])
+  expect(notes).toEqual(['Condition is empty, so Nexus sends New.', 'FAM: Title: the Italian text is shown on DE.'])
 })

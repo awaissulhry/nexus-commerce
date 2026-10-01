@@ -7,7 +7,7 @@ export type PresenceVerdict = 'agrees' | 'pending' | 'diverged' | 'unknown' | 'u
 export interface PresenceMeta { label: string; tone: Tone; sentence: string }
 
 const INTENT: Record<PresenceIntent, PresenceMeta> = {
-  NONE: { label: 'No listing here', tone: 'neutral', sentence: 'We hold no listing record for this coordinate. Nothing has been checked against the channel.' },
+  NONE: { label: 'Not listed yet', tone: 'neutral', sentence: 'Nexus has no listing here yet, so nothing has been checked against the channel.' },
   DRAFT: { label: 'Draft', tone: 'neutral', sentence: 'A record exists, never sent.' },
   LIVE: { label: 'Listed', tone: 'info', sentence: 'Our record holds a channel reference.' },
   HELD: { label: 'Held', tone: 'warning', sentence: 'We send nothing; the channel keeps what it has.' },

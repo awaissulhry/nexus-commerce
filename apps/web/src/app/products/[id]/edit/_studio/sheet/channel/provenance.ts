@@ -99,7 +99,7 @@ export function foldSource(source: ChannelValueSource, kind: StudioRowKind, pres
 export function cascadeOf(cell: StudioCellValue | undefined, kind: StudioRowKind): CascadeLayer {
   if (!cell) return 'unset'
   const present = hasValue(cell.value) || cell.pinned === true
-  /* P1 — an old listing text (`channelSnapshot`) is THIS row's listing's own value: its reset is "Follow Master".
+  /* P1 — an old listing text (`channelSnapshot`) is THIS row's listing's own value: its reset is "Follow Shared".
      Read from the source, not the layer: an older server folded it into `master`, which offered only a pin. */
   if (cell.source === 'channelSnapshot' && present) return kind === 'parent' ? 'alias' : 'aliasVariant'
   // The server uses `alias` for this row's own named-listing override too.
@@ -143,7 +143,7 @@ const META: Record<CascadeLayer, CascadeMeta> = {
     layer: 'aliasVariant',
     action: 'reset',
     fromLabel: (c) => `${aliasMark(c.aliasPosition)} ${c.aliasLabel} · ${c.sku}`,
-    actionHint: () => 'Click to reset it to this variant’s Master value.',
+    actionHint: () => 'Click to reset it to this variant’s Shared value.',
   },
   alias: {
     layer: 'alias',
@@ -151,13 +151,13 @@ const META: Record<CascadeLayer, CascadeMeta> = {
     fromLabel: (c) => `${aliasMark(c.aliasPosition)} ${c.aliasLabel}`,
     actionHint: (c) =>
       c.kind === 'parent'
-        ? 'Click to reset this listing row to Master.'
+        ? 'Click to reset this listing row to the Shared product.'
         : `Click to pin it for ${c.sku} alone.`,
   },
   master: {
     layer: 'master',
     action: 'pin',
-    fromLabel: () => 'the master record',
+    fromLabel: () => 'the Shared product',
     actionHint: (c) =>
       c.kind === 'parent'
         ? `Click to pin it for ${aliasMark(c.aliasPosition)} ${c.aliasLabel}.`

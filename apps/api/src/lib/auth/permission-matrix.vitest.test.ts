@@ -51,6 +51,10 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   ['GET', '/api/orders', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
   ['POST', '/api/orders/123/refund', ['ADMIN', 'OPS_MANAGER']],
   ['POST', '/api/orders/123/cancel', ['ADMIN', 'OPS_MANAGER']],
+  // A refund from a return is a refund (MCP full control #15): FULFILLMENT processes returns but does not refund.
+  ['POST', '/api/fulfillment/returns/:id/refund', ['ADMIN', 'OPS_MANAGER']],
+  ['POST', '/api/fulfillment/returns/:id/refund/retry', ['ADMIN', 'OPS_MANAGER']],
+  ['POST', '/api/fulfillment/returns/:id/receive', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT']],
   // Listings — the ASIN read-back of published Amazon listings completes a publication: listings.publish
   ['POST', '/api/amazon/listings/fill-asins', ['ADMIN', 'OPS_MANAGER']],
   // Fulfillment

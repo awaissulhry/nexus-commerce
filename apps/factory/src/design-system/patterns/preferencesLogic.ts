@@ -15,6 +15,8 @@ import type { PreferencesColumnSpec, PreferencesValue } from './PreferencesModal
 export interface AttributeGroup {
   key: string
   label: string
+  /** The group's colour, from its first column that names one (`PreferencesColumnSpec.groupTone`). */
+  tone?: string
   columns: PreferencesColumnSpec[]
 }
 
@@ -35,7 +37,9 @@ export function resolveAttributeGroups(
   const columns = allColumns.filter((c) => !c.locked)
   for (const c of columns) {
     const key = groupOf(c)
-    if (!groups.has(key)) groups.set(key, { key, label: c.group?.trim() || listLabel, columns: [] })
+    const group = groups.get(key)
+    if (!group) groups.set(key, { key, label: c.group?.trim() || listLabel, ...(c.groupTone ? { tone: c.groupTone } : {}), columns: [] })
+    else if (!group.tone && c.groupTone) group.tone = c.groupTone
   }
   const byKey = new Map(columns.map((c) => [c.key, c]))
   const order = [...new Set([...(value.columnOrder ?? []), ...value.visibleColumns, ...columns.map((c) => c.key)])]
@@ -273,4 +277,19 @@ export function inViewCount(
   const nonStructural = allColumns.filter((c) => !c.locked && !c.uncounted)
   const shown = nonStructural.filter((c) => locks.has(c.key) || value.visibleColumns.includes(c.key)).length
   return { shown, total: nonStructural.length }
+}
+
+/**
+ * A drag's drop (2026-10-01, the Customise dialog's dnd-kit drag): move one column or a ticked set, in their order,
+ * right before a column, right after one, or to the end of a group (an empty group, or a closed one). Each step is
+ * `moveAttributeColumn` / `moveAttributesToGroup`, so the group rules are the ones Customise already keeps.
+ */
+export type ColumnDropTarget = { before: string } | { after: string } | { group: string }
+export function placeColumns(
+  allColumns: readonly PreferencesColumnSpec[], value: PreferencesValue, keys: readonly string[], target: ColumnDropTarget | null,
+): PreferencesValue {
+  if (!target || !keys.length) return value
+  if ('group' in target) return moveAttributesToGroup(allColumns, value, keys, target.group)
+  if ('before' in target) return keys.reduce((draft, key) => (key === target.before ? draft : moveAttributeColumn(allColumns, draft, key, target.before, false)), value)
+  return [...keys].reverse().reduce((draft, key) => (key === target.after ? draft : moveAttributeColumn(allColumns, draft, key, target.after, true)), value)
 }

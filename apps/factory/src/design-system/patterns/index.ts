@@ -1,6 +1,6 @@
 export { AppShell, type AppShellProps, type ShellNavItem } from './AppShell'
 export { PageHeader, type PageHeaderProps } from './PageHeader'
-export { DetailHeader, type DetailHeaderProps } from './DetailHeader'
+export { DetailHeader, DETAIL_HEADER_FOLD, type DetailHeaderProps } from './DetailHeader'
 export { FilterPanel, FilterField, type FilterPanelProps } from './FilterPanel'
 export { FilterBar, type FilterBarProps, type FilterBarOption, type FilterDimension } from './FilterBar'
 export { GridToolbar, type GridToolbarProps } from './GridToolbar'

@@ -49,7 +49,7 @@ export function ProductSheetTab({ productId: override, shopifySchema }: ProductS
 
   return (<>
     {recoveryAt && recoveryAt === recoveryKey && <Banner tone="warning" action={<Button size="sm" onClick={() => setTab('shopify-family')}>Review recovered changes</Button>}>A recovery copy from the previous Shopify editor is retained in this browser. Review it in Product family.</Banner>}
-    {capabilities.error && <Banner tone="warning" action={<Button size="sm" onClick={() => void capabilities.refresh()}>Retry attributes</Button>}>{capabilities.error}</Banner>}
+    {capabilities.error && <Banner tone="warning" action={<Button size="sm" onClick={() => void capabilities.refresh()}>Try again</Button>}>{capabilities.error}</Banner>}
     <ProductSheet
       scope="channel"
       // Remounting on a coordinate change is deliberate: an in-flight write belongs to the

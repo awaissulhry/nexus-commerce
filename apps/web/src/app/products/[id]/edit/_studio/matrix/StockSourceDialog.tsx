@@ -220,7 +220,7 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
       </>}>
       <div className={styles.body}>
         {!canSwitch && <Banner tone="info">Only an owner of this business can change where stock comes from.</Banner>}
-        {error && <Banner tone="danger" action={<Button onClick={() => { void loadPreview({ live: true }) }}>Retry</Button>}>{error}</Banner>}
+        {error && <Banner tone="danger" action={<Button onClick={() => { void loadPreview({ live: true }) }}>Try again</Button>}>{error}</Banner>}
 
         <fieldset className={styles.choices} disabled={busy || grants === null}>
           <legend className={styles.legend}>Stock from</legend>

@@ -6,6 +6,25 @@ export const IMPORT_ACCEPT = '.xlsx,.xlsm,.csv,.zip'
 /** The server's own limit for one upload (`PRODUCT_TRANSFER_MAX_BYTES`). */
 export const IMPORT_MAX_BYTES = 50 * 1024 * 1024
 
+/**
+ * Step 4 (D4) — the dialog names every file type it takes, from the same list the picker accepts, so the sentence can
+ * never drift from the picker: "Accepted: .xlsx, .xlsm, .csv or .zip, up to 50 MB."
+ */
+export function acceptedFilesSentence(accept: string, maxBytes: number): string {
+  const types = accept.split(',').map(t => t.trim()).filter(Boolean)
+  const list = types.length > 1 ? `${types.slice(0, -1).join(', ')} or ${types[types.length - 1]}` : types[0] ?? 'any file'
+  return `Accepted: ${list}, up to ${Math.round(maxBytes / 1024 / 1024)} MB.`
+}
+
+/** The step that failed; its title says what did not work (step 4, D4 — never "This did not work"). */
+export type ImportStep = 'read' | 'changes' | 'apply' | 'undo'
+export const IMPORT_FAILED: Record<ImportStep, string> = {
+  read: 'The file could not be checked',
+  changes: 'The list of changes could not be loaded',
+  apply: 'The changes could not be saved',
+  undo: 'The import could not be undone',
+}
+
 const FORMATS: Record<SheetImportFormat, string> = {
   nexus: 'Nexus file', 'nexus-legacy': 'Older Nexus file', amazon: 'Amazon template', ebay: 'eBay file', shopify: 'Shopify file', csv: 'CSV file', undo: 'Undo',
 }
@@ -28,15 +47,18 @@ export function applyLabel(status: Pick<SheetImportStatus, 'summary' | 'total'>)
 
 export interface DoneView { tone: 'success' | 'warning' | 'danger'; title: string; body: string }
 /** What the finished import says. Always states that nothing went to a channel (the Owner's D1 (a)). */
-export function doneView(status: Pick<SheetImportStatus, 'state' | 'receipt' | 'format' | 'error'>): DoneView {
+export function doneView(status: Pick<SheetImportStatus, 'state' | 'receipt' | 'format' | 'error' | 'newFamilies'>): DoneView {
   const saved = status.receipt?.saved ?? 0, failed = status.receipt?.failed ?? 0, skipped = status.receipt?.skipped ?? 0
   const undo = status.format === 'undo'
   const channels = 'Nothing was sent to the channels.'
+  // Phase 2 — a family the file created is another product: it is published from there.
+  const created = status.newFamilies ?? []
+  const publish = created.length ? `New ${created.length === 1 ? 'product' : 'products'}: ${created.map(f => f.sku).join(', ')}. Open ${created.length === 1 ? 'it' : 'each one'} to publish.` : 'Publish from the product when you are ready.'
   if (status.state === 'FAILED') return { tone: 'danger', title: undo ? 'The undo failed' : 'The import failed', body: status.error ?? 'Nothing was saved. Try again, or drop another file.' }
   if (status.state === 'PARTIAL') return { tone: 'warning', title: `${plural(saved, 'record')} saved, ${plural(failed, 'record')} not saved`,
     body: `The records not saved changed in Nexus while you were importing. Their reasons are listed below. ${channels}` }
   return { tone: 'success', title: undo ? 'Import undone' : `${plural(saved, 'record')} saved in Nexus`,
-    body: undo ? `Every value this import changed is back. ${channels}` : `${skipped ? `${plural(skipped, 'record')} with problems ${skipped === 1 ? 'was' : 'were'} skipped. ` : ''}${channels} Publish from the product when you are ready.` }
+    body: undo ? `Every value this import changed is back. ${channels}` : `${skipped ? `${plural(skipped, 'record')} with problems ${skipped === 1 ? 'was' : 'were'} skipped. ` : ''}${channels} ${publish}` }
 }
 
 /** A cell value for people: empty is a dash, lists are joined, a measure reads "1.2 kilograms". */
@@ -75,11 +97,20 @@ export function changeCells(change: Pick<SheetImportChange, 'before' | 'after' |
   return focusChange(cellValue(change, 'before', 4000), cellValue(change, 'after', 4000))
 }
 
-export const STATUS_LABELS: Record<SheetImportChange['status'], string> = { ready: 'Ready', problem: 'Problem', saved: 'Saved', failed: 'Not saved', skipped: 'Skipped' }
+export const STATUS_LABELS: Record<SheetImportChange['status'], string> = { ready: 'Ready', new: 'New', problem: 'Problem', saved: 'Saved', failed: 'Not saved', skipped: 'Skipped' }
 
 /** Where in the file a problem is: "Amazon IT · row 14 · column F". */
 export function whereInFile(change: Pick<SheetImportChange, 'sheet' | 'row' | 'column'>): string {
   return [change.sheet, change.row ? `row ${change.row}` : '', change.column ? `column ${change.column}` : ''].filter(Boolean).join(' · ')
+}
+
+/**
+ * Phase 2 (2026-10-01) — the done screen's "Open GALE-JACKET": one per family the import created besides the open product's.
+ * The path is workspace-relative; the workspace Link adds `/w/<id>`.
+ */
+export function openFamilyActions(status: Pick<SheetImportStatus, 'state' | 'newFamilies'> | null): { label: string; href: string }[] {
+  if (!isFinished(status)) return []
+  return (status!.newFamilies ?? []).map(f => ({ label: `Open ${f.sku}`, href: `/products/${encodeURIComponent(f.productId)}/edit/studio` }))
 }
 
 /** Still working: poll. */

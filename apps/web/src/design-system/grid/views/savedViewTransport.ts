@@ -67,3 +67,33 @@ export async function saveWorkingLayout<T = ColumnsViewPayload>(
   }
   return saved as StoredSheetLayout<T>
 }
+
+/**
+ * 2026-10-01 — a person's own sheet layout, the same in every business profile (`GET /api/sheet-layouts`). Same record
+ * shape as the working layout above; `null` when this person has none yet for this sheet.
+ */
+export async function loadUserSheetLayout<T = ColumnsViewPayload>(
+  baseUrl: string, surface: string, validate?: (value: unknown) => value is T,
+): Promise<StoredSheetLayout<T> | null> {
+  const body = await savedViewRequest<unknown>(`${baseUrl}/api/sheet-layouts?surface=${encodeURIComponent(surface)}`)
+  return parseWorkingLayout(body, validate)
+}
+
+/**
+ * Create (`previous` null) or replace (the record last read) a person's own sheet layout (`PUT /api/sheet-layouts`).
+ * `keepalive`, so a change made just before the page closes still arrives.
+ */
+export async function saveUserSheetLayout<T = ColumnsViewPayload>(
+  baseUrl: string, surface: string, filters: T, previous: StoredSheetLayout<T> | null,
+): Promise<StoredSheetLayout<T>> {
+  const saved = await savedViewRequest<unknown>(`${baseUrl}/api/sheet-layouts`, {
+    method: 'PUT',
+    keepalive: true,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ surface, filters, expectedUpdatedAt: previous?.updatedAt ?? null }),
+  })
+  if (!isStoredLayout(saved) || saved.name !== 'Current layout') {
+    throw new Error('The server did not return a saved layout acknowledgement. Reload the saved layout before retrying.')
+  }
+  return saved as StoredSheetLayout<T>
+}

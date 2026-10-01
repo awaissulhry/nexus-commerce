@@ -44,6 +44,7 @@ import {
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { productStudioPath } from '@/lib/products/studio-path'
 
 interface ChannelTuple {
   platform: string
@@ -679,11 +680,11 @@ function DraftExpandedDetail({
             {d.kind === 'wizard' && (
               <li>
                 <Link
-                  href={`/products/${d.productId}/list-wizard`}
+                  href={productStudioPath(d.productId, { channel: d.channels[0]?.platform, market: d.channels[0]?.marketplace })}
                   className="inline-flex items-center gap-1 text-sm text-blue-700 dark:text-blue-400 hover:underline"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  {t('drafts.detail.openWizard')}
+                  {t('drafts.detail.openStudio')}
                 </Link>
               </li>
             )}
@@ -766,7 +767,7 @@ const DraftRow = memo(function DraftRow({
       : 0
   const resumeHref =
     d.kind === 'wizard'
-      ? `/products/${d.productId}/list-wizard`
+      ? productStudioPath(d.productId, { channel: d.channels[0]?.platform, market: d.channels[0]?.marketplace })
       : `/products/${d.productId}/edit`
   return (
     <tr

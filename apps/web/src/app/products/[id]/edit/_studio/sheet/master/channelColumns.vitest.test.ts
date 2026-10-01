@@ -90,14 +90,14 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY'])('%s scope indicators', channel => {
     expect(html).toContain('Show cell details: GALE-JACKET, German title')
   })
 
-  it('says an old listing text is the listing’s own value, not "Follows Master" (report 2 I-3)', () => {
+  it('says an old listing text is the listing’s own value, not "Follows Shared" (report 2 I-3)', () => {
     const [definition] = setup([{ ...base, kind: 'text' }], undefined, scope)
     const data = { rowId: 'primary:gale', sku: 'GALE-JACKET', rowKind: 'variant', values: { title: { value: 'Old eBay title',
       source: 'channelSnapshot', layer: 'channel', pinned: false, follows: true, provenance: { member: 'inherited', from: 'Italian · eBay · IT · following snapshot' },
       mapped: { status: 'mapped', provenance: 'catalogRule', sourcePath: 'title', derived: false, usesExpression: false, errors: [], warnings: [], appliedTransforms: [] } } } }
     const html = renderToStaticMarkup(createElement(definition.cellRenderer, { ...definition.cellRendererParams, data, value: 'Old eBay title', node: {} }))
-    expect(html).toContain('title="Listing value. This listing still holds its own text, not Master’s')
-    expect(html).not.toContain('Follows Master')
+    expect(html).toContain('title="Listing value. This listing still holds its own text, not the Shared product’s')
+    expect(html).not.toContain('Follows Shared')
     expect(html).not.toContain('nds-source-indicator--quiet')
   })
 

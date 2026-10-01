@@ -221,6 +221,9 @@ export const ENTRIES: Entry[] = [
   P(F.marketingPublish, pfx('/api/image-publish-jobs')),
 
   // ── S2 coverage: catalog / PIM sub-resources ───────────────────
+  // The Products page's "New product" dialog creates one DRAFT product: `products.create`, not the `/api/products`
+  // prefix rule's products.edit below (GET /api/products, the list, stays products.view there).
+  P(F.productsCreate, (m, p) => m === 'POST' && p === '/api/products'),
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/studio-publication(?:\/|$)/.test(p)),
   // Sheet pop-up P3 A3 — "New attribute" from the variation pop-up creates a dictionary attribute and places it in a family:
   // what `/api/attributes` and `/api/families` require, never the `/api/products` rule's products.edit below.
@@ -232,6 +235,8 @@ export const ENTRIES: Entry[] = [
   RW(F.pimManage, F.pimManage, pfx('/api/workflow-comments')),
   RW(F.productsEdit, F.productsEdit, pfx('/api/tags')),
   RW(F.productsView, F.productsEdit, pfx('/api/saved-views')),
+  // 2026-10-01 — a person's own product sheet layout (the same in every business profile), read and kept like saved views.
+  RW(F.productsView, F.productsEdit, pfx('/api/sheet-layouts')),
   RW(F.productsView, F.productsEdit, pfx('/api/bundles')),
   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-ops')),
 
@@ -372,6 +377,9 @@ export const ENTRIES: Entry[] = [
 
   // ── Fulfillment / inventory ─────────────────────────────────────
   P(F.fulfillmentExport, (m, p) => p.startsWith('/api/fulfillment') && has('/export')(m, p)),
+  // Issuing or retrying a refund from a return sends money to the buyer: orders.refund, as on /api/orders. Before the
+  // returns rule below, which would otherwise match first. Refund READS stay with returns.view.
+  P(F.ordersRefund, (m, p) => !isRead(m) && p.startsWith('/api/fulfillment/returns/') && /\/refund(\/retry)?$/.test(p)),
   RW(F.returnsView, F.returnsProcess, pfx('/api/fulfillment/returns')),
   RW(F.returnsView, F.returnsProcess, pfx('/api/returns')),
   // PO approval and receiving have their own permissions, so these come BEFORE the PO rule below, which matches every

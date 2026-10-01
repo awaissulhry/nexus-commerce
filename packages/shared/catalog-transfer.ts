@@ -185,9 +185,12 @@ export interface SheetImportStatus {
    * `failed` when it could not (the next edit of the family rebuilds it). Absent when nothing was saved.
    */
   readiness?: 'pending' | 'done' | 'failed'
+  /** Product families this import created besides the open product's (phase 2, 2026-10-01): the done screen offers to open them. */
+  newFamilies?: { productId: string; sku: string }[]
   error?: string
 }
-export type SheetImportChangeStatus = 'ready' | 'problem' | 'saved' | 'failed' | 'skipped'
+/** `new` (2026-10-01): a product, variation, listing SKU or listing Apply makes, and the values of a listing it creates. */
+export type SheetImportChangeStatus = 'ready' | 'new' | 'problem' | 'saved' | 'failed' | 'skipped'
 export interface SheetImportChange {
   id: string
   sku: string

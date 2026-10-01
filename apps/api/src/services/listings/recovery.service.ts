@@ -42,6 +42,16 @@ import { whereCoordinate, type ListingCoordinate } from '../../lib/listing-coord
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { logger } from '../../utils/logger.js'
 
+/**
+ * Where the operator continues after a recovery: the product studio on the recovered channel · market (the Owner's (a),
+ * 2026-10-02 — nothing opens the old listing wizard any more; the wizard never read the recovery event id). Workspace-
+ * relative: the web's workspace router adds the business. The field keeps its name, `wizardUrl`, for the web client.
+ */
+export function recoveryStudioPath(req: { productId: string; channel: string; marketplace: string }): string {
+  const query = new URLSearchParams({ scope: req.channel.toUpperCase(), market: req.marketplace.toUpperCase() })
+  return `/products/${encodeURIComponent(req.productId)}/edit/studio?${query}`
+}
+
 export type RecoveryAction =
   | 'REPUBLISH_IN_PLACE'
   | 'DELETE_RELIST_SAME'
@@ -284,7 +294,7 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
         eventId: event.id,
         status: 'SUCCEEDED',
         completedSteps: steps,
-        wizardUrl: `/products/${req.productId}/list-wizard?channel=${req.channel}&marketplace=${req.marketplace}&recoveryEventId=${event.id}&mode=republish`,
+        wizardUrl: recoveryStudioPath(req),
       }
     }
 
@@ -391,7 +401,7 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       eventId: event.id,
       status: 'SUCCEEDED',
       completedSteps: steps,
-      wizardUrl: `/products/${req.productId}/list-wizard?channel=${req.channel}&marketplace=${req.marketplace}&recoveryEventId=${event.id}&mode=recreate`,
+      wizardUrl: recoveryStudioPath(req),
     }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)

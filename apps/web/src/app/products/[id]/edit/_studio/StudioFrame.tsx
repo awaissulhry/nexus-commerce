@@ -18,6 +18,7 @@
  */
 
 import { useRef } from 'react'
+import { DETAIL_HEADER_FOLD } from '@/design-system/patterns'
 
 import { StudioSubheader } from './StudioSubheader'
 import { StudioTabHost } from './StudioTabHost'
@@ -29,13 +30,14 @@ export function StudioFrame() {
   const bandsRef = useRef<HTMLDivElement>(null)
   // 48 → 32 on GRID scroll, armed only when the scroll range can survive the collapse (§4.2).
   // The class lands on the bands, so a fold restyles the header and not the grid below it.
-  useHeaderCollapse(frameRef, bandsRef, styles.collapsed)
+  // The fold's look is the DS's (`DETAIL_HEADER_FOLD`, styles/patterns.css): this page only says when.
+  useHeaderCollapse(frameRef, bandsRef, DETAIL_HEADER_FOLD.folded)
   // A <div>, not a <main>: AppShell's `noRail` branch already renders `<main id="main-content">`
   // around this route, and a second main landmark inside it would give the page two. (/products/next
   // does nest one — an existing flaw in the benchmark, not a thing to copy.)
   return (
     <div ref={frameRef} className={styles.shell}>
-      <div ref={bandsRef} className={styles.bands}>
+      <div ref={bandsRef} className={`${styles.bands} ${DETAIL_HEADER_FOLD.host}`}>
         <StudioSubheader frameRef={frameRef} />
       </div>
       <div className={styles.body}>

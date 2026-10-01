@@ -245,7 +245,7 @@ describe('the master-scope file that would write a live listing', () => {
       amazon_title: cell({ verdict: 'changed', after: 'y' }),
     }))!
     expect(w).toMatch(/1 cell in this file writes to the Amazon listing/)
-    expect(w).toMatch(/not to the master record/)
+    expect(w).toMatch(/not to the Shared product/)
     expect(w).toMatch(/what buyers see/)
   })
 

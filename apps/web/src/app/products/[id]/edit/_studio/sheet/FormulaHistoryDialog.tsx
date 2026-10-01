@@ -65,7 +65,7 @@ export function FormulaHistoryDialog({ familyProductId, coordinate, onClose, onA
       <Button onClick={onClose}>Close</Button>
     </>}>
     <div className={styles.content}>
-      {error && <p role="alert" className={styles.error}>{error} <Button onClick={() => void load()}>Retry history</Button></p>}
+      {error && <p role="alert" className={styles.error}>{error} <Button onClick={() => void load()}>Try again</Button></p>}
       {loading ? <p role="status">Loading formula history…</p> : operations.length === 0 ? <p>No saved formula operations for this scope yet.</p> : <DataGrid keyboardScroll ariaLabel="Saved formula operations" rows={operations} rowKey={row => row.operationId} columns={[
         { key: 'date', label: 'Started', render: row => <Button disabled={busy} onClick={() => void open(row.operationId)}>{row.createdAt ? new Date(row.createdAt).toLocaleString() : 'View operation'}</Button> },
         { key: 'field', label: 'Field', render: row => <span className={styles.cell}>{row.fieldKey}</span> },

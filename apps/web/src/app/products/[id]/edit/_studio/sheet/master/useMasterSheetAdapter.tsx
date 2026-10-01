@@ -14,6 +14,8 @@ import { useSheetGeometry } from '../useSheetGeometry';
 import type { ProductSheetModel } from '../productSheetModel';
 import { formulaCandidates, formulaColumnId } from '../formulaColumns';
 import { sheetEmptyState } from '../sheetGridStates';
+import { chooseCategoryLink, FAMILY_UNSET, setupSentence } from '../channel/rulesStatus';
+import Link from '@/lib/workspaces/Link';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
 import { aiDraftContextOf, historyLoaderFor, inheritedContextOf } from '../cellEditorContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -49,6 +51,7 @@ import type { SheetColumn, StudioRow } from './types';
 import { useMasterSheet } from './useMasterSheet';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { productMediaColumn, useProductMediaEditor, withProductMediaColumn, PRODUCT_MEDIA_COLUMN } from '../../media/productMediaColumn';
+import { withSheetGroups } from '../sheetGroups';
 import { useReferenceNames } from '../useReferenceNames';
 import { referenceSearchText } from '../referenceLabels';
 import { flaggedColumnKeys, IDENTITY_COLUMN, orderColumnKeys, rankOfColumn, RESERVED_COLUMN_IDS } from '../views';
@@ -94,6 +97,7 @@ interface SheetPageState {
     search: string;
 }
 const NO_VARIATION_AXES: readonly string[] = [];
+const NO_KEYS: readonly string[] = [];
 /** What the Shared scope is called on screen (the scope chip, the progress column). */
 const SHARED_SCOPE_LABEL = 'Shared product';
 export function useMasterSheetAdapter({ productId, market, locale, variationAxes = NO_VARIATION_AXES as string[] }: MasterSheetProps): ProductSheetModel<StudioRow, SheetPageState, DrawerSheetRow> {
@@ -301,7 +305,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         progressSheetColumn<SheetColumn>(SCOPE_PROGRESS_COLUMN, 'Shared product', SHARED_PROGRESS_TIP),
         ...coordinateColumns.map((c) => progressSheetColumn<SheetColumn>(progressKeyOf(c.colId), c.label, marketProgressTip(c.label, languageLabel(c.language), c.computedAt))),
     ] : []), [sheet, coordinateColumns]);
-    const schemaColumns = useMemo(() => [...progressSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))], [sheet, progressSpecs]);
+    const schemaColumns = useMemo(() => withSheetGroups([...progressSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))]), [sheet, progressSpecs]);
     const viewCtx = useMemo(() => ({
         variationAxes: sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes,
         locale,
@@ -523,8 +527,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onDone: onFamilyChanged,
         onCollectVariation: setNewVariation,
     });
-    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell,
-        family: { productId, channel: null, columns: () => [...columnByKeyRef.current.values()] } });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
     const [exportNote, setExportNote] = useState<string | null>(null);
     const onExport = useCallback((mode: SheetExportMode) => {
         const api = getGridApi();
@@ -546,7 +549,16 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const row = rowsRef.current.find((r) => r.id === rowId);
         return row ? ({ ...row, listings: {} } as unknown as DrawerSheetRow) : null;
     }, []);
-    const drawerScope = useMemo(() => ({ kind: 'master' as const, marketplace: market, locale, label: sheet?.scope.label ?? `Master · ${market}` }), [market, locale, sheet]);
+    const drawerScope = useMemo(() => ({ kind: 'master' as const, marketplace: market, locale, label: sheet?.scope.label ?? `Shared product · ${market}` }), [market, locale, sheet]);
+    const setupMissing = sheet?.meta.schemaMissing ?? NO_KEYS;
+    const familyUnset = setupMissing.includes(FAMILY_UNSET);
+    const categoryLink = chooseCategoryLink('EBAY', market, setupMissing);
+    const setupNotice = setupMissing.length > 0 && <Banner tone="warning"
+        title={familyUnset ? 'No product family is chosen' : setupSentence(market, setupMissing[0])}
+        action={familyUnset && canEdit ? <Button size="sm" variant="secondary" disabled={loading} onClick={() => setClassificationOpen(true)}>Choose a product family</Button>
+            : !familyUnset && categoryLink ? <Button asChild size="sm" variant="link"><Link href={categoryLink.href}>{categoryLink.label}</Link></Button> : undefined}>
+        {[...(familyUnset ? ['The shared fields come from it.'] : []), ...setupMissing.filter(key => key !== FAMILY_UNSET).slice(familyUnset ? 0 : 1).map(key => setupSentence(market, key))].join(' ') || undefined}
+      </Banner>;
     editorContextLive.current = (row, key) => ({
         aiDraft: aiDraftContextOf(aiLayer.drafts.drafts.find(d => d.productId === row.id && d.columnKey === key && d.status === 'pending'),
             { approve: ids => aiLayer.drafts.approve(ids), reject: ids => aiLayer.drafts.reject(ids), onApplied: reload }),
@@ -623,12 +635,12 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             overflow: [{ id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'refresh-progress', label: progressMenu()[0].name, description: 'Read the progress bars again — the shared product and every channel · market', onSelect: refreshProgress }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             status: [
                 ...(switching ? [{ tone: 'info' as const, label: 'Loading languages…', detail: 'The sheet keeps the languages it shows until the new ones arrive; editing resumes then.' }] : []),
-                ...(staleTypes.length > 0 || (sheet?.meta.schemaMissing.length ?? 0) > 0 ? [{
+                /* Step 4 (D3, 2026-10-01) — a missing setup is the notice above the grid, in plain words and with the button
+                   that fixes it; the chip keeps only the cached-requirements note. */
+                ...(staleTypes.length > 0 && !(sheet?.meta.schemaMissing.length) ? [{
                     tone: 'warning' as const,
-                    label: (sheet?.meta.schemaMissing.length ?? 0) > 0 ? 'Setup incomplete' : 'Cached requirements',
-                    detail: sheet && sheet.meta.schemaMissing.length > 0
-                        ? `Attribute setup is incomplete: ${sheet.meta.schemaMissing.join(', ')}. Choose a product family in Classification; channel requirements use their selected category.`
-                        : `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
+                    label: 'Cached requirements',
+                    detail: `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
                 }] : []),
                 ...familyVerbs.status,
                 ...(readinessQuery.status === 'error' ? [{ tone: 'warning' as const, label: 'Progress unavailable', detail: `The channel · market progress bars could not be read: ${readinessQuery.message} Choose ⋯ → Refresh progress to try again.` }]
@@ -656,7 +668,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     {conflicts.length > 0 && (<Button size="sm" variant="link" onClick={reload}>
                 {conflicts.length} {conflicts.length === 1 ? 'row' : 'rows'} changed elsewhere — refresh
               </Button>)}</>,
-        notice: <>{contractProblems.length > 0 && <Banner tone="warning" title="The sheet read did not match its contract">{contractProblems.join(" · ")}</Banner>}</>,
+        notice: <>{contractProblems.length > 0 && <Banner tone="warning" title="The sheet read did not match its contract">{contractProblems.join(" · ")}</Banner>}
+          {setupNotice}</>,
         grid: {
             noRowsOverlayComponentParams: emptyState,
             ...mediaClipboard,

@@ -229,10 +229,9 @@ async function fireOneSchedule(
 interface ScheduleNotificationInput {
   userId: string
   wizardId: string
-  /** Used to build the click-through href; the wizard page path is
-   *  /products/[productId]/list-wizard, the page resolves the active
-   *  wizard internally. Empty string skips href (keeps the row
-   *  informational rather than linking to a 404). */
+  /** Used to build the click-through href, the product's studio
+   *  (/products/[productId]/edit/studio). Empty string skips href (keeps
+   *  the row informational rather than linking to a 404). */
   productId: string
   productSku: string | null
   overall: 'DRAFT' | 'SUBMITTED' | 'LIVE' | 'FAILED'
@@ -270,8 +269,10 @@ async function emitScheduleNotification(
         body,
         entityType: 'ListingWizard',
         entityId: input.wizardId,
+        // The product studio, not the old listing wizard (the Owner's (a), 2026-10-02). Workspace-relative: this row has
+        // no business id, and the web's workspace links add the open business.
         href: input.productId
-          ? `/products/${input.productId}/list-wizard`
+          ? `/products/${encodeURIComponent(input.productId)}/edit/studio`
           : null,
         meta: {
           wizardStatus: input.overall,

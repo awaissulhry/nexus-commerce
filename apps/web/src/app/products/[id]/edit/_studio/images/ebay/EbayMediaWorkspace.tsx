@@ -15,7 +15,7 @@ import { ListingPhotoPreview } from './ListingPhotoPreview'
 import { MediaReview } from './MediaReview'
 import { dimensions, SourceLibrary } from './SourceLibrary'
 import { MediaRequestError, requestWorkspace } from './transport'
-import { connectAccountSentence, coordinateName, mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence } from '../../draftListing'
+import { connectAccountSentence, mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence, noAccountTitle, notListedTitle } from '../../draftListing'
 import styles from './media.module.css'
 
 const LISTING: EbayMediaGallery = { axis: null, value: null, assetIds: [] }
@@ -184,7 +184,7 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
   }
 
   if (!workspace || !draft) return <div className={styles.state} aria-busy={!loadError && !error}>
-    {loadError || error ? <EmptyState title="Gallery unavailable" description={loadError ?? error} action={<Button onClick={() => { void reload() }} disabled={busy}><RefreshCw size={16} aria-hidden />Retry</Button>} />
+    {loadError || error ? <EmptyState title="Gallery unavailable" description={loadError ?? error} action={<Button onClick={() => { void reload() }} disabled={busy}><RefreshCw size={16} aria-hidden />Try again</Button>} />
       : <p role="status">Loading eBay galleries and source images…</p>}
   </div>
 
@@ -240,11 +240,11 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
       </section>
     </header>
     <div className={styles.workspaceBody}>
-      {gate === 'starts-draft' && <Banner tone="info" title={`Not listed on ${coordinateName('EBAY', workspace.destination.marketplace)} yet`}>
-        {mediaDraftStartSentence('EBAY', workspace.destination.marketplace)}{workspace.destination.listings.length ? ' To edit a listing alias instead, choose it above.' : ''}
+      {gate === 'starts-draft' && <Banner tone="info" title={notListedTitle('EBAY', workspace.destination.marketplace)}>
+        {mediaDraftStartSentence('EBAY')}{workspace.destination.listings.length ? ' To edit a listing alias instead, choose it above.' : ''}
       </Banner>}
       {gate === 'choose-listing' && <Banner tone="neutral" title="Choose a listing to edit">Select a listing alias above to load its galleries and variation groups.</Banner>}
-      {gate === 'no-account' && <Banner tone="warning" title="No eBay account">{connectAccountSentence('EBAY', workspace.destination.marketplace)}</Banner>}
+      {gate === 'no-account' && <Banner tone="warning" title={noAccountTitle('EBAY')}>{connectAccountSentence('EBAY', workspace.destination.marketplace)}</Banner>}
       {!canEdit && <Banner tone="neutral" title="View access">You can inspect these galleries. Image editing permission is required to change them.</Banner>}
       {error && <Banner tone="danger" title={requiresReload ? 'Reload required before saving' : 'Action could not be completed'} action={requiresReload ? <Button disabled={busy || uploading} onClick={askReload}>Reload saved</Button> : undefined}>{error}</Banner>}
       {check.problems.length > 0 && <Banner tone="neutral" title="Review required before saving"

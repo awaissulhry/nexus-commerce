@@ -724,6 +724,7 @@ CREATE TABLE "ProductListingAlias" (
     "position" INTEGER NOT NULL DEFAULT 1,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "adoptedFromProductId" TEXT,
+    "sku" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" TEXT,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -5600,6 +5601,18 @@ CREATE TABLE "SavedView" (
 );
 
 -- CreateTable
+CREATE TABLE "UserSheetLayout" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "surface" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "UserSheetLayout_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Review" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -10047,6 +10060,9 @@ CREATE INDEX "ProductListingAlias_workspaceId_idx" ON "ProductListingAlias"("wor
 CREATE UNIQUE INDEX "ProductListingAlias_coord_position_key" ON "ProductListingAlias"("workspaceId", "productId", "channel", "marketplace", "channelConnectionId", "position");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ProductListingAlias_workspace_sku_key" ON "ProductListingAlias"("workspaceId", "sku");
+
+-- CreateIndex
 CREATE INDEX "ChannelListingSnapshot_channelListingId_createdAt_idx" ON "ChannelListingSnapshot"("channelListingId", "createdAt");
 
 -- CreateIndex
@@ -12724,6 +12740,9 @@ CREATE INDEX "SavedView_workspaceId_idx" ON "SavedView"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "SavedView_userId_surface_name_key" ON "SavedView"("workspaceId", "userId", "surface", "name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserSheetLayout_userId_surface_key" ON "UserSheetLayout"("userId", "surface");
 
 -- CreateIndex
 CREATE INDEX "Review_productId_postedAt_idx" ON "Review"("productId", "postedAt");

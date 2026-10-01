@@ -12,7 +12,7 @@ import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
 import { familyPublicationOrder } from './family-publication-order.js'
-import { ebayListingLevelValues, isEbayListingLevel, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
+import { ebayListingLevelValues, isEbayItemLevel, isEbayListingLevel, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
 
@@ -43,11 +43,16 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: scope.channel,
     marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: destination.aliasKey ?? '' }, include: { translations: true, offers: true } })
   const excludedIds = await readExcludedListingIds(listings.map(l => l.id))
+  // Audit P4 (2026-10-01) — an eBay family never started here (its main listing, no variant has a row at this destination
+  // and nothing of it is live) publishes all its variants: "no included variants" was a dead end, and the send starts their
+  // draft rows itself (`ensureDraftListings`, `family: false`). The review lists every product it sends and says why.
+  const unstarted = scope.channel === 'EBAY' && !destination.aliasKey && products.length > 1
+    && !listings.some(l => l.externalListingId) && !listings.some(l => l.productId !== parent.id)
   // VTR step 0 — the one "included" rule Information and the dock use (`studio-sheet.service.ts`, `family-projection.service.ts`):
   // a VARIANT is in this listing only with its own row here that is not excluded. A variant with no row is not sent.
   const selected = products.filter(p => {
     const rows = listings.filter(l => l.productId === p.id)
-    return (p.id === parent.id || rows.length > 0) && !rows.some(l => excludedIds.has(l.id))
+    return (p.id === parent.id || rows.length > 0 || unstarted) && !rows.some(l => excludedIds.has(l.id))
   })
     .sort(familyPublicationOrder(p => p.id === parent.id))
   const closed = scope.channel === 'AMAZON' ? await closedMarketSet(selected.map(p => p.id)) : new Set<string>()
@@ -60,8 +65,10 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   if (!selected.some(p => p.id === parent.id)) error('The parent listing is excluded. Include it before publishing this family.')
   if ((parent.isParent || parent.isMaster) && selected.length < 2) error('This family has no included variants to publish.')
   for (const skip of skipped) issues.push({ ...skip, message: skip.reason, severity: 'warning' })
+  if (unstarted) issues.push({ severity: 'warning', message: `No variant had an eBay row here yet, so all ${selected.length - 1} variants are included. Publishing starts their eBay rows.` })
   if (included.length > 200) error('This family exceeds the publication limit of 200 products.')
-  if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error('Reconnect this account before publishing.')
+  // Audit P12 — say WHICH account and where (the studio footer says the same).
+  if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error(`Reconnect ${account.displayName?.trim() || 'this account'} in Settings → Channels before publishing.`)
   // Publish's lock: a paused still-draft may be sent (Publish is what makes it live); any other paused listing is refused.
   for (const listing of listings.filter(l => included.some(p => p.id === l.productId))) {
     const refusal = assertPublishAllowed(listing)
@@ -83,11 +90,14 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
       valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value }) : []
     const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])
     const reporterOf = (field: string) => levels.find(level => level.field.key === field)?.supplier.productId ?? parent.id
+    // Follow-up 2026-10-01 — Condition, policies, location, package… go to eBay once, from the main row: only it is judged.
+    const itemLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayItemLevel(field.store)).map(field => field.key) : [])
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
       if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
       // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
       if (listingLevelKeys.has(field) && row.productId !== reporterOf(field)) continue
+      if (itemLevelKeys.has(field) && row.productId !== parent.id) continue
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
       for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
@@ -101,13 +111,17 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     const listing = listings.find(l => l.productId === product.id)
     const content = await resolvePublishContent({ product: product as any, parent: product.id === parent.id ? null : parent as any,
       listing, channel: scope.channel, marketplace: scope.marketplace })
+    // An eBay variation listing sends ONE title and description, the main row's: a variation's own text is not judged.
+    const variationText = !!ebayAxes && product.id !== parent.id
     for (const issue of publishContentIssues(content)) {
       if (issue.severity === 'ERROR' && !requireReviewedContent()) continue
+      if (variationText && ['title', 'description'].includes(issue.field ?? '')) continue
       issues.push({ productId: product.id, sku: product.sku, field: issue.field, message: issue.message, severity: issue.severity === 'ERROR' ? 'error' : 'warning' })
     }
     // A-32 (R-30) — a pinned own text that is the primary-language text, on a market that speaks another language.
     for (const issue of foreignOwnTextIssues({ channel: scope.channel, marketplace: scope.marketplace, marketLanguages: languages,
       product: product as any, parent: product.id === parent.id ? null : parent as any, listing: listing as any })) {
+      if (variationText && ['title', 'description'].includes(issue.field)) continue
       issues.push({ productId: product.id, sku: product.sku, field: issue.field, message: issue.message, severity: 'warning' })
     }
   }

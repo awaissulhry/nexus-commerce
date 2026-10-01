@@ -64,7 +64,7 @@ export function ExportDialog({ open, onClose, context, visibleFields, onReferenc
   return (
     <Modal open={open} onClose={onClose} size="md" title="Export" subtitle="Download a file to edit. Import it back when you are done."
       footer={<>
-        {onReference && <Button size="sm" variant="ghost" title="A CSV of the table on screen, for reading only. It cannot be imported." onClick={() => { onReference(); onClose() }}>Table on screen (CSV)</Button>}
+        {onReference && <Button size="sm" variant="ghost" title="A CSV of the table on screen, for reading only. It cannot be imported." onClick={() => { onReference(); onClose() }}>Export table</Button>}
         <span className="grow" />
         <Button size="sm" variant="secondary" onClick={onClose}>{notes ? 'Close' : 'Cancel'}</Button>
         <Button size="sm" variant="primary" disabled={!derived || !!derived.blocker || busy} onClick={download}>{busy ? 'Preparing file…' : 'Download'}</Button>

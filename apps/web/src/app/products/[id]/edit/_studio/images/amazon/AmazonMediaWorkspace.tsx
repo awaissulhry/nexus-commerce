@@ -18,7 +18,7 @@ import { BulkImageAssignment } from './BulkImageAssignment'
 import { SkuSelection } from './SkuSelection'
 import { SafetyImageExport } from './SafetyImageExport'
 import styles from './media.module.css'
-import { connectAccountSentence, coordinateName, mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence } from '../../draftListing'
+import { connectAccountSentence, mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence, noAccountTitle, notListedTitle } from '../../draftListing'
 
 const working = (run: AmazonMediaRun | null) => !!run && ['REVIEW_QUEUED', 'REVIEWING', 'QUEUED', 'READY', 'SUBMITTING'].includes(run.status)
 const sending = (run: AmazonMediaRun | null) => !!run && ['QUEUED', 'READY', 'SUBMITTING'].includes(run.status)
@@ -221,7 +221,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
     editSlot(code, slots[next.code] ?? null); editSlot(next.code, slots[code] ?? null)
   }
 
-  if (!workspace || !draft) return <div className={styles.loading}>{error ? <><EmptyState title="Amazon images unavailable" description={error} action={<Button onClick={() => void reload()}>Retry</Button>} />
+  if (!workspace || !draft) return <div className={styles.loading}>{error ? <><EmptyState title="Amazon images unavailable" description={error} action={<Button onClick={() => void reload()}>Try again</Button>} />
     {listingChoices.length > 0 && <Field label="Choose an Amazon listing"><Select value="" onChange={event => onListingChange(event.target.value)}><option value="">Choose listing</option>{listingChoices.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</Select></Field>}</> : <p role="status">Loading Amazon images…</p>}</div>
   const themes = [...new Set(items.flatMap(i => i.theme ? [i.theme] : []))]
   const activeObservation = item && workspace.observations[item.id]
@@ -269,9 +269,9 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
       </aside>
       <section className={styles.canvas} aria-label="Amazon gallery editor">
         {error && <Banner tone="danger" title="Action needs attention" children={error} />}
-        {gate === 'starts-draft' && <Banner tone="info" title={`Not listed on ${coordinateName('AMAZON', workspace.destination.marketplace)} yet`}>{mediaDraftStartSentence('AMAZON', workspace.destination.marketplace)}</Banner>}
+        {gate === 'starts-draft' && <Banner tone="info" title={notListedTitle('AMAZON', workspace.destination.marketplace)}>{mediaDraftStartSentence('AMAZON')}</Banner>}
         {gate === 'choose-listing' && <Banner tone="neutral" title="Choose a listing to edit">This listing alias has no Amazon listing here. Choose another listing above.</Banner>}
-        {gate === 'no-account' && <Banner tone="warning" title="No Amazon account">{connectAccountSentence('AMAZON', workspace.destination.marketplace)}</Banner>}
+        {gate === 'no-account' && <Banner tone="warning" title={noAccountTitle('AMAZON')}>{connectAccountSentence('AMAZON', workspace.destination.marketplace)}</Banner>}
         {message && <p role="status" className={styles.note}>{message}</p>}
         {workspace.warnings.map(warning => <Banner key={warning} tone="warning" children={warning} />)}
         <div className={styles.galleryHeading}>

@@ -113,11 +113,14 @@ export async function assignCreditNoteNumber(
         ? `Resa merce — ${refund.return.rmaNumber}`
         : 'Resa merce')
 
-    // Atomic counter increment + sequence return.
+    // Atomic counter increment + sequence return. The conflict target
+    // must be the table's real unique key, its primary key
+    // ("fiscalYear", "issuer"); any other column set makes PostgreSQL
+    // refuse every call (42P10).
     const rows = await tx.$queryRaw<Array<{ current: number }>>`
       INSERT INTO "CreditNoteCounter" ("fiscalYear", "issuer", "current", "updatedAt")
       VALUES (${fiscalYear}, ${issuer}, 1, CURRENT_TIMESTAMP)
-      ON CONFLICT ("workspaceId", "fiscalYear", "issuer") DO UPDATE
+      ON CONFLICT ("fiscalYear", "issuer") DO UPDATE
         SET "current" = "CreditNoteCounter"."current" + 1,
             "updatedAt" = CURRENT_TIMESTAMP
       RETURNING "current"

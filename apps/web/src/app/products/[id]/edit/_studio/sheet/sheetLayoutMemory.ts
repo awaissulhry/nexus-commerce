@@ -150,6 +150,8 @@ export function withPick(layout: ColumnsViewPayload | null, pick: SheetPick): Wo
 const sessionPicks = new Map<string, SheetPick>()
 export function rememberPick(surface: string, pick: SheetPick): void { sessionPicks.set(surface, pick) }
 export function recalledPick(surface: string): SheetPick | null { return sessionPicks.get(surface) ?? null }
+/** A newer record from another tab replaces this tab's pick: the saved layout is the one truth (2026-10-01). */
+export function forgetPick(surface: string): void { sessionPicks.delete(surface) }
 /** Tests only. */
 export function forgetSessionPicks(): void { sessionPicks.clear() }
 
@@ -189,14 +191,12 @@ export function chooseLanding(input: LandingChoiceInput): LandingChoice {
 
 /* ── 3. progress columns and the variation theme ──────────────────────────────────────────── */
 
-/** Customise's own group for the variation theme — right after Progress, where the sheet shows it until it is moved. */
-export const FIXED_GROUP_KEY = 'variation-theme'
-export const FIXED_GROUP_LABEL = 'Variation theme'
 /**
  * The groups the sheet shows FIRST by default. A layout saved before one of them existed never ordered it; Customise then
- * lists it first too (not at the bottom), so the dialog and the sheet agree.
+ * lists it first too (not at the bottom), so the dialog and the sheet agree. (Until 2026-10-01 the variation theme had a
+ * front group of its own; it now sits in its group — Offer Identity, or Variations on eBay and Amazon.)
  */
-export const FRONT_GROUP_KEYS = ['progress', FIXED_GROUP_KEY] as const
+export const FRONT_GROUP_KEYS = ['progress'] as const
 
 /**
  * The progress columns a payload shows by default: every one it does not hide ON PURPOSE. A v3 layout hides a key it

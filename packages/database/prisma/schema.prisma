@@ -1902,6 +1902,10 @@ model ProductListingAlias {
   /// adoption stays auditable and reversible.
   adoptedFromProductId String?
 
+  /// The seller SKU of this listing's main row (an eBay listing's parent SKU), unique in the business. Import and export
+  /// name an extra listing by it; null on an alias made before 2026-10-01 until an import gives it one.
+  sku String?
+
   listings ChannelListing[]
 
   createdAt DateTime @default(now())
@@ -1909,6 +1913,7 @@ model ProductListingAlias {
   updatedAt DateTime @updatedAt
 
   @@unique([workspaceId, productId, channel, marketplace, channelConnectionId, position], map: "ProductListingAlias_coord_position_key", name: "productId_channel_marketplace_channelConnectionId_position")
+  @@unique([workspaceId, sku], name: "workspace_sku", map: "ProductListingAlias_workspace_sku_key")
   @@index([productId])
   @@index([channel, marketplace])
   @@index([channelConnectionId])
@@ -12530,6 +12535,21 @@ model SavedView {
   @@unique([workspaceId, userId, surface, name], name: "userId_surface_name", map: "SavedView_userId_surface_name_key")
   @@index([userId, surface])
   @@index([workspaceId])
+}
+
+/// 2026-10-01 (Owner: "whenever I reload or change profiles, I should see the same layout") — a person's own product
+/// sheet layout, one per sheet (`product-edit:layout:master`, `product-edit:layout:EBAY`, …): My layout, the view
+/// picked last, widths, sort and row height. GLOBAL, not business-owned: it follows the person into every business
+/// profile. Written only through `services/sheet-layouts/user-sheet-layout.service.ts`, always for the signed-in user.
+model UserSheetLayout {
+  id        String   @id @default(cuid())
+  userId    String
+  surface   String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, surface])
 }
 
 // ─────────────────────────────────────────────────────────────────────

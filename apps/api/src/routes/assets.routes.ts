@@ -55,6 +55,7 @@ import {
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
 import { checkAssetQuality } from '../services/asset-quality.service.js'
+import { safeFetch, SafeFetchError } from '../services/net/safe-fetch.js'
 import { buildAllVariants } from '../services/channel-variants.service.js'
 import { shopifyMediaRoutes } from './shopify-media.routes.js'
 
@@ -1679,25 +1680,27 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'folderId does not exist' })
     }
 
-    let res: Response
+    // Public addresses only (MCP full control P2): the safe fetcher refuses loopback, private, link-local and
+    // metadata addresses, after DNS and on every redirect hop, and any port but 80/443.
+    const fetchCap = Math.max(MAX_UPLOAD_BYTES, MAX_VIDEO_BYTES)
+    let fetched: Awaited<ReturnType<typeof safeFetch>>
     try {
-      res = await fetch(parsed.toString(), {
-        // 15s cap; longer fetches go through the bulk flow.
-        signal: AbortSignal.timeout(15_000),
-        redirect: 'follow',
-      })
+      // 15s cap; longer fetches go through the bulk flow.
+      fetched = await safeFetch(parsed.toString(), { maxBytes: fetchCap, timeoutMs: 15_000, maxRedirects: 5 })
     } catch (err) {
+      if (err instanceof SafeFetchError && err.reason === 'refused')
+        return reply.code(400).send({ error: err.message })
+      if (err instanceof SafeFetchError && err.reason === 'status')
+        return reply.code(502).send({ error: `source URL returned ${err.status}` })
+      if (err instanceof SafeFetchError && err.reason === 'too_large')
+        return reply.code(413).send({ error: `remote file exceeds the ${fetchCap} byte limit` })
       return reply.code(502).send({
         error: 'failed to fetch the URL',
         detail: err instanceof Error ? err.message : 'unknown',
       })
     }
-    if (!res.ok)
-      return reply
-        .code(502)
-        .send({ error: `source URL returned ${res.status}` })
 
-    const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim()
+    const mimeType = fetched.contentType?.split(';')[0]?.trim()
     const isVideo = mimeType ? UPLOAD_VIDEO_MIME_TYPES.has(mimeType) : false
     const isImage = mimeType ? UPLOAD_IMAGE_MIME_TYPES.has(mimeType) : false
     if (!mimeType || (!isImage && !isVideo))
@@ -1705,29 +1708,27 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         .code(400)
         .send({ error: `unsupported content-type "${mimeType ?? 'unknown'}"` })
 
-    const arrayBuffer = await res.arrayBuffer()
+    const buffer = fetched.buffer
     const sizeCap = isVideo ? MAX_VIDEO_BYTES : MAX_UPLOAD_BYTES
-    if (arrayBuffer.byteLength > sizeCap)
+    if (buffer.byteLength > sizeCap)
       return reply.code(413).send({
         error: `remote file exceeds the ${sizeCap} byte limit`,
-        size: arrayBuffer.byteLength,
+        size: buffer.byteLength,
       })
 
     // MC.13.1 — quota check on URL imports too. Cap is the same
     // workspace-level number; URL imports count against the hard
     // cap exactly like multipart uploads.
     {
-      const quota = await checkStorageQuota(arrayBuffer.byteLength)
+      const quota = await checkStorageQuota(buffer.byteLength)
       if (!quota.ok)
         return reply.code(507).send({
           error: 'Storage quota exceeded',
           usedBytes: quota.usedBytes,
           hardCapBytes: quota.hardCap,
-          fileSize: arrayBuffer.byteLength,
+          fileSize: buffer.byteLength,
         })
     }
-
-    const buffer = Buffer.from(arrayBuffer)
 
     // MC.3.3 — same dedup path as the multipart upload. URL imports
     // are common-case for "I bought stock photos and pasted three

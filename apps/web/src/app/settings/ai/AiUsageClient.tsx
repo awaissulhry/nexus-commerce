@@ -25,6 +25,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import Link from '@/lib/workspaces/Link'
+import { productStudioPath } from '@/lib/products/studio-path'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -786,7 +787,7 @@ function TopWizardRowView({ row }: { row: TopWizardRow }) {
           : 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300'
   const isPublished = row.status === 'LIVE' || row.status === 'SUBMITTED'
   const productHref = row.productId
-    ? `/products/${row.productId}/list-wizard`
+    ? productStudioPath(row.productId)
     : null
   return (
     <tr

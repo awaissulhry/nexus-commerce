@@ -14,6 +14,7 @@ import type { ReactNode } from 'react'
 import { ExternalLink } from 'lucide-react'
 
 import type { ProductRow } from '@/app/products/_types'
+import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import { Tag, type Tone } from '@/design-system/primitives'
 import type { CoverageChannel, MenuItemDef } from '@/design-system/components'
 import {
@@ -166,8 +167,14 @@ export function variationCount(row: ProductRow): number {
   return row.childCount ?? 0
 }
 
-export const familyHref = (parentId: string) => `/products?parent=${encodeURIComponent(parentId)}`
-const editHref = (row: ProductRow) => `/products/${row.id}/edit/studio`
+/**
+ * Every product link on this page stays inside the business it is opened in (`/w/<id>/…`). The grid's cells link
+ * with `next/link` and plain `<a>`s, which drop the prefix: the name did nothing and "Open" landed on the profile
+ * picker (product journey audit C7, 2026-10-01). Read at click/render time, in the browser.
+ */
+const inBusiness = (href: string) => workspaceHref(browserWorkspaceId(), href)
+export const familyHref = (parentId: string) => inBusiness(`/products?parent=${encodeURIComponent(parentId)}`)
+const editHref = (row: ProductRow) => inBusiness(`/products/${encodeURIComponent(row.id)}/edit/studio`)
 
 /**
  * What you can do to one product — the ONE list.
