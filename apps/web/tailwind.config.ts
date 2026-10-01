@@ -15,6 +15,24 @@
 import type { Config } from 'tailwindcss'
 import colors from 'tailwindcss/colors'
 
+/**
+ * A design-system token as a Tailwind colour, with opacity modifiers kept (`text-primary/60`,
+ * `placeholder:text-tertiary`, `bg-opacity-50`): Tailwind substitutes `<alpha-value>` wherever it
+ * appears in the string, so `color-mix` carries it.
+ *
+ * Why not `rgb(var(--text-primary) / <alpha-value>)`: that needs `--text-primary` as RGB numbers,
+ * and the design system's `tokens.css` (imported by ~195 files, the top bar among them) redefines
+ * the same eleven names at `:root` as whole colours. On almost every route the whole colour won, so
+ * Tailwind built `rgb(#1c2530 / 1)` — invalid. The text colour was inherited (black on the dark
+ * page, 1.04:1), backgrounds went transparent and borders took the text colour. The `--nds-*` tokens
+ * have one form, are defined on every route (`tokens-global.css`), flip under `.dark`, and the
+ * light-pinned surfaces (the ads console, the fleet) pin them.
+ *
+ * 🔴 Only `--nds-*` tokens go through here, never `--text-*`, `--surface-*` or `--border-*`
+ * (`tailwind-token-form.vitest.test.ts` and `scripts/check-alias-form.mjs` hold this).
+ */
+const ds = (token: `--nds-${string}`) => `color-mix(in srgb, var(${token}) calc(<alpha-value> * 100%), transparent)`
+
 const config: Config = {
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
@@ -213,31 +231,32 @@ const config: Config = {
           to:      'rgb(var(--accent-to) / <alpha-value>)',
           bright:  'rgb(var(--accent-bright) / <alpha-value>)',
         },
-        // Surface tokens — now var-backed so dark mode (class) flips
-        // them automatically. Light values are pixel-identical to the
-        // old static hexes, so existing bg-surface-* / border-surface-*
-        // usages are unchanged in light mode and dark-ready for free.
+        // Surface tokens — var-backed so dark mode (class) flips them.
+        // background/card/border/border-strong read the design-system
+        // tokens (see `ds` above); elevated keeps the globals.css channel.
         surface: {
-          background:      'rgb(var(--surface-card) / <alpha-value>)',
-          card:            'rgb(var(--surface-card) / <alpha-value>)',
+          background:      ds('--nds-surface'),
+          card:            ds('--nds-surface'),
           elevated:        'rgb(var(--surface-raised) / <alpha-value>)',
           overlay:         'rgb(15 23 42 / 0.4)',
-          border:          'rgb(var(--border-subtle) / <alpha-value>)',
-          'border-strong': 'rgb(var(--border-default) / <alpha-value>)',
+          border:          ds('--nds-border-subtle'),
+          'border-strong': ds('--nds-border'),
         },
       },
 
       // ── Semantic TEXT tokens (P0) ─────────────────────────────────
-      // The fix for 6,485 raw `text-slate-400` (4.2:1, fails AA). Every
-      // value passes WCAG AA on both surface-card and surface-canvas,
-      // light AND dark (var-backed flip). Use text-secondary, not -400.
+      // The fix for 6,485 raw `text-slate-400` (4.2:1, fails AA). Use
+      // text-secondary, not -400. Contrast of the --nds-* text tokens
+      // on --nds-bg/--nds-surface, light and dark, is held by
+      // `scripts/check-nds-contrast.mjs` (light, on white: primary
+      // 15.5:1, secondary 9.9:1, tertiary 8.2:1, link 8.0:1).
       textColor: {
-        primary:   'rgb(var(--text-primary) / <alpha-value>)',   // ~17:1
-        secondary: 'rgb(var(--text-secondary) / <alpha-value>)', // ~7.5:1
-        tertiary:  'rgb(var(--text-tertiary) / <alpha-value>)',  // ~4.7:1 (AA body)
-        disabled:  'rgb(var(--text-disabled) / <alpha-value>)',  // decorative / disabled only
+        primary:   ds('--nds-text'),
+        secondary: ds('--nds-text-2'),
+        tertiary:  ds('--nds-text-3'),
+        disabled:  ds('--nds-text-disabled'), // decorative / disabled only
         inverse:   'rgb(var(--text-inverse) / <alpha-value>)',
-        link:      'rgb(var(--text-link) / <alpha-value>)',
+        link:      ds('--nds-text-link'),
       },
 
       // ── Semantic SURFACE tokens (P0) ──────────────────────────────
@@ -245,22 +264,21 @@ const config: Config = {
       // card = panel, raised = elevated/hover, sunken = inset well.
       // Named to avoid colliding with the `surface` color object above.
       backgroundColor: {
-        canvas:  'rgb(var(--surface-canvas) / <alpha-value>)',
-        card:    'rgb(var(--surface-card) / <alpha-value>)',
+        canvas:  ds('--nds-bg'),
+        card:    ds('--nds-surface'),
         raised:  'rgb(var(--surface-raised) / <alpha-value>)',
-        sunken:  'rgb(var(--surface-sunken) / <alpha-value>)',
+        sunken:  ds('--nds-surface-sunken'),
         overlay: 'rgb(var(--surface-overlay) / <alpha-value>)',
       },
 
       // ── Semantic BORDER tokens (P0) ───────────────────────────────
-      // Fix for 6,547 invisible borders. `default` (slate-300, ~1.9:1)
-      // anchors grids; `strong` (slate-400) for section dividers;
-      // `subtle` (slate-200) for nested rules. Bare `border` (DEFAULT)
-      // is untouched — these are additive.
+      // `default` anchors grids; `strong` for section dividers;
+      // `subtle` for nested rules. Bare `border` (DEFAULT) is
+      // untouched — these are additive.
       borderColor: {
-        subtle:  'rgb(var(--border-subtle) / <alpha-value>)',
-        default: 'rgb(var(--border-default) / <alpha-value>)',
-        strong:  'rgb(var(--border-strong) / <alpha-value>)',
+        subtle:  ds('--nds-border-subtle'),
+        default: ds('--nds-border'),
+        strong:  ds('--nds-border-strong'),
       },
     },
   },

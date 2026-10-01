@@ -11,35 +11,28 @@
 /* ═══════════════════════════════════════════════════════════════════
    P0 — Design-language tokens (UI_REBUILD_STRATEGY.md).
 
-   CSS variables that back the semantic tokens in tailwind.config.ts
-   (text-*, bg-canvas/card/raised/sunken, border-subtle/default/strong,
-   *-soft/line/strong). Each is space-separated RGB so Tailwind's
-   `rgb(var(--x) / <alpha-value>)` opacity syntax works.
+   CSS variables that back some semantic tokens in tailwind.config.ts
+   (text-inverse, bg-raised/overlay, *-soft/line/strong, accent). Each
+   is space-separated RGB so Tailwind's `rgb(var(--x) / <alpha-value>)`
+   opacity syntax works. ONE definition flips light↔dark.
 
-   The whole point: ONE definition flips light↔dark. Light values are
-   chosen so existing surfaces are pixel-identical; the dark block is
-   the previously-missing half of the dark-mode story.
+   🔴 NOT HERE: --text-{primary,secondary,tertiary,disabled,link},
+   --surface-{canvas,card,sunken}, --border-{subtle,default,strong}.
+   The design system's tokens.css defines those eleven at :root as
+   WHOLE colours, and on almost every route it won, so every
+   `rgb(var(--text-primary) / 1)` was invalid: inherited black text on
+   the dark page, transparent cards, borders in the text colour. Their
+   Tailwind utilities (text-primary, bg-card, border-default, …) now
+   read the --nds-* tokens instead (tailwind.config.ts `ds()`), and so
+   does `body` below. `scripts/check-alias-form.mjs` refuses any of the
+   eleven back in this file.
    ═══════════════════════════════════════════════════════════════════ */
 :root {
-  /* Text — every value passes WCAG AA on card + canvas (light). */
-  --text-primary:   15 23 42;    /* slate-900  ~17:1  */
-  --text-secondary: 71 85 105;   /* slate-600  ~7.5:1 */
-  --text-tertiary:  100 116 139; /* slate-500  ~4.7:1 (AA body) */
-  --text-disabled:  148 163 184; /* slate-400  decorative / disabled only */
   --text-inverse:   248 250 252; /* slate-50 — on dark fills */
-  --text-link:      37 99 235;   /* blue-600   ~5.2:1 */
 
   /* Surfaces — solid elevation, no translucency. */
-  --surface-canvas: 248 250 252; /* slate-50  — page */
-  --surface-card:   255 255 255; /* white     — panels/cards */
   --surface-raised: 255 255 255; /* white     — elevated (+ shadow) */
-  --surface-sunken: 241 245 249; /* slate-100 — inset wells */
   --surface-overlay: 15 23 42;   /* scrim base (used at /60) */
-
-  /* Borders — default is visible (slate-300), not the old slate-200. */
-  --border-subtle:  226 232 240; /* slate-200 — nested rules */
-  --border-default: 203 213 225; /* slate-300 — grid lines */
-  --border-strong:  148 163 184; /* slate-400 — section dividers */
 
   /* Status — SOLID soft surfaces (replace bg-*-950/40). soft=fill,
      line=border, strong=text; strong-on-soft passes AA. */
@@ -57,22 +50,10 @@
 }
 
 .dark {
-  --text-primary:   248 250 252; /* slate-50  */
-  --text-secondary: 203 213 225; /* slate-300 */
-  --text-tertiary:  148 163 184; /* slate-400 */
-  --text-disabled:  100 116 139; /* slate-500 */
   --text-inverse:   15 23 42;    /* slate-900 */
-  --text-link:      96 165 250;  /* blue-400  */
 
-  --surface-canvas: 2 6 23;      /* slate-950 — page */
-  --surface-card:   15 23 42;    /* slate-900 — panels */
   --surface-raised: 30 41 59;    /* slate-800 — elevated */
-  --surface-sunken: 2 6 23;      /* slate-950 — wells */
   --surface-overlay: 2 6 23;
-
-  --border-subtle:  30 41 59;    /* slate-800 */
-  --border-default: 51 65 85;    /* slate-700 */
-  --border-strong:  71 85 105;   /* slate-600 */
 
   /* Dark status — SOLID deep fills (not /40 tints) + light text. */
   --success-soft: 6 46 35;  --success-line: 6 95 70;   --success-strong: 110 231 183;
@@ -89,18 +70,14 @@
 
    SCOPED to .theme-console so it does NOT flip the live app. The
    /design/console preview wraps itself in `.dark .theme-console`:
-   `.dark` supplies the dark text/status tokens, `.theme-console`
-   deepens the canvas to a blue-black and brightens the accent. When
-   approved, P2 promotes this to the global shell.
+   `.dark` supplies the dark tokens (text, cards and borders are the
+   --nds-* ones, like everywhere else), `.theme-console` deepens the
+   canvas to a blue-black and brightens the accent. When approved, P2
+   promotes this to the global shell.
    ═══════════════════════════════════════════════════════════════════ */
 .theme-console {
-  --surface-canvas: 8 10 20;     /* #08 0A 14 — deep blue-black */
-  --surface-card:   17 20 34;    /* lifted panel */
+  --console-canvas: 8 10 20;     /* #08 0A 14 — deep blue-black */
   --surface-raised: 26 30 50;    /* elevated */
-  --surface-sunken: 5 7 14;      /* wells */
-  --border-subtle:  41 47 70;
-  --border-default: 56 64 92;
-  --border-strong:  84 94 128;
   --accent: 129 140 248;         /* indigo-400 */
 }
 
@@ -127,7 +104,7 @@
    Pure decoration; sits at low opacity so it never fights legibility. */
 .theme-console .console-atmosphere {
   position: relative;
-  background-color: rgb(var(--surface-canvas));
+  background-color: rgb(var(--console-canvas));
   background-image:
     radial-gradient(60rem 40rem at 12% -10%, rgb(99 102 241 / 0.18), transparent 60%),
     radial-gradient(50rem 36rem at 100% 0%, rgb(34 211 238 / 0.12), transparent 55%);
@@ -210,9 +187,12 @@ html {
 body {
   /* P0 — var-backed so dark mode flips; Inter as the default family
      with a hardened fallback chain; antialiasing so Inter renders
-     crisp (not heavy) — directly addresses the "too thin" complaint. */
-  background-color: rgb(var(--surface-canvas));
-  color: rgb(var(--text-primary));
+     crisp (not heavy) — directly addresses the "too thin" complaint.
+     The colours are the design system's: `rgb(var(--text-primary))`
+     was invalid wherever tokens.css loaded (see the top of this file),
+     so inherited text was black, also on the dark page. */
+  background-color: var(--nds-bg);
+  color: var(--nds-text);
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
     'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;

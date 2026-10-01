@@ -4,8 +4,8 @@
  * grid actually paint with (`--nds-*` in `apps/web/src/design-system/styles/tokens.css`), light and dark, at 7:1 (AAA)
  * and 4.5:1 (AA).
  *
- * ── Why this and not `check-contrast.mjs` ────────────────────────────────────────────────────────────────────────────
- * `check-contrast.mjs` measures the legacy `--text-*` tokens in `globals.css` through a hand-written colour map. The studio
+ * ── Why this and not `check-contrast.mjs` (retired 2026-10-01) ──────────────────────────────────────────────────────
+ * `check-contrast.mjs` measured the legacy `--text-*` tokens in `globals.css` through a hand-written colour map. The studio
  * references `--nds-*` only, so a gate there goes green or red about text the sheet never draws (PLAN-REVIEW-2026-09-22 §4).
  *
  * ── Nothing here is a hand-kept member list ──────────────────────────────────────────────────────────────────────────
