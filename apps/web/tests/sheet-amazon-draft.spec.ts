@@ -164,7 +164,8 @@ test.describe('Amazon attribute drafts', () => {
         await expect(dialog).toContainText(warning(key))
         await expect(dialog).toContainText(value ?? 'Empty')
         if (key === fields[fields.length - 1]) await page.screenshot({ path: info.outputPath(`amazon-draft-${theme}-${width}.png`), fullPage: true })
-        await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+        // The DS dialog has a header × and a footer button, both named Close: use the footer one.
+        await dialog.getByRole('button', { name: 'Close', exact: true }).last().click()
         const sent = saves.slice(requestCount)
         expect(sent).toHaveLength(1)
         expect(sent[0].method()).toBe('POST')
