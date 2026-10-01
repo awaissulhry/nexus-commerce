@@ -48,6 +48,7 @@ import { ledgerInputs, loadSyncLedgers } from "./stock-pool/sync-ledgers.js";
 import { loadChannelPolicies, policyFor } from "./sync-control-policy.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
 import { productEventService } from "./product-event.service.js";
+import { recordListingSyncOutcome } from "./listing-sync-outcome.js";
 import {
   reviseInventoryStatus as ebayReviseInventoryStatus,
   reviseInventoryStatusBatch as ebayReviseInventoryStatusBatch,
@@ -964,6 +965,8 @@ export class OutboundSyncService {
               where: { id: item.id },
               data: completion,
             });
+            // 2026-10-01 — the listing's own status follows the send (it stayed "Pending" after a successful send).
+            if (completion.syncStatus === 'SUCCESS') await recordListingSyncOutcome(prisma, { channelListingId: item.channelListingId, productId: item.productId, outcome: 'sent' });
             startAfterAnswer(result);
             if (completion.syncStatus === 'SKIPPED') stats.skipped++;
             else stats.succeeded++;
@@ -1047,6 +1050,8 @@ export class OutboundSyncService {
               where: { id: item.id },
               data: completion,
             });
+            // 2026-10-01 — the listing's own status follows the send (it stayed "Pending" after a successful send).
+            if (completion.syncStatus === 'SUCCESS') await recordListingSyncOutcome(prisma, { channelListingId: item.channelListingId, productId: item.productId, outcome: 'sent' });
             startAfterAnswer(result);
             if (completion.syncStatus === 'SKIPPED') stats.skipped++;
             else stats.succeeded++;
@@ -2703,6 +2708,7 @@ export class OutboundSyncService {
           diedAt: new Date(),
         },
       });
+      await recordListingSyncOutcome(prisma, { channelListingId: queueItem.channelListingId, productId: queueItem.productId, outcome: 'failed', error: errorMessage });
       productEventService
         .emit({
           aggregateId: queueItem.productId ?? queueItem.id,

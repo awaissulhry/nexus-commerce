@@ -25,6 +25,8 @@ interface RefreshResult {
   /** CX — cells the engine refused (no FX rate): not written, their old snapshot dropped. */
   refused: number
   skusProcessed: number
+  /** `refreshAllSnapshots` only: rows of cells that no longer exist, removed after the full refresh. */
+  removed?: number
   durationMs: number
 }
 
@@ -226,8 +228,14 @@ export async function refreshAllSnapshots(
   })
   const allSkus = [...new Set([...variants.map((v) => v.sku), ...products.map((p) => p.sku)])]
   const result = await refreshSnapshotsForSkus(prisma, allSkus)
+  // 2026-10-01 — a full refresh is the whole catalogue: a cell it did not write is a cell that no longer exists (the
+  // product was deleted, the listing or the FBA/FBM offer removed). Those rows stayed, with their old prices, and the
+  // page's snapshot age kept reading the oldest of them (production: 177 rows of 49 deleted products, from May). A
+  // non-refusal engine error throws above, so reaching here means every live cell was written at or after `startedAt`.
+  const stale = await prisma.pricingSnapshot.deleteMany({ where: { computedAt: { lt: new Date(startedAt) } } })
   return {
     ...result,
+    removed: stale.count,
     durationMs: Date.now() - startedAt,
   }
 }
