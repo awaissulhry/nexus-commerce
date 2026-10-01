@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { ProductTransferOptions, SheetImportStatus } from '@nexus/shared/catalog-transfer'
 import { defaultExportChoice, exportBlocker, exportDestinations, exportLanguages, exportProductIds, exportSelection, type ExportContext } from './exportModel'
-import { applyLabel, cellValue, changeCells, displayValue, doneView, focusChange, summaryLine, whereInFile } from './importModel'
+import { applyLabel, cellValue, changeCells, displayValue, doneView, focusChange, openFamilyActions, summaryLine, whereInFile } from './importModel'
 import { exportNotesOf } from './sheetTransferApi'
 
 const listing = (id: string, productId: string, channel: string, marketplace: string, accountId = 'acc-1', aliasKey = '') =>
@@ -91,6 +91,15 @@ describe('import words', () => {
     expect(doneView(status({ state: 'PARTIAL', receipt: { saved: 39, failed: 1, skipped: 0 } })).tone).toBe('warning')
     expect(doneView(status({ state: 'DONE', format: 'undo', receipt: { saved: 40, failed: 0, skipped: 0 } })).title).toBe('Import undone')
     expect(doneView(status({ state: 'FAILED', error: 'The check was interrupted. Drop the file again.' })).body).toBe('The check was interrupted. Drop the file again.')
+  })
+  // Phase 2 (2026-10-01) — a file that created another product family: the done screen opens it, and it is published from there.
+  it('offers "Open <SKU>" for each family the import created besides the open product, once the import is done', () => {
+    const created = status({ state: 'DONE', receipt: { saved: 131, failed: 0, skipped: 0 }, newFamilies: [{ productId: 'cm 1', sku: 'GALE-JACKET' }] })
+    expect(openFamilyActions(created)).toEqual([{ label: 'Open GALE-JACKET', href: '/products/cm%201/edit/studio' }])
+    expect(doneView(created).body).toBe('Nothing was sent to the channels. New product: GALE-JACKET. Open it to publish.')
+    expect(openFamilyActions(status({ state: 'READY', newFamilies: [{ productId: 'p', sku: 'X' }] }))).toEqual([])
+    expect(openFamilyActions(status({ state: 'DONE' }))).toEqual([])
+    expect(openFamilyActions(null)).toEqual([])
   })
   it('values read like the sheet: empty is a dash, lists are joined, a measure has its unit, inherited says so', () => {
     expect(displayValue(null)).toBe('—')

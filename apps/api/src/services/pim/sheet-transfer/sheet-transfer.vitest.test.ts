@@ -8,7 +8,7 @@ import { sheetCellMarker, type TransferRow } from '@nexus/shared/catalog-transfe
 import { writeCatalogWorkbook, readCatalogWorkbook, type WorkbookScope } from '../catalog-workbook.js'
 import { sheetTabNames } from '../catalog-editor-workbook.js'
 import { undeclaredListingValues } from '../catalog-transfer-export.js'
-import { sameValue } from './sheet-import.service.js'
+import { planChanges, sameValue } from './sheet-import.service.js'
 import { inDatabaseTransaction, beforeDatabaseCommit, hasBeforeDatabaseCommit, dropBeforeDatabaseCommit } from '../../../lib/database-context.js'
 
 const base: TransferRow = { row: 3, entity: 'Products', sku: 'JACKET-M', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'Gale jacket', version: 7 }
@@ -166,5 +166,77 @@ describe('before-commit producers: a wider producer covers narrower ones', () =>
   it('outside a transaction there is nothing registered and nothing to drop', () => {
     expect(hasBeforeDatabaseCommit('readiness:root')).toBe(false)
     expect(() => dropBeforeDatabaseCommit('readiness:')).not.toThrow()
+  })
+})
+
+// Phase 2 (the Owner, 2026-10-01) — an import that creates products: every made thing is first in the review, in the order
+// Apply makes it, as status "new"; then the values of each new listing. After Apply the made things read "saved".
+describe('the review of an import that creates a family', () => {
+  const row = (sku: string, field: string, value: unknown): TransferRow => ({ ...base, entity: 'Overrides', sku, channel: 'EBAY', accountId: 'acc-1', marketplace: 'IT', field, value, version: 0 })
+  const payload = {
+    labels: {}, listingPlan: {
+      names: [], creates: [{ sku: 'IT-GALE', rootId: '', rootSku: 'GALE', accountId: 'acc-1', marketplace: 'IT', rows: [row('GALE-BLACK-M', 'price', 105)] }],
+      families: [{ rootSku: 'GALE', name: 'Giacca', theme: 'Colore,Taglia', axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }],
+        children: [{ sku: 'GALE-BLACK-M', name: 'Giacca', values: { color: 'Nero', size: 'M' } }], restore: {} }],
+      mains: [{ rootSku: 'GALE', rootId: '', accountId: 'acc-1', marketplace: 'IT', rows: [row('GALE', 'title', 'Giacca GALE')] }],
+    },
+  }
+  it('lists the new product, its variations, the main listing and its values, then the extra listings', () => {
+    expect(planChanges(payload as never).map(c => [c.sku, c.destination, c.label, c.after, c.status])).toEqual([
+      ['GALE', 'Shared', 'Product', 'New product GALE (varies by Colore, Taglia)', 'new'],
+      ['GALE-BLACK-M', 'Shared', 'Variation', 'New variation GALE-BLACK-M (Nero · M)', 'new'],
+      ['GALE', 'eBay · IT', 'Listing', 'New listing (draft)', 'new'],
+      ['GALE', 'eBay · IT', 'Title', 'Giacca GALE', 'new'],
+      ['GALE', 'eBay · IT · IT-GALE', 'Listing', 'New listing IT-GALE (draft)', 'new'],
+      ['GALE-BLACK-M', 'eBay · IT · IT-GALE', 'Price', 105, 'new'],
+    ])
+  })
+  it('says the open product becomes the parent, and shows what Apply made as saved', () => {
+    const adopted = { ...payload, listingPlan: { ...payload.listingPlan, families: [{ ...payload.listingPlan.families[0], adoptId: 'open' }] },
+      familiesDone: { families: [], mains: [] }, listingsDone: { named: [], created: [] } }
+    const rows = planChanges(adopted as never)
+    expect(rows[0]).toMatchObject({ sku: 'GALE', before: 'No variations', after: 'GALE becomes a product with variations (varies by Colore, Taglia)', status: 'saved' })
+    expect(rows.every(c => c.status === 'saved')).toBe(true)
+    expect(rows.some(c => c.field === 'title' || c.field === 'price')).toBe(false)
+  })
+  it('an undo says what goes to the recycle bin, and that the open product stays a parent', () => {
+    const undo = { labels: {}, listingUndo: { named: [], created: [],
+      families: [{ rootId: 'open', rootSku: 'GALE', adopted: true, axes: ['Colore', 'Taglia'], products: [{ id: 'v1', sku: 'GALE-BLACK-M' }] }],
+      mains: [{ rootId: 'open', rootSku: 'GALE', accountId: 'acc-1', marketplace: 'IT', listings: [{ id: 'l0', productId: 'open' }, { id: 'l1', productId: 'v1' }] }] } }
+    expect(planChanges(undo as never).map(c => [c.sku, c.before, c.after])).toEqual([
+      ['GALE', '1 variation', 'GALE stays a product with variations (Colore, Taglia). Its variations go to the recycle bin.'],
+      ['GALE-BLACK-M', 'Product GALE-BLACK-M', 'In the recycle bin'],
+      ['GALE', 'Draft listing', 'Removed'],
+    ])
+  })
+})
+
+// Phase 2b (the Owner, 2026-10-01) — an existing family the file completes: its new axes, variations and values, as "New";
+// an undo puts them back to none.
+describe('the review of an import that completes an existing family', () => {
+  it('lists the axes it gets, its new variations, the values it lacked, then the new variations’ listing values', () => {
+    const payload = { labels: {}, listingPlan: { names: [], creates: [], mains: [], families: [{ rootSku: 'GALE', existingId: 'r1', name: 'Gale', theme: '', setsAxes: true,
+      axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }], restore: {},
+      children: [{ sku: 'GALE-YELLOW-M', name: 'Gale (Giallo, M)', values: { color: 'Giallo', size: 'M' } }],
+      fills: [{ productId: 'v1', sku: 'GALE-BLACK-M', values: { color: 'Nero', size: 'M' } }],
+      listings: [{ accountId: 'acc-1', aliasKey: 'a1', marketplace: 'IT', label: 'IT-GALE' }],
+      rows: [{ ...base, entity: 'Overrides', sku: 'GALE-YELLOW-M', channel: 'EBAY', accountId: 'acc-1', marketplace: 'IT', aliasKey: 'a1', field: 'price', value: 105 }] }] } }
+    expect(planChanges(payload as never).map(c => [c.sku, c.destination, c.label, c.before, c.after, c.status])).toEqual([
+      ['GALE', 'Shared', 'Axes', null, 'Colore, Taglia', 'new'],
+      ['GALE-YELLOW-M', 'Shared', 'Variation', null, 'New variation GALE-YELLOW-M (Giallo · M)', 'new'],
+      ['GALE-BLACK-M', 'Shared', 'Colore', null, 'Nero', 'new'],
+      ['GALE-BLACK-M', 'Shared', 'Taglia', null, 'M', 'new'],
+      ['GALE-YELLOW-M', 'eBay · IT · IT-GALE', 'Price', null, 105, 'new'],
+    ])
+  })
+  it('an undo puts the axes and values back to none and the new variations in the recycle bin', () => {
+    const undo = { labels: {}, listingUndo: { named: [], created: [], mains: [], families: [{ rootId: 'r1', rootSku: 'GALE', adopted: false, existing: true,
+      axes: ['Colore', 'Taglia'], axisCodes: ['color', 'size'], axesSet: ['color', 'size'], products: [{ id: 'n1', sku: 'GALE-YELLOW-M' }],
+      filled: [{ productId: 'v1', sku: 'GALE-BLACK-M', values: { color: 'Nero' } }] }] } }
+    expect(planChanges(undo as never).map(c => [c.sku, c.label, c.before, c.after])).toEqual([
+      ['GALE', 'Axes', 'Colore, Taglia', null],
+      ['GALE-BLACK-M', 'Colore', 'Nero', null],
+      ['GALE-YELLOW-M', 'Product', 'Product GALE-YELLOW-M', 'In the recycle bin'],
+    ])
   })
 })

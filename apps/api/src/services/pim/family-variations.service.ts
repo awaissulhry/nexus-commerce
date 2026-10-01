@@ -42,7 +42,8 @@ export interface VariationValueChange {
 type Bag = Record<string, unknown>
 const bag = (value: unknown): Bag => value && typeof value === 'object' && !Array.isArray(value) ? value as Bag : {}
 
-async function dictionary(): Promise<DictionaryAttribute[]> {
+/** The business's attribute dictionary, as the writers read it (the eBay import plans a new family's axes against it too). */
+export async function variationDictionary(): Promise<DictionaryAttribute[]> {
   return prisma.customAttribute.findMany({ where: { archivedAt: null }, orderBy: { code: 'asc' }, select: {
     id: true, code: true, label: true, semanticKey: true, archivedAt: true,
     options: { orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], select: { id: true, code: true, label: true, metadata: true, synonyms: true, sortOrder: true, archivedAt: true } },
@@ -70,7 +71,7 @@ export async function setFamilyVariationValues(familyId: string, input: { expect
     if (root.version !== input.expectedVersion) throw new FamilyVariationError('This family changed. Reload and review the change again.', 409, { current: root.version })
 
     // The family's axes → dictionary attributes: the stored codes, else today's labels through the concept.
-    const attributes = await dictionary()
+    const attributes = await variationDictionary()
     const axes = (root.variationAxisCodes.length ? root.variationAxisCodes : root.variationAxes).map(name => {
       const found = root.variationAxisCodes.length ? { attribute: attributes.find(a => a.code === name) ?? null } : attributeForAxis(name, attributes)
       if (!found.attribute) throw new FamilyVariationError(`The ${name} axis of ${root.sku} is not linked to a dictionary attribute. Link it before editing values.`, 409)
@@ -176,7 +177,7 @@ export async function setFamilyAxes(familyId: string, input: { expectedVersion: 
     if (!root) throw new FamilyVariationError('This family no longer exists.', 404)
     if (root.parentId) throw new FamilyVariationError('Set axes on the family parent.', 400)
     if (root.version !== input.expectedVersion) throw new FamilyVariationError('This family changed. Reload and review the change again.', 409, { current: root.version })
-    const attributes = await dictionary()
+    const attributes = await variationDictionary()
     const names = (label: string, code: string) => { const found = attributeForAxis(label, attributes); return !('reason' in found) && found.attribute.code === code }
     const mirror = input.codes.map((code, i) => {
       const attribute = attributes.find(a => a.code === code)
@@ -226,7 +227,7 @@ export async function setFamilyValueOrder(familyId: string, input: { expectedVer
     if (!root) throw new FamilyVariationError('This family no longer exists.', 404)
     if (root.parentId) throw new FamilyVariationError('Set the value order on the family parent.', 400)
     if (root.version !== input.expectedVersion) throw new FamilyVariationError('This family changed. Reload and review the change again.', 409, { current: root.version })
-    const attributes = await dictionary()
+    const attributes = await variationDictionary()
     for (const [code, options] of entries) {
       if (!root.variationAxisCodes.includes(code)) throw new FamilyVariationError(`This family does not vary by ${code}.`, 400)
       const attribute = attributes.find(a => a.code === code)

@@ -7,6 +7,12 @@ import { TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
 import { EBAY_WORKBOOK_COLUMNS } from '../channel-mapping/defaults.js'
 import { ebayChannelKeyOf, headerNames } from '../channel-mapping/ebay-draft.js'
 import { ignoredReason, unmappedReason, type ReaderMapping } from '../channel-mapping/decisions.js'
+// Pure modules only: the parse worker imports this file (`readEbayWorkbook`), and it must never load Prisma.
+import { parseThemeAxes } from '../ebay-theme-axes.js'
+import { attributeForAxis, valueIdentity, type AxisAttribute, type DictionaryAttribute } from './family-variations-core.js'
+import { canonicalVariantAxis } from './variant-attribute-keys.js'
+import { variationBag } from './shared-variation-values.js'
+import { variationAxisValue } from './variation-collisions.js'
 
 /**
  * CFI-5 (R-CFI-1) — our eBay listing workbooks, every family and both shapes the Owner holds:
@@ -46,9 +52,54 @@ export interface EbayLink { fileSku: string; proposedSku: string; reason: string
  */
 export interface EbayListingPlan {
   names: { aliasId: string; sku: string; rootId: string; rootSku: string; label: string; accountId: string; marketplace: string }[]
+  /** `rootId` is '' for a family Apply creates first (`families`); Apply finds it by `rootSku`. */
   creates: { sku: string; rootId: string; rootSku: string; accountId: string; marketplace: string; rows: TransferRow[] }[]
+  /** Phase 2 (the Owner, 2026-10-01: "import any files to then create new products based on the SKUs"). */
+  families?: EbayFamilyPlan[]
+  /** The main eBay listing of a family that has none on this market: Apply makes its drafts, then saves these rows. */
+  mains?: EbayMainListingPlan[]
 }
+/**
+ * A product family the file names and Nexus does not hold: Apply creates the products (DRAFT), or makes the open product
+ * their parent (`adoptId`), then writes the axes and values through the one writer (`family-variations.service.ts`).
+ */
+export interface EbayFamilyPlan {
+  rootSku: string
+  /** The studio's open product, when it becomes this family's parent. Undo leaves it a parent; it never deletes it. */
+  adoptId?: string
+  /**
+   * Phase 2b (the Owner, 2026-10-01) — an EXISTING family the file completes: its root. Apply adds its new variations and
+   * the axes and values it lacks; it never overwrites what the family has.
+   */
+  existingId?: string
+  /** An existing family that had no axes gets these (`axes`) from the file. */
+  setsAxes?: boolean
+  /** Values the existing variations lack, from the file: attribute code → value. */
+  fills?: { productId: string; sku: string; values: Record<string, string> }[]
+  /** The family's listings the file names: each new variation gets an inert draft row on every one of them. */
+  listings?: { accountId: string; aliasKey: string; marketplace: string; label: string }[]
+  /** The file's rows for the new variations on those listings, checked and saved once their rows exist. */
+  rows?: TransferRow[]
+  /** A new root's name (the main parent row's Title). An adopted product keeps its own name. */
+  name: string
+  /** The root's `variationTheme`: the file's Variation Theme, else the axis labels. */
+  theme: string
+  /** Dictionary attribute codes, with the file's spelling ("Colore") as the label mirror. */
+  axes: { code: string; label: string }[]
+  /** `values`: attribute code → the file's value. */
+  children: { sku: string; name: string; values: Record<string, string> }[]
+  /** SKU → id: products an earlier, undone import put in the recycle bin. Apply brings them back instead of creating them. */
+  restore: Record<string, string>
+}
+export interface EbayMainListingPlan { rootSku: string; rootId: string; accountId: string; marketplace: string; rows: TransferRow[] }
 export const NEW_LISTING_KEY = 'new:'
+/** Products an import creates carry this `importSource`: only these may be brought back from the recycle bin by an import. */
+export const SHEET_IMPORT_SOURCE = 'SHEET_IMPORT'
+/** What a new family is planned against: the open product's family root and the business's attribute dictionary. */
+export interface EbayFamilyContext {
+  open?: { id: string; sku: string; children: number }
+  dictionary?: readonly DictionaryAttribute[]
+}
 export interface EbayWorkbookResult {
   rows: TransferRow[]; issues: TransferIssue[]; exclusions: SourceExclusion[]
   ledger: EbayLedgerEntry[]; links: EbayLink[]; warnings: string[]
@@ -153,7 +204,9 @@ function decideRecord(out: EbayWorkbookResult, table: EbayWorkbookTable, record:
 }
 
 /** Invalid identities block their whole row. Resolved rows account for every populated cell. */
-export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookTarget[], specs: Map<string, ChannelSpec>, options: EbayResolveOptions & { notInNexus?: string; knownSkus?: ReadonlySet<string>; mapping?: ReaderMapping; mappingSpecs?: ReadonlyMap<string, ChannelSpec>; accountPolicyIds?: readonly string[] } = {}): EbayWorkbookResult {
+export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookTarget[], specs: Map<string, ChannelSpec>, options: EbayResolveOptions & { notInNexus?: string; knownSkus?: ReadonlySet<string>; mapping?: ReaderMapping; mappingSpecs?: ReadonlyMap<string, ChannelSpec>; accountPolicyIds?: readonly string[]
+  /** Categories whose eBay rules could not be loaded (`ebayFileSpecs`), with the reason. */
+  unloadedCategories?: ReadonlyMap<string, string> } = {}): EbayWorkbookResult {
   const out = emptyResult()
   const warned = new Set<string>()
   const value = (r: Record<string, string>, header: string) => (r[header] ?? '').trim()
@@ -220,6 +273,15 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
   // A listing named by more than one row is refused on EVERY such row: no row may be applied as "the" value.
   const rowsByListing = new Map<string, number[]>()
   for (const m of matched) rowsByListing.set(m.t.id, [...(rowsByListing.get(m.t.id) ?? []), m.record.row])
+  // A category without saved eBay rules is ONE problem, on its first parent row; its other rows point to it (2026-10-01:
+  // a new business refused every row with "Refresh this marketplace and category schema", and nothing said how).
+  const absent = (category: string) => { const spec = specs.get(category); return !spec || spec.absent }
+  const anchors = new Map<string, { row: number; parent: boolean; rows: number }>()
+  for (const m of matched) if (rowsByListing.get(m.t.id)!.length === 1 && absent(m.category)) {
+    const anchor = anchors.get(m.category)
+    if (!anchor) anchors.set(m.category, { row: m.record.row, parent: m.parentage === 'parent', rows: 1 })
+    else { anchor.rows++; if (!anchor.parent && m.parentage === 'parent') Object.assign(anchor, { row: m.record.row, parent: true }) }
+  }
   // Pass 2 — the values of each uniquely identified listing.
   for (const { record, t, category, parentage, parentRow } of matched) {
     const r = record.values
@@ -227,7 +289,13 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
     const sameListing = rowsByListing.get(t.id)!
     if (sameListing.length > 1) { refuseRow('SKU', `Duplicate rows ${sameListing.join(', ')} name the same eBay listing for ${t.sku}; keep one row per listing and import again`); continue }
     const spec = specs.get(category)
-    if (!spec || spec.absent || spec.marketplace !== table.marketplace) { refuseRow('Category ID', 'Refresh this marketplace and category schema before importing'); continue }
+    if (!spec || spec.absent) {
+      const anchor = anchors.get(category)!
+      if (record.row === anchor.row) refuseRow('Category ID', `Nexus could not load eBay ${table.marketplace}'s rules for category ${category} (${options.unloadedCategories?.get(category) ?? 'they are not saved in this business'}). Check the eBay account in Settings → Channels, then import again. Nothing in this category is imported (${anchor.rows} ${anchor.rows === 1 ? 'row' : 'rows'}).`)
+      else decideRecord(out, table, record, 'skipped-row', 'Category ID', `Not imported: eBay ${table.marketplace}'s rules for category ${category} are missing (see row ${anchor.row}).`)
+      continue
+    }
+    if (spec.marketplace !== table.marketplace) { refuseRow('Category ID', 'Refresh this marketplace and category schema before importing'); continue }
     // Action: a delete-like lifecycle word ends the listing in Nexus (nothing is sent), only when confirmed.
     const action = value(r, 'Action')
     const fileSkuHere = fileSkuOf(record)
@@ -350,6 +418,11 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
         if (field.shape === 'measure' && value(r, 'Wt Unit')) refuse('Wt Unit', message)
       }
     }
+    // P7 (audit 2026-10-01) — a file states the category on the parent row only, and publish reads it on every row. A listing
+    // this import creates takes the parent's category on each variation row. Not ledgered: the file's cell is blank.
+    const categoryField = fixedFields['Category ID']
+    if (t.id.startsWith(NEW_LISTING_KEY) && parentage === 'child' && !value(r, 'Category ID') && spec.fields.some(f => f.key === categoryField))
+      out.rows.push({ ...identity, entity: 'Listings', field: categoryField, value: category, source: source('Category ID') })
     if (value(r, 'Wt Unit') && !value(r, 'Weight')) refuse('Wt Unit', 'A weight unit needs a populated Weight cell')
     if (out.rows.length + out.issues.length + out.exclusions.length > TRANSFER_MAX_ROWS) throw new Error('The eBay workbook exceeds 50,000 attribute outcomes')
   }
@@ -376,23 +449,213 @@ export function checkEbayLedger(table: EbayWorkbookTable, result: Pick<EbayWorkb
 }
 
 type Db = typeof import('../../db.js')['default']
-interface GroupPlan { rootId: string; rootSku: string; records: EbayWorkbookTable['records']; knownSkus: ReadonlySet<string> }
+interface GroupPlan {
+  rootId: string; rootSku: string; records: EbayWorkbookTable['records']; knownSkus: ReadonlySet<string>
+  /** Phase 2: the family Apply creates (or makes the open product the parent of) before it saves these rows. */
+  family?: EbayFamilyPlan
+}
 /** An extra listing the file names by a SKU Nexus does not hold: `aliasId` (no SKU yet) gets it, or one is created. */
 interface ListingProposal { rootId: string; rootSku: string; aliasId?: string; label?: string }
+
+const cell = (r: Record<string, string>, h: string) => (r[h] ?? '').trim()
+const isChildRow = (r: Record<string, string>) => cell(r, 'Parent/Child').toLowerCase() === 'child'
+/** The listing a row belongs to, by the file's own SKUs: a parent row's SKU, a variation row's Parent SKU. */
+const fileParentOf = (r: Record<string, string>) => cell(r, 'Parent/Child').toLowerCase() === 'parent' ? cell(r, 'SKU') : cell(r, 'Parent SKU')
+const outsideProduct = (fileParent: string, rootSku: string) => fileParent === rootSku
+  ? `${rootSku} is another product in this business. Import this file from ${rootSku}.`
+  : `${fileParent} is a listing of ${rootSku}, another product in this business. Import this file from ${rootSku}.`
+
+/** Phase 2 — file parents that share variation SKUs are listings of ONE family. Clusters and their parents keep file order. */
+export function clusterFileParents(parents: readonly string[], childrenOf: (parent: string) => readonly string[]): string[][] {
+  let clusters: { parents: string[]; children: Set<string> }[] = []
+  for (const parent of parents) {
+    const kids = childrenOf(parent)
+    const hits = clusters.filter(c => kids.some(k => c.children.has(k)))
+    clusters = [...clusters.filter(c => !hits.includes(c)), { parents: [...hits.flatMap(c => c.parents), parent], children: new Set([...hits.flatMap(c => [...c.children]), ...kids]) }]
+  }
+  const order = (sku: string) => parents.indexOf(sku)
+  return clusters.map(c => [...c.parents].sort((a, b) => order(a) - order(b))).sort((a, b) => order(a[0]) - order(b[0]))
+}
+
+/**
+ * Phase 2 — the axes of a file without a Variation Theme: the item-specific columns whose values differ between one listing's
+ * variations. A column that splits them exactly as another does ("Colore", "Colore specifico", "Colore esatto") is the same
+ * axis written twice; the column the export marks ↕ wins, else the first. Returned in the file's column order.
+ */
+export function varyingColumns(headers: readonly string[], rows: readonly Record<string, string>[]): string[] {
+  const specific = (h: string) => !fixedFields[h] && !coordinates.has(h) && !quantityHeaders.has(h) && !controlHeaders.has(h) && !identifierHeaders.has(h)
+    && !isPriceHeader(h) && !isImageHeader(h) && h !== 'Action' && h !== EBAY_WORKBOOK_COLUMNS.weightUnitHeader
+  const varying = headers.filter(specific).flatMap(h => {
+    const values = rows.map(r => fold(cell(r, h)))
+    if (new Set(values.filter(Boolean)).size < 2) return []
+    const index = new Map<string, number>()
+    return [{ h, shape: JSON.stringify(values.map(x => { if (!index.has(x)) index.set(x, index.size); return index.get(x) })) }]
+  })
+  const kept = new Map<string, string>()
+  for (const c of [...varying.filter(c => /↕/u.test(c.h)), ...varying.filter(c => !/↕/u.test(c.h))]) if (!kept.has(c.shape)) kept.set(c.shape, c.h)
+  const chosen = new Set(kept.values())
+  return headers.filter(h => chosen.has(h))
+}
+
+/** The column that holds an axis the Variation Theme names: by either of its names, then as the same dimension (Color ≡ Colore). */
+function axisColumn(headers: readonly string[], label: string): string | undefined {
+  const find = (same: (name: string) => boolean) => headers.find(h => !fixedFields[h] && !coordinates.has(h) && headerNames(h).some(same))
+  return find(name => fold(name) === fold(label)) ?? find(name => canonicalVariantAxis(name) === canonicalVariantAxis(label))
+}
+
+/** The dictionary attribute of an axis by the first of its names that finds one (the theme's word, then the column's two names). */
+function axisAttribute(names: readonly string[], dictionary: readonly DictionaryAttribute[]): AxisAttribute & { name?: string } {
+  let ambiguous: AxisAttribute | null = null
+  for (const name of names) {
+    const found = attributeForAxis(name, dictionary)
+    if (found.attribute) return { ...found, name }
+    if ('candidates' in found) ambiguous ??= found
+  }
+  return ambiguous ?? { attribute: null, reason: 'no-attribute' }
+}
+
+type FileAxis = { code: string; label: string; column: string; attribute: DictionaryAttribute }
+/**
+ * The axes a file gives a family: its Variation Theme, else the columns whose values differ between `sample` (one listing's
+ * variations), each mapped to a dictionary attribute CODE. `problem` names the first axis Nexus cannot use.
+ */
+function fileAxes(table: EbayWorkbookTable, records: EbayWorkbookTable['records'], sample: readonly Record<string, string>[], rootSku: string,
+  dictionary: readonly DictionaryAttribute[]): { theme: string; axes: FileAxis[]; problem: string } {
+  const theme = records.map(rec => cell(rec.values, 'Variation Theme')).find(Boolean) ?? ''
+  const wanted = theme ? parseThemeAxes(theme).map(label => ({ label, column: axisColumn(table.headers, label) }))
+    : varyingColumns(table.headers, sample).map(column => ({ label: aspectLabel(column), column }))
+  const axes: FileAxis[] = []
+  if (!wanted.length) return { theme, axes, problem: `The file does not say how the variations of ${rootSku} differ. Add a Variation Theme column (for example "Colore,Taglia"), then import again.` }
+  for (const axis of wanted) {
+    if (!axis.column) return { theme, axes, problem: `The Variation Theme names ${axis.label}, but the file has no ${axis.label} column. Add the column, then import again.` }
+    const found = axisAttribute([axis.label, ...headerNames(axis.column)], dictionary)
+    if (!found.attribute) return { theme, axes, problem: 'candidates' in found ? `The axis ${axis.label} matches several attributes (${found.candidates.join(', ')}). Keep one of them in Settings → Attributes, then import again.`
+      : `Nexus has no attribute for the axis ${axis.label}. Add it in Settings → Attributes, then import again.` }
+    const twin = axes.find(a => a.code === found.attribute!.code)
+    if (twin) return { theme, axes, problem: `${twin.label} and ${axis.label} are the same attribute (${twin.attribute.label}). Keep one of them in the Variation Theme, then import again.` }
+    // The label names the attribute (the writer checks that), so it is the name that found it.
+    axes.push({ code: found.attribute.code, label: found.name ?? axis.label, column: axis.column, attribute: found.attribute })
+  }
+  return { theme, axes, problem: '' }
+}
+
+/** What a file adds to an EXISTING family: the plan, the new variations it refuses (SKU → why), and other named problems. */
+export interface FamilyUpdate { family: EbayFamilyPlan | null; refused: Map<string, string>; issues: TransferIssue[] }
+export interface FamilyUpdateInput {
+  /** The family's listings in the file. */
+  table: EbayWorkbookTable
+  root: { id: string; sku: string; name: string; variationAxisCodes: string[]; variationAxes: string[] }
+  /** Its live variations, with their stored values. */
+  variants: { id: string; sku: string; categoryAttributes: unknown; variantAttributes: unknown }[]
+  /** Child SKUs of the file that Nexus does not hold (or that an earlier, undone import put in the recycle bin). */
+  newSkus: readonly string[]
+  restore: Record<string, string>
+  dictionary: readonly DictionaryAttribute[]
+}
+
+/**
+ * Phase 2b (the Owner, 2026-10-01) — an EXISTING family the file names gets what it lacks, never what it has:
+ *  - its new variation SKUs, with values for the family's own axes (a family without axes takes the file's, like a family
+ *    copied from another business); one whose values collide with a variant, or that the file's axes do not fit, is refused;
+ *  - the values its variations lack; a value that differs from the one Nexus holds is a named problem, never overwritten.
+ */
+export function planFamilyUpdate(input: FamilyUpdateInput): FamilyUpdate {
+  const { table, root, variants, dictionary } = input
+  const refused = new Map<string, string>(), issues: TransferIssue[] = []
+  const childRows = (sku: string) => table.records.filter(rec => isChildRow(rec.values) && cell(rec.values, 'SKU') === sku)
+  const rowOf = (sku: string) => childRows(sku).find(rec => fileParentOf(rec.values) === root.sku) ?? childRows(sku)[0]
+  const rootTitle = cell(table.records.find(rec => !isChildRow(rec.values) && cell(rec.values, 'SKU') === root.sku)?.values ?? {}, 'Title') || root.name || root.sku
+  const source = (column: string) => ({ sheet: table.sheet, column: columnName(Math.max(0, table.headers.indexOf(column))) })
+  // The family's own axes win: its codes, else today's labels through the dictionary (the writers' rule).
+  const own = root.variationAxisCodes.length
+    ? root.variationAxisCodes.map((code, i) => ({ code, label: root.variationAxes[i] ?? code, attribute: dictionary.find(a => a.code === code) ?? null }))
+    : root.variationAxes.map(label => { const found = attributeForAxis(label, dictionary); return { code: found.attribute?.code ?? '', label, attribute: found.attribute } })
+  const sample = table.records.filter(rec => isChildRow(rec.values) && fileParentOf(rec.values) === root.sku).map(rec => rec.values)
+  const file = fileAxes(table, table.records, sample.length ? sample : table.records.filter(rec => isChildRow(rec.values)).map(rec => rec.values), root.sku, dictionary)
+  let axes: FileAxis[] = [], blocked = '', misfit = ''
+  const unlinked = own.find(a => !a.attribute)
+  if (unlinked) blocked = `The ${unlinked.label} axis of ${root.sku} is not linked to a dictionary attribute. Link it in Settings → Attributes, then import again.`
+  else if (!own.length) { axes = file.axes; blocked = (input.newSkus.length || variants.length) ? file.problem : '' }
+  else {
+    // A file column for each of the family's axes: the theme's axis with that code, else the column named like it.
+    axes = own.map(a => ({ code: a.code, label: a.label, attribute: a.attribute!,
+      column: file.axes.find(f => f.code === a.code)?.column ?? axisColumn(table.headers, a.label) ?? axisColumn(table.headers, a.attribute!.label) ?? axisColumn(table.headers, a.code) ?? '' }))
+    const theme = file.theme ? parseThemeAxes(file.theme) : []
+    if (theme.length && (file.problem || file.axes.some(f => !own.some(a => a.code === f.code)) || own.some(a => !file.axes.some(f => f.code === a.code))))
+      misfit = `The file varies ${root.sku} by ${theme.join(', ')}; the family varies by ${own.map(a => a.label).join(', ')}. Nexus does not change a family's axes: new variations are not created.`
+  }
+  const setsAxes = !own.length && !blocked && axes.length > 0
+  if (blocked && !input.newSkus.length && variants.length) issues.push({ row: table.records[0]?.row ?? 0, sku: root.sku, field: 'Variation Theme', message: blocked, source: source('Variation Theme') })
+  const valueOf = (variant: FamilyUpdateInput['variants'][number], axis: FileAxis) => {
+    const bag = variationBag(variant) as Record<string, string>
+    return String(variationAxisValue(bag, axis.label) || variationAxisValue(bag, axis.code) || '').trim()
+  }
+  // Values the variations lack; a value Nexus holds that the file contradicts is named, never overwritten.
+  const current = new Map(variants.map(v => [v.id, Object.fromEntries(axes.map(a => [a.code, valueOf(v, a)])) as Record<string, string>]))
+  const fills: NonNullable<EbayFamilyPlan['fills']> = []
+  for (const variant of blocked ? [] : variants) {
+    const row = rowOf(variant.sku)
+    if (!row) continue
+    const add: Record<string, string> = {}
+    for (const a of axes) {
+      const fileValue = a.column ? cell(row.values, a.column) : '', has = current.get(variant.id)![a.code]
+      if (!fileValue) continue
+      if (!has) add[a.code] = fileValue
+      else if (valueIdentity(has, a.attribute) !== valueIdentity(fileValue, a.attribute)) issues.push({ row: row.row, sku: variant.sku, field: a.column, source: source(a.column),
+        message: `${variant.sku} has ${a.label} "${has}" in Nexus and "${fileValue}" in the file. Nexus keeps its value; change it on the product if the file is right.` })
+    }
+    if (Object.keys(add).length) fills.push({ productId: variant.id, sku: variant.sku, values: add })
+  }
+  const children: EbayFamilyPlan['children'] = []
+  for (const sku of input.newSkus) {
+    if (blocked || misfit) { refused.set(sku, blocked || misfit); continue }
+    const row = rowOf(sku)!.values
+    const values = Object.fromEntries(axes.map(a => [a.code, a.column ? cell(row, a.column) : '']))
+    const missing = axes.filter(a => !values[a.code])
+    if (missing.length) { refused.set(sku, `${sku} has no ${missing.map(a => a.label).join(' or ')} in the file. Every variation needs a value for each axis.`); continue }
+    children.push({ sku, name: variationName(rootTitle, axes.map(a => values[a.code])), values })
+  }
+  // Two variants with the same values cannot both be sold: a new one is refused, a fill is not made. Each by name.
+  const filled = new Map(fills.map(f => [f.sku, f.values]))
+  const combos = new Map<string, string[]>()
+  const keyOf = (values: Record<string, string>) => axes.length && axes.every(a => values[a.code]) ? JSON.stringify(axes.map(a => valueIdentity(values[a.code], a.attribute))) : ''
+  for (const v of variants) { const key = keyOf({ ...current.get(v.id), ...filled.get(v.sku) }); if (key) combos.set(key, [...combos.get(key) ?? [], v.sku]) }
+  for (const c of children) { const key = keyOf(c.values); if (key) combos.set(key, [...combos.get(key) ?? [], c.sku]) }
+  for (const skus of combos.values()) {
+    if (skus.length < 2 || !skus.some(sku => filled.has(sku) || children.some(c => c.sku === sku))) continue
+    const message = `${skus.join(' and ')} would have the same ${axes.map(a => a.label).join(' and ')}. Give each variation its own values, then import again.`
+    for (const sku of skus) {
+      if (children.some(c => c.sku === sku)) refused.set(sku, message)
+      else if (filled.delete(sku)) { const row = rowOf(sku)!; issues.push({ row: row.row, sku, field: 'SKU', message, source: source('SKU') }) }
+    }
+  }
+  const kept = children.filter(c => !refused.has(c.sku)), keptFills = fills.filter(f => filled.has(f.sku))
+  if (!setsAxes && !kept.length && !keptFills.length) return { family: null, refused, issues }
+  return { refused, issues, family: { rootSku: root.sku, existingId: root.id, name: root.name, theme: '', axes: axes.map(({ code, label }) => ({ code, label })), ...(setsAxes ? { setsAxes } : {}),
+    children: kept, fills: keptFills, listings: [], rows: [], restore: Object.fromEntries(Object.entries(input.restore).filter(([sku]) => kept.some(c => c.sku === sku))) } }
+}
+
+/** The Owner (2026-10-01): a variation the import creates is named "<the product's title> (<its values, comma-separated>)". */
+const variationName = (rootTitle: string, values: readonly string[]) => values.length ? `${rootTitle} (${values.join(', ')})` : rootTitle
 
 /**
  * Decide which Nexus product group each file listing belongs to (D4): the file parent SKU as a Nexus root → an
  * ADOPTED legacy shell's alias → a confirmed link → otherwise a PROPOSAL from its children (never applied unasked).
- * `onlyRootId` (the drawer) skips rows of other product groups instead of refusing them.
+ * `onlyRootId` (the drawer) skips rows of other product groups instead of refusing them; the product page's Import
+ * (`listingPlan`) refuses them by name, so no row is dropped.
+ *
+ * Phase 2 (the Owner, 2026-10-01): with `listingPlan`, a file listing whose SKUs Nexus does not hold becomes a NEW product
+ * family instead of a refusal. Parents that share variation SKUs are one family; its first parent row is the product (the
+ * open product instead, when it is one of them and has no variations yet), the other parents become its extra listings.
  */
 export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListingAlias'>, table: EbayWorkbookTable, out: EbayWorkbookResult, options: EbayResolveOptions, onlyRootId?: string,
-  listingProposals?: Map<string, ListingProposal>): Promise<GroupPlan[]> {
-  const v = (r: Record<string, string>, h: string) => (r[h] ?? '').trim()
-  const fileParentOf = (r: Record<string, string>) => v(r, 'Parent/Child').toLowerCase() === 'parent' ? v(r, 'SKU') : v(r, 'Parent SKU')
+  listingProposals?: Map<string, ListingProposal>, context: EbayFamilyContext = {}): Promise<GroupPlan[]> {
+  const v = cell
   const parentSkus = [...new Set(table.records.map(rec => fileParentOf(rec.values)).filter(Boolean))]
-  const childSkus = [...new Set(table.records.filter(rec => v(rec.values, 'Parent/Child').toLowerCase() === 'child').map(rec => v(rec.values, 'SKU')).filter(Boolean))]
+  const childSkus = [...new Set(table.records.filter(rec => isChildRow(rec.values)).map(rec => v(rec.values, 'SKU')).filter(Boolean))]
+  const childrenOf = (parent: string) => [...new Set(table.records.filter(rec => isChildRow(rec.values) && v(rec.values, 'Parent SKU') === parent).map(rec => v(rec.values, 'SKU')).filter(Boolean))]
   const linkTargets = Object.values(options.links ?? {})
-  const products = await prisma.product.findMany({ where: { sku: { in: [...new Set([...parentSkus, ...childSkus, ...linkTargets])] } }, select: { id: true, sku: true, parentId: true, productType: true, deletedAt: true } })
+  const products = await prisma.product.findMany({ where: { sku: { in: [...new Set([...parentSkus, ...childSkus, ...linkTargets])] } }, select: { id: true, sku: true, parentId: true, productType: true, deletedAt: true, importSource: true } })
   const live = new Map(products.filter(p => !p.deletedAt).map(p => [p.sku, p]))
   // An adopted listing shell is found by its alias whatever the shell product looks like now (adoption soft-deletes it).
   const shells = products.filter(p => p.productType === 'EBAY_LISTING_SHELL')
@@ -406,6 +669,9 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
     select: { id: true, productId: true, sku: true, label: true, adoptedFromProductId: true } }) : []
   const rootById = new Map(roots.map(r => [r.id, r.sku]))
   const decision = new Map<string, { rootId: string; rootSku: string } | { refuse: string } | { skip: string }>()
+  /** Phase 2: file parents Nexus does not hold (or the open product without variations), planned as new families below. */
+  const fresh: string[] = []
+  const outside = (fileParent: string, rootSku: string) => options.listingPlan ? { refuse: outsideProduct(fileParent, rootSku) } : { skip: 'Outside this product; use Catalog import' }
   for (const fileParent of parentSkus) {
     const own = live.get(fileParent)
     // A LIVE shell not adopted yet; a deleted one that no alias adopted is gone, and the file SKU is free for a listing.
@@ -423,7 +689,7 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
     else if (shell) { decision.set(fileParent, { refuse: `${fileParent} is an old eBay listing record that is not attached to its product yet, so Nexus cannot tell which listing it is. Nothing is imported for it.` }); continue }
     else if (linked && !linked.parentId && linked.productType !== 'EBAY_LISTING_SHELL') root = { rootId: linked.id, rootSku: linked.sku }
     if (!root) {
-      const children = table.records.filter(rec => v(rec.values, 'Parent/Child').toLowerCase() === 'child' && v(rec.values, 'Parent SKU') === fileParent).map(rec => v(rec.values, 'SKU'))
+      const children = table.records.filter(rec => isChildRow(rec.values) && v(rec.values, 'Parent SKU') === fileParent).map(rec => v(rec.values, 'SKU'))
       const known = children.map(sku => live.get(sku)).filter((p): p is NonNullable<typeof p> => !!p && !!p.parentId)
       const parentIds = [...new Set(known.map(p => p.parentId!))]
       if (parentIds.length === 1 && rootById.has(parentIds[0])) {
@@ -433,35 +699,146 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
         const unnamed = familyAliases.find(a => a.productId === parentIds[0] && !a.sku && !a.adoptedFromProductId && a.label.trim() === fileParent)
         if (unnamed || parentSkus.includes(proposedSku)) {
           // The file decides (the Owner, 2026-10-01): Apply names that listing, or creates it, then saves its values.
-          if (onlyRootId && onlyRootId !== parentIds[0]) { decision.set(fileParent, { skip: 'Outside this product; use Catalog import' }); continue }
+          if (onlyRootId && onlyRootId !== parentIds[0]) { decision.set(fileParent, outside(fileParent, proposedSku)); continue }
           if (!options.listingPlan) { decision.set(fileParent, { refuse: `This business has no eBay ${table.marketplace} listing with the SKU ${fileParent} yet. Import this file with the Import button of product ${proposedSku}: it names or creates the listing.` }); continue }
           listingProposals?.set(fileParent, { rootId: parentIds[0], rootSku: proposedSku, aliasId: unnamed?.id, label: unnamed?.label })
           decision.set(fileParent, { rootId: parentIds[0], rootSku: proposedSku })
           continue
         }
+        // Phase 2 — on the product page, a listing that shares a few variation SKUs with another product is a new family (those
+        // SKUs are named problems), never a link to a product this page cannot import into.
+        if (options.listingPlan && onlyRootId && onlyRootId !== parentIds[0]) { fresh.push(fileParent); continue }
         out.links.push({ fileSku: fileParent, proposedSku, reason: `${known.length} of ${new Set(children).size} variation SKUs under eBay parent ${fileParent} belong to Nexus product ${proposedSku}` })
         decision.set(fileParent, { refuse: `Link eBay parent ${fileParent} to Nexus product ${proposedSku}? Confirm the link to import this listing.` })
-      } else decision.set(fileParent, { refuse: parentIds.length > 1 ? `The variations under eBay parent ${fileParent} belong to several Nexus products; this listing cannot be placed.` : `eBay parent ${fileParent} is not a Nexus product, and none of its variation SKUs is. Create the product first, or link the parent.` })
+      } else if (options.listingPlan && !parentIds.length) fresh.push(fileParent)
+      else decision.set(fileParent, { refuse: parentIds.length > 1 ? `The variations under eBay parent ${fileParent} belong to several Nexus products; this listing cannot be placed.` : `eBay parent ${fileParent} is not a Nexus product, and none of its variation SKUs is. Create the product first, or link the parent.` })
       continue
     }
-    if (onlyRootId && root.rootId !== onlyRootId) { decision.set(fileParent, { skip: 'Outside this product; use Catalog import' }); continue }
+    // Phase 2 — the open product without variations becomes the parent of the family its file listing describes.
+    if (options.listingPlan && root.rootSku === fileParent && root.rootId === context.open?.id && !context.open.children && childrenOf(fileParent).length) { fresh.push(fileParent); continue }
+    if (onlyRootId && root.rootId !== onlyRootId) { decision.set(fileParent, outside(fileParent, root.rootSku)); continue }
     decision.set(fileParent, root)
   }
+
+  // ── Phase 2: new families ─────────────────────────────────────────────────────────────────────
+  const decided = new Set<number>()
+  const refuseRows = (records: EbayWorkbookTable['records'], field: string, message: string) => {
+    for (const record of records) if (!decided.has(record.row)) { decided.add(record.row); decideRecord(out, table, record, 'refused', field, message) }
+  }
+  const familyOf = new Map<string, { key: string; rootId: string; rootSku: string; family: EbayFamilyPlan }>()
+  const dictionary = context.dictionary ?? []
+  // A SKU the file also lists as a variation would be made twice.
+  const twice = (sku: string) => childSkus.includes(sku) ? `${sku} is both a listing and a variation in this file. Keep one of them, then import again.` : ''
+  /** A new extra listing's own SKU: never a product's SKU, never another listing's. */
+  const listingSkuProblem = (p: string, rootSku: string) => live.has(p) ? `${p} is a product SKU in this business, so it cannot name a listing of ${rootSku}. Change the SKU in the file, then import again.`
+    : named.some(a => a.sku === p) ? `${p} is already the SKU of another listing in this business. Change the SKU in the file, then import again.` : twice(p)
+  for (const cluster of fresh.length ? clusterFileParents(parentSkus, childrenOf) : []) {
+    const parents = cluster.filter(p => fresh.includes(p))
+    if (!parents.length) continue
+    const records = table.records.filter(rec => parents.includes(fileParentOf(rec.values)))
+    // A listing that shares its variations with one Nexus already places (or refuses) belongs with it, never in a new family.
+    const placed = cluster.find(p => !fresh.includes(p))
+    if (placed) {
+      const d = decision.get(placed)
+      // Phase 2b (the Owner, 2026-10-01) — another listing of a family this import places becomes its extra listing; the
+      // variations it lists that the family lacks are created in that family (`planFamilyUpdate`).
+      if (d && 'rootId' in d) {
+        for (const p of parents) {
+          const problem = listingSkuProblem(p, d.rootSku)
+          if (problem) { refuseRows(records.filter(rec => fileParentOf(rec.values) === p), 'SKU', problem); continue }
+          listingProposals?.set(p, { rootId: d.rootId, rootSku: d.rootSku })
+          decision.set(p, d)
+        }
+        continue
+      }
+      refuseRows(records, 'Parent SKU', `${parents.join(', ')} ${parents.length === 1 ? 'lists' : 'list'} the same variations as ${placed}, which this import cannot place (see the rows of ${placed}).`)
+      continue
+    }
+    const adopt = context.open && parents.some(p => live.get(p)?.id === context.open!.id) ? context.open : undefined
+    const rootSku = adopt?.sku ?? parents[0]
+    const rootRecords = records.filter(rec => fileParentOf(rec.values) === rootSku)
+    const rootName = cell(rootRecords.find(rec => !isChildRow(rec.values))?.values ?? {}, 'Title') || rootSku
+    const restore: Record<string, string> = {}
+    /** A SKU held by a product in the recycle bin: one an earlier import made comes back; any other is the Owner's to decide. */
+    const binned = (sku: string) => {
+      const gone = live.has(sku) ? undefined : products.find(p => p.sku === sku && p.deletedAt)
+      if (!gone) return ''
+      if (gone.importSource === SHEET_IMPORT_SOURCE) { restore[sku] = gone.id; return '' }
+      return `${sku} is in the recycle bin. Restore it, or delete it for good, then import again.`
+    }
+    const own = live.get(rootSku)
+    const rootProblem = adopt ? twice(rootSku) : own ? `${rootSku} is a variation of ${rootById.get(own.parentId ?? '') ?? 'another product'} in this business. A new product family cannot take its SKU.` : twice(rootSku) || binned(rootSku)
+    if (rootProblem) { refuseRows(records, 'SKU', rootProblem); continue }
+    // Its other listings get their own SKUs: never a product's SKU, never another listing's.
+    const listings = parents.filter(p => p !== rootSku).filter(p => {
+      const problem = listingSkuProblem(p, rootSku)
+      if (problem) refuseRows(records.filter(rec => fileParentOf(rec.values) === p), 'SKU', problem)
+      return !problem
+    })
+    // The variations: every child SKU of the family's listings, once, in file order.
+    const kids = [...new Set(parents.flatMap(childrenOf))]
+    const childRows = (sku: string) => records.filter(rec => isChildRow(rec.values) && v(rec.values, 'SKU') === sku)
+    const rowOf = (sku: string) => (childRows(sku).find(rec => fileParentOf(rec.values) === rootSku) ?? childRows(sku)[0]).values
+    // The axes: the file's Variation Theme, else the columns whose values differ between the main listing's variations.
+    const sample = rootRecords.filter(rec => isChildRow(rec.values)).map(rec => rec.values)
+    const { theme, axes, problem: familyProblem } = kids.length ? fileAxes(table, records, sample.length ? sample : kids.map(rowOf), rootSku, dictionary) : { theme: '', axes: [] as FileAxis[], problem: '' }
+    if (familyProblem) { refuseRows(records, 'Variation Theme', familyProblem); continue }
+    const children: EbayFamilyPlan['children'] = []
+    const childProblems = new Map<string, string>()
+    /** The other families whose variations the file lists. */
+    const elsewhere = new Set<string>()
+    for (const sku of kids) {
+      const existing = live.get(sku)
+      if (existing?.parentId) elsewhere.add(rootById.get(existing.parentId) ?? 'another product')
+      const problem = parentSkus.includes(sku) ? `${sku} is both a listing and a variation in this file. Keep one of them, then import again.`
+        : existing?.parentId ? `${sku} is already a variation of ${rootById.get(existing.parentId) ?? 'another product'}. Nexus never moves a product to another family; nothing is imported for it.`
+        : existing ? `${sku} is already a product in this business. Nexus does not make it a variation of ${rootSku}; nothing is imported for it.`
+        : binned(sku)
+      if (problem) { childProblems.set(sku, problem); continue }
+      const row = rowOf(sku)
+      const values = Object.fromEntries(axes.map(a => [a.code, v(row, a.column)]))
+      const missing = axes.filter(a => !values[a.code])
+      if (missing.length) { childProblems.set(sku, `${sku} has no ${missing.map(a => a.label).join(' or ')} in the file. Every variation needs a value for each axis.`); continue }
+      children.push({ sku, name: variationName(rootName, axes.map(a => values[a.code])), values })
+    }
+    // Two variations with the same values cannot both be sold: each is refused, by name.
+    const combos = new Map<string, string[]>()
+    for (const c of children) { const key = JSON.stringify(axes.map(a => valueIdentity(c.values[a.code], a.attribute))); combos.set(key, [...(combos.get(key) ?? []), c.sku]) }
+    for (const skus of combos.values()) if (skus.length > 1) for (const sku of skus) childProblems.set(sku, `${skus.join(' and ')} have the same ${axes.map(a => a.label).join(' and ')}. Give each variation its own values, then import again.`)
+    const kept = children.filter(c => !childProblems.has(c.sku))
+    // A listing of another product's variations belongs to that product: one sentence on every row says where to import it.
+    const [other] = elsewhere
+    if (kids.length && elsewhere.size === 1 && kids.every(sku => live.get(sku)?.parentId)) {
+      refuseRows(records, 'Parent SKU', `${parents.join(', ')} ${parents.length === 1 ? 'lists' : 'list'} the variations of ${other}, another product in this business. Import this file from ${other}.`)
+      continue
+    }
+    for (const [sku, problem] of childProblems) refuseRows(childRows(sku), 'SKU', problem)
+    if (kids.length && !kept.length) { refuseRows(records, 'Parent SKU', `None of the variations of ${rootSku} can be created; their rows say why.`); continue }
+    const family: EbayFamilyPlan = { rootSku, ...(adopt ? { adoptId: adopt.id } : {}), name: rootName, theme: kept.length ? theme || axes.map(a => a.label).join(',') : '',
+      axes: axes.map(({ code, label }) => ({ code, label })), children: kept, restore: Object.fromEntries(Object.entries(restore).filter(([sku]) => sku === rootSku || kept.some(c => c.sku === sku))) }
+    const placement = { key: adopt?.id ?? `${NEW_LISTING_KEY}${rootSku}`, rootId: adopt?.id ?? '', rootSku, family }
+    for (const p of [rootSku, ...listings]) familyOf.set(p, placement)
+    for (const p of listings) listingProposals?.set(p, { rootId: placement.rootId, rootSku })
+  }
+
   const groups = new Map<string, GroupPlan>()
   for (const record of table.records) {
+    if (decided.has(record.row)) continue
     const fileParent = fileParentOf(record.values)
-    const d = fileParent ? decision.get(fileParent) : { refuse: 'A variation row needs its Parent SKU' }
+    const placed = familyOf.get(fileParent)
+    const d = placed ?? (fileParent ? decision.get(fileParent) : { refuse: 'A variation row needs its Parent SKU' })
     if (!d) { decideRecord(out, table, record, 'refused', 'Parent SKU', 'A variation row needs its Parent SKU'); continue }
     if ('refuse' in d) { decideRecord(out, table, record, 'refused', 'Parent SKU', d.refuse); continue }
     if ('skip' in d) { decideRecord(out, table, record, 'skipped-row', 'Parent SKU', d.skip); continue }
-    const group = groups.get(d.rootId) ?? { rootId: d.rootId, rootSku: d.rootSku, records: [], knownSkus: new Set(live.keys()) }
+    const key = placed?.key ?? d.rootId
+    const group = groups.get(key) ?? { rootId: d.rootId, rootSku: d.rootSku, records: [], knownSkus: new Set(live.keys()), ...(placed ? { family: placed.family } : {}) }
     // A linked parent is matched under its Nexus SKU; the file's own SKU travels with the row.
     const isParent = v(record.values, 'Parent/Child').toLowerCase() === 'parent'
     group.records.push(fileParent === d.rootSku || !options.links?.[fileParent] ? record : {
       ...record, fileSku: v(record.values, 'SKU'), fileParentSku: fileParent,
       values: { ...record.values, ...(isParent ? { SKU: d.rootSku } : { 'Parent SKU': d.rootSku }) },
     })
-    groups.set(d.rootId, group)
+    groups.set(key, group)
   }
   return [...groups.values()]
 }
@@ -494,10 +871,103 @@ export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId:
   })
 }
 
-/** The business's one active eBay account, when it has exactly one (a new listing of a product with no eBay listing yet). */
-async function soleEbayAccount(prisma: Db): Promise<string> {
-  const accounts = await prisma.channelConnection.findMany({ where: { channelType: 'EBAY', isActive: true }, select: { id: true }, take: 2 })
-  return accounts.length === 1 ? accounts[0].id : ''
+/**
+ * The eBay account a new listing of this family goes on: the account of the family's own eBay listing (the main one
+ * first), else the business's PRIMARY active eBay account. With several accounts and no primary, nothing is guessed:
+ * the review names the problem.
+ */
+export async function ebayAccountFor(prisma: Pick<Db, 'channelListing'>, rootId: string): Promise<{ id: string } | { problem: string }> {
+  const { AmbiguousConnectionError, chooseConnection, listActiveConnections } = await import('../connection-resolver.service.js')
+  const active = await listActiveConnections('EBAY')
+  if (rootId && active.length) {
+    const listings = await prisma.channelListing.findMany({ where: { productId: rootId, channel: 'EBAY', channelConnectionId: { in: active.map(a => a.id) } }, select: { channelConnectionId: true, aliasKey: true }, orderBy: { createdAt: 'asc' } })
+    const own = listings.find(l => !l.aliasKey) ?? listings[0]
+    if (own?.channelConnectionId) return { id: own.channelConnectionId }
+  }
+  try { return { id: chooseConnection(active, { channel: 'EBAY', wantPrimary: true }).id } } catch (error) {
+    return { problem: error instanceof AmbiguousConnectionError
+      ? 'Several eBay accounts are connected and none is the primary one. Make one primary in Settings → Channels, then import again.'
+      : 'Connect an eBay account in Settings → Channels, then import again: Nexus creates the listings of this file on it.' }
+  }
+}
+
+/**
+ * Phase 2b — read an existing family (its axes and its variations' values) and the file's variation SKUs it does not hold,
+ * then plan what the file adds (`planFamilyUpdate`). A SKU that is another family's variation, another product, or in the
+ * recycle bin (unless an earlier, undone import made it) is refused by name; it is never moved.
+ */
+async function existingFamilyUpdate(prisma: Db, table: EbayWorkbookTable, rootId: string, dictionary: readonly DictionaryAttribute[]): Promise<FamilyUpdate | null> {
+  const [root, variants] = await Promise.all([
+    prisma.product.findFirst({ where: { id: rootId, deletedAt: null }, select: { id: true, sku: true, name: true, variationAxisCodes: true, variationAxes: true } }),
+    prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true, sku: true, categoryAttributes: true, variantAttributes: true }, orderBy: { sku: 'asc' } }),
+  ])
+  if (!root) return null
+  const held = new Set([root.sku, ...variants.map(v => v.sku)])
+  const parents = new Set(table.records.filter(rec => !isChildRow(rec.values)).map(rec => cell(rec.values, 'SKU')))
+  const kids = [...new Set(table.records.filter(rec => isChildRow(rec.values)).map(rec => cell(rec.values, 'SKU')).filter(sku => sku && !held.has(sku)))]
+  const others = kids.length ? await prisma.product.findMany({ where: { sku: { in: kids } }, select: { id: true, sku: true, parentId: true, deletedAt: true, importSource: true, parent: { select: { sku: true } } } }) : []
+  const refused = new Map<string, string>(), restore: Record<string, string> = {}, newSkus: string[] = []
+  for (const sku of kids) {
+    const other = others.find(p => p.sku === sku)
+    if (parents.has(sku)) refused.set(sku, `${sku} is both a listing and a variation in this file. Keep one of them, then import again.`)
+    else if (!other) newSkus.push(sku)
+    else if (!other.deletedAt) refused.set(sku, other.parentId ? `${sku} is already a variation of ${other.parent?.sku ?? 'another product'}. Nexus never moves a product to another family; nothing is imported for it.`
+      : `${sku} is already a product in this business. Nexus does not make it a variation of ${root.sku}; nothing is imported for it.`)
+    else if (other.importSource === SHEET_IMPORT_SOURCE) { restore[sku] = other.id; newSkus.push(sku) }
+    else refused.set(sku, `${sku} is in the recycle bin. Restore it, or delete it for good, then import again.`)
+  }
+  const planned = planFamilyUpdate({ table, root, variants, newSkus, restore, dictionary })
+  for (const [sku, message] of planned.refused) refused.set(sku, message)
+  return { ...planned, refused }
+}
+
+/** Where a category's eBay rules come from: this business's saved rules, and the one writer that saves them from eBay. */
+export interface EbayRulesSource {
+  load(marketplace: string, category: string): Promise<ChannelSpec>
+  save(marketplace: string, category: string): Promise<void>
+}
+const savedEbayRules: EbayRulesSource = {
+  load: async (marketplace, category) => (await import('./channel-specs/index.js')).loadEbaySpec(marketplace, [category]),
+  // The category page's own writer (`CategorySchemaService`): eBay's aspects and conditions through the channel gateway,
+  // saved as this business's CategorySchema. The sheet columns built from the old rules are dropped, as that page does.
+  save: async (marketplace, category) => {
+    const [{ default: prisma }, { CategorySchemaService }, { AmazonService }, { clearSheetColumnCache }, { clearStudioColumnCache }] = await Promise.all([import('../../db.js'),
+      import('../categories/schema-sync.service.js'), import('../marketplaces/amazon.service.js'), import('./sheet-columns.service.js'), import('./studio-columns.js')])
+    await new CategorySchemaService(prisma as never, new AmazonService()).getSchema({ channel: 'EBAY', marketplace, productType: category }, { force: true })
+    clearSheetColumnCache(); clearStudioColumnCache()
+  },
+}
+
+/**
+ * The eBay rules of every category the file names. A category this business never saved the rules of (a new business's
+ * first import) is loaded from eBay first, then read again; one that cannot be loaded keeps the reason, in plain words.
+ */
+export async function ebayFileSpecs(table: EbayWorkbookTable, rules: EbayRulesSource = savedEbayRules) {
+  const specs = new Map<string, ChannelSpec>(), unloaded = new Map<string, string>()
+  for (const category of new Set(table.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))) {
+    let spec = await rules.load(table.marketplace, category)
+    if (spec.absent) {
+      try {
+        await rules.save(table.marketplace, category)
+        spec = await rules.load(table.marketplace, category)
+        if (spec.absent) unloaded.set(category, 'eBay sent no rules for it')
+      } catch (error) {
+        unloaded.set(category, plainRulesReason(error))
+      }
+    }
+    specs.set(category, spec)
+  }
+  return { specs, unloaded }
+}
+
+/** Why eBay's rules could not be loaded, for the person importing: no setting names or developer words. */
+function plainRulesReason(error: unknown): string {
+  const message = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').trim()
+  if (/^No active EBAY connection|NoConnection/i.test(message)) return 'no eBay account is connected'
+  if (/Ambiguous/i.test(message)) return 'several eBay accounts are connected and none is the primary one'
+  if (/^auth:|credentials|reconnect|token|unauthori[sz]ed/i.test(message)) return 'the eBay account is not signed in'
+  if (/^network:|ECONN|ETIMEDOUT|fetch failed|timed? ?out/i.test(message)) return 'eBay did not answer'
+  return message.replace(/[.\s]+$/, '').slice(0, 160) || 'eBay did not answer'
 }
 
 /** The policy IDs this business's eBay accounts use by default (`connectionMetadata.ebayPolicies`). */
@@ -509,40 +979,78 @@ async function accountPolicyIds(prisma: Db, targets: EbayWorkbookTarget[]): Prom
     .filter((id): id is string => typeof id === 'string' && !!id.trim())
 }
 
-async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptions, onlyRootId?: string): Promise<EbayWorkbookResult> {
+async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptions, onlyRootId?: string, context: EbayFamilyContext = {}): Promise<EbayWorkbookResult> {
   const [{ default: prisma }, { loadEbaySpec }] = await Promise.all([import('../../db.js'), import('./channel-specs/index.js')])
   const out = emptyResult()
-  const plan: EbayListingPlan = { names: [], creates: [] }
+  const plan: EbayListingPlan = { names: [], creates: [], families: [], mains: [] }
   const proposals = new Map<string, ListingProposal>()
   // CHMAP M2 — one mapping version for the whole file: its columns against every category it names.
-  const fileSpecs = new Map<string, ChannelSpec>()
-  for (const category of new Set(table.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))) fileSpecs.set(category, await loadEbaySpec(table.marketplace, [category]))
+  const { specs: fileSpecs, unloaded } = await ebayFileSpecs(table)
   const { ebayImportMapping } = await import('../channel-mapping/ebay-import.js')
   let chmap: Awaited<ReturnType<typeof ebayImportMapping>> | null = null, mappingProblem = ''
   try { chmap = await ebayImportMapping(table, fileSpecs) } catch (error) { mappingProblem = error instanceof Error ? error.message : String(error) }
-  for (const group of await planEbayGroups(prisma, table, out, options, onlyRootId, proposals)) {
-    const sub: EbayWorkbookTable = { ...table, records: group.records }
-    const mine = [...proposals].filter(([, p]) => p.rootId === group.rootId)
+  for (const group of await planEbayGroups(prisma, table, out, options, onlyRootId, proposals, context)) {
+    let sub: EbayWorkbookTable = { ...table, records: group.records }
+    const family = group.family
+    // Phase 2b — an EXISTING family the file names gets its new variations and the axes and values it lacks (product page only).
+    const update = options.listingPlan && !family && group.rootId ? await existingFamilyUpdate(prisma, sub, group.rootId, context.dictionary ?? []) : null
+    if (update) {
+      out.issues.push(...update.issues)
+      for (const [sku, message] of update.refused) for (const record of sub.records) if (isChildRow(record.values) && cell(record.values, 'SKU') === sku) decideRecord(out, table, record, 'refused', 'SKU', message)
+      sub = { ...sub, records: sub.records.filter(record => !(isChildRow(record.values) && update.refused.has(cell(record.values, 'SKU')))) }
+    }
+    const familyUpdate = update?.family ?? null
+    const mine = [...proposals].filter(([, p]) => p.rootId === group.rootId && p.rootSku === group.rootSku)
     const pendingNames = new Map(mine.filter(([, p]) => p.aliasId).map(([sku, p]) => [p.aliasId!, sku]))
-    const named = await groupTargets(prisma, sub, group.rootId, { pendingNames })
+    // A family Apply creates has no listing yet; an adopted product may have its own.
+    const named = group.rootId ? await groupTargets(prisma, sub, group.rootId, { pendingNames }) : []
     // A listing to create is matched against what it will be: one draft row per live product of the family.
     const creating = mine.filter(([, p]) => !p.aliasId)
-    const account = creating.length ? named.find(t => !t.aliasKey)?.accountId || named[0]?.accountId || await soleEbayAccount(prisma) : ''
-    const family = creating.length && account ? await prisma.product.findMany({ where: { OR: [{ id: group.rootId }, { parentId: group.rootId }], deletedAt: null }, select: { id: true, sku: true } }) : []
-    const virtual: EbayWorkbookTarget[] = creating.flatMap(([sku]) => family.map(p => ({ id: `${NEW_LISTING_KEY}${sku}:${p.sku}`, sku: p.sku, parentSku: group.rootSku, sourceParentSku: sku,
-      isParent: p.id === group.rootId, itemId: '', accountId: account, marketplace: table.marketplace, aliasKey: `${NEW_LISTING_KEY}${sku}`, version: 0, specificNames: [], policyIds: [] })))
-    const targets = [...named, ...virtual]
+    // Phase 2 — the main listing, when the file holds it and this market has none (only the product page's Import makes it).
+    const mainMissing = !!options.listingPlan && sub.records.some(r => fileParentOf(r.values) === group.rootSku) && (!!family || !named.some(t => !t.aliasKey))
+    const known = named.find(t => !t.aliasKey)?.accountId || named[0]?.accountId
+    const choice = creating.length || mainMissing ? known ? { id: known } : await ebayAccountFor(prisma, group.rootId) : null
+    // A new family is created for its eBay listings: without an account to put them on, nothing of it is created.
+    if (family && choice && 'problem' in choice) { for (const record of sub.records) decideRecord(out, table, record, 'refused', 'Parent SKU', choice.problem); continue }
+    const account = choice && 'id' in choice ? choice.id : ''
+    const members = !account ? [] : family ? [{ sku: family.rootSku, isParent: true }, ...family.children.map(c => ({ sku: c.sku, isParent: false }))]
+      : [...(await prisma.product.findMany({ where: { OR: [{ id: group.rootId }, { parentId: group.rootId }], deletedAt: null }, select: { id: true, sku: true } })).map(p => ({ sku: p.sku, isParent: p.id === group.rootId })),
+        ...familyUpdate?.children.map(c => ({ sku: c.sku, isParent: false })) ?? []]
+    const virtualTarget = (id: string, product: { sku: string; isParent: boolean }, sourceParentSku: string, aliasKey: string): EbayWorkbookTarget => ({ id, sku: product.sku, parentSku: group.rootSku, sourceParentSku,
+      isParent: product.isParent, itemId: '', accountId: account, marketplace: table.marketplace, aliasKey, version: 0, specificNames: [], policyIds: [] })
+    const virtual = creating.flatMap(([sku]) => members.map(p => virtualTarget(`${NEW_LISTING_KEY}${sku}:${p.sku}`, p, sku, `${NEW_LISTING_KEY}${sku}`)))
+    // The main listing's drafts: every product without a main row on this market (an adopted product keeps its own).
+    const mainSkus = new Set(mainMissing ? members.filter(p => !named.some(t => !t.aliasKey && t.sku === p.sku)).map(p => p.sku) : [])
+    const mains = members.filter(p => mainSkus.has(p.sku)).map(p => virtualTarget(`${NEW_LISTING_KEY}main:${p.sku}`, p, group.rootSku, ''))
+    // Phase 2b — the new variations of an existing family on each of its listings the file names (their rows are made at Apply).
+    const fileParents = new Set(sub.records.map(r => fileParentOf(r.values)))
+    const coordinates = familyUpdate?.children.length ? [...new Map(named.filter(t => fileParents.has(t.sourceParentSku))
+      .map(t => [JSON.stringify([t.accountId, t.aliasKey]), t] as const)).values()] : []
+    const additions = coordinates.flatMap(c => familyUpdate!.children.map(child => ({ ...virtualTarget(`${NEW_LISTING_KEY}var:${c.aliasKey}:${child.sku}`, { sku: child.sku, isParent: false }, c.sourceParentSku, c.aliasKey),
+      accountId: c.accountId, itemId: c.itemId })))
+    const targets = [...named, ...virtual, ...mains, ...additions]
     const specs = new Map<string, ChannelSpec>()
     const categories = new Set(sub.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))
     for (const category of categories) specs.set(category, fileSpecs.get(category) ?? await loadEbaySpec(table.marketplace, [category]))
-    const mapped = mapEbayWorkbook(sub, targets, specs, { ...options, knownSkus: group.knownSkus, accountPolicyIds: await accountPolicyIds(prisma, targets), ...(chmap?.mapping ? { mapping: chmap.mapping, mappingSpecs: fileSpecs } : {}) })
+    const mapped = mapEbayWorkbook(sub, targets, specs, { ...options, knownSkus: group.knownSkus, accountPolicyIds: await accountPolicyIds(prisma, targets), unloadedCategories: unloaded, ...(chmap?.mapping ? { mapping: chmap.mapping, mappingSpecs: fileSpecs } : {}) })
+    const problem = choice && 'problem' in choice ? choice.problem : ''
     for (const [sku, p] of mine) {
       if (p.aliasId) { const t = named.find(n => n.aliasKey === p.aliasId); if (t) plan.names.push({ aliasId: p.aliasId, sku, rootId: p.rootId, rootSku: p.rootSku, label: p.label ?? sku, accountId: t.accountId, marketplace: t.marketplace }); continue }
-      if (!account) { out.issues.push({ row: 0, sku, field: 'Parent SKU', message: `Connect an eBay account before Nexus can create the eBay ${table.marketplace} listing ${sku}.` }); continue }
+      if (!account) { out.issues.push({ row: 0, sku, field: 'Parent SKU', message: `The eBay ${table.marketplace} listing ${sku} cannot be created. ${problem}` }); continue }
       const rows = mapped.rows.filter(r => r.aliasKey === `${NEW_LISTING_KEY}${sku}`)
       if (rows.length) plan.creates.push({ sku, rootId: p.rootId, rootSku: p.rootSku, accountId: account, marketplace: table.marketplace, rows })
     }
-    mapped.rows = mapped.rows.filter(r => !r.aliasKey.startsWith(NEW_LISTING_KEY))
+    if (mainMissing && !account) out.issues.push({ row: 0, sku: group.rootSku, field: 'Parent SKU', message: `The eBay ${table.marketplace} listing ${group.rootSku} cannot be created. ${problem}` })
+    if (mains.length) plan.mains!.push({ rootSku: group.rootSku, rootId: group.rootId, accountId: account, marketplace: table.marketplace, rows: mapped.rows.filter(r => !r.aliasKey && mainSkus.has(r.sku)) })
+    if (family) plan.families!.push(family)
+    const added = new Set(familyUpdate?.children.map(c => c.sku) ?? [])
+    const addedRow = (r: TransferRow) => added.has(r.sku) && !r.aliasKey.startsWith(NEW_LISTING_KEY) && !(!r.aliasKey && mainSkus.has(r.sku))
+    if (familyUpdate) {
+      familyUpdate.listings = coordinates.map(c => ({ accountId: c.accountId, aliasKey: c.aliasKey, marketplace: c.marketplace, label: c.sourceParentSku }))
+      familyUpdate.rows = mapped.rows.filter(addedRow)
+      plan.families!.push(familyUpdate)
+    }
+    mapped.rows = mapped.rows.filter(r => !r.aliasKey.startsWith(NEW_LISTING_KEY) && !(!r.aliasKey && mainSkus.has(r.sku)) && !addedRow(r))
     out.rows.push(...mapped.rows); out.issues.push(...mapped.issues); out.exclusions.push(...mapped.exclusions)
     out.ledger.push(...mapped.ledger); out.warnings.push(...mapped.warnings)
   }
@@ -552,7 +1060,7 @@ async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptio
     await recordUse(chmap.info.setId, 'IMPORT', table.sheet, { rows: out.rows.length, excluded: out.exclusions.length, refused: out.issues.length })
   }
   out.warnings.unshift(...(chmap?.info ? [`Read with the mapping ${chmap.info.label}.`] : []), ...(chmap?.warnings ?? []), ...(mappingProblem ? [`The mapping versions could not be read (${mappingProblem}); this file was read with the built-in rules only, and no Owner decision was applied.`] : []))
-  if (plan.names.length || plan.creates.length) out.listingPlan = plan
+  if (plan.names.length || plan.creates.length || plan.families!.length || plan.mains!.length) out.listingPlan = plan
   out.warnings.unshift(`eBay listing workbook (${table.marketplace}${table.marketplaceFrom === 'filename' ? ', market from the file name' : table.marketplaceFrom === 'hint' ? ', market chosen for the import' : ''}): populated values are reviewed against current Nexus values. Blank cells preserve data. Prices are recorded without sending them to eBay; quantities, controls and sync fields are reference only.`)
   return out
 }
@@ -574,7 +1082,16 @@ export async function resolveEbayWorkbook(table: EbayWorkbookTable, productId: s
   const { default: prisma } = await import('../../db.js')
   const product = await prisma.product.findFirst({ where: { id: productId, deletedAt: null }, select: { id: true, parentId: true } })
   if (!product) throw new Error('This product is unavailable')
-  return resolveGroups(table, options, product.parentId ?? product.id)
+  const rootId = product.parentId ?? product.id
+  // Phase 2 — the product page's Import may create families: it needs the open family's root and the attribute dictionary.
+  const context: EbayFamilyContext = {}
+  if (options.listingPlan) {
+    const [root, children, { variationDictionary }] = await Promise.all([prisma.product.findFirst({ where: { id: rootId, deletedAt: null }, select: { id: true, sku: true } }),
+      prisma.product.count({ where: { parentId: rootId, deletedAt: null } }), import('./family-variations.service.js')])
+    if (root) context.open = { ...root, children }
+    context.dictionary = await variationDictionary()
+  }
+  return resolveGroups(table, options, rootId, context)
 }
 
 /** The catalog page: every product group the file names, in one review. */

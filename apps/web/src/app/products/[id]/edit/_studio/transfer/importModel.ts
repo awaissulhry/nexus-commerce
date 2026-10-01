@@ -28,15 +28,18 @@ export function applyLabel(status: Pick<SheetImportStatus, 'summary' | 'total'>)
 
 export interface DoneView { tone: 'success' | 'warning' | 'danger'; title: string; body: string }
 /** What the finished import says. Always states that nothing went to a channel (the Owner's D1 (a)). */
-export function doneView(status: Pick<SheetImportStatus, 'state' | 'receipt' | 'format' | 'error'>): DoneView {
+export function doneView(status: Pick<SheetImportStatus, 'state' | 'receipt' | 'format' | 'error' | 'newFamilies'>): DoneView {
   const saved = status.receipt?.saved ?? 0, failed = status.receipt?.failed ?? 0, skipped = status.receipt?.skipped ?? 0
   const undo = status.format === 'undo'
   const channels = 'Nothing was sent to the channels.'
+  // Phase 2 — a family the file created is another product: it is published from there.
+  const created = status.newFamilies ?? []
+  const publish = created.length ? `New ${created.length === 1 ? 'product' : 'products'}: ${created.map(f => f.sku).join(', ')}. Open ${created.length === 1 ? 'it' : 'each one'} to publish.` : 'Publish from the product when you are ready.'
   if (status.state === 'FAILED') return { tone: 'danger', title: undo ? 'The undo failed' : 'The import failed', body: status.error ?? 'Nothing was saved. Try again, or drop another file.' }
   if (status.state === 'PARTIAL') return { tone: 'warning', title: `${plural(saved, 'record')} saved, ${plural(failed, 'record')} not saved`,
     body: `The records not saved changed in Nexus while you were importing. Their reasons are listed below. ${channels}` }
   return { tone: 'success', title: undo ? 'Import undone' : `${plural(saved, 'record')} saved in Nexus`,
-    body: undo ? `Every value this import changed is back. ${channels}` : `${skipped ? `${plural(skipped, 'record')} with problems ${skipped === 1 ? 'was' : 'were'} skipped. ` : ''}${channels} Publish from the product when you are ready.` }
+    body: undo ? `Every value this import changed is back. ${channels}` : `${skipped ? `${plural(skipped, 'record')} with problems ${skipped === 1 ? 'was' : 'were'} skipped. ` : ''}${channels} ${publish}` }
 }
 
 /** A cell value for people: empty is a dash, lists are joined, a measure reads "1.2 kilograms". */
@@ -80,6 +83,15 @@ export const STATUS_LABELS: Record<SheetImportChange['status'], string> = { read
 /** Where in the file a problem is: "Amazon IT · row 14 · column F". */
 export function whereInFile(change: Pick<SheetImportChange, 'sheet' | 'row' | 'column'>): string {
   return [change.sheet, change.row ? `row ${change.row}` : '', change.column ? `column ${change.column}` : ''].filter(Boolean).join(' · ')
+}
+
+/**
+ * Phase 2 (2026-10-01) — the done screen's "Open GALE-JACKET": one per family the import created besides the open product's.
+ * The path is workspace-relative; the workspace Link adds `/w/<id>`.
+ */
+export function openFamilyActions(status: Pick<SheetImportStatus, 'state' | 'newFamilies'> | null): { label: string; href: string }[] {
+  if (!isFinished(status)) return []
+  return (status!.newFamilies ?? []).map(f => ({ label: `Open ${f.sku}`, href: `/products/${encodeURIComponent(f.productId)}/edit/studio` }))
 }
 
 /** Still working: poll. */
