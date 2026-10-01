@@ -2,8 +2,8 @@
  * PES.4 — the record drawer's page-scoped styles.
  *
  * Everything here is on the `--nds-*` namespace and nothing else. The platform aliases
- * (--text-*, --surface-*, --border-*) are names that app/globals.css and .h10-shell ALSO define,
- * as Tailwind RGB CHANNELS, where `var(--border-default)` is invalid and silently dropped.
+ * (--text-*, --surface-*, --border-*) are names that .h10-shell ALSO defines (app/globals.css did
+ * too until 2026-10-01), as RGB CHANNELS, where `var(--border-default)` is invalid and silently dropped.
  *
  * 🔴 Tone tokens are not all theme-aware, and the ones that are not fail SILENTLY — they resolve
  * to a light-mode palette entry that is never redefined under `.dark`. Measured 2026-09-01 against

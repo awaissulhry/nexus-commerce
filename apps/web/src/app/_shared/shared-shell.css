@@ -49,9 +49,9 @@
   color-scheme: light;
 }
 
-/* App-wide rail host (the AppShell chrome container). The H10 design tokens
-   (tokens.css) are NOT loaded globally — and can't be, since they would
-   override the shared text, surface and border aliases that globals.css owns —
+/* App-wide rail host (the AppShell chrome container). The full H10 design tokens
+   (tokens.css) are NOT loaded globally — the root layout loads tokens-global.css,
+   which withholds the text, surface and border aliases (see app/layout.tsx) —
    so the rail brings its own self-contained token set here, scoped to
    .app-rail-host. Light by default; .dark overrides the palette. Standalone
    shells use the .h10-shell pin instead (always light), so this never affects
@@ -117,9 +117,12 @@
  * Pin ALL of them or none. A subset leaves a half-dark palette — light cards with light text —
  * which is worse than either extreme and much harder to notice in review.
  *
- * Values are copied from globals.css `:root` and tokens.css `:root`. globals.css stores
- * space-separated RGB triplets on purpose (Tailwind composes them as `rgb(var(--x) / <alpha>)`),
- * so they must be written in that form here too, not as hex.
+ * Values are copied from globals.css `:root` and tokens.css `:root`, as space-separated RGB
+ * triplets because Tailwind composes them as `rgb(var(--x) / <alpha>)`. Since 2026-10-01 that holds
+ * only for inverse, raised, overlay, the status channels and accent: Tailwind's text-primary,
+ * bg-card, border-default… and the ads stylesheets read `--nds-*` (pinned below), and globals.css no
+ * longer defines the eleven text/surface/border names, so their triplets here have no reader left
+ * (removing them is a follow-up).
  */
 .h10-shell {
   /* Text */

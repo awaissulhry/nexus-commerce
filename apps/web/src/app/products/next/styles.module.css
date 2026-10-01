@@ -2,8 +2,8 @@
  * /products/next — page-scoped styles.
  *
  * Everything here is on the `--nds-*` namespace and nothing else. The platform aliases
- * (--text-*, --surface-*, --border-*) are the names app/globals.css and .h10-shell ALSO define
- * as Tailwind RGB channels, where `var(--border-default)` is invalid and silently dropped; the
+ * (--text-*, --surface-*, --border-*) are the names .h10-shell ALSO defines (app/globals.css did
+ * too until 2026-10-01) as RGB channels, where `var(--border-default)` is invalid and silently dropped; the
  * design system's rule is `--nds-*`, which no other stylesheet redefines and which `.dark`
  * already handles. See DESIGN.md, "the same names mean two different things".
  *

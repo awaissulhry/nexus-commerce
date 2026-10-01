@@ -494,9 +494,10 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // 🔴 DS stylesheets DO NOT consume these. `token-guard` check D enforces it.
   //
   // This tier is published for APP CSS only. Eleven of these names — --text-*,
-  // --surface-* and --border-* — are ALSO defined by globals.css (`:root`) and
-  // ads.css (`.h10-shell`) as space-separated RGB CHANNELS, because Tailwind
-  // composes them as `rgb(var(--x) / <alpha-value>)`. Custom properties resolve
+  // --surface-* and --border-* — are ALSO defined by the ads shell (`.h10-shell`,
+  // app/_shared/shared-shell.css) as space-separated RGB CHANNELS; globals.css
+  // (`:root`) defined them too, for Tailwind's `rgb(var(--x) / <alpha-value>)`,
+  // until 2026-10-01, when Tailwind moved to `--nds-*`. Custom properties resolve
   // from the nearest defining ANCESTOR, not by source order, so inside the shell
   // those definitions shadow these and `background: var(--surface-card)` becomes
   // `background: 255 255 255` — invalid at computed-value time, silently dropped.
@@ -505,13 +506,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   //
   // The tier is KEPT rather than deleted: --color-primary and the --status-*
   // family are NOT contested (nothing else defines them) and app stylesheets
-  // depend on them — reporting.css alone has 47 uses, plus trust.css and
+  // depend on them — reporting.css alone has 60 uses, plus trust.css and
   // /products/next. Deleting the tier would break ~70 app declarations to fix a
   // problem the guard already prevents.
   //
   // If you add a name here, first `grep -rn -- "--<name>:" apps/web/src/app`.
-  // If globals.css or ads.css already defines it, adding it is a landmine, not a
-  // fix — that is why --surface-raised is deliberately absent.
+  // If globals.css or shared-shell.css already defines it, adding it is a landmine,
+  // not a fix — that is why --surface-raised is deliberately absent.
   // ── Tier 3: grid (GDS) ───────────────────────────────────────────
   // The AG-Grid-based design-system grid's own tokens, defined once in ./grid.ts so the
   // TypeScript numbers a page hands AG (row height, header height, widths) and the CSS custom

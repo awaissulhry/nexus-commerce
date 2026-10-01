@@ -21,7 +21,7 @@
  * every scope, so they are used bare and must stay that way.
  *
  * ACR.1.6 — this file used to carry two `.dark` overrides. It no longer does: the ads console
- * is deliberately light and `.h10-shell` pins the DS tokens to prove it (ads.css). Do not add
+ * is deliberately light and `.h10-shell` pins the DS tokens to prove it (shared-shell.css). Do not add
  * `.dark` rules or `prefers-color-scheme` here; both would fire on an operator whose OS is dark
  * (useTheme defaults to 'system') and paint dark chart colours onto a permanently white card.
  */
@@ -328,7 +328,7 @@
    console's card surface (#ffffff).
 
    ACR.1.6 — the dark variant is gone because the surface it was tuned for cannot occur here:
-   `.h10-shell` now pins the DS tokens light (see ads.css), so a card under this console is
+   `.h10-shell` now pins the DS tokens light (see shared-shell.css), so a card under this console is
    always #ffffff. Keeping a `.dark` override would have put a dark-tuned accent on a white
    card the moment an operator's OS went dark — and `useTheme` defaults to 'system', so that
    was reachable without anyone choosing it. */
