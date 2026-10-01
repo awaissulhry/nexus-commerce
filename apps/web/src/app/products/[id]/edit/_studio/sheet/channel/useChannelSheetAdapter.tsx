@@ -301,12 +301,24 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }));
     useEffect(() => () => followUp.dispose(), [followUp]);
     /** Repaint the cells a save settled in place: the saved columns of the saved row, its progress, the theme token. */
-    const repaintSettled = (patched: Set<ChannelSheetRow>, columns: Set<string>) => {
+    const repaintSettled = (patched: Set<ChannelSheetRow>, columns: Set<string>, request: SheetWriteRequest<ChannelSheetRow>) => {
         const api = getGridApi();
         if (!api || api.isDestroyed())
             return;
         const nodes = [...patched].flatMap((row) => { const node = api.getRowNode(row.rowId); return node ? [node] : []; });
-        api.refreshCells({ rowNodes: nodes, columns: [...columns, SCOPE_PROGRESS_COLUMN], force: true });
+        /* 2026-10-01 — the request's OWN cells are repainted by the writer's settle a moment later (`SheetWriter.settle`
+           repaints every cell it sent); forcing them here too drew each edited cell twice. Every other patched cell —
+           another row of the family, another column of this row — is still forced here. */
+        const sent = new Set(request.cells.map((cell) => cell.colId));
+        const others = nodes.filter((node) => node.id !== request.rowId);
+        const own = nodes.find((node) => node.id === request.rowId);
+        const ownColumns = [...columns].filter((colId) => !sent.has(colId));
+        if (others.length)
+            api.refreshCells({ rowNodes: others, columns: [...columns], force: true });
+        if (own && ownColumns.length)
+            api.refreshCells({ rowNodes: [own], columns: ownColumns, force: true });
+        /* The progress cell is compared, not forced: its column's `equals` repaints it only when the reading changed. */
+        api.refreshCells({ rowNodes: nodes, columns: [SCOPE_PROGRESS_COLUMN] });
     };
     const writerRef = useRef<SheetWriter<ChannelSheetRow> | null>(null);
     if (writerRef.current === null) {
@@ -342,7 +354,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                     api.refreshCells({ rowNodes: nodes, ...(columns?.length ? { columns } : {}), force: true });
                 } });
             const inPlace = save.inPlace(result.ok);
-            if (inPlace) repaintSettled(inPlace.rows, inPlace.columns);
+            if (inPlace) repaintSettled(inPlace.rows, inPlace.columns, req);
             else if (result.ok) followUp.owe();
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });

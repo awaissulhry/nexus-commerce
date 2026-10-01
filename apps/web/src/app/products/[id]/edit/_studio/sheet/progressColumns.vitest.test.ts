@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { progressTone } from '@/design-system/grid'
-import { coordinateProgressValue, isProgressColumn, listingsHref, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns } from './progressColumns'
+import { coordinateProgressValue, isProgressColumn, listingsHref, progressColumn, rowProgressValue, sameProgressReading, sheetFieldAction, studioFieldHref, withoutProgressColumns } from './progressColumns'
 
 const completeness = {
   overall: { filled: 5, total: 10, pct: 50 },
@@ -91,5 +91,34 @@ describe('links and actions', () => {
     expect(isProgressColumn('progress:scope')).toBe(true)
     expect(isProgressColumn('brand')).toBe(false)
     expect(withoutProgressColumns([{ key: 'a' }, { key: 'progress:scope', managedBy: 'progress' }])).toEqual([{ key: 'a' }])
+  })
+})
+
+describe('progressColumn — repaints only what changed (2026-10-01 scroll/edit budgets)', () => {
+  type Row = { sku: string; completeness: { overall: { filled: number; total: number; pct: number }; required: { filled: number; total: number; missing: Array<{ key: string; label: string }> } } }
+  const column = progressColumn<Row>({ colId: 'progress:scope', headerName: 'Shared product', headerTooltip: '', value: row => rowProgressValue(row),
+    cell: { scopeLabel: 'Shared product', subjectOf: p => (p.data as Row | undefined)?.sku ?? null, actionFor: () => ({ kind: 'none', reason: '' }) as never, onGoTo: () => {} } })
+  const row = (over: Partial<Row> = {}): Row => ({ sku: 'E2E-A', completeness: { overall: { filled: 3, total: 4, pct: 75 }, required: { filled: 1, total: 2, missing: [{ key: 'brand', label: 'Brand' }] } }, ...over })
+  const read = (data: Row) => (column.valueGetter as (p: { data: Row }) => unknown)({ data })
+  const equals = column.equals!
+
+  it('treats a reading rebuilt from the same facts as unchanged, though it is a new object', () => {
+    const a = read(row()), b = read(row())
+    expect(a).not.toBe(b)
+    expect(equals(a, b)).toBe(true)
+  })
+
+  it('repaints when the percentage, an empty field or the named row changes', () => {
+    const base = read(row())
+    expect(equals(base, read(row({ completeness: { ...row().completeness, overall: { filled: 4, total: 4, pct: 100 } } })))).toBe(false)
+    expect(equals(base, read(row({ completeness: { ...row().completeness, required: { filled: 1, total: 2, missing: [{ key: 'colour', label: 'Colour' }] } } })))).toBe(false)
+    expect(equals(base, read(row({ sku: 'E2E-B' })))).toBe(false)
+    expect(equals(base, null)).toBe(false)
+  })
+
+  it('still formats the reading as before', () => {
+    expect(sameProgressReading(null, undefined)).toBe(true)
+    const formatted = (column.valueFormatter as (p: { data: Row; value: unknown }) => string)({ data: row(), value: read(row()) })
+    expect(formatted).toMatch(/75/)
   })
 })

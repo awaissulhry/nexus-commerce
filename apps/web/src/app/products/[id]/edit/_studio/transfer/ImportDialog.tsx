@@ -23,15 +23,30 @@ const remember = (productId: string, jobId: string | null) => {
   try { if (jobId) sessionStorage.setItem(runningKey(productId), jobId); else sessionStorage.removeItem(runningKey(productId)) } catch { /* storage unavailable: nothing to resume */ }
 }
 
+/* 2026-10-01 (edit ≤ 60 renders) — only the OPEN dialog reads the sheet's save state. The dialog stays mounted while
+   closed so a running import keeps going; reading the save state at its top repainted it, and its Modal, on every
+   sheet edit. The DS Modal renders nothing while closed, so these two subscribe only while it is open. */
+function useSheetUnsaved(): boolean {
+  const save = useStudioSave()
+  return save.kind === 'saving' || save.kind === 'error'
+}
+
+function ApplyButton({ label, needsConfirmation, onClick }: { label: string | null; needsConfirmation: boolean; onClick(): void }) {
+  const unsaved = useSheetUnsaved()
+  return <Button size="sm" variant="primary" disabled={!label || unsaved || needsConfirmation} onClick={onClick}>{label ?? 'Nothing to apply'}</Button>
+}
+
+function UnsavedEditsBanner() {
+  return useSheetUnsaved() ? <Banner tone="warning">Finish saving your edits in the sheet first. Then apply.</Banner> : null
+}
+
 /**
  * PSIE — Import: drop a file → one summary → Apply → done, with Undo. No format, scope or language choice: the file
  * says what it is and what it touches. Saving writes Nexus only; publishing is its own step (the Owner's D1 (a)).
  * The dialog stays mounted while closed, so a save keeps going and the sheet refreshes when it ends.
  */
 export function ImportDialog({ open, onClose, productId, market, onApplied }: { open: boolean; onClose(): void; productId: string; market: string; onApplied(): void }) {
-  const save = useStudioSave()
   const { toast } = useToast()
-  const unsaved = save.kind === 'saving' || save.kind === 'error'
   const [file, setFile] = useState<File | null>(null)
   const [reading, setReading] = useState<number | null>(null)
   const [status, setStatus] = useState<SheetImportStatus | null>(null)
@@ -167,7 +182,7 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
       {status.format !== 'undo' && <Button size="sm" variant="secondary" onClick={() => { reset() }}>Choose another file</Button>}
       <span className="grow" />
       <Button size="sm" variant="secondary" onClick={close}>Cancel</Button>
-      <Button size="sm" variant="primary" disabled={!label || unsaved || needsConfirmation} onClick={apply}>{label ?? 'Nothing to apply'}</Button>
+      <ApplyButton label={label} needsConfirmation={needsConfirmation} onClick={apply} />
     </>}
     {done && <>
       {status?.canUndo && <Button size="sm" variant="secondary" onClick={undo}>Undo</Button>}
@@ -201,7 +216,7 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
             { label: 'Listings', value: status.summary.listings.toLocaleString('en') },
             { label: 'Problems', value: status.summary.problems.toLocaleString('en'), onClick: status.summary.problems ? () => { setFilter('problems'); setPage(1) } : undefined, active: filter === 'problems' },
           ]} />
-          {unsaved && <Banner tone="warning">Finish saving your edits in the sheet first. Then apply.</Banner>}
+          <UnsavedEditsBanner />
           {!status.summary.changes && !status.summary.problems && <Banner tone="info">Nothing to change: this file holds the values Nexus already has.</Banner>}
           {status.summary.problems > 0 && <Banner tone="warning" title={`${status.summary.problems.toLocaleString('en')} ${status.summary.problems === 1 ? 'problem' : 'problems'}`}
             action={<a className={styles.link} href={sheetTransferApi.problemsUrl(status.jobId)}>Download the list</a>}>
