@@ -17,6 +17,7 @@ import { duration, easing } from './motion'
 import { fontSize, fontWeight } from './typography'
 import { radius } from './radius'
 import { gridVars, gridVarsDark } from './grid'
+import { groupToneVars, groupToneVarsDark } from './groupTones'
 import { workspaceVars } from './workspace'
 import { chromeVars } from './chrome'
 import { topbarVars } from './topbar'
@@ -524,6 +525,8 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // properties the theme binds are the same table. Every colour is a semantic role, so the
   // .dark block below needs no grid entry.
   ...gridVars,
+  // The product sheet's column-group colours (the old flat file's), light here and dark below.
+  ...groupToneVars,
   ...workspaceVars,
 
   // TB — the app-wide top bar's own tokens (tokens/topbar.ts). Colours alias the RAIL rather
@@ -757,6 +760,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
 
   // ── grid aliases, re-declared so they resolve against the dark tier (tokens/grid.ts) ──
   ...gridVarsDark,
+  ...groupToneVarsDark,
 
   // No top-bar or chrome entries here: chrome is theme-independent literals (tokens/chrome.ts)
   // and the bar aliases only those, so there is nothing to re-resolve in the dark scope.
