@@ -37,8 +37,8 @@ export function normalisePricingRule(value: unknown): PricingRuleName | null {
   return (PRICING_RULES as readonly string[]).includes(upper) ? (upper as PricingRuleName) : null
 }
 
-/** The sentence a refused pricing rule earns. */
-export const PRICING_RULE_REFUSAL = `The pricing rule must be one of ${PRICING_RULES.join(', ')}.`
+/** The sentence a refused pricing rule earns: the operator's words for the three rules, no column names. */
+export const PRICING_RULE_REFUSAL = 'Choose a pricing rule: Fixed, Match Amazon or Percent of master.'
 
 /**
  * Why an adjustment percent cannot be stored, or `null` when it can. A number with at most 2 decimals, above -100
@@ -46,10 +46,10 @@ export const PRICING_RULE_REFUSAL = `The pricing rule must be one of ${PRICING_R
  */
 export function adjustmentPercentProblem(value: unknown): string | null {
   const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN
-  if (!Number.isFinite(n)) return 'The adjustment percent must be a number.'
-  if (Math.abs(roundCents(n) - n) > 1e-9) return 'The adjustment percent has at most 2 decimals.'
-  if (n <= -100) return 'The adjustment percent must be above -100%: -100% or less prices the listing at zero or below.'
-  if (n > ADJUSTMENT_PERCENT_MAX) return `The adjustment percent is at most ${ADJUSTMENT_PERCENT_MAX}%.`
+  if (!Number.isFinite(n)) return 'The adjustment must be a number.'
+  if (Math.abs(roundCents(n) - n) > 1e-9) return 'The adjustment can have at most 2 decimals.'
+  if (n <= -100) return 'The adjustment must be above -100%. At -100% or less the price would be 0 or below.'
+  if (n > ADJUSTMENT_PERCENT_MAX) return `The adjustment can be at most ${ADJUSTMENT_PERCENT_MAX}%.`
   return null
 }
 

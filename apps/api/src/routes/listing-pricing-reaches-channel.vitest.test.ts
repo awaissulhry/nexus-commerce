@@ -172,14 +172,26 @@ describe('PATCH /api/listings/:id — the listing drawer', () => {
     const gbp = await scoped(() => seed('patch-pin-gbp', { marketplace: 'UK', product: { maxPrice: 20 } }))
     expect((await patch(gbp.id, { priceOverride: 25, expectedVersion: gbp.version })).statusCode).toBe(200)
     expect(await prices(gbp.id)).toEqual([25])
-    // 0 is not a price.
-    expect((await patch(gbp.id, { priceOverride: 0 })).statusCode).toBe(400)
+    // 0 is not a price — said in the operator's words (no field name, no "or null").
+    const zero = await patch(gbp.id, { priceOverride: 0 })
+    expect([zero.statusCode, zero.json().error]).toEqual([400, 'The price must be above 0.'])
   })
 
   it('a bad percent or rule is a 400 before anything is read or written; a version-less reset button still works', async () => {
     const l = await scoped(() => seed('patch-bad', { follow: false, price: 25, rule: 'PERCENT_OF_MASTER', adj: 10 }))
-    for (const body of [{ priceAdjustmentPercent: -100 }, { priceAdjustmentPercent: 1.234 }, { pricingRule: 'CHEAPEST' }]) {
-      expect((await patch(l.id, body)).statusCode).toBe(400)
+    // Each refusal is a short sentence in the operator's words: no field names, no enum names.
+    for (const [body, sentence] of [
+      [{ priceAdjustmentPercent: -100 }, 'The adjustment must be above -100%. At -100% or less the price would be 0 or below.'],
+      [{ priceAdjustmentPercent: 1.234 }, 'The adjustment can have at most 2 decimals.'],
+      [{ priceAdjustmentPercent: 1000 }, 'The adjustment can be at most 999.99%.'],
+      [{ priceAdjustmentPercent: 'ten' }, 'The adjustment must be a number.'],
+      [{ pricingRule: 'CHEAPEST' }, 'Choose a pricing rule: Fixed, Match Amazon or Percent of master.'],
+      [{ priceOverride: 'abc' }, 'The price must be above 0.'],
+      [{ followMasterPrice: true, priceOverride: 12 }, 'A listing cannot follow the master price and keep its own price at the same time. Choose one.'],
+      [{ followMasterPrice: false, priceOverride: null }, 'A listing cannot follow the master price and keep its own price at the same time. Choose one.'],
+    ] as const) {
+      const res = await patch(l.id, body)
+      expect([res.statusCode, res.json().error], JSON.stringify(body)).toEqual([400, sentence])
     }
     expect(await queued(l.id)).toEqual([])
     // OverrideBadge's reset sends no version: the door names why (`listing-patch-unversioned`) and sends 11.
@@ -254,7 +266,7 @@ describe('POST /api/listings/bulk-action', () => {
     expect(await run('set-price', [l.id], { price: 25 })).toMatchObject({ status: 'FAILED', lastError: expect.stringContaining('above its pricing ceiling of 20.00') })
     expect(await queued(l.id)).toEqual([])
     const zero = await scoped(async () => app.inject({ method: 'POST', url: '/api/listings/bulk-action', payload: { action: 'set-price', listingIds: [l.id], payload: { price: 0 } } }))
-    expect(zero.statusCode).toBe(400)
+    expect([zero.statusCode, zero.json().error]).toEqual([400, 'The price must be above 0.'])
   })
 
   it('a refusal fails that listing by name and writes nothing; a bad percent is a 400 before any job', async () => {
@@ -264,7 +276,9 @@ describe('POST /api/listings/bulk-action', () => {
     expect((await listing(l.id)).pricingRule).toBe('FIXED')
     expect(await queued(l.id)).toEqual([])
     const bad = await scoped(async () => app.inject({ method: 'POST', url: '/api/listings/bulk-action', payload: { action: 'set-pricing-rule', listingIds: [l.id], payload: { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 10.555 } } }))
-    expect(bad.statusCode).toBe(400)
+    expect([bad.statusCode, bad.json().error]).toEqual([400, 'The adjustment can have at most 2 decimals.'])
+    const rule = await scoped(async () => app.inject({ method: 'POST', url: '/api/listings/bulk-action', payload: { action: 'set-pricing-rule', listingIds: [l.id], payload: { pricingRule: 'CHEAPEST' } } }))
+    expect([rule.statusCode, rule.json().error]).toEqual([400, 'Choose a pricing rule: Fixed, Match Amazon or Percent of master.'])
   })
 })
 

@@ -497,7 +497,7 @@ export async function applyChanges(
                 actor: opts.actor ?? 'flat-file-import', source: 'BULK_OVERRIDE', reason: `Flat-file import ${change.column}`,
               })
               const result = written.results[0]
-              if (!result || result.outcome === 'refused' || result.outcome === 'conflict') throw new CellRefusedError(result?.reason ?? 'The price write refused this cell.')
+              if (!result || result.outcome === 'refused' || result.outcome === 'conflict') throw new CellRefusedError(result?.reason ?? 'The price in this cell was not changed.')
               return result
             })
             // Only a cell that committed is undone by the inverse, and touches its product.

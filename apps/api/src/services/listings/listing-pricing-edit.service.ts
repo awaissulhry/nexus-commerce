@@ -39,9 +39,15 @@ export interface ListingPricingEdit {
 
 const has = (body: object, key: string) => Object.prototype.hasOwnProperty.call(body, key)
 
+/** A typed price (a pin) that is not above 0: the listing PATCH, the grid's price cell and the bulk "Set price". */
+export const PRICE_ABOVE_ZERO = 'The price must be above 0.'
+/** A follow flag and a pin (or a stop-following and a hand-back) in one change. */
+export const FOLLOW_OR_OWN_PRICE = 'A listing cannot follow the master price and keep its own price at the same time. Choose one.'
+
 /**
  * Read the pricing keys of a request body into an edit, or throw the 400 sentence. `undefined` when the body carries
- * none of them. The percent and the rule are checked by the same functions the door checks with.
+ * none of them. The percent and the rule are checked by the same functions the door checks with. Every sentence is the
+ * operator's: short, no field names (the listings screens show it as it comes).
  */
 export function parseListingPricingEdit(body: Record<string, unknown>): ListingPricingEdit | undefined {
   const edit: ListingPricingEdit = {}
@@ -62,15 +68,12 @@ export function parseListingPricingEdit(body: Record<string, unknown>): ListingP
     else if (raw !== undefined) {
       const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN
       // A typed price is above 0 (the price door refuses 0 too); null hands the listing back to the master.
-      if (!Number.isFinite(n) || n <= 0) throw new ListingPricingError(400, 'priceOverride must be a number above 0, or null to follow the master price again')
+      if (!Number.isFinite(n) || n <= 0) throw new ListingPricingError(400, PRICE_ABOVE_ZERO)
       edit.priceOverride = n
     }
   }
-  if (edit.followMasterPrice === true && typeof edit.priceOverride === 'number') {
-    throw new ListingPricingError(400, 'followMasterPrice: true and a priceOverride contradict each other: send one of them.')
-  }
-  if (edit.followMasterPrice === false && edit.priceOverride === null) {
-    throw new ListingPricingError(400, 'followMasterPrice: false and priceOverride: null contradict each other: send one of them.')
+  if ((edit.followMasterPrice === true && typeof edit.priceOverride === 'number') || (edit.followMasterPrice === false && edit.priceOverride === null)) {
+    throw new ListingPricingError(400, FOLLOW_OR_OWN_PRICE)
   }
   return Object.keys(edit).length ? edit : undefined
 }
@@ -94,7 +97,7 @@ export function pricingTarget(
 function refusalOf(outcome: PriceWriteOutcome | undefined): ListingPricingError | null {
   if (!outcome) return new ListingPricingError(500, 'The price write returned no outcome for this listing.')
   if (outcome.outcome === 'conflict') return new ListingPricingError(409, 'Version conflict — another tab edited this listing. Refresh and retry.', { currentVersion: outcome.version })
-  if (outcome.outcome === 'refused') return new ListingPricingError(outcome.reason === 'No listing with this id' ? 404 : 400, outcome.reason ?? 'The price write refused this listing.', { code: 'PRICE_REFUSED' })
+  if (outcome.outcome === 'refused') return new ListingPricingError(outcome.reason === 'No listing with this id' ? 404 : 400, outcome.reason ?? 'The price was not changed.', { code: 'PRICE_REFUSED' })
   return null
 }
 

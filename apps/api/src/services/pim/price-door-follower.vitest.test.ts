@@ -237,7 +237,7 @@ describe('refusals write nothing', () => {
       [{ priceAdjustmentPercent: 10.555 }, '2 decimals'],
       [{ priceAdjustmentPercent: 1000 }, '999.99'],
       [{ priceAdjustmentPercent: Number.NaN }, 'must be a number'],
-      [{ pricingRule: 'CHEAPEST' }, 'must be one of FIXED, MATCH_AMAZON, PERCENT_OF_MASTER'],
+      [{ pricingRule: 'CHEAPEST' }, 'Choose a pricing rule: Fixed, Match Amazon or Percent of master.'],
     ] as const) {
       const r = await door({ listingId: l.id, rule, expectedVersion: l.version })
       expect(r.results[0].outcome).toBe('refused')

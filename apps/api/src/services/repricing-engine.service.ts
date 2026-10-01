@@ -374,7 +374,7 @@ export class RepricingEngineService {
           })
           const outcome = written.results[0]
           appliedToListing = outcome?.outcome === 'applied' || outcome?.outcome === 'noop'
-          if (!appliedToListing) notApplied = outcome?.reason ?? 'The price write refused this listing.'
+          if (!appliedToListing) notApplied = outcome?.reason ?? 'The price was not changed.'
         }
       } catch (err) {
         // Don't fail the evaluator — the decision row still records what the engine intended, and why it did not land.

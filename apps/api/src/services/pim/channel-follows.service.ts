@@ -136,7 +136,7 @@ export async function applyChannelFollows(
       })
       const outcome = written.results[0]
       if (!outcome || outcome.outcome === 'refused' || outcome.outcome === 'conflict') {
-        results.push({ marketplace, channel, field: u.field, ok: false, reason: outcome?.reason ?? 'The price write refused this listing.' })
+        results.push({ marketplace, channel, field: u.field, ok: false, reason: outcome?.reason ?? 'The price was not changed.' })
         continue
       }
       const flags = await prisma.channelListing.findUnique({ where: { id: listing.id }, select: FLAGS })

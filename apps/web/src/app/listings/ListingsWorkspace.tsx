@@ -1397,7 +1397,8 @@ function InlineNumberCell({
     // A typed price is above 0 (the price door refuses 0); a quantity is a whole number, zero or more.
     if (!Number.isFinite(n) || (field === 'price' ? n <= 0 : n < 0 || !Number.isInteger(n))) {
       toast.error(
-        field === 'price' ? 'Price must be a number above 0' : 'Quantity must be a whole number, zero or more',
+        // The API's own sentences (PATCH /api/listings/:id), so the cell and the server say the same thing.
+        field === 'price' ? 'The price must be above 0.' : 'The quantity must be a whole number, 0 or more.',
       )
       setEditing(false)
       setDraft(value != null ? String(value) : '')
@@ -2710,11 +2711,11 @@ function SetPriceModal({
     }
     const n = Number(trimmed)
     if (!Number.isFinite(n)) {
-      setError('Price must be a number.')
+      setError('The price must be a number.')
       return
     }
     if (n <= 0) {
-      setError('Price must be above 0.')
+      setError('The price must be above 0.')
       return
     }
     onConfirm(n)

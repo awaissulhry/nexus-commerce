@@ -3292,7 +3292,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (listing.pricingRule === 'MATCH_AMAZON') {
         return reply.code(409).send({
-          error: 'pricingRule=MATCH_AMAZON takes its price from Amazon, not from the master; there is no master price to resync to.',
+          error: 'This listing follows Match Amazon: its price comes from Amazon, not from the master price, so there is nothing to resync.',
         })
       }
       const written = await writeChannelPrices({
@@ -3301,7 +3301,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       })
       const outcome = written.results[0]
       if (!outcome || outcome.outcome === 'refused' || outcome.outcome === 'conflict') {
-        return reply.code(409).send({ error: outcome?.reason ?? 'The price write refused this listing.' })
+        return reply.code(409).send({ error: outcome?.reason ?? 'The price was not changed.' })
       }
       const after = await prisma.channelListing.findUnique({ where: { id }, select: { price: true } })
       return reply.send({

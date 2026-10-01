@@ -1739,7 +1739,7 @@
   "pricing.drawer.suggestion": "Engine suggestion (not the listing's price; not sent)",
   "pricing.drawer.warnings": "Warnings",
   "pricing.drawer.pushTitle": "Push to marketplace",
-  "pricing.drawer.pushDescription": "Queues the listing's price for {channel} through Nexus's price door: it is sent after a 30-second hold, with the push lock, the currency and the floor and ceiling checked. A paused listing or a draft is not sent.",
+  "pricing.drawer.pushDescription": "Sends the listing's price to {channel} after a 30-second hold. Nothing is sent if the listing is paused or still a draft, or if the price is outside the product's floor and ceiling.",
   "pricing.drawer.pushButton": "Push price",
   "pricing.drawer.pushing": "Pushing…",
   "pricing.drawer.lastComputed": "Last computed {when}",

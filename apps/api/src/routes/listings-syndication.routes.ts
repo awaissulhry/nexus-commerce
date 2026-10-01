@@ -29,7 +29,7 @@ import { AmbiguousConnectionError, tryResolveConnection } from '../services/conn
 import { DraftListingError, ensureDraftListingsInTransaction } from '../services/pim/draft-listing.service.js'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
-import { applyListingBulkPricing, ListingPricingError, parseListingPricingEdit, patchListing, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
+import { applyListingBulkPricing, ListingPricingError, parseListingPricingEdit, patchListing, PRICE_ABOVE_ZERO, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
 import { listingVersionOf, setListingQuantityFollow, writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
@@ -1225,17 +1225,17 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       if (hasQuantity || hasSale) {
         const others = Object.keys(body).filter((k) => !MATRIX_KEYS.includes(k) && k !== 'expectedVersion')
         if (others.length || (hasQuantity && hasSale)) {
-          return reply.code(400).send({ error: 'A quantity or a sale is saved on its own (it goes through the Studio matrix\'s write): send the other fields in a separate change.' })
+          return reply.code(400).send({ error: 'Save the quantity or the sale on its own, then save the other changes.' })
         }
         let write: ListingMatrixCell
         if (hasQuantity) {
           const n = typeof body.quantity === 'number' ? body.quantity : typeof body.quantity === 'string' && body.quantity.trim() !== '' ? Number(body.quantity) : Number.NaN
-          if (!Number.isInteger(n) || n < 0) return reply.code(400).send({ error: 'quantity must be a whole number, zero or more' })
+          if (!Number.isInteger(n) || n < 0) return reply.code(400).send({ error: 'The quantity must be a whole number, 0 or more.' })
           write = { cell: 'syncQty', value: n }
         } else {
           const raw = body.salePrice
           const value = raw === null || raw === undefined || raw === '' ? null : Number(raw)
-          if (value !== null && (!Number.isFinite(value) || value <= 0)) return reply.code(400).send({ error: 'salePrice must be a number above 0, or null to end the sale' })
+          if (value !== null && (!Number.isFinite(value) || value <= 0)) return reply.code(400).send({ error: 'The sale price must be above 0.' })
           const date = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
           write = { cell: 'salePrice', value: { value, start: value === null ? null : date(body.salePriceStart), end: value === null ? null : date(body.salePriceEnd) } }
         }
@@ -3383,18 +3383,18 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       if (action === 'set-price') {
         const p = Number(body.payload?.price)
         if (!Number.isFinite(p) || p <= 0) {
-          return reply.code(400).send({ error: 'payload.price must be a number above 0' })
+          return reply.code(400).send({ error: PRICE_ABOVE_ZERO })
         }
       }
       if (action === 'set-pricing-rule') {
         const rule = normalisePricingRule(body.payload?.pricingRule)
         if (!rule) {
-          return reply.code(400).send({ error: `payload.pricingRule: ${PRICING_RULE_REFUSAL}` })
+          return reply.code(400).send({ error: PRICING_RULE_REFUSAL })
         }
         const pct = body.payload?.priceAdjustmentPercent
         if (rule === 'PERCENT_OF_MASTER' && pct != null && pct !== '') {
           const problem = adjustmentPercentProblem(pct)
-          if (problem) return reply.code(400).send({ error: `payload.priceAdjustmentPercent: ${problem}` })
+          if (problem) return reply.code(400).send({ error: problem })
         }
       }
 

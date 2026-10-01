@@ -158,7 +158,7 @@ export async function writeListingCellThroughMatrix(input: {
   const outcome = written.results[0]
   if (!outcome) throw new ListingPricingError(500, 'The price write returned no outcome for this listing.')
   if (outcome.outcome === 'conflict') throw conflict(outcome.version)
-  if (outcome.outcome === 'refused') throw new ListingPricingError(400, outcome.reason ?? 'The price write refused this sale.', { code: 'PRICE_REFUSED' })
+  if (outcome.outcome === 'refused') throw new ListingPricingError(400, outcome.reason ?? 'The sale was not changed.', { code: 'PRICE_REFUSED' })
   return { id: listing.id, version: outcome.version, outcome: outcome.outcome === 'applied' ? 'applied' : 'noop' }
 }
 

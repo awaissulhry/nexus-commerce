@@ -102,9 +102,13 @@ describe('the grid\'s stock cell pins the quantity with the matrix\'s own pin (p
   it('a stale version is 409; a quantity beside another field is a 400; a negative or fractional quantity is a 400', async () => {
     const [l] = await scoped(() => seed('grid-qty-bad', [{ channel: 'EBAY', marketplace: 'DE' }]))
     expect((await patch(l.id, { quantity: 7, expectedVersion: l.version - 1 })).statusCode).toBe(409)
-    expect((await patch(l.id, { quantity: 7, stockBuffer: 1 })).statusCode).toBe(400)
-    expect((await patch(l.id, { quantity: -1 })).statusCode).toBe(400)
-    expect((await patch(l.id, { quantity: 1.5 })).statusCode).toBe(400)
+    // In the operator's words: no field names.
+    const beside = await patch(l.id, { quantity: 7, stockBuffer: 1 })
+    expect([beside.statusCode, beside.json().error]).toEqual([400, 'Save the quantity or the sale on its own, then save the other changes.'])
+    for (const quantity of [-1, 1.5]) {
+      const res = await patch(l.id, { quantity })
+      expect([res.statusCode, res.json().error]).toEqual([400, 'The quantity must be a whole number, 0 or more.'])
+    }
     expect(await listing(l.id)).toMatchObject({ quantity: 5, followMasterQuantity: true })
   })
 })
@@ -123,6 +127,9 @@ describe('a sale goes through the price door with its window, with the matrix sa
     const [l] = await scoped(() => seed('sale-nodates', [{ channel: 'AMAZON', marketplace: 'IT' }]))
     const res = await patch(l.id, { salePrice: 8, expectedVersion: l.version })
     expect(res.statusCode).toBe(400)
+    // A sale of 0 is refused before the door, in the operator's words.
+    const zero = await patch(l.id, { salePrice: 0, salePriceStart: '2026-11-01', salePriceEnd: '2026-11-30' })
+    expect([zero.statusCode, zero.json().error]).toEqual([400, 'The sale price must be above 0.'])
     expect((await listing(l.id)).salePrice).toBeNull()
     expect(await queued(l.id, 'PRICE_UPDATE')).toEqual([])
   })
