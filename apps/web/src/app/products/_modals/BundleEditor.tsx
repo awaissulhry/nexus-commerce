@@ -138,7 +138,7 @@ export default function BundleEditor({
                   setCreating(true)
                   setDraft({ wrapperProductId: '', wrapperName: '', name: '', components: [] })
                 }}
-                className="bg-slate-900 dark:bg-slate-100 text-white border-slate-900 hover:bg-slate-800"
+                className="bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900 hover:opacity-90"
                 icon={<Plus size={12} />}
               >
                 New bundle
@@ -248,7 +248,7 @@ export default function BundleEditor({
               <Button
                 onClick={createBundle}
                 disabled={!draft.wrapperProductId || !draft.name.trim() || draft.components.length === 0}
-                className="bg-slate-900 dark:bg-slate-100 text-white border-slate-900 hover:bg-slate-800"
+                className="bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900 hover:opacity-90"
               >
                 Create bundle
               </Button>

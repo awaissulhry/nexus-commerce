@@ -148,3 +148,16 @@ describe('projectBufferAndDetect', () => {
     }
   })
 })
+
+// 2026-10-01 — the overview tells the page which markets the rows are on, so the Market filter can offer each of them
+// (it was a fixed IT/DE/FR/ES/DEFAULT list: Shopify's and Etsy's GLOBAL rows could not be filtered).
+describe('the overview names every market the rows are on', () => {
+  it('GLOBAL (Shopify, Etsy) is offered beside the countries', async () => {
+    await seed('overview-markets', [{ marketplace: 'IT' }, { marketplace: 'GLOBAL', channel: 'SHOPIFY' }, { marketplace: 'GLOBAL', channel: 'ETSY' }])
+    const res = await app.inject({ method: 'GET', url: '/api/stock/sync-control/overview' })
+    expect(res.statusCode).toBe(200)
+    const markets = res.json().markets as string[]
+    expect(markets).toEqual(expect.arrayContaining(['GLOBAL', 'IT']))
+    expect(markets).toEqual([...new Set(markets)].sort())
+  })
+})

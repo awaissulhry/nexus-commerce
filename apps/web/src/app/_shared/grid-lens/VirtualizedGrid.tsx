@@ -435,12 +435,12 @@ export function VirtualizedGrid<T extends GridLensRow>({
             >
               {/* ── Header ───────────────────────────────────────────── */}
               <div
-                className="flex border-b border-default bg-slate-50 sticky top-0 z-10"
+                className="flex border-b border-default bg-sunken sticky top-0 z-10"
                 role="row"
               >
                 {draggable && (
                   <div
-                    className={`px-1 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                    className={`px-1 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-sunken` : ''}`}
                     style={{
                       width: 28,
                       minWidth: 28,
@@ -451,7 +451,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                   />
                 )}
                 <div
-                  className={`px-3 py-2 flex items-center${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                  className={`px-3 py-2 flex items-center${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-sunken` : ''}`}
                   style={{
                     width: 32,
                     minWidth: 32,
@@ -479,7 +479,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                 </div>
                 {showExpandColumn && (
                   <div
-                    className={`px-1 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                    className={`px-1 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-sunken` : ''}`}
                     style={{
                       width: 24,
                       minWidth: 24,
@@ -491,7 +491,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                 )}
                 {onTagEdit && (
                   <div
-                    className={`px-0.5 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800` : ''}`}
+                    className={`px-0.5 py-2${stickyLeft ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-sunken` : ''}`}
                     style={{
                       width: 22,
                       minWidth: 22,
@@ -523,9 +523,9 @@ export function VirtualizedGrid<T extends GridLensRow>({
                   const isStickyLeftCol = stickyLeft && col.key === firstStickyKey
                   const isStickyRightCol = stickyRight && col.key === lastStickyKey
                   const stickyHeaderCls = isStickyLeftCol
-                    ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800 ${STICKY_LEFT_EDGE_SHADOW}`
+                    ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-sunken ${STICKY_LEFT_EDGE_SHADOW}`
                     : isStickyRightCol
-                      ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-slate-50 dark:bg-slate-800 ${STICKY_RIGHT_EDGE_SHADOW}`
+                      ? ` sticky ${STICKY_HEADER_CORNER_Z} bg-sunken ${STICKY_RIGHT_EDGE_SHADOW}`
                       : ''
                   const stickyHeaderStyle: React.CSSProperties = isStickyLeftCol
                     ? { left: stickyLeftOffsets.firstContent }
@@ -545,7 +545,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                           onSort(sortKeys[col.key])
                         }
                       }}
-                      className={`relative px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left flex items-start group/sort ${sortable ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}${stickyHeaderCls}`}
+                      className={`relative px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left flex items-start group/sort ${sortable ? 'cursor-pointer hover:bg-raised focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-raised' : ''}${stickyHeaderCls}`}
                       style={{
                         width: `var(--col-${col.key}-width)`,
                         minWidth: `var(--col-${col.key}-width)`,
@@ -844,10 +844,10 @@ const GridRowInner = memo(function GridRowInner({
     ? 'opacity-40'
     : isChild
       ? isSelected
-        ? `bg-blue-50/40 ${focusRing}`
-        : `${stagedTint || stateTint || 'bg-slate-50/40'} hover:bg-slate-100/60 ${focusRing}`
+        ? `bg-info-soft/40 ${focusRing}`
+        : `${stagedTint || stateTint || 'bg-sunken/40'} hover:bg-sunken/60 ${focusRing}`
       : isSelected
-        ? `bg-blue-50/30 ${focusRing}`
+        ? `bg-info-soft/30 ${focusRing}`
         : `${stagedTint || stateTint} hover:bg-slate-50 dark:hover:bg-slate-900 ${focusRing}`
 
   // PG.6 — sticky body-cell modifier helpers. Each leading utility

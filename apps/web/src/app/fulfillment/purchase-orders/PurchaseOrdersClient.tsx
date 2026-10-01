@@ -782,7 +782,7 @@ export default function PurchaseOrdersClient() {
                     className={cn(
                       'px-3 py-1 text-sm font-medium rounded border transition-colors',
                       statusFilter === f.key
-                        ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                        ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                         : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                     )}
                   >
@@ -1956,7 +1956,7 @@ function PoCard({
                     className={cn(
                       'inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-medium rounded border transition-colors disabled:opacity-50',
                       tr.variant === 'primary' &&
-                        'bg-slate-900 dark:bg-slate-100 text-white border-slate-900 hover:bg-slate-800',
+                        'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900 hover:opacity-90',
                       tr.variant === 'secondary' &&
                         'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                       tr.variant === 'danger' &&

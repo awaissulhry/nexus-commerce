@@ -505,7 +505,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
             />
             <button
               onClick={saveTags}
-              className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800"
+              className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90"
             >
               {t('common.save')}
             </button>
@@ -700,7 +700,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                 <button
                   onClick={addNote}
                   disabled={!noteDraft.trim()}
-                  className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   <Plus size={12} /> {t('common.save')}
                 </button>
@@ -813,7 +813,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                 <button
                   onClick={addNote}
                   disabled={!noteDraft.trim()}
-                  className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   <Plus size={12} /> {t('common.save')}
                 </button>
@@ -1088,7 +1088,7 @@ function FiscalDataCard({
           <button
             onClick={save}
             disabled={busy}
-            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50"
           >
             Salva
           </button>

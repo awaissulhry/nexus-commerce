@@ -12,6 +12,7 @@ import { WORKSPACES_ENABLED, profileEntryHref } from '@/lib/workspaces/paths'
 import { useTheme } from '@/lib/theme/use-theme'
 import { useProfileScope, type BusinessProfile } from '../_shared/ProfileScope'
 import { useProfileDirectory } from '@/lib/workspaces/profile-directory'
+import { mfaStepOf } from './mfaStep'
 import './profiles.css'
 
 export default function ProfilesClient() {
@@ -28,6 +29,16 @@ export default function ProfilesClient() {
   const directory = useProfileDirectory({ q: query, status: showArchived ? 'archived' : 'active' })
   const { profiles, error, loading } = directory
   const refresh = async () => { await Promise.all([directory.refresh(), refreshScope()]) }
+  const mfaStep = mfaStepOf(user)
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState<string | null>(null)
+  const signInAgain = async () => {
+    setSigningOut(true); setSignOutError(null)
+    const response = await fetch(`${getBackendUrl()}/api/auth/logout`, { method: 'POST' }).catch(() => null)
+    if (response?.ok) { window.location.assign('/login?next=%2Fprofiles'); return }
+    setSignOutError('Sign out could not be completed. Try again.')
+    setSigningOut(false)
+  }
   useEffect(() => { if (search.get('create') === '1') setCreating(true) }, [search])
   if (!WORKSPACES_ENABLED) return <div className="business-profiles"><Banner title="Business profiles are being prepared">Your existing workspace is available from the dashboard.</Banner><Button asChild><a href="/dashboard/overview">Open dashboard</a></Button></div>
   return <div className="business-profiles">
@@ -36,7 +47,16 @@ export default function ProfilesClient() {
       <Button variant="primary" onClick={() => setCreating(true)}><Plus size={16} aria-hidden />Create profile</Button>
     </header>
     {search.get('unavailable') === '1' && <Banner tone="warning" title="That profile is unavailable">Choose a profile you currently have access to.</Banner>}
-    {error && <Banner tone="danger" title="Profiles could not be loaded" action={<Button onClick={() => { void refresh() }}>Retry</Button>}>{error}</Banner>}
+    {mfaStep === 'sign-in-again' && <Banner tone="warning" title="Sign in again with your authentication code"
+      action={<Button variant="primary" disabled={signingOut} onClick={() => { void signInAgain() }}>{signingOut ? 'Signing out…' : 'Sign in again'}</Button>}>
+      Two-factor authentication is on for your login, but this sign-in was made without a code, so business profiles stay closed. Sign in again and enter the 6-digit code from your authenticator app.
+      {signOutError && <> {signOutError}</>}
+    </Banner>}
+    {mfaStep === 'set-up' && <Banner tone="warning" title="Set up two-factor authentication"
+      action={<Button variant="primary" asChild><a href="/settings/security">Set up two-factor</a></Button>}>
+      Your login must use two-factor authentication before business profiles open. Set it up in Personal settings; you can continue right after.
+    </Banner>}
+    {error && !mfaStep && <Banner tone="danger" title="Profiles could not be loaded" action={<Button onClick={() => { void refresh() }}>Retry</Button>}>{error}</Banner>}
     <Field label="Search business profiles"><Input value={query} maxLength={80} onChange={event => setQuery(event.target.value)} leadingIcon={<Search size={15} aria-hidden />} placeholder="Search by business name" /></Field>
     <div><Button variant={showArchived ? 'secondary' : 'primary'} onClick={() => setShowArchived(false)} aria-pressed={!showArchived}>Active profiles</Button> <Button variant={showArchived ? 'primary' : 'secondary'} onClick={() => setShowArchived(true)} aria-pressed={showArchived}>Archived profiles</Button></div>
     {loading && <p role="status">Loading your business profiles…</p>}

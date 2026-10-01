@@ -695,6 +695,10 @@
    inheritance, distinguished by its own glyph rather than by a shade of the same one. */
 .nds-cell-prov-via { color: var(--nds-prov-inherited-fg); }
 .nds-ag-wrap .ag-cell.nds-cell-is-inherited-override { background: color-mix(in srgb, var(--nds-primary) 5%, transparent); }
+/* Shared stock by SKU (2026-10-01): a quantity that follows ANOTHER business profile's lent stock (the Matrix's Qty and
+   Mode cells of such a SKU). After the inherited tint above, which a following cell also carries, so this one shows; the
+   text keeps the cell's normal colour. Never colour alone: the cell's tooltip names the business, the row says "Shared". */
+.nds-ag-wrap .ag-cell.nds-cell-is-shared-stock { color: var(--nds-grid-cell-fg); background: var(--nds-grid-shared-stock-bg); }
 .nds-cell-prov-pinned { color: var(--nds-prov-inherited-fg); }
 /* 🔴 `--nds-prov-ai-fg` with a FALLBACK, deliberately. DS.2 is landing that token now and it does
    not exist yet — and an undefined custom property in a `color` computes to `rgba(0,0,0,0)`, i.e.
@@ -1071,7 +1075,8 @@
    `sm` button 28: the cluster holds the toolbar's height on the first tick and never wraps —
    labels hide under 1320px and the reach note under 1100px of the CARD (`GridCard` is the container). */
 .nds-grid-selbar { display: inline-flex; align-items: center; gap: 7px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; min-height: var(--nds-grid-toolbar-slot-h); }
-.nds-grid-selbar-note { color: var(--nds-grid-muted-fg); }
+/* The size of the count it sits beside (`.nds-toolbar .cnt`); without it the note took the page's 16px and read as another font (Owner, 2026-10-01). */
+.nds-grid-selbar-note { color: var(--nds-grid-muted-fg); font-size: var(--nds-font-size-sm-plus); }
 .nds-grid-search { flex: 1; min-width: 220px; max-width: 340px; }
 /* The two halves share ONE height. A DS field is a 1px border + padding + a 19.5px line box = 35.5px;
    the cluster's floor was 36 — a half-pixel step on every tick (measured 64.5 → 65 on both surfaces).

@@ -10,6 +10,8 @@ import {
   normalizeMarket,
   validateServesTokens,
   syncLedgerOf,
+  KNOWN_CHANNELS,
+  QUANTITY_PUSH_CHANNELS,
   type SyncControlInputs,
   type RoutedLedgerRow,
 } from './sync-control-core.js'
@@ -252,8 +254,34 @@ describe('SC.0 — membership wrapper (per-variant eBay control)', () => {
 
 describe('SC.0 — token validation helper (future UI)', () => {
   it('flags empty, over-long, and unknown-channel tokens', () => {
-    const problems = validateServesTokens(['', 'AMAZON:IT:X', 'ETSY:IT', 'AMAZON:IT'])
+    const problems = validateServesTokens(['', 'AMAZON:IT:X', 'WISH:IT', 'AMAZON:IT'])
     expect(problems).toHaveLength(3)
     expect(validateServesTokens(['AMAZON', 'EBAY:DE'])).toEqual([])
+  })
+})
+
+// 2026-10-01 — Etsy joins the stock cascade, so Sync Control knows it: its tokens route, its policies pause.
+describe('Etsy is a Sync Control channel', () => {
+  it('ETSY and ETSY:* are valid routing tokens (they were refused as an unknown channel)', () => {
+    expect(validateServesTokens(['ETSY', 'ETSY:GLOBAL', 'ETSY:*'])).toEqual([])
+  })
+  it('a bare ETSY token routes Etsy only — it is a channel, not a market code read on every channel', () => {
+    expect(locationServes(['ETSY'], 'ETSY', 'GLOBAL')).toBe(true)
+    expect(locationServes(['ETSY'], 'AMAZON', 'IT')).toBe(false)
+    expect(locationServes(['ETSY'], 'EBAY', 'EBAY_IT')).toBe(false)
+    expect(locationServes(['ETSY'], 'SHOPIFY', 'GLOBAL')).toBe(false)
+    expect(locationServes(['AMAZON:IT', 'EBAY'], 'ETSY', 'GLOBAL')).toBe(false)
+  })
+  it('an Etsy listing follows the routed ledger like any other: buffer, policy, pause and pin keep their order', () => {
+    const etsy = (over: Partial<SyncControlInputs> = {}) => base({ channel: 'ETSY', marketplace: 'GLOBAL', ...over })
+    expect(resolveIntendedQuantity(etsy({ stockBuffer: 2 }))).toEqual({ kind: 'FOLLOW', quantity: 8, routedAvailable: 10, routedLocations: ['IT-MAIN'] })
+    expect(resolveIntendedQuantity(etsy({ ledger: syncLedgerOf([row('IT-MAIN', 10, ['AMAZON'])]) }))).toEqual({ kind: 'UNCOUNTED' })
+    expect(resolveIntendedQuantity(etsy({ channelPolicy: { pushesPaused: true }, syncPaused: true }))).toEqual({ kind: 'PAUSED', via: 'POLICY' })
+    expect(resolveIntendedQuantity(etsy({ syncPaused: true, followMasterQuantity: false, pinnedQuantity: 3 }))).toEqual({ kind: 'PAUSED', via: 'LISTING' })
+    expect(resolveIntendedQuantity(etsy({ followMasterQuantity: false, pinnedQuantity: 3 }))).toEqual({ kind: 'PINNED', quantity: 3 })
+  })
+  it('the channels that receive quantity rows are exactly the channels Sync Control knows, Etsy among them', () => {
+    expect([...QUANTITY_PUSH_CHANNELS].sort()).toEqual([...KNOWN_CHANNELS].sort())
+    expect([...QUANTITY_PUSH_CHANNELS].sort()).toEqual(['AMAZON', 'EBAY', 'ETSY', 'SHOPIFY', 'WOOCOMMERCE'])
   })
 })

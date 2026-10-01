@@ -4,8 +4,8 @@
  * grid actually paint with (`--nds-*` in `apps/web/src/design-system/styles/tokens.css`), light and dark, at 7:1 (AAA)
  * and 4.5:1 (AA).
  *
- * ── Why this and not `check-contrast.mjs` ────────────────────────────────────────────────────────────────────────────
- * `check-contrast.mjs` measures the legacy `--text-*` tokens in `globals.css` through a hand-written colour map. The studio
+ * ── Why this and not `check-contrast.mjs` (retired 2026-10-01) ──────────────────────────────────────────────────────
+ * `check-contrast.mjs` measured the legacy `--text-*` tokens in `globals.css` through a hand-written colour map. The studio
  * references `--nds-*` only, so a gate there goes green or red about text the sheet never draws (PLAN-REVIEW-2026-09-22 §4).
  *
  * ── Nothing here is a hand-kept member list ──────────────────────────────────────────────────────────────────────────
@@ -19,6 +19,14 @@
  *   tag      foreground/background token pair in each actual `.nds-tag.X` CSS rule
  *   inverse  `--nds-text-inverse` on `--nds-primary`                (button labels)
  *   hover    `--nds-text-inverse` on `--nds-primary-hover`          (the same label on the hover fill — R-65)
+ *   placeholder  `--nds-placeholder` on every surface above (2026-10-01): field hints are read, so they meet AA 4.5:1,
+ *            counted in both columns. They are not body text — a hint must stay lighter than a value — and R-49 did
+ *            not rule them; 4.5:1 is the bar the lead set for them.
+ *   tw-status  every `--X-strong` that has a `--X-soft` in apps/web/src/app/globals.css `:root` (and its `.dark` value):
+ *            the RGB channels behind Tailwind's `text-X-strong` on `bg-X-soft` (Badge, Toast, ConfirmDialog, …). Ported
+ *            2026-10-01 from the retired `check-contrast.mjs`, with ITS bar: AA 4.5:1, counted in both columns. These are
+ *            not `--nds-*` tokens and R-49 never ruled them; the 7:1 verdict is printed beside them (`atBody`), not
+ *            counted. Factory has no Tailwind, so a Factory token path measures none (`--globals <path>` overrides).
  *
  * ── Two tiers, from a usage table the Owner rules ────────────────────────────────────────────────────────────────────
  *   body  (the default) AAA 7:1 · AA 4.5:1        ui  (large or UI-label text only) AAA 4.5:1 · AA 3:1
@@ -35,6 +43,7 @@
  *   node scripts/check-nds-contrast.mjs --json                    # the same, as JSON
  *   node scripts/check-nds-contrast.mjs --max-failures 49 --max-aa-failures 8   # ratchet: exit 1 if either count GROWS
  *   node scripts/check-nds-contrast.mjs --tokens <path>           # measure a scratch copy (rehearsal; never edit the real file)
+ *   node scripts/check-nds-contrast.mjs --globals <path>          # the same, for the Tailwind status channels
  */
 
 import { readFileSync } from 'node:fs'
@@ -51,6 +60,8 @@ const opt = (name) => {
 const TOKENS_CSS = opt('--tokens') ?? `${ROOT}/apps/web/src/design-system/styles/tokens.css`
 // Token scratch copies use web's component rules unless explicitly overridden.
 const PRIMITIVES_CSS = opt('--primitives') ?? `${ROOT}/apps/${resolve(TOKENS_CSS).includes('/apps/factory/') ? 'factory' : 'web'}/src/design-system/styles/primitives.css`
+// The Tailwind status channels live in web's globals.css; Factory has no Tailwind.
+const GLOBALS_CSS = opt('--globals') ?? (resolve(TOKENS_CSS).includes('/apps/factory/') ? null : `${ROOT}/apps/web/src/app/globals.css`)
 const JSON_OUT = argv.includes('--json')
 const intOpt = (name) => {
   const v = opt(name)
@@ -183,6 +194,8 @@ if (has('--nds-text-inverse') && has('--nds-primary')) PAIRS.push({ group: 'inve
 // resolves to null and counts as a failure; a theme with no hover of its own falls back to :root's (dark text on the light
 // fill measured 2.66 before the sweep); a hover lighter than the rest fill (blue-700 under blue-800: 5.98) fails the bar.
 if (has('--nds-text-inverse') && has('--nds-primary')) PAIRS.push({ group: 'hover', fg: '--nds-text-inverse', bg: '--nds-primary-hover' })
+// Field hints on every surface a field can sit on, at their own bar (AA in both columns — see the header).
+if (has('--nds-placeholder')) for (const s of SURFACES) PAIRS.push({ group: 'placeholder', fg: '--nds-placeholder', bg: s, tier: 'aa', bar: 4.5 })
 /** Stated, not measured: a `--nds-*-text` token with no derivable ground. */
 const UNPAIRED = NAMES.filter((n) => /^--nds-[a-z0-9]+-text$/.test(n) && !has(n.replace(/-text$/, '-soft')))
 /** The page ground a translucent background is composited over. */
@@ -192,8 +205,8 @@ function measure(mode) {
   const page = colorOf(PAGE, mode)
   const rows = []
   for (const p of PAIRS) {
-    const usage = USAGE[p.fg] ?? { tier: 'body' }
-    const counted = TIERS[usage.tier === 'to-rule' ? 'body' : usage.tier]
+    const usage = p.tier ? { tier: p.tier } : USAGE[p.fg] ?? { tier: 'body' }
+    const counted = p.bar ? { aaa: p.bar, aa: p.bar } : TIERS[usage.tier === 'to-rule' ? 'body' : usage.tier]
     const fgC = colorOf(p.fg, mode), bgC = colorOf(p.bg, mode)
     if (!fgC || !bgC || !page || page.a < 1) {
       rows.push({ mode, ...p, tier: usage.tier, ratio: null, unresolved: [!fgC && p.fg, !bgC && p.bg, (!page || page.a < 1) && PAGE].filter(Boolean), belowAAA: true, belowAA: true })
@@ -209,17 +222,45 @@ function measure(mode) {
   return rows
 }
 
+// ── Tailwind status pairs: the RGB channels in globals.css (`text-X-strong` on `bg-X-soft`) ───────────────────────────
+/** `selector { --name: r g b; … }` blocks of globals.css → name → [r, g, b]. Only exact `:root` / `.dark` blocks count. */
+function channelBlocks(path) {
+  const src = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  const light = new Map(), dark = new Map()
+  for (const m of src.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const sel = m[1].trim()
+    const into = sel === ':root' ? light : sel === '.dark' ? dark : null
+    if (!into) continue
+    for (const d of m[2].matchAll(/(--[a-z0-9-]+)\s*:\s*(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*(?:;|$)/g)) into.set(d[1], [Number(d[2]), Number(d[3]), Number(d[4])])
+  }
+  return { light, dark }
+}
+const TW = GLOBALS_CSS ? channelBlocks(GLOBALS_CSS) : null
+const TW_PAIRS = TW ? [...TW.light.keys()].filter((n) => /^--[a-z]+-strong$/.test(n) && TW.light.has(n.replace(/-strong$/, '-soft'))).map((fg) => ({ group: 'tw-status', fg, bg: fg.replace(/-strong$/, '-soft') })) : []
+if (TW && !TW_PAIRS.length) throw new Error(`check-nds-contrast: ${GLOBALS_CSS} has no --X-strong / --X-soft channel pair in :root — nothing to measure is a failure, not a pass`)
+const TW_BAR = 4.5
+function measureTailwind(mode) {
+  return TW_PAIRS.map((p) => {
+    const pick = (n) => (mode === 'dark' ? TW.dark.get(n) ?? TW.light.get(n) : TW.light.get(n))
+    const fg = pick(p.fg), bg = pick(p.bg)
+    if (!fg || !bg) return { mode, ...p, tier: 'aa', ratio: null, unresolved: [!fg && p.fg, !bg && p.bg].filter(Boolean), belowAAA: true, belowAA: true }
+    const r = ratio(fg, bg)
+    return { mode, ...p, tier: 'aa', ratio: r2(r), fgHex: toHex(fg), bgHex: toHex(bg), belowAAA: r < TW_BAR, belowAA: r < TW_BAR, atBody: { belowAAA: r < TIERS.body.aaa } }
+  })
+}
+
 // ── controls ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const posFg = colorOf('--nds-text', 'light'), posBg = colorOf('--nds-surface', 'light')
 const positive = posFg && posBg ? r2(ratio(posFg.rgb, posBg.rgb)) : null
 const negative = colorOf('--nds-zz-control-never-declared', 'light')
 const controls = { positive, positiveOk: positive != null && positive >= 15 && positive <= 16, negative, negativeOk: negative === null }
 
-const rows = [...measure('light'), ...measure('dark')]
+const rows = [...measure('light'), ...measure('dark'), ...measureTailwind('light'), ...measureTailwind('dark')]
 const summary = (sel) => ({ pairs: sel.length, belowAAA: sel.filter((r) => r.belowAAA).length, belowAA: sel.filter((r) => r.belowAA).length })
 const result = {
   tokens: TOKENS_CSS,
   primitives: PRIMITIVES_CSS,
+  globals: GLOBALS_CSS,
   controls,
   light: summary(rows.filter((r) => r.mode === 'light')),
   dark: summary(rows.filter((r) => r.mode === 'dark')),
@@ -244,6 +285,10 @@ if (JSON_OUT) {
     const extra = r.ratio === null ? `missing ${r.unresolved.join(', ')}` : `${r.fgHex} on ${r.bgHex}${r.ifUi ? ` · tier TO RULE (as ui: ${r.ifUi.belowAAA ? (r.ifUi.belowAA ? 'below AA' : 'below AAA') : 'passes AAA'})` : ''}`
     console.log(`  ${tag}  ${r.ratio === null ? '   —  ' : r.ratio.toFixed(2).padStart(6)}  ${r.mode.padEnd(5)}  ${r.group.padEnd(7)}  ${r.fg} on ${r.bg}  ${extra}`)
   }
+  const ph = rows.filter((r) => r.group === 'placeholder' && r.ratio !== null)
+  if (ph.length) for (const m of ['light', 'dark']) { const mine = ph.filter((r) => r.mode === m); console.log(`placeholder (AA bar) ${m}: worst ${Math.min(...mine.map((r) => r.ratio)).toFixed(2)} over ${mine.length} surfaces (${mine[0].fgHex})`) }
+  const tw = rows.filter((r) => r.group === 'tw-status' && r.ratio !== null)
+  if (tw.length) console.log(`tailwind status (globals.css, text-X-strong on bg-X-soft, AA bar): ${tw.map((r) => `${r.mode} ${r.fg.slice(2, -7)} ${r.ratio.toFixed(2)}${r.atBody.belowAAA ? '*' : ''}`).join(' · ')}  (* below 7:1 — reported, not counted)`)
   for (const m of ['light', 'dark', 'total']) console.log(`${m.padEnd(5)}: ${result[m].pairs} pairs · ${result[m].belowAAA} below AAA · ${result[m].belowAA} below AA`)
   if (UNPAIRED.length) console.log(`not measured (no derivable ground): ${UNPAIRED.join(', ')}`)
   if (MAX_AAA !== undefined || MAX_AA !== undefined) console.log(`ratchet: max ${MAX_AAA ?? '—'} below AAA, ${MAX_AA ?? '—'} below AA → ${exit === 1 ? 'FAILED — a count grew' : 'held'}`)

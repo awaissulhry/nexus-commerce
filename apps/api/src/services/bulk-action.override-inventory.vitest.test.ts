@@ -222,7 +222,8 @@ describe('the owner rules', () => {
     const id = (await seed('publish', [{ channel: 'AMAZON', marketplace: 'UK' }]))['AMAZON:UK']
     await expect(service.createJob({ jobName: 'pause', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', targetProductIds: ['publish'], actionPayload: { isPublished: false } }))
       .rejects.toThrow(PUBLISH_FLAG_REFUSAL)
-    // The built-in "Pause listings (Amazon DE)" template's shape, stored before this change.
+    // A job stored with this payload before the refusal — the shape of the retired built-in "Pause listings (Amazon DE)"
+    // template (deleted by the seeder since 2026-10-01) — is still refused, row by row.
     const stored = await prisma.bulkActionJob.create({ data: { jobName: 'stored pause', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', targetProductIds: ['publish'], targetVariationIds: [], actionPayload: { isPublished: false }, status: 'PENDING', totalItems: 1 } })
     const result = await service.processJob(stored.id)
     expect(result.errors.map((e) => e.error)).toEqual([PUBLISH_FLAG_REFUSAL])

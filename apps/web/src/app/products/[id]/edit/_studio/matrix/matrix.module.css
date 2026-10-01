@@ -98,3 +98,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Shared stock by SKU: the Stock number and its "Shared" tag on one line. */
+.stockShared {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

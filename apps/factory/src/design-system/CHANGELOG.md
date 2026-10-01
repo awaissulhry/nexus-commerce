@@ -426,3 +426,11 @@ PresenceMark axis=intent|fact|both (default both) separates adjacent columns; co
 ## PressableRow stacked — 2026-09-26
 
 `PressableRow stacked` puts `children` on their own full-width line under the label; `leading`, the label and `actions` keep the first line, and the whole row stays one keyboard and pointer target. Use it when a row's details are wider than its label: side by side, a wide body squeezed the label to its padding and the label's words overflowed onto the body (measured on the File mappings version list, `/channels/mapping?view=files`). Off by default, so existing rows are unchanged. Specimen: the stacked row under "Gallery navigation" in `MediaGalleryExample`. Mirrored between Web and Factory.
+
+## Shared stock cell state — 2026-10-01
+
+`.nds-cell-is-shared-stock` (grid.css) with the token `--nds-grid-shared-stock-bg` (tokens/grid.ts, teal at 14%; the Owner tried violet at 18% and chose teal): a grid cell whose number follows ANOTHER business profile's lent stock. The Matrix puts it on the Qty and Mode cells of a SKU that sells from a lent stock and follows it (not on a fixed, paused or Amazon-managed listing), and names the lending business in the cell's tooltip — never colour alone. It comes after the inherited tint in the stylesheet, so it shows on a following cell. Mirrored between Web and Factory.
+
+## Selection note size — 2026-10-01
+
+`.nds-grid-selbar-note` (grid.css; `SelectionNote`) now has the size of the count beside it (`--nds-font-size-sm-plus`, the size of `.nds-toolbar .cnt`). Before, it took the page's 16px: on the Matrix, "Selected 21 rows" was 12.5px and "on Amazon EU · Inventory · IT DE FR ES" next to it 16px, so the Owner read it as another font (Chrome draws both in Inter). Also fixes the Products page, which uses the same note.

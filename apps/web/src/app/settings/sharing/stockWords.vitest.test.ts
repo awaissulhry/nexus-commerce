@@ -25,6 +25,9 @@ describe('shared stock words', () => {
     expect([...ours].sort()).toEqual([...apiRules].sort())
     for (const rule of ours) expect(previewRuleWords({ rule, willShow: 4 })).not.toMatch(/-|undefined/)
     expect(previewRuleWords({ rule: 'follows', willShow: 9 })).toBe('Shows 9')
+    // A fixed number ends when the SKU joins a lent stock: its quantity is then changed only in the lender.
+    expect(previewRuleWords({ rule: 'follows', willShow: 9, wasFixed: true })).toBe('Shows 9 (its fixed number ends)')
+    expect(previewRuleWords({ rule: 'follows', willShow: null, wasFixed: true })).toBe('Follows the stock (its fixed number ends)')
   })
 
   it('the pause preview says exactly what happens, only the lines that apply, a listing never keeping an old number', () => {

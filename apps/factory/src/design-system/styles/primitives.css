@@ -395,7 +395,7 @@
   padding: 7px 11px;
 }
 .nds-field > input::placeholder {
-  color: var(--nds-text-disabled);
+  color: var(--nds-placeholder);
 }
 
 /* Textarea primitive — the multi-line sibling of .nds-field, for paste-style inputs */
@@ -422,7 +422,7 @@
   box-shadow: var(--nds-focus-ring);
 }
 .nds-textarea::placeholder {
-  color: var(--nds-text-disabled);
+  color: var(--nds-placeholder);
 }
 .nds-textarea:disabled {
   background: var(--nds-surface-sunken);

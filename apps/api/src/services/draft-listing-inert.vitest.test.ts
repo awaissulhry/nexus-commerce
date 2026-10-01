@@ -31,6 +31,7 @@ const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGAC
 
 let amazon = ''
 let ebay = ''
+let etsy = ''
 let warehouse = ''
 
 beforeAll(() => scoped(async () => {
@@ -39,11 +40,12 @@ beforeAll(() => scoped(async () => {
   }
   amazon = (await prisma.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'draft-safety-amazon', isActive: true, isPrimary: true } as never })).id
   ebay = (await prisma.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'draft-safety-ebay', isActive: true, isPrimary: true } as never })).id
+  etsy = (await prisma.channelConnection.create({ data: { channelType: 'ETSY', accountLabel: 'draft-safety-etsy', isActive: true, isPrimary: true } as never })).id
   warehouse = (await prisma.stockLocation.create({ data: { code: 'DRAFT-SAFETY-WH', name: 'Draft safety warehouse', type: 'WAREHOUSE' } })).id
 }), 60_000)
 afterAll(async () => { await state.db?.close() })
 
-type ListingSeed = { channel?: 'AMAZON' | 'EBAY'; marketplace: string; live: boolean; paused: boolean; status?: string; published?: boolean; quantity?: number | null; price?: number | null }
+type ListingSeed = { channel?: 'AMAZON' | 'EBAY' | 'ETSY'; marketplace: string; live: boolean; paused: boolean; status?: string; published?: boolean; quantity?: number | null; price?: number | null }
 /** A live listing has a channel id and is published; a draft has neither (the Variants tick's recipe when paused). */
 async function seed(sku: string, listings: ListingSeed[], product: { stock?: number; status?: 'DRAFT' | 'ACTIVE' | 'INACTIVE' } = {}) {
   const created = await prisma.product.create({ data: { sku, name: sku, basePrice: 10, status: product.status ?? 'ACTIVE', fulfillmentMethod: 'FBM', totalStock: product.stock ?? 0 } })
@@ -53,7 +55,7 @@ async function seed(sku: string, listings: ListingSeed[], product: { stock?: num
     const channel = l.channel ?? 'AMAZON'
     rows[`${channel}_${l.marketplace}`] = await prisma.channelListing.create({ data: {
       productId: created.id, channel, marketplace: l.marketplace, region: l.marketplace, channelMarket: `${channel}_${l.marketplace}`,
-      channelConnectionId: channel === 'AMAZON' ? amazon : ebay, aliasKey: '', fulfillmentMethod: 'FBM',
+      channelConnectionId: channel === 'AMAZON' ? amazon : channel === 'ETSY' ? etsy : ebay, aliasKey: '', fulfillmentMethod: 'FBM',
       listingStatus: l.status ?? (l.live ? 'ACTIVE' : 'DRAFT'), isPublished: l.published ?? l.live, externalListingId: l.live ? `FIXTURE-${sku}-${l.marketplace}` : null,
       syncPaused: l.paused, followMasterQuantity: true, followMasterPrice: true,
       quantity: l.quantity === undefined ? (l.live ? 5 : null) : l.quantity, price: l.price === undefined ? (l.live ? 10 : null) : l.price,
@@ -236,5 +238,23 @@ describe('an UNPAUSED still-draft is inert too (a draft started before drafts we
     expect(result.queuedSyncIds).toEqual([live[0].id])
     expect(await queueFor(rows.EBAY_IT.id, 'CONTENT_UPDATE')).toEqual([])
     expect(await prisma.channelListingTranslation.findFirst({ where: { channelListingId: rows.EBAY_IT.id, language: 'it' } })).toMatchObject({ follows: ['title'] })
+  }))
+})
+
+// 2026-10-01 — Etsy joins the stock cascade (etsy-stock-cascade.vitest.test.ts). An Etsy draft is as inert as any other:
+// the live Etsy listing on the same product is the control that IS queued.
+describe('an Etsy still-draft is inert to the stock cascade; a live Etsy listing is queued', () => {
+  it('a stock movement queues the live Etsy listing and nothing for an unpaused or a paused Etsy draft', () => scoped(async () => {
+    const live = await seed('DRAFT-ETSY-LIVE', [{ channel: 'ETSY', marketplace: 'GLOBAL', live: true, paused: false }], { stock: 5 })
+    const unpausedDraft = await seed('DRAFT-ETSY-UNPAUSED', [{ channel: 'ETSY', marketplace: 'GLOBAL', live: false, paused: false }], { stock: 5 })
+    const pausedDraft = await seed('DRAFT-ETSY-PAUSED', [{ channel: 'ETSY', marketplace: 'GLOBAL', live: false, paused: true }], { stock: 5 })
+    for (const seeded of [live, unpausedDraft, pausedDraft]) {
+      await applyStockMovement({ productId: seeded.product.id, locationId: warehouse, change: 3, reason: 'MANUAL_ADJUSTMENT', actor: 'draft-safety' })
+    }
+    expect(await queueFor(live.rows.ETSY_GLOBAL.id, 'QUANTITY_UPDATE')).toEqual([expect.objectContaining({ targetChannel: 'ETSY', payload: expect.objectContaining({ quantity: 8 }) })])
+    for (const draft of [unpausedDraft.rows.ETSY_GLOBAL, pausedDraft.rows.ETSY_GLOBAL]) {
+      expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: draft.id } })).toBe(0)
+      expect(await stored(draft.id)).toMatchObject({ quantity: null, listingStatus: 'DRAFT', isPublished: false, externalListingId: null, version: draft.version })
+    }
   }))
 })

@@ -1,8 +1,9 @@
 /**
  * PES.6 — /channels/mapping page-scoped styles.
  *
- * `--nds-*` ONLY. The platform aliases (--text-*, --surface-*, --border-*) are Tailwind RGB
- * CHANNELS, so `var(--border-default)` is invalid and silently dropped — the same rule
+ * `--nds-*` ONLY. The platform aliases (--text-*, --surface-*, --border-*) are RGB CHANNELS inside
+ * `.h10-shell` and whole colours only where tokens.css is loaded, so `var(--border-default)` can be
+ * invalid and silently dropped — the same rule
  * /products/next's stylesheet states, and the trap this file was rewritten to avoid after a
  * first pass invented a `--color-*` namespace that does not exist.
  *

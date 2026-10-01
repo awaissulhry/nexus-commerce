@@ -302,6 +302,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       ? await (prisma as any).role.count({ where: { key: { in: req.authUser.roleKeys }, requireMfa: true } })
       : 0
     const mfaSetupRequired = (rolesRequireMfa > 0 || req.authUser.mfaRequired) && !req.authUser.twoFactorEnabledAt
+    // Did THIS sign-in prove the second factor? `mfaIncomplete` is the exact rule that makes every business page answer
+    // "Complete two-factor authentication" (workspace-hook.ts): the profiles page then says what to do about it.
+    const mfaSatisfied = req.authMfaSatisfied === true
+    const mfaIncomplete = (req.authUser.mfaRequired || !!req.authUser.twoFactorEnabledAt) && !mfaSatisfied
     return {
       user: {
         id: req.authUser.id,
@@ -311,6 +315,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         mfaEnabled: !!req.authUser.twoFactorEnabledAt,
         mfaRequired: req.authUser.mfaRequired,
         mfaSetupRequired,
+        mfaSatisfied,
+        mfaIncomplete,
       },
       isOwner: resolved.isOwner,
       permissions: resolved.isOwner ? ['*'] : [...resolved.permissions],

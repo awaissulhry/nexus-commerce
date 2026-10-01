@@ -26,8 +26,7 @@ const SEEDS = [
     parameters: [{ name: 'pct', label: 'Discount %', type: 'number', defaultValue: -10, required: true, min: -90, max: 90 }],
     defaultFilters: { status: 'ACTIVE' } },
   { name: 'Round prices to .99', actionType: 'PRICING_UPDATE', category: 'pricing',
-    actionPayload: { adjustmentType: 'ABSOLUTE', value: '${target}' },
-    parameters: [{ name: 'target', label: 'Target price', type: 'number', defaultValue: 99.99, required: true, min: 0 }] },
+    actionPayload: { adjustmentType: 'ROUND_DOWN_TO_99' } },
   { name: 'Flat €N markup', actionType: 'PRICING_UPDATE', category: 'pricing',
     actionPayload: { adjustmentType: 'DELTA', value: '${delta}' },
     parameters: [{ name: 'delta', label: 'Amount', type: 'number', defaultValue: 5, required: true }] },
@@ -49,8 +48,8 @@ const SEEDS = [
     actionPayload: { syncType: 'QUANTITY_UPDATE', channels: [] } },
   { name: 'Full resync (all fields, all channels)', actionType: 'LISTING_SYNC', category: 'channel',
     actionPayload: { syncType: 'FULL_SYNC', channels: [] } },
-  { name: 'Pause listings (Amazon DE)', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', category: 'channel',
-    actionPayload: { isPublished: false } },
+  // 'Pause listings (Amazon DE)' is retired (2026-10-01): the service seeder deletes it (RETIRED_BUILTIN_TEMPLATES);
+  // this runner neither creates nor deletes it.
 ]
 
 let created = 0, updated = 0

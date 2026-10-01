@@ -807,7 +807,7 @@ export default function PendingShipmentsClient() {
                   onClick={() => setParam('urgency', f.key === 'ALL' ? null : f.key)}
                   className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${
                     isActive
-                      ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                      ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                       : isOverdue && !isActive
                       ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/60'
                       : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-default dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'

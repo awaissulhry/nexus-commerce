@@ -704,7 +704,7 @@ export default function AiBulkGenerateModal({
               <button
                 type="button"
                 onClick={onComplete}
-                className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded-md hover:bg-slate-800"
+                className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded-md hover:opacity-90"
               >
                 Done
               </button>

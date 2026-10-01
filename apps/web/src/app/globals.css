@@ -11,38 +11,32 @@
 /* ═══════════════════════════════════════════════════════════════════
    P0 — Design-language tokens (UI_REBUILD_STRATEGY.md).
 
-   CSS variables that back the semantic tokens in tailwind.config.ts
-   (text-*, bg-canvas/card/raised/sunken, border-subtle/default/strong,
-   *-soft/line/strong). Each is space-separated RGB so Tailwind's
-   `rgb(var(--x) / <alpha-value>)` opacity syntax works.
+   CSS variables that back some semantic tokens in tailwind.config.ts
+   (text-inverse, bg-raised/overlay, *-soft/line/strong, accent). Each
+   is space-separated RGB so Tailwind's `rgb(var(--x) / <alpha-value>)`
+   opacity syntax works. ONE definition flips light↔dark.
 
-   The whole point: ONE definition flips light↔dark. Light values are
-   chosen so existing surfaces are pixel-identical; the dark block is
-   the previously-missing half of the dark-mode story.
+   🔴 NOT HERE: --text-{primary,secondary,tertiary,disabled,link},
+   --surface-{canvas,card,sunken}, --border-{subtle,default,strong}.
+   The design system's tokens.css defines those eleven at :root as
+   WHOLE colours, and on almost every route it won, so every
+   `rgb(var(--text-primary) / 1)` was invalid: inherited black text on
+   the dark page, transparent cards, borders in the text colour. Their
+   Tailwind utilities (text-primary, bg-card, border-default, …) now
+   read the --nds-* tokens instead (tailwind.config.ts `ds()`), and so
+   does `body` below. `scripts/check-alias-form.mjs` refuses any of the
+   eleven back in this file.
    ═══════════════════════════════════════════════════════════════════ */
 :root {
-  /* Text — every value passes WCAG AA on card + canvas (light). */
-  --text-primary:   15 23 42;    /* slate-900  ~17:1  */
-  --text-secondary: 71 85 105;   /* slate-600  ~7.5:1 */
-  --text-tertiary:  100 116 139; /* slate-500  ~4.7:1 (AA body) */
-  --text-disabled:  148 163 184; /* slate-400  decorative / disabled only */
   --text-inverse:   248 250 252; /* slate-50 — on dark fills */
-  --text-link:      37 99 235;   /* blue-600   ~5.2:1 */
 
   /* Surfaces — solid elevation, no translucency. */
-  --surface-canvas: 248 250 252; /* slate-50  — page */
-  --surface-card:   255 255 255; /* white     — panels/cards */
   --surface-raised: 255 255 255; /* white     — elevated (+ shadow) */
-  --surface-sunken: 241 245 249; /* slate-100 — inset wells */
   --surface-overlay: 15 23 42;   /* scrim base (used at /60) */
 
-  /* Borders — default is visible (slate-300), not the old slate-200. */
-  --border-subtle:  226 232 240; /* slate-200 — nested rules */
-  --border-default: 203 213 225; /* slate-300 — grid lines */
-  --border-strong:  148 163 184; /* slate-400 — section dividers */
-
   /* Status — SOLID soft surfaces (replace bg-*-950/40). soft=fill,
-     line=border, strong=text; strong-on-soft passes AA. */
+     line=border, strong=text; strong-on-soft passes AA, light and dark
+     (held by scripts/check-nds-contrast.mjs, group tw-status). */
   --success-soft: 236 253 245; --success-line: 167 243 208; --success-strong: 4 120 87;
   --warning-soft: 255 251 235; --warning-line: 253 230 138; --warning-strong: 180 83 9;
   --danger-soft:  255 241 242; --danger-line:  254 205 211; --danger-strong:  190 18 60;
@@ -57,22 +51,10 @@
 }
 
 .dark {
-  --text-primary:   248 250 252; /* slate-50  */
-  --text-secondary: 203 213 225; /* slate-300 */
-  --text-tertiary:  148 163 184; /* slate-400 */
-  --text-disabled:  100 116 139; /* slate-500 */
   --text-inverse:   15 23 42;    /* slate-900 */
-  --text-link:      96 165 250;  /* blue-400  */
 
-  --surface-canvas: 2 6 23;      /* slate-950 — page */
-  --surface-card:   15 23 42;    /* slate-900 — panels */
   --surface-raised: 30 41 59;    /* slate-800 — elevated */
-  --surface-sunken: 2 6 23;      /* slate-950 — wells */
   --surface-overlay: 2 6 23;
-
-  --border-subtle:  30 41 59;    /* slate-800 */
-  --border-default: 51 65 85;    /* slate-700 */
-  --border-strong:  71 85 105;   /* slate-600 */
 
   /* Dark status — SOLID deep fills (not /40 tints) + light text. */
   --success-soft: 6 46 35;  --success-line: 6 95 70;   --success-strong: 110 231 183;
@@ -89,18 +71,14 @@
 
    SCOPED to .theme-console so it does NOT flip the live app. The
    /design/console preview wraps itself in `.dark .theme-console`:
-   `.dark` supplies the dark text/status tokens, `.theme-console`
-   deepens the canvas to a blue-black and brightens the accent. When
-   approved, P2 promotes this to the global shell.
+   `.dark` supplies the dark tokens (text, cards and borders are the
+   --nds-* ones, like everywhere else), `.theme-console` deepens the
+   canvas to a blue-black and brightens the accent. When approved, P2
+   promotes this to the global shell.
    ═══════════════════════════════════════════════════════════════════ */
 .theme-console {
-  --surface-canvas: 8 10 20;     /* #08 0A 14 — deep blue-black */
-  --surface-card:   17 20 34;    /* lifted panel */
+  --console-canvas: 8 10 20;     /* #08 0A 14 — deep blue-black */
   --surface-raised: 26 30 50;    /* elevated */
-  --surface-sunken: 5 7 14;      /* wells */
-  --border-subtle:  41 47 70;
-  --border-default: 56 64 92;
-  --border-strong:  84 94 128;
   --accent: 129 140 248;         /* indigo-400 */
 }
 
@@ -127,7 +105,7 @@
    Pure decoration; sits at low opacity so it never fights legibility. */
 .theme-console .console-atmosphere {
   position: relative;
-  background-color: rgb(var(--surface-canvas));
+  background-color: rgb(var(--console-canvas));
   background-image:
     radial-gradient(60rem 40rem at 12% -10%, rgb(99 102 241 / 0.18), transparent 60%),
     radial-gradient(50rem 36rem at 100% 0%, rgb(34 211 238 / 0.12), transparent 55%);
@@ -210,14 +188,89 @@ html {
 body {
   /* P0 — var-backed so dark mode flips; Inter as the default family
      with a hardened fallback chain; antialiasing so Inter renders
-     crisp (not heavy) — directly addresses the "too thin" complaint. */
-  background-color: rgb(var(--surface-canvas));
-  color: rgb(var(--text-primary));
+     crisp (not heavy) — directly addresses the "too thin" complaint.
+     The colours are the design system's: `rgb(var(--text-primary))`
+     was invalid wherever tokens.css loaded (see the top of this file),
+     so inherited text was black, also on the dark page. */
+  background-color: var(--nds-bg);
+  color: var(--nds-text);
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
     'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Dark mode for the legacy (Tailwind) pages — 2026-10-01.
+
+   Since `body` reads `--nds-text`, text that sets no colour of its own
+   is light in dark mode, as it should be on the dark page. Until then
+   the value was invalid and all such text was BLACK — unreadable on the
+   page, but readable on the light boxes legacy markup draws without a
+   `dark:` partner. These rules keep those boxes and plain fields right.
+
+   1. `color-scheme: dark` — the browser draws unstyled form controls,
+      scrollbars and pickers dark, so an input with no `bg-*` class is a
+      dark field with light text instead of a white field with light
+      text. Light-pinned surfaces (`.h10-shell`, `.fleet-surface`,
+      `.productsNextLight`) already declare `color-scheme: light`.
+   2. A light box with no `dark:bg-*` partner (bg-white, any 50/100/200
+      tint) keeps the dark ink it always had, and its own unstyled
+      controls stay light. `:where()` makes the rule weigh nothing: any
+      text-colour class on the box or inside it still wins.
+   3. Placeholders of plain inputs follow their field's own text colour
+      at 75% (Tailwind's preflight grey-400 is 2.5:1 on white). DS
+      fields and `placeholder:` utilities set their own and win.
+   4. Plain fields (no `bg-*` class) outside those light boxes take the
+      DS field surface and border in dark mode (see the rule below).
+   ═══════════════════════════════════════════════════════════════════ */
+.dark {
+  color-scheme: dark;
+}
+:where(.dark :is(
+  .bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200, .bg-gray-50, .bg-gray-100, .bg-gray-200,
+  .bg-zinc-50, .bg-zinc-100, .bg-zinc-200, .bg-neutral-50, .bg-neutral-100, .bg-neutral-200,
+  .bg-stone-50, .bg-stone-100, .bg-stone-200, .bg-red-50, .bg-red-100, .bg-red-200, .bg-orange-50,
+  .bg-orange-100, .bg-orange-200, .bg-amber-50, .bg-amber-100, .bg-amber-200, .bg-yellow-50,
+  .bg-yellow-100, .bg-yellow-200, .bg-lime-50, .bg-lime-100, .bg-lime-200, .bg-green-50,
+  .bg-green-100, .bg-green-200, .bg-emerald-50, .bg-emerald-100, .bg-emerald-200, .bg-teal-50,
+  .bg-teal-100, .bg-teal-200, .bg-cyan-50, .bg-cyan-100, .bg-cyan-200, .bg-sky-50, .bg-sky-100,
+  .bg-sky-200, .bg-blue-50, .bg-blue-100, .bg-blue-200, .bg-indigo-50, .bg-indigo-100,
+  .bg-indigo-200, .bg-violet-50, .bg-violet-100, .bg-violet-200, .bg-purple-50, .bg-purple-100,
+  .bg-purple-200, .bg-fuchsia-50, .bg-fuchsia-100, .bg-fuchsia-200, .bg-pink-50, .bg-pink-100,
+  .bg-pink-200, .bg-rose-50, .bg-rose-100, .bg-rose-200
+):not([class*="dark:bg-"])) {
+  color: var(--nds-grey-900);
+  color-scheme: light;
+}
+/* 4. Plain fields in dark mode — an input, textarea or select with no
+      `bg-*` class of its own, and not inside a light box from rule 2 —
+      take the design system's field surface and border (.nds-field:
+      --nds-surface, --nds-border) instead of the browser's neutral grey.
+      Dark only, so light mode is untouched; zero specificity, so any
+      class or component stylesheet still wins. */
+:where(.dark :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"],
+  [type="file"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"]),
+  textarea, select):not([class*="bg-"]):not(:is(
+  .bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200, .bg-gray-50, .bg-gray-100, .bg-gray-200,
+  .bg-zinc-50, .bg-zinc-100, .bg-zinc-200, .bg-neutral-50, .bg-neutral-100, .bg-neutral-200,
+  .bg-stone-50, .bg-stone-100, .bg-stone-200, .bg-red-50, .bg-red-100, .bg-red-200, .bg-orange-50,
+  .bg-orange-100, .bg-orange-200, .bg-amber-50, .bg-amber-100, .bg-amber-200, .bg-yellow-50,
+  .bg-yellow-100, .bg-yellow-200, .bg-lime-50, .bg-lime-100, .bg-lime-200, .bg-green-50,
+  .bg-green-100, .bg-green-200, .bg-emerald-50, .bg-emerald-100, .bg-emerald-200, .bg-teal-50,
+  .bg-teal-100, .bg-teal-200, .bg-cyan-50, .bg-cyan-100, .bg-cyan-200, .bg-sky-50, .bg-sky-100,
+  .bg-sky-200, .bg-blue-50, .bg-blue-100, .bg-blue-200, .bg-indigo-50, .bg-indigo-100,
+  .bg-indigo-200, .bg-violet-50, .bg-violet-100, .bg-violet-200, .bg-purple-50, .bg-purple-100,
+  .bg-purple-200, .bg-fuchsia-50, .bg-fuchsia-100, .bg-fuchsia-200, .bg-pink-50, .bg-pink-100,
+  .bg-pink-200, .bg-rose-50, .bg-rose-100, .bg-rose-200
+):not([class*="dark:bg-"]) *)) {
+  background-color: var(--nds-surface);
+  border-color: var(--nds-border);
+}
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, currentColor 75%, transparent);
 }
 
 /* Toast slide-in animation. Used by /components/ui/Toast.tsx via the

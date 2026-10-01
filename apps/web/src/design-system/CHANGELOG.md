@@ -1,3 +1,11 @@
+## Field placeholders get their own token, at 4.5:1 — 2026-10-01
+
+Dark-mode token clash (`fix/dark-mode-token-clash`), lead browser audit. DS placeholders used **`--nds-text-disabled`**: 2.04:1 on a white field, 2.78:1 on the dark one. New **`--nds-placeholder`**: `var(--nds-grey-600)` light (#5b6573, 5.91 on `--nds-surface`, worst 5.22 on sunken) and #97a3b1 dark (5.94, worst 5.51). Read by `.nds-field > input`, `.nds-textarea`, `.nds-combo-in`, `.nds-combo-search input` and `.nds-range-in input` placeholders. Pinned light on `body:has(.h10-shell)` and the fleet surface. `scripts/check-nds-contrast.mjs` measures it on every surface (group `placeholder`, AA bar). Mirrored in Factory: `tokens/css-vars.ts` (+ `npm run tokens:gen:factory`), `styles/primitives.css`, `styles/components.css`, `styles/patterns.css`.
+
+## Tailwind's semantic colours read the design-system tokens — 2026-10-01
+
+Dark-mode token clash (`fix/dark-mode-token-clash`). In `apps/web/tailwind.config.ts`, `text-{primary,secondary,tertiary,disabled,link}`, `bg-{canvas,card,sunken}`, `border-{subtle,default,strong}` and `surface.{background,card,border,border-strong}` now read **`--nds-text`**, **`--nds-text-2`**, **`--nds-text-3`**, **`--nds-text-disabled`**, **`--nds-text-link`**, **`--nds-bg`**, **`--nds-surface`**, **`--nds-surface-sunken`**, **`--nds-border-subtle`**, **`--nds-border`**, **`--nds-border-strong`** through `color-mix` (`ds()`), so `/NN`, `*-opacity-*` and variants keep working. They read `rgb(var(--text-primary) / 1)` over globals.css channels, and `tokens.css` redefines those eleven names at `:root` as whole colours: on almost every route the value was invalid (inherited black text on the dark page, transparent cards, borders in the text colour). globals.css no longer defines the eleven; `body` reads `--nds-bg` / `--nds-text`. Light mode changes too: borders are the DS's light-grey lines and muted text its greys. Held by `src/app/tailwind-token-form.vitest.test.ts` and `scripts/check-alias-form.mjs` (`--self-test` is a static gate). `scripts/check-contrast.mjs` (the old globals palette) is retired; `check-nds-contrast.mjs` measures these tokens, and now also the Tailwind status pairs it held (`text-X-strong` on `bg-X-soft`, globals.css channels, light and dark, at AA). The ads console's `reporting.css`, `trust.css`, `launch-receipt.css` and four `rules-automation.css` rules read `--nds-*` instead of the aliases, so their dialogs (which portal to `<body>`, outside `.h10-shell`) get real colours. Not in Factory (no Tailwind).
+
 ## Closed editors leave no pending attachment work — 2026-09-30
 
 The pinned AG React patch checks that its cell is alive and still owns the same editor before a delayed attachment runs. Closing an editor, removing its row, or destroying the grid cannot attach a stale tooltip or cancel a replacement editor. Both published module formats have direct regression tests. Mirrored in Factory.
@@ -1360,3 +1368,11 @@ PresenceMark axis=intent|fact|both (default both) separates adjacent columns; co
 ## PressableRow stacked — 2026-09-26
 
 `PressableRow stacked` puts `children` on their own full-width line under the label; `leading`, the label and `actions` keep the first line, and the whole row stays one keyboard and pointer target. Use it when a row's details are wider than its label: side by side, a wide body squeezed the label to its padding and the label's words overflowed onto the body (measured on the File mappings version list, `/channels/mapping?view=files`). Off by default, so existing rows are unchanged. Specimen: the stacked row under "Gallery navigation" in `MediaGalleryExample`. Mirrored between Web and Factory.
+
+## Shared stock cell state — 2026-10-01
+
+`.nds-cell-is-shared-stock` (grid.css) with the token `--nds-grid-shared-stock-bg` (tokens/grid.ts, teal at 14%; the Owner tried violet at 18% and chose teal): a grid cell whose number follows ANOTHER business profile's lent stock. The Matrix puts it on the Qty and Mode cells of a SKU that sells from a lent stock and follows it (not on a fixed, paused or Amazon-managed listing), and names the lending business in the cell's tooltip — never colour alone. It comes after the inherited tint in the stylesheet, so it shows on a following cell. Mirrored between Web and Factory.
+
+## Selection note size — 2026-10-01
+
+`.nds-grid-selbar-note` (grid.css; `SelectionNote`) now has the size of the count beside it (`--nds-font-size-sm-plus`, the size of `.nds-toolbar .cnt`). Before, it took the page's 16px: on the Matrix, "Selected 21 rows" was 12.5px and "on Amazon EU · Inventory · IT DE FR ES" next to it 16px, so the Owner read it as another font (Chrome draws both in Inter). Also fixes the Products page, which uses the same note.

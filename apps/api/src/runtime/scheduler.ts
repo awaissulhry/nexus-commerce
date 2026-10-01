@@ -189,20 +189,21 @@ export async function startScheduler(): Promise<void> {
 
   // W5.4 — seed built-in BulkActionTemplate rows. Idempotent —
   // keyed by (userId='__builtin', name) so re-running on every
-  // boot picks up seed list changes without duplicating rows.
+  // boot picks up seed list changes without duplicating rows, and
+  // deletes the built-ins named in RETIRED_BUILTIN_TEMPLATES.
   // Best-effort: a failure (e.g., DB up but the migration hasn't
   // landed yet on this replica) logs and continues.
   try {
     const { seedBulkActionTemplates } = await import(
       '../services/bulk-action-template-seeds.js'
     );
-    const result = { created: 0, updated: 0 };
+    const result = { created: 0, updated: 0, retired: 0 };
     await visitActiveWorkspaces(async () => {
       const count = await seedBulkActionTemplates(prisma);
-      result.created += count.created; result.updated += count.updated;
+      result.created += count.created; result.updated += count.updated; result.retired += count.retired;
     });
     logger.info(
-      `[boot] bulk-action-template seeds: ${result.created} created, ${result.updated} updated`,
+      `[boot] bulk-action-template seeds: ${result.created} created, ${result.updated} updated, ${result.retired} retired`,
     );
   } catch (err) {
     logger.warn(

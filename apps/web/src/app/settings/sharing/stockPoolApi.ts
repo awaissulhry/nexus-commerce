@@ -73,6 +73,8 @@ export interface ListingPreview {
   showsNow: number | null
   willShow: number | null
   rule: ListingRule
+  /** It has a fixed number now; joining a lent stock turns it back to follow (a shared SKU has no fixed number). */
+  wasFixed?: boolean
 }
 export interface SwitchPreview {
   productId: string

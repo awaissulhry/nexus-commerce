@@ -119,6 +119,12 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
       },
     })
   }
+  /** Shared stock by SKU: the lending business, when the SKU sells from its stock; anything malformed reads as own stock. */
+  const poolSourceOf = (raw: unknown): MatrixRowRead['stock']['source'] => {
+    const s = raw as Record<string, unknown> | null | undefined
+    return s && s.kind === 'pool' && typeof s.grantId === 'string' && typeof s.lenderName === 'string'
+      ? { kind: 'pool', grantId: s.grantId, lenderName: s.lenderName } : null
+  }
   const rows: MatrixRowRead[] = []
   for (const raw of b.rows) {
     const r = raw as Record<string, unknown>
@@ -132,6 +138,7 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
         available: typeof stock.available === 'number' ? stock.available : null,
         uncounted: stock.uncounted === true,
         locations: Array.isArray(stock.locations) ? (stock.locations as MatrixRowRead['stock']['locations']) : [],
+        source: poolSourceOf(stock.source),
       },
       basePrice: typeof r.basePrice === 'number' ? r.basePrice : null,
       status: typeof r.status === 'string' ? r.status : '',

@@ -205,6 +205,25 @@ export async function revokeSession(sessionId: string, userId?: string): Promise
   return r.count > 0
 }
 
+/**
+ * The second factor was just proved on THIS session (the person set up two-factor and entered a valid code): mark it
+ * done, and drop its cached copy so the very next request reads it. Before, setting up two-factor left the session
+ * that did it "not done" — and every business page then refused it with "Complete two-factor authentication" until
+ * the person signed out and in again (2026-10-01). Only a live session of this user changes.
+ */
+export async function markSessionMfaSatisfied(sessionId: string, userId: string): Promise<boolean> {
+  const row = await (prisma as any).userSession.findUnique({
+    where: { id: sessionId },
+    select: { sessionTokenHash: true },
+  })
+  const r = await (prisma as any).userSession.updateMany({
+    where: { id: sessionId, userId, revokedAt: null },
+    data: { mfaSatisfied: true },
+  })
+  if (row?.sessionTokenHash) await dropCachedSessions([row.sessionTokenHash])
+  return r.count > 0
+}
+
 /** Revoke the session identified by a raw token (logout). */
 export async function revokeSessionByToken(rawToken: string): Promise<boolean> {
   const hash = hashToken(rawToken)

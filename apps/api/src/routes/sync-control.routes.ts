@@ -9,7 +9,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * resolveMembershipIntended — the SAME core the cascade, dispatch and
  * read-backs consume — so the tab can never disagree with the engine.
  *
- *   GET /api/stock/sync-control/overview   — summary, locations, policies, audit
+ *   GET /api/stock/sync-control/overview   — summary, the markets the rows are on, locations, policies, audit
  *   GET /api/stock/sync-control/listings   — flat rows (listings + shared
  *       memberships), filters channel/market/mode/q, paginated
  */
@@ -27,7 +27,7 @@ import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../services/s
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
-import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, rowMarkets, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
 import { projectActionAndDetect, projectBufferAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from '../services/amazon-eu-quantity-guard.js'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { closeMarketOffers, reopenMarketOffers, isFbaCoordinate } from '../services/amazon-market-offer.service.js'
@@ -303,6 +303,8 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           routedLocations: locations.filter((l) => (l.syncRoutes ?? []).length > 0).length,
           policies: policies.length,
         },
+        // The Market filter's options: every market the rows are on (GLOBAL for Shopify and Etsy included).
+        markets: rowMarkets(rows),
         locations: locations.map((l) => ({
           code: l.code, name: l.name, type: l.type, isActive: l.isActive,
           syncRoutes: l.syncRoutes ?? [],
