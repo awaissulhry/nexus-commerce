@@ -168,7 +168,7 @@
 .nds-ag-ws .ag-row.h10-am-grp .ag-cell-wrapper { width: 100%; }
 .nds-ag-ws .nds-ws-grp { display: flex; align-items: center; height: 100%; padding: 0 16px; box-sizing: border-box; }
 .nds-ag-ws .nds-ws-grp .gl { font-size: var(--nds-font-size-sm); font-weight: 700; color: var(--nds-wsgrid-text-emphasis); }
-.nds-ag-ws .nds-ws-grp .gc { margin-left: 8px; font-size: var(--nds-font-size-xs-plus); font-weight: 600; color: var(--nds-wsgrid-text-muted); }
+.nds-ag-ws .nds-ws-grp .gc { margin-left: 8px; font-size: var(--nds-font-size-xs-plus); font-weight: 600; color: var(--nds-wsgrid-text-secondary); }
 /* a remainder is arithmetic, not an entity — it reads as a note, and it is not selectable */
 .nds-ag-ws .ag-row.nds-tree-remainder { background-color: var(--nds-surface-sunken); font-style: italic; }
 .nds-ag-ws .ag-row.nds-tree-remainder .ag-cell.nds-ws-td.nm { color: var(--nds-warning-strong); font-style: normal; font-weight: 600; }
@@ -187,7 +187,7 @@
 .nds-ag-ws .nds-ws-td.nm .badge { font-size: var(--nds-font-size-nano); font-weight: 800; color: var(--nds-wsgrid-sponsored-products-fg); background: var(--nds-purple-bg); border-radius: 4px; padding: 2px 5px; }
 .nds-ag-ws .nds-ws-td.nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--nds-wsgrid-accent); cursor: pointer; }
 .nds-ag-ws .nds-ws-td.nm .t:hover { text-decoration: underline; }
-.nds-ag-ws .nds-ws-td.nm .mk { font-size: var(--nds-font-size-micro); color: var(--nds-wsgrid-text-muted); border: 1px solid var(--nds-wsgrid-border); border-radius: 4px; padding: 1px 5px; }
+.nds-ag-ws .nds-ws-td.nm .mk { font-size: var(--nds-font-size-micro); color: var(--nds-wsgrid-text-secondary); border: 1px solid var(--nds-wsgrid-border); border-radius: 4px; padding: 1px 5px; }
 .nds-ag-ws .nds-ws-td.nm .pin { color: var(--nds-wsgrid-icon-muted); flex-shrink: 0; }
 .nds-ag-ws .nds-ws-td.nm .tg { font-size: var(--nds-font-size-micro); font-weight: 800; color: var(--nds-pill-neutral-fg); background: var(--nds-pill-neutral-bg); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
 .nds-ag-ws .nds-ws-td.nm .pb { font-size: var(--nds-font-size-nano); font-weight: 800; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
@@ -217,7 +217,7 @@
 .nds-ag-ws .nds-ws-td.nm .nmw .t { color: var(--nds-wsgrid-accent); font-weight: 600; font-size: var(--nds-font-size-base); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .nds-ag-ws .nds-ws-td.nm .nmw .t:hover { text-decoration: underline; }
 .nds-ag-ws .nds-ws-td.nm .nmw a.t { text-decoration: none; }
-.nds-ag-ws .nds-ws-td.nm .nmw .mk { font-size: var(--nds-font-size-micro-plus); color: var(--nds-wsgrid-text-muted); border: 1px solid var(--nds-wsgrid-border); border-radius: 4px; padding: 2px 6px; flex-shrink: 0; height: 19px; display: inline-flex; align-items: center; }
+.nds-ag-ws .nds-ws-td.nm .nmw .mk { font-size: var(--nds-font-size-micro-plus); color: var(--nds-wsgrid-text-secondary); border: 1px solid var(--nds-wsgrid-border); border-radius: 4px; padding: 2px 6px; flex-shrink: 0; height: 19px; display: inline-flex; align-items: center; }
 .nds-ag-ws .nds-ws-td.nm .nmw .agi { color: var(--nds-wsgrid-accent); flex-shrink: 0; }
 /* CBN.2h.5 — "Open in new tab", revealed on row hover */
 .nds-ag-ws .nds-ws-td.nm .nmw .h10-open { display: none; align-items: center; gap: 4px; font-size: var(--nds-font-size-xs); font-weight: 600; color: var(--nds-wsgrid-on-accent); background: var(--nds-wsgrid-accent); border-radius: 6px; padding: 3px 8px; text-decoration: none; margin-left: 2px; flex-shrink: 0; white-space: nowrap; }

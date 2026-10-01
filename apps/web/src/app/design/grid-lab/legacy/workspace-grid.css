@@ -46,7 +46,7 @@
 
 .nds-wsgrid.nds-wsgrid-legacy td.nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 
-.nds-wsgrid.nds-wsgrid-legacy td.nm .mk { font-size: var(--nds-font-size-micro); color: var(--nds-grey-500); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-wsgrid-legacy-badge-radius); padding: 1px 5px; }
+.nds-wsgrid.nds-wsgrid-legacy td.nm .mk { font-size: var(--nds-font-size-micro); color: var(--nds-grey-600); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-wsgrid-legacy-badge-radius); padding: 1px 5px; }
 
 .nds-wsgrid.nds-wsgrid-legacy td.empty { text-align: center; color: var(--nds-text-2); padding: 28px; }
 
@@ -138,7 +138,7 @@
 
 .nds-wsgrid.nds-wsgrid-legacy td.nm .nmw a.t { text-decoration: none; }
 
-.nds-wsgrid.nds-wsgrid-legacy td.nm .nmw .mk { font-size: var(--nds-font-size-micro); color: var(--nds-grey-500); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-wsgrid-legacy-badge-radius); padding: 1px 5px; flex-shrink: 0; }
+.nds-wsgrid.nds-wsgrid-legacy td.nm .nmw .mk { font-size: var(--nds-font-size-micro); color: var(--nds-grey-600); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-wsgrid-legacy-badge-radius); padding: 1px 5px; flex-shrink: 0; }
 
 /* CBN.3 G3 — Ad Groups cell affordances (H10): blue layers icon before the name, Target
    count + open-icon, ACoS value + health dot. Scoped to AdGroups' own classes. */
@@ -366,7 +366,7 @@
 
 .nds-wsgrid.nds-wsgrid-legacy tr.h10-am-grp .gl { font-size: var(--nds-font-size-sm); font-weight: 700; color: var(--nds-grey-700); }
 
-.nds-wsgrid.nds-wsgrid-legacy tr.h10-am-grp .gc { margin-left: 8px; font-size: var(--nds-font-size-xs-plus); font-weight: 600; color: var(--nds-grey-500); }
+.nds-wsgrid.nds-wsgrid-legacy tr.h10-am-grp .gc { margin-left: 8px; font-size: var(--nds-font-size-xs-plus); font-weight: 600; color: var(--nds-grey-600); }
 
 /* row click-to-detail (AdsDataGrid onRowClick) */
 .nds-wsgrid.nds-wsgrid-legacy tbody tr.clickable { cursor: pointer; }
