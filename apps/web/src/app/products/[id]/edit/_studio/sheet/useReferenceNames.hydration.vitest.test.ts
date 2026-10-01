@@ -36,7 +36,11 @@ vi.mock('react', async original => ({ ...await original<typeof import('react')>(
 
 const reads = vi.hoisted(() => ({ policies: vi.fn(), themes: vi.fn() }))
 vi.mock('./ebayPolicies', () => ({ policyLists: { paymentPolicyId: 'paymentPolicies' }, loadEbayPolicies: reads.policies }))
-vi.mock('./referenceOptions', () => ({ isReferenceField: () => false, loadReferenceChoices: reads.themes }))
+vi.mock('./referenceOptions', async (importOriginal) => {
+  // The chosen-name fallback is real; the catalog reads stay counted.
+  const real = await importOriginal<typeof import('./referenceOptions')>()
+  return { chosenReferenceLabels: real.chosenReferenceLabels, subscribeChosenReferenceLabels: real.subscribeChosenReferenceLabels, withChosenReferenceLabels: real.withChosenReferenceLabels, isReferenceField: () => false, loadReferenceChoices: reads.themes }
+})
 import { useReferenceNames } from './useReferenceNames'
 import type { NamedColumn } from './referenceLabels'
 const hydration = (market = 'IT'): { channel: string; market: string; lookups: Array<{ field: 'descriptionThemeId' | 'categoryId'; ids: string[]; labels: Record<string, string> }> } => ({ channel: 'EBAY', market, lookups: [

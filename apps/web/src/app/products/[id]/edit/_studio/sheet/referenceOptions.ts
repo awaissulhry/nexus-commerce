@@ -72,3 +72,42 @@ export async function loadReferenceChoices(field: ReferenceField, scope: Referen
   cache.set(key, { expires: Date.now() + 60_000, pending: true, value: pending })
   return pending
 }
+
+/* ── 2026-10-01 — names the operator just CHOSE ───────────────────────────────────────────────────────────────────────
+ * A cell names its reference from the sheet's reference names, which learn a new id only from a later read (the final
+ * local browser round saw a new description theme shown as its id for more than 15 s). The editor holds the chosen
+ * option's name: it remembers it here, per field and account (Etsy resource ids belong to their shop), and the names
+ * fall back to it for an id they cannot name. A name the sheet read always wins. */
+type ChosenLabels = Record<string, Record<string, string>>
+const chosen = new Map<string, ChosenLabels>()
+const chosenListeners = new Set<() => void>()
+
+export function rememberChosenReferenceLabel(field: string, connectionId: string | null | undefined, id: string, label: string): void {
+  if (!id || !label.trim()) return
+  const account = connectionId ?? ''
+  const labels = chosen.get(account) ?? {}
+  if (labels[field]?.[id] === label) return
+  chosen.set(account, { ...labels, [field]: { ...labels[field], [id]: label } })
+  for (const listener of chosenListeners) listener()
+}
+
+export function chosenReferenceLabels(connectionId: string | null | undefined): ChosenLabels {
+  return chosen.get(connectionId ?? '') ?? {}
+}
+
+export function subscribeChosenReferenceLabels(listener: () => void): () => void {
+  chosenListeners.add(listener)
+  return () => { chosenListeners.delete(listener) }
+}
+
+/** `names` with each chosen name added only where `names` has none for that id. */
+export function withChosenReferenceLabels<T extends Record<string, Record<string, string> | undefined>>(names: T, picked: ChosenLabels): T {
+  const fields = Object.keys(picked)
+  if (!fields.length) return names
+  const merged: Record<string, Record<string, string> | undefined> = { ...names }
+  for (const field of fields) merged[field] = { ...picked[field], ...names[field] }
+  return merged as T
+}
+
+/** Tests only. */
+export function forgetChosenReferenceLabels(): void { chosen.clear() }

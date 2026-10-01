@@ -4,7 +4,7 @@ import type { InformationField } from '@nexus/shared/shopify-information'
 import { getBackendUrl } from '@/lib/backend-url'
 import { loadEbayPolicies, policyLists } from './ebayPolicies'
 import { marketplaceReferenceLabels, mergeReferenceLabels, nameReferenceColumns, type NamedColumn, type ReferenceLabels } from './referenceLabels'
-import { isReferenceField, loadReferenceChoices } from './referenceOptions'
+import { chosenReferenceLabels, isReferenceField, loadReferenceChoices, subscribeChosenReferenceLabels, withChosenReferenceLabels } from './referenceOptions'
 
 type Sheet = { meta?: unknown; family?: { id: string }; columns: Array<NamedColumn & { shopifyField?: InformationField }>; rows: Array<{ productType?: string | null; values: Record<string, { value: unknown }> }>; scope: { kind: string; connectionId?: string | null; locale?: string } }
 
@@ -82,6 +82,10 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
   /* 2026-09-24 — pictures for Shopify references (files, video posters, products), from the same lookup as their
      names, so a file cell can show the image itself. Display only; never a value. */
   const [pictures, setPictures] = useState<{ coordinate: string; images: Record<string, string>; swatches: Record<string, string> } | null>(null)
+  /* 2026-10-01 — a name the operator just chose in a reference editor (`rememberChosenReferenceLabel`): a fallback for an id
+     the names below cannot name yet, so a new choice never shows its internal id while a read catches up. */
+  const [chosenVersion, setChosenVersion] = useState(0)
+  useEffect(() => subscribeChosenReferenceLabels(() => setChosenVersion(version => version + 1)), [])
 
   // Keep successful names if a later optional lookup fails. Fresh sheet names win immediately below.
   useEffect(() => {
@@ -198,7 +202,8 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
       names.descriptionThemeId = resolved.labels.descriptionThemeId
     }
     // A selected-market taxonomy path is authoritative over a stored mapping's cached name.
-    const columns = nameReferenceColumns(sheet.columns, mergeReferenceLabels(names, breadcrumbs?.coordinate === coordinate ? breadcrumbs.labels : {}))
+    const read = mergeReferenceLabels(names, breadcrumbs?.coordinate === coordinate ? breadcrumbs.labels : {})
+    const columns = nameReferenceColumns(sheet.columns, withChosenReferenceLabels(read, chosenReferenceLabels(connectionId)))
     return { ...sheet, columns: current ? columns.map(column => column.shopifyField?.type.includes('_reference') ? { ...column, referenceImages: current.images, referenceSwatches: current.swatches } : column) : columns }
-  }, [sheet, resolved, pictures, coordinate, hydrated, breadcrumbs]) as T | null
+  }, [sheet, resolved, pictures, coordinate, hydrated, breadcrumbs, chosenVersion, connectionId]) as T | null
 }
