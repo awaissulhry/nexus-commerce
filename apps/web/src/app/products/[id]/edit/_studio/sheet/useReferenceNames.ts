@@ -166,7 +166,8 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
     }
     if (present.has('productType') && channel === 'AMAZON') tasks.push(read(`listing-wizard/product-types?${new URLSearchParams({ channel, marketplace: market })}`, abort.signal)
       .then(body => apply({ productType: Object.fromEntries((body.items ?? []).map((item: { productType: string; displayName: string }) => [item.productType, item.displayName])) })))
-    if ((channel === 'AMAZON' || channel === 'MASTER') && productTypes) {
+    // GLOBAL is not an Amazon marketplace: a master sheet there has no Amazon names to read (the route answers 400).
+    if ((channel === 'AMAZON' || channel === 'MASTER') && productTypes && market && market.toUpperCase() !== 'GLOBAL') {
       for (const productType of productTypes.split(',')) {
         const query = new URLSearchParams({ marketplace: market, productType, ...(connectionId ? { accountId: connectionId } : {}) })
         const ids = browseNodeIds ? browseNodeIds.split(',') : []
