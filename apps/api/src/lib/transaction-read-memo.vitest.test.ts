@@ -1,7 +1,8 @@
 /**
  * P2 (2026-09-30) — remembered reads inside one snapshot transaction (`transaction-read-memo.ts`), on a real PostgreSQL
  * (PGlite) through the real `inDatabaseTransaction` / `inSavepoint`: a read repeated with nothing written in between is
- * answered from memory, and every write, raw write and rolled-back savepoint makes the next read go to the database.
+ * answered from memory, and every write, raw write and savepoint rolled back after a write makes the next read go to
+ * the database; a raw read is remembered only when its caller names it a plain read (`rememberedRead`).
  * Then a bulk save of 21 rows: the reads every row repeats are made once per operation.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,7 @@ vi.mock('@nexus/database', async () => {
 vi.mock('./queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
 vi.mock('../services/outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn(async () => undefined) }))
 import prisma from '../db.js'
-import { activeDatabaseTransaction, inDatabaseTransaction, inSavepoint } from './database-context.js'
+import { activeDatabaseTransaction, inDatabaseTransaction, inSavepoint, rememberedRead } from './database-context.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from './workspace-context.js'
 import { applyProductBulkSave, type BulkSaveUnit } from '../services/products/bulk-save.service.js'
 
@@ -94,6 +95,44 @@ describe('remembered reads', () => {
       expect(outcome.ok).toBe(false)
       expect(await read()).toEqual({ name: 'Before' })
     })
+  })
+
+  // 2026-10-01 — a refused platform batch reads a whole family and writes nothing; its rows then read it all again.
+  it('keeps what it read across a savepoint, or a nested transaction, that rolled back without writing', async () => {
+    const { texts } = await sent(() => remembered(async () => {
+      const read = () => prisma.product.findUnique({ where: { id: 'memo-p' }, select: { name: true } })
+      const outcome = await inSavepoint(async () => {
+        expect(await read()).toEqual({ name: 'Before' })
+        throw new Error('refused before any write')
+      })
+      expect(outcome.ok).toBe(false)
+      expect(await read()).toEqual({ name: 'Before' })
+      const tx = activeDatabaseTransaction() as unknown as { $transaction: (work: (inner: typeof prisma) => Promise<unknown>) => Promise<unknown> }
+      await expect(tx.$transaction(async inner => {
+        expect(await inner.product.findUnique({ where: { id: 'memo-p' }, select: { name: true } })).toEqual({ name: 'Before' })
+        throw new Error('undo nothing')
+      })).rejects.toThrow('undo nothing')
+      expect(await read()).toEqual({ name: 'Before' })
+    }))
+    expect(reads(texts, 'Product')).toBe(1)
+  })
+
+  it('remembers a raw read its caller names a plain read, until the next write', async () => {
+    const { texts } = await sent(() => remembered(async () => {
+      const name = () => rememberedRead(`memo-name:memo-p`, () => prisma.$queryRaw<Array<{ name: string }>>`SELECT name FROM "Product" WHERE id = ${'memo-p'}`)
+      expect(await name()).toEqual([{ name: 'Before' }])
+      expect(await name()).toEqual([{ name: 'Before' }])
+      await prisma.$executeRaw`UPDATE "Product" SET name = ${'Raw named'} WHERE id = ${'memo-p'}`
+      expect(await name()).toEqual([{ name: 'Raw named' }])
+      await prisma.product.update({ where: { id: 'memo-p' }, data: { name: 'Before' } })
+      expect(await name()).toEqual([{ name: 'Before' }])
+    }))
+    expect(texts.filter(text => /^\s*SELECT name FROM "Product"/.test(text)).length).toBe(3)
+    // Outside a remembering transaction the read simply runs, every time.
+    const { texts: plain } = await sent(() => scoped(() => inDatabaseTransaction(prisma, async () => {
+      for (let i = 0; i < 2; i++) await rememberedRead(`memo-name:memo-p`, () => prisma.$queryRaw`SELECT name FROM "Product" WHERE id = ${'memo-p'}`)
+    })))
+    expect(plain.filter(text => /^\s*SELECT name FROM "Product"/.test(text)).length).toBe(2)
   })
 
   it('is refused outside a snapshot transaction', async () => {

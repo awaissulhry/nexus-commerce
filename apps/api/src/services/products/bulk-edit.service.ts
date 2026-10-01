@@ -239,7 +239,8 @@ async function channelRowContract(
   const { productCategoryContext } = await import('../pim/product-category-context.js')
   const { columnForCategory, columnApplies } = await import('@nexus/shared/master-sheet')
   const productTypes = [...new Set(owners.map((r) => r.productType).filter((v): v is string => !!v))]
-  const context = await productCategoryContext(ids, ctx.channel, ctx.marketplace, ctx.accountId)
+  // `owners` is each caller's own read of these rows in this transaction, nothing written since: not read again.
+  const context = await productCategoryContext(ids, ctx.channel, ctx.marketplace, ctx.accountId, owners)
   const channelSet = await getSheetColumns({
     locale: ctx.locale,
     accountId: context.connectionId,
@@ -433,6 +434,31 @@ export function setBasedCascadedFields(fieldsByProduct: Map<string, string[]>, m
         `)
   }
   return statements
+}
+
+/** A listing compare-and-swap: the version (and, for a snapshot, the `updatedAt`) the write was computed from. */
+interface ListingGuard { id: string; version: number; updatedAt?: Date; at: Date }
+
+/**
+ * Every listing guard of one edit as ONE statement, before any of its writes. Each guard is what one
+ * `channelListing.update({ where: { id, version, updatedAt? }, data: { updatedAt: at } })` did — VERIFY ONLY, the write
+ * that follows bumps the version — and, as there, a guard that matches no row fails the edit with P2025 (the caller's
+ * 409). Measured 2026-10-01: a family clear guarded each of its 21 listings with a statement of its own.
+ */
+async function guardListings(guards: ListingGuard[]): Promise<void> {
+  if (!guards.length) return
+  const rows = JSON.stringify(guards.map(guard => ({ id: guard.id, version: guard.version, updatedAt: guard.updatedAt ?? null, at: guard.at })))
+  const matched = await prisma.$queryRaw<Array<{ id: string }>>`
+    UPDATE "ChannelListing" AS listing
+    SET "updatedAt" = guard.at
+    FROM jsonb_to_recordset(${rows}::jsonb) AS guard(id text, version integer, "updatedAt" timestamp, at timestamp)
+    WHERE listing.id = guard.id AND listing.version = guard.version
+      AND (guard."updatedAt" IS NULL OR listing."updatedAt" = guard."updatedAt")
+    RETURNING listing.id
+  `
+  if (matched.length !== guards.length) {
+    throw Object.assign(new Error('A listing changed after this edit read it.'), { code: 'P2025' })
+  }
 }
 
 /** Validate, preview or atomically apply product edits, including their formula dependencies. */
@@ -723,7 +749,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (changeIds.length > 0) {
     try {
       const [ptRows, mkRows] = await Promise.all([
-        prisma.product.findMany({ where: { id: { in: changeIds } }, select: { id: true, parentId: true, isParent: true, productType: true, familyId: true, categoryAttributes: true, parent: { select: { familyId: true } } } }),
+        // The whole row: the no-op check below reads exactly this (`prodRows`), so a transaction that remembers reads
+        // answers it from memory. The parent's family comes from the family read below, not from a relation read.
+        prisma.product.findMany({ where: { id: { in: changeIds } } }),
         capMarket ? Promise.resolve([]) : prisma.channelListing.findMany({
           where: { productId: { in: changeIds } }, select: { marketplace: true }, distinct: ['marketplace'],
         }),
@@ -737,15 +765,21 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // channel spec, so the market only names coordinates; `GLOBAL` with `allowUnknownMarket` names none of a
       // marketplace's own.
       const marketFree = markets.length === 0
-      const familyIds = [...new Set(ptRows.map(r => r.familyId ?? r.parent?.familyId).filter((v): v is string => !!v))]
       // Studio exposes saved fields across the entire parent/variation group. Build that same
       // schema for a child edit, including fields currently stored only on its parent or sibling.
       const rootIds = [...new Set(ptRows.map(r => r.parentId ?? r.id))]
       const schemaFamilyRows = rootIds.length ? await prisma.product.findMany({
         where: { OR: [{ id: { in: rootIds } }, { parentId: { in: rootIds } }], deletedAt: null },
-        select: { id: true, parentId: true, categoryAttributes: true, variantAttributes: true, variationAxes: true },
+        select: { id: true, parentId: true, familyId: true, categoryAttributes: true, variantAttributes: true, variationAxes: true },
       }) : []
-      for (const row of schemaFamilyRows) variationOwners.set(row.id, { ...row, variationAxes: row.variationAxes?.length ? row.variationAxes : schemaFamilyRows.find(parent => parent.id === row.parentId)?.variationAxes ?? [] })
+      // A variation's family is its own, else its parent's. Every live parent is a root of the read above; a deleted one
+      // (which that read leaves out) is read by id, as the parent relation read it.
+      const parentFamily = new Map(schemaFamilyRows.map(row => [row.id, row.familyId]))
+      const unreadParents = [...new Set(ptRows.filter(r => !r.familyId && r.parentId && !parentFamily.has(r.parentId)).map(r => r.parentId!))]
+      if (unreadParents.length) for (const row of await prisma.product.findMany({ where: { id: { in: unreadParents } }, select: { id: true, familyId: true } })) parentFamily.set(row.id, row.familyId)
+      const familyOf = (r: { familyId: string | null; parentId: string | null }) => r.familyId ?? (r.parentId ? parentFamily.get(r.parentId) : undefined)
+      const familyIds = [...new Set(ptRows.map(familyOf).filter((v): v is string => !!v))]
+      for (const { familyId: _familyId, ...row } of schemaFamilyRows) variationOwners.set(row.id, { ...row, variationAxes: row.variationAxes?.length ? row.variationAxes : schemaFamilyRows.find(parent => parent.id === row.parentId)?.variationAxes ?? [] })
       if (ptRows.length > 0) {
         const { getSheetColumns } = await import('../pim/sheet-columns.service.js')
         if (primaryContext) {
@@ -771,7 +805,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           const { canonicalVariantAxis } = await import('../pim/variant-attribute-keys.js')
           for (const product of ptRows) {
             const row = new Map<string, import('../pim/sheet-columns.service.js').SheetColumn>()
-            const shape = { isParent: product.isParent, productType: product.productType, familyId: product.familyId ?? product.parent?.familyId }
+            const shape = { isParent: product.isParent, productType: product.productType, familyId: familyOf(product) }
             // P1 (report 2 I-11) — the family row holds a per-variant column's value for its variations unless it is a
             // variation axis (the studio sheet's own rule, `columnEditableOnRow`); `axis` from this family's axes.
             const axes = new Set((variationOwners.get(product.id)?.variationAxes ?? []).map(axis => canonicalVariantAxis(String(axis))))
@@ -2276,7 +2310,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // Build the transaction's update list. One Prisma promise per
     // statement; runs serially in array-form $transaction.
     const updates: any[] = []
-    const listingGuards = new Map<string, any>()
+    /** One compare-and-swap per listing; a later `set` for the same listing replaces the earlier (the strongest wins). */
+    const listingGuards = new Map<string, ListingGuard>()
 
     // Helper for a ChannelListing column write by (productId, channel,
     // marketplace). R.1 — fans out to every effectiveContext whose
@@ -2364,18 +2399,13 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             : undefined
         if (hit) {
           if (expectedVersion !== undefined && !priceWrittenIds.has(hit.id)) {
-            listingGuards.set(hit.id,
-              prisma.channelListing.update({
-                where: { id: hit.id, version: expectedVersion },
-                // ⚠ VERIFY ONLY — do NOT bump. The update below already does
-                // `version: { increment: 1 }`; bumping here too would advance
-                // the row by TWO while the response reported ONE, and the next
-                // write would 409 every time. Prisma still throws P2025 when
-                // the version does not match, which is this statement's whole
-                // job. Same shape as the attr_* CAS.
-                data: { updatedAt: new Date() },
-              }),
-            )
+            // ⚠ VERIFY ONLY — do NOT bump. The update below already does
+            // `version: { increment: 1 }`; bumping here too would advance
+            // the row by TWO while the response reported ONE, and the next
+            // write would 409 every time. A guard that matches no row fails
+            // as P2025 (`guardListings`), which is its whole job. Same shape
+            // as the attr_* CAS.
+            listingGuards.set(hit.id, { id: hit.id, version: expectedVersion, at: new Date() })
           }
           // Recorded whether or not a token was sent: this is what makes the
           // response able to report the LISTING's version for a mapped write.
@@ -2785,20 +2815,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           // `priceWrittenIds`: its version is this transaction's own, not the
           // caller's token, so there is nothing to guard it against.
           if (hit && !priceWrittenIds.has(hit.id)) {
-            listingGuards.set(hit.id,
-              prisma.channelListing.update({
-                where: { id: hit.id, version: expectedVersion },
-                // ⚠ VERIFY ONLY — do NOT bump here. `writeChannelOverrideMerge`
-                // below already does `"version" = "version" + 1`, and bumping in
-                // both made an accepted write advance the version by TWO while
-                // the response reported ONE. Feeding the returned version into
-                // the next write then 409'd every time — i.e. the sheet stops
-                // saving after the first cell and blames the operator.
-                // Prisma still throws P2025 when the version does not match,
-                // which is the whole job of this statement.
-                data: { updatedAt: new Date() },
-              }),
-            )
+            // ⚠ VERIFY ONLY — do NOT bump here. `writeChannelOverrideMerge`
+            // below already does `"version" = "version" + 1`, and bumping in
+            // both made an accepted write advance the version by TWO while
+            // the response reported ONE. Feeding the returned version into
+            // the next write then 409'd every time — i.e. the sheet stops
+            // saving after the first cell and blames the operator.
+            // The guard still fails as P2025 when the version does not
+            // match, which is the whole job of this check.
+            listingGuards.set(hit.id, { id: hit.id, version: expectedVersion, at: new Date() })
           }
         }
         updates.push(writeChannelOverrideMerge(prisma, e, connFor.get(e.channel) ?? null))
@@ -2839,10 +2864,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
         // Replacing a JSON bag must guard the snapshot even for callers without a token. The parent listing a variation
         // row's listing-level value lands on is guarded by the snapshot this request read: the token is the row's own.
-        listingGuards.set(row.id, prisma.channelListing.update({
-          where: { id: row.id, version: priceWrittenIds.has(row.id) || e.familyWrite ? row.version : expectedVersion ?? row.version, ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}) },
-          data: { updatedAt: new Date() },
-        }))
+        listingGuards.set(row.id, { id: row.id, version: priceWrittenIds.has(row.id) || e.familyWrite ? row.version : expectedVersion ?? row.version,
+          ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}), at: new Date() })
         const bag = applyPlatformMutations(row.platformAttributes, e.sets)
         updates.push(
           prisma.$executeRaw`
@@ -2937,18 +2960,17 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // A slot rewrites its sibling array. Guard the snapshot it used, including tokenless callers.
     // Apply this after collecting other guards so a later column write cannot weaken it.
     for (const snapshot of slotSnapshots.values()) {
-      listingGuards.set(snapshot.id, prisma.channelListing.update({
-        where: { id: snapshot.id, version: priceWrittenIds.has(snapshot.id) ? snapshot.version : expectedVersion ?? snapshot.version,
-          ...(snapshot.updatedAt ? { updatedAt: snapshot.updatedAt } : {}) },
-        data: { updatedAt: new Date() },
-      }))
+      listingGuards.set(snapshot.id, { id: snapshot.id, version: priceWrittenIds.has(snapshot.id) ? snapshot.version : expectedVersion ?? snapshot.version,
+        ...(snapshot.updatedAt ? { updatedAt: snapshot.updatedAt } : {}), at: new Date() })
       if (!channelListingIdsTouched.includes(snapshot.id)) channelListingIdsTouched.push(snapshot.id)
     }
     try {
       const formulaWrite = currentFormulaWrite(context.formulaWriteToken)
       if (formulaWrite && (validated.length !== 1 || validated[0].id !== formulaWrite.productId || validated[0].field !== formulaWrite.writeField)) throw new Error('Formula transaction does not match its value write.')
       const atomic = formulaWrite?.operations?.() ?? []
-      const results = await prisma.$transaction([...listingGuards.values(), ...updates, ...atomic], {
+      // Every guard is checked before any write, as one statement: a family clear guards every family listing.
+      await guardListings([...listingGuards.values()])
+      const results = await prisma.$transaction([...updates, ...atomic], {
         isolationLevel: 'ReadCommitted',
       })
       if (formulaWrite) formulaWrite.results = atomic.length ? results.slice(-atomic.length) : []

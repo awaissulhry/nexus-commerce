@@ -8,10 +8,12 @@
  * 14 failures reporting `Cannot read properties of undefined (reading 'findMany')` at frames in code VT.1 never
  * touched — the classic mis-attributing symptom of a half-built module.
  *
- * This file imports prisma and NOTHING else, so both sides can read it.
+ * This file imports prisma and the database context (itself a leaf, which `db.ts` already imports) and NOTHING else,
+ * so both sides can read it.
  */
 
 import prisma from '../../db.js'
+import { rememberedRead } from '../../lib/database-context.js'
 
 /**
  * `variationExcluded` is read and written through narrow raw SQL on purpose: the column is **not in the Prisma
@@ -50,9 +52,11 @@ export async function readExcludedListingIds(listingIds: string[]): Promise<Set<
   if (!(await variationExcludedColumnExists())) {
     throw new Error('ChannelListing.variationExcluded does not exist on this database, so exclusions cannot be read.')
   }
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+  // A plain read: inside one bulk save every row of a family asks it with the same listings, and only a write of this
+  // transaction can change its answer (`rememberedRead`).
+  const rows = await rememberedRead(`variation-excluded:${JSON.stringify(listingIds)}`, () => prisma.$queryRawUnsafe<Array<{ id: string }>>(
     'SELECT "id" FROM "ChannelListing" WHERE "variationExcluded" = true AND "id" = ANY($1::text[])',
     listingIds,
-  )
+  ))
   return new Set(rows.map((r) => r.id))
 }

@@ -32,6 +32,16 @@ export function contextualDatabase(root: PrismaClient): PrismaClient {
 
 export const activeDatabaseTransaction = () => context.getStore()?.client
 
+/**
+ * A plain raw read (`$queryRaw` of a SELECT with no effect) that a `memoReads` transaction may answer from memory until
+ * its next write, as it answers a repeated model read (transaction-read-memo.ts). `key` must name the whole answer:
+ * the statement and every value it reads with. Outside such a transaction the read simply runs.
+ */
+export function rememberedRead<T>(key: string, read: () => PromiseLike<T>): Promise<T> {
+  const memo = context.getStore()?.memo
+  return Promise.resolve(memo ? memo.remember(key, read) : read())
+}
+
 /** A sheet reads many related tables. Configure workspace ownership once for its snapshot,
  * rather than opening a new transaction for every query over the database connection. */
 export async function inDatabaseReadTransaction<T>(client: PrismaClient, work: () => Promise<T>): Promise<T> {
@@ -237,14 +247,16 @@ export async function inSavepoint<T>(work: () => Promise<T>): Promise<{ ok: true
   const producers = new Map(active.producers)
   const batches = new Map([...active.batches].map(([key, bag]) => [key, new Set(bag)]))
   const client = active.client as unknown as { $transaction: (run: () => Promise<unknown>) => Promise<unknown> }
+  const writesBefore = active.memo?.writes
   let value: T
   try {
     await client.$transaction(async () => { value = await work() })
     return { ok: true, value: value! }
   } catch (error) {
     if (transactionMustRestart(error)) throw error
-    // The savepoint's writes are undone: a read remembered after them no longer describes the database.
-    active.memo?.clear()
+    // The savepoint's writes are undone: a read remembered after them no longer describes the database. A savepoint
+    // that wrote nothing undid nothing, and what it read still answers (transaction-read-memo.ts).
+    if (active.memo && active.memo.writes !== writesBefore) active.memo.clear()
     restoreInPlace(active.effects, effects)
     restoreInPlace(active.producers, producers)
     restoreInPlace(active.batches, batches)

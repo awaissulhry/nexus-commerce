@@ -268,15 +268,23 @@ export async function resolveCategoriesForProducts(input: {
   marketplace: string
   mappingSnapshot?: MappingRow[]
   channelConnectionId?: string | null
+  /**
+   * The caller's own read of these products (at least `id`, `parentId`, `productType`), made in this transaction with
+   * nothing written since — the same rows the read below would return, so it is not made again.
+   */
+  products?: ReadonlyArray<{ id: string; parentId: string | null; productType: string | null }>
 }): Promise<Record<string, ResolvedCategory>> {
   const { channel, marketplace } = input
   const productIds = [...new Set(input.productIds)].filter(Boolean)
   const out: Record<string, ResolvedCategory> = {}
   if (productIds.length === 0) return out
 
-  const products = await prisma.product.findMany({
-    where: { id: { in: productIds } }, select: { id: true, parentId: true, productType: true },
-  })
+  const requested = new Set(productIds)
+  const products = input.products
+    ? input.products.filter(p => requested.has(p.id)).map(p => ({ id: p.id, parentId: p.parentId, productType: p.productType }))
+    : await prisma.product.findMany({
+      where: { id: { in: productIds } }, select: { id: true, parentId: true, productType: true },
+    })
   const membershipIds = [...new Set([...productIds, ...products.map(p => p.parentId).filter((id): id is string => !!id)])]
   const amazon = channel.toUpperCase() === 'AMAZON'
   /* A variation that resolves to nothing of its own takes its parent's RESOLVED category (Amazon keeps one product type per
