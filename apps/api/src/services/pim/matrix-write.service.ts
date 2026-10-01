@@ -156,7 +156,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         if (!mode) return refuse('Mode is Follow or Pinned')
         if (s.mode === mode) return noop()
         // Shared stock by SKU: a SKU that sells from a lent stock gets no fixed number (the database refuses it too).
-        if (mode === 'PINNED' && row.stock.source) return refuse(sharedStockReason(row.stock.source.lenderName))
+        if (mode === 'PINNED' && row.stock?.source) return refuse(sharedStockReason(row.stock.source.lenderName))
         if (await amazonManaged()) return managedRefusal()
         await bumpTx(targets)
         const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: mode === 'FOLLOW', actor: ctx.actor })
