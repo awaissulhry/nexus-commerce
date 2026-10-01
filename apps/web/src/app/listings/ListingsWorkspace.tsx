@@ -1394,9 +1394,10 @@ function InlineNumberCell({
       return
     }
     const n = Number(trimmed)
-    if (!Number.isFinite(n) || n < 0) {
+    // A typed price is above 0 (the price door refuses 0); a quantity is a whole number, zero or more.
+    if (!Number.isFinite(n) || (field === 'price' ? n <= 0 : n < 0 || !Number.isInteger(n))) {
       toast.error(
-        field === 'price' ? 'Price must be a non-negative number' : 'Quantity must be a non-negative integer',
+        field === 'price' ? 'Price must be a number above 0' : 'Quantity must be a whole number, zero or more',
       )
       setEditing(false)
       setDraft(value != null ? String(value) : '')
@@ -1428,7 +1429,9 @@ function InlineNumberCell({
         if (j.notSent) toast.warning(j.notSent)
         else toast.success(j.queued ? `Price pinned at ${format(finalValue)}; it is sent to the channel in 30 seconds` : `Price pinned at ${format(finalValue)}`)
       } else {
-        toast.success('Stock updated')
+        // The quantity is pinned with the Studio matrix's own write; on Amazon EU it is one number for every EU market.
+        const group = Array.isArray(j.expandedTo) && j.expandedTo.length > 1 ? ` on Amazon EU (${j.expandedTo.join(' ')})` : ''
+        toast.success(j.changed === false ? `Stock already pinned at ${finalValue}` : `Stock pinned at ${finalValue}${group}; it is sent to the channel`)
       }
       emitInvalidation({
         type: 'listing.updated',
@@ -2710,8 +2713,8 @@ function SetPriceModal({
       setError('Price must be a number.')
       return
     }
-    if (n < 0) {
-      setError('Price cannot be negative.')
+    if (n <= 0) {
+      setError('Price must be above 0.')
       return
     }
     onConfirm(n)

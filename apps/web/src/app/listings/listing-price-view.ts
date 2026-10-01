@@ -5,7 +5,7 @@
  * These screens read the same function, so a listing following at "master +10%" is shown ON its rule, never as 1.00
  * of drift, and the grid's price cell asks for what the API's PATCH takes: a typed price is a pin (`priceOverride`).
  */
-import { expectedListingPrice, pricingRuleLabel } from '@nexus/shared/listing-price'
+import { expectedListingPrice, pricingRuleLabel, roundCents } from '@nexus/shared/listing-price'
 
 /** The PATCH body of the grid's inline cell. A price is a pin through the price door; it was `{ price }`, refused. */
 export function inlineCellPatchBody(field: 'price' | 'quantity', value: number, version: number): Record<string, number> {
@@ -34,7 +34,7 @@ export function priceDriftView(listing: {
   const master = masterPrice == null || masterPrice === '' || !Number.isFinite(Number(masterPrice)) ? null : Number(masterPrice)
   const expected = following ? expectedListingPrice(listing, master) : master
   const price = listing.price == null || listing.price === '' ? null : Number(listing.price)
-  const drift = expected != null && price != null && Number.isFinite(price) ? Math.round((price - expected) * 100) / 100 : null
+  const drift = expected != null && price != null && Number.isFinite(price) ? roundCents(price - expected) : null
   if (drift == null) return { expected, drift, label: null }
   const sign = drift > 0 ? '+' : ''
   const label = following
