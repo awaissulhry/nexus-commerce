@@ -650,10 +650,11 @@
    The card is deliberately small and repeated: fourteen of them read as one
    instrument panel, where fourteen full-width panels would read as a list.
 
-   🔴 Every surface/border/text token below is `rgb(var(--x))` — see the header
-   note. `--color-primary` and the `--status-*-strong` tokens are real hex and
-   are used bare. Getting that backwards is silent: the declaration is dropped
-   and the element renders with no background and a zero-width border. */
+   🔴 Every surface/border/text colour below is an `--nds-*` token — see the
+   header note (R0). `--color-primary` and the `--status-*-strong` tokens are
+   real hex and are used bare. Reading a `--text-*`/`--surface-*`/`--border-*`
+   alias instead is silent: the declaration is dropped and the element renders
+   with no background and a zero-width border. */
 
 .rpt-bm {
   display: flex;
@@ -908,10 +909,10 @@
 .rpt-bm-foot b { color: var(--nds-text-2); font-weight: 650; }
 
 /* ══ RPX — the strategy tabs ═════════════════════════════════════════════════
-   Token forms follow this file's existing convention: the text/surface/border tier is
-   CHANNELS inside the ads shell (`rgb(var(--x))`), the brand/status tier is whole colours.
-   Mixing the two forms is silently invalid at computed-value time — see the notes in
-   ads.css and the DS token guard. */
+   Token forms follow this file's convention (R0 at the top): text/surface/border colours
+   are `--nds-*` tokens, the brand/status tier (`--color-primary`, `--status-*`) is whole
+   colours used bare. The `--text-*`/`--surface-*`/`--border-*` aliases have a different form
+   inside the shell and in a portal, so they are invalid in one or the other. */
 
 .rpx-shell .nds-tabs { margin-bottom: 14px; }
 .rpx { display: flex; flex-direction: column; gap: 14px; }

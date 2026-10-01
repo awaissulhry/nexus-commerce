@@ -42,7 +42,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             )}
           </div>
         )}
-        <div className="relative">
+        {/* Positioned only when it holds a prefix or suffix. A positioned wrapper paints AFTER an
+            earlier absolutely positioned sibling, so a caller's own search icon placed before this
+            Input (13 toolbars do it) was hidden under the now-opaque `bg-card` field. */}
+        <div className={prefix || suffix ? 'relative' : undefined}>
           {prefix && (
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary text-md pointer-events-none">
               {prefix}
