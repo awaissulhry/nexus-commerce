@@ -11,9 +11,10 @@
  * A light module on purpose: the cascade's module loads the queue (a Redis connection); the door must not pay that.
  */
 import type { Prisma } from '@prisma/client'
-import { followerListingPrice } from '@nexus/shared/listing-price'
+import { followerListingPrice, roundCents } from '@nexus/shared/listing-price'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { marketCurrency, type MarketCurrencyRow } from './market-currency.js'
+import { masterCurrency } from '../fx-rate.service.js'
 
 /** The operator's grace window before a follower price leaves: 30 s to undo (IS.2b). */
 export const FOLLOWER_PRICE_HOLD_MS = 30 * 1000
@@ -72,28 +73,42 @@ export function heldSentence(listing: HoldFacts, what: string): string {
  * HELD PRICES (round 5, 2026-10-01) — a price change kept in Nexus by `holdsCascadedPrice` is not lost: it is written
  * as a PRICE_UPDATE row that is never dispatched (`SKIPPED`, so no dispatcher, drain or retry picks it up), and the
  * channel price door's `sendHeldPrices` sends it ONCE when the listing can be sent to again — on resume, and when a
- * draft is published. Before, nothing replayed it: a price, pin or sale changed while a listing was paused stayed in
+ * draft goes live. Before, nothing replayed it: a price, pin or sale changed while a listing was paused stayed in
  * Nexus after the resume until some later change happened to push it.
  *
  *   - `PUSH_SYNC_PAUSED` — a live listing's sync is paused. The same code the dispatcher gives a row it refuses because
  *     the listing was paused after the row was queued (inside the 30 s hold), so that change waits the same way.
- *   - `PRICE_HELD_DRAFT` — a still-draft, for a change its publication does NOT carry: every publisher sends a
- *     following listing the master price and a pinned listing its own price (`studio-publication-amazon.ts`,
- *     `studio-publication-ebay.ts`), and Amazon's publication sends no sale (no sale dates in its row). A pin, or a
- *     follower whose rule price IS the master price, is carried by Publish and is not marked: it is sent once, by Publish.
+ *   - `PRICE_HELD_DRAFT` — a still-draft, for a change its publication does NOT carry. Round 6: every publisher sends
+ *     the listing's own send price (`listingSendPrice`: a pin, or the rule's price), so a price is carried by Publish
+ *     and is never marked; Amazon's publication sends no sale (no sale dates in its row), so an Amazon draft's sale is.
+ *     (Other channels' senders send no sale: a held one would only send the price again.)
+ * A held row is kept by the queue's retention sweep (`NOT_HELD_PRICE_ROW`) and is not retried by hand: it waits for
+ * the resume or the publish, or is replaced by a newer change.
  */
 export const HELD_PAUSED_CODE = 'PUSH_SYNC_PAUSED'
 export const HELD_DRAFT_CODE = 'PRICE_HELD_DRAFT'
 export const HELD_PRICE_CODES = [HELD_PAUSED_CODE, HELD_DRAFT_CODE] as const
 /** A `where` for a listing's held price changes. */
 export const HELD_PRICE_ROWS = { syncType: 'PRICE_UPDATE', syncStatus: 'SKIPPED', errorCode: { in: [...HELD_PRICE_CODES] } } satisfies Prisma.OutboundSyncQueueWhereInput
+/**
+ * A `where` for every row that is NOT a held price change — for a sweep that deletes or cancels settled rows (the
+ * retention job). Spelled positively: SQL's `NOT IN` is unknown on a null `errorCode`, which would keep every
+ * code-less SKIPPED price row for ever.
+ */
+export const NOT_HELD_PRICE_ROW = {
+  OR: [{ syncType: { not: 'PRICE_UPDATE' } }, { syncStatus: { not: 'SKIPPED' } }, { errorCode: null }, { errorCode: { notIn: [...HELD_PRICE_CODES] } }],
+} satisfies Prisma.OutboundSyncQueueWhereInput
+/** Is this queue row a held price change? */
+export const isHeldPriceRow = (row: { syncType: string | null; syncStatus: string | null; errorCode: string | null }) =>
+  row.syncType === 'PRICE_UPDATE' && row.syncStatus === 'SKIPPED' && (HELD_PRICE_CODES as readonly string[]).includes(row.errorCode ?? '')
 
 /**
  * Which held marker a change kept in Nexus needs, or `null` (none: the listing is not held, or Publish carries it).
  * `followerPrice` is the price a following listing now carries when the change moved it; `masterPrice` the master.
  */
-export function heldPriceCode(listing: HoldFacts, change: { pin: boolean; sale: boolean; followerPrice: number | null; masterPrice: number | null }): typeof HELD_PRICE_CODES[number] | null {
-  if (isStillDraftListing(listing)) return change.sale || (change.followerPrice != null && change.followerPrice !== change.masterPrice) ? HELD_DRAFT_CODE : null
+export function heldPriceCode(listing: HoldFacts & { channel: string }, change: { pin: boolean; sale: boolean; followerPrice: number | null }): typeof HELD_PRICE_CODES[number] | null {
+  // A draft: Publish carries the price (`listingSendPrice`); only Amazon's sale is left for the go-live to send.
+  if (isStillDraftListing(listing)) return change.sale && listing.channel === 'AMAZON' ? HELD_DRAFT_CODE : null
   if (listing.syncPaused) return change.pin || change.sale || change.followerPrice != null ? HELD_PAUSED_CODE : null
   return null
 }
@@ -117,6 +132,90 @@ export function heldPriceRowData(
       : 'Kept in Nexus while this listing is a draft. It is sent once, when the listing is published.',
     payload: { ...payload, source: 'HELD_PRICE', heldFrom: payload.source ?? null, held: code } as Prisma.InputJsonValue,
   }
+}
+
+/** The facts `listingSendPrice` reads. */
+export interface SendPriceListing {
+  followMasterPrice: boolean | null
+  priceOverride: unknown
+  price: unknown
+  pricingRule: string | null
+  priceAdjustmentPercent: unknown
+}
+
+/** A configured currency code (three letters, upper case), or `null` — read as `marketCurrency` reads a market's. */
+export const currencyCode = (value: unknown): string | null => {
+  const code = typeof value === 'string' ? value.trim().toUpperCase() : ''
+  return /^[A-Z]{3}$/.test(code) ? code : null
+}
+
+/** A product with no listing on the destination yet: it follows the master price under the default rule. */
+export const NO_LISTING_PRICE_FACTS: SendPriceListing = { followMasterPrice: true, priceOverride: null, price: null, pricingRule: 'FIXED', priceAdjustmentPercent: null }
+
+/** The price a listing is sent, or why it has none to send (a sentence in the door's words). */
+export type SendPrice = { price: number; reason?: undefined } | { price: null; reason: string }
+
+const amount = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null
+  const n = typeof value === 'number' ? value : Number(String(value))
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * ROUND 6 (2026-10-01) — THE price a listing is sent now. One rule for every sender: the price door's SEND mode (Push
+ * price and the held-price hook), every publisher (Amazon, eBay, Shopify's content sync and colour products) and the
+ * native Shopify offer sender for a row that carries no price:
+ *
+ *   - pinned (`followMasterPrice: false`): its own price (`priceOverride`, else `price`);
+ *   - following, in a market that sells in the master currency, under a rule that takes its price from the master:
+ *     the rule's price from the CURRENT master (`computeListingPrice`, the cascade's maths);
+ *   - following under Match Amazon, or in a market that sells in another currency (or has none configured): the price
+ *     the listing holds — its own number in its own currency. The master number is never sent there, converted or not.
+ *   - nothing to send: `null`, and why.
+ *
+ * Before, every publisher sent a following listing the MASTER price: a listing at "master +10%" went live at the
+ * master, and a GBP market was sent the EUR number as pounds.
+ */
+export function listingSendPrice(
+  listing: SendPriceListing,
+  context: { masterPrice: unknown; marketCurrency: string | null; masterCurrency?: string; where?: string },
+): SendPrice {
+  const where = context.where ?? 'this market'
+  // A market's own name ("eBay UK") keeps its spelling at the start of a sentence; the stand-in is capitalised.
+  const whereStart = context.where ?? 'This market'
+  const own = amount(listing.priceOverride) ?? amount(listing.price)
+  if (listing.followMasterPrice === false) {
+    return own != null ? { price: roundCents(own) } : { price: null, reason: `This listing has no price of its own for ${where}. Set its price first.` }
+  }
+  const master = (context.masterCurrency ?? masterCurrency()).toUpperCase()
+  const base = amount(context.masterPrice)
+  if (context.marketCurrency === master && base != null) {
+    const ruled = computeListingPrice(base, listing.pricingRule, true, listing.priceAdjustmentPercent as never)
+    if (ruled != null) return { price: ruled }
+  }
+  const held = amount(listing.price)
+  if (held != null) return { price: roundCents(held) }
+  if (context.marketCurrency !== master) {
+    return {
+      price: null,
+      reason: context.marketCurrency
+        ? `${whereStart} sells in ${context.marketCurrency}, and this listing follows the master price in ${master}. Nexus does not convert it. Set this listing's own ${context.marketCurrency} price.`
+        : `No currency is configured for ${where}, so the master price (${master}) is not sent there. Set the market's currency, or this listing's own price.`,
+    }
+  }
+  return {
+    price: null,
+    reason: base == null
+      ? 'This product has no master price. Set the master price, or this listing\'s own price.'
+      : `Match Amazon has not set a price for ${where} yet. Set this listing's own price, or change its pricing rule.`,
+  }
+}
+
+/** `listingSendPrice` with the listing market's currency read from its Marketplace row (none configured → `null`). */
+export async function listingSendPriceNow(listing: SendPriceListing & { channel: string; marketplace: string }, masterPrice: unknown, where?: string): Promise<SendPrice> {
+  let marketCur: string | null = null
+  try { marketCur = await marketCurrency(listing.channel, listing.marketplace) } catch { marketCur = null }
+  return listingSendPrice(listing, { masterPrice, marketCurrency: marketCur, where: where ?? `${listing.channel} ${listing.marketplace}` })
 }
 
 /** The listing market's configured currency, or `null` when the market has none (then it is never the master currency). */

@@ -173,6 +173,15 @@ describe('🔴 Push price is ONE queued row from the price door — never a dire
     expect(live[0]).toMatchObject({ targetChannel: 'EBAY', payload: { price: 25, resend: true, marketplace: 'UK' } })
   }))
 
+  it('round 6 — a GBP follower holding no price: refused with the shared send-price sentence (never the EUR master as pounds); nothing queued', () => scoped(async () => {
+    const l = await seed('TEST-PUSH-GBP-NONE', { channel: 'EBAY', marketplace: 'UK', price: null as never })
+    await prisma.channelListing.update({ where: { id: l.id }, data: { price: null } })
+    const result = await push('TEST-PUSH-GBP-NONE', 'EBAY', 'UK')
+    expect(result).toMatchObject({ ok: false, pushedPrice: null,
+      error: 'TEST-PUSH-GBP-NONE on EBAY UK: nothing was sent — EBAY UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.' })
+    expect(await rows(l.id)).toEqual([])
+  }))
+
   it('a listing holding 0: refused, a price must be above 0; nothing queued', () => scoped(async () => {
     const l = await seed('TEST-PUSH-ZERO', { pinned: 0 })
     const result = await push('TEST-PUSH-ZERO')

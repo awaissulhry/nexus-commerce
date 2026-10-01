@@ -16,6 +16,8 @@ import { linkColourProducts } from './link.service.js'
 import { planFor, rowsWhere, type Destination } from './find.service.js'
 import { assertColourSyncCurrent, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 import { colourIsPublished, readOnlineStorePublication, readColourRemote, planColourVariants, COLOUR_SIZE_CREATE, COLOUR_SIZE_ORDER, type ColourRemoteProduct } from './variants.js'
+import { NO_LISTING_PRICE_FACTS, listingMarketCurrency, listingSendPrice } from '../../pim/follower-price.js'
+import { marketCurrencyRows } from '../../pim/market-currency.js'
 
 const listingWhere = (d: Destination) => ({ channel: 'SHOPIFY', marketplace: d.marketplace, channelConnectionId: d.accountId, aliasKey: d.aliasKey ?? '' })
 const ownedListings = (d: Destination, row: ShopifyColourProduct) => prisma.channelListing.findMany({ where: { ...listingWhere(d), platformAttributes: { path: ['shopifyColourProductId'], equals: row.id } }, include: { product: true }, orderBy: { id: 'asc' } })
@@ -82,13 +84,19 @@ async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyCo
     if (!location?.isActive) throw new WorkspaceScopeError('The reviewed Shopify stock location is no longer active.')
     const products = await prisma.product.findMany({ where: { id: { in: planned.missing.map(v => v.productId) }, parentId: d.familyId, deletedAt: null } })
     const drafts = await prisma.channelListing.findMany({ where: { ...listingWhere(d), productId: { in: planned.missing.map(v => v.productId) } } })
+    // Round 6 — the market's currency, read as the price door reads it (`listingSendPrice` below).
+    const marketCur = listingMarketCurrency({ channel: 'SHOPIFY', marketplace: d.marketplace }, await marketCurrencyRows('SHOPIFY'))
     const variants = planned.missing.map(v => {
       const child = products.find(p => p.id === v.productId), draft = drafts.find(l => l.productId === v.productId)
       if (!child || child.sku !== v.sku) throw new WorkspaceScopeError('The new size changed. Sync the current family again.')
       const pa = object(draft?.platformAttributes)
       if (draft && (draft.externalListingId || pa.variantId || pa.shopifyColourProductId && pa.shopifyColourProductId !== row.id))
         throw new WorkspaceScopeError(`${v.sku} already has a Shopify mapping. Review it before creating a size.`)
-      const price = draft && !draft.followMasterPrice ? draft.priceOverride ?? draft.price : child.basePrice
+      // Round 6 — THE send price (`listingSendPrice`): a pin's own price, a follower's rule price from the current master
+      // in the master currency, else the price the listing holds. It created every following size at the master price.
+      const send = listingSendPrice(draft ?? NO_LISTING_PRICE_FACTS, { masterPrice: child.basePrice, marketCurrency: marketCur, where: `Shopify ${d.marketplace}` })
+      if (send.price == null) throw new WorkspaceScopeError(`${v.sku}: ${send.reason} Its size was not created.`)
+      const price = send.price.toFixed(2)
       if (!/^\d+(\.\d{1,2})?$/.test(String(price))) throw new WorkspaceScopeError(`${v.sku} needs a valid price before its size is created.`)
       return { optionValues: v.optionValues, price: String(price), inventoryPolicy: 'DENY', inventoryItem: { sku: v.sku, tracked: true },
         inventoryQuantities: [{ locationId: locations[0], availableQuantity: 0 }] }

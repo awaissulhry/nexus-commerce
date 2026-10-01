@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { planColourProducts } from '@nexus/shared/shopify-colour-products'
 const state = vi.hoisted(() => ({ db: null as any, d: null as any, family: null as any, remote: null as any, sizes: ['S', 'M'], order: ['S', 'M'],
-  calls: [] as string[], stock: [] as string[], failStock: '', lostCreate: false, gone: false, mode: 'live', next: 30, linked: 0 }))
+  calls: [] as string[], stock: [] as string[], failStock: '', lostCreate: false, gone: false, mode: 'live', next: 30, linked: 0, createdPrices: [] as string[] }))
 vi.mock('@nexus/database', async original => {
   const { formulaDatabase } = await import('../../../test-support/formula-database.js')
   state.db = await formulaDatabase()
@@ -31,6 +31,7 @@ function shopify(query: string, vars: any) {
     expect(vars.strategy).toBeUndefined() // The document explicitly preserves the standalone variant.
     expect(query).toContain('PRESERVE_STANDALONE_VARIANT')
     for (const v of vars.variants) {
+      state.createdPrices.push(v.price)
       expect(v.inventoryQuantities).toEqual([{ locationId: 'gid://shopify/Location/7', availableQuantity: 0 }])
       expect(v.inventoryPolicy).toBe('DENY')
       const id = String(state.next++)
@@ -116,6 +117,20 @@ it('creates a missing size at zero, saves exact IDs, reorders, then sends stock'
   expect(state.remote.options[0].values).toEqual(['XS', 'S', 'M'])
   expect((await rows()).find(r => r.product.sku.endsWith('-XS'))).toMatchObject({ platformAttributes: { variantId: '30', inventoryItemId: '30' }, isPublished: true })
   state.calls = []; await run(); expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
+})
+// Round 6 — a new size is created at the listing's send price (`listingSendPrice`), not the master price.
+it('🔴 creates a missing size following "master +10%" at 11.00 (it was the master 10); a FIXED one at 10.00', async () => {
+  state.sizes = ['XS', 'S', 'M']; state.order = ['XS', 'S', 'M']; state.createdPrices = []
+  const xs = state.family.variants.find((v: any) => v.optionsSize === 'XS')
+  await scoped(() => prisma.channelListing.create({ data: { productId: xs.productId, channel: 'SHOPIFY', channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', marketplace: 'GLOBAL',
+    channelConnectionId: state.d.accountId, aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: true, followMasterPrice: true, pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 10 } as never }))
+  await run()
+  expect(state.createdPrices).toEqual(['11.00'])
+})
+it('a missing size with no listing yet is created at the master price, in Shopify\'s two decimals ("10.00"; it sent "10")', async () => {
+  state.sizes = ['XS', 'S', 'M']; state.order = ['XS', 'S', 'M']; state.createdPrices = []
+  await run()
+  expect(state.createdPrices).toEqual(['10.00'])
 })
 it('recovers a create whose response was lost without a duplicate variant', async () => {
   state.sizes = ['XS', 'S', 'M']; state.order = ['XS', 'S', 'M']; state.lostCreate = true

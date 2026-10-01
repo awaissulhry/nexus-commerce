@@ -26,6 +26,7 @@ import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { mediaLayoutFor } from '../images/media-plan.service.js'
 import { applyMediaPlanToShopifyContent } from './media-plan-content.js'
 import type { ShopifyMediaLayout } from '@nexus/shared/media-plan-channels'
+import { NO_LISTING_PRICE_FACTS, listingMarketCurrency, listingSendPrice } from '../pim/follower-price.js'
 
 /**
  * Stable family keys in the explicitly selected order; omissions remain omitted. A Shopify-only option (P3b, slice A4 —
@@ -77,7 +78,7 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
     images: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true, url: true, alt: true, mediaType: true } },
   } })
   if (!family || family.parentId) throw new WorkspaceScopeError('The product family is unavailable or nested. Resolve the family hierarchy first.', 422)
-  const market = await tx.marketplace.findFirst({ where: { channel: 'SHOPIFY', code: destination.marketplace }, select: { channel: true, code: true, language: true, languages: true, schemaMapping: true } })
+  const market = await tx.marketplace.findFirst({ where: { channel: 'SHOPIFY', code: destination.marketplace }, select: { channel: true, code: true, language: true, languages: true, schemaMapping: true, currency: true } })
   const languages = marketLanguages('SHOPIFY', destination.marketplace, market ? [market] : [])
   const loadedListings = await tx.channelListing.findMany({ include: { translations: true, product: { include: { translations: true, parent: { include: { translations: true } } } } }, where: { productId: { in: [family.id, ...family.children.map(c => c.id)] }, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } })
   const storedListings = loadedListings.map(listing => ({ ...listing, languages }))
@@ -118,16 +119,23 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
   // Shared stock — a pooled product publishes the pool's number, not its business's own total. Kept
   // out of `family` so the review revision below does not change with every pool sale.
   const sellable = await sellableQuantity(tx, products)
+  // Round 6 — each variant's price is THE send price (`listingSendPrice`, the price door's rule): a pin's own price, a
+  // follower's rule price from the current master in the master currency, else the price it holds. It sent every
+  // following variant the master price, whatever its rule or its market's currency. Nothing to send is an error by name.
+  const marketCur = listingMarketCurrency({ channel: 'SHOPIFY', marketplace: destination.marketplace }, market ? [{ channel: market.channel, code: market.code, currency: market.currency }] : [])
+  const priceErrors: string[] = []
   const variants: ContentVariant[] = products.map(p => {
     const offer = listings.find(l => l.productId === p.id)
-    const price = offer && !offer.followMasterPrice ? offer.priceOverride ?? offer.price ?? p.basePrice : p.basePrice
+    const send = listingSendPrice(offer ?? NO_LISTING_PRICE_FACTS, { masterPrice: p.basePrice, marketCurrency: marketCur, where: `Shopify ${destination.marketplace}` })
+    if (send.price == null) priceErrors.push(`${p.sku}: ${send.reason}`)
+    const price = send.price == null ? '' : send.price.toFixed(2)
     const followed = sellable.get(p.id) ?? p.totalStock
     const stock = offer && !offer.followMasterQuantity ? offer.quantityOverride ?? offer.quantity ?? followed : followed
     const compareAtPrice = nativeListingValue(offer, 'compareAtPrice')
     return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: withShopifyOwnOptions({ ...variationBag({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }) as Record<string, string>, ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, ownOptionKeys, p.categoryAttributes), price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
   })
   const revision = digest([family, market?.schemaMapping, mediaFiles, listings.map(l => [l.id, l.version, l.platformAttributes, l.priceOverride, l.quantityOverride, l.price, l.quantity, l.followMasterPrice, l.followMasterQuantity, l.stockBuffer])])
-  const errors = [...inspectShopifyContent(draft, variants), ...shopifyOptionValueProblems(draft, variants)]
+  const errors = [...priceErrors, ...inspectShopifyContent(draft, variants), ...shopifyOptionValueProblems(draft, variants)]
   if (!family.children.length && (family.isParent || family.isMaster)) errors.push('This family has no sellable child products. Add its variants before publishing.')
   return { family, listing, listings, variants, draft, revision, storedDocumentRevision: digest(pa[CONTENT_KEY]), publish, errors, destination }
 }

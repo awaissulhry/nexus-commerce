@@ -53,7 +53,7 @@ import { storedCompareAt, withCompareAt } from './compare-at-price.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL, pricingRuleLabel, roundCents, type PricingRuleName } from '@nexus/shared/listing-price'
 import {
   FOLLOWER_PRICE_HOLD_MS, HELD_PRICE_CODES, HELD_PRICE_ROWS, computeListingPrice, followerPricePayload, heldPriceCode, heldPriceRowData, heldPriceSentence,
-  heldSentence, holdsCascadedPrice, listingMarketCurrency, logMasterCurrencyRefusals, masterCurrencyRefusal, type MasterCurrencyRefusal,
+  heldSentence, holdsCascadedPrice, listingMarketCurrency, listingSendPrice, logMasterCurrencyRefusals, masterCurrencyRefusal, type MasterCurrencyRefusal,
 } from './follower-price.js'
 import { masterCurrency } from '../fx-rate.service.js'
 import { boundsApply, priceBoundsOf, storedPriceReason, zeroPriceReason } from '../price-bounds.service.js'
@@ -435,8 +435,11 @@ export async function writeChannelPrices(input: {
         // Match Amazon and a market in another currency send the price they hold; that is not a refusal here.
         currencyRefusal = null
         notSent = undefined
-        resendPrice = follower ? follower.next : wasFollowing ? currentPrice : (currentOverride ?? currentPrice)
-        if (resendPrice == null) { refuse(`${who} holds no price to send.`); continue targets }
+        // Round 6 — THE send price (`listingSendPrice`), the one every publisher and sender asks: a pin's own price, a
+        // follower's rule price in the master currency (the same number `follower.next` holds here), else what it holds.
+        const send = listingSendPrice(l, { masterPrice: basePrice, marketCurrency: listingMarketCurrency(l, currencyRows), masterCurrency: master, where: `${l.channel} ${l.marketplace}` })
+        resendPrice = send.price
+        if (resendPrice == null) { refuse(`${who}: nothing was sent — ${send.reason}`); continue targets }
         if (zeroPriceReason(resendPrice)) { refuse(`${who}: nothing was sent — it holds ${resendPrice.toFixed(2)}, and a price must be above 0.`); continue targets }
         const outside = boundsSpeak ? storedPriceReason(resendPrice, priceBoundsOf(l.product ?? {})) : null
         if (outside) { refuse(`${who}: nothing was sent — ${outside}. Change the price, or the floor or ceiling on the product.`); continue targets }
@@ -477,7 +480,7 @@ export async function writeChannelPrices(input: {
       const queues = !input.recordOnly && (sendsPrice || saleChanges) && !held
       // Round 5 — a change kept in Nexus by the hold is written as a held row, sent once on resume or publish.
       const heldCode = input.recordOnly || queues || t.resend ? null
-        : heldPriceCode(l, { pin: priceChanges, sale: saleChanges, followerPrice: follower?.store ? follower.next : null, masterPrice: basePrice })
+        : heldPriceCode(l, { pin: priceChanges, sale: saleChanges, followerPrice: follower?.store ? follower.next : null })
       if (queues && saleChanges && effectivePrice == null) {
         // Amazon replaces the offer with what the row carries: a sale sent with no price would drop the sale (and the price).
         refuse(`${who}: the sale was not set — a sale is sent with the listing's price, and this listing holds none${marketIsMaster ? '' : ` in ${listingMarketCurrency(l, currencyRows) ?? 'its market currency'} (the master price is in ${master}; Nexus does not convert it)`}. Set the listing's own price first. Nothing was changed.`)

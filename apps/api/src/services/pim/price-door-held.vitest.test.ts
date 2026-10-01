@@ -232,20 +232,22 @@ describe('🔴 a change made while a live listing is paused is sent ONCE when it
 })
 
 describe('🔴 a draft\'s held change is sent ONCE when it goes live — only what its publication does not carry', () => {
-  it('a following draft at master +10%: the master change is held (Publish sends the master, not 13.20) and sent once at go-live', () => scoped(async () => {
+  it('round 6 — a following draft at master +10%: nothing is held; Publish itself carries its rule price (13.20), so the go-live sends nothing more', () => scoped(async () => {
     const l = await seed('held-draft-percent', { rule: 'PERCENT_OF_MASTER', adj: 10, draft: true })
     await new MasterPriceService(prisma as never).update(l.productId, 12, { reason: 'test' })
     expect(Number((await listing(l.id)).price)).toBe(13.2)
-    expect(await pending(l.id)).toEqual([])
-    expect((await held(l.id)).map((row) => row.errorCode)).toEqual(['PRICE_HELD_DRAFT'])
-    // Still a draft: a resume of its pause sends nothing (only Publish sends a draft).
+    // Publish sends `listingSendPrice` (`studio-publication-send-price.vitest.test.ts`): the rule's 13.20 goes out once, with it.
+    expect(await priceRows(l.id)).toEqual([])
     expect((await resume(l)).heldPricesSent).toBe(0)
-    expect(await held(l.id)).toHaveLength(1)
+    expect((await goLive(l)).sent).toEqual([])
+    expect(await priceRows(l.id)).toEqual([])
+  }))
 
-    expect((await goLive(l)).sent).toEqual([l.id])
-    expect((await pending(l.id)).map((row) => (row.payload as { price: number }).price)).toEqual([13.2])
-    expect((await sendHeldPrices({ listingIds: [l.id], actor: 'person-2', cause: 'publish' })).sent).toEqual([])
-    expect(await pending(l.id)).toHaveLength(1)
+  it('a sale on an eBay draft is not held: eBay\'s sender sends no sale, so the go-live would only send the price again', () => scoped(async () => {
+    const l = await seed('held-draft-ebay-sale', { channel: 'EBAY', pinned: 30, draft: true })
+    const r = await write({ listingId: l.id, sale: SALE, expectedVersion: l.version })
+    expect(r.results[0]).toMatchObject({ outcome: 'applied', queueId: null })
+    expect(await priceRows(l.id)).toEqual([])
   }))
 
   it('a sale on a pinned draft is held and sent once at go-live, with the pinned price', () => scoped(async () => {

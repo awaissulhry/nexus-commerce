@@ -157,3 +157,27 @@ describe('the eBay studio builder — Title and ItemSpecifics', () => {
     await expect((builder as any).buildEbayListingInput(fixture(), { currency: 'EUR' })).rejects.toThrow(/also used by products outside this selection/)
   })
 })
+
+// ── Round 6 (2026-10-01) — each variation goes out at the listing's send price (`listingSendPrice`) ──────────────────
+describe('🔴 the eBay studio builder sends each variation its send price, never the master for a follower', () => {
+  /** The StartPrice of the variation with this SKU, from the XML eBay receives. */
+  const startPrice = (xml: string, sku: string) => {
+    const block = xml.split('<Variation>').find(part => part.includes(`<SKU>${sku}</SKU>`))
+    return block?.match(/<StartPrice[^>]*>([\d.]+)<\/StartPrice>/)?.[1]
+  }
+  it('a variation at "master +10%" goes out at 108.9 (it went out at the master 99); a FIXED one at 99; a pin at its own', async () => {
+    const facts = fixture()
+    facts.listings[1] = listing('c1', {}, { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 10, price: 108.9 })
+    facts.listings[2] = listing('c2', {}, { followMasterPrice: false, priceOverride: 95, price: 95 })
+    const plan = await builder.prepareEbayPublication(facts)
+    expect([startPrice(plan.xml, 'FAM-NERO-M'), startPrice(plan.xml, 'FAM-NERO-L')]).toEqual(['108.9', '95'])
+    const fixed = await builder.prepareEbayPublication(fixture())
+    expect([startPrice(fixed.xml, 'FAM-NERO-M'), startPrice(fixed.xml, 'FAM-NERO-L')]).toEqual(['99', '99'])
+  })
+  it('🔴 on eBay UK (GBP) a follower that holds no price is refused by name — the EUR master number is never sent as pounds', async () => {
+    const facts = fixture()
+    facts.scope.marketplace = 'UK'; facts.destination.currency = 'GBP'
+    await expect(builder.prepareEbayPublication(facts)).rejects.toThrow(
+      'FAM-NERO-M: eBay UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.')
+  })
+})

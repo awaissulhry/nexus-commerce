@@ -343,7 +343,7 @@ export class MasterPriceService {
             idempotencyKey: ctx.idempotencyKey ?? null,
           })
           if (holdsCascadedPrice(listing)) {
-            const code = heldPriceCode(listing, { pin: false, sale: false, followerPrice: newListingPrice, masterPrice: rounded })
+            const code = heldPriceCode(listing, { pin: false, sale: false, followerPrice: newListingPrice })
             if (code) heldRowsToCreate.push(heldPriceRowData({ ...listing, productId }, code, payload) as Prisma.OutboundSyncQueueCreateManyInput)
             continue
           }
