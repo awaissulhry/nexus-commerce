@@ -342,8 +342,11 @@
   text-transform: uppercase; letter-spacing: 0.03em;
   border: 1px solid var(--nds-grey-150); background: var(--nds-grey-75); color: var(--nds-grey-600); white-space: nowrap;
 }
-.ap-plabel.l-accepted { background: #f1faf5; border-color: #c3e5d3; color: var(--nds-success-text); }
-.ap-plabel.l-rejected { background: #fdf2f2; border-color: #e6bcba; color: var(--nds-danger-text); }
+/* 2026-10-01 — `-strong`, not `-text`: both pins (the ads shell, and the fleet's `.fleet-surface` +
+   approvals' `.aq-page`) hold the -strong tokens light, but not -text, which `.dark` turned light green /
+   pink on these light grounds (1.44:1 on /fleet/approvals). 4.71:1 and 6.87:1 on the grounds below. */
+.ap-plabel.l-accepted { background: #f1faf5; border-color: #c3e5d3; color: var(--nds-success-strong); }
+.ap-plabel.l-rejected { background: #fdf2f2; border-color: #e6bcba; color: var(--nds-danger-strong); }
 .ap-ptext {
   min-width: 0; font-size: 12px; color: #46525f; line-height: 1.5;
   display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere;
