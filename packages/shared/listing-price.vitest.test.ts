@@ -5,7 +5,37 @@ import {
   followerListingPrice,
   normalisePricingRule,
   pricingRuleLabel,
+  roundCents,
 } from './listing-price'
+
+describe('roundCents — the one cents rounding', () => {
+  it('🔴 a half cent the float hides rounds up: 1.005 → 1.01, 1.015 → 1.02, 2.675 → 2.68', () => {
+    // `Math.round(n * 100) / 100` gives 1.00, 1.01 and 2.67 here: `n * 100` lands just below the half.
+    expect(roundCents(1.005)).toBe(1.01)
+    expect(roundCents(1.015)).toBe(1.02)
+    expect(roundCents(2.675)).toBe(2.68)
+    expect(roundCents(8.345)).toBe(8.35)
+  })
+
+  it('a product of floats lands on the cent it means', () => {
+    expect(roundCents(0.1 + 0.2)).toBe(0.3)
+    expect(roundCents(10 * 1.1)).toBe(11)
+    expect(roundCents(19.99 * 1.075)).toBe(21.49)
+    expect(roundCents(123456.785)).toBe(123456.79)
+  })
+
+  it('below a half cent stays down; whole numbers and zero are unchanged', () => {
+    expect(roundCents(1.0049)).toBe(1)
+    expect(roundCents(1.00499999)).toBe(1)
+    expect(roundCents(0)).toBe(0)
+    expect(roundCents(42)).toBe(42)
+  })
+
+  it('🔴 the follower price uses it: master 10 at +0.05% is 10.01, not the float 10.00', () => {
+    expect(followerListingPrice(10, 'PERCENT_OF_MASTER', 0.05)).toBe(10.01)
+    expect(followerListingPrice(1.005, 'FIXED', null)).toBe(1.01)
+  })
+})
 
 describe('followerListingPrice — the one rule maths', () => {
   it('FIXED follows the master; PERCENT_OF_MASTER applies the percent; MATCH_AMAZON takes no master price', () => {

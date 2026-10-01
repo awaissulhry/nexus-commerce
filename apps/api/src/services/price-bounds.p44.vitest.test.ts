@@ -6,12 +6,13 @@
  *   B. the loader reads only what it needs and never blocks a send by failing;
  *   C. every send lane asks — a derived census, so a fourth lane is covered.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { priceBoundsRefusal } from './price-bounds.service.js'
 
+// The bounds are master-currency numbers; these arms price in the master currency (EUR). The currency arms are below.
 const at = (price: number | null | undefined, minPrice: number | null, maxPrice: number | null) =>
-  priceBoundsRefusal({ price, bounds: { minPrice, maxPrice }, channel: 'Amazon', sku: 'SKU-1' })
+  priceBoundsRefusal({ price, bounds: { minPrice, maxPrice }, channel: 'Amazon', sku: 'SKU-1', currency: 'EUR', masterCurrency: 'EUR' })
 
 // ── A. the verdict ──────────────────────────────────────────────────────────
 describe('P4.4c priceBoundsRefusal', () => {
@@ -65,9 +66,20 @@ describe('P4.4c priceBoundsRefusal', () => {
   })
 
   it('the sku is optional and the sentence still reads', () => {
-    const refusal = priceBoundsRefusal({ price: 1, bounds: { minPrice: 5, maxPrice: null }, channel: 'eBay' })
+    const refusal = priceBoundsRefusal({ price: 1, bounds: { minPrice: 5, maxPrice: null }, channel: 'eBay', currency: 'EUR', masterCurrency: 'EUR' })
     expect(refusal).toContain('Nothing was sent to eBay:')
     expect(refusal).not.toContain('for ')
+  })
+
+  it('🔴 refuse, don\'t convert: a price in another currency is never compared with the master-currency bounds', () => {
+    // 120 GBP is not "above a ceiling of 100" EUR, and 79 SEK is not "below a floor of 85" EUR.
+    const bounds = { minPrice: 85, maxPrice: 100 }
+    expect(priceBoundsRefusal({ price: 120, bounds, channel: 'eBay', currency: 'GBP', masterCurrency: 'EUR' })).toBeNull()
+    expect(priceBoundsRefusal({ price: 79, bounds, channel: 'Amazon', currency: 'SEK', masterCurrency: 'EUR' })).toBeNull()
+    // No configured currency is not the master currency either: the send refuses that market on its own ground.
+    expect(priceBoundsRefusal({ price: 120, bounds, channel: 'Amazon', currency: null, masterCurrency: 'EUR' })).toBeNull()
+    // Control: the same 120 in EUR is refused.
+    expect(priceBoundsRefusal({ price: 120, bounds, channel: 'eBay', currency: 'EUR', masterCurrency: 'EUR' })).toContain('above the pricing ceiling')
   })
 })
 
@@ -79,8 +91,18 @@ const m = vi.hoisted(() => {
   // copies the function by value at module-eval time and cannot be changed after.
   return { findUnique, model: { findUnique } as unknown }
 })
-vi.mock('../db.js', () => ({ default: { get product() { return m.model } } }))
-const { loadPriceBounds, priceRefusalFor } = await import('./price-bounds.service.js')
+// The market's currency comes from its Marketplace row (P4.4a); IT sells in EUR, UK in GBP.
+const mk = vi.hoisted(() => {
+  const markets = [{ channel: 'AMAZON', code: 'IT', currency: 'EUR' }, { channel: 'EBAY', code: 'UK', currency: 'GBP' }]
+  return { marketplace: { findFirst: async ({ where }: { where: { channel: string; code: string } }) => markets.find((r) => r.channel === where.channel && r.code === where.code) ?? null } }
+})
+vi.mock('../db.js', () => ({ default: { get product() { return m.model }, marketplace: mk.marketplace } }))
+const IT = { channel: 'AMAZON', marketplace: 'IT' }
+const UK = { channel: 'EBAY', marketplace: 'EBAY_GB' }
+// Loaded after the mock above (no top-level await: the API's tsconfig targets ES2020 modules).
+let loadPriceBounds: typeof import('./price-bounds.service.js').loadPriceBounds
+let priceRefusalFor: typeof import('./price-bounds.service.js').priceRefusalFor
+beforeAll(async () => ({ loadPriceBounds, priceRefusalFor } = await import('./price-bounds.service.js')))
 
 describe('P4.4c loadPriceBounds / priceRefusalFor', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -99,7 +121,7 @@ describe('P4.4c loadPriceBounds / priceRefusalFor', () => {
   it('🔴 a row with NO price never touches the database', async () => {
     // A content or quantity push must not pay for this guard, and must not fail
     // because of it.
-    expect(await priceRefusalFor({ price: undefined, productId: 'p-1', channel: 'Amazon' })).toBeNull()
+    expect(await priceRefusalFor({ price: undefined, productId: 'p-1', channel: 'Amazon', market: IT })).toBeNull()
     expect(m.findUnique).not.toHaveBeenCalled()
   })
 
@@ -121,7 +143,7 @@ describe('P4.4c loadPriceBounds / priceRefusalFor', () => {
     m.findUnique.mockRejectedValue(new Error('connection reset'))
     expect(await loadPriceBounds('p-1')).toEqual({ minPrice: null, maxPrice: null })
     m.findUnique.mockRejectedValue(new Error('connection reset'))
-    expect(await priceRefusalFor({ price: 1, productId: 'p-1', channel: 'Amazon' })).toBeNull()
+    expect(await priceRefusalFor({ price: 1, productId: 'p-1', channel: 'Amazon', market: IT })).toBeNull()
   })
 
   it('a missing product id is "no bounds", and asks nothing', async () => {
@@ -131,8 +153,18 @@ describe('P4.4c loadPriceBounds / priceRefusalFor', () => {
 
   it('end to end: a price under the floor is refused', async () => {
     m.findUnique.mockResolvedValue({ minPrice: '85.00', maxPrice: null })
-    expect(await priceRefusalFor({ price: 79.99, productId: 'p-1', channel: 'Amazon', sku: 'S' }))
+    expect(await priceRefusalFor({ price: 79.99, productId: 'p-1', channel: 'Amazon', sku: 'S', market: IT }))
       .toContain('below the pricing floor of 85')
+  })
+
+  it('🔴 end to end: a GBP market\'s price is not held to the EUR bounds, and the bounds are not even read', async () => {
+    m.findUnique.mockResolvedValue({ minPrice: null, maxPrice: '100.00' })
+    expect(await priceRefusalFor({ price: 120, productId: 'p-1', channel: 'eBay', sku: 'S', market: UK })).toBeNull()
+    expect(m.findUnique).not.toHaveBeenCalled()
+    // A market with no currency configured: the same (the send refuses it by its own rule, P4.4a).
+    expect(await priceRefusalFor({ price: 120, productId: 'p-1', channel: 'Amazon', sku: 'S', market: { channel: 'AMAZON', marketplace: 'XX' } })).toBeNull()
+    // Control: the same price on the EUR market is refused.
+    expect(await priceRefusalFor({ price: 120, productId: 'p-1', channel: 'Amazon', sku: 'S', market: IT })).toContain('above the pricing ceiling of 100')
   })
 })
 

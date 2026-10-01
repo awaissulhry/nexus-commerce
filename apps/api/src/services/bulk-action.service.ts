@@ -377,8 +377,9 @@ export function marketplaceOverridePlan(payload: Record<string, any>): Marketpla
     if (v === undefined) {
       throw new BulkActionInputError('priceOverride must be a number, or null to follow the master price again.');
     }
-    if (v !== null && (!Number.isFinite(v) || v < 0)) {
-      throw new BulkActionInputError('priceOverride must be zero or more.');
+    // A typed price is above 0, as the price door requires (2026-10-01; 0 used to be accepted here).
+    if (v !== null && (!Number.isFinite(v) || v <= 0)) {
+      throw new BulkActionInputError('priceOverride must be above 0.');
     }
     price = v;
   }

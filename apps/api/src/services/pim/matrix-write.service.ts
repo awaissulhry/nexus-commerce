@@ -60,6 +60,8 @@ import { canonical } from './import-diff.service.js'
 import { setFulfillmentMethod, type FulfilmentWrite } from './fulfillment-method.service.js'
 import { writeChannelPrices } from './channel-price-write.service.js'
 import { getMatrixRead } from './matrix.service.js'
+import { roundCents } from '@nexus/shared/listing-price'
+import type { ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
 
 export interface DoorContext {
@@ -74,7 +76,7 @@ const OP_KIND = 'studio-matrix-verb'
 
 /* ── the read, and the listing rows a coordinate stands for ─────────────────────────────────── */
 
-interface Target { id: string; marketplace: string; version: number }
+export interface Target { id: string; marketplace: string; version: number }
 type Located = { row: MatrixRowRead; coord: MatrixCoordinate; cells: MatrixCells }
 
 function locate(read: MatrixRead, rowId: string, key: CoordinateKey): Located | null {
@@ -113,7 +115,8 @@ async function bumpAll(tx: Prisma.TransactionClient, targets: readonly Target[],
   return true
 }
 
-class Conflict extends Error { constructor(readonly version: number) { super('conflict') } }
+/** A compare-and-set lost to another write; carries the listing's CURRENT version. */
+export class Conflict extends Error { constructor(readonly version: number) { super('conflict') } }
 
 async function bumpTx(targets: readonly Target[], extra?: Prisma.ChannelListingUpdateManyMutationInput): Promise<void> {
   await prisma.$transaction(async (tx) => {
@@ -122,6 +125,32 @@ async function bumpTx(targets: readonly Target[], extra?: Prisma.ChannelListingU
 }
 
 const asInt = (v: unknown): number | null => { const n = typeof v === 'number' ? v : Number(v); return Number.isInteger(n) ? n : null }
+
+/**
+ * The quantity PIN of the matrix's Qty cell (D-MX3) — ONE implementation for every screen that types a listing's
+ * quantity (the Studio matrix, the listings grid, 2026-10-01), so the two cannot drift:
+ *   1. Owner rule: FBA quantity is untouchable. Any Amazon-managed target refuses the whole write BEFORE anything is
+ *      staged (`amazonManagedListingIds`, the primitive's own verdict), so neither the FBA row nor half of an EU group
+ *      is written. `staged: false`.
+ *   2. The typed value is staged into `quantity` on EVERY target under CAS (a lost one throws `Conflict`).
+ *   3. The PIN primitive (`setFollowMasterQuantity`, follow=false) snapshots exactly that value into the three
+ *      quantity columns and queues the QUANTITY_UPDATE. A target it still skips as FBA refuses with `staged: true`.
+ * `coordinates` narrows the PIN to exactly the target listings (the grid); the matrix narrows by its markets.
+ */
+export async function pinTypedQuantity(input: {
+  productId: string
+  channel: string
+  targets: readonly Target[]
+  quantity: number
+  actor: string
+  coordinates?: ListingCoordinate[]
+}): Promise<{ refused?: string; staged?: boolean }> {
+  if (input.channel === 'AMAZON' && (await amazonManagedListingIds(input.targets.map((t) => t.id))).size > 0) return { refused: MATRIX_COPY.amazonManaged, staged: false }
+  await bumpTx(input.targets, { quantity: input.quantity })
+  const r = await setFollowMasterQuantity({ productIds: [input.productId], channel: input.channel as 'AMAZON' | 'EBAY', markets: input.targets.map((t) => t.marketplace), follow: false, actor: input.actor, ...(input.coordinates ? { coordinates: input.coordinates } : {}) })
+  if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { refused: MATRIX_COPY.amazonManaged, staged: true }
+  return {}
+}
 
 /* ── one cell through the door ──────────────────────────────────────────────────────────────── */
 
@@ -170,11 +199,10 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         /* A pinned row's value is `intended` when the resolver speaks and `held` (the lockstep-written quantity) under a
            pause — measured in the rehearsal: comparing `intended` alone spent a version on a re-pin of a paused row. */
         if (s.mode === 'PINNED' && (s.intended ?? s.held) === n) return noop()
-        if (await amazonManaged()) return managedRefusal()
-        /* D-MX3: the typed value is staged into `quantity` under CAS; the PIN primitive snapshots exactly that. */
-        await bumpTx(targets, { quantity: n })
-        const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: false, actor: ctx.actor })
-        if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version + 1 }
+        /* D-MX3: the typed value is staged into `quantity` under CAS; the PIN primitive snapshots exactly that —
+           `pinTypedQuantity`, the one implementation the listings grid uses too. */
+        const pinned = await pinTypedQuantity({ productId: row.id, channel, targets, quantity: n, actor: ctx.actor })
+        if (pinned.refused) return pinned.staged ? { ...base, outcome: 'refused', reason: pinned.refused, version: cells.version + 1 } : managedRefusal()
         return applied()
       }
       case 'syncBuffer': {
@@ -204,8 +232,9 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const p = cells.price; if (!p) return refuse('This coordinate has no price')
         if (!ctx.can(PRICE_PERMISSION)) return refuse(PRICE_PERMISSION_REASON)
         const v = w.value === null ? null : typeof w.value === 'number' ? w.value : Number(w.value)
-        if (v !== null && (!Number.isFinite(v) || v < 0)) return refuse('A price is zero or more')
-        const rounded = v === null ? null : Math.round(v * 100) / 100
+        // A typed price is above 0, as the price door requires (2026-10-01); rounded with the one cents helper.
+        if (v !== null && (!Number.isFinite(v) || v <= 0)) return refuse('A price must be above 0')
+        const rounded = v === null ? null : roundCents(v)
         if (rounded !== null && p.value === rounded && p.source === 'override') return noop()
         if (rounded === null && p.source === 'master') return noop()
         /* A-17 (R-12): this read passed the version check above, so its price is the one the operator saw. A verb

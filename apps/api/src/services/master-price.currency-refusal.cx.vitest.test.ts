@@ -20,11 +20,11 @@ const listing = (id: string, channel: string, marketplace: string, extra: Partia
   ({ id, channel, region: marketplace, marketplace, externalListingId: null, price: 10, masterPrice: 10, pricingRule: 'FIXED', priceAdjustmentPercent: null, followMasterPrice: true, ...extra })
 const MARKETS = [{ channel: 'EBAY', code: 'IT', currency: 'EUR' }, { channel: 'EBAY', code: 'UK', currency: 'GBP' }, { channel: 'AMAZON', code: 'DE', currency: 'EUR' }, { channel: 'AMAZON', code: 'SE', currency: '' }]
 
-function fakeClient(listings: Listing[]) {
+function fakeClient(listings: Listing[], productExtra: Record<string, unknown> = {}) {
   const listingUpdates: Array<{ id: string; data: Record<string, unknown> }> = []
   const audits: Array<Record<string, any>> = []
   const tx = {
-    product: { findUnique: vi.fn(async () => ({ id: 'p1', basePrice: 10, sku: 'SKU-P1' })), update: vi.fn(async () => ({})) },
+    product: { findUnique: vi.fn(async () => ({ id: 'p1', basePrice: 10, sku: 'SKU-P1', ...productExtra })), update: vi.fn(async () => ({})) },
     channelListing: { findMany: vi.fn(async () => listings), update: vi.fn(async ({ where, data }: any) => { listingUpdates.push({ id: where.id, data }); return {} }) },
     marketplace: { findMany: vi.fn(async () => MARKETS) },
     outboundSyncQueue: { findMany: vi.fn(async ({ where }: any) => (where.channelListingId.in as string[]).map((id) => ({ id: `q-${id}` }))) },
@@ -91,5 +91,28 @@ describe('master price cascade — a different-currency market is refused, never
     h.logConflict.mockRejectedValue(new Error('db down'))
     const f = fakeClient([listing('L-UK', 'EBAY', 'UK')])
     await expect(new MasterPriceService(f.client).update('p1', 20)).resolves.toMatchObject({ changed: true })
+  })
+})
+
+describe('master price cascade — a follower price outside the product\'s floor or ceiling is not stored or sent (2026-10-01)', () => {
+  it('🔴 as the price door refuses it at the edit: the listing keeps its price, gets only the snapshot, is not queued, and the refusal is recorded', async () => {
+    // Master 10 → 19.90; ceiling 21: FIXED follows at 19.90 (sent), PERCENT +10 would be 21.89 (refused).
+    const f = fakeClient([listing('L-FIX', 'EBAY', 'IT'), listing('L-PCT', 'AMAZON', 'DE', { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 10, price: 11 })], { maxPrice: 21 })
+    const r = await new MasterPriceService(f.client).update('p1', 19.9)
+    expect(r.cascadedListingIds).toEqual(['L-FIX'])
+    expect(queued().map((row) => row.channelListingId)).toEqual(['L-FIX'])
+    expect(f.listingUpdates.find((u) => u.id === 'L-PCT')?.data).toEqual({ masterPrice: '19.90' })
+    expect(r.boundsRefused).toEqual([{ listingId: 'L-PCT', channel: 'AMAZON', marketplace: 'DE', price: 21.89, reason: '21.89 is above its pricing ceiling of 21.00' }])
+    expect(f.audits[0].metadata).toMatchObject({ boundsRefusedListingIds: ['L-PCT'] })
+    const logged = h.logConflict.mock.calls.map((c) => c[0]).filter((c) => c.conflictType === 'MASTER_PRICE_BOUNDS_REFUSED')
+    expect(logged).toHaveLength(1)
+    expect(logged[0].message).toContain('the listing would follow it at 21.89, but 21.89 is above its pricing ceiling of 21.00')
+  })
+
+  it('a GBP market is refused for its currency only, never compared with the EUR bounds', async () => {
+    const f = fakeClient([listing('L-UK', 'EBAY', 'UK', { price: 17 })], { maxPrice: 15 })
+    const r = await new MasterPriceService(f.client).update('p1', 19.9)
+    expect(r.boundsRefused).toEqual([])
+    expect(r.currencyRefused.map((x) => x.listingId)).toEqual(['L-UK'])
   })
 })

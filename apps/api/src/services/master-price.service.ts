@@ -77,12 +77,14 @@ import prisma from '../db.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { masterCurrency } from './fx-rate.service.js'
+import { roundCents } from '@nexus/shared/listing-price'
 import { type MarketCurrencyRow } from './pim/market-currency.js'
 // The follower rules the channel price door applies too — one module, so the cascade and the door cannot drift.
 import {
-  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, holdsCascadedPrice, listingMarketCurrency,
-  logMasterCurrencyRefusals, type MasterCurrencyRefusal,
+  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerBoundsReason, followerPricePayload, holdsCascadedPrice, listingMarketCurrency,
+  logFollowerBoundsRefusals, logMasterCurrencyRefusals, type FollowerBoundsRefusal, type MasterCurrencyRefusal,
 } from './pim/follower-price.js'
+import { priceBoundsOf } from './price-bounds.service.js'
 export { computeListingPrice, holdsCascadedPrice }
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
@@ -124,6 +126,8 @@ export interface MasterPriceUpdateResult {
   queuedSyncIds: string[]
   /** Listings NOT sent the master price because their market's currency is not the master currency (null = not configured). */
   currencyRefused: MasterCurrencyRefusal[]
+  /** Listings NOT sent the follower price because it is outside the product's floor or ceiling, or not above 0. */
+  boundsRefused: FollowerBoundsRefusal[]
   /** AuditLog row id. */
   auditLogId: string | null
 }
@@ -144,11 +148,9 @@ interface ChannelListingForCascade {
   isPublished: boolean
 }
 
-function roundCurrency(value: number): number {
-  // ChannelListing.price is Decimal(10, 2). Round to 2dp to avoid Prisma rejecting
-  // a value like 19.99000000000004 from a JS float multiply.
-  return Math.round(value * 100) / 100
-}
+// ChannelListing.price is Decimal(10, 2): the one cents rounding (`@nexus/shared/listing-price`), the same the price
+// door, the agent tools and the screens use, so 1.005 is 1.01 everywhere.
+const roundCurrency = roundCents
 
 export class MasterPriceService {
   constructor(private readonly client: PrismaClient = prisma) {}
@@ -182,7 +184,7 @@ export class MasterPriceService {
     ): Promise<MasterPriceUpdateResult> => {
       const product = await tx.product.findUnique({
         where: { id: productId },
-        select: { id: true, basePrice: true, sku: true },
+        select: { id: true, basePrice: true, sku: true, minPrice: true, maxPrice: true },
       })
       if (!product) {
         throw new Error(`MasterPriceService.update: product ${productId} not found`)
@@ -202,6 +204,7 @@ export class MasterPriceService {
           snapshottedListingIds: [],
           queuedSyncIds: [],
           currencyRefused: [],
+          boundsRefused: [],
           auditLogId: null,
         }
       }
@@ -237,6 +240,7 @@ export class MasterPriceService {
       const cascadedListingIds: string[] = []
       const snapshottedListingIds: string[] = []
       const currencyRefused: MasterPriceUpdateResult['currencyRefused'] = []
+      const boundsRefused: MasterPriceUpdateResult['boundsRefused'] = []
       const master = masterCurrency()
       let currencyRows: MarketCurrencyRow[] | null = null
       /** The listing market's configured currency, or null (not configured → never the master currency). */
@@ -264,8 +268,16 @@ export class MasterPriceService {
         if (listingCurrency !== master) {
           currencyRefused.push({ listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace, currency: listingCurrency, masterCurrency: master })
         }
+        // 2026-10-01 — as the channel price door refuses it at the edit: a follower price outside the product's own floor
+        // or ceiling (master-currency numbers; this listing sells in the master currency here), or not above 0, is
+        // neither stored nor queued. The listing keeps its price; the refusal is recorded like the currency refusal.
+        const outOfBounds = newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master
+          ? followerBoundsReason(newListingPrice, priceBoundsOf(product)) : null
+        if (outOfBounds) {
+          boundsRefused.push({ listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace, price: newListingPrice!, reason: outOfBounds })
+        }
 
-        if (newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master) {
+        if (newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master && !outOfBounds) {
           // Real cascade: update both snapshot + computed price + flag for sync.
           await tx.channelListing.update({
             where: { id: listing.id },
@@ -363,6 +375,7 @@ export class MasterPriceService {
             snapshottedListingIds,
             queuedSyncIds,
             currencyRefusedListingIds: currencyRefused.map((r) => r.listingId),
+            boundsRefusedListingIds: boundsRefused.map((r) => r.listingId),
             graceMs: holdUntil
               ? holdUntil.getTime() - Date.now()
               : 0,
@@ -380,6 +393,7 @@ export class MasterPriceService {
         snapshottedListingIds,
         queuedSyncIds,
         currencyRefused,
+        boundsRefused,
         auditLogId: audit.id,
       }
     }
@@ -430,6 +444,10 @@ export class MasterPriceService {
     if (result.currencyRefused.length > 0) {
       logger.warn('MasterPriceService.update: master price not sent to a different-currency market', { productId, refused: result.currencyRefused })
       if (!ctx.tx) await logMasterCurrencyRefusals(productId, result.newBasePrice, result.currencyRefused)
+    }
+    if (result.boundsRefused.length > 0) {
+      logger.warn('MasterPriceService.update: a follower price outside the product\'s floor or ceiling was not sent', { productId, refused: result.boundsRefused })
+      if (!ctx.tx) await logFollowerBoundsRefusals(productId, result.newBasePrice, result.boundsRefused)
     }
 
     if (result.changed) {

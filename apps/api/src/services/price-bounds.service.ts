@@ -28,10 +28,24 @@
  */
 
 import prisma from '../db.js'
+import { masterCurrency } from './fx-rate.service.js'
+import { marketCurrency } from './pim/market-currency.js'
 
 export interface PriceBounds {
   minPrice: number | null
   maxPrice: number | null
+}
+
+/**
+ * 🔴 Refuse, don't convert (2026-10-01). `Product.minPrice` / `maxPrice` are numbers in the MASTER currency
+ * (NEXUS_MASTER_CURRENCY, EUR), like the master price itself. A price in another currency — a GBP, SEK or PLN
+ * market — is never compared with them: 120 GBP is not "above a ceiling of 100" EUR, and 80 SEK is not "below a
+ * floor of 85" EUR. Nor is it converted to be compared: an exchange rate is not a fact the operator set. So the
+ * floor and ceiling speak only to a price in the master currency; a market with no configured currency is not the
+ * master currency either (its send is refused on that ground, by `marketCurrency`, not here).
+ */
+export function boundsApply(currency: string | null | undefined, master: string): boolean {
+  return !!currency && currency.trim().toUpperCase() === master.trim().toUpperCase()
 }
 
 /**
@@ -44,11 +58,16 @@ export function priceBoundsRefusal(args: {
   bounds: PriceBounds
   channel: string
   sku?: string | null
+  /** The currency the price is in, and the master currency the bounds are in (`boundsApply`). */
+  currency: string | null
+  masterCurrency: string
 }): string | null {
   const price = args.price
   // No price on this row: nothing to check. A row with a nonsense price is a
   // different defect, refused by the channel's own validation.
   if (price === undefined || price === null || !Number.isFinite(price)) return null
+  // A price in another currency than the bounds': not compared, not converted (`boundsApply`).
+  if (!boundsApply(args.currency, args.masterCurrency)) return null
   const who = args.sku ? ` for ${args.sku}` : ''
   const { minPrice, maxPrice } = args.bounds
   // A floor ABOVE the ceiling is a contradiction the operator has to resolve; we
@@ -104,11 +123,19 @@ export async function priceRefusalFor(args: {
   productId: string | null | undefined
   channel: string
   sku?: string | null
+  /** The market the price is sent to (channel code + marketplace): its currency decides whether the bounds apply. */
+  market: { channel: string; marketplace: string | null | undefined }
 }): Promise<string | null> {
   // No read at all when the row carries no price — a content or quantity push
   // must not pay for this guard, and must not fail because of it.
   if (args.price === undefined || args.price === null) return null
-  return priceBoundsRefusal({ ...args, bounds: await loadPriceBounds(args.productId) })
+  // The market's currency, from its Marketplace row (P4.4a). An unreadable or unconfigured one is not the master
+  // currency, so the master-currency bounds are not applied to it (`boundsApply`); the send refuses it on its own.
+  let currency: string | null = null
+  try { currency = await marketCurrency(args.market.channel, String(args.market.marketplace ?? '')) } catch { currency = null }
+  const master = masterCurrency()
+  if (!boundsApply(currency, master)) return null
+  return priceBoundsRefusal({ price: args.price, channel: args.channel, sku: args.sku, currency, masterCurrency: master, bounds: await loadPriceBounds(args.productId) })
 }
 
 /**

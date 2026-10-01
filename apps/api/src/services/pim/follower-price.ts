@@ -14,6 +14,7 @@ import type { Prisma } from '@prisma/client'
 import { followerListingPrice } from '@nexus/shared/listing-price'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { marketCurrency, type MarketCurrencyRow } from './market-currency.js'
+import { masterPriceBoundsReason, type PriceBounds } from '../price-bounds.service.js'
 
 /** The operator's grace window before a follower price leaves: 30 s to undo (IS.2b). */
 export const FOLLOWER_PRICE_HOLD_MS = 30 * 1000
@@ -96,6 +97,43 @@ export async function logMasterCurrencyRefusals(productId: string | null, master
       productId: productId ?? undefined,
       localData: { masterPrice, masterCurrency: refusal.masterCurrency },
       remoteData: { listingId: refusal.listingId, marketplace: refusal.marketplace, marketCurrency: refusal.currency },
+    }).catch(() => { /* observability best-effort — the refusal already holds */ })
+  }
+}
+
+/** A follower price outside the product's own floor or ceiling, or not above 0: never stored, never sent. */
+export interface FollowerBoundsRefusal {
+  listingId: string
+  channel: string
+  marketplace: string
+  /** The follower price the rule gave. */
+  price: number
+  /** The clause: "11.00 is above its pricing ceiling of 10.50". */
+  reason: string
+}
+
+/**
+ * Why a follower price cannot be stored or sent, or `null`: not above 0, or outside the product's own floor/ceiling.
+ * Only for a market in the master currency (the bounds are master-currency numbers; refuse, don't convert) — the
+ * caller has already refused any other currency. The cascade and the door both ask this, so they cannot drift.
+ */
+export function followerBoundsReason(price: number, bounds: PriceBounds): string | null {
+  if (!(price > 0)) return `${price.toFixed(2)} is not above 0`
+  return masterPriceBoundsReason(price, bounds)
+}
+
+/** Record each refusal as a MASTER_PRICE_BOUNDS_REFUSED sync-health conflict, once the change is committed. Best effort. */
+export async function logFollowerBoundsRefusals(productId: string | null, masterPrice: number, refusals: readonly FollowerBoundsRefusal[]): Promise<void> {
+  if (!refusals.length) return
+  const { syncHealthService } = await import('../sync-health.service.js')
+  for (const refusal of refusals) {
+    await syncHealthService.logConflict({
+      channel: refusal.channel,
+      conflictType: 'MASTER_PRICE_BOUNDS_REFUSED',
+      message: `The master price ${masterPrice.toFixed(2)} was not sent to ${refusal.channel} ${refusal.marketplace}: the listing would follow it at ${refusal.price.toFixed(2)}, but ${refusal.reason}. Change the rule, or the floor or ceiling on the product. The listing keeps its price; nothing was queued.`,
+      productId: productId ?? undefined,
+      localData: { masterPrice, followerPrice: refusal.price },
+      remoteData: { listingId: refusal.listingId, marketplace: refusal.marketplace },
     }).catch(() => { /* observability best-effort — the refusal already holds */ })
   }
 }

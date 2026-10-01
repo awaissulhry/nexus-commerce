@@ -160,6 +160,21 @@ describe('PATCH /api/listings/:id — the listing drawer', () => {
     expect(await prices(l.id)).toEqual([12.5])
   })
 
+  it('🔴 a typed price above the product\'s EUR ceiling is refused at the edit; the same price on a GBP market is not compared', async () => {
+    const eur = await scoped(() => seed('patch-pin-eur', { product: { maxPrice: 20 } }))
+    const before = await listing(eur.id)
+    const refused = await patch(eur.id, { priceOverride: 25, expectedVersion: eur.version })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error).toContain('cannot be pinned at 25.00: 25.00 is above its pricing ceiling of 20.00')
+    expect(await listing(eur.id)).toEqual(before)
+    expect(await queued(eur.id)).toEqual([])
+    const gbp = await scoped(() => seed('patch-pin-gbp', { marketplace: 'UK', product: { maxPrice: 20 } }))
+    expect((await patch(gbp.id, { priceOverride: 25, expectedVersion: gbp.version })).statusCode).toBe(200)
+    expect(await prices(gbp.id)).toEqual([25])
+    // 0 is not a price.
+    expect((await patch(gbp.id, { priceOverride: 0 })).statusCode).toBe(400)
+  })
+
   it('a bad percent or rule is a 400 before anything is read or written; a version-less reset button still works', async () => {
     const l = await scoped(() => seed('patch-bad', { follow: false, price: 25, rule: 'PERCENT_OF_MASTER', adj: 10 }))
     for (const body of [{ priceAdjustmentPercent: -100 }, { priceAdjustmentPercent: 1.234 }, { pricingRule: 'CHEAPEST' }]) {
@@ -203,6 +218,14 @@ describe('POST /api/listings/bulk-action', () => {
     expect(await run('follow-master', [c.id])).toMatchObject({ status: 'COMPLETED' })
     expect(await listing(c.id)).toMatchObject({ followMasterPrice: true, followMasterTitle: true, followMasterQuantity: true })
     expect(await prices(c.id)).toEqual([11])
+  })
+
+  it('🔴 bulk Set price above a EUR ceiling fails that listing by name; 0 is a 400 before any job', async () => {
+    const l = await scoped(() => seed('bulk-pin-ceiling', { product: { maxPrice: 20 } }))
+    expect(await run('set-price', [l.id], { price: 25 })).toMatchObject({ status: 'FAILED', lastError: expect.stringContaining('above its pricing ceiling of 20.00') })
+    expect(await queued(l.id)).toEqual([])
+    const zero = await scoped(async () => app.inject({ method: 'POST', url: '/api/listings/bulk-action', payload: { action: 'set-price', listingIds: [l.id], payload: { price: 0 } } }))
+    expect(zero.statusCode).toBe(400)
   })
 
   it('a refusal fails that listing by name and writes nothing; a bad percent is a 400 before any job', async () => {
@@ -275,5 +298,17 @@ describe('the other writers send the computed price', () => {
     // The refused cell wrote nothing: still FIXED at 10 (its percent cell, alone, was written: a FIXED listing's price does not move).
     expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: refused.id } })).toMatchObject({ pricingRule: 'FIXED' })
     expect(await pending(refused.id)).toEqual([])
+  }))
+
+  it('🔴 the FF2 import\'s Products-sheet base price goes through the master-price writer: following listings are recomputed and queued', () => scoped(async () => {
+    const l = await seed('ff2-master', { rule: 'PERCENT_OF_MASTER', adj: 10, price: 11 })
+    const masterCell = { sku: 'FF2-MASTER', sheet: 'Products', channel: undefined, market: undefined, column: 'base_price', base: 'base_price', from: 10, to: '20', kind: 'update' } as unknown as CellChange
+    const result = await applyChanges(prisma, { changes: [], masterChanges: [masterCell], deletes: [], stats: { adds: 0, updates: 1, deletes: 0, conflicts: 0, outOfScope: 0 } } as ImportDiff,
+      { scope: { channel: 'EBAY', markets: ['DE'], includeMaster: true } as never, actor: 'person-1' })
+    expect(result).toMatchObject({ applied: 1, failed: 0 })
+    expect(Number((await prisma.product.findUniqueOrThrow({ where: { id: 'ff2-master' } })).basePrice)).toBe(20)
+    expect(Number((await prisma.channelListing.findUniqueOrThrow({ where: { id: l.id } })).price)).toBe(22)
+    const rows = await prisma.outboundSyncQueue.findMany({ where: { channelListingId: l.id, syncStatus: 'PENDING' } })
+    expect(rows.map((row) => [(row.payload as any).source, (row.payload as any).price])).toEqual([['MASTER_PRICE_CHANGE', 22]])
   }))
 })

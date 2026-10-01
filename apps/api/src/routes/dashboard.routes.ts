@@ -24,7 +24,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { writeChannelPrices } from '../services/pim/channel-price-write.service.js'
 import { bulkActorOf } from '../services/bulk-action-actor.js'
-import { followerListingPrice } from '@nexus/shared/listing-price'
+import { followerListingPrice, roundCents } from '@nexus/shared/listing-price'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
@@ -3434,7 +3434,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       const priceDrifts = priceCandidates.flatMap((row) => {
         const expectedPrice = followerListingPrice(row.masterPrice, row.pricingRule, row.priceAdjustmentPercent)
         if (expectedPrice === null) return []
-        const priceDelta = Math.round((Number(row.price) - expectedPrice) * 100) / 100
+        const priceDelta = roundCents(Number(row.price) - expectedPrice)
         return Math.abs(priceDelta) > priceThreshold ? [{ ...row, expectedPrice, priceDelta }] : []
       }).sort((a, b) => Math.abs(b.priceDelta) - Math.abs(a.priceDelta))
       const priceDriftRows = priceDrifts.slice(0, 100)

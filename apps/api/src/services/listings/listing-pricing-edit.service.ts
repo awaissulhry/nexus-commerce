@@ -61,7 +61,8 @@ export function parseListingPricingEdit(body: Record<string, unknown>): ListingP
     if (raw === null) edit.priceOverride = null
     else if (raw !== undefined) {
       const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN
-      if (!Number.isFinite(n) || n < 0) throw new ListingPricingError(400, 'priceOverride must be a non-negative number or null')
+      // A typed price is above 0 (the price door refuses 0 too); null hands the listing back to the master.
+      if (!Number.isFinite(n) || n <= 0) throw new ListingPricingError(400, 'priceOverride must be a number above 0, or null to follow the master price again')
       edit.priceOverride = n
     }
   }

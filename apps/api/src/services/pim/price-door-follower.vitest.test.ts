@@ -298,3 +298,39 @@ describe('hand-back and stop-following', () => {
     expect((await pending(l.id)).map((row) => [(row.payload as any).price, (row.payload as any).saleRemoved])).toEqual([[11, true]])
   }))
 })
+
+describe('typed prices (pins) — above 0 and inside the floor/ceiling, in the master currency only', () => {
+  const pin = (l: { id: string; version: number }, price: number) => door({ listingId: l.id, price, expectedVersion: l.version })
+
+  it('🔴 a EUR pin above the product\'s ceiling is refused at the edit, nothing written; inside it is sent', () => scoped(async () => {
+    const l = await seed('pin-eur-ceiling', { product: { maxPrice: 20 } })
+    const before = await footprint(l)
+    const r = await pin(l, 25)
+    expect(r.results[0]).toMatchObject({ outcome: 'refused', queueId: null })
+    expect(r.results[0].reason).toBe('PIN-EUR-CEILING on EBAY DE cannot be pinned at 25.00: 25.00 is above its pricing ceiling of 20.00. Change the price, or the floor or ceiling on the product. Nothing was changed.')
+    expect(await footprint(l)).toEqual(before)
+    expect((await pin(l, 19.5)).results[0].outcome).toBe('applied')
+    expect((await pending(l.id)).map((row) => (row.payload as any).price)).toEqual([19.5])
+  }))
+
+  it('🔴 a GBP pin above the EUR ceiling is NOT refused: the bounds are master-currency numbers (refuse, don\'t convert)', () => scoped(async () => {
+    const l = await seed('pin-gbp-ceiling', { marketplace: 'UK', product: { maxPrice: 20, minPrice: 15 } })
+    const r = await pin(l, 25)
+    expect(r.results[0]).toMatchObject({ outcome: 'applied' })
+    expect((await pending(l.id)).map((row) => (row.payload as any).price)).toEqual([25])
+    // Below the EUR floor, in GBP: not compared either.
+    expect((await pin(await listing(l.id), 9)).results[0].outcome).toBe('applied')
+  }))
+
+  it('a pin of 0 is refused; a price recorded from the channel\'s own file keeps the old rule (its fact, not a typed price)', () => scoped(async () => {
+    const l = await seed('pin-zero', { product: { maxPrice: 20 } })
+    const before = await footprint(l)
+    const r = await pin(l, 0)
+    expect(r.results[0]).toMatchObject({ outcome: 'refused', reason: 'A price must be above 0. Nothing was changed.' })
+    expect(await footprint(l)).toEqual(before)
+    // Record-only (CFI-6): the channel already holds 25 — it is recorded, not refused for the ceiling, and nothing is sent.
+    const recorded = await writeChannelPrices({ targets: [{ listingId: l.id, price: 25, expectedVersion: l.version }], actor: 'import', source: 'CHANNEL_FILE_IMPORT', recordOnly: 'channel-file-import' })
+    expect(recorded.results[0].outcome).toBe('applied')
+    expect(await queue(l.id)).toEqual([])
+  }))
+})

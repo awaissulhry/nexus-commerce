@@ -14,6 +14,9 @@
  *   - Follow-flag columns (title_follows_master@IT etc.): setting 'true'
  *     re-attaches the listing to master and nulls the override.
  *
+ * MASTER PRICE (2026-10-01) — a Products-sheet `base_price` cell goes through MasterPriceService.update inside this
+ * import's transaction, so the listings following it are recomputed and queued (it was a plain Product write).
+ *
  * PRICING cells (2026-10-01) — `price`, `price_follows_master`, `pricing_rule` and `price_adj_pct` go through the
  * ONE channel price door (`writeChannelPrices`, inside this import's transaction): a price pins the listing and is
  * queued for the channel; an emptied price cell or a follow flag of 'true' hands it back to the master, and a rule or
@@ -244,10 +247,16 @@ export async function applyChanges(
     actor?: string
     /** The channel price door; injectable so the mock-client tests can see what a pricing cell asks of it. */
     writePrices?: typeof writeChannelPrices
+    /** The one master-price writer (MasterPriceService.update); injectable for the mock-client tests. */
+    updateMasterPrice?: (productId: string, price: number, ctx: { tx: any; actor: string; reason: string }) => Promise<unknown>
   },
 ): Promise<ApplyResult> {
   const writePrices: typeof writeChannelPrices = opts.writePrices
     ?? (async (input) => (await import('../../pim/channel-price-write.service.js')).writeChannelPrices(input))
+  // Loaded when an import carries a master price: the cascade's module loads the queue.
+  const updateMasterPrice = opts.updateMasterPrice
+    ?? (async (productId: string, price: number, ctx: { tx: any; actor: string; reason: string }) =>
+      (await import('../../master-price.service.js')).masterPriceService.update(productId, price, ctx))
   // Combine channel changes + master changes into a single ordered pass.
   // masterChanges (Products sheet) travel with the channel changes; their
   // sheet field distinguishes them ('Products' vs a channel sheet name).
@@ -348,6 +357,28 @@ export async function applyChanges(
               status: 'SKIPPED',
               detail: 'skipped: product is soft-deleted (would resurrect)',
             })
+            continue
+          }
+
+          // 2026-10-01 — the master price goes through the one master-price writer (MasterPriceService.update, inside
+          // this import's transaction): the listings that follow it are recomputed by their rules and queued, as for
+          // every other master price write. It used to be a plain Product write, so no listing ever followed it.
+          if (field.source.column === 'basePrice') {
+            const value = coerce(change.to, field) as number | null
+            if (!before || before.deletedAt) {
+              skipped++
+              rows.push({ sku, status: 'SKIPPED', detail: 'skipped: no live product with this SKU' })
+              continue
+            }
+            if (value === null) {
+              failed++
+              rows.push({ sku, status: 'FAILED', detail: 'A master price cannot be emptied by an import. Set a price.' })
+              continue
+            }
+            inverseDiff.push({ model: 'Product', sku, data: captureInverse({ basePrice: value }, before) })
+            await updateMasterPrice(String(before.id), value, { tx, actor: opts.actor ?? 'flat-file-import', reason: `Flat-file import ${change.column}` })
+            applied++
+            rows.push({ sku, status: 'SUCCESS' })
             continue
           }
 

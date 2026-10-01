@@ -337,7 +337,8 @@ describe('per-row errors are reported, never swallowed', () => {
     const stored = await prisma.bulkActionJob.create({ data: { jobName: 'stored', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', targetProductIds: ['bad-payload'], targetVariationIds: [], actionPayload: { priceOverride: -5 }, status: 'PENDING', totalItems: 1 } })
     const result = await service.processJob(stored.id)
     expect(result).toMatchObject({ status: 'FAILED', failedItems: 1 })
-    expect(result.errors.map((e) => e.error)).toEqual(['priceOverride must be zero or more.'])
+    // 2026-10-01 — a typed price must be above 0 (the price door's rule); the sentence says so.
+    expect(result.errors.map((e) => e.error)).toEqual(['priceOverride must be above 0.'])
     const row = await prisma.channelListing.findFirstOrThrow({ where: { productId: 'bad-payload' } })
     expect(listingShape(row)).toMatchObject({ price: 10, priceOverride: null, followMasterPrice: true })
     expect(await queueOf(row.id)).toEqual([])
@@ -434,7 +435,7 @@ describe('the source scan — the bulk action writes no channel price itself', (
     ['the plan reads the payload', "if ('priceOverride' in payload) {"],
     ['the plan reads the payload', 'const v = numOrNull(payload.priceOverride);'],
     ['the plan reads the payload', "throw new BulkActionInputError('priceOverride must be a number, or null to follow the master price again.');"],
-    ['the plan reads the payload', "throw new BulkActionInputError('priceOverride must be zero or more.');"],
+    ['the plan reads the payload', "throw new BulkActionInputError('priceOverride must be above 0.');"],
     ['the plan reads the payload', 'if (payload.followMasterPrice === true) {'],
     ['the plan reads the payload', "throw new BulkActionInputError('priceOverride and followMasterPrice: true contradict each other: send one of them.');"],
     ['the plan reads the payload', '} else if (payload.followMasterPrice === false && price == null) {'],

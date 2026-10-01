@@ -20,7 +20,15 @@ export type PricingRuleName = (typeof PRICING_RULES)[number]
 /** `ChannelListing.priceAdjustmentPercent` is Decimal(5, 2): at most 999.99 either way. */
 export const ADJUSTMENT_PERCENT_MAX = 999.99
 
-const roundCents = (value: number): number => Math.round(value * 100) / 100
+/**
+ * THE cents rounding for every price Nexus computes (the cascade, the price door, the agent tools, the screens).
+ * `toPrecision(12)` first, so the float error of `n * 100` cannot decide the cent: 1.005 is 1.01, not the float 1.00
+ * (`1.005 * 100` is `100.49999999999999`). Half-up, as a price is rounded; 12 significant digits keep every price
+ * below ten billion exact.
+ */
+export function roundCents(value: number): number {
+  return Math.round(Number((value * 100).toPrecision(12))) / 100
+}
 
 /** A pricing rule name in any case, trimmed, as the column stores it; `null` when it names none of the three. */
 export function normalisePricingRule(value: unknown): PricingRuleName | null {

@@ -280,6 +280,25 @@ describe('applyChanges', () => {
     expect(call.data).toEqual({ brand: 'Xavia New' })
   })
 
+  // ── M. Master price ────────────────────────────────────────────────────────
+  it('M — a Products-sheet base_price cell goes through the master-price writer, never a plain Product write', async () => {
+    const prisma = makeMockPrisma({ productRow: { id: 'product-m', sku: 'SKU-M', deletedAt: null, basePrice: 189.9 } })
+    const calls: Array<[string, number, { actor: string; reason: string }]> = []
+    const updateMasterPrice = async (productId: string, price: number, ctx: { tx: unknown; actor: string; reason: string }) => { calls.push([productId, price, { actor: ctx.actor, reason: ctx.reason }]); expect(ctx.tx).toBe(prisma) }
+    const cell = makeMasterChange({ sku: 'SKU-M', column: 'base_price', base: 'base_price', from: 189.9, to: '199.9' })
+    const result = await applyChanges(prisma, { ...makeEmptyDiff(), masterChanges: [cell] }, { scope: SCOPE_AMAZON_IT, actor: 'person-1', updateMasterPrice })
+    expect(result).toMatchObject({ applied: 1, failed: 0 })
+    expect(calls).toEqual([['product-m', 199.9, { actor: 'person-1', reason: 'Flat-file import base_price' }]])
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
+    expect(result.inverseDiff).toEqual([{ model: 'Product', sku: 'SKU-M', data: { basePrice: 189.9 } }])
+
+    // An emptied master price is refused by name; nothing is written.
+    const emptied = await applyChanges(prisma, { ...makeEmptyDiff(), masterChanges: [{ ...cell, to: '', kind: 'delete' }] }, { scope: SCOPE_AMAZON_IT, updateMasterPrice })
+    expect(emptied.rows[0]).toMatchObject({ status: 'FAILED', detail: expect.stringContaining('cannot be emptied') })
+    expect(calls).toHaveLength(1)
+    expect(prisma._calls.productUpdateMany).toHaveLength(0)
+  })
+
   // ── 5. SKU guard ──────────────────────────────────────────────────────────
   it('5 — base=sku is SKIPPED, no write recorded', async () => {
     const prisma = makeMockPrisma()

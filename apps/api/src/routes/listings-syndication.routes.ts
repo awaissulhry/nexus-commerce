@@ -30,6 +30,8 @@ import { DraftListingError, ensureDraftListingsInTransaction } from '../services
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
 import { applyListingBulkPricing, ListingPricingError, parseListingPricingEdit, patchListing, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
+import { writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
 
@@ -1203,13 +1205,59 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         /** A number pins the listing at it (the grid's price cell, the cockpit's PricingCard); null hands it back
          *  to the master. Through the channel price door, like the rule, the percent and the follow flag. */
         priceOverride?: number | string | null
+        /** 2026-10-01 — a typed quantity (the grid's stock cell) PINS the listing at it, and a sale (value + both
+         *  dates, or null) is scheduled: each through the Studio matrix's own write, with its rules. On its own. */
+        quantity?: number | string
         salePrice?: number | string | null
+        salePriceStart?: string | null
+        salePriceEnd?: string | null
       }
 
       if (Object.prototype.hasOwnProperty.call(body, 'isPublished')) return reply.code(409).send({
         code: 'CHANNEL_WORKFLOW_REQUIRED', error: 'Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.',
         reviewHref: `/products/listing-readiness?${new URLSearchParams({ listingIds: id })}`,
       })
+      // A quantity or a sale goes through the Studio matrix's write (FBA refused, the Amazon EU group, eBay/Etsy have
+      // no sale, the price permission) — the very rules of the matrix cell. Alone: that write is its own transaction.
+      const MATRIX_KEYS = ['quantity', 'salePrice', 'salePriceStart', 'salePriceEnd']
+      const hasQuantity = Object.prototype.hasOwnProperty.call(body, 'quantity')
+      const hasSale = ['salePrice', 'salePriceStart', 'salePriceEnd'].some((k) => Object.prototype.hasOwnProperty.call(body, k))
+      if (hasQuantity || hasSale) {
+        const others = Object.keys(body).filter((k) => !MATRIX_KEYS.includes(k) && k !== 'expectedVersion')
+        if (others.length || (hasQuantity && hasSale)) {
+          return reply.code(400).send({ error: 'A quantity or a sale is saved on its own (it goes through the Studio matrix\'s write): send the other fields in a separate change.' })
+        }
+        let write: ListingMatrixCell
+        if (hasQuantity) {
+          const n = typeof body.quantity === 'number' ? body.quantity : typeof body.quantity === 'string' && body.quantity.trim() !== '' ? Number(body.quantity) : Number.NaN
+          if (!Number.isInteger(n) || n < 0) return reply.code(400).send({ error: 'quantity must be a whole number, zero or more' })
+          write = { cell: 'syncQty', value: n }
+        } else {
+          const raw = body.salePrice
+          const value = raw === null || raw === undefined || raw === '' ? null : Number(raw)
+          if (value !== null && (!Number.isFinite(value) || value <= 0)) return reply.code(400).send({ error: 'salePrice must be a number above 0, or null to end the sale' })
+          const date = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
+          write = { cell: 'salePrice', value: { value, start: value === null ? null : date(body.salePriceStart), end: value === null ? null : date(body.salePriceEnd) } }
+        }
+        let written: Awaited<ReturnType<typeof writeListingCellThroughMatrix>>
+        try {
+          written = await writeListingCellThroughMatrix({
+            listingId: id, write, actor: bulkActorOf(request) ?? 'listing-edit', can: permissionCheckerFor(request),
+            ...(body.expectedVersion != null ? { expectedVersion: Number(body.expectedVersion) } : {}),
+          })
+        } catch (err) {
+          if (err instanceof ListingPricingError) return reply.code(err.statusCode).send({ error: err.message, ...err.details })
+          throw err
+        }
+        publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
+        void productEventService.emit({
+          aggregateId: id, aggregateType: 'ChannelListing', eventType: 'CHANNEL_LISTING_UPDATED',
+          data: Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'expectedVersion')),
+          metadata: { source: 'OPERATOR', ip: request.ip ?? undefined },
+        })
+        return { ok: true, listing: { id: written.id, version: written.version }, changed: written.outcome === 'applied', ...(written.expandedTo ? { expandedTo: written.expandedTo } : {}) }
+      }
+
       const data: any = {}
       // The price's follow flag is a pricing edit (below): it recomputes and sends the price.
       const boolFields = [
@@ -1235,20 +1283,6 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         }
         data.stockBuffer = n
       }
-      if ('salePrice' in body) {
-        if (body.salePrice === null) {
-          data.salePrice = null
-        } else if (body.salePrice != null) {
-          const n = Number(body.salePrice)
-          if (!Number.isFinite(n) || n < 0) {
-            return reply
-              .code(400)
-              .send({ error: 'salePrice must be a non-negative number or null' })
-          }
-          data.salePrice = n
-        }
-      }
-
       // AC.7.2 — platformAttributes shallow-merge. The JSON column
       // is owned by multiple writers (schema editor, channel adapter,
       // cockpit cards), so we never overwrite the whole blob — we
@@ -3331,8 +3365,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // a malformed request doesn't leave a half-baked job in the DB.
       if (action === 'set-price') {
         const p = Number(body.payload?.price)
-        if (!Number.isFinite(p) || p < 0) {
-          return reply.code(400).send({ error: 'payload.price must be a non-negative number' })
+        if (!Number.isFinite(p) || p <= 0) {
+          return reply.code(400).send({ error: 'payload.price must be a number above 0' })
         }
       }
       if (action === 'set-pricing-rule') {

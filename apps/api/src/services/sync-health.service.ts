@@ -51,6 +51,9 @@ export type ConflictType =
   // CX (review 2026-09-26) — the master-price cascade refused a listing whose market does not sell in the
   // master currency (or has none configured): refuse, don't convert; nothing was queued.
   | 'MASTER_PRICE_CURRENCY_REFUSED'
+  // 2026-10-01 — the master-price cascade did not store or send a follower price outside the product's own floor or
+  // ceiling (or not above 0), as the channel price door refuses it at the edit; the listing kept its price.
+  | 'MASTER_PRICE_BOUNDS_REFUSED'
   // P0c — auth-class publish failures (403/Unauthorized/invalid_grant): the
   // silent-credential-degradation tripwire (the 2026-07-20 incident class)
   | 'CHANNEL_AUTH_FAILURE';

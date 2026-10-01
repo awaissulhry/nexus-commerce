@@ -225,8 +225,8 @@ export async function startScheduler(): Promise<void> {
   // W4.10 — Repricing evaluator cron (every 5 min). Walks every
   // enabled RepricingRule, builds market context from the latest
   // BuyBoxHistory + matching ChannelListing, calls
-  // repricingEngineService.evaluate (applyToProduct=false on this
-  // path — pushes are W4.10b once channel-override flow lands).
+  // repricingEngineService.evaluate. It applies (applyToProduct) only
+  // with NEXUS_REPRICER_LIVE=1, and then through the channel price door.
   startRepricingEvaluatorCron();
 
   // F.3 — Nightly Amazon Sales & Traffic ingest. Gated behind an env

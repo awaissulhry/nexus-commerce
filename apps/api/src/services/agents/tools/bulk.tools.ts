@@ -38,6 +38,7 @@ import { masterCurrency } from '../../fx-rate.service.js'
 import { marketCurrency, type MarketCurrencyRow } from '../../pim/market-currency.js'
 import { masterPriceBoundsReason, priceBoundsOf, type PriceBounds } from '../../price-bounds.service.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
+import { roundCents } from '@nexus/shared/listing-price'
 
 /** The most products one bulk change may name. */
 export const BULK_MAX_PRODUCTS = 250
@@ -82,8 +83,8 @@ const listed = (items: string[]) =>
 const money = (n: number | null) => (n == null ? '—' : n.toFixed(2))
 /** A refusal, then what did not happen: one full stop between them, never two. */
 const refused = (reason: string, nothing: string) => `${reason.trim().replace(/[.\s]+$/, '')}. ${nothing}`
-/** Rounded to cents; `toPrecision` first so 1.005 is 1.01 and not the float 1.00. */
-const cents = (n: number) => Math.round(Number((n * 100).toPrecision(12))) / 100
+/** Rounded to cents by the one helper the cascade and the price door use: 1.005 is 1.01, not the float 1.00. */
+const cents = roundCents
 const holdText = () => `${Math.round(MASTER_PRICE_HOLD_MS / 1000)} seconds`
 /**
  * A short fingerprint of EVERYTHING a preview was worked out from, not only the lines it shows. The approval

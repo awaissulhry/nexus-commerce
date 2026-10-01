@@ -1341,7 +1341,8 @@ export class OutboundSyncService {
     // a number a person typed, and sending a different one quietly is worse than
     // not sending it.
     {
-      const refusal = await priceRefusalFor({ price: payload.price, productId: product?.id, channel: 'Amazon', sku });
+      // Only a price in the master currency is held to the master-currency floor and ceiling (refuse, don't convert).
+      const refusal = await priceRefusalFor({ price: payload.price, productId: product?.id, channel: 'Amazon', sku, market: { channel: 'AMAZON', marketplace: cl?.marketplace ?? marketplaceId } });
       if (refusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
     }
     const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM", content);
@@ -1578,7 +1579,8 @@ export class OutboundSyncService {
     // a number a person typed, and sending a different one quietly is worse than
     // not sending it.
     {
-      const refusal = await priceRefusalFor({ price: payload.price, productId: product?.id, channel: 'eBay', sku });
+      // Only a price in the master currency is held to the master-currency floor and ceiling (refuse, don't convert).
+      const refusal = await priceRefusalFor({ price: payload.price, productId: product?.id, channel: 'eBay', sku, market: { channel: 'EBAY', marketplace: marketplaceId } });
       if (refusal) return { success: false, queueId, channel: "EBAY", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
     }
     const digest = digestPayload({
@@ -2348,7 +2350,8 @@ export class OutboundSyncService {
     // rather than a price complaint. It REFUSES rather than clamping: a price is
     // a number a person typed, and sending a different one quietly is worse than
     // not sending it.
-      const refusal = await priceRefusalFor({ price: payload?.price, productId: product?.id, channel: 'Shopify', sku });
+      // Only a price in the master currency is held to the master-currency floor and ceiling (refuse, don't convert).
+      const refusal = await priceRefusalFor({ price: payload?.price, productId: product?.id, channel: 'Shopify', sku, market: { channel: 'SHOPIFY', marketplace: channelListing?.marketplace ?? 'GLOBAL' } });
       if (refusal) return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
       work.price = payload?.price ?? null;
     } else {
@@ -2556,7 +2559,8 @@ export class OutboundSyncService {
           if (!Number.isFinite(price) || price <= 0) return failed("This price change carries no usable price, so nothing was sent to Etsy.", "NO_PRICE", false);
           // P4.4c — the operator's own floor and ceiling, and it REFUSES rather than clamping,
           // because a price is a number a person typed.
-          const refusal = await priceRefusalFor({ price, productId: product?.id, channel: 'Etsy', sku });
+          // Only a price in the master currency is held to the master-currency floor and ceiling (refuse, don't convert).
+          const refusal = await priceRefusalFor({ price, productId: product?.id, channel: 'Etsy', sku, market: { channel: 'ETSY', marketplace: channelListing?.marketplace ?? 'GLOBAL' } });
           if (refusal) return failed(refusal, "PRICE_OUT_OF_BOUNDS", false);
           // P4.4a, as the Amazon and eBay lanes: the currency is the listing market's Marketplace row, never guessed.
           // The writer compares it with the currency Etsy states for the listing, and a mismatch sends nothing.

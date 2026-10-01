@@ -50,13 +50,13 @@ import { decimalToNumber } from './sheet-rows.service.js'
 import { CHANNEL_FIELD_MAP, channelOverrideKeys } from './channel-field-map.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
 import { storedCompareAt, withCompareAt } from './compare-at-price.js'
-import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL, pricingRuleLabel, type PricingRuleName } from '@nexus/shared/listing-price'
+import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL, pricingRuleLabel, roundCents, type PricingRuleName } from '@nexus/shared/listing-price'
 import {
-  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, heldPriceSentence, holdsCascadedPrice, listingMarketCurrency,
+  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerBoundsReason, followerPricePayload, heldPriceSentence, holdsCascadedPrice, listingMarketCurrency,
   logMasterCurrencyRefusals, masterCurrencyRefusal, type MasterCurrencyRefusal,
 } from './follower-price.js'
 import { masterCurrency } from '../fx-rate.service.js'
-import { masterPriceBoundsReason, priceBoundsOf } from '../price-bounds.service.js'
+import { boundsApply, masterPriceBoundsReason, priceBoundsOf } from '../price-bounds.service.js'
 import type { MarketCurrencyRow } from './market-currency.js'
 
 // ETSY since 2026-09-30: `syncToEtsy` sends a PRICE_UPDATE (P4.6e). It was left off while Etsy was read-only (D6,
@@ -93,6 +93,8 @@ export type PriceWriteUnguardedReason =
   | 'flat-file-import'
   /** `POST /api/dashboard/stock-drift/:id/resync` — the drift panel's Resync names a listing, not a version. */
   | 'dashboard-drift-resync'
+  /** The repricing engine's apply (`repricing-engine.service.ts`): a machine decision from market data, no version seen. */
+  | 'repricer'
 
 /**
  * CFI-6 (R-CFI-1 Q2, BUILD.md D2) — the reasons a price may be RECORDED without being sent. A closed set, like
@@ -169,7 +171,8 @@ export interface PriceWriteOutcome {
 
 export interface PriceWriteResult { results: PriceWriteOutcome[]; applied: number; refused: number; noop: number; conflict: number }
 
-const round2 = (n: number) => Math.round(n * 100) / 100
+/** The one cents rounding (`@nexus/shared/listing-price`): the cascade, the agent tools and the screens use it too. */
+const round2 = roundCents
 
 const LISTING_SELECT = {
   id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true,
@@ -290,6 +293,13 @@ export async function writeChannelPrices(input: {
       const currentOverride = decimalToNumber(l.priceOverride)
       const nextPrice = t.price === undefined ? undefined : t.price == null ? null : round2(Number(t.price))
       if (nextPrice !== undefined && nextPrice !== null && (!Number.isFinite(nextPrice) || nextPrice < 0)) { refuse('A price is zero or more'); continue targets }
+      // 2026-10-01 — a typed price (a pin) is above 0, as a follower price is. A price recorded from the channel's own
+      // file is the channel's fact and keeps the old rule.
+      if (nextPrice != null && nextPrice <= 0 && !input.recordOnly) { refuse('A price must be above 0. Nothing was changed.'); continue targets }
+      const who = `${l.product?.sku ?? 'This listing'} on ${l.channel} ${l.marketplace}`
+      // Product.minPrice / maxPrice are master-currency numbers: only a price in the master currency is held to them
+      // (`boundsApply` — refuse, don't convert). A GBP price is never compared with a EUR ceiling.
+      const boundsSpeak = boundsApply(listingMarketCurrency(l, currencyRows), master)
       const currentSale: { value: number | null } & SaleWindow = { value: decimalToNumber(l.salePrice), ...(windows.get(l.id) ?? { start: null, end: null }) }
       const nextSale = t.sale === undefined ? undefined : { value: t.sale.value == null ? null : round2(Number(t.sale.value)), start: t.sale.value == null ? null : t.sale.start, end: t.sale.value == null ? null : t.sale.end }
       if (nextSale) {
@@ -354,9 +364,9 @@ export async function writeChannelPrices(input: {
             currencyRefusal = { listingId: l.id, channel: l.channel, marketplace: l.marketplace, currency: marketCur, masterCurrency: master }
             notSent = masterCurrencyRefusal(currencyRefusal, basePrice!)
           } else {
-            const who = `${l.product?.sku ?? 'This listing'} on ${l.channel} ${l.marketplace}`
-            if (next <= 0) { refuse(`${who} would follow ${pricingRuleLabel(ruleAfter, adjAfter)} at ${next.toFixed(2)}: a price must be above 0. Nothing was changed.`); continue targets }
-            const outside = masterPriceBoundsReason(next, priceBoundsOf(l.product ?? {}))
+            // Here the market sells in the master currency, so the floor and ceiling apply (`boundsSpeak` is true). The
+            // same verdict the cascade asks (`followerBoundsReason`), so the two cannot drift.
+            const outside = followerBoundsReason(next, priceBoundsOf(l.product ?? {}))
             if (outside) { refuse(`${who} would follow ${pricingRuleLabel(ruleAfter, adjAfter)} at ${next.toFixed(2)}, but ${outside}. Change the rule, or the floor or ceiling on the product. Nothing was changed.`); continue targets }
             const held = holdsCascadedPrice(l)
             const moves = next !== currentPrice
@@ -369,6 +379,12 @@ export async function writeChannelPrices(input: {
       }
 
       const priceChanges = pin && (dirtyPrice || !(currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
+      // A typed price outside the product's own floor or ceiling is refused at the edit, as a follower price is: the push
+      // would refuse it anyway, and by then Nexus would hold a price the channel never gets. Master currency only.
+      if (priceChanges && !input.recordOnly && boundsSpeak) {
+        const outside = masterPriceBoundsReason(nextPrice!, priceBoundsOf(l.product ?? {}))
+        if (outside) { refuse(`${who} cannot be pinned at ${nextPrice!.toFixed(2)}: ${outside}. Change the price, or the floor or ceiling on the product. Nothing was changed.`); continue targets }
+      }
       const saleChanges = nextSale !== undefined && (nextSale.value !== currentSale.value || nextSale.start !== currentSale.start || nextSale.end !== currentSale.end)
       const compareChanges = nextCompare !== undefined && (currentCompare.state !== 'stored' || currentCompare.value !== nextCompare)
       const followChanges = Object.keys(followColumns).length > 0

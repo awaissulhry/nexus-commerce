@@ -52,6 +52,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { writeChannelPrices } from './pim/channel-price-write.service.js'
 
 export type RepricingStrategyV2 =
   | 'match_buy_box'
@@ -289,19 +290,16 @@ export function pickPrice(
  * DB-bound evaluator. Reads the rule, runs pickPrice, writes a
  * RepricingDecision row, updates the rule's last* fields.
  *
- * W4.10b — when opts.applyToProduct=true AND the decision is
- * `changed`, also pushes the new price to the matching
- * ChannelListing via priceOverride + followMasterPrice=false. This
- * is per-channel-marketplace (single row, no cascade) so repricing
- * doesn't conflict with the master-price.service.ts master cascade
- * — they own different rows. An OutboundSyncQueue PRICE_UPDATE row
- * is enqueued so the marketplace sync drains it on the next tick.
+ * W4.10b — when opts.applyToProduct=true AND the decision is `changed`, the new price is PINNED on the matching
+ * ChannelListing through the ONE channel price door (`writeChannelPrices`, 2026-10-01): `price` + `priceOverride` +
+ * `followMasterPrice = false`, the override audit row, the price timeline row (source REPRICER) and one PRICE_UPDATE
+ * row on the 30 s hold. Before, this wrote `priceOverride` alone — never `price`, which is what the push reads — and
+ * queued nothing (the cron queued a row of its own; the manual route queued none). The rule's own min/max clamp
+ * (`pickPrice`) still decides the price; the door then holds it to the product's own floor and ceiling in the master
+ * currency, and refuses a price of 0. A refusal is not applied: the decision says `applied: false` and why.
  *
- * The cron path (W4.10) keeps applyToProduct=false by default —
- * decisions are logged for operator review. To enable auto-push
- * per rule, add a future `autoApply` column on RepricingRule and
- * have the cron pass applyToProduct=rule.autoApply. Until then,
- * push happens via the drawer's preview-and-apply flow.
+ * Callers: the evaluator cron (`jobs/repricing-evaluator.job.ts`, every 5 min, applyToProduct only with
+ * NEXUS_REPRICER_LIVE=1) and `POST /api/repricing-rules/:id/evaluate` (applyToProduct from the body).
  */
 export class RepricingEngineService {
   constructor(private readonly client: PrismaClient = prisma) {}
@@ -310,7 +308,7 @@ export class RepricingEngineService {
     ruleId: string,
     market: MarketContext,
     opts: { applyToProduct?: boolean } = {},
-  ): Promise<PickResult & { ruleId: string; decisionId: string }> {
+  ): Promise<PickResult & { ruleId: string; decisionId: string; applied: boolean; notApplied?: string }> {
     const rule = await this.client.repricingRule.findUnique({
       where: { id: ruleId },
     })
@@ -327,6 +325,7 @@ export class RepricingEngineService {
         changed: false,
         reason: 'rule-disabled',
         capped: null,
+        applied: false,
       }
     }
 
@@ -350,14 +349,10 @@ export class RepricingEngineService {
       market,
     )
 
-    // W4.10b — actually push the new price to the matching
-    // ChannelListing when caller opts in. Single-row update, no
-    // cascade — repricing owns ChannelListing.priceOverride for its
-    // (channel, marketplace) tuple, master-price.service.ts owns
-    // the broader master-cascade. They don't conflict because they
-    // touch different fields (or, when both touch price, the per-
-    // channel override wins via followMasterPrice=false).
+    // W4.10b — pin the new price on the matching ChannelListing when the caller opts in, through the ONE channel
+    // price door (a pin: price + priceOverride + followMasterPrice=false, audit, timeline, one PRICE_UPDATE row).
     let appliedToListing = false
+    let notApplied: string | undefined
     if (opts.applyToProduct && result.changed) {
       try {
         const listing = await this.client.channelListing.findFirst({
@@ -366,26 +361,24 @@ export class RepricingEngineService {
             channel: rule.channel,
             ...(rule.marketplace ? { marketplace: rule.marketplace } : {}),
           },
-          select: { id: true, version: true },
+          select: { id: true },
           orderBy: { updatedAt: 'desc' },
         })
-        if (listing) {
-          await this.client.channelListing.update({
-            where: { id: listing.id },
-            data: {
-              priceOverride: result.price,
-              followMasterPrice: false,
-              lastSyncStatus: 'PENDING',
-              version: { increment: 1 },
-            },
+        if (!listing) {
+          notApplied = 'No listing matches this rule\'s channel and market.'
+        } else {
+          // A machine decision holds no operator-seen version: the door is told why (`repricer`).
+          const written = await writeChannelPrices({
+            targets: [{ listingId: listing.id, price: result.price, unguardedReason: 'repricer' }],
+            actor: `repricer:${ruleId}`, source: 'REPRICER', reason: `Repricer rule ${ruleId} (${result.reason})`,
           })
-          appliedToListing = true
+          const outcome = written.results[0]
+          appliedToListing = outcome?.outcome === 'applied' || outcome?.outcome === 'noop'
+          if (!appliedToListing) notApplied = outcome?.reason ?? 'The price write refused this listing.'
         }
       } catch (err) {
-        // Don't fail the evaluator — the decision row still records
-        // what the engine intended. Operator surfaces the failure
-        // via decision.applied=false despite their applyToProduct=true.
-        // (Best-effort: caller can retry by re-running evaluate.)
+        // Don't fail the evaluator — the decision row still records what the engine intended, and why it did not land.
+        notApplied = err instanceof Error ? err.message : String(err)
       }
     }
 
@@ -394,7 +387,8 @@ export class RepricingEngineService {
         ruleId,
         oldPrice: market.currentPrice,
         newPrice: result.price,
-        reason: result.reason,
+        // A requested apply that did not land says why on the decision the operator reads.
+        reason: notApplied ? `${result.reason} — not applied: ${notApplied}` : result.reason,
         buyBoxPrice: market.buyBoxPrice ?? null,
         lowestCompPrice: market.lowestCompPrice ?? null,
         competitorCount: market.competitorCount ?? null,
@@ -417,7 +411,7 @@ export class RepricingEngineService {
       },
     })
 
-    return { ...result, ruleId, decisionId: decision.id }
+    return { ...result, ruleId, decisionId: decision.id, applied: appliedToListing, ...(notApplied ? { notApplied } : {}) }
   }
 }
 
