@@ -168,7 +168,7 @@ export interface StudioScopeValue {
 }
 
 const ScopeCtx = createContext<StudioScopeValue | null>(null)
-interface DiscoveryState { failed: boolean | null; note: string | null; retry?: () => Promise<void>; retrying: boolean }
+interface DiscoveryState { failed: boolean | null; note: string | null; link?: { href: string; label: string } | null; retry?: () => Promise<void>; retrying: boolean }
 const DiscoveryCtx = createContext<DiscoveryState | null>(null)
 export function useStudioDiscovery() { return useContext(DiscoveryCtx) }
 export function useStudioDiscoveryFailure(): boolean | null { return useStudioDiscovery()?.failed ?? null }
@@ -1089,10 +1089,12 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce + askedNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason, coordinateNonce)
 
   // P2 — one object per change of what it says, not per render: every reader re-rendered on every provider render.
-  const accountHealth = accounts.find(a => a.id === accountId)?.health
-  const discovery = useMemo(() => ({ failed: marketplacesFailed ?? null, retry: discoveryRetry, retrying: discoveryRetrying === true,
-    note: connectionScopePolicy(accountHealth, channelLabel(scope), marketplacesFailed === true).note }),
-  [marketplacesFailed, discoveryRetry, discoveryRetrying, accountHealth, scope])
+  const account = accounts.find(a => a.id === accountId)
+  const accountHealth = account?.health, accountName = account?.label
+  const discovery = useMemo(() => {
+    const policy = connectionScopePolicy(accountHealth, channelLabel(scope), marketplacesFailed === true, accountName)
+    return { failed: marketplacesFailed ?? null, retry: discoveryRetry, retrying: discoveryRetrying === true, note: policy.note, link: policy.link }
+  }, [marketplacesFailed, discoveryRetry, discoveryRetrying, accountHealth, accountName, scope])
 
   return (
     <ProductCtx.Provider value={product}>

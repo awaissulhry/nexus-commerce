@@ -18,6 +18,7 @@ import { useStudioDiscovery } from '../contracts'
 
 import { GridSheetNote, SHEET_SHORTCUT_HINT } from '@/design-system/grid'
 import { Button } from '@/design-system/primitives'
+import Link from '@/lib/workspaces/Link'
 
 import { readRetired, retiresOnSave, shortcutHintState, writeRetired, type HintRetirement } from './shortcutHint'
 import type { SheetSaveStatusStore } from './sheetSaveStatusStore'
@@ -106,6 +107,8 @@ export function SheetFooterNote({ source, ...props }: SheetFooterNoteProps) {
   }
   if (discovery?.note) return <span className="nds-grid-sheet-noteslot">
     <GridSheetNote kind="provenance" title={discovery.note}>{discovery.note}</GridSheetNote>
+    {/* Audit P12 — a login that needs reconnecting blocks publishing: the note says where, and this goes there. */}
+    {discovery.link && <Button asChild inline variant="link"><Link href={discovery.link.href}>{discovery.link.label}</Link></Button>}
     {discovery.failed && discovery.retry && <Button inline variant="link" disabled={discovery.retrying} onClick={() => void discovery.retry?.()}>
       {discovery.retrying ? 'Retrying…' : 'Retry channel availability'}
     </Button>}

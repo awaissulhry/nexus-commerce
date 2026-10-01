@@ -1,4 +1,4 @@
-import type { StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import type { StudioPublishIssue, StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
 import type { MarketplaceLite } from '../types'
 
 export const publicationScopeKey = (scope: StudioPublishScope) => JSON.stringify([scope.channel, scope.marketplace, scope.accountId, scope.listingId ?? null])
@@ -49,4 +49,19 @@ export function matchesPublicationReview(value: unknown, productId: string, scop
   return !!review && review.productId === productId && !!review.scope && publicationScopeKey(review.scope) === publicationScopeKey(scope)
     && Array.isArray(review.rows) && Array.isArray(review.issues) && typeof review.expiresAt === 'string'
     && (review.id === null || typeof review.id === 'string')
+}
+
+/** One row of the review's problem table: the SKU (or the whole listing) and what to fix, with the channel's own words. */
+export interface PublicationProblemRow { id: string; sku: string; message: string; detail?: string }
+
+/**
+ * Audit D4 (2026-10-01) — the review's issues as ONE table of problems (SKU · what to fix) and a list of notes. A problem
+ * that names no SKU is about the whole listing. A message that already starts with its SKU does not repeat it.
+ */
+export function publicationProblems(issues: readonly StudioPublishIssue[]): { problems: PublicationProblemRow[]; notes: string[] } {
+  const text = (issue: StudioPublishIssue) => issue.sku && issue.message.startsWith(`${issue.sku}: `) ? issue.message.slice(issue.sku.length + 2) : issue.message
+  const problems = issues.filter(issue => issue.severity === 'error')
+    .map((issue, index) => ({ id: `${index}`, sku: issue.sku ?? 'Whole listing', message: text(issue), ...(issue.detail ? { detail: issue.detail } : {}) }))
+  const notes = [...new Set(issues.filter(issue => issue.severity === 'warning').map(issue => issue.sku ? `${issue.sku}: ${text(issue)}` : issue.message))]
+  return { problems, notes }
 }

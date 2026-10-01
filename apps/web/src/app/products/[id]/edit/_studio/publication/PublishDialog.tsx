@@ -3,14 +3,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { blockingIssues, isPhotoChangeId, type StudioPublishResult, type StudioPublishReview, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
 import { Button, Select } from '@/design-system/primitives'
-import { Banner, Disclosure, Field, Modal, ProgressBar } from '@/design-system/components'
+import { Banner, Disclosure, Field, JobProgress, MetricStrip, Modal } from '@/design-system/components'
+// The DS grid's DataGrid (AG Grid), as the Import dialog lists its rows (audit D4: one way to list rows in both dialogs).
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { useStudioProduct, usePublicationSave, useStudioScope, useStudioDiscoveryFailure } from '../contracts'
-import { matchesPublicationReview, matchesPublicationSelection, publicationDestinations, publicationScopeKey, retainPublicationReceipt, publicationOverwriteAcknowledged } from './model'
+import { matchesPublicationReview, matchesPublicationSelection, publicationDestinations, publicationProblems, publicationScopeKey, retainPublicationReceipt, publicationOverwriteAcknowledged, type PublicationProblemRow } from './model'
 import { PublicationOverwrite } from './PublicationOverwrite'
 import { PublicationChanges } from './PublicationChanges'
 import { publicationRequest as request } from './request'
 import styles from './publication.module.css'
+
+type ReviewRow = StudioPublishReview['rows'][number]
+type ResultRow = StudioPublishResult['results'][number]
+const BUSY: Record<'review' | 'selection' | 'publish' | 'status', { label: string; detail: string }> = {
+  review: { label: 'Checking saved product information', detail: 'Reading saved values and running every check…' },
+  selection: { label: 'Preparing the selected request', detail: 'Preparing the exact request for your selected fields…' },
+  publish: { label: 'Publishing', detail: 'Submitting the reviewed changes. Waiting for the channel’s response…' },
+  status: { label: 'Checking publication status', detail: 'Asking the channel for the result…' },
+}
+// Audit D4 — what to fix, by SKU, in one table; the channel's own words under it, muted.
+const PROBLEM_COLUMNS: Column<PublicationProblemRow>[] = [
+  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
+  { key: 'fix', label: 'What to fix', width: 560, className: styles.textCol, render: row => <span className={styles.fix}>
+    <span>{row.message}</span>{row.detail && <span className={styles.detail} title={row.detail}>{row.detail}</span>}</span> },
+]
+const PRODUCT_COLUMNS: Column<ReviewRow>[] = [
+  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
+  { key: 'title', label: 'Title', width: 380, className: styles.textCol, render: row => <span className={styles.clamp} title={row.title}>{row.title}</span> },
+  { key: 'listing', label: 'Listing', width: 130, render: row => row.existing ? 'Existing listing' : 'New listing' },
+]
+const REFUSED_COLUMNS: Column<ResultRow>[] = [
+  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
+  { key: 'message', label: 'What the channel said', width: 560, className: styles.textCol, render: row => <span className={styles.fix}>{row.message}</span> },
+]
 
 export function PublishDialog({ onClose }: { onClose(): void }) {
   const product = useStudioProduct(), studio = useStudioScope()
@@ -26,6 +52,9 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
   const [result, setResult] = useState<StudioPublishResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<'review' | 'selection' | 'publish' | 'status' | null>(null)
+  // When the current wait started: the progress shows the time passed, as the Import dialog's does.
+  const [busySince, setBusySince] = useState<number | null>(null)
+  useEffect(() => { setBusySince(busy ? Date.now() : null) }, [busy])
   const [locationId, setLocationId] = useState(''), [refresh, setRefresh] = useState(0)
   const [uncertain, setUncertain] = useState(false)
   const [confirmedReviewId, setConfirmedReviewId] = useState<string | null>(null)
@@ -127,6 +156,8 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
   const canSend = currentReview && !!review?.id && !busy && !blockedSave && canPublish && !blockers.length && !result && !uncertain
     && (!review.locations || review.locations.some(l => l.id === locationId))
     && (sparse ? !!selectedReview?.fieldCount && !!selectedReview.products.length : publicationOverwriteAcknowledged(review, confirmedReviewId))
+  const { problems, notes } = useMemo(() => publicationProblems(review?.issues ?? []), [review])
+  const refused = result?.results.filter(r => r.status === 'FAILED') ?? []
   const canReviewSelection = currentReview && !!review?.id && !!review.changes && selectedIds.length > 0 && !busy && !blockedSave && canPublish && !blockers.length && !result && !uncertain
   return <Modal open onClose={() => { if (!pending) onClose() }} size="xl" readable title="Publish product"
     subtitle={`${product.sku} · Saved product information and included variants`}
@@ -147,36 +178,49 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
         </Select>
       </Field>
       {!options.length && !discoveryFailed && <Banner tone="neutral" title="No connected destinations">Connect a sales channel to publish this product.</Banner>}
-      {busy && <div className={styles.body}><ProgressBar indeterminate ariaLabel={busy === 'review' ? 'Checking saved product information' : busy === 'selection' ? 'Preparing selected request' : 'Publishing product'} /><p role="status">{busy === 'review' ? 'Reading saved values and channel content…' : busy === 'selection' ? 'Preparing the exact request for your selected fields…' : busy === 'publish' ? 'Submitting the reviewed changes. Waiting for the channel’s response…' : 'Checking publication status…'}</p></div>}
+      {busy && <JobProgress label={BUSY[busy].label} detail={BUSY[busy].detail} startedAt={busySince ?? undefined} />}
       {error && <Banner tone="danger" title={uncertain ? 'Publication result needs checking' : 'Review could not complete'}>{error}</Banner>}
       {review && <>
         <p><strong>{review.accountLabel}</strong> · {review.aliasLabel} · {review.scope.marketplace}</p>
-        <p>{review.rows.length} {review.rows.length === 1 ? 'product reviewed' : 'products reviewed'}{review.excluded ? ` · ${review.excluded} excluded` : ''}{review.skipped?.length ? ` · ${review.skipped.length} skipped` : ''}.</p>
+        <MetricStrip metrics={[
+          { label: 'Products', value: review.rows.length.toLocaleString('en'), hint: review.excluded || review.skipped?.length
+            ? [review.excluded ? `${review.excluded} excluded` : '', review.skipped?.length ? `${review.skipped.length} skipped` : ''].filter(Boolean).join(' · ') : undefined },
+          { label: 'Problems', value: problems.length.toLocaleString('en') },
+          { label: 'Notes', value: notes.length.toLocaleString('en') },
+        ]} />
         {review.visibility && <Banner tone="info" title={`Shopify visibility: ${review.visibility}`}>The saved status and sales-channel selections will be applied.</Banner>}
         {review.locations && <Field label="Inventory location"><Select size="sm" disabled={pending || uncertain || !!result} value={locationId} onChange={e => setLocationId(e.target.value)}><option value="">Choose a location</option>{review.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>}
-        {review.issues.length > 0 && <Banner tone={blockers.length || review.photosOnly ? 'warning' : 'info'} title={review.photosOnly ? 'Other fields have problems — only photos can be sent now' : blockers.length ? `${blockers.length} ${blockers.length === 1 ? 'issue' : 'issues'} to resolve before publishing` : 'Review notes'}>
-          <ul className={styles.issues}>{review.issues.map((issue, i) => <li key={i}>{issue.sku && <strong>{issue.sku}: </strong>}{issue.message}</li>)}</ul>
+        {/* Audit D4 — one short banner says what the table is; the table names each problem (SKU · what to fix). */}
+        {problems.length > 0 && <Banner tone="warning" title={review.photosOnly ? 'Other fields have problems — only photos can be sent now'
+          : `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} to fix before publishing`}>
+          {review.photosOnly ? 'Choose only photos to send now, or fix the problems below first.' : 'Each row says what to fix. Fix them, then refresh the review.'}
         </Banner>}
+        {problems.length > 0 && <DataGrid ariaLabel="Problems to fix before publishing" size="sm" keyboardScroll columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
+        {/* Notes inform and block nothing: one closed section, as in the Import dialog. */}
+        {notes.length > 0 && <Disclosure summary={`${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`}>
+          <ul className={styles.issues}>{notes.map(note => <li key={note}>{note}</li>)}</ul>
+        </Disclosure>}
         {sparse && review.changes && <PublicationChanges changes={review.changes} selectedIds={selectedIds} onSelectionChange={chooseFields} disabled={!review.id || !!busy || uncertain || !!result} photosOnly={review.photosOnly} />}
         {/* An error above already says why no fields are listed: this banner is only for a review that names no error. */}
         {sparse && !review.changes && !blockers.length && <Banner tone="warning" title="Field review unavailable">The review did not list the fields to send. Refresh the review.</Banner>}
-        {selectedReview && <div ref={selectionPreview} tabIndex={-1} role="region" aria-label="Selected publication request"><Banner tone="info" title="Selected request ready">
-          <p>{selectedReview.fieldCount} {selectedReview.fieldCount === 1 ? 'change' : 'changes'} affecting {selectedReview.products.length} {selectedReview.products.length === 1 ? 'product' : 'products'}.</p>
-          <p>{review.accountLabel} · {review.scope.marketplace}</p>
-          <p>Only the selected changes will be applied. Where a channel requires a complete collection, its other values are preserved in the request shown below.</p>
+        {/* The request itself sits below the banner, never inside it (audit D4: a banner holds a sentence, not a payload). */}
+        {selectedReview && <div ref={selectionPreview} tabIndex={-1} role="region" aria-label="Selected publication request" className={styles.body}>
+          <Banner tone="info" title="Selected request ready">
+            {selectedReview.fieldCount} {selectedReview.fieldCount === 1 ? 'change' : 'changes'} affecting {selectedReview.products.length} {selectedReview.products.length === 1 ? 'product' : 'products'} on {review.accountLabel} · {review.scope.marketplace}.
+            Only the selected changes will be applied. Where a channel requires a complete collection, its other values are preserved in the request below.
+          </Banner>
           <Disclosure summary="Exact request to the channel"><pre tabIndex={0} aria-label="Exact channel request" className={styles.payload}>{selectedReview.payload.content}</pre></Disclosure>
-        </Banner></div>}
+        </div>}
         {!sparse && review.overwrite && <PublicationOverwrite overwrite={review.overwrite} confirmed={confirmedReviewId === review.id && !!review.id}
           onConfirm={confirmed => setConfirmedReviewId(confirmed ? review.id : null)} disabled={!review.id || !!busy || uncertain || !!result} />}
         {!sparse && !review.overwrite && !blockers.length && review.rows.some(row => row.existing) && <Banner tone="warning" title="Overwrite review unavailable">The review did not check what this overwrites on the existing listings. Refresh the review.</Banner>}
-        <div className={styles.products} role="region" aria-label="Products in this publication" tabIndex={0}>
-          {review.rows.map(row => <div key={row.productId} className={styles.product}><strong>{row.sku}</strong><span>{row.title}</span><span>{row.existing ? 'Existing listing' : 'New listing'}</span></div>)}
-        </div>
+        <DataGrid ariaLabel="Products in this publication" size="sm" keyboardScroll columns={PRODUCT_COLUMNS} rows={review.rows} rowKey={row => row.productId} />
       </>}
-      {result && <Banner tone={result.status === 'VERIFIED' ? 'success' : ['SUBMITTED', 'ACCEPTED', 'PUBLISHING'].includes(result.status) ? 'info' : 'warning'} title={result.status === 'VERIFIED' ? 'Publication verified' : result.status === 'ACCEPTED' ? 'Accepted by the channel' : result.status === 'SUBMITTED' ? 'Submitted to the channel' : result.status === 'PUBLISHING' ? 'Publication in progress' : 'Publication needs attention'}>{result.message}
-        {!!result.warnings?.length && <ul className={styles.issues}>{result.warnings.map(message => <li key={message}>{message}</li>)}</ul>}
-        {result.results.some(r => r.status === 'FAILED') && <ul className={styles.issues}>{result.results.filter(r => r.status === 'FAILED').map(r => <li key={r.sku}><strong>{r.sku}: </strong>{r.message}</li>)}</ul>}
-      </Banner>}
+      {result && <Banner tone={result.status === 'VERIFIED' ? 'success' : ['SUBMITTED', 'ACCEPTED', 'PUBLISHING'].includes(result.status) ? 'info' : 'warning'} title={result.status === 'VERIFIED' ? 'Publication verified' : result.status === 'ACCEPTED' ? 'Accepted by the channel' : result.status === 'SUBMITTED' ? 'Submitted to the channel' : result.status === 'PUBLISHING' ? 'Publication in progress' : 'Publication needs attention'}>{result.message}</Banner>}
+      {refused.length > 0 && <DataGrid ariaLabel="Products the channel refused" size="sm" keyboardScroll columns={REFUSED_COLUMNS} rows={refused} rowKey={row => row.sku} />}
+      {!!result?.warnings?.length && <Disclosure open summary={`${result.warnings.length} ${result.warnings.length === 1 ? 'note' : 'notes'} from the channel`}>
+        <ul className={styles.issues}>{result.warnings.map(message => <li key={message}>{message}</li>)}</ul>
+      </Disclosure>}
       {(error || blockers.length > 0) && !uncertain && !result && <div className={styles.actions}><Button size="sm" disabled={!!busy || blockedSave} onClick={() => setRefresh(n => n + 1)}>Refresh review</Button><Button size="sm" disabled={!!busy} onClick={onClose}>Back to editing</Button></div>}
     </div>
   </Modal>
