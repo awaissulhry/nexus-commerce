@@ -445,8 +445,21 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    see: each popover is internally coherent and above AA in both themes. It is a coherence
    failure, not a contrast one. Pinning on the body that CONTAINS a shell covers the portals
    without any component needing to know about themes. */
+/* 🔴 The two OTHER light-pinned surfaces read this same list (2026-10-01): the Amazon ads console
+   `.az-root` (marketing/ads-console/amazon.css) and the fleet `.fleet-surface` / `.fleet-portal`
+   (fleet/fleet-pages.css). Each pinned its own ground light but only a FEW tokens, so every DS
+   component inside them read the `.dark` values: the console's DataGrid rows went navy under its
+   light ink (`.az-cell-sub` 2.15:1, 1,000 rows on Targeting), and on the fleet the ALIASES leaked
+   (`--nds-text-strong`, `--nds-success-text`, `--nds-grid-header-fg` … are resolved on <html>, so
+   re-pinning `--nds-text` below them does not reach them) — sort buttons at 1.13:1. A partial pin
+   is the half-dark palette the fleet's own comment warns about.
+   Inside `:where()` on purpose — zero specificity — so each surface's OWN pin (amazon.css's link
+   and status inks, the fleet's ramp-based block) still wins wherever it sets the same token,
+   whatever order the stylesheets load in. Element-scoped, not `body:has()`: the fleet renders
+   inside the app chrome, which must keep following the theme. */
 body:has(.h10-shell),
-.h10-shell {
+.h10-shell,
+:where(.az-root, .fleet-surface, .fleet-portal) {
   --nds-amber-soft: #fdf3d3;
   --nds-amber-text: #6b4800;
   --nds-bg: var(--nds-grey-50);

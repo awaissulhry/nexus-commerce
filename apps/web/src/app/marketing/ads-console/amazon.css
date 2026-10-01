@@ -37,6 +37,11 @@
   --nds-danger-text: #9c2f2a;    /* 7.36:1 */
   --nds-danger-strong: #a3211a;  /* 7.53:1 */
   --nds-success-text: #146034;   /* 7.63:1 */
+  /* The rest of the DS tokens (surfaces, grid, text) are pinned light by the shared light pin in
+     _shared/shared-shell.css, which lists `.az-root` since 2026-10-01; this block still wins where
+     it sets the same token. `color-scheme` keeps the browser's own controls and scrollbars light
+     here too, as on the other light-pinned surfaces. */
+  color-scheme: light;
   height: 100vh; overflow: hidden; display: flex; flex-direction: column;
   background: var(--bg); color: var(--ink);
   font-family: var(--nds-font-sans);
