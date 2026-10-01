@@ -159,6 +159,8 @@ export interface StudioCellValue extends importContentWriteFacts {
   requested?: importResolvedContent['requested']
   provenance?: importResolvedContent['provenance']
   translation?: importResolvedContent['translation']
+  /** The server's note that publishing uses another layer's value than the one this cell shows (API `StudioCellValue`). */
+  divergence?: { publishesAs: unknown; note: string }
   value: unknown
   /**
    * The resolver's `ValueSource`. REQUIRED: PES.5 §3.2 defines `StudioCellValue` as

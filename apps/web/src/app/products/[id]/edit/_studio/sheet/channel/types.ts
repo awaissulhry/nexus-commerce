@@ -271,6 +271,8 @@ export interface StudioCellValue extends importContentWriteFacts {
   translation?: importResolvedContent['translation']
 
   resettable?: boolean
+  /** The server's note that publishing uses another layer's value than the one this cell shows (API `StudioCellValue`). */
+  divergence?: { publishesAs: unknown; note: string }
   shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite
   value: unknown
   source: ChannelValueSource
