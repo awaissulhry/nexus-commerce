@@ -183,7 +183,7 @@ function EventRow({ event }: { event: ProductEvent }) {
               {summary}
             </p>
           )}
-          <div className="text-[10px] text-zinc-400 mt-0.5">{source}</div>
+          <div className="text-[10px] text-tertiary mt-0.5">{source}</div>
         </div>
       </div>
     </li>

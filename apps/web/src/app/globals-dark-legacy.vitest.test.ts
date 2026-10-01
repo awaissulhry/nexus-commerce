@@ -82,13 +82,18 @@ describe('inverted buttons (slate-900, dark:slate-100)', () => {
     }
     return out
   }
+  // Scan class FRAGMENTS — runs between quotes, backticks and braces — not whole string literals: a
+  // backtick literal holding `${active ? 'bg-slate-900 dark:bg-slate-100 text-white' : '… dark:text-…'}`
+  // carries the other branch's dark:text- and hid the Returns "ALL" chip from a literal-level scan.
+  const LIGHT_DARK_FILL = /\bdark:bg-(?:white|(?:slate|gray|zinc)-(?:50|100|200))\b/
   const offenders: string[] = []
   let seen = 0
   for (const file of walk(SRC)) {
     const src = readFileSync(file, 'utf8')
-    for (const m of src.matchAll(/(["'`])((?:(?!\1)[^\n])*?\bdark:bg-slate-100\b(?:(?!\1)[^\n])*?)\1/g)) {
+    for (const m of src.matchAll(/[^'"`{}\n]+/g)) {
+      if (!LIGHT_DARK_FILL.test(m[0])) continue
       seen++
-      if (/(?<![:\w-])text-white\b/.test(m[2]) && !/dark:text-/.test(m[2])) offenders.push(`${file.slice(SRC.length + 1)}:${src.slice(0, m.index).split('\n').length}`)
+      if (/(?<![:\w-])text-white\b/.test(m[0]) && !/dark:text-/.test(m[0])) offenders.push(`${file.slice(SRC.length + 1)}:${src.slice(0, m.index).split('\n').length}`)
     }
   }
 

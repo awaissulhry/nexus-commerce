@@ -1438,7 +1438,7 @@ export default function StockWorkspace() {
             <button
               type="button"
               onClick={() => setPreferencesOpen(true)}
-              className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+              className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-secondary"
               title={t('grid.preferences.trigger')}
               aria-haspopup="dialog"
             >
@@ -1869,7 +1869,7 @@ export default function StockWorkspace() {
           </span>
           <Link
             href="/fulfillment/stock/cycle-count"
-            className="relative flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-slate-600 border-t-2 border-transparent active:bg-slate-50 dark:bg-slate-800"
+            className="relative flex-1 inline-flex flex-col items-center justify-center gap-0.5 py-2 text-secondary border-t-2 border-transparent active:bg-slate-50 dark:bg-slate-800"
           >
             <ClipboardCheck size={16} />
             Cycle counts
@@ -1947,7 +1947,7 @@ function KpiStrip({ kpis, t, onFilterStatus }: {
         ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
         : kpis.stockouts > 0
           ? 'bg-rose-50 text-rose-600'
-          : 'bg-slate-50 dark:bg-slate-800 text-slate-600',
+          : 'bg-slate-50 dark:bg-slate-800 text-secondary',
       onClick: kpis.stockouts > 0 ? () => onFilterStatus('OUT_OF_STOCK') : undefined,
       cardClass: stockoutSevere ? 'ring-2 ring-rose-300 dark:ring-rose-800' : undefined,
       ariaLabel: kpis.stockouts > 0
@@ -1959,7 +1959,7 @@ function KpiStrip({ kpis, t, onFilterStatus }: {
       label: t('stock.kpi.critical'),
       value: kpis.critical.toLocaleString(),
       detail: t('stock.kpi.criticalDetail', { n: kpis.low.toLocaleString() }),
-      tone: kpis.critical > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 dark:bg-slate-800 text-slate-600',
+      tone: kpis.critical > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 dark:bg-slate-800 text-secondary',
       onClick: kpis.critical > 0 ? () => onFilterStatus('CRITICAL') : undefined,
       ariaLabel: kpis.critical > 0
         ? t('stock.kpi.criticalAria', { n: kpis.critical.toLocaleString() })
@@ -2147,7 +2147,7 @@ function InsightsPanel({
                     <span className="tabular-nums">{g.deficitLocation.quantity}</span>
                   </div>
                 </div>
-                <div className="text-sm font-semibold text-violet-700 inline-flex items-center gap-0.5 flex-shrink-0">
+                <div className="text-sm font-semibold text-violet-700 dark:text-violet-300 inline-flex items-center gap-0.5 flex-shrink-0">
                   +{g.suggestedTransfer}
                   <ChevronRight size={12} className="text-tertiary" />
                 </div>
@@ -2233,7 +2233,7 @@ function InsightCategory({
       {cta && !isEmpty && (
         <Link
           href={cta.href}
-          className="text-sm text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-0.5 mt-1"
+          className="text-sm text-link hover:underline inline-flex items-center gap-0.5 mt-1"
         >
           {cta.label} <ChevronRight size={10} />
         </Link>
@@ -2535,7 +2535,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                     {bundle.product.sku}
                     {bundle.product.amazonAsin && <span> · {bundle.product.amazonAsin}</span>}
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-base text-slate-600">
+                  <div className="mt-1 flex items-center gap-3 text-base text-secondary">
                     <span className="inline-flex items-center gap-1">
                       <Boxes size={11} className="text-tertiary" />
                       <span className="font-semibold tabular-nums">{bundle.product.totalStock}</span> total
@@ -2606,7 +2606,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             .filter(loc => bundle.family!.children.some(c => c.stockLevels.some(sl => sl.locationId === loc.id)))
                             .map(loc => (
                               <th key={loc.id} className="pb-1.5 text-right text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-2">
-                                <span className={`inline-block px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`}>
+                                <span className={`inline-block px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-secondary border-default dark:border-slate-700'}`}>
                                   {loc.code}
                                 </span>
                               </th>
@@ -2684,7 +2684,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                       <li key={sl.id} className="flex items-center justify-between gap-3 py-2 px-3 border border-default dark:border-slate-700 rounded">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`}>
+                            <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-secondary border-default dark:border-slate-700'}`}>
                               {sl.location.code}
                             </span>
                             <span className="text-base text-slate-700 dark:text-slate-300">{sl.location.name}</span>
@@ -2747,7 +2747,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             {atp && (
                               <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums">
                                 {atp.source === 'SHARED_POOL' ? t('stock.atpPerChannel.shared', { name: atp.poolLenderName ?? '' }) : t('stock.atpPerChannel.onHand')} <span className="text-slate-700 dark:text-slate-300 font-semibold">{atp.onHand}</span>
-                                {atp.reservedForChannel > 0 && <> · −<span className="text-violet-700">{atp.reservedForChannel}</span> {t('stock.atpPerChannel.reserved')}</>}
+                                {atp.reservedForChannel > 0 && <> · −<span className="text-violet-700 dark:text-violet-300">{atp.reservedForChannel}</span> {t('stock.atpPerChannel.reserved')}</>}
                                 {atp.stockBuffer > 0 && <> · −<span className="text-amber-700">{atp.stockBuffer}</span> {t('stock.atpPerChannel.buffer')}</>}
                                 <> = <span className="text-emerald-700 font-semibold">{atp.available}</span> {t('stock.atpPerChannel.available')}</>
                                 {atp.drift != null && atp.drift !== 0 && (
@@ -3060,7 +3060,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                               <span className="text-xs text-tertiary font-mono">{m.referenceType}</span>
                             )}
                           </div>
-                          {m.notes && <div className="text-sm text-slate-600 mt-0.5">{m.notes}</div>}
+                          {m.notes && <div className="text-sm text-secondary mt-0.5">{m.notes}</div>}
                           <MovementUsedBy usedBy={m.usedBy} />
                           <div className="text-xs text-tertiary mt-0.5">
                             {new Date(m.createdAt).toLocaleString()} {m.actor && `· ${m.actor}`}
@@ -3395,7 +3395,7 @@ function SavedViewsButton({
             )}
             <button
               onClick={onOpenSaveModal}
-              className="w-full mt-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded inline-flex items-center gap-2 border-t border-subtle dark:border-slate-800"
+              className="w-full mt-1 px-3 py-2 text-sm text-link hover:bg-info-soft rounded inline-flex items-center gap-2 border-t border-subtle dark:border-slate-800"
             >
               <BookmarkPlus size={12} />
               {t('stock.savedViews.saveCurrent')}
@@ -3684,7 +3684,7 @@ const COLUMN_META: Record<ColumnKey, {
       if (locs.length === 1) {
         const loc = locs[0].location
         return (
-          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`} title={loc.name}>
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-secondary border-default dark:border-slate-700'}`} title={loc.name}>
             {loc.code}
           </span>
         )
@@ -3692,7 +3692,7 @@ const COLUMN_META: Record<ColumnKey, {
       return (
         <div className="flex items-center gap-1 flex-wrap">
           {locs.map((sl) => (
-            <span key={sl.id} className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-default dark:border-slate-700'}`} title={sl.location.name}>
+            <span key={sl.id} className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-secondary border-default dark:border-slate-700'}`} title={sl.location.name}>
               {sl.location.code}
             </span>
           ))}
@@ -3761,7 +3761,7 @@ const COLUMN_META: Record<ColumnKey, {
     align: 'right',
     head: 'Cost',
     cell: ({ it }) => (
-      <span className="tabular-nums text-slate-600">
+      <span className="tabular-nums text-secondary">
         {it.costPrice != null ? `€${it.costPrice.toFixed(2)}` : <span className="text-tertiary">—</span>}
       </span>
     ),
@@ -4110,7 +4110,7 @@ function BulkAdjustModal({
               return (
                 <li key={it.id} className="text-sm flex items-center justify-between gap-2 py-0.5">
                   <span className="truncate">
-                    <span className="font-mono text-slate-600">{it.sku}</span>
+                    <span className="font-mono text-secondary">{it.sku}</span>
                     {it.stockLevels.length > 0 && (
                       <span className="text-tertiary"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
                     )}
@@ -4212,7 +4212,7 @@ function BulkTransferModal({
             {selectedItems.slice(0, 50).map((it) => (
               <li key={it.id} className="text-sm flex items-center justify-between gap-2 py-0.5">
                 <span className="truncate">
-                  <span className="font-mono text-slate-600">{it.sku}</span>
+                  <span className="font-mono text-secondary">{it.sku}</span>
                   {it.stockLevels.length > 0 && (
                     <span className="text-tertiary"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
                   )}
@@ -4274,7 +4274,7 @@ function BulkThresholdModal({
             aria-describedby="bulk-threshold-help"
             className="flex-1 h-9 px-2 text-md border border-default dark:border-slate-700 rounded font-mono tabular-nums disabled:bg-slate-100 disabled:text-tertiary"
           />
-          <label className="text-base text-slate-600 inline-flex items-center gap-1.5">
+          <label className="text-base text-secondary inline-flex items-center gap-1.5">
             <input type="checkbox" checked={clearMode} onChange={(e) => setClearMode(e.target.checked)} />
             {t('stock.bulkThreshold.clearMaster')}
           </label>

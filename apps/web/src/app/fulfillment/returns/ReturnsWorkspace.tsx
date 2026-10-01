@@ -661,7 +661,7 @@ export default function ReturnsWorkspace() {
               <button
                 key={s}
                 onClick={() => setFilters({ status: s, queue: null, page: '1' })}
-                className={`h-7 px-2 text-sm border rounded ${statusFilter === s && !queueFilter ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                className={`h-7 px-2 text-sm border rounded ${statusFilter === s && !queueFilter ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
               >
                 {s.replace(/_/g, ' ')}
               </button>
