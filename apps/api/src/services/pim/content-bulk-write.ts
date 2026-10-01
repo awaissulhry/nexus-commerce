@@ -1,4 +1,5 @@
 import { currentFormulaWrite } from './mapping/formula-write-context.js'
+import { resolveChannelConnectionId } from '../connection-resolver.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import prisma from '../../db.js'
@@ -22,7 +23,9 @@ const addressKey = (value: unknown, label: string) => {
     : ['pin', address.language, address.coordinate.channel, address.coordinate.market, address.coordinate.accountId ?? '', address.coordinate.aliasId ?? ''])
 }
 export interface ContentEdit { change: Change; column: SheetColumn }
-export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: () => Promise<any>,
+/** Only owners whose content write checked the caller's token may advance the next write's token. */
+export type ContentOwnerVersion = (productId: string, versionOf: 'product' | 'channelListing') => Promise<number | undefined>
+export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: (readContentOwner?: ContentOwnerVersion) => Promise<any>,
   priorErrors: Array<{ id: string; field: string; error: string }> = [], priorWarnings: Array<{ id: string; field: string; warning: string }> = []) {
   const errors: Array<{ id: string; field: string; error: string }> = [...priorErrors]
   /** P1 (`value-verdict.ts`) — a stored value with a problem (a title over the channel's limit), and its reason. */
@@ -105,10 +108,15 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
   return inDatabaseTransaction(prisma, async () => {
     const groups = new Map<string, typeof plans>()
     for (const plan of plans) { const key = `${plan.edit.change.id}:${JSON.stringify(plan.address)}`; groups.set(key, [...(groups.get(key) ?? []), plan]) }
-    const ownerVersions = new Map<string, number>()
+    const ownerVersions = new Map<string, () => Promise<number>>()
     const createdListings: Array<{ productId: string; listingId: string }> = []
     const refused = new Set<typeof plans>()
-    let currentVersion: number | undefined, versionOf: 'product' | 'channelListing' = 'product'
+    let readFinalOwner: (() => Promise<number>) | undefined, versionOf: 'product' | 'channelListing' = 'product'
+    // The content row each write moved (a pin's listing translation, a shared language's product translation) and the
+    // version it holds now: every cell on that row carries it as its token, so the sheet's NEXT edit there chains without
+    // waiting for a read (the P3 commit sweep, 2026-09-30: a second bullet save was refused as "changed").
+    const contentVersions: Array<{ id: string; tier: 'pin' | 'language'; language: string; version: number }> = []
+    const translationIds = new Map<(typeof contentVersions)[number], string>()
     for (const group of groups.values()) {
       const first = group[0], change = first.edit.change
       if (first.draft && !first.listingId) {
@@ -118,7 +126,7 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
           const ensured = await ensureDraftListings(activeDatabaseTransaction()!, { channel: c.channel, market: c.market, accountId: c.accountId ?? null, productIds: [change.id], family: true })
           for (const row of ensured) if (row.created) createdListings.push({ productId: row.productId, listingId: row.id })
           const own = ensured.find(row => row.productId === change.id)!
-          ownerVersions.set(`listing:${own.id}`, own.version)
+          ownerVersions.set(`listing:${own.id}`, async () => own.version)
           for (const plan of group) plan.listingId = own.id
         } catch (error) {
           // No account, an inactive market: that row's own refusal, never a 500 (all-or-nothing callers fail whole).
@@ -132,12 +140,20 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       for (const plan of group.filter(p => p.edit.change.intent !== 'reset')) values[plan.field] = plan.slot ? withSlotValue(values[plan.field] ?? plan.baseValue, plan.slot, plan.value) : plan.value
       const reset = group.filter(p => p.edit.change.intent === 'reset').map(p => p.field)
       const ownerKey = first.address.tier === 'pin' ? `listing:${first.listingId}` : `product:${change.id}`
-      await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
-        expectedVersion: ownerVersions.get(ownerKey) ?? input.expectedVersion ?? first.ownerVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined })
+      const written = await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
+        expectedVersion: await ownerVersions.get(ownerKey)?.() ?? input.expectedVersion ?? first.ownerVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined })
+      if (first.address.tier !== 'source' && 'version' in written && 'id' in written) {
+        const token = { id: change.id, tier: first.address.tier, language: first.address.language, version: written.version }
+        contentVersions.push(token)
+        translationIds.set(token, written.id)
+      }
       versionOf = first.address.tier === 'pin' ? 'channelListing' : 'product'
-      const owner = versionOf === 'channelListing' ? await prisma.channelListing.findUniqueOrThrow({ where: { id: first.listingId! }, select: { version: true } }) : await prisma.product.findUniqueOrThrow({ where: { id: change.id }, select: { version: true } })
-      currentVersion = owner.version
-      ownerVersions.set(ownerKey, owner.version)
+      // Read only when another group needs this owner's CAS, or once at the end for the reply.
+      // A formula or a later content group can move it after this write.
+      readFinalOwner = first.address.tier === 'pin'
+        ? async () => (await prisma.channelListing.findUniqueOrThrow({ where: { id: first.listingId! }, select: { version: true } })).version
+        : async () => (await prisma.product.findUniqueOrThrow({ where: { id: change.id }, select: { version: true } })).version
+      ownerVersions.set(ownerKey, readFinalOwner)
     }
     const formulaWrite = currentFormulaWrite(context.formulaWriteToken)
     if (formulaWrite) {
@@ -145,23 +161,64 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       formulaWrite.results = []
       for (const operation of formulaWrite.operations?.() ?? []) formulaWrite.results.push(await operation)
     }
-    const rest = await facts()
+    const rest = await facts(async (productId, owner) => {
+      const pin = owner === 'channelListing' ? plans.find(plan => plan.edit.change.id === productId && plan.address.tier === 'pin') : undefined
+      const key = owner === 'product' ? `product:${productId}` : `listing:${pin?.listingId}`
+      return ownerVersions.get(key)?.()
+    })
+    let contentMayHaveMoved = groups.size > 1 || (rest.updated ?? 0) > 0
     if (!context.formulaCascade) {
       const { reevaluateDependents } = await import('./mapping/cell-formula.service.js')
       for (const group of groups.values()) {
         if (refused.has(group)) continue
         const first = group[0], address = first.address
-        await reevaluateDependents({ productId: first.edit.change.id, changedFields: group.map(plan => plan.edit.change.field), updatedBy: context.userId,
+        const recalculated = await reevaluateDependents({ productId: first.edit.change.id, changedFields: group.map(plan => plan.edit.change.field), updatedBy: context.userId,
           ...(address.tier === 'pin' ? { coordinate: { channel: address.coordinate.channel, marketplace: address.coordinate.market, channelConnectionId: address.coordinate.accountId, aliasKey: address.coordinate.aliasId, locale: address.language } } : {}) })
+        contentMayHaveMoved ||= recalculated.length > 0
       }
     }
+    // Reuse each writer's confirmed translation unless later work could have changed it. One batch per
+    // table covers all touched rows; row IDs keep a pin on its own account/listing/alias.
+    if (contentMayHaveMoved) {
+      for (const tier of ['language', 'pin'] as const) {
+        const tokens = contentVersions.filter(token => token.tier === tier)
+        if (!tokens.length) continue
+        const args = { where: { id: { in: tokens.map(token => translationIds.get(token)!) } }, select: { id: true, version: true } }
+        const rows = tier === 'language' ? await prisma.productTranslation.findMany(args) : await prisma.channelListingTranslation.findMany(args)
+        const versions = new Map(rows.map(row => [row.id, row.version]))
+        for (const token of tokens) {
+          const version = versions.get(translationIds.get(token)!)
+          if (version === undefined) throw new Error('The saved content row is missing from the final version read.')
+          token.version = version
+        }
+      }
+    }
+    // The rest writer can own a different row type. Keep its response ownership, then read that row after
+    // the content formulas too. A guarded request targets exactly one product and one coordinate.
+    if (rest.currentVersion !== undefined && rest.versionOf && rest.versionOf !== versionOf) {
+      const productId = input.changes[0].id, coordinate = contexts[0]
+      const accountId = rest.versionOf === 'channelListing' ? coordinate.accountId ?? await resolveChannelConnectionId(coordinate.channel) : null
+      readFinalOwner = rest.versionOf === 'product'
+        ? async () => (await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { version: true } })).version
+        : async () => (await prisma.channelListing.findFirstOrThrow({ where: { productId, channel: coordinate.channel, marketplace: coordinate.marketplace,
+            channelConnectionId: accountId, aliasKey: 'aliasKey' in coordinate && typeof coordinate.aliasKey === 'string' ? coordinate.aliasKey : '' }, select: { version: true } })).version
+      versionOf = rest.versionOf
+    }
+    const currentVersion = await readFinalOwner?.()
     const ids = [...new Set([...edits.map(edit => edit.change.id), ...createdListings.map(row => row.productId)])]
     await afterDatabaseCommit(`product-cache:${ids.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(ids))
-    // The drafts this save started, with the version each holds now, so the sheet adopts them at once.
-    const created = createdListings.length ? await prisma.channelListing.findMany({ where: { id: { in: createdListings.map(row => row.listingId) } }, select: { id: true, version: true } }) : []
-    const createdOut = [...createdListings.map(row => ({ ...row, version: created.find(r => r.id === row.listingId)?.version ?? null })), ...(rest.createdListings ?? [])]
+    // Include the rest writer's draft/family receipts: content formulas can advance those listings too.
+    type ListingReply = { productId: string; listingId: string }
+    const createdReply: ListingReply[] = [...createdListings, ...(rest.createdListings ?? [])]
+    const familyReply: ListingReply[] = rest.familyListings ?? []
+    const replyListingIds = [...createdReply, ...familyReply].map(row => row.listingId)
+    const listings = replyListingIds.length ? await prisma.channelListing.findMany({ where: { id: { in: replyListingIds } }, select: { id: true, version: true } }) : []
+    const listingVersions = new Map(listings.map(row => [row.id, row.version]))
+    const finalListing = (row: ListingReply) => ({ ...row, version: listingVersions.get(row.listingId) ?? null })
+    const createdOut = createdReply.map(finalListing)
     const skipped = [...refused].reduce((n, group) => n + group.length, 0)
     return { ...rest, success: true, updated: plans.length - skipped + (rest.updated ?? 0), ...(createdOut.length ? { createdListings: createdOut } : {}),
-      currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [], ...withWarnings(rest) }
+      ...(contentVersions.length ? { contentVersions } : {}), ...(familyReply.length ? { familyListings: familyReply.map(finalListing) } : {}),
+      currentVersion: currentVersion ?? rest.currentVersion, versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [], ...withWarnings(rest) }
   })
 }

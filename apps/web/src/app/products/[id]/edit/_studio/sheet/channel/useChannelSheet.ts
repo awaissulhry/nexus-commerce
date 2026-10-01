@@ -36,6 +36,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
+import { adoptContentVersions, contentWriteProof } from '../contentVersions'
 import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
@@ -405,6 +406,8 @@ export interface ChannelWriteCoord {
    * operation's single bulk-save request (`runBulkOperation`, `bulkOperation.ts`). Everything else here is the same.
    */
   bulkSend?: BulkSend
+  /** Keep the writer's separate row tokens in step when aliases share one product. */
+  onProductVersionsChanged?: (rows: ChannelSheetRow[]) => void
 }
 
 function reportCreated(req: SheetWriteRequest<ChannelSheetRow>, coord: ChannelWriteCoord, created: CreatedListing[]): void {
@@ -506,7 +509,11 @@ async function commitChannelLanguage(
   }
   // A channel write CAS-guards the LISTING; with no listing on the row yet, 0 says "I saw none" and the server starts
   // the family's draft (create path, step 6). Never the product's version as a stand-in.
-  const casVersion = touchesChannel ? row.listing ? row.listing.version : NO_LISTING_VERSION : req.expectedVersion
+  const selection = contentWriteProof(row, req.cells.map(cell => row.values[cell.colId]), touchesChannel ? 'channelListing' : 'product',
+    touchesChannel ? row.listing ? row.listing.version : NO_LISTING_VERSION : req.expectedVersion, [...(coord.familyRows?.() ?? [])])
+  if (!selection.ok) return { ok: false, conflict: true, reason: selection.reason,
+    cells: Object.fromEntries(req.cells.map(cell => [cell.colId, { ok: false, reason: selection.reason }])) }
+  const proof = selection.proof, casVersion = proof.expectedVersion
 
   try {
     const send = (expectedVersion: number | undefined) => (coord.bulkSend ?? directBulkSend)({
@@ -531,6 +538,7 @@ async function commitChannelLanguage(
         (!row.listing || row.listing.id === body.listingId)) {
       if (row.listing) row.listing.version = body.currentVersion
       else row.listing = conflictListing(body.listingId, body.currentVersion)
+      proof.listingRetry = { listingId: body.listingId, expectedVersion: body.currentVersion }
       res = await send(body.currentVersion)
       body = await res.json().catch(() => null)
     }
@@ -571,7 +579,17 @@ async function commitChannelLanguage(
      */
     const versionOf: 'channelListing' | 'product' | undefined = body?.versionOf
     if (versionOf === 'channelListing' && raw !== undefined && row.listing) row.listing.version = raw
-    const version = versionOf === 'product' ? raw : undefined
+    // The content row the save moved hands its new token to every cell writing to it (bullets, title, …).
+    if (res.ok) adoptContentVersions(row, body, family, proof)
+    let version = versionOf === 'product' ? raw : undefined
+    if (res.ok && version !== undefined) {
+      const confirmedVersion = version
+      const moved = [...new Set([row, ...family])].filter(r => r.id === row.id && (r.version === undefined || r.version < confirmedVersion))
+      for (const sibling of moved) sibling.version = confirmedVersion
+      if (moved.length) coord.onProductVersionsChanged?.(moved)
+      // An older answer may arrive after another alias already advanced the shared product.
+      version = Math.max(version, row.version ?? version)
+    }
 
     if (res.status === 404 || res.status === 501) {
       return { ok: false, reason: 'The channel write path is not deployed yet (PES.5)' }

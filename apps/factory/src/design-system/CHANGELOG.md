@@ -1,3 +1,19 @@
+## Save replies reconcile replacement rows — 2026-09-30
+
+**`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.
+
+## Replacement rows keep confirmed write versions — 2026-09-30
+
+**`SheetWriter`** accepts an optional `mergeRow(previous, incoming, knownVersion)` function on row seeds and edits. Product sheets use it to retain confirmed content and listing versions without replacing edited values. Ownership rules stay in the sheet. Mirrored in Factory.
+
+## Batch replies keep newer version numbers — 2026-09-30
+
+**`SheetWriter`** keeps the highest confirmed row version when a save finishes. An older reply cannot undo a newer version learned from another alias, so the next edit uses the right number. Uses the existing seed rule. Mirrored in Factory.
+
+## Clear is reachable with the arrow keys — 2026-09-30
+
+**`ListboxPanel`** lets ArrowUp reach Clear from the first option. Enter and Tab report an empty value before a grid ends the edit. Focusing Clear also updates the keyboard choice. A missing stored value still stays unchanged until the operator chooses. Mirrored in Factory.
+
 ## A short list takes the keyboard before it is painted — 2026-09-30
 
 Mirrored from web. `ListboxPanel` without a search field focuses its container in a layout effect, before the paint.

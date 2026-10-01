@@ -26,6 +26,7 @@ import { adaptLegacySheet, type LegacySheetPage } from './adaptLegacy'
 import { recoverSheetRow } from '../sheetRecovery'
 import { commitMasterRow } from './masterWrite'
 import { runBulkOperation, type BulkSend } from '../bulkOperation'
+import { preserveContentVersions } from '../contentVersions'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
 
 export interface UseMasterSheetOptions {
@@ -126,6 +127,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const writer = useMemo(
     () =>
       new SheetWriter<StudioRow>({
+        mergeRow: preserveContentVersions,
         tracker,
         commit,
         // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29 on the channel

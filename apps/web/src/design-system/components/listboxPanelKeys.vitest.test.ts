@@ -131,6 +131,75 @@ describe('ListboxPanel — onKeyChoice reports Enter and Tab before the grid end
   const search = (root: El) => flat(root).find((el) => el.type === 'input')
   const labels = (root: El) => optionEls(root).map((o) => [o.props.children].flat().filter((c) => typeof c === 'string').join(''))
 
+  it.each(['Enter', 'Tab'])('↑ from the first option reaches Clear, and %s reports an empty value', (key) => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'a', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), key)
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('Clear stays reachable at the top and ↓ returns to the first option', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'a', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('a')
+  })
+
+  it('focusing Clear makes it the choice for both the grid and standalone panel', () => {
+    const onKeyChoice = vi.fn()
+    const onCommit = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'b', emptyLabel: 'Clear', onCommit, onCancel() {} }
+    ;(optionEls(render(props))[0].props.onFocus as (() => void) | undefined)?.()
+    enter(render(props))
+    expect(onCommit).toHaveBeenLastCalledWith('')
+    capture(render({ ...props, onKeyChoice }), 'Tab')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('a stored value outside the list is kept until ↑ explicitly chooses Clear', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'zz', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith(null)
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('a searching list highlights Clear and reports an empty value', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options, value: 'a', emptyLabel: 'Clear', searchable: true, onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    const root = render(props)
+    expect(optionEls(root)[0].props.className).toContain('active')
+    capture(root, 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('Clear remains the choice when an empty list has no option below it', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options: [], value: 'unavailable', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    arrow(render(props), 'ArrowUp')
+    arrow(render(props), 'ArrowDown')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
+  it('an explicit empty option is not duplicated, and ↑ can choose it', () => {
+    const onKeyChoice = vi.fn()
+    const props: ListboxPanelProps = { options: [{ value: '', label: 'None' }, ...options], value: 'a', emptyLabel: 'Clear', onCommit() {}, onCancel() {}, onKeyChoice }
+    expect(optionEls(render(props))).toHaveLength(options.length + 1)
+    arrow(render(props), 'ArrowUp')
+    capture(render(props), 'Enter')
+    expect(onKeyChoice).toHaveBeenLastCalledWith('')
+  })
+
   it('Enter reports the highlighted row, and the panel does not also commit it', () => {
     const onCommit = vi.fn()
     const onKeyChoice = vi.fn()

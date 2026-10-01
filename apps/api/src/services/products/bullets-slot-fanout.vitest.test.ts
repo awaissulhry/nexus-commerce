@@ -29,7 +29,7 @@ const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGAC
 const CAP = 700
 const context = { formulaCascade: false, logger: { warn: vi.fn(), error: vi.fn() } }
 let account = ''
-const ids: Record<'ten' | 'refuse' | 'stale' | 'direct', string> = { ten: '', refuse: '', stale: '', direct: '' }
+const ids: Record<'ten' | 'refuse' | 'stale' | 'direct' | 'chain', string> = { ten: '', refuse: '', stale: '', direct: '', chain: '' }
 
 beforeAll(() => scoped(async () => {
   await prisma.marketplace.create({ data: { channel: 'AMAZON', code: 'IT', name: 'Italy', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'], marketplaceId: 'APJ6JRA9NG5V4' } as never })
@@ -128,3 +128,20 @@ it('F5 control — off the sheet route (no per-row opt-in) the same refused requ
   expect(result).toMatchObject({ success: false, updated: 0 })
   expect(await stored(ids.direct)).toEqual(before)
 }, 60_000)
+
+it('F9 the answer names the pin text\'s new version, and the next save sent with it lands (the sheet chains without a read)', async () => {
+  // What the sheet sends: the pin text's version as each bullet cell's `contentVersion` (0 while no pin text exists).
+  const save = (values: Record<number, string>, contentVersion: number) => scoped(async () => app.inject({ method: 'PATCH', url: '/products/bulk', payload: {
+    changes: slotChanges(ids.chain, values).map(change => ({ ...change, contentVersion })), marketplaceContexts: contexts(), expectedVersion: (await listing(ids.chain)).version } }))
+  const first = await save({ 1: 'one' }, 0)
+  expect(first.statusCode, first.body).toBe(200)
+  expect(first.json().contentVersions).toEqual([{ id: ids.chain, tier: 'pin', language: 'it', version: 1 }])
+  const second = await save({ 2: 'two' }, first.json().contentVersions[0].version)
+  expect(second.statusCode, second.body).toBe(200)
+  expect(second.json().contentVersions).toEqual([{ id: ids.chain, tier: 'pin', language: 'it', version: 2 }])
+  expect(await stored(ids.chain)).toEqual(['one', 'two'])
+  // The token is real: the version from before the second save is refused, and nothing is written.
+  const stale = await save({ 3: 'three' }, 1)
+  expect(stale.statusCode).not.toBe(200)
+  expect(await stored(ids.chain)).toEqual(['one', 'two'])
+})

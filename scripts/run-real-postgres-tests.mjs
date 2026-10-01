@@ -146,6 +146,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'eBay price read-back dedupe (JSON-path key, classes, 24 h, per business)', file: 'src/services/ebay-price-readback-postgres.vitest.test.ts', expect: 4 },
   { name: 'master-price currency refusal (own transaction, caller rollback and commit)', file: 'src/services/master-price-currency-postgres.vitest.test.ts', expect: 3 },
   { name: 'pending readiness vs a concurrent rebuild (attributes P2)', file: 'src/services/pim/readiness-pending-race.vitest.test.ts', expect: 2 },
+  { name: 'transaction commit conflict (real adapter error, fresh snapshot and committed effects)', file: 'src/lib/database-context-postgres.vitest.test.ts', expect: 1 },
   { name: 'one sheet operation = one transaction (250 rows, one readiness rebuild, row savepoints, RLS, two operations at once)', file: 'src/services/products/bulk-save-postgres.vitest.test.ts', expect: 5 },
   { name: 'category tree races (moves, creates, memberships and workspace commands serialize on the tree lock)', file: 'src/services/category-tree-concurrency.vitest.test.ts', expect: 5 },
   { name: 'Amazon Ads drift closes on evidence, per profile (structural reconcile under row security)', file: 'src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts', expect: 1 },
