@@ -12537,6 +12537,21 @@ model SavedView {
   @@index([workspaceId])
 }
 
+/// 2026-10-01 (Owner: "whenever I reload or change profiles, I should see the same layout") — a person's own product
+/// sheet layout, one per sheet (`product-edit:layout:master`, `product-edit:layout:EBAY`, …): My layout, the view
+/// picked last, widths, sort and row height. GLOBAL, not business-owned: it follows the person into every business
+/// profile. Written only through `services/sheet-layouts/user-sheet-layout.service.ts`, always for the signed-in user.
+model UserSheetLayout {
+  id        String   @id @default(cuid())
+  userId    String
+  surface   String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, surface])
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // ORDERS REBUILD D.1 — review request engine + tags
 // ─────────────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify'
 import { deleteSavedView, listSavedViewGroups, listSavedViewsWithAlerts, SavedViewError, savedViewOwner, writeSavedView, type SavedViewWriteInput } from '../services/saved-views/persistence.service.js'
+import { readUserSheetLayout, writeUserSheetLayout, type UserSheetLayoutWrite } from '../services/sheet-layouts/user-sheet-layout.service.js'
 
 function fail(reply: FastifyReply, error: unknown) {
   return reply.code(error instanceof SavedViewError ? error.status : 500).send({ error: error instanceof Error ? error.message : String(error) })
@@ -26,6 +27,18 @@ const savedViewPersistenceRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch('/saved-views/:id', async (request, reply) => {
     try { return await writeSavedView(savedViewOwner(request), (request.params as { id: string }).id, request.body as SavedViewWriteInput) }
+    catch (error) { return fail(reply, error) }
+  })
+
+  /* 2026-10-01 — a person's own product sheet layout, the same in every business profile (`user-sheet-layout.service.ts`).
+     Same list / write shapes as the saved views above, so the sheet reads and writes it the same way. */
+  fastify.get('/sheet-layouts', async (request, reply) => {
+    try { return { items: await readUserSheetLayout(savedViewOwner(request), (request.query as { surface?: unknown }).surface) } }
+    catch (error) { return fail(reply, error) }
+  })
+
+  fastify.put('/sheet-layouts', async (request, reply) => {
+    try { return await writeUserSheetLayout(savedViewOwner(request), request.body as UserSheetLayoutWrite) }
     catch (error) { return fail(reply, error) }
   })
 
