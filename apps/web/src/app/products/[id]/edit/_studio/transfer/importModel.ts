@@ -75,7 +75,7 @@ export function changeCells(change: Pick<SheetImportChange, 'before' | 'after' |
   return focusChange(cellValue(change, 'before', 4000), cellValue(change, 'after', 4000))
 }
 
-export const STATUS_LABELS: Record<SheetImportChange['status'], string> = { ready: 'Ready', problem: 'Problem', saved: 'Saved', failed: 'Not saved', skipped: 'Skipped' }
+export const STATUS_LABELS: Record<SheetImportChange['status'], string> = { ready: 'Ready', new: 'New', problem: 'Problem', saved: 'Saved', failed: 'Not saved', skipped: 'Skipped' }
 
 /** Where in the file a problem is: "Amazon IT · row 14 · column F". */
 export function whereInFile(change: Pick<SheetImportChange, 'sheet' | 'row' | 'column'>): string {

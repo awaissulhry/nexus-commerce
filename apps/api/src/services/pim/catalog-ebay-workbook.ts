@@ -37,17 +37,24 @@ export interface EbayLedgerEntry {
   outcome: 'row' | 'excluded' | 'refused' | 'skipped-row'
   field?: string; reason?: string
 }
+/** CFI-4 — an identity PROPOSAL the Owner confirms (`links` on the next preview request). */
+export interface EbayLink { fileSku: string; proposedSku: string; reason: string }
 /**
- * CFI-4 — an identity PROPOSAL the Owner confirms (`links` on the next preview request). 2026-10-01: `kind` marks an extra
- * listing of `proposedSku` — one without a SKU yet that gets `fileSku` (`name-listing`), or a new one (`new-listing`);
- * those are confirmed through `listings`, not `links`.
+ * 2026-10-01 (the Owner: "simply import", one step) — the extra listings a file names by a SKU Nexus does not hold yet,
+ * done by Apply before it saves the values: an extra listing without a SKU whose name is that SKU gets it (`names`); a
+ * missing one is created as inert drafts (`creates`, with the file's rows for it, keyed `new:<sku>` until it exists).
  */
-export interface EbayLink { fileSku: string; proposedSku: string; reason: string; kind?: 'name-listing' | 'new-listing' }
+export interface EbayListingPlan {
+  names: { aliasId: string; sku: string; rootId: string; rootSku: string; label: string; accountId: string; marketplace: string }[]
+  creates: { sku: string; rootId: string; rootSku: string; accountId: string; marketplace: string; rows: TransferRow[] }[]
+}
+export const NEW_LISTING_KEY = 'new:'
 export interface EbayWorkbookResult {
   rows: TransferRow[]; issues: TransferIssue[]; exclusions: SourceExclusion[]
   ledger: EbayLedgerEntry[]; links: EbayLink[]; warnings: string[]
   /** CHMAP — the mapping version the file was read with (`docs/studies/channel-mappings.md` §8). */
   mapping?: { setId: string; version: number; status: string; label: string; created: boolean }
+  listingPlan?: EbayListingPlan
 }
 export interface EbayResolveOptions {
   /** Confirmed identity links: file parent SKU → Nexus parent SKU. */
@@ -55,8 +62,9 @@ export interface EbayResolveOptions {
   /** A delete-like `Action` marks the listing ended in Nexus only when confirmed: `true` = every delete row, a list = only
    *  the rows whose FILE SKU it names (never the resolved Nexus SKU — an alias shares it with its primary listing). */
   confirmDeletes?: boolean | readonly string[]
-  /** Confirmed extra listings (2026-10-01): the file parent SKUs whose `name-listing` / `new-listing` proposal the Owner ticked. */
-  listings?: readonly string[]
+  /** The caller's Apply names and creates extra listings (`EbayListingPlan`): only the product sheet's Import. Elsewhere such a
+   *  listing is refused by name, never dropped. */
+  listingPlan?: boolean
 }
 
 // CHMAP — the column lists are data, shared with the mapping draft builder and the export (`channel-mapping/defaults.ts`).
@@ -369,8 +377,8 @@ export function checkEbayLedger(table: EbayWorkbookTable, result: Pick<EbayWorkb
 
 type Db = typeof import('../../db.js')['default']
 interface GroupPlan { rootId: string; rootSku: string; records: EbayWorkbookTable['records']; knownSkus: ReadonlySet<string> }
-/** An extra listing the Owner can confirm: give `aliasId` (no SKU yet) the file's SKU, or create one when absent. */
-interface ListingProposal { rootId: string; rootSku: string; aliasId?: string }
+/** An extra listing the file names by a SKU Nexus does not hold: `aliasId` (no SKU yet) gets it, or one is created. */
+interface ListingProposal { rootId: string; rootSku: string; aliasId?: string; label?: string }
 
 /**
  * Decide which Nexus product group each file listing belongs to (D4): the file parent SKU as a Nexus root → an
@@ -423,14 +431,12 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
         // 2026-10-01 — another listing of that product: the file also holds its main listing, or one of its extra listings
         // without a SKU carries this name. The Owner confirms; Nexus then names that listing, or creates it, with this SKU.
         const unnamed = familyAliases.find(a => a.productId === parentIds[0] && !a.sku && !a.adoptedFromProductId && a.label.trim() === fileParent)
-        if ((unnamed || parentSkus.includes(proposedSku)) && (!onlyRootId || onlyRootId === parentIds[0])) {
-          const where = `eBay ${table.marketplace}`
-          listingProposals?.set(fileParent, { rootId: parentIds[0], rootSku: proposedSku, aliasId: unnamed?.id })
-          out.links.push(unnamed
-            ? { fileSku: fileParent, proposedSku, kind: 'name-listing', reason: `Give the ${where} listing "${unnamed.label}" of ${proposedSku} the SKU ${fileParent} (it has no SKU yet)` }
-            : { fileSku: fileParent, proposedSku, kind: 'new-listing', reason: `Create the ${where} listing ${fileParent} for ${proposedSku}, as a draft` })
-          decision.set(fileParent, { refuse: unnamed ? `Give the ${where} listing "${unnamed.label}" the SKU ${fileParent}? Confirm it above, then check again.`
-            : `Create the ${where} listing ${fileParent} for ${proposedSku}? Confirm it above, then check again.` })
+        if (unnamed || parentSkus.includes(proposedSku)) {
+          // The file decides (the Owner, 2026-10-01): Apply names that listing, or creates it, then saves its values.
+          if (onlyRootId && onlyRootId !== parentIds[0]) { decision.set(fileParent, { skip: 'Outside this product; use Catalog import' }); continue }
+          if (!options.listingPlan) { decision.set(fileParent, { refuse: `This business has no eBay ${table.marketplace} listing with the SKU ${fileParent} yet. Import this file with the Import button of product ${proposedSku}: it names or creates the listing.` }); continue }
+          listingProposals?.set(fileParent, { rootId: parentIds[0], rootSku: proposedSku, aliasId: unnamed?.id, label: unnamed?.label })
+          decision.set(fileParent, { rootId: parentIds[0], rootSku: proposedSku })
           continue
         }
         out.links.push({ fileSku: fileParent, proposedSku, reason: `${known.length} of ${new Set(children).size} variation SKUs under eBay parent ${fileParent} belong to Nexus product ${proposedSku}` })
@@ -461,7 +467,7 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
 }
 
 /** Every eBay listing of one product group as a verified target (primary and adopted aliases). CHMAP: the export reads it too. */
-export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId: string, options: { unnamedByLabel?: boolean } = {}) {
+export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId: string, options: { unnamedByLabel?: boolean; pendingNames?: ReadonlyMap<string, string> } = {}) {
   const { productTransferOptions } = await import('./catalog-product-transfer.js')
   const transfer = await productTransferOptions(rootId), productById = new Map(transfer.products.map(p => [p.id, p]))
   const selected = transfer.listings.filter(l => l.channel === 'EBAY' && l.marketplace === table.marketplace)
@@ -478,7 +484,8 @@ export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId:
     // adopted shell's. An extra listing with neither has no name in a file — the export may write its label, which the
     // import then offers to make its SKU.
     const sourceParentSku = !coordinate.aliasKey ? rootSku
-      : alias?.sku || (alias?.adoptedFromProductId ? shells.find(s => s.id === alias.adoptedFromProductId)?.sku : undefined) || (options.unnamedByLabel ? alias?.label.trim() : undefined)
+      : alias?.sku || options.pendingNames?.get(alias?.id ?? '') || (alias?.adoptedFromProductId ? shells.find(s => s.id === alias.adoptedFromProductId)?.sku : undefined)
+        || (options.unnamedByLabel ? alias?.label.trim() : undefined)
     if (!sourceParentSku) return []
     const attributes = (l.platformAttributes ?? {}) as { itemSpecifics?: Record<string, unknown> } & Record<string, unknown>
     const specifics = attributes.itemSpecifics
@@ -487,30 +494,10 @@ export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId:
   })
 }
 
-/**
- * 2026-10-01 — the extra listings the Owner confirmed (`options.listings`): an extra listing without a SKU gets the file's
- * SKU; a missing one is created on the product's eBay account for this market, as inert drafts. It runs before the plan,
- * so the plan finds them by SKU. Each is decided again here; a proposal that no longer holds is skipped.
- */
-async function applyListingDecisions(prisma: Db, table: EbayWorkbookTable, options: EbayResolveOptions, onlyRootId?: string): Promise<string[]> {
-  const proposals = new Map<string, ListingProposal>()
-  await planEbayGroups(prisma, table, emptyResult(), { ...options, listings: undefined }, onlyRootId, proposals)
-  const { createAlias, nameListingAlias } = await import('./listing-alias.service.js')
-  const done: string[] = []
-  for (const fileSku of new Set(options.listings ?? [])) {
-    const proposal = proposals.get(fileSku)
-    if (!proposal) continue
-    const where = `eBay ${table.marketplace}`
-    if (proposal.aliasId) {
-      await nameListingAlias(proposal.aliasId, fileSku)
-      done.push(`The ${where} listing ${fileSku} of ${proposal.rootSku} now has the SKU ${fileSku}.`)
-      continue
-    }
-    const main = await prisma.channelListing.findFirst({ where: { productId: proposal.rootId, channel: 'EBAY', marketplace: table.marketplace, aliasKey: '' }, select: { channelConnectionId: true } })
-    await createAlias({ productId: proposal.rootId, channel: 'EBAY', marketplace: table.marketplace, accountId: main?.channelConnectionId ?? undefined, label: fileSku, sku: fileSku })
-    done.push(`Created the ${where} listing ${fileSku} for ${proposal.rootSku}, as a draft.`)
-  }
-  return done
+/** The business's one active eBay account, when it has exactly one (a new listing of a product with no eBay listing yet). */
+async function soleEbayAccount(prisma: Db): Promise<string> {
+  const accounts = await prisma.channelConnection.findMany({ where: { channelType: 'EBAY', isActive: true }, select: { id: true }, take: 2 })
+  return accounts.length === 1 ? accounts[0].id : ''
 }
 
 /** The policy IDs this business's eBay accounts use by default (`connectionMetadata.ebayPolicies`). */
@@ -525,20 +512,37 @@ async function accountPolicyIds(prisma: Db, targets: EbayWorkbookTarget[]): Prom
 async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptions, onlyRootId?: string): Promise<EbayWorkbookResult> {
   const [{ default: prisma }, { loadEbaySpec }] = await Promise.all([import('../../db.js'), import('./channel-specs/index.js')])
   const out = emptyResult()
-  const done = options.listings?.length ? await applyListingDecisions(prisma, table, options, onlyRootId) : []
+  const plan: EbayListingPlan = { names: [], creates: [] }
+  const proposals = new Map<string, ListingProposal>()
   // CHMAP M2 — one mapping version for the whole file: its columns against every category it names.
   const fileSpecs = new Map<string, ChannelSpec>()
   for (const category of new Set(table.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))) fileSpecs.set(category, await loadEbaySpec(table.marketplace, [category]))
   const { ebayImportMapping } = await import('../channel-mapping/ebay-import.js')
   let chmap: Awaited<ReturnType<typeof ebayImportMapping>> | null = null, mappingProblem = ''
   try { chmap = await ebayImportMapping(table, fileSpecs) } catch (error) { mappingProblem = error instanceof Error ? error.message : String(error) }
-  for (const group of await planEbayGroups(prisma, table, out, options, onlyRootId)) {
+  for (const group of await planEbayGroups(prisma, table, out, options, onlyRootId, proposals)) {
     const sub: EbayWorkbookTable = { ...table, records: group.records }
-    const targets = await groupTargets(prisma, sub, group.rootId)
+    const mine = [...proposals].filter(([, p]) => p.rootId === group.rootId)
+    const pendingNames = new Map(mine.filter(([, p]) => p.aliasId).map(([sku, p]) => [p.aliasId!, sku]))
+    const named = await groupTargets(prisma, sub, group.rootId, { pendingNames })
+    // A listing to create is matched against what it will be: one draft row per live product of the family.
+    const creating = mine.filter(([, p]) => !p.aliasId)
+    const account = creating.length ? named.find(t => !t.aliasKey)?.accountId || named[0]?.accountId || await soleEbayAccount(prisma) : ''
+    const family = creating.length && account ? await prisma.product.findMany({ where: { OR: [{ id: group.rootId }, { parentId: group.rootId }], deletedAt: null }, select: { id: true, sku: true } }) : []
+    const virtual: EbayWorkbookTarget[] = creating.flatMap(([sku]) => family.map(p => ({ id: `${NEW_LISTING_KEY}${sku}:${p.sku}`, sku: p.sku, parentSku: group.rootSku, sourceParentSku: sku,
+      isParent: p.id === group.rootId, itemId: '', accountId: account, marketplace: table.marketplace, aliasKey: `${NEW_LISTING_KEY}${sku}`, version: 0, specificNames: [], policyIds: [] })))
+    const targets = [...named, ...virtual]
     const specs = new Map<string, ChannelSpec>()
     const categories = new Set(sub.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))
     for (const category of categories) specs.set(category, fileSpecs.get(category) ?? await loadEbaySpec(table.marketplace, [category]))
     const mapped = mapEbayWorkbook(sub, targets, specs, { ...options, knownSkus: group.knownSkus, accountPolicyIds: await accountPolicyIds(prisma, targets), ...(chmap?.mapping ? { mapping: chmap.mapping, mappingSpecs: fileSpecs } : {}) })
+    for (const [sku, p] of mine) {
+      if (p.aliasId) { const t = named.find(n => n.aliasKey === p.aliasId); if (t) plan.names.push({ aliasId: p.aliasId, sku, rootId: p.rootId, rootSku: p.rootSku, label: p.label ?? sku, accountId: t.accountId, marketplace: t.marketplace }); continue }
+      if (!account) { out.issues.push({ row: 0, sku, field: 'Parent SKU', message: `Connect an eBay account before Nexus can create the eBay ${table.marketplace} listing ${sku}.` }); continue }
+      const rows = mapped.rows.filter(r => r.aliasKey === `${NEW_LISTING_KEY}${sku}`)
+      if (rows.length) plan.creates.push({ sku, rootId: p.rootId, rootSku: p.rootSku, accountId: account, marketplace: table.marketplace, rows })
+    }
+    mapped.rows = mapped.rows.filter(r => !r.aliasKey.startsWith(NEW_LISTING_KEY))
     out.rows.push(...mapped.rows); out.issues.push(...mapped.issues); out.exclusions.push(...mapped.exclusions)
     out.ledger.push(...mapped.ledger); out.warnings.push(...mapped.warnings)
   }
@@ -548,7 +552,7 @@ async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptio
     await recordUse(chmap.info.setId, 'IMPORT', table.sheet, { rows: out.rows.length, excluded: out.exclusions.length, refused: out.issues.length })
   }
   out.warnings.unshift(...(chmap?.info ? [`Read with the mapping ${chmap.info.label}.`] : []), ...(chmap?.warnings ?? []), ...(mappingProblem ? [`The mapping versions could not be read (${mappingProblem}); this file was read with the built-in rules only, and no Owner decision was applied.`] : []))
-  out.warnings.unshift(...done)
+  if (plan.names.length || plan.creates.length) out.listingPlan = plan
   out.warnings.unshift(`eBay listing workbook (${table.marketplace}${table.marketplaceFrom === 'filename' ? ', market from the file name' : table.marketplaceFrom === 'hint' ? ', market chosen for the import' : ''}): populated values are reviewed against current Nexus values. Blank cells preserve data. Prices are recorded without sending them to eBay; quantities, controls and sync fields are reference only.`)
   return out
 }

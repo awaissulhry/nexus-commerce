@@ -7,7 +7,7 @@ import { writeCatalogWorkbook, type WorkbookScope, type EditingWorkbookBaseline 
 import { TRANSFER_MAX_FILE_BYTES, readTransferFile } from './catalog-transfer-file.js'
 import { checkProductTransferBoundary, productTransferOptions } from './catalog-product-transfer.js'
 import { TransferConflict } from './catalog-transfer.service.js'
-import { resolveEbayWorkbook, resolveEbayCatalogWorkbook } from './catalog-ebay-workbook.js'
+import { resolveEbayWorkbook, resolveEbayCatalogWorkbook, type EbayListingPlan } from './catalog-ebay-workbook.js'
 import { resolveAmazonCatalogWorkbook } from './catalog-amazon-workbook.js'
 import { sniffCsv, shopifyInventoryDoor } from './channel-file-sniff.js'
 import { resolveShopifyCsv } from './catalog-shopify-csv.js'
@@ -21,8 +21,10 @@ export const PRODUCT_TRANSFER_MAX_OUTCOMES = 250_000
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue
 interface SavedExport extends EditingWorkbookBaseline { kind: typeof EXPORT_KIND; boundary: ProductTransferBoundary }
 /** CFI-4 — an identity the file suggests but the Owner must confirm (BUILD.md §1, D4). */
-export interface IdentityProposal { fileSku: string; proposedSku: string; reason: string; kind?: 'name-listing' | 'new-listing' }
+export interface IdentityProposal { fileSku: string; proposedSku: string; reason: string }
 interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[]; links?: IdentityProposal[]
+  /** eBay files: the extra listings Apply names or creates before it saves their values (2026-10-01). */
+  listingPlan?: EbayListingPlan
   /** PSIE — what each part was (the parse worker's verdict), in upload order. */
   kinds?: ('editing' | 'wide' | 'transfer' | 'ebay' | 'amazon' | 'shopify')[]
   /** PSIE — the editing baseline the file was checked against, when it is a Nexus editing file. */
@@ -32,7 +34,7 @@ interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions
  * `confirmDeletes` lets a file's delete rows end their listings — `true` for every delete row, or the list of file
  * SKUs the Owner confirmed one by one. Both absent = nothing is assumed. Passed to the readers unchanged.
  */
-export interface ChannelFileDecisions { links?: Record<string, string>; confirmDeletes?: boolean | string[]; listings?: string[] }
+export interface ChannelFileDecisions { links?: Record<string, string>; confirmDeletes?: boolean | string[] }
 /** Stage timing for the import. The 2026-09-16 handler emitted nothing and was unreadable. */
 export type ImportLog = (event: string, detail: Record<string, unknown>) => void
 
@@ -82,7 +84,7 @@ const EXPANDED_BATCH_BYTES = 128 * 1024 * 1024
  * review.
  */
 async function readEditorPart(session: ParseSession, buffer: Buffer, filename: string, productId: string, expanded: { bytes: number },
-  baselineOf: () => SavedExport | undefined, decisions: ChannelFileDecisions = {}, ebayMarket?: string, changesOnly = false): Promise<ParsedInput> {
+  baselineOf: () => SavedExport | undefined, decisions: ChannelFileDecisions = {}, ebayMarket?: string, changesOnly = false, listingPlan = false): Promise<ParsedInput> {
   const outcome = await session.read(filename, buffer, EXPANDED_BATCH_BYTES - expanded.bytes, { ...(ebayMarket ? { market: ebayMarket } : {}), ...(changesOnly ? { changesOnly } : {}) })
   expanded.bytes += outcome.expandedBytes
   if (outcome.kind === 'editing') {
@@ -90,7 +92,7 @@ async function readEditorPart(session: ParseSession, buffer: Buffer, filename: s
     if (!baseline) throw new TransferConflict('This workbook baseline is unavailable, expired or belongs to another product or user. Download a new editing workbook.')
     return { ...outcome.parsed, boundary: baseline.boundary, editing: true, kinds: ['editing'], exportId: baseline.id }
   }
-  if (outcome.kind === 'ebay') return { ...await resolveEbayWorkbook(outcome.table, productId, { links: decisions.links, confirmDeletes: decisions.confirmDeletes, listings: decisions.listings }), editing: true, kinds: ['ebay'] }
+  if (outcome.kind === 'ebay') return { ...await resolveEbayWorkbook(outcome.table, productId, { links: decisions.links, confirmDeletes: decisions.confirmDeletes, listingPlan }), editing: true, kinds: ['ebay'] }
   // CFI-1 — Amazon's own template, scoped to this product group; account and marketplace resolve from the
   // file and the group's listings (BUILD.md D5). Like the eBay export its rows carry verified coordinates.
   if (outcome.kind === 'amazon') return { ...await resolveAmazonCatalogWorkbook(outcome.parsed, { productId, mode: 'update', links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true, kinds: ['amazon'] }
@@ -112,7 +114,7 @@ async function drawerEbayMarket(productId: string): Promise<string | undefined> 
 /** ZIPs are staged as one complete review. No partial archive can quietly become an import. */
 /** `options.changesOnly` (PSIE): an editing workbook returns only the cells the user changed (see `readCatalogWorkbook`). */
 export async function readEditorTransfer(buffer: Buffer, filename: string, productId: string, userId: string | null, log?: ImportLog, decisions: ChannelFileDecisions = {},
-  options: { changesOnly?: boolean } = {}): Promise<ParsedInput> {
+  options: { changesOnly?: boolean; listingPlan?: boolean } = {}): Promise<ParsedInput> {
   if (!buffer.length || buffer.length > PRODUCT_TRANSFER_MAX_BYTES) throw new Error('Choose a file up to 50 MB; individual workbooks may contain at most 10 MB')
   const parts: { name: string; bytes: Buffer }[] = []
   if (/\.zip$/i.test(filename)) {
@@ -159,7 +161,7 @@ export async function readEditorTransfer(buffer: Buffer, filename: string, produ
   })
   try {
     for (const part of parts) {
-      const parsed = await readEditorPart(session, part.bytes, part.name, productId, expanded, () => baselineUsed, decisions, ebayMarket, options.changesOnly === true)
+      const parsed = await readEditorPart(session, part.bytes, part.name, productId, expanded, () => baselineUsed, decisions, ebayMarket, options.changesOnly === true, options.listingPlan === true)
       out.kinds!.push(...parsed.kinds ?? [])
       if (parsed.exportId) out.exportId = parsed.exportId
       if (!parsed.editing) out.editing = false
@@ -173,6 +175,10 @@ export async function readEditorTransfer(buffer: Buffer, filename: string, produ
       out.exclusions!.push(...(parsed.exclusions ?? []).map(i => ({ ...i, source: { ...i.source, file: part.name } })))
       out.warnings!.push(...(parsed.warnings ?? []))
       if (parsed.links?.length) (out.links ??= []).push(...parsed.links)
+      if (parsed.listingPlan) {
+        out.listingPlan ??= { names: [], creates: [] }
+        out.listingPlan.names.push(...parsed.listingPlan.names); out.listingPlan.creates.push(...parsed.listingPlan.creates)
+      }
       if (out.rows.length + out.issues.length + out.exclusions!.length > PRODUCT_TRANSFER_MAX_OUTCOMES) throw new Error('Import at most 250,000 attribute outcomes in one batch')
       if (parsed.boundary) {
         if (out.boundary && JSON.stringify(out.boundary) !== JSON.stringify(parsed.boundary)) throw new Error('These workbooks have different export selections. Review each export separately.')
@@ -260,7 +266,7 @@ export async function readCatalogTransferUpload(buffer: Buffer, filename: string
   try {
     // The chosen marketplace is the eBay reader's last hint, after the sheet name and the file name.
     const outcome = await session.read(filename, buffer, EXPANDED_BATCH_BYTES, { blankPolicy: input.blankPolicy, market: input.market || undefined })
-    const decisions = { links: input.links, confirmDeletes: input.confirmDeletes, listings: input.listings }
+    const decisions = { links: input.links, confirmDeletes: input.confirmDeletes }
     if (outcome.kind === 'amazon') {
       const meta = outcome.parsed.meta
       // No chosen marketplace = the template's own (a chosen one that contradicts the file is refused by the reader).

@@ -333,22 +333,31 @@ describe('product groups — a Nexus root, an adopted shell, a confirmed link, o
     expect(await planEbayGroups(fakeDb(nexus, [{ id: 'a1', productId: 'r1', status: 'ACTIVE', sku: 'DE-ROOT', marketplace: 'DE' }]), t, out, {})).toEqual([])
     expect(out.issues[0].message).toBe('DE-ROOT is the SKU of a listing on eBay DE, not on eBay IT.')
   })
-  it('offers to give an extra listing without a SKU the file SKU its label carries', async () => {
+  // The Owner, 2026-10-01: "simply import" — the file decides; nothing is asked. Apply names or creates the listing.
+  it('places a file SKU that an extra listing without a SKU carries as its name, for Apply to name it', async () => {
     const out = empty(), t = table('IT-ROOT', ['KID-M'])
     const proposals = new Map()
-    expect(await planEbayGroups(fakeDb(nexus, [{ id: 'a1', productId: 'r1', status: 'ACTIVE', label: 'IT-ROOT' }]), t, out, {}, undefined, proposals)).toEqual([])
-    expect(out.links).toEqual([{ fileSku: 'IT-ROOT', proposedSku: 'NEXUS-ROOT', kind: 'name-listing', reason: 'Give the eBay IT listing "IT-ROOT" of NEXUS-ROOT the SKU IT-ROOT (it has no SKU yet)' }])
-    expect(proposals.get('IT-ROOT')).toEqual({ rootId: 'r1', rootSku: 'NEXUS-ROOT', aliasId: 'a1' })
-    expect(out.issues.every(i => i.message.includes('Confirm it above, then check again'))).toBe(true)
-    ledgerClean(t, out)
+    const groups = await planEbayGroups(fakeDb(nexus, [{ id: 'a1', productId: 'r1', status: 'ACTIVE', label: 'IT-ROOT' }]), t, out, { listingPlan: true }, undefined, proposals)
+    expect(groups.map(g => [g.rootSku, g.records.length])).toEqual([['NEXUS-ROOT', 2]])
+    expect(proposals.get('IT-ROOT')).toEqual({ rootId: 'r1', rootSku: 'NEXUS-ROOT', aliasId: 'a1', label: 'IT-ROOT' })
+    expect(out.links).toEqual([])
+    expect(out.issues).toEqual([])
   })
-  it('offers a new extra listing when the file also holds the main listing', async () => {
+  it('places a file SKU of a missing extra listing when the file also holds the main listing, for Apply to create it', async () => {
     const t: EbayWorkbookTable = { ...table('NEXUS-ROOT', ['KID-M']), records: [...table('NEXUS-ROOT', ['KID-M']).records, ...table('IT-ROOT', ['KID-M']).records.map(r => ({ ...r, row: r.row + 10 }))] }
     const out = empty(), proposals = new Map()
-    const groups = await planEbayGroups(fakeDb(nexus), t, out, {}, undefined, proposals)
-    expect(groups.map(g => [g.rootSku, g.records.length])).toEqual([['NEXUS-ROOT', 2]])
-    expect(out.links).toEqual([{ fileSku: 'IT-ROOT', proposedSku: 'NEXUS-ROOT', kind: 'new-listing', reason: 'Create the eBay IT listing IT-ROOT for NEXUS-ROOT, as a draft' }])
-    expect(proposals.get('IT-ROOT')).toEqual({ rootId: 'r1', rootSku: 'NEXUS-ROOT', aliasId: undefined })
+    const groups = await planEbayGroups(fakeDb(nexus), t, out, { listingPlan: true }, undefined, proposals)
+    expect(groups.map(g => [g.rootSku, g.records.length])).toEqual([['NEXUS-ROOT', 4]])
+    expect(proposals.get('IT-ROOT')).toEqual({ rootId: 'r1', rootSku: 'NEXUS-ROOT', aliasId: undefined, label: undefined })
+    expect(out.links).toEqual([])
+    expect(out.issues).toEqual([])
+  })
+  it('refuses such a listing by name, never drops it, where Apply cannot name or create listings', async () => {
+    const out = empty(), t = table('IT-ROOT', ['KID-M'])
+    expect(await planEbayGroups(fakeDb(nexus, [{ id: 'a1', productId: 'r1', status: 'ACTIVE', label: 'IT-ROOT' }]), t, out, {})).toEqual([])
+    expect(out.issues).toHaveLength(2)
+    expect(out.issues[0].message).toBe('This business has no eBay IT listing with the SKU IT-ROOT yet. Import this file with the Import button of product NEXUS-ROOT: it names or creates the listing.')
+    ledgerClean(t, out)
   })
   it('skips — does not refuse — rows of another product group in the drawer', async () => {
     const out = empty(), t = table('NEXUS-ROOT', ['KID-M'])

@@ -36,14 +36,7 @@ export function decisionsOf(fields: Record<string, string>): ChannelFileDecision
       || Object.entries(value).some(([from, to]) => !from.trim() || from.length > 200 || typeof to !== 'string' || !to.trim() || to.length > 200)) throw new Error('Confirmed links must be a JSON object of file SKU → Nexus SKU')
     links = value as Record<string, string>
   }
-  let listings: string[] | undefined
-  if (fields.listings?.trim()) {
-    let value: unknown
-    try { value = JSON.parse(fields.listings) } catch { throw new Error('Confirmed listings must be a JSON list of file SKUs') }
-    if (!Array.isArray(value) || value.length > 5000 || value.some(sku => typeof sku !== 'string' || !sku.trim() || sku.length > 200)) throw new Error('Confirmed listings must be a JSON list of file SKUs')
-    listings = value as string[]
-  }
-  return { ...(links ? { links } : {}), ...(listings ? { listings } : {}), ...confirmedDeletesOf(fields.confirmDeletes) }
+  return { ...(links ? { links } : {}), ...confirmedDeletesOf(fields.confirmDeletes) }
 }
 /**
  * D1 — which delete rows the Owner confirmed: 'true' = every delete row in the file, 'false' or absent = none, or a

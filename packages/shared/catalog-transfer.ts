@@ -152,8 +152,7 @@ export interface SheetImportSummary {
   ended: number
   prices: number
 }
-/** `kind` (2026-10-01): an extra listing of `proposedSku` that gets `fileSku` as its SKU — named (it has none) or created. */
-export interface SheetImportLink { fileSku: string; proposedSku: string; reason: string; kind?: 'name-listing' | 'new-listing' }
+export interface SheetImportLink { fileSku: string; proposedSku: string; reason: string }
 export interface SheetImportDelete { sku: string; fileSku: string; channel: string; marketplace: string; accountId: string; evidence?: string; confirmed: boolean }
 export interface SheetImportStatus {
   jobId: string
@@ -188,7 +187,8 @@ export interface SheetImportStatus {
   readiness?: 'pending' | 'done' | 'failed'
   error?: string
 }
-export type SheetImportChangeStatus = 'ready' | 'problem' | 'saved' | 'failed' | 'skipped'
+/** `new` (2026-10-01): a listing SKU or a new listing Apply makes, and the values of a listing it creates. */
+export type SheetImportChangeStatus = 'ready' | 'new' | 'problem' | 'saved' | 'failed' | 'skipped'
 export interface SheetImportChange {
   id: string
   sku: string

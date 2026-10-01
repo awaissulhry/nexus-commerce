@@ -159,6 +159,8 @@ async function checkListingSku(value: string) {
   if (!sku || sku.length > 200) throw new ProductRelationshipError('A listing SKU needs 1 to 200 characters.')
   const { default: prisma } = await import('../../db.js')
   if (await prisma.product.findFirst({ where: { sku, deletedAt: null }, select: { id: true } })) throw new ProductRelationshipError(`${sku} is already a product SKU in this business. Choose another SKU for the listing.`)
+  // An archived listing gives its SKU up to a live one (an import names a listing again after an undo archived it).
+  await prisma.productListingAlias.updateMany({ where: { sku, status: 'ARCHIVED' }, data: { sku: null } })
   return sku
 }
 const listingSkuTaken = (error: unknown, sku: string | undefined) => (error as { code?: string })?.code === 'P2002' && sku

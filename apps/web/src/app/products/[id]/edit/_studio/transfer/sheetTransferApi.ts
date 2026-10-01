@@ -46,12 +46,11 @@ export const sheetTransferApi = {
     return { filename, notes }
   },
 
-  startImport(productId: string, file: File, market: string, decisions: { links?: Record<string, string>; confirmDeletes?: boolean | string[]; listings?: string[] } = {}, signal?: AbortSignal) {
+  startImport(productId: string, file: File, market: string, decisions: { links?: Record<string, string>; confirmDeletes?: boolean | string[] } = {}, signal?: AbortSignal) {
     const form = new FormData()
     form.append('market', market)
     if (decisions.links && Object.keys(decisions.links).length) form.append('links', JSON.stringify(decisions.links))
     if (decisions.confirmDeletes) form.append('confirmDeletes', decisions.confirmDeletes === true ? 'true' : JSON.stringify(decisions.confirmDeletes))
-    if (decisions.listings?.length) form.append('listings', JSON.stringify(decisions.listings))
     form.append('file', file)
     return json<SheetImportStatus>(post(`/sheet/products/${encodeURIComponent(productId)}/import`, form, signal))
   },
