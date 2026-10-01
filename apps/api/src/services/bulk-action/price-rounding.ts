@@ -2,9 +2,9 @@
  * The PRICING_UPDATE rounding mode (2026-10-01): each price becomes the largest price ending in .99 that is at or
  * below it — 25.40 → 24.99, 25.00 → 24.99, 25.99 stays. Used by the built-in "Round prices to .99" template.
  *
- * Pure functions, no Prisma. The bulk run (`processPricingUpdate`) and its preview (`computePreview`) both call
- * `roundDownTo99Outcome`, so the preview cannot show a number the run would not write. The new price then goes
- * through the same master price write as every other PRICING_UPDATE mode.
+ * Pure functions, no Prisma. The bulk run (`processPricingUpdate`) and its preview (`computePreview`) both reach
+ * `roundDownTo99Outcome` through `pricingUpdateOutcome` (`pricing-update.ts`), so the preview cannot show a number the
+ * run would not write. The new price then goes through the same master price write as every other PRICING_UPDATE mode.
  */
 
 /** The `adjustmentType` of the mode. It takes no `value`. */

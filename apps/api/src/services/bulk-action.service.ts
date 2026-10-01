@@ -48,8 +48,8 @@ import {
   readProductAttribute,
   type ProductLike,
 } from './bulk-action/attribute-helpers.js';
-// The PRICING_UPDATE rounding mode ("Round prices to .99"), shared by the run and its preview.
-import { ROUND_DOWN_TO_99, roundDownTo99Outcome } from './bulk-action/price-rounding.js';
+// PRICING_UPDATE — one rule per row for every mode, shared by the run and its preview.
+import { currentBasePrice, pricingUpdateOutcome } from './bulk-action/pricing-update.js';
 
 // (Removed: a stubbed Decimal mock class whose `.plus()` returned
 // `this`, breaking every PRICING_UPDATE math op silently. Phase B-3
@@ -1944,54 +1944,14 @@ export class BulkActionService {
   ): { currentValue: unknown; newValue: unknown; status: 'processed' | 'skipped' } {
     switch (actionType) {
       case 'PRICING_UPDATE': {
-        if (payload.adjustmentType === ROUND_DOWN_TO_99) {
-          // The rounding mode reads the price its run reads: a PRICING_UPDATE item is a Product (`basePrice`).
-          const product = item as Product;
-          const current = product.basePrice != null ? Number(product.basePrice) : 0;
-          const outcome = roundDownTo99Outcome(current, payload);
-          return { currentValue: current.toFixed(2), newValue: outcome.newPrice.toFixed(2), status: outcome.status };
-        }
-        const variation = item as ProductVariation;
-        const currentPrice = Number(variation.price);
-        const adjustmentType = payload.adjustmentType;
-        const value = Number(payload.value);
-        if (Number.isNaN(value)) {
-          throw new Error(
-            'Invalid PRICING_UPDATE payload: numeric value required',
-          );
-        }
-        let newPrice: number;
-        switch (adjustmentType) {
-          case 'ABSOLUTE':
-            newPrice = value;
-            break;
-          case 'PERCENT':
-            newPrice = currentPrice * (1 + value / 100);
-            break;
-          case 'DELTA':
-            newPrice = currentPrice + value;
-            break;
-          default:
-            throw new Error(
-              `Invalid PRICING_UPDATE adjustmentType: ${adjustmentType}`,
-            );
-        }
-        let status: 'processed' | 'skipped' = 'processed';
-        if (newPrice < 0) status = 'skipped';
-        else if (
-          typeof payload.minPrice === 'number' &&
-          newPrice < payload.minPrice
-        )
-          status = 'skipped';
-        else if (
-          typeof payload.maxPrice === 'number' &&
-          newPrice > payload.maxPrice
-        )
-          status = 'skipped';
+        // The run's own rule on the run's own column (`bulk-action/pricing-update.ts`): a PRICING_UPDATE item is a
+        // Product, priced from `basePrice`. Reading `variation.price` here showed "NaN" before.
+        const current = currentBasePrice(item as Product);
+        const outcome = pricingUpdateOutcome(current, payload);
         return {
-          currentValue: currentPrice.toFixed(2),
-          newValue: newPrice.toFixed(2),
-          status,
+          currentValue: current.toFixed(2),
+          newValue: outcome.newPrice.toFixed(2),
+          status: outcome.status,
         };
       }
 
@@ -3007,66 +2967,23 @@ export class BulkActionService {
    * ROUND_DOWN_TO_99: the largest X.99 at or below the current price
    * (`bulk-action/price-rounding.ts`); skipped when there is none
    * (under 0.99) or the price already ends in .99.
+   * Every mode's rule: `bulk-action/pricing-update.ts`, shared with
+   * the preview.
    */
   private async processPricingUpdate(
     item: Product,
     payload: Record<string, any>,
     jobId: string,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    const adjustmentType = payload.adjustmentType as
-      | 'ABSOLUTE'
-      | 'PERCENT'
-      | 'DELTA'
-      | typeof ROUND_DOWN_TO_99
-      | undefined;
+    // The preview's own rule (`computePreview`) on the same column: the
+    // new price in stored cents, or a skip (below zero, outside
+    // minPrice / maxPrice, or nothing to round). Soft constraints skip
+    // rather than fail so the rest of the job continues; a payload no
+    // row can run throws (the item fails).
+    const outcome = pricingUpdateOutcome(currentBasePrice(item), payload);
+    if (outcome.status === 'skipped') return { status: 'skipped' };
 
-    // basePrice is a Decimal column — coerce to number for math.
-    const currentPrice = item.basePrice != null ? Number(item.basePrice) : 0;
-    let newPrice: number;
-    if (adjustmentType === ROUND_DOWN_TO_99) {
-      // The preview's own rule (computePreview), then the same write as every mode below.
-      const outcome = roundDownTo99Outcome(currentPrice, payload);
-      if (outcome.status === 'skipped') return { status: 'skipped' };
-      newPrice = outcome.newPrice;
-    } else {
-      const rawValue = payload.value;
-      const value =
-        typeof rawValue === 'number' ? rawValue : Number(rawValue);
-      if (!adjustmentType || Number.isNaN(value)) {
-        throw new Error(
-          'Invalid PRICING_UPDATE payload: adjustmentType + numeric value required',
-        );
-      }
-      switch (adjustmentType) {
-        case 'ABSOLUTE':
-          newPrice = value;
-          break;
-        case 'PERCENT':
-          newPrice = currentPrice * (1 + value / 100);
-          break;
-        case 'DELTA':
-          newPrice = currentPrice + value;
-          break;
-      }
-    }
-
-    // Soft constraints — skip rather than fail so the rest of the job
-    // continues. Hard constraint: never write a negative price.
-    if (newPrice < 0) return { status: 'skipped' };
-    if (
-      typeof payload.minPrice === 'number' &&
-      newPrice < payload.minPrice
-    ) {
-      return { status: 'skipped' };
-    }
-    if (
-      typeof payload.maxPrice === 'number' &&
-      newPrice > payload.maxPrice
-    ) {
-      return { status: 'skipped' };
-    }
-
-    await this.masterPriceService.update(item.id, newPrice, {
+    await this.masterPriceService.update(item.id, outcome.newPrice, {
       actor: 'bulk-action',
       reason: 'bulk-pricing-job',
       idempotencyKey: `${jobId}:${item.id}`,
