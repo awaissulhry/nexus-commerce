@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Ship this session's finished work to main — branch from origin/main, commit only this session's files, push, open a pull request, turn on auto-merge, watch CI until it merges, then report the deploy. The Owner starts it with /ship.
+description: Ship this session's finished work to main — branch from origin/main, commit only this session's files, check it locally, push, open a pull request, merge it, then report the deploy. The Owner starts it with /ship.
 disable-model-invocation: true
 argument-hint: "[what the change is]"
 ---
@@ -9,15 +9,14 @@ argument-hint: "[what the change is]"
 
 The Owner's note, if any: $ARGUMENTS
 
-`main` has a ruleset ("main - pull requests with green CI"): every change needs a pull request, and the
-checks `ci-ok` and `db-security` must pass. Nobody can bypass it. Auto-merge merges the pull request by itself
-when both checks are green. A merge to `main` is a release:
-- **API:** `.github/workflows/deploy-api.yml` runs when the change touches its `paths` (apps/api, packages/database,
-  packages/shared, packages/events, package*.json). It runs CI again, then ships to Railway, and
-  the release applies new migrations to production.
-- **Web:** Vercel builds when `@nexus/web` or one of its dependencies changed (`turbo-ignore`). Then
-  `prod-smoke.yml` checks production.
-- Anything else (docs, `.claude/`, scripts) merges and deploys nothing.
+Since 2026-10-01 (the Owner, for speed) **no CI runs on pull requests and no check is required to merge**. The
+ruleset on `main` still requires a pull request and forbids force-pushes and deleting `main`. So **your local checks
+in step 2 are the only checks** before the change is live. A merge to `main` is a release:
+- `.github/workflows/deploy-api.yml` runs when the change touches its `paths` (apps/api, apps/web, packages/*,
+  package*.json, patches, Docker and Railway files). It builds the images and ships to Railway **without running
+  CI first**: the API (which applies new migrations to production), then worker, scheduler and web. Live in about
+  7 minutes. A read-only production smoke runs after the web ships.
+- Anything else (docs, `.claude/`, `.github/`, scripts) merges and deploys nothing.
 
 Never: push `main`, force-push, `gh pr merge --admin`, `--no-verify`, or change the ruleset or repo settings.
 
@@ -35,11 +34,15 @@ Never: push `main`, force-push, `gh pr merge --admin`, `--no-verify`, or change 
 
 ## 2. Check before you move it
 
-Run these where you made the change, and write down the results for the pull request:
+Run these where you made the change, and write down the results for the pull request (the light LOCAL FIRST
+rule in `~/.claude/CLAUDE.md`):
 - `npm run typecheck -w <workspace>` for every workspace you changed.
 - The tests of the changed area (the file or directory, not the whole suite). API tests run from `apps/api`.
+- A big screen change only: a look in the browser against a LOCAL API on a LOCAL database
+  (`NEXT_PUBLIC_API_URL` set to it; never production data).
 
-A failure caused by your change → fix it first. CI runs the full gate on the pull request anyway.
+A failure caused by your change → fix it first. **Nothing else checks it**: no CI runs on the pull request, and the
+deploy ships without tests.
 
 ## 3. Get a clean branch
 
@@ -99,49 +102,40 @@ The body holds, in short lines:
 - `Deploys:` API, web, both or nothing (from the paths above).
 - The pull-request attribution line from this session's attribution instructions, last.
 
-Never open it as a draft: auto-merge does not merge a draft.
+Never open it as a draft.
 
-## 6. Turn on auto-merge
+## 6. Merge
 
-```bash
-gh pr merge <number> --auto --squash
-```
-
-Squash gives one commit per pull request on `main`, so one revert undoes it. If the checks are already green,
-this merges at once.
-
-## 7. Watch CI
-
-CI takes about 8 minutes. Watch the CI run for the pushed commit, not `gh pr checks --required`: `ci-ok` and
-`db-security` do not exist until the other jobs end, so that command exits at once with "no required checks
-reported" and exit code 0. Run this in the background, from the worktree; you are told when it ends:
+There are no checks to wait for. Read the state, then merge exactly the commit you pushed:
 
 ```bash
-sha=$(git rev-parse HEAD); run=
-until [ -n "$run" ]; do sleep 10
-  run=$(gh run list --workflow ci.yml --commit "$sha" -L 1 --json databaseId --jq '.[0].databaseId'); done
-gh run watch "$run" --exit-status --compact --interval 30; echo "ci exit=$?"
-sleep 30; gh pr view <number> --json state,mergeStateStatus,mergeCommit
+gh pr view <number> --json state,mergeable,mergeStateStatus
+gh pr merge <number> --squash --match-head-commit "$(git rev-parse HEAD)"
 ```
 
-- **MERGED** → step 8.
-- **A check failed** → `gh run view <run-id> --log-failed | tail -150`.
-  - Your change caused it → fix it in the worktree, commit, push. Auto-merge stays on and CI runs again.
-  - It is not from your change (main is red, infrastructure, a known flaky test) → run
-    `gh run rerun <run-id> --failed` once. Red again → stop and report the job, the error line and why it is
-    not yours.
-- **Green but not merged** → read `mergeStateStatus`. `DIRTY` means a conflict with `main`: run
-  `git merge origin/main` in the worktree, resolve only your files, push. Never rebase a pushed branch: a
-  force-push is denied. `BLOCKED` with green checks → stop and report it.
+Squash gives one commit per pull request on `main`, so one revert undoes it.
+- `DIRTY` means a conflict with `main`: run `git merge origin/main` in the worktree, resolve only your files, rerun
+  the checks of step 2, push, merge. Never rebase a pushed branch: a force-push is denied.
+- `BLOCKED` → stop and report it.
+- A change to the Docker build files (`apps/*/Dockerfile`, `package-lock.json`, `turbo.json` …) also starts the
+  `Images` workflow on the pull request (build + secret scan, no push). It blocks nothing; read it before merging.
+
+## 7. (No CI on pull requests since 2026-10-01)
+
+Do not wait for `ci-ok` or `db-security`: they no longer run on pull requests. The nightly workflow still runs the
+whole CI on `main` and emails the Owner on a failure.
 
 ## 8. After the merge
 
 - The merge commit: `gh pr view <number> --json mergeCommit --jq .mergeCommit.oid`.
-- **API deploy** (if the change touches its paths): `gh run list --workflow deploy-api.yml --branch main -L 3`,
-  pick the run for the merge commit, and watch it in the background with `gh run watch <run-id> --exit-status`.
-  It runs CI again, then ships.
-- **Web deploy** (if the web changed): `gh run list --workflow prod-smoke.yml -L 3` shows the production smoke
-  after Vercel's production build.
+- **Deploy** (if the change touches its paths): `gh run list --workflow deploy-api.yml --branch main -L 3`, pick
+  the run for the merge commit (none at all → `gh workflow run deploy-api.yml --ref main -f ship=changed`), and
+  watch it in the background with `gh run watch <run-id> --exit-status`. It builds the images and ships (API,
+  worker, scheduler, web), then runs the read-only production smoke. About 8 minutes.
+  - An image build that fails with `Can't resolve '@vercel/turbopack-next/internal/font/google/font'` is a Google
+    Fonts download failure on the runner, not your change: `gh run rerun <run-id> --failed` once.
+  - Then check production: `curl -fsS https://nexusapi-production-b7bb.up.railway.app/api/health/ready` must say
+    `healthy` with the merge commit's first 8 characters as `build`.
 - Clean up only after the pull request shows MERGED. Delete the remote branch through the API: a
   `git push --delete` from the shared checkout runs that checkout's own pre-push hook, which may fail on other
   sessions' work.
@@ -156,6 +150,6 @@ sleep 30; gh pr view <number> --json state,mergeStateStatus,mergeCommit
 
 Short, plain sentences:
 - What merged, the pull-request link and the merge commit.
-- The checks you ran, and the CI result.
-- The deploy: none, or the API and web runs and their results.
+- The checks you ran (the only checks before going live) and their results.
+- The deploy: none, or the deploy run, its result and the live `build`.
 - Files you left out and why, and edits that stay in the shared checkout.
