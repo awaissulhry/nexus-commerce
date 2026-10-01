@@ -18,8 +18,13 @@
  * A patch is an object: each key it holds replaces the base's value for that key; the reserved key `~` holds
  * `u` (keys the base has and this cell lacks), `n` (patches of nested objects both sides hold) or `v` (a cell that
  * is not an object, or that itself holds `~`, sent whole).
+ *
+ * Pooled patches (`cells=compact&patches=pooled`, 2026-10-01), a second opt-in on top: many cells and nested objects
+ * differ from their column the same way (the same key order, the same inherited source …), so each patch that repeats
+ * is sent once in `patchPool` and every place that holds it sends its index instead. See `encodePooledSheetCells`.
  */
 export const SHEET_CELL_ENCODING = 'column-base-v1'
+export const POOLED_SHEET_CELL_ENCODING = 'column-base-pool-v2'
 
 type Obj = Record<string, unknown>
 interface Meta { u?: string[]; n?: Record<string, Obj>; v?: unknown; o?: string[] }
@@ -142,6 +147,8 @@ function apply(base: Obj | undefined, patch: Obj, extra?: Obj): unknown {
 interface SheetLike { rows?: Obj[]; meta?: Obj; cellBase?: Record<string, Obj>; rowBase?: Obj }
 /** What goes on the wire: the rows are patches until `decodeSheetCells` restores them. */
 export type EncodedSheet<T> = Omit<T, 'rows'> & { rows: Obj[]; cellBase: Record<string, Obj>; rowBase: Obj }
+/** The pooled wire form: an encoded sheet whose repeated patches are sent once, in `patchPool`. */
+export type PooledSheet<T> = EncodedSheet<T> & { patchPool: Obj[] }
 
 const literal = (value: unknown): Obj => ({ [META]: { v: value } })
 /** A row with its cells replaced by a placeholder in place, so the row base keeps where `values` stands. */
@@ -194,12 +201,154 @@ export function encodeSheetCells<T extends { rows?: readonly object[]; meta?: ob
   }
 }
 
+const utf8 = new TextEncoder()
+const utf8Bytes = (json: string): number => utf8.encode(json).length
+const mapValues = <V>(object: Obj, map: (value: unknown) => V): Record<string, V> =>
+  Object.fromEntries(Object.entries(object).map(([key, value]) => [key, map(value)]))
+const nestedPatches = (patch: Obj): Record<string, Obj> | undefined => (patch[META] as Meta | undefined)?.n
+/** Names the wire itself uses. A sheet that already holds one is not pooled (see `encodePooledSheetCells`). */
+const WIRE_FIELDS = ['cellBase', 'rowBase', 'patchPool'] as const
+const ENCODINGS: ReadonlySet<unknown> = new Set([SHEET_CELL_ENCODING, POOLED_SHEET_CELL_ENCODING])
+
 /**
- * The sheet exactly as it was before `encodeSheetCells`. A sheet that was not encoded (an older API, or a reader that
- * did not ask) is returned as it is.
+ * The sheet for a reader that asked for pooled patches (`cells=compact&patches=pooled`): whichever of the plain sheet,
+ * the `encodeSheetCells` form and the pooled form is the fewest UTF-8 bytes, so asking can never make an answer larger.
+ * `decodeSheetCells` restores all three.
+ *
+ * The pooled form is the `encodeSheetCells` form plus `patchPool`: the cell patches (`rows[].values[field]`) and nested
+ * patches (`~.n[key]`, in a row's fields or a cell, at any depth) that repeat often enough to pay for themselves. Each
+ * such place sends the patch's index in `patchPool` instead. `encodeSheetCells` never puts a number in those places (a
+ * cell that is not an object is sent as `{"~":{"v":…}}`), so a number there is always a reference and never a value.
+ * Pool entries are those exact patches, never references themselves; values, metadata and the bases are not pooled.
+ *
+ * A sheet that already holds a field the wire uses (`cellBase`, `rowBase`, `patchPool`, `meta.cellEncoding`) is sent
+ * plain, which keeps it exact; only one whose `meta.cellEncoding` would make the reader take it for encoded gets the
+ * answer a reader that did not ask would get.
+ */
+export function encodePooledSheetCells<T extends { rows?: readonly object[]; meta?: object }>(sheet: T): T | EncodedSheet<T> | PooledSheet<T> {
+  const meta = (sheet.meta ?? {}) as Obj
+  if (WIRE_FIELDS.some(field => Object.hasOwn(sheet, field)) || Object.hasOwn(meta, 'cellEncoding')) {
+    return ENCODINGS.has(meta.cellEncoding) ? encodeSheetCells(sheet) : sheet
+  }
+  const legacy = encodeSheetCells(sheet)
+  const legacyJson = JSON.stringify(legacy)
+  let best: { form: T | EncodedSheet<T> | PooledSheet<T>; bytes: number } = { form: legacy, bytes: utf8Bytes(legacyJson) }
+  const pooled = poolPatches(legacy)
+  if (pooled) {
+    const bytes = utf8Bytes(JSON.stringify(pooled))
+    if (bytes < best.bytes) best = { form: pooled, bytes }
+  }
+  // A sheet too small or too varied to gain from either form goes plain, as a reader that did not ask would get it.
+  return utf8Bytes(JSON.stringify(sheet)) <= best.bytes ? sheet : best.form
+}
+
+/** `legacy` with each repeated cell or nested patch sent once; undefined when no patch repeats. */
+function poolPatches<T>(legacy: EncodedSheet<T>): PooledSheet<T> | undefined {
+  // A patch's text is its identity: two patches are the same patch only when they are the same JSON, key order included.
+  const texts = new WeakMap<Obj, string>()
+  const textOf = (patch: Obj): string => {
+    let text = texts.get(patch)
+    if (text === undefined) texts.set(patch, text = JSON.stringify(patch))
+    return text
+  }
+  const seen = new Map<string, { patch: Obj; count: number; bytes: number }>()
+  const count = (patch: Obj) => {
+    const text = textOf(patch)
+    const entry = seen.get(text)
+    if (entry) entry.count++
+    else seen.set(text, { patch, count: 1, bytes: utf8Bytes(text) })
+    for (const child of Object.values(nestedPatches(patch) ?? {})) count(child)
+  }
+  for (const row of legacy.rows) {
+    for (const child of Object.values(nestedPatches(row) ?? {})) count(child)
+    if (isObject(row.values)) for (const cell of Object.values(row.values)) count(cell as Obj)
+  }
+  // The most used patches get the shortest indexes.
+  let pool = [...seen.entries()].filter(([, entry]) => entry.count > 1)
+    .sort(([, a], [, b]) => b.count - a.count || b.bytes - a.bytes)
+  let result: PooledSheet<T> | undefined
+  // A pooled patch hides the patches nested in it, so their uses drop; drop the entries that no longer pay and index again.
+  for (let pass = 0; pool.length && pass < 8; pass++) {
+    const indexOf = new Map(pool.map(([text], index) => [text, index]))
+    const uses = pool.map(() => 0)
+    const reference = (patch: Obj): Obj | number => {
+      const index = indexOf.get(textOf(patch))
+      if (index === undefined) return withNestedReferences(patch)
+      uses[index]++
+      return index
+    }
+    const withNestedReferences = (patch: Obj): Obj => {
+      const nested = nestedPatches(patch)
+      return nested ? { ...patch, [META]: { ...(patch[META] as Meta), n: mapValues(nested, child => reference(child as Obj)) } } : patch
+    }
+    result = {
+      ...legacy,
+      meta: { ...(legacy as { meta?: Obj }).meta, cellEncoding: POOLED_SHEET_CELL_ENCODING },
+      patchPool: pool.map(([, entry]) => entry.patch),
+      rows: legacy.rows.map(row => {
+        const patch = withNestedReferences(row)
+        return isObject(row.values) ? { ...patch, values: mapValues(row.values, cell => reference(cell as Obj)) } : patch
+      }),
+    }
+    // An entry pays when what its uses save (its bytes less the index's digits, each) exceeds its own bytes and comma.
+    const paying = pool.filter(([, entry], index) => uses[index] * (entry.bytes - String(index).length) > entry.bytes + 1)
+    if (paying.length === pool.length) break
+    pool = paying
+  }
+  return result
+}
+
+/** The `encodeSheetCells` form of a pooled sheet: every reference replaced by its pooled patch, checked first. */
+function expandPooledPatches(encoded: SheetLike & { patchPool?: unknown }): SheetLike {
+  const refuse = (why: string): never => { throw new Error(`The sheet response could not be read: ${why}.`) }
+  const pool = encoded.patchPool
+  if (!Array.isArray(pool) || !Array.isArray(encoded.rows) || !isObject(encoded.cellBase) || !isObject(encoded.rowBase)) {
+    return refuse('the pooled form is incomplete')
+  }
+  const strings = (value: unknown) => value === undefined || (Array.isArray(value) && value.every(key => typeof key === 'string'))
+  /** `references`: whether this place may hold an index (a pooled patch itself may not, so no reference can loop). */
+  const expand = (patch: unknown, references: boolean, open: Set<object>): Obj => {
+    if (typeof patch === 'number') {
+      if (!references) return refuse('a pooled patch refers to another one')
+      if (!Number.isSafeInteger(patch) || patch < 0 || Object.is(patch, -0) || patch >= pool.length) return refuse(`no pooled patch ${patch}`)
+      return pool[patch] as Obj
+    }
+    if (!isObject(patch)) return refuse('a patch is not an object')
+    if (open.has(patch)) return refuse('a patch contains itself')
+    const meta = patch[META]
+    if (meta === undefined) return patch
+    if (!isObject(meta)) return refuse('a patch marker is not an object')
+    if (Object.hasOwn(meta, 'v')) return patch
+    if (!strings(meta.u) || !strings(meta.o)) return refuse('a patch lists keys that are not text')
+    if (meta.n === undefined) return patch
+    if (!isObject(meta.n)) return refuse('a nested patch list is not an object')
+    open.add(patch)
+    try {
+      return { ...patch, [META]: { ...meta, n: mapValues(meta.n, child => expand(child, references, open)) } }
+    } finally { open.delete(patch) }
+  }
+  // Every pooled patch is checked before any reference to it is followed.
+  for (const patch of pool) expand(patch, false, new Set())
+  const rows = encoded.rows.map((row: unknown) => {
+    // A row is never pooled: only cells and nested patches are.
+    if (typeof row === 'number') return refuse('a row is a reference')
+    const patch = expand(row, true, new Set())
+    if (Object.hasOwn((patch[META] ?? {}) as Obj, 'v') || patch.values === undefined) return patch
+    if (!isObject(patch.values)) return refuse('a row\'s cells are not an object')
+    return { ...patch, values: mapValues(patch.values, cell => expand(cell, true, new Set())) }
+  })
+  const { patchPool: _pool, ...rest } = encoded
+  return { ...rest, meta: { ...encoded.meta, cellEncoding: SHEET_CELL_ENCODING }, rows }
+}
+
+/**
+ * The sheet exactly as it was before `encodeSheetCells` or `encodePooledSheetCells`. A sheet that was not encoded (an
+ * older API, or a reader that did not ask) is returned as it is. A pooled sheet whose references do not resolve is
+ * refused with an error, never read as something else.
  */
 export function decodeSheetCells<T>(sheet: T): T {
-  const encoded = sheet as SheetLike
+  let encoded = sheet as SheetLike
+  if (encoded?.meta?.cellEncoding === POOLED_SHEET_CELL_ENCODING) encoded = expandPooledPatches(encoded)
   if (!encoded || encoded.meta?.cellEncoding !== SHEET_CELL_ENCODING) return sheet
   const cellBase = encoded.cellBase ?? {}
   const rowBase = encoded.rowBase ?? {}

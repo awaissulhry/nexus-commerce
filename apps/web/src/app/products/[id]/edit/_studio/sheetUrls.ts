@@ -51,8 +51,10 @@ export function masterSheetUrl(productId: string, market: string, locale: string
  * P2 — the sheet read asks for the compact wire form (each column's shared cell once, each cell as its difference); the
  * sheet hooks decode it to today's shape. Here, beside the other builders, so the page-load prefetch asks for the SAME
  * bytes as the hook and is adopted — a prefetch of the plain form was never adopted and cost a second full read.
+ * `patches=pooled` (2026-10-01): each repeated patch once more. An API that does not know it answers the compact form,
+ * and `decodeSheetCells` reads plain, compact and pooled answers alike.
  */
-export const compactSheetUrl = (url: string): string => `${url}${url.includes('?') ? '&' : '?'}cells=compact`
+export const compactSheetUrl = (url: string): string => `${url}${url.includes('?') ? '&' : '?'}cells=compact&patches=pooled`
 
 /** The destination check a channel scope makes before its tab mounts. */
 export function destinationUrl(productId: string, channel: string, market: string, accountId?: string, listingId?: string): string {

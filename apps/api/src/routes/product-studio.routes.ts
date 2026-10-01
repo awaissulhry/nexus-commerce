@@ -21,7 +21,7 @@ import { getInformationSheet } from '../services/pim/information-sheet.js'
  */
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
-import { encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
+import { encodePooledSheetCells, encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { encodeReadiness } from '@nexus/shared/readiness-wire'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
 import { resolveWorkspaceDestination, resolveWorkspaceListing, WorkspaceScopeError } from '../services/pim/workspace-destination.js'
@@ -583,8 +583,10 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       reply.header('Server-Timing', `studio;dur=${result.meta.tookMs}`)
       reply.header('Cache-Control', 'no-store')
       // P2 — `cells=compact`: each column's shared cell once, each cell as its difference (@nexus/shared/sheet-cell-wire).
-      // Opt-in, so every other reader of this route keeps today's shape.
-      return q.cells === 'compact' ? encodeSheetCells(result) : result
+      // Opt-in, so every other reader of this route keeps today's shape. `patches=pooled` on top: each repeated patch
+      // once more (the fewest bytes of plain, compact and pooled). A reader that does not ask keeps exactly the compact form.
+      if (q.cells !== 'compact') return result
+      return q.patches === 'pooled' ? encodePooledSheetCells(result) : encodeSheetCells(result)
     } catch (err) {
       return sendError(reply, err, request.log, { id, market, scope: rawScope, channel })
     }

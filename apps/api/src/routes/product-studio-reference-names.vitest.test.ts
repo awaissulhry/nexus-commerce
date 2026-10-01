@@ -40,8 +40,9 @@ beforeEach(() => {
   })
 })
 const url = '/products/family-a/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=account-a&locales=it,de'
-it.each(['plain', 'compact'] as const)('hydrates combined Languages once, outside the read transaction and inside the business scope (%s wire)', async wire => {
-  const response = await app.inject(url + (wire === 'compact' ? '&cells=compact' : ''))
+const WIRE = { plain: '', compact: '&cells=compact', pooled: '&cells=compact&patches=pooled' } as const
+it.each(['plain', 'compact', 'pooled'] as const)('hydrates combined Languages once, outside the read transaction and inside the business scope (%s wire)', async wire => {
+  const response = await app.inject(url + WIRE[wire])
   expect(response.statusCode).toBe(200)
   expect(mocks.sheet).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ locales: ['it', 'de'] }))
   expect(mocks.themes).toHaveBeenCalledExactlyOnceWith({ where: { id: { in: ['theme-a', 'theme-b'] } }, select: { id: true, name: true } })

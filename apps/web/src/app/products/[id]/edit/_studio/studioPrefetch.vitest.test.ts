@@ -24,6 +24,20 @@ describe('studioPrefetchPlan', () => {
     expect(plan.destination).toMatch(new RegExp(`/api/products/${ID}/studio/destination\\?channel=EBAY&market=IT&accountId=${ACCOUNT}$`))
   })
 
+  it('prefetches the pooled compact read the hooks make, so it is adopted once and read only once', async () => {
+    const plan = studioPrefetchPlan(ID, params(`scope=EBAY&market=IT&account=${ACCOUNT}&locale=it&tab=sheet`))
+    expect(new URL(plan.sheet!).searchParams.get('cells')).toBe('compact')
+    expect(new URL(plan.sheet!).searchParams.get('patches')).toBe('pooled')
+    expect(new URL(studioPrefetchPlan(ID, params('scope=master&market=IT&locale=it')).sheet!).searchParams.get('patches')).toBe('pooled')
+    const network = vi.fn(() => Promise.resolve(new Response('network')))
+    vi.stubGlobal('fetch', network)
+    startPrefetch(plan.sheet!, () => Promise.resolve(new Response('prefetched')))
+    // The URL `useChannelSheet` fetches for the same coordinate.
+    const hookRead = compactSheetUrl(channelScopeUrl({ productId: ID, channel: 'EBAY', marketplace: 'IT', accountId: ACCOUNT, locale: 'it', locales: null }))
+    await expect((await fetchStudioRead(hookRead)).text()).resolves.toBe('prefetched')
+    expect(network).not.toHaveBeenCalled()
+  })
+
   it('names the master sheet on the Shared scope, with no destination', () => {
     expect(studioPrefetchPlan(ID, params('scope=master&market=IT&locale=it'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', null)) })
     expect(studioPrefetchPlan(ID, params('market=IT&locales=it,de'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', ['it', 'de'])) })
