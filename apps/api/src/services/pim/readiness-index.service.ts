@@ -198,6 +198,18 @@ export async function rebuildPendingFamily(rootId: string): Promise<number> {
   return reconcileFamilyReadiness(rootId, scope)
 }
 
+/**
+ * Audit P6 (2026-10-01) — after a sheet import: rebuild the family's pending rows, or BUILD it when it has no readiness row
+ * at all. An import marks only rows that exist, so a family new to the index had nothing to mark, nothing was rebuilt, and
+ * every scope said "Not computed". Returns the rows written; 0 when another worker got there first.
+ */
+export async function rebuildImportedFamily(rootId: string): Promise<number> {
+  const rebuilt = await rebuildPendingFamily(rootId)
+  if (rebuilt) return rebuilt
+  const any = await prisma.readinessIndex.findFirst({ where: { product: { OR: [{ id: rootId }, { parentId: rootId }] } }, select: { id: true } })
+  return any ? 0 : reconcileFamilyReadiness(rootId)
+}
+
 /** How many families have pending rows. Uses the `(workspaceId, pendingSince)` index; cheap when nothing is pending. */
 export async function countPendingReadinessFamilies(): Promise<number> {
   const [row] = await prisma.$queryRaw<Array<{ n: bigint | number }>>`

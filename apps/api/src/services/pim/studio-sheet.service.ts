@@ -1872,7 +1872,21 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     }
   }
 
+  // Audit P5 (2026-10-01) — what eBay needs for a NEW listing beyond its category's fields (an item location, the three
+  // business policies), named on the main row only when Nexus KNOWS publish could not fill it (`ebay-publish-readiness.ts`).
+  if (coordinate?.channel === 'EBAY') {
+    const { addEbayPublishReadiness, judgeEbayItemLevelOnMainRow } = await import('./ebay-publish-readiness.js')
+    // Follow-up 2026-10-01 — Condition, policies, location… go to eBay once, from the main row: a variation row's own
+    // value is never sent, so it names no issue there (the publish review judges them the same way).
+    judgeEbayItemLevelOnMainRow({ rows, columns, label: coordinate.label,
+      recount: (row, kept) => completenessFor(kept as SheetColumn[], { isParent: row.isParent, productType: row.productType, familyId: row.familyId }, row.values as Record<string, SheetCellValue>),
+      restate: row => row.readiness.issues.some(issue => issue.severity === 'error') ? 'errors'
+        : listedState(row.listing, coordinate.channel) ?? (!row.listing ? 'unlisted' : row.readiness.issues.length ? 'missing' : 'ready') })
+    if (context?.connectionId) await addEbayPublishReadiness({ rows, columns, label: coordinate.label, market: coordinate.marketplace, accountId: context.connectionId })
+  }
+
   // ── 6. alias group summaries ──────────────────────────────────────
+  const itemLevelColumn = coordinate?.channel === 'EBAY' ? (await import('./ebay-publish-readiness.js')).isEbayItemLevelColumn : null
   const aliases: AliasGroup[] = coordinate
     ? groups.map((g) => {
         const mine = rows.filter((r) => r.aliasId === g.id)
@@ -1887,9 +1901,12 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         // Other marketplace requirements cannot affect this destination.
         let filled = 0
         let total = 0
+        // Follow-up 2026-10-01 — an eBay variation row does not hold the listing's item-level fields (its main row does).
+        const withMain = mine.some(r => r.parentId === null)
         for (const r of mine) {
           for (const c of columns) {
             if (!columnApplies(c, { isParent: r.isParent, productType: r.productType, familyId: r.familyId })) continue
+            if (itemLevelColumn && withMain && r.parentId !== null && itemLevelColumn(c, coordinate.label)) continue
             if (!r.values[c.key]?.mapped?.requiredByRule && !columnRequiredHere(c, coordinate.label, r.productType, r.familyId, r.values)) continue
             total++
             if ((!r.values[c.key]?.language || !translationMissing({ language: r.values[c.key].language }, locale)) && !isBlank(r.values[c.key]?.value)) filled++

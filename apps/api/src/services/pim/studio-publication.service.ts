@@ -22,6 +22,7 @@ import { sharedListingWarnings } from '../assortment/shared-listing-warning.js'
 import { prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
 import { compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
+import { verifyNewEbayListing } from './studio-publication-ebay-verify.js'
 
 const KIND = 'studio-publication'
 const IN_FLIGHT = ['PUBLISHING', 'UNVERIFIED', 'SUBMITTED']
@@ -139,7 +140,28 @@ async function reconcileEbayReceipt(data: Record<string, any>, previous: StudioP
   return { ...previous, status: 'ACCEPTED', warnings, message: `eBay accepted item ${reference} and reports it active.` }
 }
 
-async function buildReview(productId: string, scope: StudioPublishScope) {
+/**
+ * Publish without surprises (audit P1/P9) — what a refused prepare step tells the review. The eBay builder names EVERY
+ * problem it found (`issues`) and the notes it made on the way (`notes`); "sending is off" (`gateOnly`) is already the
+ * review's one gate message, so it adds nothing but its notes. Any other refusal is one message, as before.
+ */
+function refusalIssues(error: unknown): StudioPublishReview['issues'] {
+  const found = error as { issues?: unknown; notes?: unknown; gateOnly?: unknown } | null
+  const notes = Array.isArray(found?.notes) ? (found!.notes as string[]).map(message => ({ severity: 'warning' as const, message })) : []
+  if (Array.isArray(found?.issues)) return [...(found!.issues as StudioPublishReview['issues']), ...notes]
+  if (found?.gateOnly === true) return notes
+  return [{ severity: 'error', message: error instanceof Error ? error.message : String(error) }, ...notes]
+}
+
+/** The one sentence a review shows when this server does not send to the channel (audit P9: it was said twice for eBay). */
+const gateMessage = (channel: string, mode: string) => mode === 'unavailable' ? 'Publication is unavailable for this channel.'
+  : `Sending is off: publishing to ${channel === 'EBAY' ? 'eBay' : channel === 'AMAZON' ? 'Amazon' : channel === 'SHOPIFY' ? 'Shopify' : channel} is ${mode === 'gated' ? 'turned off' : `in ${mode} mode`} on this server. Every check above ran; nothing will be sent until live publishing is turned on.`
+
+/**
+ * `verify` (the preview only): a NEW eBay listing whose own checks pass is checked by eBay too (VerifyAddFixedPriceItem,
+ * which creates nothing), so its problems are in this review, not at the send. The send runs eBay's check again.
+ */
+async function buildReview(productId: string, scope: StudioPublishScope, options: { verify?: boolean } = {}) {
   const facts = await readPublicationFacts(productId, scope)
   const mode = publishMode(scope.channel)
   const issues = [...facts.issues]
@@ -191,8 +213,11 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
         && existingProducts.has(change.productId)))
         issues.push({ severity: 'warning', field: 'variation_theme', message: 'Changing a live variation theme can regroup its variants. Review the variation relationships before publishing.' })
     }
-  } catch (error) { issues.push({ severity: 'error', message: error instanceof Error ? error.message : String(error) }) }
-  if (mode !== 'live') issues.push({ severity: 'error', message: mode === 'unavailable' ? 'Publication is unavailable for this channel.' : `Live publishing is ${mode === 'gated' ? 'disabled' : `in ${mode} mode`} for this channel. Enable live publishing in the channel configuration to send this product.` })
+  } catch (error) { issues.push(...refusalIssues(error)) }
+  // Audit P1 — eBay's own check, only once Nexus's checks found nothing that blocks (else eBay would name the same gaps again).
+  if (options.verify && prepared?.kind === 'ebay' && !prepared.itemId && mode === 'live' && !issues.some(issue => issue.severity === 'error'))
+    issues.push(...await verifyNewEbayListing(prepared, scope.accountId))
+  if (mode !== 'live') issues.push({ severity: 'error', message: gateMessage(scope.channel, mode) })
   const overwrite = await readPublicationOverwrite(facts)
   const review: StudioPublishReview = {
     id: null, productId, scope, accountLabel: facts.account.displayName, aliasLabel: facts.aliasLabel, mode,
@@ -216,7 +241,7 @@ export async function previewStudioPublication(productId: string, scope: StudioP
     const workspace = await getContentWorkspace(productId, contentScope)
     if (!workspace.initialized) await saveContentWorkspace(productId, contentScope, { draft: workspace.draft, expectedRevision: workspace.revision })
   }
-  const plan = await buildReview(productId, scope)
+  const plan = await buildReview(productId, scope, { verify: true })
   const id = randomUUID()
   const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
   const unresolved = await prisma.bulkOperation.findFirst({ where: { status: { in: IN_FLIGHT }, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })

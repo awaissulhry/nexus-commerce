@@ -251,3 +251,75 @@ describe('the family order the publisher sends in', () => {
     expect(supplier?.sku).toBe(published[1])
   })
 })
+
+// Audit P4 (2026-10-01) — an eBay family never started at this destination had "no included variants" and could not be
+// published, though the send starts draft rows itself. Its variants are included now, and the review says why.
+it('P4: an eBay family with no row here yet publishes all its variants, and the review says so', async () => {
+  const ebay = { ...scope, channel: 'EBAY', listingId: undefined }
+  m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: '' })
+  m.listingRead.mockResolvedValue([])
+  m.excluded.mockResolvedValue(new Set())
+  const facts = await readPublicationFacts('parent', ebay)
+  expect(facts.products.map(p => p.id).sort()).toEqual(['child', 'excluded', 'parent'])
+  expect(facts.issues).toContainEqual({ severity: 'warning', message: 'No variant had an eBay row here yet, so all 2 variants are included. Publishing starts their eBay rows.' })
+  expect(facts.issues.some(i => i.message === 'This family has no included variants to publish.')).toBe(false)
+  // Only the main row started: still unstarted for its variants.
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }])
+  expect((await readPublicationFacts('parent', ebay)).products).toHaveLength(3)
+})
+
+it('P4 control: a started eBay family, an alias, and Amazon keep the VTR step-0 rule', async () => {
+  m.excluded.mockResolvedValue(new Set())
+  m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: '' })
+  // One variant has its row: only it is included, as Information shows.
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-child', productId: 'child' }])
+  expect((await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).products.map(p => p.id)).toEqual(['parent', 'child'])
+  // An extra listing (alias) is never started by Publish.
+  m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: 'summer' })
+  m.listingRead.mockResolvedValue([])
+  const alias = await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })
+  expect(alias.products.map(p => p.id)).toEqual(['parent'])
+  expect(alias.issues).toContainEqual(expect.objectContaining({ message: 'This family has no included variants to publish.' }))
+  // Amazon: unchanged.
+  m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: '' })
+  expect((await readPublicationFacts('parent', scope)).products.map(p => p.id)).toEqual(['parent'])
+})
+
+// Follow-up 2026-10-01 (live check, GALE-JACKET + 20 variations) — "Condition: Field 'Condition' is required." was named on
+// every variation, though eBay takes ONE Condition for the listing, from its main row. Item-level fields are judged on the
+// main row only; what is per variation (price, quantity, axis values…) is still judged per variation.
+describe('eBay item-level fields are judged on the main row only', () => {
+  const ITEM_LEVEL = [
+    { fieldKey: 'conditionId', label: 'Condition', channelStore: { kind: 'platformAttributes', path: ['conditionId'] } },
+    { fieldKey: 'fulfillmentPolicyId', label: 'Shipping policy', channelStore: { kind: 'platformAttributes', path: ['fulfillmentPolicyId'] } },
+    { fieldKey: 'itemPostalCode', label: 'Item location postal code', channelStore: { kind: 'platformAttributes', path: ['itemPostalCode'] } },
+    { fieldKey: 'title', label: 'Title', channelStore: { kind: 'listingColumn', column: 'title' } },
+    { fieldKey: 'price', label: 'Listing price', channelStore: { kind: 'listingColumn', column: 'price' } },
+  ]
+  const required = (label: string) => ({ value: null, label, errors: [`Field '${label}' is required.`] })
+  const ebay = { ...scope, channel: 'EBAY', listingId: undefined }
+  beforeEach(() => {
+    m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: '' })
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
+    m.excluded.mockResolvedValue(new Set())
+    m.languages.mockResolvedValue(['it'])
+  })
+  const resolveWith = (parentCells: Record<string, unknown>) => m.resolve.mockImplementation(async ({ productIds }: any) => ({ missingProductIds: [], catalogue: { fields: ITEM_LEVEL },
+    products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: productId === 'parent' ? parentCells : {
+      conditionId: required('Condition'), fulfillmentPolicyId: required('Shipping policy'), itemPostalCode: required('Item location postal code'), title: required('Title'),
+      price: required('Listing price'),
+    } })) }))
+
+  it('set on the parent only: no problem from the variations\' empty item-level cells; their price is still named', async () => {
+    resolveWith({ conditionId: { value: 'NEW', label: 'Condition', errors: [] }, title: { value: 'Giacca', label: 'Title', errors: [] } })
+    const facts = await readPublicationFacts('parent', ebay)
+    const errors = facts.issues.filter(i => i.severity === 'error')
+    expect(errors.filter(i => ['conditionId', 'fulfillmentPolicyId', 'itemPostalCode', 'title'].includes(i.field!))).toEqual([])
+    expect(errors.map(i => `${i.sku}:${i.field}`).sort()).toEqual(['CHILD:price', 'EXCLUDED:price'])
+  })
+  it('the parent lacks Condition: ONE problem, on the parent', async () => {
+    resolveWith({ conditionId: required('Condition'), title: { value: 'Giacca', label: 'Title', errors: [] } })
+    const facts = await readPublicationFacts('parent', ebay)
+    expect(facts.issues.filter(i => i.field === 'conditionId')).toEqual([{ productId: 'parent', sku: 'PARENT', field: 'conditionId', severity: 'error', message: 'Condition: Field \'Condition\' is required.' }])
+  })
+})

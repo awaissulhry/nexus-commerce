@@ -273,6 +273,8 @@ export class TradingApiFailure extends Error {
     public readonly duplicateSubmission: boolean,
     public readonly priorItemId?: string,
     channelErrors: Array<{ code: string; message: string }> = [],
+    /** eBay's whole answer, so a reader can tell an Error from a Warning per `<Errors>` block (the review's Verify step). */
+    public readonly raw?: string,
   ) {
     super(message)
     this.name = 'TradingApiFailure'
@@ -451,7 +453,7 @@ export async function callTradingApi(
       })
     }
     throw new TradingApiFailure(`eBay ${callName} Failure: ${detail}${code}`, duplicateSubmission,
-      duplicateSubmission ? duplicateItemId(callName, xml, raw) : undefined, channelErrors)
+      duplicateSubmission ? duplicateItemId(callName, xml, raw) : undefined, channelErrors, raw)
   }
   return { ack, itemId, errors, raw }
 }

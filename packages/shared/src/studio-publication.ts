@@ -12,6 +12,8 @@ export interface StudioPublishIssue {
   field?: string
   message: string
   severity: 'error' | 'warning'
+  /** The channel's own words behind `message` (eBay's check answers in its own text), shown as a detail. */
+  detail?: string
 }
 
 export interface StudioPublishReview {
