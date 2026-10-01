@@ -36,6 +36,7 @@ import {
 import { computeListingPrice, holdsCascadedPrice } from '../../master-price.service.js'
 import { masterCurrency } from '../../fx-rate.service.js'
 import { marketCurrency, type MarketCurrencyRow } from '../../pim/market-currency.js'
+import { masterPriceBoundsReason, priceBoundsOf, type PriceBounds } from '../../price-bounds.service.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 
 /** The most products one bulk change may name. */
@@ -64,6 +65,8 @@ interface BulkProduct {
   id: string
   sku: string
   basePrice: number | null
+  /** The product's own pricing floor and ceiling (Product.minPrice / maxPrice). */
+  bounds: PriceBounds
   categoryAttributes: Record<string, unknown>
 }
 
@@ -97,7 +100,7 @@ async function resolveProducts(refs: string[], nothing: string): Promise<BulkPro
   const wanted = [...new Set(refs.map((ref) => ref.trim()).filter(Boolean))]
   const rows = await prisma.product.findMany({
     where: { deletedAt: null, OR: [{ id: { in: wanted } }, { sku: { in: wanted } }] },
-    select: { id: true, sku: true, basePrice: true, categoryAttributes: true },
+    select: { id: true, sku: true, basePrice: true, minPrice: true, maxPrice: true, categoryAttributes: true },
   })
   const byId = new Map(rows.map((row) => [row.id, row]))
   const bySku = new Map(rows.map((row) => [row.sku, row]))
@@ -114,6 +117,7 @@ async function resolveProducts(refs: string[], nothing: string): Promise<BulkPro
       id: row.id,
       sku: row.sku,
       basePrice: row.basePrice != null ? Number(row.basePrice) : null,
+      bounds: priceBoundsOf(row),
       categoryAttributes: attributes && typeof attributes === 'object' && !Array.isArray(attributes) ? (attributes as Record<string, unknown>) : {},
     })
   }
@@ -221,7 +225,7 @@ interface PricePlan {
   currency: string
   products: BulkProduct[]
   /** Products whose master price changes, with the new price. */
-  items: Array<{ id: string; sku: string; from: number | null; to: number }>
+  items: Array<{ id: string; sku: string; from: number | null; to: number; bounds: PriceBounds }>
   /** SKUs already at the new price. */
   unchanged: string[]
 }
@@ -244,6 +248,7 @@ async function planPrices(args: Record<string, unknown>, nothing: string): Promi
   const items: PricePlan['items'] = []
   const unchanged: string[] = []
   const refused: string[] = []
+  const outOfBounds: string[] = []
   for (const product of found) {
     const from = product.basePrice
     if (operation !== 'set' && from == null) {
@@ -255,11 +260,25 @@ async function planPrices(args: Record<string, unknown>, nothing: string): Promi
       refused.push(`${product.sku} would go to ${money(to)}`)
       continue
     }
+    // The push refuses a price outside the product's own floor or ceiling, after Nexus has stored it; refused
+    // here instead, so Nexus and the channels never disagree. A product already at that price is left alone.
+    const outside = from != null && cents(from) === to ? null : masterPriceBoundsReason(to, product.bounds)
+    if (outside) {
+      outOfBounds.push(`${product.sku} (${outside})`)
+      continue
+    }
     if (from != null && cents(from) === to) unchanged.push(product.sku)
-    else items.push({ id: product.id, sku: product.sku, from, to })
+    else items.push({ id: product.id, sku: product.sku, from, to, bounds: product.bounds })
   }
   if (refused.length) {
     return { error: `A master price must stay above 0: ${listed(refused)}. ${nothing}` }
+  }
+  if (outOfBounds.length) {
+    return {
+      error:
+        `A master price must stay within the pricing floor and ceiling set on the product: ${listed(outOfBounds)}. ` +
+        `Change the plan, change the floor or ceiling on those products in Nexus, or leave them out. ${nothing}`,
+    }
   }
   return { operation, value, currency: masterCurrency(), products: found, items, unchanged }
 }
@@ -329,6 +348,8 @@ async function pricePreview(plan: PricePlan) {
   const counts = { queued: 0, paused: 0, draft: 0, ownPrice: 0, otherCurrency: 0, alreadyAtPrice: 0 }
   const lines: string[] = []
   const fates: unknown[] = []
+  /** Listings sent a price (a percent rule) outside the product's floor or ceiling: the push will refuse them. */
+  const refusedAtPush: unknown[] = []
   for (const listing of listings) {
     const item = itemById.get(listing.productId)
     if (!item) continue
@@ -337,7 +358,9 @@ async function pricePreview(plan: PricePlan) {
     const where = `${item.sku} · ${channelLabel(listing.channel)} ${listing.marketplace}`
     if (fate.kind === 'queued' || fate.kind === 'paused' || fate.kind === 'draft') {
       counts[fate.kind]++
-      const held = fate.kind === 'queued' ? '' : ` (${fate.kind}: stored, not sent)`
+      const outside = fate.kind === 'queued' && fate.to != null ? masterPriceBoundsReason(fate.to, item.bounds) : null
+      if (outside) refusedAtPush.push([listing.id, outside])
+      const held = fate.kind === 'queued' ? (outside ? ` (refused when sent: ${outside})` : '') : ` (${fate.kind}: stored, not sent)`
       lines.push(`${where}: ${money(fate.from ?? null)} → ${money(fate.to ?? null)}${held}`)
     } else if (fate.kind === 'own-price') counts.ownPrice++
     else if (fate.kind === 'already') counts.alreadyAtPrice++
@@ -377,8 +400,22 @@ async function pricePreview(plan: PricePlan) {
       listingsWithOwnPrice: counts.ownPrice,
       listingsOtherCurrency: counts.otherCurrency,
       listingsAlreadyAtPrice: counts.alreadyAtPrice,
+      // Only when there are some, so a preview without any reads (and fingerprints) as it did before.
+      ...(refusedAtPush.length ? { listingsRefusedAtPush: refusedAtPush.length } : {}),
     },
-    basis: basisOf({ items: plan.items.map((item) => [item.id, item.from, item.to]), unchanged: plan.unchanged, fates }),
+    ...(refusedAtPush.length
+      ? {
+          warning:
+            `${plural(refusedAtPush.length, 'listing')} would be sent a price outside the pricing floor or ceiling set on the product ` +
+            '(its pricing rule adjusts the master price), so the marketplace push refuses it and that listing keeps its old price there.',
+        }
+      : {}),
+    basis: basisOf({
+      items: plan.items.map((item) => [item.id, item.from, item.to]),
+      unchanged: plan.unchanged,
+      fates,
+      ...(refusedAtPush.length ? { refusedAtPush } : {}),
+    }),
     note:
       'Nothing changes until a person approves this in Nexus. It sets each master price through the master price service: every listing that ' +
       `follows the master price is updated and queued to its marketplace, held for ${holdText()} (the undo window), then sent on the outbound ` +

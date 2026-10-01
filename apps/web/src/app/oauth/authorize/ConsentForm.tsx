@@ -43,7 +43,7 @@ export function ConsentForm(props: ConsentFormProps) {
   return (
     <Card
       header={`Connect ${view.clientName} to Nexus`}
-      description={`${view.clientName} will work in one business as you. It can read what you can see, and ask for changes — every change waits for your approval in Nexus.`}
+      description={`${view.clientName} will work in one business as you. It can read what you can see. If you allow it, it can also ask for changes, and nothing changes until someone with permission approves it in Nexus.`}
     >
       <form className="business-profile-form" onSubmit={submit} aria-busy={props.busy}>
         <p>
@@ -99,7 +99,7 @@ export function ConsentForm(props: ConsentFormProps) {
                   checked={props.allowWrite}
                   onChange={(event) => props.onAllowWrite(event.target.checked)}
                   disabled={props.busy}
-                  label="Ask for changes — each one waits for your approval in Nexus"
+                  label="Ask for changes — each one waits for approval in Nexus by someone with permission"
                 />
               )}
             </div>

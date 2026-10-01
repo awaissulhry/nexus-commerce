@@ -110,3 +110,25 @@ export async function priceRefusalFor(args: {
   if (args.price === undefined || args.price === null) return null
   return priceBoundsRefusal({ ...args, bounds: await loadPriceBounds(args.productId) })
 }
+
+/**
+ * The same floor and ceiling, checked BEFORE a master price is written (the agent price tools). The push
+ * refuses a price outside them, but by then Nexus has stored it, so Nexus and the channel would disagree.
+ * `null` = within the bounds, or none set; otherwise the reason as a clause ("35.00 is below its pricing floor
+ * of 40.00") for the caller's own sentence.
+ */
+export function masterPriceBoundsReason(price: number, bounds: PriceBounds): string | null {
+  const { minPrice, maxPrice } = bounds
+  const fmt = (n: number) => n.toFixed(2)
+  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+    return `its pricing floor (${fmt(minPrice)}) is above its pricing ceiling (${fmt(maxPrice)})`
+  }
+  if (minPrice !== null && price < minPrice) return `${fmt(price)} is below its pricing floor of ${fmt(minPrice)}`
+  if (maxPrice !== null && price > maxPrice) return `${fmt(price)} is above its pricing ceiling of ${fmt(maxPrice)}`
+  return null
+}
+
+/** Decimal-or-null columns as the numbers `PriceBounds` holds. */
+export function priceBoundsOf(row: { minPrice?: unknown; maxPrice?: unknown }): PriceBounds {
+  return { minPrice: asNumber(row.minPrice), maxPrice: asNumber(row.maxPrice) }
+}

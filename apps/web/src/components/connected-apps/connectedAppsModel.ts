@@ -140,9 +140,12 @@ export function sectionVisible(state: ConnectedAppsState): boolean {
   return state.load === 'ready' && (state.enabled || state.grants.length > 0 || state.notice !== null)
 }
 
-/** Changes wait for the approval of the person who connected the app: "you" on their own page. */
-export function accessWords(scopes: ConnectedApp['scopes'], scope: ConnectedAppsScope): string {
-  if (scopes.includes('nexus.write')) return `Reads, and asks for changes ${scope === 'mine' ? 'you' : 'they'} approve`
+/**
+ * What a connection may do. A change it asks for waits for approval in Nexus by anyone with the permission
+ * for it, not only by the person who connected the app.
+ */
+export function accessWords(scopes: ConnectedApp['scopes']): string {
+  if (scopes.includes('nexus.write')) return 'Reads, and asks for changes that wait for approval in Nexus'
   if (scopes.includes('nexus.read')) return 'Reads only'
   return 'No access'
 }

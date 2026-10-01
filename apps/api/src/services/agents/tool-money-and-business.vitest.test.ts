@@ -308,7 +308,7 @@ describe('MCP.2 — money a person may not see never comes back', () => {
 
   it('the money-cleared run really reads the seeded money (positive control)', async () => {
     const analytics = await run(cleared(A), 'product-analytics', ARGS['product-analytics'](seeded[A]))
-    expect(analytics.visible?.data).toMatchObject({ unitsSold: 3, revenue: 3000.03 })
+    expect(analytics.visible?.data).toMatchObject({ unitsSold: 3, revenueByCurrency: { EUR: 3000.03 } })
     const insights = await run(cleared(A), 'insights-metric', ARGS['insights-metric'](seeded[A]))
     expect(insights.visible?.data).toMatchObject({ revenueByCurrency: { EUR: 3007.8 } })
   })
@@ -355,9 +355,9 @@ describe('MCP.2 — money a person may not see never comes back', () => {
   it('a revenue grant reveals revenue, and only revenue', async () => {
     const revenueOnly = principal(A, [...EVERY_ACTION, FIELDS.financialsRevenueView])
     const out = await run(revenueOnly, 'product-analytics', ARGS['product-analytics'](seeded[A]))
-    expect(out.visible?.data).toMatchObject({ revenue: 3000.03 })
+    expect(out.visible?.data).toMatchObject({ revenueByCurrency: { EUR: 3000.03 } })
     const operatorOut = await run(operator(A), 'product-analytics', ARGS['product-analytics'](seeded[A]))
-    expect(operatorOut.visible?.data).not.toHaveProperty('revenue')
+    expect(operatorOut.visible?.data).not.toHaveProperty('revenueByCurrency')
     expect(operatorOut.visible?.data).toMatchObject({ unitsSold: 3 })
   })
 })

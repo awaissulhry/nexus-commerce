@@ -312,15 +312,19 @@ export async function scheduleApproval(input: {
   error?: string
   code?: 'forbidden'
 }> {
-  const executeAfter = new Date(Date.now() + UNDO_WINDOW_MS)
+  const now = new Date()
+  const executeAfter = new Date(now.getTime() + UNDO_WINDOW_MS)
   // MCP.1 — a person may approve only the tools their permissions cover. The
   // check is part of the claim itself, so it costs no extra query.
   const approvable = approvableToolNames(input.actor)
   // Atomic pending→scheduled claim: two tabs cannot both schedule the same row.
+  // A request past its expiresAt is not approvable, even in the seconds before
+  // the maintenance sweep marks it expired.
   const claim = await prisma.agentApproval.updateMany({
     where: {
       id: input.id,
       status: 'pending',
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       ...(approvable ? { toolName: { in: approvable } } : {}),
     },
     data: {
@@ -339,9 +343,12 @@ export async function scheduleApproval(input: {
   if (claim.count === 0) {
     const cur = await prisma.agentApproval.findUnique({
       where: { id: input.id },
-      select: { status: true, toolName: true },
+      select: { status: true, toolName: true, expiresAt: true },
     })
     if (!cur) return { ok: false, error: 'approval not found' }
+    if (cur.status === 'pending' && cur.expiresAt && cur.expiresAt <= now) {
+      return { ok: false, error: 'This request expired before anyone approved it. Nothing changed.' }
+    }
     if (cur.status === 'pending' && approvable && !approvable.includes(cur.toolName)) {
       const tool = getTool(cur.toolName)
       const missing = tool ? missingPermissions(input.actor, tool) : []
@@ -631,7 +638,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // different act. `publishMode` is the important one: if the channel flipped
   // to live between the approval and the run, the operator approved a gated
   // queue-up and would get a real publish.
-  'publish-listing': ['currentlyPublished', 'publishMode'],
+  // `marketplace` — the one listing it re-sends (MCP review 2026-10-01: it used to be whichever came first).
+  'publish-listing': ['marketplace', 'currentlyPublished', 'publishMode'],
 
   // `suppressed` is the one that matters most anywhere in this map: if the
   // customer opted out after the operator said yes, the message must not go.

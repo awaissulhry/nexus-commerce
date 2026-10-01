@@ -19,10 +19,10 @@ Make sure you know, and ask only for what is missing:
 
 ## 2. Gather the products and their current prices
 
-- `channel-price-stock` with a `sku` prefix, `channel`, `market` or `productId`: one row per channel listing with `productId`, `sku` and `price` (`master`, `listed`, `sale`, `followsMaster`, `override`, `rule`). Use `limit: 100`; to read on, call again with the same filters and `cursor` set to `nextCursor`, until `nextCursor` is null. Group the rows by product.
+- `channel-price-stock` with a `sku` prefix, `channel`, `market` or `productId`: one row per channel listing with `productId`, `sku` and `price` (`master`, `listed`, `sale`, `followsMaster`, `override`, `rule`, `currency`, `masterCurrency`). Use `limit: 100`; to read on, call again with the same filters and `cursor` set to `nextCursor`, until `nextCursor` is null. Group the rows by product.
 - `product-search` finds products by name, SKU or brand (at most 50 per call, no paging); then read each product's prices with `channel-price-stock` (`productId`) or `price-status`.
 - Prefer one filtered list over one call per product. If you would need more than about 20 single calls, say it will take a while, or ask for a narrower filter.
-- Skip, and list separately, products with no master price. Prices are in each product's own currency: a fixed amount must not mix currencies.
+- Skip, and list separately, products with no master price. Every master price is in the one master currency (`masterCurrency`, normally EUR), so `set` and `amount` are in that currency. A listing's `listed` price is in its market's `currency`, which can differ (GBP, SEK, PLN, USD).
 
 ## 3. Show the plan, then stop and ask
 
@@ -30,8 +30,8 @@ Keep it short:
 
 - How many products, and the change in one line ("raise the master price 5%, rounded to the cent").
 - A table of up to 15 rows: SKU, current master price, new master price, change in %. Then "and N more", with the smallest and largest change.
-- Which channel listings will follow: those with `followsMaster: true` and no `override`, under rule `FIXED` (they take the master price) or `PERCENT_OF_MASTER` (master adjusted by their `adjustPercent`). Those with an `override`, `followsMaster: false` or rule `MATCH_AMAZON` keep their price. Give counts per channel, not every row.
-- Ask about anything odd before going on: a new price of 0, a change bigger than 20%, a new price below a listing's sale price, products left out.
+- Which channel listings will follow: those with `followsMaster: true`, no `override` and a `currency` equal to `masterCurrency`, under rule `FIXED` (they take the master price) or `PERCENT_OF_MASTER` (master adjusted by their `adjustPercent`). Those with an `override`, `followsMaster: false`, rule `MATCH_AMAZON`, or a market in another currency keep their price. Give counts per channel, not every row.
+- Ask about anything odd before going on: a change bigger than 20%, a new price below a listing's sale price, products left out. A new price of 0 or less is refused by Nexus, and so is a master price outside the pricing floor or ceiling set on a product: leave such products out, or ask the person to change the floor or ceiling in Nexus first.
 
 Then ask plainly: "Shall I send this to Nexus as one price change for approval?" Go on only after a clear yes. If the person changes the plan, show it again.
 

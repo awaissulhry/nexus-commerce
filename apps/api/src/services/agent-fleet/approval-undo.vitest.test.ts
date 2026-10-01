@@ -98,6 +98,8 @@ describe('AP.4 — approving parks instead of firing', () => {
     expect(db.agentApproval.updateMany.mock.calls[0]![0]!.where).toEqual({
       id: 'a1',
       status: 'pending',
+      // Not past its expiry, inside the same claim (MCP review 2026-10-01).
+      OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
     })
   })
 

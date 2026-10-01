@@ -8,7 +8,7 @@
  * Unadvertised at this stage; Phase 2 surfaces it as the /products copilot.
  */
 
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import prisma from '../db.js'
 import {
   runAgent,
@@ -22,9 +22,9 @@ import {
 } from '../services/agents/tool-policy.service.js'
 import {
   listApprovals,
-  decideApproval,
   requestApproval,
 } from '../services/agents/approval-gate.service.js'
+import { decideFleetApproval } from '../services/agent-fleet/approval-inbox.service.js'
 import {
   runAutonomousAgent,
   getAgentOverview,
@@ -165,36 +165,35 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
     return requestApproval(toolName, request.body?.args ?? {}, await requestPrincipal(request))
   })
 
+  // Settings › AI decides through the same path as the Approvals page (decideFleetApproval): an approve is
+  // parked for the undo window, and when it runs the decider's permissions and the preview are checked again
+  // (a stale request is handed back, not run). Calling decideApproval here ran the action at once, with none
+  // of those checks, so two identical requests approved here both ran.
+  const decide = async (
+    request: FastifyRequest<{ Params: { id: string }; Body: { reason?: string } }>,
+    reply: FastifyReply,
+    decision: 'approve' | 'reject',
+  ) => {
+    const r = await decideFleetApproval({
+      id: request.params.id,
+      decision,
+      reason: request.body?.reason?.trim() || undefined,
+      actor: await requestPrincipal(request),
+    })
+    if (!r.ok && r.error === 'approval not found')
+      return reply.code(404).send(r)
+    if (r.code === 'forbidden') return reply.code(403).send(r)
+    return r
+  }
+
   fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
     '/agent/approvals/:id/approve',
-    async (request, reply) => {
-      const r = await decideApproval(
-        request.params.id,
-        'approve',
-        await requestPrincipal(request),
-        request.body?.reason,
-      )
-      if (!r.ok && r.error === 'approval not found')
-        return reply.code(404).send(r)
-      if (r.code === 'forbidden') return reply.code(403).send(r)
-      return r
-    },
+    (request, reply) => decide(request, reply, 'approve'),
   )
 
   fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
     '/agent/approvals/:id/reject',
-    async (request, reply) => {
-      const r = await decideApproval(
-        request.params.id,
-        'reject',
-        await requestPrincipal(request),
-        request.body?.reason,
-      )
-      if (!r.ok && r.error === 'approval not found')
-        return reply.code(404).send(r)
-      if (r.code === 'forbidden') return reply.code(403).send(r)
-      return r
-    },
+    (request, reply) => decide(request, reply, 'reject'),
   )
 
   // ── ACP.4a/5a — autonomous agents + Control Center ──────────────────
