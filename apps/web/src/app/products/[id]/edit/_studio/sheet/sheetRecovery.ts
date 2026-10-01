@@ -3,6 +3,7 @@ import { sheetValuesMatch, type SheetWriteRequest } from '@/design-system/grid/e
 import { loadReferenceChoices, isReferenceField as isPickerReference } from './referenceOptions'
 import { loadEbayPolicies, policyLists } from './ebayPolicies'
 import { wholeListWriteField } from './channel/provenance'
+import { shopifyFactsState } from '../shopify/draftHistory'
 
 type RecoveryCell = { shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite; value: unknown; pinned?: boolean; follows?: boolean | null; writeTarget?: string; writeField?: string; source?: string | null }
 type RecoveryRow = { id: string; version: number; aliasId?: string | null; productType?: string | null; listing?: { id: string; version?: number } | null; values: Record<string, RecoveryCell> }
@@ -30,6 +31,8 @@ export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, requ
       const slots = base ? Object.values(row.values).filter(value => wholeListWriteField(value.writeField ?? '') === base) : [stored]
       // An old listing text reads `pinned: false, follows: true` too — it is not a reset that landed (P1).
       matches[cell.colId] = slots.length > 0 && slots.every(value => value.pinned === false && value.follows !== false && value.source !== 'channelSnapshot')
+        // A Shopify draft cell follows again only by its reported sharing facts (`shopifyFactsState`); missing facts prove nothing.
+        && (!stored.shopifyWrite || shopifyFactsState(stored) === 'follow')
       if (matches[cell.colId] && stored.shopifyWrite && request.row.values[cell.colId]) request.row.values[cell.colId].shopifyWrite = stored.shopifyWrite
       continue
     }
@@ -43,7 +46,9 @@ export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, requ
         equal = sheetValuesMatch(stored.value, resolveReferenceValue(field, cell.value, Object.entries(labels).map(([id, name]) => ({ id, name }))))
       } catch { matches[cell.colId] = null; continue }
     }
-    matches[cell.colId] = equal && (cell.intent !== 'pin' || stored.pinned === true)
+    /* A Shopify draft write always makes the cell its own. Value and pinned flag are not enough: a legacy follower pin under
+       a still-following sharing rule shows both, and missing facts prove nothing (`shopifyFactsState`). */
+    matches[cell.colId] = equal && (stored.shopifyWrite ? shopifyFactsState(stored) === 'own' : cell.intent !== 'pin' || stored.pinned === true)
     if (matches[cell.colId] && stored.shopifyWrite && request.row.values[cell.colId]) request.row.values[cell.colId].shopifyWrite = stored.shopifyWrite
   }
   // Keep local typing visible. Only the concurrency metadata is refreshed here; the host performs

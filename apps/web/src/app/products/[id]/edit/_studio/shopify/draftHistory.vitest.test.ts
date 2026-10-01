@@ -56,7 +56,8 @@ describe('a Shopify cell reports its own/follow state from the server facts only
   it.each([
     ['own (no sharing rule, own value)', cell('A', null, true), 'own'],
     ['follow (no sharing rule, inherited)', cell('A', null, false), 'follow'],
-    ['own (the shared source)', cell('A', { sourceOwnerId: 'gid://shopify/Product/10', follows: false }, true), 'own'],
+    ['own (the shared source, pinned)', cell('A', { sourceOwnerId: 'gid://shopify/Product/10', follows: false }, true), 'own'],
+    ['follow (the shared source, following its provider)', cell('A', { sourceOwnerId: 'gid://shopify/Product/10', follows: false }, false), 'follow'],
     ['own (an excluded follower)', cell('A', { sourceOwnerId: source, follows: false }, true), 'own'],
     ['follow (a follower)', cell('A', { sourceOwnerId: source, follows: true }, false), 'follow'],
     ['contradictory (a legacy pin under a following rule)', cell('A', { sourceOwnerId: source, follows: true }, true), 'contradictory'],

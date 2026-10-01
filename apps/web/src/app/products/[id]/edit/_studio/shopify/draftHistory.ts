@@ -16,6 +16,7 @@
 import { HISTORY_ONLY } from '../sheet/sheetUndo'
 import { sheetValuesMatch } from '@/design-system/grid/editors/sheetWriter'
 import type { StudioCellValue } from '../sheet/channel/types'
+import type { ShopifySheetWrite } from '@nexus/shared/shopify-information'
 
 /** own: this cell stores its own value · follow: it shows what it inherits · contradictory: a saved pin while the sharing
  *  rule still follows · unknown: the sharing facts were not reported (never proof of either). */
@@ -35,14 +36,22 @@ const priors = new WeakMap<object, StudioCellValue>()
 /* The intent an undo/redo replay needs, read once by the write. */
 const replays = new WeakMap<object, ShopifyReplayIntent>()
 
-export function shopifyDraftState(cell: StudioCellValue | undefined): ShopifyDraftState {
-  if (!cell?.shopifyWrite) return 'unknown'
-  const local = optimistic.get(cell)
-  if (local) return local
-  const sharing = cell.shopifyWrite.sharing
-  if (sharing === undefined) return 'unknown'
-  if (sharing) return sharing.follows ? (cell.pinned ? 'contradictory' : 'follow') : 'own'
+/**
+ * A cell's state from the server's reported facts alone (`ShopifySheetWrite.sharing`). A follower of a sharing rule
+ * follows it unless the rule excludes it; a follower that still keeps a saved pin is the legacy contradictory state. The
+ * source, and a field no rule covers, are own when pinned and follow their provider/mapping otherwise. Facts that were
+ * not reported prove nothing (`unknown`) — also not ownership.
+ */
+export function shopifyFactsState(cell: { pinned?: boolean; shopifyWrite?: ShopifySheetWrite } | undefined): ShopifyDraftState {
+  const write = cell?.shopifyWrite
+  if (!write || write.sharing === undefined) return 'unknown'
+  const sharing = write.sharing
+  if (sharing && sharing.sourceOwnerId !== write.ownerId) return sharing.follows ? (cell.pinned ? 'contradictory' : 'follow') : 'own'
   return cell.pinned ? 'own' : 'follow'
+}
+/** The state this sheet shows: an optimistic edit or replay made here first, else the reported facts. */
+export function shopifyDraftState(cell: StudioCellValue | undefined): ShopifyDraftState {
+  return (cell && optimistic.get(cell)) || shopifyFactsState(cell)
 }
 
 export const isShopifyHistoryValue = (value: unknown): value is ShopifyHistoryValue =>
