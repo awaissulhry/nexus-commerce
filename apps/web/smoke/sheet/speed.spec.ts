@@ -2,12 +2,11 @@ import { expect, test } from './fixture'
 import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { focusCell, openSheet, readSheet, revealAllColumns, scopeOf } from './grid'
 import { sheetSeed } from './seed'
-import { NetworkMetrics, renderHook } from './metrics'
+import { NetworkMetrics, OFFLINE_LATENCY, renderHook } from './metrics'
 import { assertSaved } from './wire'
 import { NETWORK_STUBS } from './drivers'
 
 const seed = sheetSeed()
-const OFFLINE_LATENCY = ['/api/ebay/flat-file/category-breadcrumbs']
 
 // Count/byte limits protect achieved P2 work. Original unmet targets stay visible in the report below.
 // Wall-clock times are report-only: runner contention must not turn a noisy sample into a correctness verdict.
@@ -110,8 +109,15 @@ test('@sheet speed · production load, one edit, compact bytes and horizontal sc
   const scrollRenders = await page.evaluate('window.__sheetRenders.snapshot()') as { total: number; commits: number }
   expect(scroll.moved).toBeGreaterThan(0)
   expect(scrollRenders.total, 'scroll instrument observed component work').toBeGreaterThan(0)
-  console.log(`SHEET_SCROLL ${JSON.stringify({ ...scroll, renders: scrollRenders, rendersPerFrame: scrollRenders.total / scroll.frames, target: 60 })}`)
-  expect.soft(scrollRenders.total / scroll.frames, 'committed component work per horizontal scroll frame').toBeLessThanOrEqual(60)
+  const sortedFrames = [...scroll.frameMs].sort((a, b) => a - b)
+  const frameP95 = sortedFrames[Math.ceil(0.95 * sortedFrames.length) - 1]
+  console.log(`SHEET_SCROLL ${JSON.stringify({ ...scroll, renders: scrollRenders, rendersPerFrame: scrollRenders.total / scroll.frames, frameP95Ms: frameP95, target: 60 })}`)
+  // Owner decision A (2026-10-01): sideways scroll is judged by smoothness — p95 frame ≤ 16.7 ms in both directions, gated
+  // by the local quiet run (.local-pse smoothness, frame times are noisy on shared CI runners and stay report-only here).
+  // AG's column window floors at ~63 component renders a frame even with a one-element cell, so the original "≤ 60
+  // renders a frame" is REPORTED as not reachable with this grid, never counted as a pass.
+  test.info().annotations.push({ type: 'horizontal-renders-per-frame', description: `${(scrollRenders.total / scroll.frames).toFixed(2)} (original target 60: reported, not reachable with AG's column window; Owner decision A)` },
+    { type: 'horizontal-frame-p95-ms', description: `${frameP95.toFixed(1)} (target 16.7, gated locally)` })
 })
 
 for (const delay of [0, 5, 15]) test(`@sheet speed · fast type-to-start preserves character order at ${delay} ms`, async ({ page }) => {

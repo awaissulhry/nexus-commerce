@@ -3,7 +3,7 @@ import { expect, test } from './fixture'
 import { focusCell, openSheet, readSheet, scopeOf } from './grid'
 import { sheetSeed } from './seed'
 import { NETWORK_STUBS } from './drivers'
-import { NetworkMetrics, renderHook } from './metrics'
+import { NetworkMetrics, OFFLINE_LATENCY, renderHook } from './metrics'
 import { armSavedTiming, firstEditableScalarMs, readSavedTiming, stopSavedTiming } from './savedTiming'
 import { assertSaved, Wire, type Save } from './wire'
 import { browserMutation } from './browserRequest'
@@ -20,13 +20,19 @@ test('@sheet latency · 20 first-editable observations and 100 distinct confirme
   const saves: Array<{ sample: number; value: string; pendingMs?: number; savedMs?: number; error?: string }> = []
   const failures: string[] = []
   page.on('pageerror', error => failures.push(`Page: ${error.message}`))
-  page.on('console', message => { if (message.type() === 'error') failures.push(`Console: ${message.text()}`) })
+  // A lookup that cannot answer on an offline stack (OFFLINE_LATENCY: eBay category breadcrumbs, 503) is the speed spec's
+  // known exception too; every other console error fails the series.
+  page.on('console', message => {
+    if (message.type() !== 'error') return
+    if (/status of 503/.test(message.text()) && OFFLINE_LATENCY.some(path => (message.location().url ?? '').includes(path))) return
+    failures.push(`Console: ${message.text()}`)
+  })
   const run = randomUUID()
   let restored = false
   await page.addInitScript(renderHook)
   for (const stub of NETWORK_STUBS) await page.route(stub.url, route => route.fulfill({ json: stub.body }))
   // The existing 1500ms request-settle window is only a quiescence precondition. It is never Saved latency.
-  const quiet = new NetworkMetrics(page, ['/api/ebay/flat-file/category-breadcrumbs'], true)
+  const quiet = new NetworkMetrics(page, OFFLINE_LATENCY, true)
   const wire = new Wire(page)
   try {
     await openSheet(page, scope)

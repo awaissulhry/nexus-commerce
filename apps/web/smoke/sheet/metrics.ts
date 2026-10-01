@@ -1,6 +1,10 @@
 import { expect, type Page, type Request } from '@playwright/test'
 
 /** Include body completion, failures and duplicate calls. Response headers alone are not a settled request. */
+/** Lookups that cannot answer on an offline stack (no channel credentials, no network): their wait and their 503 are not
+ *  the sheet's. One list for the speed and latency specs. */
+export const OFFLINE_LATENCY = ['/api/ebay/flat-file/category-breadcrumbs']
+
 export class NetworkMetrics {
   readonly requests: Request[] = []
   private readonly pending = new Set<Request>()
