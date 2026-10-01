@@ -238,12 +238,36 @@ export class EtsyPriceRefusal extends Error {
 }
 
 /**
+ * 2026-10-01 — a stock number Nexus will not send to this Etsy listing: the SKU is on more than one Etsy product, the
+ * listing has one quantity for all its variations, or Etsy order import is off. Raised before the PUT, so nothing was
+ * sent, and a retry gives the same answer.
+ */
+export class EtsyQuantityRefusal extends Error {
+  readonly code = 'ETSY_QUANTITY_REFUSED'
+  constructor(message: string) { super(message); this.name = 'EtsyQuantityRefusal' }
+}
+
+/**
+ * Etsy's ceiling for one offering's quantity. The OpenAPI document sets no maximum on the field; 999 is the most
+ * Etsy lets a seller list of one item (Etsy's seller help), so a higher number is sent as 999 and the clamp is reported.
+ */
+export const ETSY_MAX_OFFERING_QUANTITY = 999
+
+/** A quantity sent lower than asked, because Etsy holds at most `ETSY_MAX_OFFERING_QUANTITY`. */
+export interface EtsyQuantityClamp {
+  sku: string | null
+  requested: number
+  sent: number
+}
+
+/**
  * Etsy answered, and its inventory does not allow the change: the SKU is not there, the data cannot be read, or the
- * price cannot be set for this SKU alone. Nothing was sent, and the same inventory gives the same answer on a retry.
- * A failed READ is not one of these; it is retryable.
+ * price or stock number cannot be set for this SKU alone. Nothing was sent, and the same inventory gives the same
+ * answer on a retry. A failed READ is not one of these; it is retryable.
  */
 export function isEtsyInventoryRefusal(error: unknown): boolean {
   return error instanceof EtsyOfferingNotFound || error instanceof EtsyInventoryShapeError || error instanceof EtsyPriceRefusal
+    || error instanceof EtsyQuantityRefusal
 }
 
 /**
@@ -311,6 +335,35 @@ function assertPriceGroupsWhole(before: EtsyInventoryWrite, after: EtsyInventory
 }
 
 /**
+ * 🔴 2026-10-01 — a stock number may not split a quantity Etsy keeps as one. The same rule as prices, on
+ * `quantity_on_property`: "The update fails if the supplied values for product sku, offering quantity, price, and/or
+ * processing profile are incompatible with values in `*_on_property` fields" (updateListingInventory), and in Etsy's
+ * listings tutorial "when quantity is updated it must be the same value across all products sharing" it. Refused
+ * before the PUT: Etsy would refuse it anyway, and a retry would only ask again.
+ */
+function assertQuantityGroupsWhole(before: EtsyInventoryWrite, after: EtsyInventoryWrite): void {
+  const quantityProperties = after.quantity_on_property ?? []
+  // The values a product has for the properties its quantity depends on. A product that states no value for one of
+  // them cannot be placed in a group, so it is its own: this check never refuses on a guess.
+  const keyOf = (product: EtsyWriteProduct, pi: number): string => {
+    const values = quantityProperties.map((id) => product.property_values?.find((pv) => pv.property_id === id))
+    if (values.some((value) => !value)) return `#${pi}`
+    return values.map((value, i) => `${quantityProperties[i]}=${value!.value_ids.join('+')}/${value!.values.join('+')}`).join('|')
+  }
+  after.products.forEach((product, pi) => {
+    const moved = product.offerings.some((offering, oi) => offering.quantity !== before.products[pi]?.offerings[oi]?.quantity)
+    if (!moved) return
+    const key = keyOf(product, pi)
+    const group = after.products.filter((other, oi) => keyOf(other, oi) === key)
+    const quantities = new Set(group.flatMap((other) => other.offerings.map((offering) => offering.quantity)))
+    if (quantities.size > 1) {
+      const name = product.sku ? `"${product.sku}"` : `product #${pi + 1}`
+      throw new EtsyQuantityRefusal(`On Etsy ${name} shares its quantity with ${group.length - 1} other variation(s) (the quantity varies only by property ${quantityProperties.join(', ')}), so a stock number for it alone cannot be sent; nothing was sent.`)
+    }
+  })
+}
+
+/**
  * Apply changes to a write body. Returns a NEW body — the original is the record of what Etsy
  * held, and the read-back compares against it.
  *
@@ -318,7 +371,12 @@ function assertPriceGroupsWhole(before: EtsyInventoryWrite, after: EtsyInventory
  * listing" and "the quantity was already right" are different facts, and a silent miss is how a
  * stock sync reports success while changing nothing.
  */
-export function applyOfferingChanges(body: EtsyInventoryWrite, changes: readonly OfferingChange[]): EtsyInventoryWrite {
+export function applyOfferingChanges(
+  body: EtsyInventoryWrite,
+  changes: readonly OfferingChange[],
+  /** Collects every quantity sent lower than asked (Etsy's ceiling), so the caller can say so. */
+  report?: { clamped: EtsyQuantityClamp[] },
+): EtsyInventoryWrite {
   const next: EtsyInventoryWrite = { ...body, products: body.products.map((p) => ({ ...p, offerings: p.offerings.map((o) => ({ ...o })) })) }
   for (const change of changes) {
     const matches = change.sku == null
@@ -339,6 +397,20 @@ export function applyOfferingChanges(body: EtsyInventoryWrite, changes: readonly
         throw new EtsyPriceRefusal(`Etsy has ${matches.length} products with SKU "${change.sku}" at different prices; Nexus holds one price for that SKU and will not choose between them, so nothing was sent.`)
       }
     }
+    if (change.quantity !== undefined) {
+      // 2026-10-01 (Owner) — Nexus holds ONE stock number for a SKU. Etsy may carry that SKU on several products
+      // (its SKU can vary by fewer properties than its quantity); writing the number onto each of them would count
+      // the same units once per product.
+      if (matches.length > 1) {
+        throw new EtsyQuantityRefusal(`Etsy has ${matches.length} products with SKU "${change.sku}" on this listing; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.`)
+      }
+      // A listing whose quantity does not vary by any property has ONE quantity for every variation: a stock number
+      // for one SKU would either change all of them or split what Etsy keeps as one.
+      if (next.products.length > 1 && (body.quantity_on_property ?? []).length === 0) {
+        const name = change.sku == null ? 'one variation' : `"${change.sku}"`
+        throw new EtsyQuantityRefusal(`On Etsy this listing has one quantity for all its ${next.products.length} variations, so a stock number for ${name} alone cannot be sent without changing the other ${next.products.length - 1}; nothing was sent.`)
+      }
+    }
     for (const product of matches) {
       const index = change.offeringIndex ?? 0
       const offering = product.offerings[index]
@@ -349,7 +421,9 @@ export function applyOfferingChanges(body: EtsyInventoryWrite, changes: readonly
         if (!Number.isInteger(change.quantity) || change.quantity < 0) {
           throw new EtsyOfferingNotFound(`A quantity of ${change.quantity} is not a whole number of items; nothing was sent.`)
         }
-        offering.quantity = change.quantity
+        const sent = Math.min(change.quantity, ETSY_MAX_OFFERING_QUANTITY)
+        if (sent !== change.quantity) report?.clamped.push({ sku: product.sku ?? null, requested: change.quantity, sent })
+        offering.quantity = sent
       }
       if (change.price !== undefined) {
         if (!Number.isFinite(change.price) || change.price <= 0) {
@@ -360,6 +434,7 @@ export function applyOfferingChanges(body: EtsyInventoryWrite, changes: readonly
     }
   }
   if (changes.some((change) => change.price !== undefined)) assertPriceGroupsWhole(body, next)
+  if (changes.some((change) => change.quantity !== undefined)) assertQuantityGroupsWhole(body, next)
   return next
 }
 

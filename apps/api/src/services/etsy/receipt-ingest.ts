@@ -12,8 +12,8 @@ import { logger } from '../../utils/logger.js'
 import { normalizeEtsyReceipt, type EtsyReceiptBinding, type EtsyReceiptRefusal } from './receipt-normalizer.js'
 import { writeEtsyReceipt, type EtsyReceiptWrite, type EtsyWriteOutcome } from './order-writer.js'
 
-export const ETSY_ORDER_INGEST_FLAG = 'NEXUS_ENABLE_ETSY_ORDER_INGEST'
-export const etsyOrderIngestEnabled = (): boolean => process.env[ETSY_ORDER_INGEST_FLAG] === '1'
+// The switch lives in its own small file: the Etsy stock writer asks it too (a stock write needs order import on).
+export { ETSY_ORDER_INGEST_FLAG, etsyOrderIngestEnabled } from './order-ingest-switch.js'
 
 /** An account that must be signed in again is not retried on the normal budget (C5's rule). */
 export const ETSY_AUTH_HOLD_MS = 30 * 60 * 1000

@@ -7,10 +7,10 @@
  * quantity goes back byte-identical; a failed read sends nothing and is retried; the publish gate still answers
  * SKIPPED; nothing reaches a marketplace (`fetch` is the only way out and it is stubbed).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const m = vi.hoisted(() => ({
-  read: vi.fn(), market: vi.fn(), audit: vi.fn(), alerts: vi.fn(),
+  read: vi.fn(), market: vi.fn(), audit: vi.fn(), alerts: vi.fn(), levels: vi.fn(),
   requests: [] as Array<{ url: string; method: string; body: string | null; contentType: string | null }>,
   answers: [] as Array<{ status: number; body: unknown }>,
 }))
@@ -19,6 +19,9 @@ vi.mock('../db.js', () => ({ default: {
   marketplace: { findFirst: m.market },
   product: { findUnique: vi.fn(async () => ({ minPrice: null, maxPrice: null })) },
   outboundSyncQueue: { update: vi.fn() },
+  // The stock ledger a stock row's send-time ceiling reads (stock-pool/sync-ledgers.ts): warehouse rows, no pool.
+  stockLevel: { findMany: m.levels },
+  stockPoolLink: { findMany: vi.fn(async () => []) },
 } }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('./sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
@@ -93,7 +96,10 @@ beforeEach(() => {
   __rateTest.useMemory(); gatewayLedger.length = 0
   m.requests = []; m.answers = []
   vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', ''); vi.stubEnv('ETSY_PUBLISH_MODE', '')
+  // A stock row needs Etsy order import on as well (2026-10-01); its own arms below turn it off.
+  vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')
   m.read.mockResolvedValue(listing)
+  m.levels.mockResolvedValue([])
   m.market.mockResolvedValue({ currency: 'EUR' })
   // Every request is recorded; answers are served in order. An unplanned request fails the test loudly.
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -325,5 +331,175 @@ describe('🔴 two rows for ONE Etsy listing never read, change and replace it a
       ETSY_LISTING_LOCK_DEFAULTS.waitMs = saved
       await leaseRedis.eval(RELEASE_SCRIPT, 1, etsyListingLockKey('etsy-acct', LISTING_ID), 'another-worker')
     }
+  }, 20_000)
+})
+
+/**
+ * 2026-10-01 (Owner) — Etsy STOCK through the same lane, with the current default ordering (NEXUS_SYNC_ORDERING_V2
+ * unset): the dispatch re-reads the listing's stored quantity and caps it to the routed warehouse stock less the
+ * listing's buffer, then the writer reads Etsy, moves that one quantity, sends, and reads back. Only `fetch` is fake.
+ */
+describe('🔴 an Etsy STOCK row, end to end (default ordering)', () => {
+  const STOCK_LISTING = { ...listing, id: 'cl-TEST-RED', quantity: 9, stockBuffer: 0, fulfillmentMethod: 'FBM', sourceLocationCodes: [] as string[] }
+  const stock = (quantity: number, over: Record<string, unknown> = {}) => row({
+    id: 'q-stock', syncType: 'QUANTITY_UPDATE', product: { id: 'p-red', sku: 'TEST-RED' },
+    channelListing: STOCK_LISTING, channelListingId: STOCK_LISTING.id, payload: { source: 'STOCK_MOVEMENT', quantity }, ...over,
+  })
+  /** The stored listing the dispatch re-reads, and the product's warehouse rows. */
+  const holds = (stored: Partial<typeof STOCK_LISTING>, available: number | null) => {
+    m.read.mockImplementation(async ({ where }: { where: { id: string } }) => where.id === STOCK_LISTING.id ? { ...STOCK_LISTING, ...stored } : listing)
+    m.levels.mockResolvedValue(available === null ? [] : [{ productId: 'p-red', quantity: available, available, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } }])
+  }
+  const afterQuantity = (sku: string, quantity: number) => {
+    const inv = etsyInventory()
+    inv.products!.find((p) => p.sku === sku)!.offerings![0].quantity = quantity
+    return inv
+  }
+  beforeEach(() => { vi.stubEnv('NEXUS_SYNC_ORDERING_V2', '') })
+
+  it('the PUT is Etsy\'s own inventory with ONE quantity moved: every price and every other offering as Etsy stated it', async () => {
+    live(); holds({ quantity: 9 }, 20)
+    m.answers.push({ status: 200, body: etsyInventory() }, { status: 200, body: {} }, { status: 200, body: afterQuantity('TEST-RED', 9) })
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: true, status: 'SUCCESS', message: `Etsy listing ${LISTING_ID} updated and confirmed.` })
+    expect(m.requests.map((r) => `${r.method} ${r.url}`)).toEqual([`GET ${INVENTORY_URL}`, `PUT ${INVENTORY_URL}`, `GET ${INVENTORY_URL}`])
+    const sent = JSON.parse(puts()[0].body!)
+    const asRead = toInventoryWrite(etsyInventory())
+    const expected = toInventoryWrite(etsyInventory()); expected.products[0].offerings[0].quantity = 9
+    expect(sent).toEqual(expected)
+    // The set claim: the other products leave byte-identical, and the moved one differs only in its quantity.
+    expect(JSON.stringify(sent.products[1])).toBe(JSON.stringify(asRead.products[1]))
+    expect(JSON.stringify(sent.products[2])).toBe(JSON.stringify(asRead.products[2]))
+    expect(sent.products[0]).toEqual({ ...asRead.products[0], offerings: [{ ...asRead.products[0].offerings[0], quantity: 9 }] })
+    expect(sent.products.map((p: { offerings: Array<{ price: number }> }) => p.offerings[0].price)).toEqual([19.99, 24.5, 21])
+    expect(JSON.stringify({ ...sent, products: null })).toBe(JSON.stringify({ ...asRead, products: null }))
+  }, 15_000)
+
+  it('the dispatch sends the STORED quantity, not an older payload; the ceiling is routed stock less the buffer', async () => {
+    live(); holds({ quantity: 25, stockBuffer: 3 }, 20)
+    m.answers.push({ status: 200, body: etsyInventory() }, { status: 200, body: {} }, { status: 200, body: afterQuantity('TEST-RED', 17) })
+    await service.syncToEtsy(stock(2))
+    // Stored 25 (the payload's 2 is older), capped to 20 available − 3 held back = 17.
+    expect(JSON.parse(puts()[0].body!).products[0].offerings[0].quantity).toBe(17)
+  }, 15_000)
+
+  it('no stock location routed to Etsy: refused by name, not retried, and nothing is read', async () => {
+    live(); holds({ quantity: 9 }, null)
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: false, status: 'FAILED', errorCode: 'NO_ROUTED_LOCATION', retryable: false })
+    expect(m.requests).toEqual([])
+  })
+
+  it('above Etsy\'s 999: sent as 999, and the row says so', async () => {
+    live(); holds({ quantity: 1500 }, 5000)
+    m.answers.push({ status: 200, body: etsyInventory() }, { status: 200, body: {} }, { status: 200, body: afterQuantity('TEST-RED', 999) })
+    const result = await service.syncToEtsy(stock(1500))
+    expect(JSON.parse(puts()[0].body!).products[0].offerings[0].quantity).toBe(999)
+    expect(result).toMatchObject({ success: true, status: 'SUCCESS' })
+    expect(result.message).toBe(`Etsy listing ${LISTING_ID} updated and confirmed. Etsy holds at most 999 of an item, so 1500 was sent as 999.`)
+  }, 15_000)
+
+  it('🔴 the SKU on two Etsy products: refused after the read, no PUT, not retried', async () => {
+    live(); holds({ quantity: 9 }, 20)
+    const twice = etsyInventory(); twice.products![2].sku = 'TEST-RED'
+    m.answers.push({ status: 200, body: twice })
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: false, status: 'FAILED', errorCode: 'ETSY_QUANTITY_REFUSED', retryable: false })
+    expect(result.message).toBe('Etsy has 2 products with SKU "TEST-RED" on this listing; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.')
+    expect(puts()).toEqual([])
+    expect(gets()).toHaveLength(1)
+  })
+
+  it('🔴 one quantity for every variation (quantity_on_property empty): refused, no PUT, not retried', async () => {
+    live(); holds({ quantity: 9 }, 20)
+    const shared = etsyInventory(); shared.quantity_on_property = []
+    m.answers.push({ status: 200, body: shared })
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: false, status: 'FAILED', errorCode: 'ETSY_QUANTITY_REFUSED', retryable: false })
+    expect(result.message).toContain('has one quantity for all its 3 variations')
+    expect(puts()).toEqual([])
+  })
+
+  it.each([['', ''], ['true', ''], ['false', 'live']])('publish switches %p / %p: SKIPPED, and not even a read', async (flag, mode) => {
+    vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', flag); vi.stubEnv('ETSY_PUBLISH_MODE', mode)
+    holds({ quantity: 9 }, 20)
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: true, status: 'SKIPPED', dryRun: true })
+    expect(m.requests).toEqual([])
+    expect(m.levels).not.toHaveBeenCalled()
+  })
+
+  it('🔴 order import off: SKIPPED naming NEXUS_ENABLE_ETSY_ORDER_INGEST, and not even a read', async () => {
+    live(); vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '')
+    holds({ quantity: 9 }, 20)
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: true, status: 'SKIPPED', errorCode: 'ETSY_ORDER_IMPORT_OFF', retryable: false })
+    expect(result.message).toContain('NEXUS_ENABLE_ETSY_ORDER_INGEST')
+    expect(m.requests).toEqual([])
+    expect(m.levels).not.toHaveBeenCalled()
+  })
+
+  it('🔴 a price and a stock change on one listing, sent together, with the DEFAULT ordering: both survive, never interleaved', async () => {
+    live(); holds({ quantity: 9 }, 20)
+    const etsy = statefulEtsy({ [LISTING_ID]: etsyInventory() })
+    const [a, b] = await Promise.all([service.syncToEtsy(priceRow('TEST-GRN', 26)), service.syncToEtsy(stock(9))])
+    expect([a, b].map((r: any) => r.status)).toEqual(['SUCCESS', 'SUCCESS'])
+    expect(etsy.offering(LISTING_ID, 'TEST-GRN')).toMatchObject({ price: money(2600), quantity: 17 })
+    expect(etsy.offering(LISTING_ID, 'TEST-RED')).toMatchObject({ price: money(1999), quantity: 9 })
+    expect(etsy.log).toEqual([`GET ${LISTING_ID}`, `PUT ${LISTING_ID}`, `GET ${LISTING_ID}`, `GET ${LISTING_ID}`, `PUT ${LISTING_ID}`, `GET ${LISTING_ID}`])
+  }, 20_000)
+
+  it('🔴 a stock row for a listing still locked after the wait: nothing read or sent, DEFERRED with no retry spent', async () => {
+    live(); holds({ quantity: 9 }, 20)
+    const etsy = statefulEtsy({ [LISTING_ID]: etsyInventory() })
+    leaseRedis.hold(etsyListingLockKey('etsy-acct', LISTING_ID), 'another-worker', 10_000)
+    const saved = ETSY_LISTING_LOCK_DEFAULTS.waitMs
+    ETSY_LISTING_LOCK_DEFAULTS.waitMs = 200
+    try {
+      const item = { ...stock(9), retryCount: 2, maxRetries: 3 }
+      const result = await service.syncToEtsy(item)
+      expect(result).toMatchObject({ success: false, status: 'FAILED', errorCode: 'ETSY_LISTING_BUSY', retryable: true })
+      expect(etsy.log).toEqual([])
+      expect(computeFailureDisposition(item, result.error, { errorCode: result.errorCode, retryable: result.retryable }))
+        .toMatchObject({ kind: 'deferral', errorCode: 'ETSY_LISTING_BUSY' })
+    } finally {
+      ETSY_LISTING_LOCK_DEFAULTS.waitMs = saved
+      await leaseRedis.eval(RELEASE_SCRIPT, 1, etsyListingLockKey('etsy-acct', LISTING_ID), 'another-worker')
+    }
+  }, 20_000)
+})
+
+/**
+ * The same two-rows-on-one-listing arm with the lease on a REAL Redis, when `NEXUS_TEST_REDIS_URL` names a throwaway
+ * loopback one (the lock's own suite does the same). Skipped otherwise: CI has no Redis.
+ */
+const REAL_REDIS_URL = process.env.NEXUS_TEST_REDIS_URL?.trim() ?? ''
+if (REAL_REDIS_URL && !/^redis:\/\/(127\.0\.0\.1|localhost)[:/]/.test(REAL_REDIS_URL)) throw new Error('NEXUS_TEST_REDIS_URL must be a loopback Redis')
+describe.skipIf(!REAL_REDIS_URL)('the listing lease on a real Redis: an Etsy price and stock row on one listing', () => {
+  let real: import('ioredis').Redis | null = null
+  beforeEach(async () => {
+    const { default: Redis } = await import('ioredis')
+    real ??= new Redis(REAL_REDIS_URL, { maxRetriesPerRequest: 1 })
+    if (real.status !== 'ready') await new Promise((resolve, reject) => { real!.once('ready', resolve); real!.once('error', reject) })
+    registerEtsyListingLockRedis(() => real as never)
+  })
+  afterEach(() => { registerEtsyListingLockRedis(() => leaseRedis) })
+  afterAll(async () => { await real?.quit() })
+
+  it('both survive and the second read comes after the first write', async () => {
+    live(); vi.stubEnv('NEXUS_SYNC_ORDERING_V2', '')
+    const red = { ...listing, id: 'cl-TEST-RED', quantity: 9, stockBuffer: 0, fulfillmentMethod: 'FBM', sourceLocationCodes: [] as string[] }
+    m.read.mockImplementation(async ({ where }: { where: { id: string } }) => where.id === red.id ? red : listing)
+    m.levels.mockResolvedValue([{ productId: 'p-red', quantity: 20, available: 20, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } }])
+    // A listing id of its own per run, so a real Redis shared between runs never sees an old key.
+    const id = String(2000000000 + Math.floor(Math.random() * 1_000_000_000))
+    const etsy = statefulEtsy({ [id]: etsyInventory() })
+    const stockRow = row({ id: 'q-red', syncType: 'QUANTITY_UPDATE', product: { id: 'p-red', sku: 'TEST-RED' }, channelListing: { ...red, externalListingId: id }, channelListingId: red.id, payload: { quantity: 9 } })
+    const [a, b] = await Promise.all([service.syncToEtsy(priceRow('TEST-GRN', 26, id)), service.syncToEtsy(stockRow)])
+    expect([a, b].map((r: any) => r.status)).toEqual(['SUCCESS', 'SUCCESS'])
+    expect(etsy.offering(id, 'TEST-GRN')).toMatchObject({ price: money(2600), quantity: 17 })
+    expect(etsy.offering(id, 'TEST-RED')).toMatchObject({ price: money(1999), quantity: 9 })
+    expect(etsy.log).toEqual([`GET ${id}`, `PUT ${id}`, `GET ${id}`, `GET ${id}`, `PUT ${id}`, `GET ${id}`])
+    expect(await real!.exists(etsyListingLockKey('etsy-acct', id))).toBe(0)
   }, 20_000)
 })

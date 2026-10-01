@@ -12,11 +12,9 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { resolveIntendedQuantity } from './sync-control-core.js'
+import { QUANTITY_PUSH_CHANNELS, resolveIntendedQuantity } from './sync-control-core.js'
 import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
-
-const VALID_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
 
 /**
  * Enqueue QUANTITY_UPDATE for one or more just-activated listings.
@@ -57,7 +55,7 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
     const rows: any[] = []
     let uncountedSkips = 0
     for (const listing of listings) {
-      if (!listing.productId || !VALID_CHANNELS.has(listing.channel)) continue
+      if (!listing.productId || !QUANTITY_PUSH_CHANNELS.has(listing.channel)) continue
       // SC.1b — full core derivation (routing + pause + policy + pin + FBA);
       // non-FOLLOW resolutions (incl. the AS.5 UNCOUNTED guard) enqueue nothing.
       const scRes = resolveIntendedQuantity({

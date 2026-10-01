@@ -10,8 +10,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  applyOfferingChanges, EtsyInventoryShapeError, EtsyOfferingNotFound, inventoryDrift,
-  moneyToNumber, toInventoryWrite, type EtsyReadInventory,
+  applyOfferingChanges, ETSY_MAX_OFFERING_QUANTITY, EtsyInventoryShapeError, EtsyOfferingNotFound, EtsyQuantityRefusal, inventoryDrift,
+  isEtsyInventoryRefusal, moneyToNumber, toInventoryWrite, type EtsyQuantityClamp, type EtsyReadInventory,
 } from './inventory.js'
 
 const money = (amount: number, divisor = 100) => ({ amount, divisor, currency_code: 'EUR' })
@@ -191,6 +191,83 @@ describe('P4.6c — applyOfferingChanges', () => {
   it('an offering index past the end is refused', () => {
     const body = toInventoryWrite(read())
     expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', offeringIndex: 3, quantity: 1 }])).toThrow('has no offering #4')
+  })
+})
+
+/**
+ * 2026-10-01 (Owner) — the guards a STOCK number meets before it may leave for Etsy. Each refusal is raised before the
+ * PUT and is not retried (`isEtsyInventoryRefusal`), because the same inventory gives the same answer.
+ */
+describe('stock numbers for Etsy: what is refused, clamped and left alone', () => {
+  const sameSku = (): EtsyReadInventory => {
+    const inv = read()
+    inv.products![1].sku = 'RED-S'
+    return inv
+  }
+
+  it('🔴 one SKU on two Etsy products is refused — Nexus holds ONE stock number for it, not one per product', () => {
+    const body = toInventoryWrite(sameSku())
+    expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', quantity: 3 }]))
+      .toThrow(new EtsyQuantityRefusal('Etsy has 2 products with SKU "RED-S" on this listing; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.'))
+    expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', quantity: 3 }])).toThrow(EtsyQuantityRefusal)
+  })
+
+  it('a listing whose quantity does not vary by variation (quantity_on_property empty) refuses a per-SKU number', () => {
+    const inv = read(); inv.quantity_on_property = []
+    const body = toInventoryWrite(inv)
+    expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', quantity: 3 }]))
+      .toThrow('On Etsy this listing has one quantity for all its 2 variations, so a stock number for "RED-S" alone cannot be sent without changing the other 1; nothing was sent.')
+    // Even a number Etsy already holds: the listing cannot hold a per-SKU number at all.
+    expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', quantity: 4 }])).toThrow(EtsyQuantityRefusal)
+  })
+
+  it('a listing with ONE product and no quantity property takes the number (the common Etsy listing)', () => {
+    const body = toInventoryWrite({ products: [{ sku: 'MUG', offerings: [{ quantity: 1, is_enabled: true, price: money(100) }] }], quantity_on_property: [] })
+    expect(applyOfferingChanges(body, [{ sku: 'MUG', quantity: 8 }]).products[0].offerings[0].quantity).toBe(8)
+  })
+
+  it('a quantity that varies by SIZE only: one colour of a size cannot get its own number', () => {
+    const size = (id: number, name: string) => ({ property_id: 100, property_name: 'Size', scale_id: 5, scale_name: 'Letter', value_ids: [id], values: [name] })
+    const colour = (id: number, name: string) => ({ property_id: 200, property_name: 'Colour', scale_id: null, scale_name: null, value_ids: [id], values: [name] })
+    const product = (sku: string, s: [number, string], c: [number, string], quantity: number) => ({ sku, is_deleted: false, property_values: [size(...s), colour(...c)],
+      offerings: [{ quantity, is_enabled: true, is_deleted: false, price: money(1000) }] })
+    const inv: EtsyReadInventory = {
+      products: [product('S-RED', [1, 'S'], [1, 'Red'], 5), product('S-BLU', [1, 'S'], [2, 'Blue'], 5), product('M-RED', [2, 'M'], [1, 'Red'], 2)],
+      price_on_property: [], quantity_on_property: [100], sku_on_property: [100, 200],
+    }
+    expect(() => applyOfferingChanges(toInventoryWrite(inv), [{ sku: 'S-RED', quantity: 3 }]))
+      .toThrow('On Etsy "S-RED" shares its quantity with 1 other variation(s) (the quantity varies only by property 100), so a stock number for it alone cannot be sent; nothing was sent.')
+    // M has a size of its own, so it may move.
+    expect(applyOfferingChanges(toInventoryWrite(inv), [{ sku: 'M-RED', quantity: 7 }]).products.map((p) => p.offerings[0].quantity)).toEqual([5, 5, 7])
+  })
+
+  it(`a number above Etsy's ${ETSY_MAX_OFFERING_QUANTITY} is sent as ${ETSY_MAX_OFFERING_QUANTITY}, and the clamp is reported`, () => {
+    const report = { clamped: [] as EtsyQuantityClamp[] }
+    const next = applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'RED-S', quantity: 1500 }], report)
+    expect(next.products[0].offerings[0].quantity).toBe(999)
+    expect(report.clamped).toEqual([{ sku: 'RED-S', requested: 1500, sent: 999 }])
+    // At the ceiling, nothing is clamped.
+    const exact = { clamped: [] as EtsyQuantityClamp[] }
+    expect(applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'RED-S', quantity: 999 }], exact).products[0].offerings[0].quantity).toBe(999)
+    expect(exact.clamped).toEqual([])
+  })
+
+  it('0 is sent as 0 and is_enabled is left as Etsy stated it (the documents set no rule for an enabled offering at 0)', () => {
+    const next = applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'RED-S', quantity: 0 }])
+    expect(next.products[0].offerings[0]).toEqual({ price: 19.99, quantity: 0, is_enabled: true, readiness_state_id: 7 })
+    expect(next.products[1].offerings[0]).toEqual({ price: 24.5, quantity: 0, is_enabled: false, readiness_state_id: null })
+  })
+
+  it('the stock guards never hold a PRICE (a price re-sends every quantity as Etsy stated it)', () => {
+    const inv = sameSku(); inv.quantity_on_property = []
+    inv.products![1].offerings![0].price = money(1999)
+    expect(applyOfferingChanges(toInventoryWrite(inv), [{ sku: 'RED-S', price: 21 }]).products.map((p) => [p.offerings[0].price, p.offerings[0].quantity]))
+      .toEqual([[21, 4], [21, 0]])
+  })
+
+  it('a stock refusal is an Etsy refusal: not retried', () => {
+    expect(isEtsyInventoryRefusal(new EtsyQuantityRefusal('x'))).toBe(true)
+    expect(new EtsyQuantityRefusal('x').code).toBe('ETSY_QUANTITY_REFUSED')
   })
 })
 

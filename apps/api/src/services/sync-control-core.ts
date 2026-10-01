@@ -38,7 +38,18 @@
  * pre-SC system.
  */
 
-export const KNOWN_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'] as const
+export const KNOWN_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'] as const
+
+/**
+ * The channels whose listings get a QUANTITY_UPDATE queue row when the quantity they should show moves. They are
+ * exactly the channels Sync Control knows: its policies, routes and pauses are what govern those rows.
+ *
+ * ONE set for every producer — the stock cascade, the stock import, follow / pin / buffer, and listing activation.
+ * Each of the four used to keep its own list, and Etsy was missing from all four (2026-10-01): its quantity moved in
+ * Nexus, the listing said PENDING, and no row was ever written. A channel cannot now be pushed by one producer and
+ * silently skipped by another.
+ */
+export const QUANTITY_PUSH_CHANNELS: ReadonlySet<string> = new Set<string>(KNOWN_CHANNELS)
 
 export interface RoutedLedgerRow {
   locationCode: string
