@@ -152,10 +152,11 @@ describe('4 · a typed price or a sale on a paused listing or a still-draft is k
   it('🔴 a pin on a paused listing: stored, nothing queued, sync state untouched, the sentence says so', () => scoped(async () => {
     const l = await seed('rv-hold-paused', { listing: { syncPaused: true, followMasterPrice: false, priceOverride: 20, price: 20 } })
     const r = await write({ listingId: l.id, price: 22, expectedVersion: l.version })
-    expect(r.results[0]).toMatchObject({ outcome: 'applied', queueId: null, notSent: 'The price 22.00 is saved in Nexus. Nothing was sent: this listing\'s sync is paused.' })
+    expect(r.results[0]).toMatchObject({ outcome: 'applied', queueId: null, notSent: 'The price 22.00 is saved in Nexus. Nothing was sent: this listing\'s sync is paused. It is sent when the listing resumes.' })
     const stored = await listing(l.id)
     expect([Number(stored.price), Number(stored.priceOverride), stored.syncStatus]).toEqual([22, 22, l.syncStatus])
-    expect(await rows(l.id)).toEqual([])
+    // Nothing queued; round 5: ONE held row (never dispatched) that the resume sends once (`price-door-held`).
+    expect((await rows(l.id)).map((row) => [row.syncStatus, row.errorCode, (row.payload as { price?: number }).price])).toEqual([['SKIPPED', 'PUSH_SYNC_PAUSED', 22]])
   }))
 
   it('🔴 a pin and a sale on a still-draft (never published): stored, nothing queued; Publish sends it', () => scoped(async () => {
@@ -167,7 +168,9 @@ describe('4 · a typed price or a sale on a paused listing or a still-draft is k
     expect(s.results[0]).toMatchObject({ outcome: 'applied', queueId: null })
     expect(s.results[0].notSent).toMatch(/^The sale 8\.00 is saved in Nexus\./)
     expect(Number((await listing(l.id)).salePrice)).toBe(8)
-    expect(await rows(l.id)).toEqual([])
+    // Nothing queued. Round 5: Publish carries the pin, so the pin is not held; Amazon's publication sends no sale, so
+    // the sale is ONE held row (never dispatched) that the go-live sends once (`price-door-held`).
+    expect((await rows(l.id)).map((row) => [row.syncStatus, row.errorCode, (row.payload as { salePrice?: number }).salePrice])).toEqual([['SKIPPED', 'PRICE_HELD_DRAFT', 8]])
   }))
 
   it('a pin on a live listing is queued, as before', () => scoped(async () => {

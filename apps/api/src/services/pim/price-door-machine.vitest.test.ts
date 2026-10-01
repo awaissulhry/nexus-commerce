@@ -147,12 +147,14 @@ describe('🔴 machine mode: a Match Amazon price set through the door, with the
   it('a paused listing: the price is stored in Nexus, nothing is queued, and the answer says why', () => scoped(async () => {
     const l = await seed('TEST-MA-PAUSED', { listing: { syncPaused: true } })
     const r = await machine(l.id, 18.5)
-    expect(r.results[0]).toMatchObject({ outcome: 'applied', queueId: null, notSent: 'The price 18.50 is saved in Nexus. Nothing was sent: this listing\'s sync is paused.' })
+    expect(r.results[0]).toMatchObject({ outcome: 'applied', queueId: null, notSent: 'The price 18.50 is saved in Nexus. Nothing was sent: this listing\'s sync is paused. It is sent when the listing resumes.' })
     expect(r.results[0].sentPrice).toBeUndefined()
     const after = await listing(l.id)
     expect(Number(after.price)).toBe(18.5)
     expect(after.followMasterPrice).toBe(true)
-    expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: l.id } })).toBe(0)
+    // Nothing queued; round 5: ONE held row (never dispatched) that the resume sends once.
+    const rows = await prisma.outboundSyncQueue.findMany({ where: { channelListingId: l.id } })
+    expect(rows.map((row) => [row.syncStatus, row.errorCode, (row.payload as { price?: number }).price])).toEqual([['SKIPPED', 'PUSH_SYNC_PAUSED', 18.5]])
   }))
 
   it('a machine price of 0 is refused; nothing written', () => scoped(async () => {

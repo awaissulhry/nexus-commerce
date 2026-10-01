@@ -238,7 +238,7 @@ describe('POST /api/listings/bulk-action', () => {
       const row = await seed('bulk-pin-paused')
       return prisma.channelListing.update({ where: { id: row.id }, data: { syncPaused: true } })
     })
-    const sentence = 'Not sent: The price 15.00 is saved in Nexus. Nothing was sent: this listing\'s sync is paused.'
+    const sentence = 'Not sent: The price 15.00 is saved in Nexus. Nothing was sent: this listing\'s sync is paused. It is sent when the listing resumes.'
     const job = await run('set-price', [l.id], { price: 15 })
     expect(job).toMatchObject({ status: 'COMPLETED', processedItems: 1, failedItems: 0, lastError: sentence })
     expect(Number((await listing(l.id)).priceOverride)).toBe(15)

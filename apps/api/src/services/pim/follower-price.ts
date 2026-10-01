@@ -59,12 +59,64 @@ export function heldPriceSentence(listing: HoldFacts, price: number): string {
 
 /**
  * The same sentence for any change kept in Nexus by `holdsCascadedPrice` — a follower price, a typed (pinned) price,
- * a sale: `what` names it ("The price 25.00", "The sale 19.90").
+ * a sale: `what` names it ("The price 25.00", "The sale 19.90"). Round 5: a held change IS sent later — once, on resume
+ * (`sendHeldPrices`), or by Publish — so the sentence says when.
  */
 export function heldSentence(listing: HoldFacts, what: string): string {
   return listing.syncPaused
-    ? `${what} is saved in Nexus. Nothing was sent: this listing's sync is paused.`
+    ? `${what} is saved in Nexus. Nothing was sent: this listing's sync is paused. It is sent when the listing resumes.`
     : `${what} is saved in Nexus. Nothing was sent: this listing is a draft that has not been published; Publish sends it.`
+}
+
+/*
+ * HELD PRICES (round 5, 2026-10-01) — a price change kept in Nexus by `holdsCascadedPrice` is not lost: it is written
+ * as a PRICE_UPDATE row that is never dispatched (`SKIPPED`, so no dispatcher, drain or retry picks it up), and the
+ * channel price door's `sendHeldPrices` sends it ONCE when the listing can be sent to again — on resume, and when a
+ * draft is published. Before, nothing replayed it: a price, pin or sale changed while a listing was paused stayed in
+ * Nexus after the resume until some later change happened to push it.
+ *
+ *   - `PUSH_SYNC_PAUSED` — a live listing's sync is paused. The same code the dispatcher gives a row it refuses because
+ *     the listing was paused after the row was queued (inside the 30 s hold), so that change waits the same way.
+ *   - `PRICE_HELD_DRAFT` — a still-draft, for a change its publication does NOT carry: every publisher sends a
+ *     following listing the master price and a pinned listing its own price (`studio-publication-amazon.ts`,
+ *     `studio-publication-ebay.ts`), and Amazon's publication sends no sale (no sale dates in its row). A pin, or a
+ *     follower whose rule price IS the master price, is carried by Publish and is not marked: it is sent once, by Publish.
+ */
+export const HELD_PAUSED_CODE = 'PUSH_SYNC_PAUSED'
+export const HELD_DRAFT_CODE = 'PRICE_HELD_DRAFT'
+export const HELD_PRICE_CODES = [HELD_PAUSED_CODE, HELD_DRAFT_CODE] as const
+/** A `where` for a listing's held price changes. */
+export const HELD_PRICE_ROWS = { syncType: 'PRICE_UPDATE', syncStatus: 'SKIPPED', errorCode: { in: [...HELD_PRICE_CODES] } } satisfies Prisma.OutboundSyncQueueWhereInput
+
+/**
+ * Which held marker a change kept in Nexus needs, or `null` (none: the listing is not held, or Publish carries it).
+ * `followerPrice` is the price a following listing now carries when the change moved it; `masterPrice` the master.
+ */
+export function heldPriceCode(listing: HoldFacts, change: { pin: boolean; sale: boolean; followerPrice: number | null; masterPrice: number | null }): typeof HELD_PRICE_CODES[number] | null {
+  if (isStillDraftListing(listing)) return change.sale || (change.followerPrice != null && change.followerPrice !== change.masterPrice) ? HELD_DRAFT_CODE : null
+  if (listing.syncPaused) return change.pin || change.sale || change.followerPrice != null ? HELD_PAUSED_CODE : null
+  return null
+}
+
+/**
+ * The held marker row (created through `createOutboundRow(s)`, like every queue row): SKIPPED, never dispatched. Its
+ * payload says what was held (the row the change would have queued) under its own `source: 'HELD_PRICE'` (the original
+ * source in `heldFrom`), so nothing that counts the rows a change QUEUED (the agent's approval status) counts it.
+ */
+export function heldPriceRowData(
+  listing: { id: string; productId: string | null; channel: string; region: string | null; externalListingId: string | null },
+  code: typeof HELD_PRICE_CODES[number],
+  payload: Record<string, unknown>,
+): Prisma.OutboundSyncQueueUncheckedCreateInput {
+  return {
+    productId: listing.productId, channelListingId: listing.id, targetChannel: listing.channel as never, targetRegion: listing.region,
+    syncStatus: 'SKIPPED' as never, syncType: 'PRICE_UPDATE', holdUntil: null, externalListingId: listing.externalListingId, maxRetries: 0,
+    errorCode: code,
+    errorMessage: code === HELD_PAUSED_CODE
+      ? 'Kept in Nexus while this listing’s sync is paused. It is sent once, when the listing resumes.'
+      : 'Kept in Nexus while this listing is a draft. It is sent once, when the listing is published.',
+    payload: { ...payload, source: 'HELD_PRICE', heldFrom: payload.source ?? null, held: code } as Prisma.InputJsonValue,
+  }
 }
 
 /** The listing market's configured currency, or `null` when the market has none (then it is never the master currency). */

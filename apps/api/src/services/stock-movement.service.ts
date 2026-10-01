@@ -52,8 +52,8 @@ const MERCHANT_CHANNELS = new Set(['EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 export async function recascadeAfterSyncControlChange(
   productIds: string[],
   actor: string,
-): Promise<{ ok: number; noLedger: number; failed: number }> {
-  const out = { ok: 0, noLedger: 0, failed: 0 }
+): Promise<{ ok: number; noLedger: number; failed: number; heldPricesSent: number }> {
+  const out = { ok: 0, noLedger: 0, failed: 0, heldPricesSent: 0 }
   const unique = [...new Set(productIds)].filter(Boolean)
   for (const pid of unique) {
     try {
@@ -72,6 +72,14 @@ export async function recascadeAfterSyncControlChange(
         error: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+  // Round 5 (2026-10-01) — the price half of "a control change becomes marketplace truth": a price, pin or sale changed
+  // while a listing was paused was kept in Nexus as a held row; now that it may be sent (a Resume, the Matrix's resume, a
+  // pause's end time), it is sent ONCE, at the price the listing carries now (the price door's `sendHeldPrices`). A
+  // listing still paused keeps waiting. Imported here: the door's module is not on the stock cascade's own path.
+  if (unique.length) {
+    const { sendHeldPrices } = await import('./pim/channel-price-write.service.js')
+    out.heldPricesSent = (await sendHeldPrices({ productIds: unique, actor, cause: 'resume' })).sent.length
   }
   return out
 }

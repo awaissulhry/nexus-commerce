@@ -139,7 +139,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Link copy: variations inherit an attribute with no column in the receiving business (AE.3)', file: 'src/services/assortment/copy-inherited-attribute.vitest.test.ts', expect: 3 },
   { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account, alias and Amazon market checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 20 },
   { name: 'product media pop-up save (Lane C: one save bound by expect; two pop-ups on one set or one list, one wins; a gallery save is announced)', file: 'src/services/images/media-popup-save.vitest.test.ts', expect: 4 },
-  { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 12 },
+  { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 13 },
   { name: 'draft listings race (product sheet create path step 2: two concurrent first saves create one set)', file: 'src/services/pim/draft-listing-postgres.vitest.test.ts', expect: 2 },
   { name: 'live listings race (step 7: two recorders, or a draft creator and a recorder, leave one live row)', file: 'src/services/pim/live-listing-postgres.vitest.test.ts', expect: 2 },
   { name: 'first theme save race (product sheet create path step 4: two concurrent version-0 saves, one draft, one 409)', file: 'src/services/pim/family-projection-postgres.vitest.test.ts', expect: 1 },

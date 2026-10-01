@@ -93,11 +93,15 @@ describe('a paused draft is inert to every cascade', () => {
     expect(live).toEqual([expect.objectContaining({ payload: expect.objectContaining({ price: 12.5 }) })])
     expect(result.queuedSyncIds).toEqual([live[0].id])
     for (const paused of [rows.AMAZON_DE, rows.AMAZON_FR]) {
-      expect(await queueFor(paused.id, 'PRICE_UPDATE')).toEqual([])
+      expect((await queueFor(paused.id, 'PRICE_UPDATE')).filter((row) => row.syncStatus !== 'SKIPPED')).toEqual([])
       // Unchanged from before: the stored price still follows the master; only the queue row is gone.
       expect(Number((await stored(paused.id)).price)).toBe(12.5)
       expect(await stored(paused.id)).toMatchObject({ syncPaused: true })
     }
+    // Round 5 — the paused LIVE row keeps the price as ONE held row (SKIPPED, never dispatched), sent once on resume; the
+    // paused draft follows the master at the master price, which its Publish carries, so nothing is held for it.
+    expect((await queueFor(rows.AMAZON_FR.id, 'PRICE_UPDATE')).map((row) => [row.syncStatus, row.errorCode])).toEqual([['SKIPPED', 'PUSH_SYNC_PAUSED']])
+    expect(await queueFor(rows.AMAZON_DE.id, 'PRICE_UPDATE')).toEqual([])
   }))
 
   it('a master price change queues nothing for an UNPAUSED still-draft either, and still queues a DRAFT row with a channel id', () => scoped(async () => {

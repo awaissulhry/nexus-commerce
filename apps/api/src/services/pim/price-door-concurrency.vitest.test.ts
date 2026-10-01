@@ -32,7 +32,7 @@ vi.mock('./readiness-index.service.js', async () => (await import('../../test-su
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { writeChannelPrices } from './channel-price-write.service.js'
+import { sendHeldPrices, writeChannelPrices } from './channel-price-write.service.js'
 import { MasterPriceService } from '../master-price.service.js'
 import { applyProductBulkEdits } from '../products/bulk-edit.service.js'
 import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/concurrent-database.js'
@@ -227,5 +227,27 @@ it('a hand-back racing a master price change: the listing follows the final mast
   expect((results[0] as { results: Array<{ outcome: string }> }).results[0].outcome).toBe('applied')
   const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
   expect([stored.followMasterPrice, Number(stored.price), Number(stored.masterPrice)]).toEqual([true, 12, 12])
+}), 60_000)
+
+// ── Round 5 (2026-10-01) — a held price is sent ONCE, even when two resumes run at the same moment ─────────────────
+// A pin made while the listing was paused is a held row; after the resume, two runs of the hook (two Sync Control
+// actions, or a Resume and a pause's end time) race. Forced as above: both are blocked on the listing row before it
+// is released. The door's compare-and-set lets one send; the other finds the version moved and sends nothing.
+it('two resumes racing: the held price is queued ONCE, and the held row is closed', () => scoped(async () => {
+  const { listing } = await seed('race-held-resume')
+  const paused = await prisma.channelListing.update({ where: { id: listing.id }, data: { syncPaused: true } })
+  const kept = await writeChannelPrices({ targets: [{ listingId: listing.id, price: 26, expectedVersion: paused.version }], actor: 'race', source: 'MANUAL_OVERRIDE' })
+  expect(kept.results[0]).toMatchObject({ outcome: 'applied', queueId: null })
+  expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: listing.id, syncStatus: 'SKIPPED', errorCode: 'PUSH_SYNC_PAUSED' } })).toBe(1)
+  await prisma.channelListing.update({ where: { id: listing.id }, data: { syncPaused: false } })
+
+  const hook = () => sendHeldPrices({ listingIds: [listing.id], actor: 'race', cause: 'resume' })
+  const results = await race(listing.id, [hook, hook]) as Array<{ sent: string[] }>
+  expect(results.map((r) => r.sent.length).sort()).toEqual([0, 1])
+  const pending = await prisma.outboundSyncQueue.findMany({ where: { channelListingId: listing.id, syncStatus: 'PENDING' } })
+  expect(pending.map((row) => (row.payload as { price?: number }).price)).toEqual([26])
+  expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: listing.id, syncStatus: 'SKIPPED', errorCode: 'PUSH_SYNC_PAUSED' } })).toBe(0)
+  // A third run, after both: nothing left to send.
+  expect((await hook()).sent).toEqual([])
 }), 60_000)
 })

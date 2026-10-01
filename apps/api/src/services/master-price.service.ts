@@ -47,7 +47,9 @@
  *   cascade: the push lock refused that row at dispatch anyway. A still-draft
  *   (`isStillDraftListing`: DRAFT, never published, no channel id) is treated the
  *   same even when it is not paused: it is not on the channel, and only Publish
- *   sends it — with the price stored here.
+ *   sends it — with the price stored here. Round 5 (2026-10-01): such a price is
+ *   recorded as a HELD row (SKIPPED, never dispatched; `pim/follower-price.ts`) and
+ *   sent once when the listing resumes or is published (`sendHeldPrices`).
  *
  * Audit:
  *   AuditLog row written with slim before/after diff (changed fields only — not
@@ -81,7 +83,7 @@ import { roundCents } from '@nexus/shared/listing-price'
 import { type MarketCurrencyRow } from './pim/market-currency.js'
 // The follower rules the channel price door applies too — one module, so the cascade and the door cannot drift.
 import {
-  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, holdsCascadedPrice, listingMarketCurrency,
+  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, heldPriceCode, heldPriceRowData, holdsCascadedPrice, listingMarketCurrency,
   logFollowerBoundsRefusals, logMasterCurrencyRefusals, type FollowerBoundsRefusal, type MasterCurrencyRefusal,
 } from './pim/follower-price.js'
 import { priceBoundsOf, storedPriceReason } from './price-bounds.service.js'
@@ -273,6 +275,9 @@ export class MasterPriceService {
         return listingMarketCurrency(listing, currencyRows)
       }
       const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
+      // Round 5 — the follower prices a paused listing (or a draft whose Publish does not carry them) keeps in Nexus:
+      // held rows, never dispatched, sent once on resume or publish (`sendHeldPrices`, the price door's module).
+      const heldRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
       const holdUntil =
         ctx.applyGrace === false
           ? null
@@ -316,11 +321,32 @@ export class MasterPriceService {
           cascadedListingIds.push(listing.id)
           // A paused listing (an operator's pause, or an inert draft) keeps the stored price but is
           // not queued, the way the stock cascade treats it. Dispatch refused its row anyway
-          // (PUSH_SYNC_PAUSED, terminal), so nothing sent changes; resume never replayed those rows.
-          // A still-draft is not queued either, paused or not. An unpaused one passes the push lock, and
-          // only the BullMQ worker skips an unpublished listing: the cron backstop, which dispatches every
-          // row that has no job (each row written inside a caller's transaction), sent its price.
-          if (holdsCascadedPrice(listing)) continue
+          // (PUSH_SYNC_PAUSED, terminal). A still-draft is not queued either, paused or not. An unpaused
+          // one passes the push lock, and only the BullMQ worker skips an unpublished listing: the cron
+          // backstop, which dispatches every row that has no job (each row written inside a caller's
+          // transaction), sent its price. Round 5 (2026-10-01): the price kept here is a HELD row (SKIPPED,
+          // never dispatched), and the resume or the publish sends it once (`sendHeldPrices`) — before,
+          // nothing replayed it.
+          const payload = followerPricePayload({
+            source: 'MASTER_PRICE_CHANGE',
+            productId,
+            productSku: product.sku,
+            channel: listing.channel,
+            marketplace: listing.marketplace,
+            price: newListingPrice,
+            oldPrice: oldListingPrice,
+            masterPrice: rounded,
+            oldMasterPrice: oldBasePrice,
+            pricingRule: listing.pricingRule,
+            priceAdjustmentPercent: listing.priceAdjustmentPercent,
+            reason: ctx.reason ?? null,
+            idempotencyKey: ctx.idempotencyKey ?? null,
+          })
+          if (holdsCascadedPrice(listing)) {
+            const code = heldPriceCode(listing, { pin: false, sale: false, followerPrice: newListingPrice, masterPrice: rounded })
+            if (code) heldRowsToCreate.push(heldPriceRowData({ ...listing, productId }, code, payload) as Prisma.OutboundSyncQueueCreateManyInput)
+            continue
+          }
           queueRowsToCreate.push({
             productId,
             channelListingId: listing.id,
@@ -330,21 +356,7 @@ export class MasterPriceService {
             syncType: 'PRICE_UPDATE',
             holdUntil,
             externalListingId: listing.externalListingId,
-            payload: followerPricePayload({
-              source: 'MASTER_PRICE_CHANGE',
-              productId,
-              productSku: product.sku,
-              channel: listing.channel,
-              marketplace: listing.marketplace,
-              price: newListingPrice,
-              oldPrice: oldListingPrice,
-              masterPrice: rounded,
-              oldMasterPrice: oldBasePrice,
-              pricingRule: listing.pricingRule,
-              priceAdjustmentPercent: listing.priceAdjustmentPercent,
-              reason: ctx.reason ?? null,
-              idempotencyKey: ctx.idempotencyKey ?? null,
-            }) as Prisma.InputJsonValue,
+            payload: payload as Prisma.InputJsonValue,
           })
         } else {
           // Snapshot-only path: masterPrice tracks the new master so the
@@ -357,6 +369,8 @@ export class MasterPriceService {
           snapshottedListingIds.push(listing.id)
         }
       }
+
+      if (heldRowsToCreate.length > 0) await createOutboundRows(tx, { data: heldRowsToCreate })
 
       // Step 4: enqueue all the OutboundSyncQueue rows in one createMany.
       // Note: createMany doesn't return ids, so we follow up with a findMany

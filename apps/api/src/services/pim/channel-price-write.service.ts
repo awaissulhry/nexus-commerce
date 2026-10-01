@@ -52,8 +52,8 @@ import { afterDatabaseCommit } from '../../lib/database-context.js'
 import { storedCompareAt, withCompareAt } from './compare-at-price.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL, pricingRuleLabel, roundCents, type PricingRuleName } from '@nexus/shared/listing-price'
 import {
-  FOLLOWER_PRICE_HOLD_MS, computeListingPrice, followerPricePayload, heldPriceSentence, heldSentence, holdsCascadedPrice, listingMarketCurrency,
-  logMasterCurrencyRefusals, masterCurrencyRefusal, type MasterCurrencyRefusal,
+  FOLLOWER_PRICE_HOLD_MS, HELD_PRICE_CODES, HELD_PRICE_ROWS, computeListingPrice, followerPricePayload, heldPriceCode, heldPriceRowData, heldPriceSentence,
+  heldSentence, holdsCascadedPrice, listingMarketCurrency, logMasterCurrencyRefusals, masterCurrencyRefusal, type MasterCurrencyRefusal,
 } from './follower-price.js'
 import { masterCurrency } from '../fx-rate.service.js'
 import { boundsApply, priceBoundsOf, storedPriceReason, zeroPriceReason } from '../price-bounds.service.js'
@@ -99,13 +99,16 @@ export type PriceWriteUnguardedReason =
   | 'pricing-push'
   /** The promotion scheduler and the promotion delete: an event's sale, set and ended by the calendar, no version seen. */
   | 'promotion'
+  /** `sendHeldPrices`: a price change kept in Nexus while the listing was paused or a draft, sent on resume or publish. */
+  | 'held-price'
 
 /**
  * CFI-6 (R-CFI-1 Q2, BUILD.md D2) — the reasons a price may be RECORDED without being sent. A closed set, like
  * `PriceWriteUnguardedReason`: the price came FROM the channel (its own file), so the channel already holds it.
  * Same column writes, compare-and-set, `ChannelListingOverride` audit and `PriceChangeEvent` timeline — but no
  * `PRICE_UPDATE` row, no cancel of pending rows, no fire, and the listing's sync state is left alone (nothing is waiting).
- * A listing with a PENDING `PRICE_UPDATE` is refused: an operator's unsent price change is never silently overtaken.
+ * A listing with a PENDING `PRICE_UPDATE`, or a change held while it is paused or a draft (round 5), is refused: an
+ * operator's unsent price change is never silently overtaken.
  */
 export type PriceWriteRecordOnlyReason = 'channel-file-import'
 
@@ -472,6 +475,9 @@ export async function writeChannelPrices(input: {
       const effectiveSale = saleChanges ? nextSale! : currentSale
       // A change that queues nothing (recorded from the channel's file, or held) sends nothing; one that queues needs a price.
       const queues = !input.recordOnly && (sendsPrice || saleChanges) && !held
+      // Round 5 — a change kept in Nexus by the hold is written as a held row, sent once on resume or publish.
+      const heldCode = input.recordOnly || queues || t.resend ? null
+        : heldPriceCode(l, { pin: priceChanges, sale: saleChanges, followerPrice: follower?.store ? follower.next : null, masterPrice: basePrice })
       if (queues && saleChanges && effectivePrice == null) {
         // Amazon replaces the offer with what the row carries: a sale sent with no price would drop the sale (and the price).
         refuse(`${who}: the sale was not set — a sale is sent with the listing's price, and this listing holds none${marketIsMaster ? '' : ` in ${listingMarketCurrency(l, currencyRows) ?? 'its market currency'} (the master price is in ${master}; Nexus does not convert it)`}. Set the listing's own price first. Nothing was changed.`)
@@ -493,7 +499,8 @@ export async function writeChannelPrices(input: {
       if (compareChanges) sentences.push(`compare-at ${money(currentCompare.value, currency)} → ${money(nextCompare!, currency)}`)
       if (notSent) sentences.push(`not sent: ${notSent}`)
       const reason = [input.reason, sentences.join(' · ')].filter(Boolean).join(': ')
-      if (input.recordOnly && await db.outboundSyncQueue.count({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' } })) {
+      // Round 5 — a change held while the listing is paused is an unsent change too: never silently overtaken.
+      if (input.recordOnly && await db.outboundSyncQueue.count({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', OR: [{ syncStatus: 'PENDING' }, { syncStatus: 'SKIPPED', errorCode: { in: [...HELD_PRICE_CODES] } }] } })) {
         refuse(`A price change is waiting to be sent to ${l.channel}. Send or cancel it before importing the channel's price.`)
         continue targets
       }
@@ -552,24 +559,25 @@ export async function writeChannelPrices(input: {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'salePrice', previousValue: currentSale.value == null ? null : `${currentSale.value} ${currentSale.start ?? ''}→${currentSale.end ?? ''}`.trim(), newValue: effectiveSale.value == null ? null : `${effectiveSale.value} ${effectiveSale.start}→${effectiveSale.end}`, reason, changedBy: input.actor } })
         }
         let queueId: string | null = null
-        if (queues && VALID_SYNC_TARGETS.has(l.channel)) {
-          // Amazon — with NEXUS_AMAZON_OFFER_MERGE on, a price push leaves the sale Amazon holds alone (a merge,
-          // `amazon/purchasable-offer.ts`), so a person REMOVING Nexus's own sale (a value with both dates: the only sale
-          // Nexus sends) must say so on the row, and keep saying so when a later write in the grace window cancels that
-          // row for this one. Written whether the switch is on or not: OFF ignores it (its replace drops the sale anyway),
-          // and a row queued just before the switch goes on still carries the removal. Other channels: unchanged.
-          const saleRemoved = l.channel === 'AMAZON' && effectiveSale.value == null && (
-            (saleChanges && currentSale.value != null && !!currentSale.start && !!currentSale.end)
-            || !!(await tx.outboundSyncQueue.findFirst({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING', payload: { path: ['saleRemoved'], equals: true } }, select: { id: true } })))
-          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
-          const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
+        // The rows a new price change of this listing replaces: the one waiting in its hold, and a held change (round 5).
+        const replaceable: Prisma.OutboundSyncQueueWhereInput = { channelListingId: l.id, syncType: 'PRICE_UPDATE', OR: [{ syncStatus: 'PENDING' }, { syncStatus: 'SKIPPED', errorCode: { in: [...HELD_PRICE_CODES] } }] }
+        // Amazon — with NEXUS_AMAZON_OFFER_MERGE on, a price push leaves the sale Amazon holds alone (a merge,
+        // `amazon/purchasable-offer.ts`), so a person REMOVING Nexus's own sale (a value with both dates: the only sale
+        // Nexus sends) must say so on the row, and keep saying so when a later write in the grace window cancels that
+        // row for this one — or when the removal was held while the listing was paused. Written whether the switch is on
+        // or not: OFF ignores it (its replace drops the sale anyway), and a row queued just before the switch goes on
+        // still carries the removal. Other channels: unchanged.
+        const saleRemovedNow = async () => l.channel === 'AMAZON' && effectiveSale.value == null && (
+          (saleChanges && currentSale.value != null && !!currentSale.start && !!currentSale.end)
+          || !!(await tx.outboundSyncQueue.findFirst({ where: { ...replaceable, payload: { path: ['saleRemoved'], equals: true } }, select: { id: true } })))
+        const rowPayload = (saleRemoved: boolean) => {
           const sale = {
             salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
             ...(saleRemoved ? { saleRemoved: true } : {}),
           }
           // A follower price is queued with the cascade's payload fields (`followerPricePayload`), so a row from the
           // cascade and a row from this door say the same things; a pin keeps this door's own payload.
-          const payload = follower?.send && !priceChanges && !machine && basePrice != null
+          return (follower?.send || (heldCode && follower?.store)) && !priceChanges && !machine && basePrice != null
             ? {
                 ...followerPricePayload({
                   source: 'CHANNEL_PRICE_WRITE', productId: l.productId, productSku: l.product?.sku ?? null, channel: l.channel,
@@ -587,6 +595,12 @@ export async function writeChannelPrices(input: {
                 ...(t.resend ? { resend: true } : {}),
                 ...sale,
               }
+        }
+        if (queues && VALID_SYNC_TARGETS.has(l.channel)) {
+          const saleRemoved = await saleRemovedNow()
+          await tx.outboundSyncQueue.updateMany({ where: replaceable, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
+          const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
+          const payload = rowPayload(saleRemoved)
           const row = await createOutboundRow(tx, {
             data: {
               productId: l.productId, channelListingId: l.id, targetChannel: l.channel as never, targetRegion: l.region,
@@ -597,6 +611,12 @@ export async function writeChannelPrices(input: {
           })
           queueId = row.id
           queued.push(row)
+        } else if (heldCode && VALID_SYNC_TARGETS.has(l.channel)) {
+          // Round 5 — the change is kept in Nexus (paused, or a draft whose Publish does not carry it): ONE held row, never
+          // dispatched, replacing any earlier one; `sendHeldPrices` sends it once the listing can be sent to.
+          const saleRemoved = await saleRemovedNow()
+          await tx.outboundSyncQueue.updateMany({ where: replaceable, data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer price change for this listing' } })
+          await createOutboundRow(tx, { data: heldPriceRowData(l, heldCode, rowPayload(saleRemoved)), select: { id: true } })
         }
         return { version: l.version + 1, queueId }
       })
@@ -629,5 +649,88 @@ export async function writeChannelPrices(input: {
   if (refusals.length) await afterDatabaseCommit(`channel-price-currency:${refusals.map(r => r.refusal.listingId).join(',')}`,
     async () => { for (const r of refusals) await logMasterCurrencyRefusals(r.productId, r.masterPrice, [r.refusal]) })
   logger.info('channel-price-write: applied', { actor: input.actor, source: input.source, ...(input.recordOnly ? { recordOnly: input.recordOnly } : {}), applied: result.applied, refused: result.refused, noop: result.noop, conflict: result.conflict })
+  return result
+}
+
+export interface HeldPriceSendResult {
+  /** Listings whose held change was sent now: ONE PRICE_UPDATE each, through this door's SEND mode. */
+  sent: string[]
+  /** Listings still paused or still a draft: their held change keeps waiting. */
+  stillHeld: string[]
+  /** Listings whose held change a later price row had already replaced: closed, nothing sent. */
+  superseded: string[]
+  /** Listings whose held price this door refuses to send now (no price, 0, outside the floor/ceiling), with why. */
+  refused: Array<{ listingId: string; reason: string }>
+}
+
+/**
+ * ROUND 5 (2026-10-01) — send, ONCE, each price change kept in Nexus while its listing could not be sent to (the held
+ * rows of `follower-price.ts`): on resume (Sync Control's Resume, the Matrix's resume and a pause's end time, all of
+ * which run `recascadeAfterSyncControlChange`) and when a draft goes live (Publish's acceptance). Before, nothing did:
+ * the changes stayed in Nexus until some unrelated change pushed a price.
+ *
+ * Exactly once, and never stale:
+ *   - only a listing that holds a held row AND is no longer held (`holdsCascadedPrice`) is sent; one still paused or
+ *     still a draft keeps waiting;
+ *   - what is sent is the price the listing carries NOW, through this door's SEND mode (`resend`): a following listing's
+ *     rule price recomputed from the current master (and stored if it moved), a pinned listing's own price, and the sale
+ *     with its window — never the number the held row recorded;
+ *   - the SEND replaces the held rows in its own transaction (and carries an Amazon sale removal they recorded), under
+ *     the listing's compare-and-set: a second run, or one racing this one, finds nothing left to send;
+ *   - a held row a later price row already replaced (a change sent after it) is closed without a send.
+ * Best effort for the caller: a failure is logged, never thrown.
+ */
+export async function sendHeldPrices(input: { listingIds?: string[]; productIds?: string[]; actor: string; cause: 'resume' | 'publish' }): Promise<HeldPriceSendResult> {
+  const result: HeldPriceSendResult = { sent: [], stillHeld: [], superseded: [], refused: [] }
+  const scope: Prisma.OutboundSyncQueueWhereInput | null = input.listingIds?.length ? { channelListingId: { in: input.listingIds } }
+    : input.productIds?.length ? { channelListing: { productId: { in: input.productIds } } } : null
+  if (!scope) return result
+  try {
+    const held = await prisma.outboundSyncQueue.findMany({ where: { ...HELD_PRICE_ROWS, ...scope }, select: { id: true, channelListingId: true, createdAt: true } })
+    const newestByListing = new Map<string, Date>()
+    for (const row of held) {
+      if (!row.channelListingId) continue
+      const newest = newestByListing.get(row.channelListingId)
+      if (!newest || row.createdAt > newest) newestByListing.set(row.channelListingId, row.createdAt)
+    }
+    if (!newestByListing.size) return result
+    const listings = await prisma.channelListing.findMany({
+      where: { id: { in: [...newestByListing.keys()] } },
+      select: { id: true, syncPaused: true, listingStatus: true, isPublished: true, externalListingId: true },
+    })
+    const close = (listingId: string, errorMessage: string) => prisma.outboundSyncQueue.updateMany({
+      where: { ...HELD_PRICE_ROWS, channelListingId: listingId }, data: { syncStatus: 'CANCELLED', errorMessage },
+    })
+    for (const l of listings) {
+      if (holdsCascadedPrice(l)) { result.stillHeld.push(l.id); continue }
+      // A price row that left after the newest held change carried a newer price: the held change is spent.
+      const later = await prisma.outboundSyncQueue.findFirst({
+        where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: { in: ['PENDING', 'IN_PROGRESS', 'SUCCESS', 'FAILED'] }, createdAt: { gt: newestByListing.get(l.id)! } },
+        select: { id: true },
+      })
+      if (later) { await close(l.id, 'Replaced by a newer price change for this listing'); result.superseded.push(l.id); continue }
+      const written = await writeChannelPrices({
+        targets: [{ listingId: l.id, resend: true, unguardedReason: 'held-price' }],
+        actor: input.actor, source: 'MANUAL_OVERRIDE',
+        reason: input.cause === 'resume' ? 'Held price sent: the listing resumed' : 'Held price sent: the listing was published',
+      })
+      const outcome = written.results[0]
+      if (outcome?.outcome === 'applied') { result.sent.push(l.id); continue }
+      // A conflict: another write moved the listing in the gap — its own row replaces the held one, or the next run sends it.
+      if (outcome?.outcome !== 'refused') continue
+      // Paused or a draft again in the gap: it keeps waiting. Otherwise the price it holds cannot be sent: closed, said.
+      const now = await prisma.channelListing.findUnique({ where: { id: l.id }, select: { syncPaused: true, listingStatus: true, isPublished: true, externalListingId: true } })
+      if (now && holdsCascadedPrice(now)) { result.stillHeld.push(l.id); continue }
+      const reason = outcome.reason ?? 'The held price was not sent.'
+      await close(l.id, `Not sent: ${reason}`)
+      result.refused.push({ listingId: l.id, reason })
+      logger.warn('held price not sent', { listingId: l.id, cause: input.cause, reason })
+    }
+  } catch (error) {
+    logger.warn('held prices: send failed; they keep waiting for the next run', { cause: input.cause, error: error instanceof Error ? error.message : String(error) })
+  }
+  if (result.sent.length || result.superseded.length || result.refused.length) {
+    logger.info('held prices sent', { cause: input.cause, actor: input.actor, sent: result.sent.length, superseded: result.superseded.length, refused: result.refused.length, stillHeld: result.stillHeld.length })
+  }
   return result
 }

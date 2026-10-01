@@ -331,7 +331,11 @@ describe('MCP.10 — bulk-price-change', { timeout: DB_TEST_TIMEOUT }, () => {
     expect(audits).toHaveLength(2)
 
     // Exactly the pushes the preview listed as sent: PRICE_UPDATE rows, held, nothing sent from here.
-    const rows = await queueRows()
+    const all = await queueRows()
+    // Round 5 — the paused listing's new price is kept as ONE held row (SKIPPED, never dispatched; sent once on resume):
+    // not a push, and not counted by the approval's status (its own `source`).
+    expect(all.filter((r) => r.syncStatus === 'SKIPPED').map((r) => [r.channelListingId, r.errorCode, (r.payload as any).source])).toEqual([[listing.amazonFr, 'PUSH_SYNC_PAUSED', 'HELD_PRICE']])
+    const rows = all.filter((r) => r.syncStatus !== 'SKIPPED')
     expect(rows.map((r) => r.channelListingId).sort()).toEqual([listing.amazonIt, listing.ebayIt, listing.p2AmazonIt].sort())
     expect(rows.length).toBe((queued.preview as any).totals.listingsSent)
     for (const row of rows) {

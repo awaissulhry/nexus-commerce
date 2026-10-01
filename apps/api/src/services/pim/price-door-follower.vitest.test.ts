@@ -152,14 +152,23 @@ describe('the cascade\'s rules hold in the door', () => {
   it('a paused listing and a still-draft store 11 and queue nothing, and say so', () => scoped(async () => {
     const paused = await seed('fw-paused', { listing: { syncPaused: true } })
     const draft = await seed('fw-draft', { listing: { listingStatus: 'DRAFT', isPublished: false, externalListingId: null } })
-    for (const l of [paused, draft]) {
+    // Round 5 — nothing is queued (no PENDING row): the price is kept as ONE held row, never dispatched, that the resume
+    // or the publish sends once (`price-door-held.vitest.test.ts`). The draft's rule price (11) is not the master price
+    // its Publish would send (10), so it is held too.
+    const heldRows = async (id: string) => (await queue(id)).filter((row) => row.syncStatus !== 'CANCELLED').map((row) => [row.syncStatus, row.errorCode, (row.payload as { price?: number }).price])
+    for (const [l, code] of [[paused, 'PUSH_SYNC_PAUSED'], [draft, 'PRICE_HELD_DRAFT']] as const) {
       const r = await toPercent(l)
       expect(r.results[0]).toMatchObject({ outcome: 'applied', queueId: null })
       expect(Number((await listing(l.id)).price)).toBe(11)
-      expect(await queue(l.id)).toEqual([])
+      expect(await pending(l.id)).toEqual([])
+      expect(await heldRows(l.id)).toEqual([['SKIPPED', code, 11]])
     }
     expect((await toPercent(await listing(paused.id), 20)).results[0].notSent).toMatch(/sync is paused/)
     expect((await toPercent(await listing(draft.id), 20)).results[0].notSent).toMatch(/draft .* Publish sends it/)
+    // The newer held change replaces the older one: still ONE held row, at the newer price.
+    expect(await heldRows(paused.id)).toEqual([['SKIPPED', 'PUSH_SYNC_PAUSED', 12]])
+    expect(await heldRows(draft.id)).toEqual([['SKIPPED', 'PRICE_HELD_DRAFT', 12]])
+    expect(await pending(paused.id)).toEqual([])
   }))
 
   it('🔴 a GBP market keeps 10, queues nothing and returns the cascade\'s refusal sentence; the rule is written', () => scoped(async () => {
