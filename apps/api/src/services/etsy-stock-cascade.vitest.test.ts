@@ -33,17 +33,18 @@ import { applyStockMovement } from './stock-movement.service.js'
 import { applyImport, type PreviewRow } from './stock-import.service.js'
 import { setFollowMasterQuantity, setStockBuffer } from './follow-master.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
+import { etsyStockWriteRefusal } from './etsy/order-ingest-switch.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
-type Channel = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'ETSY'
-const MARKET: Record<Channel, string> = { AMAZON: 'IT', EBAY: 'IT', SHOPIFY: 'GLOBAL', ETSY: 'GLOBAL' }
+type Channel = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'ETSY' | 'WOOCOMMERCE'
+const MARKET: Record<Channel, string> = { AMAZON: 'IT', EBAY: 'IT', SHOPIFY: 'GLOBAL', ETSY: 'GLOBAL', WOOCOMMERCE: 'GLOBAL' }
 const account: Partial<Record<Channel, string>> = {}
 let warehouse = ''
 let amazonOnly = ''
 
 beforeAll(() => scoped(async () => {
-  for (const channel of ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const) {
+  for (const channel of ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE'] as const) {
     account[channel] = (await prisma.channelConnection.create({ data: { channelType: channel, accountLabel: `etsy-cascade-${channel.toLowerCase()}`, isActive: true, isPrimary: true } as never })).id
   }
   warehouse = (await prisma.stockLocation.create({ data: { code: 'ETSY-CASCADE-WH', name: 'Etsy cascade warehouse', type: 'WAREHOUSE' } })).id
@@ -188,9 +189,31 @@ describe('the other producers queue Etsy from the same set', () => {
     expect(await quantityRows(rows.ETSY.id)).toEqual([expect.objectContaining({ targetChannel: 'ETSY', payload: expect.objectContaining({ source: 'FOLLOW_MASTER', quantity: 5, follow: true }) })])
   }))
 
-  it('an Etsy listing that goes live is sent the stock it should show', () => scoped(async () => {
-    const { rows } = await seed('ETSY-CASCADE-ACTIVATED', [{ channel: 'ETSY', stockBuffer: 1, quantity: 0 }], { quantity: 5 })
-    await syncActivatedListings([rows.ETSY.id])
+  it('an Etsy listing that goes live is sent the stock it should show; activation still queues nothing for WooCommerce', () => scoped(async () => {
+    const { rows } = await seed('ETSY-CASCADE-ACTIVATED', [{ channel: 'AMAZON', quantity: 0 }, { channel: 'ETSY', stockBuffer: 1, quantity: 0 }, { channel: 'WOOCOMMERCE', quantity: 0 }], { quantity: 5 })
+    await syncActivatedListings([rows.AMAZON.id, rows.ETSY.id, rows.WOOCOMMERCE.id])
     expect(await quantityRows(rows.ETSY.id)).toEqual([expect.objectContaining({ targetChannel: 'ETSY', payload: expect.objectContaining({ source: 'LISTING_ACTIVATED', quantity: 4 }) })])
+    expect(await quantityRows(rows.AMAZON.id)).toEqual([expect.objectContaining({ targetChannel: 'AMAZON', payload: expect.objectContaining({ quantity: 5, source: 'LISTING_ACTIVATED' }) })])
+    // Activation never queued WooCommerce (it has no stock writer); adding Etsy did not change that.
+    expect(await quantityRows(rows.WOOCOMMERCE.id)).toEqual([])
+  }))
+})
+
+describe('an Etsy stock write needs Etsy order import on AND activated for the account (read from the real table)', () => {
+  it('switch off → OFF; switch on, no activation row → NOT ACTIVATED; activated → may send; another account stays not activated', () => scoped(async () => {
+    const before = process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST
+    try {
+      delete process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST
+      expect(await etsyStockWriteRefusal(account.ETSY!)).toMatchObject({ code: 'ETSY_ORDER_IMPORT_OFF' })
+      process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST = '1'
+      expect(await etsyStockWriteRefusal(account.ETSY!)).toMatchObject({ code: 'ETSY_ORDER_IMPORT_NOT_ACTIVATED' })
+      await prisma.etsyReceiptIngest.create({ data: { connectionId: account.ETSY! } as never })
+      expect(await etsyStockWriteRefusal(account.ETSY!)).toBeNull()
+      const other = (await prisma.channelConnection.create({ data: { channelType: 'ETSY', accountLabel: 'etsy-cascade-other', isActive: false, isPrimary: false } as never })).id
+      expect(await etsyStockWriteRefusal(other)).toMatchObject({ code: 'ETSY_ORDER_IMPORT_NOT_ACTIVATED' })
+    } finally {
+      if (before === undefined) delete process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST
+      else process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST = before
+    }
   }))
 })

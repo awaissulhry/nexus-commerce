@@ -10,7 +10,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const m = vi.hoisted(() => ({
-  read: vi.fn(), market: vi.fn(), audit: vi.fn(), alerts: vi.fn(), levels: vi.fn(),
+  read: vi.fn(), market: vi.fn(), audit: vi.fn(), alerts: vi.fn(), levels: vi.fn(), ingest: vi.fn(),
   requests: [] as Array<{ url: string; method: string; body: string | null; contentType: string | null }>,
   answers: [] as Array<{ status: number; body: unknown }>,
 }))
@@ -22,6 +22,8 @@ vi.mock('../db.js', () => ({ default: {
   // The stock ledger a stock row's send-time ceiling reads (stock-pool/sync-ledgers.ts): warehouse rows, no pool.
   stockLevel: { findMany: m.levels },
   stockPoolLink: { findMany: vi.fn(async () => []) },
+  // The account's Etsy order-import activation (EtsyReceiptIngest), which a stock row needs.
+  etsyReceiptIngest: { findUnique: m.ingest },
 } }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('./sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
@@ -98,6 +100,7 @@ beforeEach(() => {
   vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', ''); vi.stubEnv('ETSY_PUBLISH_MODE', '')
   // A stock row needs Etsy order import on as well (2026-10-01); its own arms below turn it off.
   vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')
+  m.ingest.mockResolvedValue({ activatedAt: new Date('2026-10-01T00:00:00Z') })
   m.read.mockResolvedValue(listing)
   m.levels.mockResolvedValue([])
   m.market.mockResolvedValue({ currency: 'EUR' })
@@ -399,13 +402,41 @@ describe('🔴 an Etsy STOCK row, end to end (default ordering)', () => {
     expect(result.message).toBe(`Etsy listing ${LISTING_ID} updated and confirmed. Etsy holds at most 999 of an item, so 1500 was sent as 999.`)
   }, 15_000)
 
-  it('🔴 the SKU on two Etsy products: refused after the read, no PUT, not retried', async () => {
+  it('🟢 Etsy\'s tutorial shape — one SKU on three products that share ONE quantity: the PUT carries it on all three, nothing else moves', async () => {
+    live(); holds({ quantity: 9 }, 20)
+    // Height (property 100) changes the SKU and the quantity; colour (200) only the price.
+    const height = (id: number) => ({ property_id: 100, property_name: 'Height', scale_id: null, scale_name: null, value_ids: [id], values: [String(id)] })
+    const shared = etsyInventory()
+    shared.products = shared.products!.slice(0, 3).map((p) => ({ ...p, sku: 'TEST-RED', property_values: [...p.property_values!, height(3)], offerings: [{ ...p.offerings![0], quantity: 4, is_enabled: true }] }))
+    shared.products.push({ product_id: 15, sku: 'TEST-TALL', is_deleted: false, property_values: [colour(1, 'Red'), height(4)],
+      offerings: [{ offering_id: 95, quantity: 6, is_enabled: true, is_deleted: false, price: money(1999), readiness_state_id: 7 }] })
+    shared.quantity_on_property = [100]; shared.sku_on_property = [100]
+    const after = structuredClone(shared); for (const p of after.products!.slice(0, 3)) p.offerings![0].quantity = 9
+    m.answers.push({ status: 200, body: shared }, { status: 200, body: {} }, { status: 200, body: after })
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: true, status: 'SUCCESS', message: `Etsy listing ${LISTING_ID} updated and confirmed.` })
+    const sent = JSON.parse(puts()[0].body!)
+    const expected = toInventoryWrite(shared); for (const p of expected.products.slice(0, 3)) p.offerings[0].quantity = 9
+    expect(sent).toEqual(expected)
+    expect(sent.products.map((p: { offerings: Array<{ quantity: number; price: number }> }) => [p.offerings[0].quantity, p.offerings[0].price])).toEqual([[9, 19.99], [9, 24.5], [9, 21], [6, 19.99]])
+  }, 15_000)
+
+  it('🔴 order import on but the account NOT activated: SKIPPED naming the activation, and not even a read', async () => {
+    live(); m.ingest.mockResolvedValue(null)
+    holds({ quantity: 9 }, 20)
+    const result = await service.syncToEtsy(stock(9))
+    expect(result).toMatchObject({ success: true, status: 'SKIPPED', errorCode: 'ETSY_ORDER_IMPORT_NOT_ACTIVATED', retryable: false })
+    expect(m.requests).toEqual([])
+    expect(m.levels).not.toHaveBeenCalled()
+  })
+
+  it('🔴 the SKU on two Etsy products that hold separate quantities: refused after the read, no PUT, not retried', async () => {
     live(); holds({ quantity: 9 }, 20)
     const twice = etsyInventory(); twice.products![2].sku = 'TEST-RED'
     m.answers.push({ status: 200, body: twice })
     const result = await service.syncToEtsy(stock(9))
     expect(result).toMatchObject({ success: false, status: 'FAILED', errorCode: 'ETSY_QUANTITY_REFUSED', retryable: false })
-    expect(result.message).toBe('Etsy has 2 products with SKU "TEST-RED" on this listing; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.')
+    expect(result.message).toBe('Etsy has 2 products with SKU "TEST-RED" on this listing, and they hold separate quantities; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.')
     expect(puts()).toEqual([])
     expect(gets()).toHaveLength(1)
   })

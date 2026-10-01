@@ -15,7 +15,11 @@ const h = vi.hoisted(() => ({
   alerts: [] as Array<Record<string, unknown>>,
   getThrows: null as Error | null,
   afterRead: null as (() => void | Promise<void>) | null,
+  /** The account's Etsy order-import activation row (EtsyReceiptIngest), as the database would answer. */
+  ingest: vi.fn(),
 }))
+
+vi.mock('../../db.js', () => ({ default: { etsyReceiptIngest: { findUnique: h.ingest } } }))
 
 vi.mock('./read-client.js', () => ({
   etsyReader: vi.fn(async () => ({
@@ -62,8 +66,10 @@ beforeEach(() => {
   leaseRedis = new FakeLeaseRedis(); h.afterRead = null
   h.gets = []; h.puts = []; h.alerts = []; h.getThrows = null
   h.inventory = inventory(); h.readBack = null
-  // A stock number needs Etsy order import on (2026-10-01); the arms below are about the write itself.
+  // A stock number needs Etsy order import on and activated for the account (2026-10-01); the arms below are about
+  // the write itself, and the order-import arms at the end turn each off.
   vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')
+  h.ingest.mockReset().mockResolvedValue({ activatedAt: new Date('2026-10-01T00:00:00Z') })
 })
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs() })
 
@@ -166,15 +172,37 @@ describe('stock numbers: order import, and Etsy\'s ceiling', () => {
   it.each([[''], ['0'], ['true']])('🔴 with order import %p (not 1) a stock number is refused before the lock, a read or a send', async (flag) => {
     vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', flag)
     const refused = await write([{ sku: 'RED-S', quantity: 12 }]).catch((error: unknown) => error)
-    expect(refused).toMatchObject({ name: 'EtsyQuantityRefusal', code: 'ETSY_QUANTITY_REFUSED' })
+    expect(refused).toMatchObject({ name: 'EtsyQuantityRefusal', code: 'ETSY_ORDER_IMPORT_OFF' })
     expect((refused as Error).message).toBe("Etsy order import is off (NEXUS_ENABLE_ETSY_ORDER_INGEST is not 1), so Etsy's own sales do not reach Nexus stock. A stock number sent now could put back units Etsy has already sold, so nothing was sent to Etsy. Turn on Etsy order import first.")
+    expect(h.gets).toEqual([])
+    expect(h.puts).toEqual([])
+    expect(leaseRedis.log).toEqual([])
+    // The switch is asked first: with it off, not even the activation is read.
+    expect(h.ingest).not.toHaveBeenCalled()
+  })
+
+  it('🔴 order import on, but THIS account is not activated: refused before the lock, a read or a send', async () => {
+    h.ingest.mockResolvedValue(null)
+    const refused = await write([{ sku: 'RED-S', quantity: 12 }]).catch((error: unknown) => error)
+    expect(refused).toMatchObject({ name: 'EtsyQuantityRefusal', code: 'ETSY_ORDER_IMPORT_NOT_ACTIVATED' })
+    expect((refused as Error).message).toBe("Etsy order import is not activated for this Etsy account (it has no activation record), so its sales do not reach Nexus stock. A stock number sent now could put back units Etsy has already sold, so nothing was sent to Etsy. Activate Etsy order import for this account first.")
+    // It asked about the account the write is for.
+    expect(h.ingest).toHaveBeenCalledWith({ where: { workspace_connectionId: { connectionId: 'etsy-1' } }, select: { activatedAt: true } })
     expect(h.gets).toEqual([])
     expect(h.puts).toEqual([])
     expect(leaseRedis.log).toEqual([])
   })
 
-  it('a PRICE is not a stock number: it is written with order import off', async () => {
+  it('a failed activation read is not taken as "activated": it throws, and nothing is sent', async () => {
+    h.ingest.mockRejectedValue(new Error('database unavailable'))
+    await expect(write([{ sku: 'RED-S', quantity: 12 }])).rejects.toThrow('database unavailable')
+    expect(h.gets).toEqual([])
+    expect(h.puts).toEqual([])
+  })
+
+  it('a PRICE is not a stock number: it is written with order import off and the account not activated', async () => {
     vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '')
+    h.ingest.mockResolvedValue(null)
     // Priced by colour (property 200), so one colour may be priced alone.
     const byColour = () => {
       const inv = inventory()
@@ -186,6 +214,7 @@ describe('stock numbers: order import, and Etsy\'s ceiling', () => {
     const result = await write([{ sku: 'BLU-S', price: 26 }], after)
     expect(result).toMatchObject({ sent: true, confirmed: true, clamped: [] })
     expect(h.puts).toHaveLength(1)
+    expect(h.ingest).not.toHaveBeenCalled()
   })
 
   it('a number above 999 is sent as 999, the result says so, and the read-back of 999 confirms it', async () => {

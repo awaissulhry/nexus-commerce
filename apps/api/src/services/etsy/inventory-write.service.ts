@@ -56,11 +56,12 @@ const DEFAULT_READ_BACK_DELAY_MS = 2_000
 export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promise<EtsyInventoryWriteResult> {
   const listingId = String(input.listingId)
   if (!/^[1-9]\d*$/.test(listingId)) throw new Error('That is not an Etsy listing id; nothing was sent.')
-  // 2026-10-01 (Owner) — a stock number needs Etsy order import on, or it puts back units Etsy already sold. Checked
-  // here as well as in the queue lane, before the lock and before any call, so no other caller can skip it.
+  // 2026-10-01 (Owner) — a stock number needs Etsy order import on AND activated for this account, or it puts back
+  // units Etsy already sold. Checked here as well as in the queue lane, before the lock and before any Etsy call, so
+  // no other caller can skip it.
   if (input.changes.some((change) => change.quantity !== undefined)) {
-    const refusal = etsyStockWriteRefusal()
-    if (refusal) throw new EtsyQuantityRefusal(refusal)
+    const refusal = await etsyStockWriteRefusal(input.accountId)
+    if (refusal) throw new EtsyQuantityRefusal(refusal.sentence, refusal.code)
   }
 
   // 2026-09-30 — one read → change → replace per listing at a time (`listing-lock.ts`): two overlapping writes to one

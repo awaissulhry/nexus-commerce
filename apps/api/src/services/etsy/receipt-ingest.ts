@@ -39,11 +39,8 @@ export async function activateEtsyIngest(connectionId: string): Promise<Date> {
   return row.activatedAt
 }
 
-/** Whether the account has its T0 (explicit activation). Read-only; never establishes it. */
-export async function etsyIngestActivated(connectionId: string): Promise<boolean> {
-  const row = await prisma.etsyReceiptIngest.findUnique({ where: { workspace_connectionId: workspaceKey({ connectionId }) }, select: { activatedAt: true } })
-  return row?.activatedAt instanceof Date
-}
+// `etsyIngestActivated` (whether the account has its T0) lives beside the switch: the Etsy stock writer asks it too.
+export { etsyIngestActivated } from './order-ingest-switch.js'
 
 /** Processing never establishes T0: a missing activation keeps the delivery retryable. */
 export async function requireEtsyIngestActivation(connectionId: string): Promise<Date> {

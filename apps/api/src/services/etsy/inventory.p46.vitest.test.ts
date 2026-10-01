@@ -205,11 +205,52 @@ describe('stock numbers for Etsy: what is refused, clamped and left alone', () =
     return inv
   }
 
-  it('🔴 one SKU on two Etsy products is refused — Nexus holds ONE stock number for it, not one per product', () => {
+  it('🔴 one SKU on two Etsy products that hold SEPARATE quantities is refused — the number would count twice', () => {
+    // Quantity varies by colour (property 200), and the SKU sits on the red AND the blue product.
     const body = toInventoryWrite(sameSku())
     expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', quantity: 3 }]))
-      .toThrow(new EtsyQuantityRefusal('Etsy has 2 products with SKU "RED-S" on this listing; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.'))
+      .toThrow(new EtsyQuantityRefusal('Etsy has 2 products with SKU "RED-S" on this listing, and they hold separate quantities; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.'))
     expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', quantity: 3 }])).toThrow(EtsyQuantityRefusal)
+  })
+
+  /**
+   * Etsy's own listings tutorial: height (property 100) changes the SKU and the quantity, material (property 300) only
+   * the price. So one SKU is on three products (one per material) that share ONE quantity, and Etsy requires that
+   * quantity to be the same on all three. Writing the SKU's number to each of them is that one quantity, not three.
+   */
+  const tutorial = (): EtsyReadInventory => {
+    const height = (id: number, name: string) => ({ property_id: 100, property_name: 'Height', scale_id: 5, scale_name: 'Inches', value_ids: [id], values: [name] })
+    const material = (id: number, name: string) => ({ property_id: 300, property_name: 'Material', scale_id: null, scale_name: null, value_ids: [id], values: [name] })
+    const product = (sku: string, h: [number, string], m: [number, string], quantity: number, amount: number) => ({ sku, is_deleted: false,
+      property_values: [height(...h), material(...m)], offerings: [{ quantity, is_enabled: true, is_deleted: false, price: money(amount), readiness_state_id: 7 }] })
+    return {
+      products: [
+        product('TEST-H3', [3, '3'], [1, 'Walnut'], 33, 800), product('TEST-H3', [3, '3'], [2, 'Oak'], 33, 700), product('TEST-H3', [3, '3'], [3, 'Pine'], 33, 600),
+        product('TEST-H4', [4, '4'], [1, 'Walnut'], 44, 800), product('TEST-H4', [4, '4'], [2, 'Oak'], 44, 700), product('TEST-H4', [4, '4'], [3, 'Pine'], 44, 600),
+      ],
+      price_on_property: [300], quantity_on_property: [100], sku_on_property: [100], readiness_state_on_property: [],
+    }
+  }
+
+  it('🟢 one SKU on several products that share ONE quantity (Etsy\'s tutorial shape): the number goes to each of them', () => {
+    const before = toInventoryWrite(tutorial())
+    const next = applyOfferingChanges(before, [{ sku: 'TEST-H3', quantity: 12 }])
+    expect(next.products.map((p) => [p.sku, p.offerings[0].quantity, p.offerings[0].price])).toEqual([
+      ['TEST-H3', 12, 8], ['TEST-H3', 12, 7], ['TEST-H3', 12, 6], ['TEST-H4', 44, 8], ['TEST-H4', 44, 7], ['TEST-H4', 44, 6],
+    ])
+    // Everything else as Etsy stated it.
+    expect(JSON.stringify({ ...next, products: next.products.slice(3) })).toBe(JSON.stringify({ ...before, products: before.products.slice(3) }))
+  })
+
+  it('the same shape with one product of the SKU stating no height cannot be shown to share: refused', () => {
+    const inv = tutorial(); inv.products![1].property_values = inv.products![1].property_values!.filter((pv) => pv.property_id !== 100)
+    expect(() => applyOfferingChanges(toInventoryWrite(inv), [{ sku: 'TEST-H3', quantity: 12 }])).toThrow(/they hold separate quantities/)
+  })
+
+  it('🟢 a listing with one quantity and ONE SKU on every product: the number is that one quantity, on each product', () => {
+    const inv = read(); inv.quantity_on_property = []; inv.products![1].sku = 'RED-S'; inv.products![1].offerings![0].quantity = 4
+    const next = applyOfferingChanges(toInventoryWrite(inv), [{ sku: 'RED-S', quantity: 9 }])
+    expect(next.products.map((p) => p.offerings[0].quantity)).toEqual([9, 9])
   })
 
   it('a listing whose quantity does not vary by variation (quantity_on_property empty) refuses a per-SKU number', () => {
@@ -258,6 +299,10 @@ describe('stock numbers for Etsy: what is refused, clamped and left alone', () =
     expect(next.products[1].offerings[0]).toEqual({ price: 24.5, quantity: 0, is_enabled: false, readiness_state_id: null })
   })
 
+  it('a refusal can carry its own code (the order-import refusals use it)', () => {
+    expect(new EtsyQuantityRefusal('x', 'ETSY_ORDER_IMPORT_NOT_ACTIVATED').code).toBe('ETSY_ORDER_IMPORT_NOT_ACTIVATED')
+  })
+
   it('the stock guards never hold a PRICE (a price re-sends every quantity as Etsy stated it)', () => {
     const inv = sameSku(); inv.quantity_on_property = []
     inv.products![1].offerings![0].price = money(1999)
@@ -268,6 +313,27 @@ describe('stock numbers for Etsy: what is refused, clamped and left alone', () =
   it('a stock refusal is an Etsy refusal: not retried', () => {
     expect(isEtsyInventoryRefusal(new EtsyQuantityRefusal('x'))).toBe(true)
     expect(new EtsyQuantityRefusal('x').code).toBe('ETSY_QUANTITY_REFUSED')
+  })
+})
+
+describe('the read-back when one SKU sits on several products (Etsy\'s tutorial shape)', () => {
+  const height = (id: number) => ({ property_id: 100, property_name: 'Height', scale_id: null, scale_name: null, value_ids: [id], values: [String(id)] })
+  const material = (id: number) => ({ property_id: 300, property_name: 'Material', scale_id: null, scale_name: null, value_ids: [id], values: [`M${id}`] })
+  const shape = (quantity: number): EtsyReadInventory => ({
+    products: [1, 2, 3].map((mat) => ({ sku: 'TEST-H3', is_deleted: false, property_values: [height(3), material(mat)],
+      offerings: [{ quantity, is_enabled: true, is_deleted: false, price: money(500 + mat * 100) }] })),
+    price_on_property: [300], quantity_on_property: [100], sku_on_property: [100],
+  })
+
+  it('🟢 each product is compared with ITSELF (by its variation values), so a write that landed shows no drift', () => {
+    const sent = applyOfferingChanges(toInventoryWrite(shape(33)), [{ sku: 'TEST-H3', quantity: 12 }])
+    expect(inventoryDrift(sent, shape(12))).toEqual([])
+  })
+
+  it('a price Etsy really moved on ONE of them is still reported, on that product', () => {
+    const sent = applyOfferingChanges(toInventoryWrite(shape(33)), [{ sku: 'TEST-H3', quantity: 12 }])
+    const after = shape(12); after.products![2].offerings![0].price = money(100)
+    expect(inventoryDrift(sent, after)).toEqual([{ product: 'TEST-H3', offering: 1, field: 'price', sent: 8, found: 1 }])
   })
 })
 

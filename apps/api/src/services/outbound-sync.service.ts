@@ -2480,14 +2480,6 @@ export class OutboundSyncService {
     // What this row writes, decided once: the branch below follows the same three answers.
     const isContent = syncType === "CONTENT_UPDATE";
     const isPrice = !isContent && (syncType === "PRICE_UPDATE" || payload?.price != null);
-    // 2026-10-01 (Owner) — a STOCK row also needs Etsy order import on. Without it Etsy's sales never reach Nexus
-    // stock, and the number sent would put back units Etsy has already sold. SKIPPED, naming the switch, before any
-    // read or call; not retried (the switch is a deploy decision, not a passing fault).
-    if (!isContent && !isPrice) {
-      const { etsyStockWriteRefusal } = await import("./etsy/order-ingest-switch.js");
-      const refusal = etsyStockWriteRefusal();
-      if (refusal) return { success: true, queueId, channel: "ETSY", status: "SKIPPED", message: refusal, errorCode: "ETSY_ORDER_IMPORT_OFF", retryable: false };
-    }
 
     const destination = await this.destinationOf(queueItem);
     if (!destination.connectionId) {
@@ -2506,6 +2498,21 @@ export class OutboundSyncService {
     if (!listingId) {
       const error = "This product has no Etsy listing id, so there is nothing on Etsy to change. Nothing was sent.";
       return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_EXTERNAL_LISTING", retryable: false };
+    }
+
+    // 2026-10-01 (Owner) — a STOCK row also needs Etsy order import: the switch on AND this account activated. Without
+    // either, Etsy's sales never reach Nexus stock, and the number sent would put back units Etsy has already sold.
+    // SKIPPED, naming what is missing, before any Etsy call; not retried (both are deliberate steps, not passing faults).
+    if (!isContent && !isPrice) {
+      const { etsyStockWriteRefusal } = await import("./etsy/order-ingest-switch.js");
+      let refusal: Awaited<ReturnType<typeof etsyStockWriteRefusal>>;
+      try {
+        refusal = await etsyStockWriteRefusal(destination.connectionId);
+      } catch (error) {
+        const message = `Nexus could not read whether Etsy order import is activated for this account, so nothing was sent. (${error instanceof Error ? error.message : String(error)})`;
+        return { success: false, queueId, channel: "ETSY", status: "FAILED", message, error: message, errorCode: "ETSY_ORDER_IMPORT_UNKNOWN", retryable: true };
+      }
+      if (refusal) return { success: true, queueId, channel: "ETSY", status: "SKIPPED", message: refusal.sentence, errorCode: refusal.code, retryable: false };
     }
 
     // SC.1 — the channel policy pause, re-checked at send time as the Amazon and eBay lanes do: a policy set after

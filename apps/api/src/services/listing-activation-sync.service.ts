@@ -17,6 +17,14 @@ import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 
 /**
+ * The channels an activated listing is sent its stock on: the shared set (`QUANTITY_PUSH_CHANNELS`) less WooCommerce.
+ * Activation never queued WooCommerce (its list was Amazon, eBay, Shopify), and WooCommerce has no stock writer yet —
+ * its lane marks every row as not sent. Etsy joined on 2026-10-01; WooCommerce stays out so its behaviour does not
+ * change here. Drop the exception when WooCommerce gets a writer.
+ */
+const ACTIVATION_CHANNELS: ReadonlySet<string> = new Set([...QUANTITY_PUSH_CHANNELS].filter((channel) => channel !== 'WOOCOMMERCE'))
+
+/**
  * Enqueue QUANTITY_UPDATE for one or more just-activated listings.
  * Batches stock lookups by productId to avoid N+1 queries.
  */
@@ -55,7 +63,7 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
     const rows: any[] = []
     let uncountedSkips = 0
     for (const listing of listings) {
-      if (!listing.productId || !QUANTITY_PUSH_CHANNELS.has(listing.channel)) continue
+      if (!listing.productId || !ACTIVATION_CHANNELS.has(listing.channel)) continue
       // SC.1b — full core derivation (routing + pause + policy + pin + FBA);
       // non-FOLLOW resolutions (incl. the AS.5 UNCOUNTED guard) enqueue nothing.
       const scRes = resolveIntendedQuantity({

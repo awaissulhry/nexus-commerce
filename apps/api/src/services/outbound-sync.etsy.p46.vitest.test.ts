@@ -21,9 +21,10 @@ const m = vi.hoisted(() => {
     queueUpdate: vi.fn(),
     market: vi.fn(),
     policies: new Map() as Map<string, { pushesPaused: boolean; newListingDefaultMode: string }>,
+    ingest: vi.fn(),
   }
 })
-vi.mock('../db.js', () => ({ default: { channelListing: { findUnique: m.read, findMany: m.many }, outboundSyncQueue: { update: m.queueUpdate }, marketplace: { findFirst: m.market } } }))
+vi.mock('../db.js', () => ({ default: { channelListing: { findUnique: m.read, findMany: m.many }, outboundSyncQueue: { update: m.queueUpdate }, marketplace: { findFirst: m.market }, etsyReceiptIngest: { findUnique: m.ingest } } }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 // The real policy lookup over the policies a test sets (none by default).
 vi.mock('./sync-control-policy.service.js', async (importOriginal) => ({
@@ -57,6 +58,7 @@ beforeEach(() => {
   vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', 'false'); vi.stubEnv('ETSY_PUBLISH_MODE', '')
   vi.stubEnv('NEXUS_SYNC_ORDERING_V2', '0')     // keep the quantity path to the payload value
   vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')   // a stock row also needs Etsy order import (its own arms below)
+  m.ingest.mockResolvedValue({ activatedAt: new Date('2026-10-01T00:00:00Z') })   // ...activated for the account
   m.policies = new Map()
   m.read.mockResolvedValue({ id: 'l1', syncPaused: false, marketplace: 'GLOBAL' })
   m.many.mockResolvedValue([])
@@ -226,13 +228,44 @@ describe('Etsy stock rows: order import, the policy pause, the ceiling', () => {
     expect(completedSyncQueueData(dispatched)).toMatchObject({ syncStatus: 'SKIPPED', syncedAt: null, errorCode: 'ETSY_ORDER_IMPORT_OFF' })
   })
 
+  it('🔴 order import on but THIS account not activated: SKIPPED naming the activation, and nothing is read or sent', async () => {
+    live(); m.ingest.mockResolvedValue(null)
+    const result = await service.syncToEtsy(row())
+    expect(result).toMatchObject({ success: true, channel: 'ETSY', status: 'SKIPPED', errorCode: 'ETSY_ORDER_IMPORT_NOT_ACTIVATED', retryable: false })
+    expect(result.message).toBe('Etsy order import is not activated for this Etsy account (it has no activation record), so its sales do not reach Nexus stock. A stock number sent now could put back units Etsy has already sold, so nothing was sent to Etsy. Activate Etsy order import for this account first.')
+    // It asked about the row's own account.
+    expect(m.ingest).toHaveBeenCalledWith({ where: { workspace_connectionId: { connectionId: 'etsy-acct' } }, select: { activatedAt: true } })
+    expect(m.inventory).not.toHaveBeenCalled()
+  })
+
+  it('the activation of ANOTHER Etsy account does not count: the read names the row\'s account', async () => {
+    live()
+    m.ingest.mockImplementation(async ({ where }: any) => (where.workspace_connectionId.connectionId === 'other-shop' ? { activatedAt: new Date() } : null))
+    expect(await service.syncToEtsy(row())).toMatchObject({ status: 'SKIPPED', errorCode: 'ETSY_ORDER_IMPORT_NOT_ACTIVATED' })
+    expect(m.inventory).not.toHaveBeenCalled()
+  })
+
+  it('an activation that cannot be read is not "activated": FAILED (retried later), nothing sent', async () => {
+    live(); m.ingest.mockRejectedValue(new Error('database unavailable'))
+    const result = await service.syncToEtsy(row())
+    expect(result).toMatchObject({ success: false, status: 'FAILED', errorCode: 'ETSY_ORDER_IMPORT_UNKNOWN', retryable: true })
+    expect(result.message).toContain('could not read whether Etsy order import is activated')
+    expect(m.inventory).not.toHaveBeenCalled()
+  })
+
+  it('with the switch off the activation is not even read', async () => {
+    live(); vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '')
+    expect(await service.syncToEtsy(row())).toMatchObject({ status: 'SKIPPED', errorCode: 'ETSY_ORDER_IMPORT_OFF' })
+    expect(m.ingest).not.toHaveBeenCalled()
+  })
+
   it('the publish gate still answers first: both switches off names the publish switches', async () => {
     vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '')
     expect((await service.syncToEtsy(row())).message).toBe('Etsy gated — not published (set NEXUS_ENABLE_ETSY_PUBLISH=true + ETSY_PUBLISH_MODE=live)')
   })
 
-  it('order import off does not hold a PRICE or a CONTENT row (neither is a stock number)', async () => {
-    live(); vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '')
+  it('order import off or not activated does not hold a PRICE or a CONTENT row (neither is a stock number)', async () => {
+    live(); vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', ''); m.ingest.mockResolvedValue(null)
     await service.syncToEtsy(row({ syncType: 'PRICE_UPDATE', payload: { price: 24.5 } }))
     expect(m.inventory.mock.calls[0][0].changes).toEqual([{ sku: 'RED-S', price: 24.5 }])
     await service.syncToEtsy(row({ syncType: 'CONTENT_UPDATE', payload: { title: 'Mug' } }))
@@ -269,7 +302,7 @@ describe('Etsy stock rows: order import, the policy pause, the ceiling', () => {
   it('a stock refusal from the writer (duplicate SKU, one shared quantity) fails the row WITHOUT a retry', async () => {
     live()
     const { EtsyQuantityRefusal } = await import('./etsy/inventory.js')
-    m.inventory.mockRejectedValue(new EtsyQuantityRefusal('Etsy has 2 products with SKU "RED-S" on this listing; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.'))
+    m.inventory.mockRejectedValue(new EtsyQuantityRefusal('Etsy has 2 products with SKU "RED-S" on this listing, and they hold separate quantities; Nexus holds one stock number for that SKU and will not put it on each of them, so nothing was sent.'))
     expect(await service.syncToEtsy(row())).toMatchObject({ success: false, status: 'FAILED', errorCode: 'ETSY_QUANTITY_REFUSED', retryable: false })
   })
 })

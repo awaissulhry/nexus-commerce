@@ -126,7 +126,7 @@ export const COLUMN_HELP: Record<string, string> = {
   buffer: 'A safety margin held back from the marketplace — the push is pool available minus the buffer.',
   sku: 'The variant SKU this listing sells. Sort to group a family together. One SKU can appear more than once: the same variant listed on several channels, markets, or shared eBay items.',
   variant: 'One row per variant SKU per listing. A variant listed on two eBay items appears twice, so you can control each item separately.',
-  channel: 'Which sales channel this listing lives on (Amazon, eBay, Shopify).',
+  channel: 'Which sales channel this listing lives on (Amazon, eBay, Shopify, Etsy).',
   market: 'Which marketplace/country this listing serves (IT, DE, FR, ES). Amazon Pan-EU listings share one ASIN across markets.',
   lane: 'How the quantity reaches the marketplace. Listing = a normal one-listing-per-SKU push. Shared = a pooled eBay item where several variants share one quantity, revised together.',
   mode: 'How this row gets its quantity. Hover the chip for the full meaning.',
@@ -203,14 +203,43 @@ export const CONTROL_HELP: Record<string, string> = {
   policyResume: 'Lift the kill-switch and let pushes to this channel/market resume. Affected listings are re-cascaded.',
   policyNewDefault: 'Choose how a NEWLY discovered listing on this channel/market starts: paused (safe — it pushes nothing until you check it) or following the pool immediately.',
   policyChannelSelect: 'The channel this new policy applies to.',
-  policyMarketSelect: 'The marketplace this new policy applies to. All markets covers every country on that channel.',
+  policyMarketSelect: 'The marketplace this new policy applies to. All markets covers every country on that channel. Etsy sells in one market, so an Etsy policy always covers all of it.',
   policyAddPause: 'Create a policy that pauses every push on the chosen channel/market straight away.',
   policyAddBornPaused: 'Create a policy that makes newly discovered listings on the chosen channel/market start paused, so nothing goes live unchecked.',
   // routes
   routeEdit: 'Change which stock locations this route draws from.',
   routeSave: 'Save the locations. The pool for the affected listings is recalculated and re-pushed.',
   routeCancel: 'Discard the edit and keep the current locations.',
-  routeInput: 'Comma-separated scopes, e.g. AMAZON:IT, EBAY. Leave it empty to apply everywhere.',
+  routeInput: 'Comma-separated scopes, e.g. AMAZON:IT, EBAY, ETSY. Leave it empty to apply everywhere.',
+}
+
+/**
+ * The channels Sync Control controls quantity on, for its channel filter and its policy editor: the API's
+ * `QUANTITY_PUSH_CHANNELS` (sync-control-core.ts). Etsy joined the stock cascade on 2026-10-01. WooCommerce is in the
+ * API's set but not offered here: it has no stock writer yet, and these screens never offered it.
+ */
+export const QUANTITY_CHANNELS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'AMAZON', label: 'Amazon' },
+  { value: 'EBAY', label: 'eBay' },
+  { value: 'SHOPIFY', label: 'Shopify' },
+  { value: 'ETSY', label: 'Etsy' },
+]
+
+/** The markets a policy may name on these screens (besides All markets). */
+const POLICY_MARKETS = ['IT', 'DE', 'FR', 'ES']
+
+/**
+ * The market choices for a new policy on this channel. Etsy sells in one market (GLOBAL), so an Etsy policy is for
+ * All markets only: a policy for Etsy · IT would be saved and never match an Etsy listing.
+ */
+export function policyMarketOptions(channel: string): Array<{ value: string; label: string }> {
+  const all = { value: '*', label: 'All markets' }
+  return channel === 'ETSY' ? [all] : [all, ...POLICY_MARKETS.map((m) => ({ value: m, label: m }))]
+}
+
+/** The market a new policy keeps when its channel changes: All markets when the old one is not offered there. */
+export function policyMarketFor(channel: string, market: string): string {
+  return policyMarketOptions(channel).some((option) => option.value === market) ? market : '*'
 }
 
 /** SCT.2 — page sizes. 500 exists so a bulk edit needs one Select all instead
