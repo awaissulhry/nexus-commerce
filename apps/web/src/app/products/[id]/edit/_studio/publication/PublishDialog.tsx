@@ -12,6 +12,7 @@ import { matchesPublicationReview, matchesPublicationSelection, publicationDesti
 import { PublicationOverwrite } from './PublicationOverwrite'
 import { PublicationChanges } from './PublicationChanges'
 import { publicationRequest as request } from './request'
+import { saveFirstNotice } from '../saveFirst'
 import styles from './publication.module.css'
 
 type ReviewRow = StudioPublishReview['rows'][number]
@@ -158,6 +159,7 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
     && (sparse ? !!selectedReview?.fieldCount && !!selectedReview.products.length : publicationOverwriteAcknowledged(review, confirmedReviewId))
   const { problems, notes } = useMemo(() => publicationProblems(review?.issues ?? []), [review])
   const refused = result?.results.filter(r => r.status === 'FAILED') ?? []
+  const saveNotice = saveFirstNotice(save, 'The review loads')
   const canReviewSelection = currentReview && !!review?.id && !!review.changes && selectedIds.length > 0 && !busy && !blockedSave && canPublish && !blockers.length && !result && !uncertain
   return <Modal open onClose={() => { if (!pending) onClose() }} size="xl" readable title="Publish product"
     subtitle={`${product.sku} · Saved product information and included variants`}
@@ -169,8 +171,9 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
     </>}>
     <div className={styles.body} aria-busy={!!busy}>
       {!canPublish && <Banner tone="warning" title="Publishing permission required">Your role needs product publishing access.</Banner>}
-      {discoveryFailed && <Banner tone="danger" title="Destinations could not be loaded">Close this dialog and retry the studio’s connection read.</Banner>}
-      {blockedSave && <Banner tone={save.kind === 'error' ? 'danger' : 'info'} title={save.kind === 'error' ? 'Save your changes first' : 'Waiting for changes to save'}>{save.kind === 'error' ? save.message : 'The review will load when autosave finishes.'}</Banner>}
+      {discoveryFailed && <Banner tone="danger" title="Destinations could not be loaded">Close this dialog, then choose Try again in the sheet footer.</Banner>}
+      {/* Step 4 (D3) — the same "save first" notice as the Import dialog. */}
+      {saveNotice && <Banner tone={saveNotice.tone} title={saveNotice.title}>{saveNotice.body}</Banner>}
       <Field label="Listing destination" hint="Choose the marketplace and connected account to receive this product.">
         <Select size="sm" value={selected} disabled={pending || uncertain || !!result} onChange={e => { setReview(null); setSelection(null); setSelectedIds([]); selectionRequest.current++; setSelected(e.target.value) }}>
           <option value="">Choose a destination</option>
@@ -190,9 +193,10 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
         ]} />
         {review.visibility && <Banner tone="info" title={`Shopify visibility: ${review.visibility}`}>The saved status and sales-channel selections will be applied.</Banner>}
         {review.locations && <Field label="Inventory location"><Select size="sm" disabled={pending || uncertain || !!result} value={locationId} onChange={e => setLocationId(e.target.value)}><option value="">Choose a location</option>{review.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>}
-        {/* Audit D4 — one short banner says what the table is; the table names each problem (SKU · what to fix). */}
+        {/* Audit D4 — one short banner says what the table is; the table names each problem (SKU · what to fix). The count is
+            the Problems tile's (step 4): the banner does not say it again. */}
         {problems.length > 0 && <Banner tone="warning" title={review.photosOnly ? 'Other fields have problems — only photos can be sent now'
-          : `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} to fix before publishing`}>
+          : 'Fix these before publishing'}>
           {review.photosOnly ? 'Choose only photos to send now, or fix the problems below first.' : 'Each row says what to fix. Fix them, then refresh the review.'}
         </Banner>}
         {problems.length > 0 && <DataGrid ariaLabel="Problems to fix before publishing" size="sm" keyboardScroll columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
