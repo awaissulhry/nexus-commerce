@@ -37,7 +37,7 @@ async function withDatabase<T>(run: (db: pg.Client) => Promise<T>, commit = fals
 }
 /** The stored family draft, read back with SQL (read-only transaction, rolled back). */
 const storedDraft = () => withDatabase(async db => {
-  expect((await db.query('SELECT current_database() AS name')).rows[0].name).toBe('nexus_pse_test')
+  expect((await db.query('SELECT current_database() AS name')).rows[0].name).toBe(privateSheetDatabaseConfig(process.env.E2E_DATABASE_URL).database)
   const listing = (await db.query('SELECT "platformAttributes" AS pa FROM "ChannelListing" WHERE id=$1 AND "productId"=$2 AND "channelConnectionId"=$3', [familyListingId, FAMILY, ACCOUNT])).rows[0]
   expect(listing).toBeTruthy()
   return listing.pa._nexusLinkedProducts as Draft
