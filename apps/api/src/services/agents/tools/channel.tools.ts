@@ -38,6 +38,8 @@ import { resolveIntendedQuantity, type IntendedResolution } from '../../sync-con
 import { loadChannelPolicies, policyFor, type PolicyMap } from '../../sync-control-policy.service.js'
 import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../../stock-pool/sync-ledgers.js'
 import { loadPoolSources, type PoolSource } from '../../stock-pool/pool-sources.js'
+import { masterCurrency } from '../../fx-rate.service.js'
+import { marketCurrency, type MarketCurrencyRow } from '../../pim/market-currency.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 
 const CHANNELS = Object.keys(CHANNEL_LABELS) as [string, ...string[]]
@@ -534,7 +536,9 @@ const channelPriceStock: AgentTool = {
   readOnly: true,
   description:
     'Price and stock of each channel listing as Nexus holds them. Per listing: price (listed, sale, the product\'s '
-    + 'master price, the override, whether it follows master, the pricing rule) and quantity (listed = what Nexus '
+    + 'master price, the override, whether it follows master, the pricing rule, the market\'s currency and the master '
+    + 'currency: a listing whose currency is not the master currency, or null when the market has none set, is never '
+    + 'sent the master price, so its listed price is its own) and quantity (listed = what Nexus '
     + 'holds for the channel; intended = what it would send now; mode = follow | pinned | paused | paused-by-policy | '
     + 'fba | closed | uncounted), plus the product\'s stock (warehouse units on hand / reserved / available, Amazon FBA '
     + 'units). A pooled product sells from another business\'s shared stock: stock.sellsFrom = "pool" and the numbers '
@@ -552,11 +556,21 @@ const channelPriceStock: AgentTool = {
     ])
     const page = pageOf(rows, size, scope, positionOf)
     const productIds = [...new Set(page.items.map((l) => l.productId))]
-    const [ledgers, pools, policies] = await Promise.all([
+    const [ledgers, pools, policies, currencies] = await Promise.all([
       loadSyncLedgers(prisma, productIds),
       loadPoolSources(prisma, productIds),
       loadChannelPolicies(),
+      prisma.marketplace.findMany({ select: { channel: true, code: true, currency: true } }) as Promise<MarketCurrencyRow[]>,
     ])
+    const master = masterCurrency()
+    /** The market's configured currency (the one masterPriceService checks), or null when none is set. */
+    const currencyOf = (channel: string, market: string): string | null => {
+      try {
+        return marketCurrency(channel, market, currencies)
+      } catch {
+        return null
+      }
+    }
     const items = page.items.map((l) => {
       const ledger = ledgers.get(l.productId)
       const { mode, intended } = intendedFor(l, ledger, policies)
@@ -575,6 +589,8 @@ const channelPriceStock: AgentTool = {
           override: money(l.priceOverride),
           rule: l.pricingRule,
           ...(l.pricingRule === 'PERCENT_OF_MASTER' ? { adjustPercent: money(l.priceAdjustmentPercent) } : {}),
+          currency: currencyOf(l.channel, l.marketplace),
+          masterCurrency: master,
         },
         quantity: { listed: l.quantity, intended, mode, followsStock: l.followMasterQuantity, buffer: l.stockBuffer ?? 0 },
         stock: stockOf(l.productId, ledger, pools),

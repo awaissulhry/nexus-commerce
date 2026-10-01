@@ -4,15 +4,25 @@
  * ACP.3a-UI — Agent approvals inbox.
  *
  * The operator's control surface for governed actions: every pending
- * AgentApproval an agent/copilot wants to run, with its dry-run diff and
- * Approve / Reject. Approving executes the real action through the gate
- * (idempotent + undo-snapshotted on the backend). Self-fetching over
+ * AgentApproval the copilot, an agent or Claude wants to run, with its
+ * dry-run diff and Approve / Reject. Self-fetching over
  * GET /api/agent/approvals + POST /agent/approvals/:id/approve|reject.
+ *
+ * Approve takes the same path as the Approvals page (the API's
+ * decideFleetApproval): the action is parked for the undo window, then the
+ * approver's permission and the preview are checked again before it runs.
+ * Undo, and the full preview, live on the Approvals page.
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { ShieldAlert, Check, X, Loader2, RefreshCw, Inbox } from 'lucide-react'
+import { Banner } from '@/design-system/components'
+import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
+import Link from '@/lib/workspaces/Link'
+
+/** The Approvals page: the full preview, and Undo while an approve is parked. */
+const APPROVALS_PAGE = '/fleet/approvals'
 
 interface Approval {
   id: string
@@ -80,6 +90,7 @@ export default function AiApprovalsClient() {
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -103,6 +114,7 @@ export default function AiApprovalsClient() {
     async (id: string, decision: 'approve' | 'reject') => {
       setActing(id)
       setError(null)
+      setNotice(null)
       try {
         const r = await fetch(
           `${backend}/api/agent/approvals/${id}/${decision}`,
@@ -111,6 +123,10 @@ export default function AiApprovalsClient() {
         const d = await r.json().catch(() => null)
         if (!r.ok || !d?.ok) {
           setError(d?.error ?? 'Action failed.')
+        } else if (d.status === 'scheduled') {
+          setNotice('Approved. It runs in about 20 seconds, after Nexus checks it again. To take it back, use Undo on the Approvals page.')
+        } else if (decision === 'reject') {
+          setNotice('Rejected. Nothing changed.')
         }
         await load()
       } catch {
@@ -143,10 +159,17 @@ export default function AiApprovalsClient() {
         </button>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-        Actions the copilot / agents have prepared. Nothing here has run —
-        approving executes it (reversibly, with an undo snapshot); rejecting
-        discards it.
+        Actions the copilot, agents or Claude have prepared. Nothing here has
+        run. Approving parks it for 20 seconds; then Nexus checks it again and
+        runs it, or hands it back if something changed. Rejecting discards it.
+        The full preview, and Undo, are on the{' '}
+        <Button variant="link" inline asChild>
+          <Link href={APPROVALS_PAGE}>Approvals page</Link>
+        </Button>
+        .
       </p>
+
+      {notice && <Banner tone="success">{notice}</Banner>}
 
       {error && (
         <div
@@ -163,8 +186,8 @@ export default function AiApprovalsClient() {
         </div>
       ) : rows.length === 0 ? (
         <div className="border border-default dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-900 text-base text-slate-500 dark:text-slate-400">
-          No pending actions. When the copilot or an agent proposes a change,
-          it appears here for your approval.
+          No pending actions. When the copilot, an agent or Claude asks for a
+          change, it appears here.
         </div>
       ) : (
         <div className="space-y-2">

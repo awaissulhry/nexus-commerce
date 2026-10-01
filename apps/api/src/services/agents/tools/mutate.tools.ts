@@ -32,6 +32,7 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
+import { masterPriceBoundsReason, priceBoundsOf } from '../../price-bounds.service.js'
 
 const SUPPRESSION_CHANNEL = 'agent-customer-message'
 
@@ -48,7 +49,8 @@ const setPrice: AgentTool = {
   title: 'Set master price',
   input: z.object({
     productId: z.string().min(1).describe('Nexus product id'),
-    price: z.coerce.number().min(0).describe('new master price, in the product currency'),
+    // Above 0: coercion turns "" and null into 0, and a master price of 0 would be cascaded and pushed.
+    price: z.coerce.number().positive().describe('new master price, in the master currency; above 0'),
   }),
   requires: [F.productsPriceEdit],
   category: 'pricing',
@@ -63,12 +65,14 @@ const setPrice: AgentTool = {
     const proposed = Number(args.price)
     if (!id || !Number.isFinite(proposed))
       return { ok: false, error: 'productId and numeric price are required' }
-    if (proposed < 0) return { ok: false, error: 'price must be non-negative' }
+    if (proposed <= 0) return { ok: false, error: 'A price must be above 0. Nothing was queued.' }
     const p = await prisma.product.findFirst({
       where: liveProduct(id),
-      select: { sku: true, basePrice: true },
+      select: { sku: true, basePrice: true, minPrice: true, maxPrice: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }
+    const outside = masterPriceBoundsReason(proposed, priceBoundsOf(p))
+    if (outside) return { ok: false, error: `${p.sku} would go to ${proposed.toFixed(2)}, but ${outside}. Change the price, or the floor or ceiling on the product in Nexus. Nothing was queued.` }
     const current = p.basePrice != null ? Number(p.basePrice) : null
     return {
       ok: true,
@@ -91,13 +95,16 @@ const setPrice: AgentTool = {
   async execute(args, ctx) {
     const id = String(args.productId ?? '')
     const proposed = Number(args.price)
-    if (!id || !Number.isFinite(proposed) || proposed < 0)
-      return { ok: false, error: 'productId and a non-negative numeric price are required' }
+    if (!id || !Number.isFinite(proposed) || proposed <= 0)
+      return { ok: false, error: 'productId and a price above 0 are required' }
     const before = await prisma.product.findFirst({
       where: liveProduct(id),
-      select: { sku: true, basePrice: true },
+      select: { sku: true, basePrice: true, minPrice: true, maxPrice: true },
     })
     if (!before) return { ok: false, error: 'Product not found' }
+    // The floor or ceiling may have changed since the preview: checked again before anything is written.
+    const outside = masterPriceBoundsReason(proposed, priceBoundsOf(before))
+    if (outside) return { ok: false, error: `${before.sku} would go to ${proposed.toFixed(2)}, but ${outside}. Nothing changed.` }
     const oldBasePrice = before.basePrice != null ? Number(before.basePrice) : null
     const res = await masterPriceService.update(id, proposed, {
       actor: ctx.userId ?? null,
@@ -118,12 +125,55 @@ const setPrice: AgentTool = {
   },
 }
 
+/**
+ * The one listing a publish-listing request names: the product's listing on that channel, in the market given.
+ * Refused, never guessed, when that is not exactly one listing (a product usually sells in several markets on one
+ * channel, and `findFirst` without the market re-sent whichever row came back first), and when the listing is a
+ * draft or has publishing switched off (`isPublished: false`), which the outbound worker skips.
+ */
+async function listingToPublish(productId: string, channel: string, market: unknown, nothing: string) {
+  const marketplace = typeof market === 'string' && market.trim() ? market.trim().toUpperCase() : null
+  const rows = await prisma.channelListing.findMany({
+    where: {
+      productId,
+      channel,
+      ...(marketplace ? { marketplace: { equals: marketplace, mode: 'insensitive' as const } } : {}),
+    },
+    select: { id: true, title: true, region: true, marketplace: true, externalListingId: true, isPublished: true },
+    orderBy: [{ marketplace: 'asc' }, { id: 'asc' }],
+    take: 50,
+  })
+  const where = `${channel}${marketplace ? ` ${marketplace}` : ''}`
+  if (rows.length === 0) return { error: `This product has no ${where} listing. ${nothing}` }
+  if (rows.length > 1) {
+    const markets = [...new Set(rows.map((row) => row.marketplace))]
+    return {
+      error: markets.length > 1
+        ? `This product has ${channel} listings in ${markets.join(', ')}. Name the market (marketplace) to publish. ${nothing}`
+        : `This product has ${rows.length} ${where} listings (more than one account). Publish it from the product in Nexus. ${nothing}`,
+    }
+  }
+  const listing = rows[0]
+  if (!listing.isPublished) {
+    return {
+      error: `The ${channel} ${listing.marketplace} listing is a draft or has publishing switched off in Nexus, so the publish worker would skip it and send nothing. Publish it from the product in Nexus. ${nothing}`,
+    }
+  }
+  return { listing }
+}
+
 const publishListing: AgentTool = {
   name: 'publish-listing',
   title: 'Publish a listing',
   input: z.object({
     productId: z.string().min(1).describe('Nexus product id'),
     channel: z.string().min(1).describe('AMAZON, EBAY, SHOPIFY or ETSY'),
+    marketplace: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe('the market of the listing, e.g. DE or IT (GLOBAL for Shopify and Etsy); required when the product has listings in more than one market on this channel'),
   }),
   requires: [F.listingsPublish],
   category: 'listings',
@@ -132,7 +182,9 @@ const publishListing: AgentTool = {
   alwaysAsk: true,
   openWorld: true,
   description:
-    'Publish / re-sync a channel listing through the gated publish pipeline (default non-live). Requires approval.',
+    'Re-send one channel listing (a product on a channel, in one market) through the gated publish pipeline (default non-live). '
+    + 'Name the market when the product sells on that channel in more than one. A listing that is still a draft in Nexus, '
+    + 'or has publishing switched off, is refused: the publish worker skips it. Requires approval.',
   async handler(args) {
     const id = String(args.productId ?? '')
     const channel = String(args.channel ?? '').toUpperCase()
@@ -142,17 +194,17 @@ const publishListing: AgentTool = {
     // nothing is queued for a person to approve.
     const product = await prisma.product.findFirst({ where: liveProduct(id), select: { id: true } })
     if (!product) return { ok: false, error: 'Product not found' }
-    const cl = await prisma.channelListing.findFirst({
-      where: { productId: id, channel },
-      select: { title: true, externalListingId: true },
-    })
+    const found = await listingToPublish(id, channel, args.marketplace, 'Nothing was queued.')
+    if ('error' in found) return { ok: false, error: found.error }
+    const cl = found.listing
     return {
       ok: true,
       preview: {
         action: 'publish-listing',
         channel,
-        currentlyPublished: !!cl?.externalListingId,
-        title: cl?.title ?? null,
+        marketplace: cl.marketplace,
+        currentlyPublished: !!cl.externalListingId,
+        title: cl.title ?? null,
         publishMode: publishModeFor(channel),
         note: 'Queues a publish through the existing gated worker; the per-channel mode is live only if explicitly enabled (default non-live).',
       },
@@ -170,12 +222,10 @@ const publishListing: AgentTool = {
       return { ok: false, error: 'productId and channel are required' }
     // MCP.12 — deleted after the request was queued: nothing is published for it.
     if (!(await isLiveProduct(id))) return { ok: false, error: PRODUCT_NOT_FOUND }
-    const cl = await prisma.channelListing.findFirst({
-      where: { productId: id, channel },
-      select: { id: true, region: true, marketplace: true, externalListingId: true },
-    })
-    if (!cl)
-      return { ok: false, error: `no ${channel} listing exists for this product` }
+    // The same one listing the preview named, found the same way; refused if that is no longer one listing.
+    const found = await listingToPublish(id, channel, args.marketplace, 'Nothing changed.')
+    if ('error' in found) return { ok: false, error: found.error }
+    const cl = found.listing
     const row = await createOutboundRow(prisma, {
       data: {
         productId: id,
@@ -237,7 +287,7 @@ const sendCustomerMessage: AgentTool = {
       return { ok: false, error: 'orderId and message are required' }
     const o = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { customerName: true, customerEmail: true, marketplace: true },
+      select: { customerName: true, customerEmail: true, marketplace: true, channel: true },
     })
     if (!o) return { ok: false, error: 'Order not found' }
     const suppressed = o.customerEmail
@@ -252,7 +302,7 @@ const sendCustomerMessage: AgentTool = {
         marketplace: o.marketplace,
         message,
         suppressed,
-        marketplaceWarning: marketplaceCommsWarning(o.marketplace),
+        marketplaceWarning: marketplaceCommsWarning(o.channel),
         note: emailIsLive()
           ? 'Outbound email is ENABLED — approving will send a real email (irreversible).'
           : 'Outbound email is in dry-run — approving records the send without delivering. Suppressed recipients are never emailed.',
@@ -270,7 +320,7 @@ const sendCustomerMessage: AgentTool = {
       return { ok: false, error: 'orderId and message are required' }
     const o = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { customerName: true, customerEmail: true, marketplace: true },
+      select: { customerName: true, customerEmail: true, marketplace: true, channel: true },
     })
     if (!o) return { ok: false, error: 'Order not found' }
     if (!o.customerEmail)
@@ -308,7 +358,7 @@ const sendCustomerMessage: AgentTool = {
         dryRun: res.dryRun,
         provider: res.provider,
         messageId: res.messageId ?? null,
-        marketplaceWarning: marketplaceCommsWarning(o.marketplace),
+        marketplaceWarning: marketplaceCommsWarning(o.channel),
       },
     }
   },
@@ -320,9 +370,10 @@ function emailIsLive(): boolean {
 
 /** Amazon/eBay require buyer contact through their own messaging systems;
  *  direct email can breach marketplace policy. Surfaced (not blocked) so
- *  the approver decides. */
-function marketplaceCommsWarning(marketplace: string | null): string | null {
-  const m = (marketplace ?? '').toLowerCase()
+ *  the approver decides. Read from the order's CHANNEL: `Order.marketplace`
+ *  holds the market code (IT, DE, UK), so testing it never warned. */
+function marketplaceCommsWarning(channel: string | null): string | null {
+  const m = (channel ?? '').toLowerCase()
   if (m.includes('amazon'))
     return 'Amazon orders: contact buyers via Amazon Buyer-Seller Messaging, not direct email (policy).'
   if (m.includes('ebay'))

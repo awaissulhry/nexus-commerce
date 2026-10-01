@@ -44,7 +44,7 @@ const PROMISED: Record<string, { properties: string[]; required: string[] }> = {
   'translate-content': { properties: ['productId', 'target'], required: ['productId', 'target'] },
   'draft-customer-message': { properties: ['intent', 'orderId'], required: ['intent'] },
   'set-price': { properties: ['productId', 'price'], required: ['productId', 'price'] },
-  'publish-listing': { properties: ['productId', 'channel'], required: ['productId', 'channel'] },
+  'publish-listing': { properties: ['productId', 'channel', 'marketplace'], required: ['productId', 'channel'] },
   'send-customer-message': { properties: ['orderId', 'message'], required: ['orderId', 'message'] },
 }
 

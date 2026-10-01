@@ -26,6 +26,20 @@ function orderStatus(o: {
   return 'pending'
 }
 
+const ORDER_STATUSES = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'] as const
+
+/**
+ * `orderStatus` as a query, so the status is filtered BEFORE the limit. Filtering the newest `limit` rows
+ * afterwards answered "0 shipped" while older shipped orders existed.
+ */
+function orderStatusWhere(status: (typeof ORDER_STATUSES)[number]): Record<string, unknown> {
+  if (status === 'cancelled') return { cancelledAt: { not: null } }
+  if (status === 'delivered') return { cancelledAt: null, deliveredAt: { not: null } }
+  if (status === 'shipped') return { cancelledAt: null, deliveredAt: null, shippedAt: { not: null } }
+  if (status === 'paid') return { cancelledAt: null, deliveredAt: null, shippedAt: null, paidAt: { not: null } }
+  return { cancelledAt: null, deliveredAt: null, shippedAt: null, paidAt: null }
+}
+
 /** MCP.12 — listings a snapshot names; the rest are counted. */
 const SNAPSHOT_LISTINGS = 20
 
@@ -155,7 +169,10 @@ const orderSearch: AgentTool = {
   input: z.object({
     marketplace: z.string().optional().describe('marketplace code, e.g. IT'),
     buyer: z.string().optional().describe('buyer name or email fragment'),
-    status: z.string().optional().describe('order status, e.g. shipped'),
+    status: z
+      .preprocess((value) => (typeof value === 'string' ? value.trim().toLowerCase() : value), z.enum(ORDER_STATUSES))
+      .optional()
+      .describe('order status: pending, paid, shipped, delivered or cancelled'),
     limit: z.coerce.number().int().min(1).max(100).optional().describe('max orders (default 20)'),
   }),
   requires: [F.ordersView],
@@ -173,6 +190,7 @@ const orderSearch: AgentTool = {
         { customerName: ci(String(args.buyer)) },
         { customerEmail: ci(String(args.buyer)) },
       ]
+    if (args.status) Object.assign(where, orderStatusWhere(args.status as (typeof ORDER_STATUSES)[number]))
     const rows = await prisma.order.findMany({
       where,
       take: limit,
@@ -191,9 +209,7 @@ const orderSearch: AgentTool = {
         cancelledAt: true,
       },
     })
-    let out = rows.map((o) => ({ ...o, status: orderStatus(o) }))
-    if (args.status)
-      out = out.filter((o) => o.status === String(args.status).toLowerCase())
+    const out = rows.map((o) => ({ ...o, status: orderStatus(o) }))
     return { ok: true, data: { count: out.length, orders: out } }
   },
 }

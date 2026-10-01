@@ -453,7 +453,7 @@ describe('MCP.9 — channel-price-stock', () => {
     expect(eBay.stock).toEqual({ sellsFrom: 'own', onHand: 7, reserved: 2, available: 5, fbaOnHand: 0 })
     expect(eBay.quantity).toMatchObject({ listed: 2, intended: 5, mode: 'follow' })
     const amazon = items.find((item) => item.channel === 'AMAZON')!
-    expect(amazon.price).toEqual({ listed: 30, sale: null, master: 25, followsMaster: true, override: null, rule: 'FIXED' })
+    expect(amazon.price).toEqual({ listed: 30, sale: null, master: 25, followsMaster: true, override: null, rule: 'FIXED', currency: null, masterCurrency: 'EUR' })
     expect(amazon.quantity).toMatchObject({ intended: null, mode: 'fba' })
     const paused = (await call('channel-price-stock', { sku: 'MCP9-P06' })).data!.items[0]
     expect(paused.quantity).toMatchObject({ listed: 1, intended: null, mode: 'paused' })

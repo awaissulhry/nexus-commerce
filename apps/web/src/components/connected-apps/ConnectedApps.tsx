@@ -90,7 +90,7 @@ function ConnectedAppRow({ scope, grant, onAsk }: { scope: ConnectedAppsScope; g
         </p>
         <KeyValue dense columns={2} items={[
           who,
-          { label: 'Access', value: accessWords(grant.scopes, scope) },
+          { label: 'Access', value: accessWords(grant.scopes) },
           { label: 'Connected', value: <AsOf at={grant.createdAt} kind="event" /> },
           { label: 'Last used', value: <AsOf at={grant.lastUsedAt} kind="event" /> },
         ]} />

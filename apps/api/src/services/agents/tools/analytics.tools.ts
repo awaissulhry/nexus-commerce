@@ -22,12 +22,13 @@ const productAnalytics: AgentTool = {
   title: 'Product sales',
   input: z.object({ productId: z.string().min(1).describe('Nexus product id'), days: z.coerce.number().int().min(1).max(365).optional().describe('window in days (default 30)') }),
   requires: [F.analyticsView],
-  restrictedFields: { revenue: FIELDS.financialsRevenueView },
+  restrictedFields: { revenueByCurrency: FIELDS.financialsRevenueView },
   category: 'insights',
   riskTier: 'low',
   readOnly: true,
   description:
-    'Units sold, revenue, and order count for a product over a recent window (default 30 days).',
+    'Units sold, revenue by currency, and order count for a product over a recent window (default 30 days). '
+    + 'A parent product counts the sales of its variations.',
   async handler(args) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
@@ -35,26 +36,38 @@ const productAnalytics: AgentTool = {
     const since = new Date(Date.now() - days * DAY)
     const p = await prisma.product.findFirst({
       where: liveProduct(id),
-      select: { sku: true, totalStock: true },
+      select: { sku: true, totalStock: true, isParent: true },
     })
     if (!p) return { ok: false, error: 'Product not found' }
+    // Orders name the variation sold, never its parent: a parent's sales are its variations' (a variation
+    // deleted since still sold what it sold).
+    const variations = p.isParent
+      ? (await prisma.product.findMany({ where: { parentId: id }, select: { id: true } })).map((child) => child.id)
+      : []
     const items = await prisma.orderItem.findMany({
       where: {
-        productId: id,
+        productId: { in: [id, ...variations] },
         order: { purchaseDate: { gte: since }, cancelledAt: null },
       },
-      select: { quantity: true, price: true, orderId: true },
+      select: { quantity: true, price: true, orderId: true, order: { select: { currencyCode: true } } },
     })
     const unitsSold = items.reduce((s, i) => s + i.quantity, 0)
-    const revenue = items.reduce((s, i) => s + Number(i.price) * i.quantity, 0)
+    // Never one sum across currencies: an Amazon SE sale is SEK, an IT sale EUR.
+    const revenueByCurrency: Record<string, number> = {}
+    for (const i of items) {
+      const c = i.order.currencyCode || 'EUR'
+      revenueByCurrency[c] = (revenueByCurrency[c] ?? 0) + Number(i.price) * i.quantity
+    }
+    for (const c of Object.keys(revenueByCurrency)) revenueByCurrency[c] = round2(revenueByCurrency[c])
     const orderCount = new Set(items.map((i) => i.orderId)).size
     return {
       ok: true,
       data: {
         sku: p.sku,
         periodDays: days,
+        ...(p.isParent ? { variationsCounted: variations.length } : {}),
         unitsSold,
-        revenue: round2(revenue),
+        revenueByCurrency,
         orderCount,
         avgUnitsPerDay: round2(unitsSold / days),
         currentStock: p.totalStock,
@@ -157,32 +170,31 @@ const insightsMetric: AgentTool = {
   async handler(args) {
     const days = Math.min(Math.max(Number(args.days) || 30, 1), 365)
     const since = new Date(Date.now() - days * DAY)
-    const orders = await prisma.order.findMany({
-      where: { purchaseDate: { gte: since }, cancelledAt: null },
-      select: { totalPrice: true, currencyCode: true, marketplace: true },
-    })
+    const inWindow = { purchaseDate: { gte: since }, cancelledAt: null }
+    // Summed by the database, not row by row here: a year of orders is never loaded to add it up.
+    const [byCurrency, byMarketRows, units] = await Promise.all([
+      prisma.order.groupBy({ by: ['currencyCode'], where: inWindow, _sum: { totalPrice: true }, _count: { _all: true } }),
+      prisma.order.groupBy({ by: ['marketplace'], where: inWindow, _count: { _all: true } }),
+      prisma.orderItem.aggregate({ _sum: { quantity: true }, where: { order: inWindow } }),
+    ])
     const revenueByCurrency: Record<string, number> = {}
-    const byMarket: Record<string, number> = {}
-    for (const o of orders) {
-      const c = o.currencyCode || 'EUR'
-      revenueByCurrency[c] = (revenueByCurrency[c] ?? 0) + Number(o.totalPrice)
-      byMarket[o.marketplace] = (byMarket[o.marketplace] ?? 0) + 1
+    let orderCount = 0
+    for (const row of byCurrency) {
+      const c = row.currencyCode || 'EUR'
+      revenueByCurrency[c] = (revenueByCurrency[c] ?? 0) + Number(row._sum.totalPrice ?? 0)
+      orderCount += row._count._all
     }
     for (const k of Object.keys(revenueByCurrency))
       revenueByCurrency[k] = round2(revenueByCurrency[k])
-    const units = await prisma.orderItem.aggregate({
-      _sum: { quantity: true },
-      where: { order: { purchaseDate: { gte: since }, cancelledAt: null } },
-    })
-    const topMarketplaces = Object.entries(byMarket)
-      .sort((a, b) => b[1] - a[1])
+    const topMarketplaces = byMarketRows
+      .map((row) => ({ marketplace: row.marketplace ?? 'unknown', orderCount: row._count._all }))
+      .sort((a, b) => b.orderCount - a.orderCount)
       .slice(0, 6)
-      .map(([marketplace, orderCount]) => ({ marketplace, orderCount }))
     return {
       ok: true,
       data: {
         periodDays: days,
-        orderCount: orders.length,
+        orderCount,
         unitsSold: units._sum.quantity ?? 0,
         revenueByCurrency,
         topMarketplaces,

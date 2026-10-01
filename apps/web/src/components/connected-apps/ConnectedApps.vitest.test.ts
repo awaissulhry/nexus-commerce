@@ -57,7 +57,7 @@ describe('MCP.6 — what the section lists', () => {
     expect(words).toContain('Connected apps')
     expect(words).toContain('Claude Returns to claude.ai, claude.com')
     expect(words).toContain('Business One')
-    expect(words).toContain('Reads, and asks for changes you approve')
+    expect(words).toContain('Reads, and asks for changes that wait for approval in Nexus')
     expect(words).toContain('Reads only')
     expect(words).toContain('never') // Claude has not been used yet
     expect(html).toContain('aria-label="Revoke Claude for Business One"')
@@ -70,7 +70,8 @@ describe('MCP.6 — what the section lists', () => {
   it('a business’s: who connected each one, and who has left it', () => {
     const words = text(render(ready([theirs, leaver]), 'business'))
     expect(words).toContain('Connected by Ada Person ada@example.test')
-    expect(words).toContain('Reads, and asks for changes they approve') // the admin is not the one who approves
+    // Anyone with the tool's permission approves, not only the person who connected it: the same words on both pages.
+    expect(words).toContain('Reads, and asks for changes that wait for approval in Nexus')
     expect(words).toContain('left@example.test Left this business')
     expect(words).toContain('Apps that people connected to this business')
   })
