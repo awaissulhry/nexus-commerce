@@ -213,6 +213,10 @@
     "./readiness-wire": {
       "types": "./dist/readiness-wire.d.ts",
       "default": "./dist/readiness-wire.js"
+    },
+    "./product-create": {
+      "types": "./dist/product-create.d.ts",
+      "default": "./dist/product-create.js"
     }
   },
   "scripts": {
