@@ -71,8 +71,8 @@ console.log('\nCase 5: DB state — seeded rows are present')
        FROM "BulkActionTemplate" WHERE "isBuiltin" = true
        ORDER BY name`,
   )
-  check(`at least 12 builtin templates in DB (got ${r.rows.length})`,
-    r.rows.length >= 12)
+  check(`at least 11 builtin templates in DB (got ${r.rows.length})`,
+    r.rows.length >= 11)
   check('every builtin row has isBuiltin=true',
     r.rows.every((row) => row.isBuiltin === true))
   // Spot-check a couple
@@ -80,8 +80,9 @@ console.log('\nCase 5: DB state — seeded rows are present')
     r.rows.some((row) => row.name === 'Spring sale — N% off'))
   check("'End-of-life — set INACTIVE' present",
     r.rows.some((row) => row.name === 'End-of-life — set INACTIVE'))
-  check("'Pause listings (Amazon DE)' present",
-    r.rows.some((row) => row.name === 'Pause listings (Amazon DE)'))
+  // Retired 2026-10-01 (RETIRED_BUILTIN_TEMPLATES): the seeder deletes it.
+  check("retired 'Pause listings (Amazon DE)' absent",
+    !r.rows.some((row) => row.name === 'Pause listings (Amazon DE)'))
 }
 
 console.log('\nCase 6: parameter shape — required + bounds')

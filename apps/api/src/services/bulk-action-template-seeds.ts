@@ -1,19 +1,28 @@
 /**
  * W5.4 — Built-in BulkActionTemplate seeds.
  *
- * Ships 12 starter templates covering the operations Awa runs daily
- * on Xavia's catalog. Each carries `isBuiltin=true` so operators
- * can't edit / delete them directly — the library UI offers
- * "Duplicate" instead, which lifts a builtin into a user-owned copy.
+ * Starter templates for everyday catalogue operations. Each carries
+ * `isBuiltin=true`: the API refuses to edit or delete one; "Duplicate"
+ * (`POST /bulk-action-templates/:id/duplicate`) makes an operator-owned
+ * copy (`isBuiltin=false`) instead.
  *
- * Idempotent: keyed by `name` so re-running the seed updates
- * existing rows in place. Run once at API boot (gated behind a
- * boot-time env flag, so dev / test environments can opt out).
+ * When it runs: at every SCHEDULER start, once per active business
+ * (`runtime/scheduler.ts`, through `visitActiveWorkspaces`). No env
+ * flag gates it.
+ *
+ * Idempotent: keyed by (userId='__builtin', name), so a re-run updates
+ * existing rows in place — a changed payload reaches the rows already
+ * in the database at the next scheduler start. Dropping a template
+ * from BUILTIN_TEMPLATES does NOT remove its row: name it in
+ * RETIRED_BUILTIN_TEMPLATES, and the seeder deletes the built-in row
+ * (only that row — an operator's copy, a schedule that names it and
+ * the job history stay).
  */
 
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import type { ParameterDecl } from './bulk-action-template.service.js'
+import { ROUND_DOWN_TO_99 } from './bulk-action/price-rounding.js'
 
 interface SeedTemplate {
   name: string
@@ -55,22 +64,12 @@ export const BUILTIN_TEMPLATES: SeedTemplate[] = [
   {
     name: 'Round prices to .99',
     description:
-      'Adjust pricing so everything ends in .99 (psychological pricing). Sets to the next .99 below current.',
+      'Lower each price to the nearest price ending in .99 at or below it (psychological pricing): 25.40 becomes 24.99, 25.00 becomes 24.99. A price that already ends in .99, or is below 0.99, is skipped.',
     actionType: 'PRICING_UPDATE',
     actionPayload: {
-      adjustmentType: 'ABSOLUTE',
-      value: '${target}',
+      // No value: each price is rounded from itself (bulk-action/price-rounding.ts).
+      adjustmentType: ROUND_DOWN_TO_99,
     },
-    parameters: [
-      {
-        name: 'target',
-        label: 'Target price (€)',
-        type: 'number',
-        defaultValue: 99.99,
-        required: true,
-        min: 0,
-      },
-    ],
     category: 'pricing',
   },
   {
@@ -200,17 +199,18 @@ export const BUILTIN_TEMPLATES: SeedTemplate[] = [
     },
     category: 'channel',
   },
-  {
-    name: 'Pause listings (Amazon DE)',
-    description:
-      'Set isPublished=false on Amazon DE channel listings. Operators use this for Brexit / market-pause flows; reversible by re-enabling per-listing.',
-    actionType: 'MARKETPLACE_OVERRIDE_UPDATE',
-    channel: 'AMAZON',
-    actionPayload: {
-      isPublished: false,
-    },
-    category: 'channel',
-  },
+]
+
+/**
+ * Built-ins taken out of the list. The seeder deletes the built-in row of each (matched on name AND action type),
+ * in every business it seeds; a name here must never be in BUILTIN_TEMPLATES too.
+ *
+ * - 'Pause listings (Amazon DE)' (2026-10-01): it set `isPublished=false` on every Amazon listing (it never had a DE
+ *   scope), so Nexus skipped every push while the offer stayed live on Amazon. Its payload has been refused since
+ *   #206; the real per-market close is Sync Control's "Close offer".
+ */
+export const RETIRED_BUILTIN_TEMPLATES: ReadonlyArray<{ name: string; actionType: string }> = [
+  { name: 'Pause listings (Amazon DE)', actionType: 'MARKETPLACE_OVERRIDE_UPDATE' },
 ]
 
 const SEED_USER_ID = '__builtin'
@@ -219,10 +219,20 @@ const SEED_USER_ID = '__builtin'
  * Seed / refresh the built-in templates. Idempotent — keyed by
  * (userId='__builtin', name). Updates in place when the seed list
  * changes (e.g., we tighten a parameter's bounds in a follow-up).
+ * First deletes the retired built-ins (`retired` = rows deleted;
+ * 0 once they are gone).
  */
 export async function seedBulkActionTemplates(
   prisma: PrismaClient,
-): Promise<{ created: number; updated: number }> {
+): Promise<{ created: number; updated: number; retired: number }> {
+  // Only the seeder's own rows: an operator's copy is isBuiltin=false and has its own userId.
+  const { count: retired } = await prisma.bulkActionTemplate.deleteMany({
+    where: {
+      userId: SEED_USER_ID,
+      isBuiltin: true,
+      OR: RETIRED_BUILTIN_TEMPLATES.map((r) => ({ name: r.name, actionType: r.actionType })),
+    },
+  })
   let created = 0
   let updated = 0
   for (const t of BUILTIN_TEMPLATES) {
@@ -264,7 +274,7 @@ export async function seedBulkActionTemplates(
     }
   }
   logger.info(
-    `[bulk-action-template seeds] applied — created=${created} updated=${updated}`,
+    `[bulk-action-template seeds] applied — created=${created} updated=${updated} retired=${retired}`,
   )
-  return { created, updated }
+  return { created, updated, retired }
 }
