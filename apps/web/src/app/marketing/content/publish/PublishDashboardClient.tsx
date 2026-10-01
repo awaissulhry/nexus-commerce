@@ -267,7 +267,7 @@ export default function PublishDashboardClient({ modes, apiBase }: Props) {
                 disabled={!enabled[cfg.channel]}
                 className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 font-mono text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-[11px] text-tertiary">
                 {cfg.destinationLabel}
               </p>
               {result && (

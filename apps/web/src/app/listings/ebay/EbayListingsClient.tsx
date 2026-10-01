@@ -137,7 +137,7 @@ export default function EbayListingsClient({
           tabs={tabs}
           activeTab={activeMarket}
           onChange={(mp) => setActiveMarket(mp)}
-          className="bg-white border-b-0"
+          className="bg-card border-b-0"
         />
       )}
 
@@ -227,17 +227,17 @@ function EbayKpiStrip({
         aria-label="Manage markdowns"
       >
         <Card>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+          <div className="text-xs uppercase tracking-wider text-tertiary font-semibold mb-1">
             Active markdowns
           </div>
           <div
             className={`text-[24px] font-semibold tabular-nums leading-none ${
-              markdowns.activeListingCount > 0 ? 'text-amber-700' : 'text-slate-900'
+              markdowns.activeListingCount > 0 ? 'text-warning-strong' : 'text-primary'
             }`}
           >
             {markdowns.activeListingCount}
           </div>
-          <div className="text-sm text-blue-600 mt-1">manage markdowns →</div>
+          <div className="text-sm text-link mt-1">manage markdowns →</div>
         </Card>
       </Link>
       <Link
@@ -246,17 +246,17 @@ function EbayKpiStrip({
         aria-label="Manage Promoted Listings campaigns"
       >
         <Card>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1">
+          <div className="text-xs uppercase tracking-wider text-tertiary font-semibold mb-1 inline-flex items-center gap-1">
             <Megaphone size={11} className="text-tertiary" /> Promoted campaigns
           </div>
           <div
             className={`text-[24px] font-semibold tabular-nums leading-none ${
-              campaigns.activeCount > 0 ? 'text-emerald-700' : 'text-slate-900'
+              campaigns.activeCount > 0 ? 'text-success-strong' : 'text-primary'
             }`}
           >
             {campaigns.activeCount}
           </div>
-          <div className="text-sm text-blue-600 mt-1">manage campaigns →</div>
+          <div className="text-sm text-link mt-1">manage campaigns →</div>
         </Card>
       </Link>
     </div>
@@ -276,21 +276,21 @@ function KpiTile({
 }) {
   const toneClass =
     tone === 'success'
-      ? 'text-emerald-700'
+      ? 'text-success-strong'
       : tone === 'warning'
-        ? 'text-amber-700'
+        ? 'text-warning-strong'
         : tone === 'danger'
-          ? 'text-rose-700'
-          : 'text-slate-900'
+          ? 'text-danger-strong'
+          : 'text-primary'
   return (
     <Card>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+      <div className="text-xs uppercase tracking-wider text-tertiary font-semibold mb-1">
         {label}
       </div>
       <div className={`text-[24px] font-semibold tabular-nums leading-none ${toneClass}`}>
         {value}
       </div>
-      {sub && <div className="text-sm text-slate-500 mt-1">{sub}</div>}
+      {sub && <div className="text-sm text-tertiary mt-1">{sub}</div>}
     </Card>
   )
 }

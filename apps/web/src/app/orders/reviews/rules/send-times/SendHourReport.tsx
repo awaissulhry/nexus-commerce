@@ -38,10 +38,10 @@ export default function SendHourReport() {
 
   const shade = (sent: number, converted: number) => {
     if (sent === 0) return 'bg-slate-50 dark:bg-slate-900/40'
-    if (converted > 0) return 'bg-emerald-500/80 text-white'
+    if (converted > 0) return 'bg-success-strong text-inverse'
     const t = maxSent ? sent / maxSent : 0
-    if (t > 0.66) return 'bg-blue-500/80 text-white'
-    if (t > 0.33) return 'bg-blue-400/60'
+    if (t > 0.66) return 'bg-info-strong text-inverse'
+    if (t > 0.33) return 'bg-info-strong/50'
     return 'bg-blue-200/60 dark:bg-blue-900/50'
   }
 

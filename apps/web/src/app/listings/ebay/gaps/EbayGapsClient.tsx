@@ -70,12 +70,12 @@ const TYPE_LABELS: Record<string, string> = {
 
 function readinessBadge(p: GapProduct) {
   if (p.hasImages && p.hasDescription && p.productType) {
-    return <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">Ready</span>
+    return <span className="px-1.5 py-0.5 bg-success-soft text-success-strong rounded text-xs font-medium">Ready</span>
   }
   if (p.hasImages || p.hasDescription) {
-    return <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">Partial</span>
+    return <span className="px-1.5 py-0.5 bg-warning-soft text-warning-strong rounded text-xs font-medium">Partial</span>
   }
-  return <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs font-medium">No content</span>
+  return <span className="px-1.5 py-0.5 bg-sunken text-tertiary rounded text-xs font-medium">No content</span>
 }
 
 export default function EbayGapsClient({ marketplace: initMarketplace, initialGap, initialProgress }: Props) {
@@ -176,7 +176,7 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
               <button
                 key={mp}
                 onClick={() => handleMarketplace(mp)}
-                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-card text-secondary border-default hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
               >
                 {COUNTRY_NAMES[mp] ?? mp}
               </button>
@@ -203,21 +203,21 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
 
         {/* Stats strip */}
         <div className="grid grid-cols-4 gap-3 mb-5">
-          <div className="bg-white border rounded-lg px-4 py-3">
-            <div className="text-2xl font-semibold text-gray-900">{gap?.gap ?? '—'}</div>
-            <div className="text-xs text-gray-500">Missing eBay listings</div>
+          <div className="bg-card border rounded-lg px-4 py-3">
+            <div className="text-2xl font-semibold text-primary">{gap?.gap ?? '—'}</div>
+            <div className="text-xs text-tertiary">Missing eBay listings</div>
           </div>
-          <div className="bg-white border rounded-lg px-4 py-3">
-            <div className="text-2xl font-semibold text-green-700">{readyCount}</div>
-            <div className="text-xs text-gray-500">Ready (images + desc)</div>
+          <div className="bg-card border rounded-lg px-4 py-3">
+            <div className="text-2xl font-semibold text-success-strong">{readyCount}</div>
+            <div className="text-xs text-tertiary">Ready (images + desc)</div>
           </div>
-          <div className="bg-white border rounded-lg px-4 py-3">
-            <div className="text-2xl font-semibold text-amber-700">{partialCount}</div>
-            <div className="text-xs text-gray-500">Partial content</div>
+          <div className="bg-card border rounded-lg px-4 py-3">
+            <div className="text-2xl font-semibold text-warning-strong">{partialCount}</div>
+            <div className="text-xs text-tertiary">Partial content</div>
           </div>
-          <div className="bg-white border rounded-lg px-4 py-3">
-            <div className="text-2xl font-semibold text-blue-700">{progress?.scheduled.pending ?? '—'}</div>
-            <div className="text-xs text-gray-500">Scheduled (pending)</div>
+          <div className="bg-card border rounded-lg px-4 py-3">
+            <div className="text-2xl font-semibold text-info-strong">{progress?.scheduled.pending ?? '—'}</div>
+            <div className="text-xs text-tertiary">Scheduled (pending)</div>
           </div>
         </div>
 
@@ -225,7 +225,7 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
         {Object.keys(byType).length > 0 && (
           <div className="flex gap-2 flex-wrap mb-5">
             {Object.entries(byType).sort((a,b) => b[1]-a[1]).map(([t, n]) => (
-              <span key={t} className="px-3 py-1 bg-white border rounded-full text-xs text-gray-600">
+              <span key={t} className="px-3 py-1 bg-card border rounded-full text-xs text-secondary">
                 {TYPE_LABELS[t] ?? t}: <strong>{n}</strong>
               </span>
             ))}
@@ -234,13 +234,13 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
 
         {/* Schedule controls */}
         {(gap?.gap ?? 0) > 0 && (
-          <div className="bg-white border rounded-lg p-4 mb-5">
-            <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+          <div className="bg-card border rounded-lg p-4 mb-5">
+            <h3 className="font-medium text-primary mb-3 flex items-center gap-2">
               <Calendar className="w-4 h-4" /> Schedule bulk listing creation
             </h3>
             <div className="flex gap-4 items-end flex-wrap">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Daily limit</label>
+                <label className="text-xs text-tertiary block mb-1">Daily limit</label>
                 <Listbox
                   value={String(dailyLimit)}
                   onChange={v => setDailyLimit(Number(v))}
@@ -255,7 +255,7 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Start date (optional)</label>
+                <label className="text-xs text-tertiary block mb-1">Start date (optional)</label>
                 <DateField
                   value={startDate}
                   onChange={setStartDate}
@@ -284,25 +284,25 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
               </div>
             </div>
             {scheduleMsg && (
-              <div className={`mt-3 px-3 py-2 rounded text-sm ${scheduleMsg.startsWith('✓') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+              <div className={`mt-3 px-3 py-2 rounded text-sm ${scheduleMsg.startsWith('✓') ? 'bg-success-soft text-success-strong' : 'bg-danger-soft text-danger-strong'}`}>
                 {scheduleMsg}
               </div>
             )}
-            <p className="mt-3 text-xs text-gray-500">
+            <p className="mt-3 text-xs text-tertiary">
               ⚠ Scheduling creates eBay listing wizards. The eBay publish gate must be ON and EBAY_PUBLISH_MODE=live before listings actually go live. You can review/cancel scheduled publishes on the listing wizard pages.
             </p>
           </div>
         )}
 
         {/* Product table */}
-        <div className="bg-white border rounded-lg overflow-hidden">
+        <div className="bg-card border rounded-lg overflow-hidden">
           {products.length === 0 ? (
-            <div className="py-16 text-center text-gray-400">
+            <div className="py-16 text-center text-tertiary">
               {gap === null ? 'Loading…' : `No gap products for eBay ${marketplace}. All active products have eBay listings!`}
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-sunken border-b">
                 <tr>
                   <th className="px-4 py-3 w-10">
                     <input
@@ -312,17 +312,17 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
                       className="rounded"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-44">SKU</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Name</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-32">Type</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-24">Variations</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-20">Images</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-24">Readiness</th>
+                  <th className="px-4 py-3 text-left font-medium text-secondary w-44">SKU</th>
+                  <th className="px-4 py-3 text-left font-medium text-secondary">Name</th>
+                  <th className="px-4 py-3 text-left font-medium text-secondary w-32">Type</th>
+                  <th className="px-4 py-3 text-left font-medium text-secondary w-24">Variations</th>
+                  <th className="px-4 py-3 text-left font-medium text-secondary w-20">Images</th>
+                  <th className="px-4 py-3 text-left font-medium text-secondary w-24">Readiness</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-subtle">
                 {products.map(p => (
-                  <tr key={p.id} className={`hover:bg-gray-50 ${selected.has(p.id) ? 'bg-blue-50' : ''}`}>
+                  <tr key={p.id} className={`hover:bg-sunken ${selected.has(p.id) ? 'bg-info-soft' : ''}`}>
                     <td className="px-4 py-2.5">
                       <input
                         type="checkbox"
@@ -335,16 +335,16 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
                         className="rounded"
                       />
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600 truncate max-w-[11rem]">{p.sku}</td>
-                    <td className="px-4 py-2.5 text-gray-700">
+                    <td className="px-4 py-2.5 font-mono text-xs text-secondary truncate max-w-[11rem]">{p.sku}</td>
+                    <td className="px-4 py-2.5 text-secondary">
                       <div className="text-xs line-clamp-2">{p.name}</div>
-                      {p.variationTheme && <div className="text-gray-400 text-xs">{p.variationTheme}</div>}
+                      {p.variationTheme && <div className="text-tertiary text-xs">{p.variationTheme}</div>}
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-gray-600">{TYPE_LABELS[p.productType ?? ''] ?? p.productType ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-600 text-center">{p.variationCount || '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-secondary">{TYPE_LABELS[p.productType ?? ''] ?? p.productType ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-secondary text-center">{p.variationCount || '—'}</td>
                     <td className="px-4 py-2.5">
                       {p.hasImages
-                        ? <Image className="w-4 h-4 text-green-600 mx-auto" />
+                        ? <Image className="w-4 h-4 text-success-strong mx-auto" />
                         : <XCircle className="w-4 h-4 text-gray-300 mx-auto" />}
                     </td>
                     <td className="px-4 py-2.5">{readinessBadge(p)}</td>
@@ -357,7 +357,7 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
 
         {/* Trust & Safety warning */}
         {(gap?.gap ?? 0) > 100 && (
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+          <div className="mt-4 bg-warning-soft border border-amber-200 rounded-lg p-4 text-sm text-warning-strong">
             <div className="flex gap-2 items-start">
               <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <div>

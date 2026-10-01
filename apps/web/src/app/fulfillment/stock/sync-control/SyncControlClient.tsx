@@ -709,7 +709,7 @@ export default function SyncControlClient() {
                   <td className="px-3 py-1.5 text-right tabular-nums">{l.stockUnits}</td>
                   <td className="px-3 py-1.5 text-xs">
                     {l.type !== 'WAREHOUSE' ? (
-                      <span className="text-zinc-400">not a sync source</span>
+                      <span className="text-tertiary">not a sync source</span>
                     ) : editingLoc === l.code ? (
                       <span className="flex items-center gap-1">
                         <Tooltip content={CONTROL_HELP.routeInput}>

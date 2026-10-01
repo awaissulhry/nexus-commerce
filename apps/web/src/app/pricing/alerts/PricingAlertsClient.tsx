@@ -301,7 +301,7 @@ export default function PricingAlertsClient() {
                       <td className="px-3 py-2">
                         <Link
                           href={`/pricing?search=${encodeURIComponent(d.sku)}`}
-                          className="text-sm text-blue-600 hover:underline"
+                          className="text-sm text-link hover:underline"
                         >
                           {t('pricing.alerts.openInPricing')}
                         </Link>
@@ -417,7 +417,7 @@ export default function PricingAlertsClient() {
                         <td className="px-3 py-2">
                           <Link
                             href={`/pricing?search=${encodeURIComponent(m.sku)}`}
-                            className="text-sm text-blue-600 hover:underline"
+                            className="text-sm text-link hover:underline"
                           >
                             {t('pricing.alerts.openInPricing')}
                           </Link>
@@ -512,7 +512,7 @@ export default function PricingAlertsClient() {
                     <td className="px-3 py-2">
                       <Link
                         href={`/pricing?search=${encodeURIComponent(r.sku)}`}
-                        className="text-sm text-blue-600 hover:underline"
+                        className="text-sm text-link hover:underline"
                       >
                         {t('pricing.alerts.openInPricing')}
                       </Link>

@@ -182,17 +182,17 @@ export default function AdvertisingSettingsPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <BarChart3 className="h-5 w-5 text-blue-600" />
-            <h1 className="text-xl font-semibold text-slate-900">Amazon Advertising API</h1>
+            <BarChart3 className="h-5 w-5 text-link" />
+            <h1 className="text-xl font-semibold text-primary">Amazon Advertising API</h1>
           </div>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-tertiary">
             Connect your Amazon Advertising account to sync campaigns, pull metrics, and enable
             automated bid management. Profiles are connected through Amazon’s own sign-in on Settings → Channels; credentials live on the connection, never on this page.
           </p>
         </div>
         <div className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs">
           <span className={`h-1.5 w-1.5 rounded-full ${adsMode === 'live' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-          <span className="text-slate-600">Server mode: <strong>{adsMode ?? 'checking…'}</strong></span>
+          <span className="text-secondary">Server mode: <strong>{adsMode ?? 'checking…'}</strong></span>
         </div>
       </div>
 
@@ -209,29 +209,29 @@ export default function AdvertisingSettingsPage() {
         <Card><div className="py-8 text-center text-tertiary text-sm flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div></Card>
       ) : connections.length > 0 ? (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Active Connections</h2>
+          <h2 className="text-sm font-semibold text-secondary uppercase tracking-wider">Active Connections</h2>
           {connections.map((conn) => (
             <Card key={conn.id}>
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-slate-900 text-sm truncate">
+                    <span className="font-medium text-primary text-sm truncate">
                       {accountDisplayName({ channel: 'AMAZON_ADS', label: conn.accountLabel ?? '' })}
                     </span>
                     <StatusBadge mode={conn.mode} writesEnabledAt={conn.writesEnabledAt} />
                   </div>
-                  <div className="text-xs text-slate-500 space-x-3">
+                  <div className="text-xs text-tertiary space-x-3">
                     <span>Region: {conn.region}</span>
                     <span>Marketplace: {conn.marketplace}</span>
                   </div>
                   {conn.lastError && (
-                    <div className="flex items-center gap-1 text-xs text-rose-600">
+                    <div className="flex items-center gap-1 text-xs text-danger-strong">
                       <AlertCircle className="h-3 w-3 flex-shrink-0" />
                       {conn.lastError}
                     </div>
                   )}
                   {testResult && testing === null && (
-                    <div className={`flex items-center gap-1 text-xs ${testResult.ok ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    <div className={`flex items-center gap-1 text-xs ${testResult.ok ? 'text-success-strong' : 'text-danger-strong'}`}>
                       {testResult.ok ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
                       {testResult.message}
                     </div>
@@ -329,8 +329,8 @@ export default function AdvertisingSettingsPage() {
 
       {/* Setup guide */}
       <Card>
-        <h2 className="text-sm font-semibold text-slate-800 mb-3">Setup Guide</h2>
-        <ol className="space-y-2 text-sm text-slate-600 list-decimal list-inside">
+        <h2 className="text-sm font-semibold text-primary mb-3">Setup Guide</h2>
+        <ol className="space-y-2 text-sm text-secondary list-decimal list-inside">
           <li>Go to <strong>advertising.amazon.com → Partner Network → Developer Console</strong></li>
           <li>Register an app with scope <code className="font-mono bg-slate-100 px-1 rounded">advertising::campaign_management</code></li>
           <li>

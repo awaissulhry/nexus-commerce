@@ -102,7 +102,7 @@ export default function MarketplaceMatrix({
           </div>
           <Link
             href="/listings"
-            className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+            className="text-sm text-link hover:underline inline-flex items-center gap-1"
           >
             {t('overview.matrix.open')} <ChevronRight className="w-3 h-3" />
           </Link>
@@ -165,7 +165,7 @@ export default function MarketplaceMatrix({
                           className={cn(
                             'tabular-nums text-sm',
                             empty
-                              ? 'text-slate-300 dark:text-slate-600'
+                              ? 'text-tertiary'
                               : 'text-slate-900 dark:text-slate-100 font-semibold',
                           )}
                         >

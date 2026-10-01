@@ -239,9 +239,9 @@ export default function BulkActionsTable({
       )}
 
       {jobs.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <p className="text-gray-500 text-lg">No bulk action jobs</p>
-          <p className="text-gray-400 text-sm mt-1">
+        <div className="bg-card rounded-lg border border-default p-12 text-center">
+          <p className="text-secondary text-lg">No bulk action jobs</p>
+          <p className="text-tertiary text-sm mt-1">
             Create a bulk action job to get started
           </p>
         </div>

@@ -2555,7 +2555,7 @@ export default function FlatFileGrid({
           {/* P4 — Group by: Family | Custom | None */}
           {enableCustomGroups && (
             <div className="flex items-center gap-1">
-              <span className="text-[11px] text-slate-400">Group by</span>
+              <span className="text-[11px] text-tertiary">Group by</span>
               <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
                 {(['family', ...(bucketMode ? (['bucket'] as CustomGroupMode[]) : []), 'custom', 'none'] as CustomGroupMode[]).map((m) => (
                   <button key={m} type="button" onClick={() => setGroupMode(m)}

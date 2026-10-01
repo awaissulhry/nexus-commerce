@@ -122,7 +122,7 @@ export default function FulfillmentOverview() {
       />
 
       {loading && !data ? (
-        <Card><div className="text-md text-slate-500 py-8 text-center">Loading…</div></Card>
+        <Card><div className="text-md text-tertiary py-8 text-center">Loading…</div></Card>
       ) : data ? (
         <>
           {/* Top alerts row */}
@@ -133,17 +133,17 @@ export default function FulfillmentOverview() {
                 {/* O.81: overdue pending orders — past ship-by with no
                     shipment yet. Highest-priority operator action. */}
                 {(data.outbound.overduePending ?? 0) > 0 && (
-                  <Link href="/fulfillment/outbound?urgency=OVERDUE" className="text-md text-rose-700 hover:underline font-medium">
+                  <Link href="/fulfillment/outbound?urgency=OVERDUE" className="text-md text-danger-strong hover:underline font-medium">
                     {data.outbound.overduePending} order{data.outbound.overduePending === 1 ? '' : 's'} past ship-by →
                   </Link>
                 )}
                 {data.replenishment.critical > 0 && (
-                  <Link href="/fulfillment/replenishment" className="text-md text-rose-700 hover:underline font-medium">
+                  <Link href="/fulfillment/replenishment" className="text-md text-danger-strong hover:underline font-medium">
                     {data.replenishment.critical} SKU{data.replenishment.critical === 1 ? '' : 's'} need urgent reorder →
                   </Link>
                 )}
                 {data.stock.outOfStock > 0 && (
-                  <Link href="/fulfillment/stock?outOfStock=true" className="text-md text-rose-700 hover:underline font-medium ml-auto">
+                  <Link href="/fulfillment/stock?outOfStock=true" className="text-md text-danger-strong hover:underline font-medium ml-auto">
                     {data.stock.outOfStock} out of stock →
                   </Link>
                 )}
@@ -278,15 +278,15 @@ function SectionCard({
           </div>
           <ArrowRight size={14} className="text-tertiary group-hover:translate-x-0.5 transition-transform" />
         </div>
-        <div className="text-lg font-semibold text-slate-900">{title}</div>
-        <div className="text-sm text-slate-500 mb-3">{cta}</div>
+        <div className="text-lg font-semibold text-primary">{title}</div>
+        <div className="text-sm text-tertiary mb-3">{cta}</div>
         <div className="grid grid-cols-3 gap-3">
           {stats.map((s, i) => {
-            const valueTone = s.tone === 'danger' ? 'text-rose-600' : s.tone === 'warning' ? 'text-amber-600' : 'text-slate-900'
+            const valueTone = s.tone === 'danger' ? 'text-danger-strong' : s.tone === 'warning' ? 'text-warning-strong' : 'text-primary'
             return (
               <div key={i}>
                 <div className={`text-[20px] font-semibold tabular-nums ${valueTone}`}>{s.value}</div>
-                <div className="text-xs uppercase tracking-wider text-slate-500">{s.label}</div>
+                <div className="text-xs uppercase tracking-wider text-tertiary">{s.label}</div>
               </div>
             )
           })}

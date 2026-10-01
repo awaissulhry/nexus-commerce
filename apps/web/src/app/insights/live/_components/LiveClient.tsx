@@ -110,7 +110,7 @@ export default function LiveClient() {
           href="/insights"
           className={cn(
             'inline-flex items-center gap-1 text-xs hover:text-slate-700',
-            fullscreen ? 'text-tertiary' : 'text-slate-500',
+            fullscreen ? 'text-tertiary' : 'text-tertiary',
           )}
         >
           <ChevronLeft className="w-3 h-3" />
@@ -129,7 +129,7 @@ export default function LiveClient() {
             <span
               className={cn(
                 'text-[11px] tabular-nums',
-                fullscreen ? 'text-tertiary' : 'text-slate-500',
+                fullscreen ? 'text-tertiary' : 'text-tertiary',
               )}
             >
               Refreshed {lastRefreshedAt.toLocaleTimeString('it-IT')}
@@ -142,7 +142,7 @@ export default function LiveClient() {
               'inline-flex items-center gap-1.5 h-7 px-2.5 text-sm rounded-md border',
               fullscreen
                 ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                : 'border-default text-slate-700 hover:bg-slate-50',
+                : 'border-default text-secondary hover:bg-sunken',
             )}
           >
             {fullscreen ? (
@@ -159,17 +159,12 @@ export default function LiveClient() {
         <h1
           className={cn(
             'text-3xl font-semibold mb-1',
-            fullscreen ? 'text-slate-100' : 'text-slate-900',
+            fullscreen ? 'text-slate-100' : 'text-primary',
           )}
         >
           Live monitor
         </h1>
-        <p
-          className={cn(
-            'text-sm',
-            fullscreen ? 'text-tertiary' : 'text-slate-500',
-          )}
-        >
+        <p className="text-sm text-tertiary">
           Today's KPIs vs yesterday — auto-refreshes every 60 seconds.
         </p>
       </div>
@@ -268,7 +263,7 @@ export default function LiveClient() {
               />
               <Link
                 href="/insights/anomalies"
-                className="text-xs text-blue-600 hover:underline self-start"
+                className="text-xs text-link hover:underline self-start"
               >
                 Investigate →
               </Link>

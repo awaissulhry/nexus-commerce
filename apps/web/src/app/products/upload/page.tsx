@@ -302,8 +302,8 @@ export default function InventoryUploadPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900">Inventory Upload</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-4xl font-bold text-primary">Inventory Upload</h1>
+          <p className="text-secondary mt-1">
             Import products from Excel or CSV files
           </p>
         </div>
@@ -311,7 +311,7 @@ export default function InventoryUploadPage() {
           <button
             type="button"
             onClick={handleReset}
-            className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            className="px-4 py-2 text-sm bg-sunken text-secondary rounded-lg hover:opacity-80 transition font-medium"
           >
             ↩ Start Over
           </button>
@@ -321,7 +321,7 @@ export default function InventoryUploadPage() {
       {/* Error banner */}
       {importError && (
         <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg">
-          <p className="text-red-800 font-medium">⚠️ {importError}</p>
+          <p className="text-danger-strong font-medium">⚠️ {importError}</p>
         </div>
       )}
 
@@ -336,14 +336,14 @@ export default function InventoryUploadPage() {
             className={`border-2 border-dashed rounded-xl p-16 text-center cursor-pointer transition-all ${
               isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
-                : 'border-gray-300 bg-white dark:bg-slate-900 hover:border-gray-400 hover:bg-gray-50'
+                : 'border-strong bg-white dark:bg-slate-900 hover:border-gray-400 hover:bg-gray-50'
             }`}
           >
             <div className="text-5xl mb-4">{isDragging ? '📥' : '📄'}</div>
-            <p className="text-lg font-semibold text-gray-700 mb-2">
+            <p className="text-lg font-semibold text-secondary mb-2">
               {isDragging ? 'Drop your file here' : 'Drag & drop your inventory file'}
             </p>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-tertiary mb-4">
               Supports .xlsx, .xls, and .csv files
             </p>
             <button
@@ -363,8 +363,8 @@ export default function InventoryUploadPage() {
 
           {/* Template info */}
           <div className="mt-6 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-blue-900 mb-2">📋 Expected Columns</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-blue-800">
+            <h3 className="text-sm font-semibold text-info-strong mb-2">📋 Expected Columns</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-info-strong">
               <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">SKU *</span>
               <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">Title *</span>
               <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">Price *</span>
@@ -385,19 +385,19 @@ export default function InventoryUploadPage() {
           {/* Summary bar */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
-              <p className="text-sm text-gray-600">File</p>
-              <p className="text-lg font-bold text-gray-900 truncate">{fileName}</p>
+              <p className="text-sm text-secondary">File</p>
+              <p className="text-lg font-bold text-primary truncate">{fileName}</p>
             </div>
             <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
-              <p className="text-sm text-gray-600">Total Rows</p>
-              <p className="text-2xl font-bold text-gray-900">{rows.length}</p>
+              <p className="text-sm text-secondary">Total Rows</p>
+              <p className="text-2xl font-bold text-primary">{rows.length}</p>
             </div>
             <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
-              <p className="text-sm text-gray-600">Valid</p>
+              <p className="text-sm text-secondary">Valid</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">{validCount}</p>
             </div>
             <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
-              <p className="text-sm text-gray-600">Errors</p>
+              <p className="text-sm text-secondary">Errors</p>
               <p className="text-2xl font-bold text-red-600 dark:text-red-400">{errorCount}</p>
             </div>
           </div>
@@ -425,35 +425,35 @@ export default function InventoryUploadPage() {
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow overflow-hidden mb-6">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-sunken border-b border-default">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-12">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase w-12">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                       Row
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                       SKU
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                       Title
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                       Price
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                       Stock
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                       UPC
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                       Issues
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-subtle">
                   {rows.map((row) => {
                     const hasErrors = row.errors.length > 0
                     const hasWarnings = row.warnings.length > 0
@@ -465,8 +465,8 @@ export default function InventoryUploadPage() {
                           hasErrors
                             ? 'bg-red-50 dark:bg-red-950/40'
                             : hasWarnings
-                              ? 'bg-yellow-50'
-                              : 'hover:bg-gray-50'
+                              ? 'bg-warning-soft'
+                              : 'hover:bg-sunken'
                         }
                       >
                         <td className="px-4 py-3 text-center">
@@ -475,27 +475,27 @@ export default function InventoryUploadPage() {
                               ✗
                             </span>
                           ) : hasWarnings ? (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-yellow-100 text-yellow-600 text-xs font-bold" title="Warning">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-warning-soft text-warning-strong text-xs font-bold" title="Warning">
                               !
                             </span>
                           ) : (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600 dark:text-green-400 text-xs font-bold" title="Valid">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-success-soft text-green-600 dark:text-green-400 text-xs font-bold" title="Valid">
                               ✓
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{row.rowIndex}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-900">
-                          {row.sku || <span className="text-red-400 italic">missing</span>}
+                        <td className="px-4 py-3 text-sm text-tertiary">{row.rowIndex}</td>
+                        <td className="px-4 py-3 text-sm font-mono text-primary">
+                          {row.sku || <span className="text-danger-strong italic">missing</span>}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
-                          {row.name || <span className="text-red-400 italic">missing</span>}
+                        <td className="px-4 py-3 text-sm text-primary max-w-xs truncate">
+                          {row.name || <span className="text-danger-strong italic">missing</span>}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {row.basePrice > 0 ? `$${row.basePrice.toFixed(2)}` : <span className="text-red-400">$0.00</span>}
+                        <td className="px-4 py-3 text-sm text-primary">
+                          {row.basePrice > 0 ? `$${row.basePrice.toFixed(2)}` : <span className="text-danger-strong">$0.00</span>}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{row.totalStock}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-600">
+                        <td className="px-4 py-3 text-sm text-primary">{row.totalStock}</td>
+                        <td className="px-4 py-3 text-sm font-mono text-secondary">
                           {row.upc || '—'}
                         </td>
                         <td className="px-4 py-3 text-xs">
@@ -503,7 +503,7 @@ export default function InventoryUploadPage() {
                             <span key={`e-${i}`} className="block text-red-600 dark:text-red-400">🔴 {err}</span>
                           ))}
                           {row.warnings.map((warn, i) => (
-                            <span key={`w-${i}`} className="block text-yellow-600">🟡 {warn}</span>
+                            <span key={`w-${i}`} className="block text-warning-strong">🟡 {warn}</span>
                           ))}
                           {!hasErrors && !hasWarnings && (
                             <span className="text-green-600 dark:text-green-400">🟢 Ready</span>
@@ -519,7 +519,7 @@ export default function InventoryUploadPage() {
 
           {/* Import button */}
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-secondary">
               {validCount} of {rows.length} rows will be imported
               {errorCount > 0 && (
                 <span className="text-red-600 dark:text-red-400 ml-1">({errorCount} skipped due to errors)</span>
@@ -541,8 +541,8 @@ export default function InventoryUploadPage() {
       {stage === 'importing' && (
         <div className="text-center py-16">
           <div className="text-5xl mb-4 animate-bounce">📦</div>
-          <p className="text-lg font-semibold text-gray-700">Importing products…</p>
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-lg font-semibold text-secondary">Importing products…</p>
+          <p className="text-sm text-tertiary mt-2">
             Processing {validCount} items. Please wait.
           </p>
         </div>
@@ -554,15 +554,15 @@ export default function InventoryUploadPage() {
           {/* Summary cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-              <p className="text-sm text-gray-600 mb-1">Processed</p>
-              <p className="text-4xl font-bold text-gray-900">{importResult.processed}</p>
+              <p className="text-sm text-secondary mb-1">Processed</p>
+              <p className="text-4xl font-bold text-primary">{importResult.processed}</p>
             </div>
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-              <p className="text-sm text-gray-600 mb-1">Successful</p>
+              <p className="text-sm text-secondary mb-1">Successful</p>
               <p className="text-4xl font-bold text-green-600 dark:text-green-400">{importResult.successful}</p>
             </div>
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-6 border-l-4 border-red-500">
-              <p className="text-sm text-gray-600 mb-1">Failed</p>
+              <p className="text-sm text-secondary mb-1">Failed</p>
               <p className="text-4xl font-bold text-red-600 dark:text-red-400">{importResult.failed}</p>
             </div>
           </div>
@@ -570,41 +570,41 @@ export default function InventoryUploadPage() {
           {/* Results table */}
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow overflow-hidden mb-6">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-sunken border-b border-default">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-secondary uppercase">
                     SKU
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-secondary uppercase">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-secondary uppercase">
                     Message
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-subtle">
                 {importResult.results.map((r, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 text-sm font-mono text-gray-900">{r.sku}</td>
+                  <tr key={idx} className="hover:bg-sunken">
+                    <td className="px-6 py-3 text-sm font-mono text-primary">{r.sku}</td>
                     <td className="px-6 py-3 text-sm">
                       {r.status === 'created' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success-soft text-success-strong">
                           ✓ Created
                         </span>
                       )}
                       {r.status === 'updated' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/60 text-blue-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/60 text-info-strong">
                           ↻ Updated
                         </span>
                       )}
                       {r.status === 'failed' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/60 text-red-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/60 text-danger-strong">
                           ✗ Failed
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-3 text-sm text-gray-600">{r.message || '—'}</td>
+                    <td className="px-6 py-3 text-sm text-secondary">{r.message || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -622,7 +622,7 @@ export default function InventoryUploadPage() {
             </button>
             <a
               href="/catalog"
-              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              className="px-6 py-3 bg-sunken text-secondary rounded-lg hover:opacity-80 transition font-medium"
             >
               📦 View Catalog
             </a>

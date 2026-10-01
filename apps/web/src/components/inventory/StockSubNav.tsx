@@ -121,10 +121,10 @@ export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0, channelDrif
                   {badge > 0 && (
                     <span
                       className={cn(
-                        'ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full text-white tabular-nums',
+                        'ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full text-inverse tabular-nums',
                         (tab as { badgeTone?: 'rose' | 'amber' }).badgeTone === 'rose'
-                          ? 'bg-rose-600'
-                          : 'bg-amber-500',
+                          ? 'bg-danger-strong'
+                          : 'bg-warning-strong',
                       )}
                       aria-label={t('stock.subnav.badgeAriaLabel', { n: badge })}
                     >

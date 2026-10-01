@@ -197,7 +197,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
             <EnvCell label="Amazon publish" enabled={status?.env.AMAZON_PUBLISH_ENABLED} mode={status?.env.AMAZON_PUBLISH_MODE} />
             <EnvCell label="eBay publish" enabled={status?.env.EBAY_PUBLISH_ENABLED} mode={status?.env.EBAY_PUBLISH_MODE} />
           </div>
-          <div className="text-xs text-tertiary dark:text-slate-500">
+          <div className="text-xs text-tertiary">
             Defaults: gated + dry-run. Flip via Railway env vars
             (NEXUS_ENABLE_&lt;CH&gt;_PUBLISH, &lt;CH&gt;_PUBLISH_MODE) — see PHASE_B_VERIFICATION.md.
           </div>
@@ -206,7 +206,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
 
       {/* Tripped circuits — critical alert, surfaces first when present */}
       {status && status.trippedCircuits.length > 0 && (
-        <Card className="border-rose-300 bg-rose-50/50">
+        <Card className="border-rose-300 bg-danger-soft/50">
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300 font-semibold inline-flex items-center gap-1.5">
               <AlertTriangle size={12} /> Likely-tripped circuits — 3+ failures in last 5 min
@@ -255,9 +255,9 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 <div
                   key={c.channel}
                   className={`border rounded p-3 ${
-                    c.tone === 'critical' ? 'border-rose-300 bg-rose-50/50'
-                    : c.tone === 'warning' ? 'border-amber-300 bg-amber-50/50'
-                    : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/30'
+                    c.tone === 'critical' ? 'border-rose-300 bg-danger-soft/50'
+                    : c.tone === 'warning' ? 'border-amber-300 bg-warning-soft/50'
+                    : 'border-emerald-200 dark:border-emerald-900 bg-success-soft/30'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5 gap-2">
@@ -474,7 +474,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
         </Card>
       )}
 
-      <div className="text-xs text-tertiary dark:text-slate-500 text-right">
+      <div className="text-xs text-tertiary text-right">
         Last fetched {lastFetchedAt ? new Date(lastFetchedAt).toLocaleTimeString() : '—'} ·{' '}
         polls every 30s ·{' '}
         <button onClick={() => refetch()} className="underline hover:text-slate-600">
@@ -498,7 +498,7 @@ function EnvCell({
     return (
       <div className="border border-default dark:border-slate-700 rounded p-2">
         <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-        <div className="text-sm text-tertiary dark:text-slate-500">loading…</div>
+        <div className="text-sm text-tertiary">loading…</div>
       </div>
     )
   }
@@ -532,7 +532,7 @@ function Stat({
 }) {
   const cls =
     value === 0
-      ? 'text-tertiary dark:text-slate-500'
+      ? 'text-tertiary'
       : tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-300 font-semibold'
       : tone === 'rose' ? 'text-rose-700 dark:text-rose-300 font-semibold'
       : tone === 'amber' ? 'text-amber-700 dark:text-amber-300 font-semibold'
@@ -541,7 +541,7 @@ function Stat({
   return (
     <div>
       <div className={`text-sm tabular-nums ${cls}`}>{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-tertiary dark:text-slate-500">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider text-tertiary">{label}</div>
     </div>
   )
 }
@@ -603,7 +603,7 @@ function Sparkline({ points }: { points: DailyTrendPoint[] }) {
 
   if (points.length === 0) {
     return (
-      <div className="h-7 w-[112px] flex items-center justify-center text-[10px] text-tertiary dark:text-slate-500">
+      <div className="h-7 w-[112px] flex items-center justify-center text-[10px] text-tertiary">
         no 14d data
       </div>
     )

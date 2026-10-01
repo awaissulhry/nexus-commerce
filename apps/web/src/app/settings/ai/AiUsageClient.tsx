@@ -401,7 +401,7 @@ export default function AiUsageClient({
                 <tr
                   key={r.id}
                   className={`border-b border-subtle dark:border-slate-800 ${
-                    r.ok ? '' : 'bg-rose-50/40'
+                    r.ok ? '' : 'bg-danger-soft/40'
                   }`}
                   title={r.errorMessage ?? undefined}
                 >

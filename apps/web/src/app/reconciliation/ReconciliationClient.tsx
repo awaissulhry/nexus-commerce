@@ -488,7 +488,7 @@ export default function ReconciliationClient({
         {/* Items table */}
         <div className="bg-white border rounded-lg overflow-hidden">
           {rows.length === 0 ? (
-            <div className="py-16 text-center text-gray-400">
+            <div className="py-16 text-center bg-card text-tertiary">
               {total === 0
                 ? 'No listings discovered yet. Click "Run ALL markets" to pull from Amazon.'
                 : `No rows with status ${statusFilter}.`}

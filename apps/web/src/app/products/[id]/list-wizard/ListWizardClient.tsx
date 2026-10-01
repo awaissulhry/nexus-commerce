@@ -583,7 +583,7 @@ export default function ListWizardClient({
   const firstChannel = channels[0] ?? { platform: '', marketplace: '' }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-50">
+    <div className="flex flex-col h-[100dvh] bg-canvas">
       <WizardHeader
         productId={product.id}
         productHref={wizardState.productPresetScope ? productPresetStudioHref(wizardState.productPresetScope as ProductPresetScope) : undefined}

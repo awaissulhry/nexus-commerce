@@ -137,21 +137,21 @@ function Tile({
 }) {
   const toneClass =
     tone === 'success'
-      ? 'text-emerald-700'
+      ? 'text-success-strong'
       : tone === 'warning'
-        ? 'text-amber-700'
+        ? 'text-warning-strong'
         : tone === 'danger'
-          ? 'text-rose-700'
-          : 'text-slate-900'
+          ? 'text-danger-strong'
+          : 'text-primary'
   return (
     <Card>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+      <div className="text-xs uppercase tracking-wider text-tertiary font-semibold mb-1">
         {label}
       </div>
       <div className={`text-[24px] font-semibold tabular-nums leading-none ${toneClass}`}>
         {value}
       </div>
-      {sub && <div className="text-sm text-slate-500 mt-1">{sub}</div>}
+      {sub && <div className="text-sm text-tertiary mt-1">{sub}</div>}
     </Card>
   )
 }

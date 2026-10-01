@@ -52,7 +52,7 @@ export default function PredictivePanel({
       action={
         <Link
           href="/fulfillment/replenishment"
-          className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+          className="text-sm text-link hover:underline inline-flex items-center gap-1"
         >
           {t('overview.predictive.openAll')} <ChevronRight className="w-3 h-3" />
         </Link>

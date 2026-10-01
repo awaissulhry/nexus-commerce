@@ -35,7 +35,7 @@ export default function TopProducts({
                 {it.productId ? (
                   <Link
                     href={`/products/${it.productId}/edit`}
-                    className="font-mono text-base text-blue-600 hover:underline truncate"
+                    className="font-mono text-base text-link hover:underline truncate"
                   >
                     {it.sku}
                   </Link>
