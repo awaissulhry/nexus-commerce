@@ -724,6 +724,7 @@ CREATE TABLE "ProductListingAlias" (
     "position" INTEGER NOT NULL DEFAULT 1,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "adoptedFromProductId" TEXT,
+    "sku" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" TEXT,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -10045,6 +10046,9 @@ CREATE INDEX "ProductListingAlias_workspaceId_idx" ON "ProductListingAlias"("wor
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ProductListingAlias_coord_position_key" ON "ProductListingAlias"("workspaceId", "productId", "channel", "marketplace", "channelConnectionId", "position");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProductListingAlias_workspace_sku_key" ON "ProductListingAlias"("workspaceId", "sku");
 
 -- CreateIndex
 CREATE INDEX "ChannelListingSnapshot_channelListingId_createdAt_idx" ON "ChannelListingSnapshot"("channelListingId", "createdAt");

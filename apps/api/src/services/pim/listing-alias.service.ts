@@ -73,6 +73,8 @@ export interface CreateAliasInput {
   marketplace: string
   accountId?: string
   label?: string
+  /** The listing's own seller SKU (2026-10-01), unique in the business and never a product's SKU. */
+  sku?: string
   createdBy?: string | null
 }
 
@@ -102,6 +104,7 @@ export async function createAlias(input: CreateAliasInput) {
   const label = channelLabel(channel)
   if (!connectionId) throw new ProductRelationshipError(`Connect ${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label} account before adding a listing on ${marketplace}.`)
   if (await legacyAliasIndexesPresent()) throw new AliasCreationBlockedError()
+  const sku = input.sku === undefined ? undefined : await checkListingSku(input.sku)
   return relationshipTransaction(async tx => {
     const seed = await tx.product.findFirst({
       where: { id: input.productId, deletedAt: null },
@@ -132,9 +135,10 @@ export async function createAlias(input: CreateAliasInput) {
         channelConnectionId: connectionId,
         label: input.label?.trim() || `Listing ${position + 1}`,
         position,
+        ...(sku ? { sku } : {}),
         createdBy: input.createdBy ?? null,
       },
-    })
+    }).catch(error => { throw listingSkuTaken(error, sku) })
 
     // Step 7 — every alias row is an inert draft decided by the one draft rule (`draftListingFields`): DRAFT,
     // unpublished and paused, so a brand-new alias is never swept into an outbound push before an operator has
@@ -147,6 +151,26 @@ export async function createAlias(input: CreateAliasInput) {
     await productReadCacheService.refreshInTransaction(tx, family.map(member => member.id))
     return alias
   })
+}
+
+/** A listing SKU: trimmed, 1–200 characters, and not a live product's SKU in this business (a file could not tell them apart). */
+async function checkListingSku(value: string) {
+  const sku = value.trim()
+  if (!sku || sku.length > 200) throw new ProductRelationshipError('A listing SKU needs 1 to 200 characters.')
+  const { default: prisma } = await import('../../db.js')
+  if (await prisma.product.findFirst({ where: { sku, deletedAt: null }, select: { id: true } })) throw new ProductRelationshipError(`${sku} is already a product SKU in this business. Choose another SKU for the listing.`)
+  return sku
+}
+const listingSkuTaken = (error: unknown, sku: string | undefined) => (error as { code?: string })?.code === 'P2002' && sku
+  ? new ProductRelationshipError(`${sku} is already the SKU of another listing in this business.`) : error
+
+/** 2026-10-01 — give an extra listing that has no SKU its seller SKU (an import names it so). Never replaces a SKU. */
+export async function nameListingAlias(aliasId: string, value: string) {
+  const sku = await checkListingSku(value)
+  const { default: prisma } = await import('../../db.js')
+  const updated = await prisma.productListingAlias.updateMany({ where: { id: aliasId, sku: null, status: 'ACTIVE' }, data: { sku } })
+    .catch(error => { throw listingSkuTaken(error, sku) })
+  if (updated.count !== 1) throw new ProductRelationshipError('This listing changed, or already has a SKU. Import the file again.')
 }
 
 type AliasMutationScope = { productId: string; accountId?: string }

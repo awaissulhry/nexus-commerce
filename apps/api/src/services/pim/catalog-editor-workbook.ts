@@ -21,7 +21,7 @@ export const PRODUCT_TRANSFER_MAX_OUTCOMES = 250_000
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue
 interface SavedExport extends EditingWorkbookBaseline { kind: typeof EXPORT_KIND; boundary: ProductTransferBoundary }
 /** CFI-4 — an identity the file suggests but the Owner must confirm (BUILD.md §1, D4). */
-export interface IdentityProposal { fileSku: string; proposedSku: string; reason: string }
+export interface IdentityProposal { fileSku: string; proposedSku: string; reason: string; kind?: 'name-listing' | 'new-listing' }
 interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[]; links?: IdentityProposal[]
   /** PSIE — what each part was (the parse worker's verdict), in upload order. */
   kinds?: ('editing' | 'wide' | 'transfer' | 'ebay' | 'amazon' | 'shopify')[]
@@ -32,7 +32,7 @@ interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions
  * `confirmDeletes` lets a file's delete rows end their listings — `true` for every delete row, or the list of file
  * SKUs the Owner confirmed one by one. Both absent = nothing is assumed. Passed to the readers unchanged.
  */
-export interface ChannelFileDecisions { links?: Record<string, string>; confirmDeletes?: boolean | string[] }
+export interface ChannelFileDecisions { links?: Record<string, string>; confirmDeletes?: boolean | string[]; listings?: string[] }
 /** Stage timing for the import. The 2026-09-16 handler emitted nothing and was unreadable. */
 export type ImportLog = (event: string, detail: Record<string, unknown>) => void
 
@@ -90,7 +90,7 @@ async function readEditorPart(session: ParseSession, buffer: Buffer, filename: s
     if (!baseline) throw new TransferConflict('This workbook baseline is unavailable, expired or belongs to another product or user. Download a new editing workbook.')
     return { ...outcome.parsed, boundary: baseline.boundary, editing: true, kinds: ['editing'], exportId: baseline.id }
   }
-  if (outcome.kind === 'ebay') return { ...await resolveEbayWorkbook(outcome.table, productId, { links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true, kinds: ['ebay'] }
+  if (outcome.kind === 'ebay') return { ...await resolveEbayWorkbook(outcome.table, productId, { links: decisions.links, confirmDeletes: decisions.confirmDeletes, listings: decisions.listings }), editing: true, kinds: ['ebay'] }
   // CFI-1 — Amazon's own template, scoped to this product group; account and marketplace resolve from the
   // file and the group's listings (BUILD.md D5). Like the eBay export its rows carry verified coordinates.
   if (outcome.kind === 'amazon') return { ...await resolveAmazonCatalogWorkbook(outcome.parsed, { productId, mode: 'update', links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true, kinds: ['amazon'] }
@@ -260,7 +260,7 @@ export async function readCatalogTransferUpload(buffer: Buffer, filename: string
   try {
     // The chosen marketplace is the eBay reader's last hint, after the sheet name and the file name.
     const outcome = await session.read(filename, buffer, EXPANDED_BATCH_BYTES, { blankPolicy: input.blankPolicy, market: input.market || undefined })
-    const decisions = { links: input.links, confirmDeletes: input.confirmDeletes }
+    const decisions = { links: input.links, confirmDeletes: input.confirmDeletes, listings: input.listings }
     if (outcome.kind === 'amazon') {
       const meta = outcome.parsed.meta
       // No chosen marketplace = the template's own (a chosen one that contradicts the file is refused by the reader).

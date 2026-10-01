@@ -15,7 +15,9 @@ import styles from './sheetTransfer.module.css'
 
 const POLL_MS = 700
 type Filter = 'all' | 'problems'
-type Decisions = { links: Record<string, string>; confirmDeletes: string[] }
+/** `listings` (2026-10-01): file SKUs of extra listings to name or create; ticked by default the first time they are offered. */
+type Decisions = { links: Record<string, string>; confirmDeletes: string[]; listings: string[] }
+const NO_DECISIONS: Decisions = { links: {}, confirmDeletes: [], listings: [] }
 const TONES: Record<SheetImportChange['status'], 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = { ready: 'info', problem: 'danger', saved: 'success', failed: 'danger', skipped: 'warning' }
 /** A check or save still running when the page reloads is picked up again; a finished one never is. */
 const runningKey = (productId: string) => `psie:running-import:${productId}`
@@ -54,25 +56,31 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   const [filter, setFilter] = useState<Filter>('all')
   const [page, setPage] = useState(1)
   const [changes, setChanges] = useState<SheetImportChangesPage | null>(null)
-  const [decisions, setDecisions] = useState<Decisions>({ links: {}, confirmDeletes: [] })
+  const [decisions, setDecisions] = useState<Decisions>(NO_DECISIONS)
   const [publishing, setPublishing] = useState(false)
   /** When the save (or the undo's save) started on this page: the job's own start is the upload. */
   const [savingSince, setSavingSince] = useState<number | null>(null)
   const settled = useRef(new Set<string>())
+  const offered = useRef(new Set<string>())
   const openRef = useRef(open)
   openRef.current = open
 
-  const reset = () => { setFile(null); setReading(null); setStatus(null); setError(null); setFilter('all'); setPage(1); setChanges(null); setDecisions({ links: {}, confirmDeletes: [] }); setSavingSince(null) }
+  const reset = () => { setFile(null); setReading(null); setStatus(null); setError(null); setFilter('all'); setPage(1); setChanges(null); setDecisions(NO_DECISIONS); offered.current.clear(); setSavingSince(null) }
   const close = () => {
     // A finished import is not shown again next time; one still running keeps going and is shown on reopening.
     if (isFinished(status) || !status && !reading) reset()
     onClose()
   }
 
-  const upload = async (picked: File, chosen: Decisions = { links: {}, confirmDeletes: [] }) => {
+  const upload = async (picked: File, chosen: Decisions = NO_DECISIONS) => {
     setFile(picked); setError(null); setStatus(null); setChanges(null); setReading(Date.now())
     try {
-      setStatus(await sheetTransferApi.startImport(productId, picked, market, { links: chosen.links, confirmDeletes: chosen.confirmDeletes.length ? chosen.confirmDeletes : undefined }))
+      const next = await sheetTransferApi.startImport(productId, picked, market, { links: chosen.links, confirmDeletes: chosen.confirmDeletes.length ? chosen.confirmDeletes : undefined, listings: chosen.listings })
+      // A listing the file names by a SKU Nexus does not have yet is ticked the first time it is offered.
+      const fresh = next.links.filter(link => link.kind && !offered.current.has(link.fileSku)).map(link => link.fileSku)
+      for (const sku of fresh) offered.current.add(sku)
+      if (fresh.length) setDecisions(d => ({ ...d, listings: [...new Set([...d.listings, ...fresh])] }))
+      setStatus(next)
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setReading(null) }
   }
@@ -226,7 +234,9 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
           {needsConfirmation && file && <Banner tone="warning" title="Confirm before applying"
             action={<Button size="sm" variant="secondary" onClick={() => void upload(file, decisions)}>Check again</Button>}>
             <ul className={styles.list}>
-              {status.links.map(link => <li key={link.fileSku}><Checkbox label={`${link.fileSku} in the file is ${link.proposedSku} in Nexus (${link.reason})`} checked={decisions.links[link.fileSku] === link.proposedSku}
+              {status.links.filter(link => link.kind).map(link => <li key={link.fileSku}><Checkbox label={link.reason} checked={decisions.listings.includes(link.fileSku)}
+                onChange={() => setDecisions(d => ({ ...d, listings: d.listings.includes(link.fileSku) ? d.listings.filter(s => s !== link.fileSku) : [...d.listings, link.fileSku] }))} /></li>)}
+              {status.links.filter(link => !link.kind).map(link => <li key={link.fileSku}><Checkbox label={`${link.fileSku} in the file is ${link.proposedSku} in Nexus (${link.reason})`} checked={decisions.links[link.fileSku] === link.proposedSku}
                 onChange={() => setDecisions(d => { const links = { ...d.links }; if (links[link.fileSku]) delete links[link.fileSku]; else links[link.fileSku] = link.proposedSku; return { ...d, links } })} /></li>)}
               {status.deletes.filter(d => !d.confirmed).map(d => <li key={`${d.fileSku}${d.channel}${d.marketplace}`}><Checkbox label={`End the ${d.channel} ${d.marketplace} listing of ${d.sku}: the file deletes it`} checked={decisions.confirmDeletes.includes(d.fileSku)}
                 onChange={() => setDecisions(x => ({ ...x, confirmDeletes: x.confirmDeletes.includes(d.fileSku) ? x.confirmDeletes.filter(s => s !== d.fileSku) : [...x.confirmDeletes, d.fileSku] }))} /></li>)}

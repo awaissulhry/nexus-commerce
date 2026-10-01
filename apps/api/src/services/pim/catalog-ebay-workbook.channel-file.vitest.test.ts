@@ -63,10 +63,15 @@ describe('matching — blank Item IDs and the parent-only category', () => {
     expect(result.rows.find(r => r.sku === 'ROOT-BLACK-L' && r.field === 'title')?.value).toBe('Giacca L')
     ledgerClean(table, result)
   })
-  it('refuses a present Item ID that differs from the one Nexus holds, and says the file may be older', () => {
-    const { result } = mapRoot(rootBook('FAMILYX', rows => { rows[1]['Item ID'] = '257999999999' }))
-    expect(result.issues).toEqual([expect.objectContaining({ row: 3, field: 'Item ID', message: expect.stringContaining('differs from the Item ID Nexus holds') })])
-    expect(result.rows.some(r => r.row === 3)).toBe(false)
+  // Owner 2026-10-01 — each business is its own store: an Item ID no listing of this business holds (a file of another
+  // business's eBay account) is ignored, and the row is matched by SKU.
+  it('ignores an Item ID that no listing of this business holds, and matches the row by SKU', () => {
+    const { table, result } = mapRoot(rootBook('FAMILYX', rows => { rows[1]['Item ID'] = '257999999999' }))
+    expect(result.issues).toEqual([])
+    expect(result.rows.some(r => r.row === 3 && r.field === 'title')).toBe(true)
+    expect(result.exclusions).toContainEqual(expect.objectContaining({ row: 3, field: 'Item ID', message: expect.stringContaining('Another eBay account') }))
+    expect(result.warnings).toContainEqual(expect.stringContaining('Nexus ignored it and matched by SKU'))
+    ledgerClean(table, result)
   })
   it('says a SKU is not a Nexus product when it is not, instead of blaming a missing listing', () => {
     const table = readEbayWorkbook(rootBook(), { filename: 'XAVIA-eBay-IT-FAMILYX.xlsx' })!
@@ -74,9 +79,31 @@ describe('matching — blank Item IDs and the parent-only category', () => {
     expect(result.issues).toEqual([expect.objectContaining({ row: 4, field: 'SKU', message: expect.stringContaining('ROOT-BLACK-L is not a Nexus product') })])
     ledgerClean(table, result)
   })
-  it('names the adopt step when a listing is not in Nexus', () => {
+  it('says in plain words which listing row is missing when a listing is not in Nexus', () => {
     const { table, result } = mapRoot(undefined, rootTargets().filter(t => t.sku !== 'ROOT-BLACK-L'))
-    expect(result.issues).toEqual([expect.objectContaining({ row: 4, message: expect.stringContaining('pes5-adopt-shells') })])
+    expect(result.issues).toEqual([expect.objectContaining({ row: 4, message: 'The eBay IT listing ROOT has no row for ROOT-BLACK-L in Nexus. Add the variation to the product, then import again.' })])
+    ledgerClean(table, result)
+  })
+})
+
+// Owner 2026-10-01 — a business policy belongs to one eBay account, like an Item ID: another account's is never imported.
+describe('business policies — only this account\'s own', () => {
+  const policyTable = (policy: string): EbayWorkbookTable => ({ sheet: 'ebay_it', marketplace: 'IT', headers: ['SKU', 'Parent/Child', 'Parent SKU', 'Category ID', 'Title', 'Fulfillment Policy ID'], records: [
+    { row: 2, values: { SKU: 'ROOT', 'Parent/Child': 'parent', 'Parent SKU': '', 'Category ID': '177104', Title: 'P', 'Fulfillment Policy ID': policy } },
+  ] })
+  const target: EbayWorkbookTarget = { id: 'L', sku: 'ROOT', parentSku: 'ROOT', sourceParentSku: 'ROOT', isParent: true, itemId: '', accountId: 'seller-b', marketplace: 'IT', aliasKey: '', version: 1, policyIds: ['OWN-1'] }
+  it('imports a policy this account already uses', () => {
+    const result = mapEbayWorkbook(policyTable('OWN-1'), [target], specs)
+    expect(result.rows.find(r => r.field === 'fulfillmentPolicyId')?.value).toBe('OWN-1')
+  })
+  it('imports a policy that is the account\'s default', () => {
+    const result = mapEbayWorkbook(policyTable('DEFAULT-1'), [target], specs, { accountPolicyIds: ['DEFAULT-1'] })
+    expect(result.rows.find(r => r.field === 'fulfillmentPolicyId')?.value).toBe('DEFAULT-1')
+  })
+  it('keeps another account\'s policy out, and says so', () => {
+    const table = policyTable('OTHER-9'), result = mapEbayWorkbook(table, [target], specs)
+    expect(result.rows.some(r => r.field === 'fulfillmentPolicyId')).toBe(false)
+    expect(result.exclusions).toContainEqual(expect.objectContaining({ field: 'Fulfillment Policy ID', message: expect.stringContaining('not one this eBay account uses') }))
     ledgerClean(table, result)
   })
 })
@@ -229,9 +256,15 @@ describe('the ledger is an independent zero-loss check', () => {
 
 describe('product groups — a Nexus root, an adopted shell, a confirmed link, or a proposal', () => {
   type P = { id: string; sku: string; parentId: string | null; productType: string | null; deletedAt: Date | null }
-  const fakeDb = (products: P[], aliases: { productId: string; adoptedFromProductId: string; status: string }[] = []) => ({
+  type A = { id?: string; productId: string; adoptedFromProductId?: string | null; status: string; sku?: string | null; label?: string; channel?: string; marketplace?: string }
+  const fakeDb = (products: P[], aliases: A[] = []) => ({
     product: { findMany: async ({ where }: any) => products.filter(p => (where.sku ? where.sku.in.includes(p.sku) : where.id.in.includes(p.id)) && (where.deletedAt === null ? !p.deletedAt : true)) },
-    productListingAlias: { findMany: async ({ where }: any) => aliases.filter(a => where.adoptedFromProductId.in.includes(a.adoptedFromProductId) && a.status === where.status) },
+    productListingAlias: { findMany: async ({ where }: any) => aliases.map(a => ({ channel: 'EBAY', marketplace: 'IT', sku: null, label: '', adoptedFromProductId: null, ...a }))
+      .filter(a => a.status === where.status
+        && (!where.adoptedFromProductId || where.adoptedFromProductId.in.includes(a.adoptedFromProductId))
+        && (!where.sku || where.sku.in.includes(a.sku))
+        && (!where.productId || where.productId.in.includes(a.productId))
+        && (!where.channel || a.channel === where.channel) && (!where.marketplace || a.marketplace === where.marketplace)) },
   }) as any
   const table = (parent: string, children: string[]): EbayWorkbookTable => ({ sheet: 'ebay_it', marketplace: 'IT', headers: ['SKU', 'Parent/Child', 'Parent SKU', 'Category ID', 'Title'], records: [
     { row: 2, values: { SKU: parent, 'Parent/Child': 'parent', 'Parent SKU': '', 'Category ID': '177104', Title: 'P' } },
@@ -252,7 +285,7 @@ describe('product groups — a Nexus root, an adopted shell, a confirmed link, o
   it('refuses an unadopted legacy shell and names the adopt step; an adopted one joins its product', async () => {
     const out = empty(), t = table('NEXUS-ROOT-ALT1', ['KID-M'])
     expect(await planEbayGroups(fakeDb(nexus), t, out, {})).toEqual([])
-    expect(out.issues.every(i => i.message.includes('pes5-adopt-shells'))).toBe(true)
+    expect(out.issues.every(i => i.message.includes('old eBay listing record that is not attached to its product'))).toBe(true)
     ledgerClean(t, out)
     const adopted = nexus.map(p => p.id === 's1' ? { ...p, deletedAt: new Date() } : p)
     const groups = await planEbayGroups(fakeDb(adopted, [{ productId: 'r1', adoptedFromProductId: 's1', status: 'ACTIVE' }]), t, empty(), {})
@@ -287,6 +320,35 @@ describe('product groups — a Nexus root, an adopted shell, a confirmed link, o
     const result = mapEbayWorkbook(sub, targets, specs)
     expect(result.rows.find(r => r.field === 'sellerSku')).toMatchObject({ entity: 'Listings', sku: 'NEXUS-ROOT', value: 'FILE-PARENT', fileSku: 'FILE-PARENT' })
     ledgerClean(t, result)
+  })
+  // 2026-10-01 — an extra listing is named by its own SKU inside the business (ProductListingAlias.sku).
+  it('places a file parent that is the SKU of an extra listing — no proposal', async () => {
+    const out = empty(), t = table('IT-ROOT', ['KID-M'])
+    const groups = await planEbayGroups(fakeDb(nexus, [{ id: 'a1', productId: 'r1', status: 'ACTIVE', sku: 'IT-ROOT', label: 'IT-ROOT' }]), t, out, {})
+    expect(groups.map(g => [g.rootSku, g.records.length])).toEqual([['NEXUS-ROOT', 2]])
+    expect(out.links).toEqual([])
+  })
+  it('refuses a listing SKU of another market by name', async () => {
+    const out = empty(), t = table('DE-ROOT', ['KID-M'])
+    expect(await planEbayGroups(fakeDb(nexus, [{ id: 'a1', productId: 'r1', status: 'ACTIVE', sku: 'DE-ROOT', marketplace: 'DE' }]), t, out, {})).toEqual([])
+    expect(out.issues[0].message).toBe('DE-ROOT is the SKU of a listing on eBay DE, not on eBay IT.')
+  })
+  it('offers to give an extra listing without a SKU the file SKU its label carries', async () => {
+    const out = empty(), t = table('IT-ROOT', ['KID-M'])
+    const proposals = new Map()
+    expect(await planEbayGroups(fakeDb(nexus, [{ id: 'a1', productId: 'r1', status: 'ACTIVE', label: 'IT-ROOT' }]), t, out, {}, undefined, proposals)).toEqual([])
+    expect(out.links).toEqual([{ fileSku: 'IT-ROOT', proposedSku: 'NEXUS-ROOT', kind: 'name-listing', reason: 'Give the eBay IT listing "IT-ROOT" of NEXUS-ROOT the SKU IT-ROOT (it has no SKU yet)' }])
+    expect(proposals.get('IT-ROOT')).toEqual({ rootId: 'r1', rootSku: 'NEXUS-ROOT', aliasId: 'a1' })
+    expect(out.issues.every(i => i.message.includes('Confirm it above, then check again'))).toBe(true)
+    ledgerClean(t, out)
+  })
+  it('offers a new extra listing when the file also holds the main listing', async () => {
+    const t: EbayWorkbookTable = { ...table('NEXUS-ROOT', ['KID-M']), records: [...table('NEXUS-ROOT', ['KID-M']).records, ...table('IT-ROOT', ['KID-M']).records.map(r => ({ ...r, row: r.row + 10 }))] }
+    const out = empty(), proposals = new Map()
+    const groups = await planEbayGroups(fakeDb(nexus), t, out, {}, undefined, proposals)
+    expect(groups.map(g => [g.rootSku, g.records.length])).toEqual([['NEXUS-ROOT', 2]])
+    expect(out.links).toEqual([{ fileSku: 'IT-ROOT', proposedSku: 'NEXUS-ROOT', kind: 'new-listing', reason: 'Create the eBay IT listing IT-ROOT for NEXUS-ROOT, as a draft' }])
+    expect(proposals.get('IT-ROOT')).toEqual({ rootId: 'r1', rootSku: 'NEXUS-ROOT', aliasId: undefined })
   })
   it('skips — does not refuse — rows of another product group in the drawer', async () => {
     const out = empty(), t = table('NEXUS-ROOT', ['KID-M'])

@@ -152,7 +152,8 @@ export interface SheetImportSummary {
   ended: number
   prices: number
 }
-export interface SheetImportLink { fileSku: string; proposedSku: string; reason: string }
+/** `kind` (2026-10-01): an extra listing of `proposedSku` that gets `fileSku` as its SKU — named (it has none) or created. */
+export interface SheetImportLink { fileSku: string; proposedSku: string; reason: string; kind?: 'name-listing' | 'new-listing' }
 export interface SheetImportDelete { sku: string; fileSku: string; channel: string; marketplace: string; accountId: string; evidence?: string; confirmed: boolean }
 export interface SheetImportStatus {
   jobId: string
