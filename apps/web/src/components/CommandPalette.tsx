@@ -287,7 +287,8 @@ export const COMMANDS: Command[] = [
     id: 'action-new-product',
     label: 'Create new product',
     icon: Plus,
-    href: '/products/new',
+    // Opens the Products page's New product dialog (a DRAFT, then its studio).
+    href: '/products?new=1',
     group: 'Action',
     keywords: 'add create draft sku item',
     chord: 'g n',

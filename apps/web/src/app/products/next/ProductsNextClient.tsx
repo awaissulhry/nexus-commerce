@@ -80,6 +80,7 @@ import { FamilyFooter } from './FamilyFooter'
 import { BulkEditModal, type BulkEditChanges } from './BulkEditModal'
 import { TagDialog } from './TagDialog'
 import { InventoryEditorModal } from './InventoryEditorModal'
+import { NewProductDialog } from './NewProductDialog'
 import { ProductsSkeleton } from './ProductsSkeleton'
 import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
 import { preferencesFromLayout, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
@@ -229,6 +230,23 @@ function ProductsNextInner() {
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [tagDialogOpen, setTagDialogOpen] = useState(false)
   const [customizeOpen, setCustomizeOpen] = useState(false)
+  /**
+   * "New product". `?new=1` opens it too, so every entry point can be a link: the command palette's "Create new
+   * product" / `g n`, Organize's quick action and the retired `/products/new` and `/catalog/add` (next.config.js).
+   * Closing drops the parameter (the same `replaceState({}, …)` as the filter below), so a reload does not reopen it
+   * and the next `?new=1` link opens it again.
+   */
+  const [newProductOpen, setNewProductOpen] = useState(false)
+  const newProductRequested = searchParams?.get('new') === '1'
+  useEffect(() => { if (newProductRequested) setNewProductOpen(true) }, [newProductRequested])
+  const closeNewProduct = useCallback(() => {
+    setNewProductOpen(false)
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('new')) return
+    url.searchParams.delete('new')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+  }, [])
   /**
    * VT.4 — the `Variation mapping` dimension (VX §11.4, values `docs/vt1-contracts.md` §5).
    *
@@ -1341,7 +1359,7 @@ function ProductsNextInner() {
                     <Upload size={13} /> Import &amp; export
                   </Link>
                 </Button>
-                <Button size="sm" variant="primary" onClick={() => router.push('/products/new')}>
+                <Button size="sm" variant="primary" onClick={() => setNewProductOpen(true)}>
                   <Plus size={13} /> New product
                 </Button>
               </>
@@ -1645,6 +1663,9 @@ function ProductsNextInner() {
 
       {/* Inventory editor modal — opened by clicking the Available cell */}
       <InventoryEditorModal row={modalRow} density={density} onClose={() => setModalRow(null)} />
+
+      {/* New product — a DRAFT in this business, then its studio. */}
+      <NewProductDialog open={newProductOpen} onClose={closeNewProduct} />
     </div>
   )
 }
