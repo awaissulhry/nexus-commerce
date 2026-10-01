@@ -85,9 +85,23 @@ export function summarizeProductSync(rows: SyncRowLike[]): ProductSyncRollup {
   }
 }
 
+/** A row's market as the Market filter names it: upper case, an eBay token without its prefix (EBAY_IT → IT). */
+function filterMarketOf(rowMarketplace: string): string {
+  return rowMarketplace.toUpperCase().replace(/^EBAY_/, '')
+}
+
 /** Normalize an eBay market token (EBAY_IT → IT) for filter comparison. */
 export function marketMatches(rowMarketplace: string, filter: string): boolean {
-  return rowMarketplace.toUpperCase().replace(/^EBAY_/, '') === filter.toUpperCase()
+  return filterMarketOf(rowMarketplace) === filter.toUpperCase()
+}
+
+/**
+ * 2026-10-01 — the markets the rows are on, as the Market filter offers them: named the way `marketMatches` compares
+ * them, distinct and sorted. Taken from the rows, so a market they have (GLOBAL for Shopify and Etsy, a legacy
+ * DEFAULT) can never be missing from the filter, which used to be a fixed IT/DE/FR/ES/DEFAULT list.
+ */
+export function rowMarkets(rows: ReadonlyArray<{ marketplace: string }>): string[] {
+  return [...new Set(rows.map((r) => filterMarketOf(r.marketplace ?? '')).filter(Boolean))].sort()
 }
 
 /**

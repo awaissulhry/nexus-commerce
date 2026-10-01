@@ -20,6 +20,7 @@ const state = vi.hoisted(() => {
     txGrantReads: 0,
     updates: [] as string[],
     queueCreates: 0,
+    queued: [] as any[],
     failOnTx: -1 as number, // index of the $transaction call that should fail AFTER running fn
     listings: [] as any[],
     addJob: vi.fn(async () => {}),
@@ -42,8 +43,10 @@ const state = vi.hoisted(() => {
       // P1.3 — a chunk's queue rows are written in ONE createManyAndReturn. The per-row
       // `create` is deliberately absent, like the per-row findUnique above: a regression
       // to a row-at-a-time write (whose BP.S3 preflight reads inside the tx) throws here.
-      createManyAndReturn: async ({ data }: any) =>
-        (data as any[]).map((d) => ({ id: `q${++s.queueCreates}`, channelListingId: d.channelListingId })),
+      createManyAndReturn: async ({ data }: any) => {
+        s.queued.push(...(data as any[]))
+        return (data as any[]).map((d) => ({ id: `q${++s.queueCreates}`, channelListingId: d.channelListingId }))
+      },
     },
     // BP.S3 — the shared-account gate reads through the caller's client. No account here
     // is shared, and the gate must ask ONCE per chunk (s.txGrantReads pins that).
@@ -86,7 +89,7 @@ const state = vi.hoisted(() => {
   // closures above would mutate a different object than the tests read).
   return Object.assign(s, { prisma, reset() {
     s.txOpts.length = 0; s.txBufferReads = 0; s.txGrantReads = 0; s.updates.length = 0
-    s.queueCreates = 0; s.failOnTx = -1; s.listings.length = 0
+    s.queueCreates = 0; s.queued.length = 0; s.failOnTx = -1; s.listings.length = 0
     s.addJob.mockClear(); s.coalesce.mockClear()
     prisma.__reset()
   } })
@@ -97,7 +100,7 @@ vi.mock('../lib/queue.js', () => ({ outboundSyncQueue: {}, addJobSafely: state.a
 vi.mock('./sync-coalesce.js', () => ({ coalescePendingQuantityRows: state.coalesce }))
 vi.mock('./outbound-sync.service.js', () => ({ isFbaListing: () => false }))
 
-import { setFollowMasterQuantity } from './follow-master.service.js'
+import { setFollowMasterQuantity, setStockBuffer } from './follow-master.service.js'
 
 function makeListings(n: number) {
   return Array.from({ length: n }, (_, i) => ({
@@ -175,5 +178,30 @@ describe('setFollowMasterQuantity — chunked transactions (P2028)', () => {
     })
     expect(r.updated).toBe(1)
     expect(state.txOpts.length).toBe(1)
+  })
+})
+
+// 2026-10-01 — Etsy was missing from this file's channel list: an Etsy Matrix Mode / Qty / Buffer edit, or a Sync Control
+// bulk Follow / Pin / Buffer, wrote the listing, answered "applied", and queued nothing. It now uses the one shared set.
+describe('Etsy listings are queued like every other channel', () => {
+  const etsy = (n: number) => makeListings(n).map((l) => ({ ...l, channel: 'ETSY', region: 'GLOBAL', marketplace: 'GLOBAL', channelConnectionId: 'etsy-account-1' }))
+
+  it('Follow on pinned Etsy listings writes them AND queues one quantity row each, on the listing\'s own account', async () => {
+    state.listings.push(...etsy(3))
+    const r = await setFollowMasterQuantity({ productIds: state.listings.map((l) => l.productId), channel: 'ETSY' as never, markets: ['GLOBAL'], follow: true, actor: 'test' })
+    expect(r.updated).toBe(3)
+    expect(state.queued.map((q) => [q.targetChannel, q.channelListingId, q.channelConnectionId, q.syncType, q.payload.quantity, q.payload.source]))
+      .toEqual([0, 1, 2].map((i) => ['ETSY', `cl${i}`, 'etsy-account-1', 'QUANTITY_UPDATE', 10, 'FOLLOW_MASTER']))
+    expect(state.addJob).toHaveBeenCalledTimes(3)
+    // A newer value supersedes any older pending one for the same listings.
+    expect(state.coalesce).toHaveBeenCalledWith(expect.anything(), ['cl0', 'cl1', 'cl2'])
+  })
+
+  it('a buffer on following Etsy listings queues pool − buffer', async () => {
+    state.listings.push(...etsy(2).map((l) => ({ ...l, followMasterQuantity: true, quantityOverride: null, quantity: 10 })))
+    const r = await setStockBuffer({ productIds: state.listings.map((l) => l.productId), channel: 'ETSY' as never, markets: ['GLOBAL'], buffer: 3, actor: 'test' })
+    expect(r.updated).toBe(2)
+    expect(state.queued.map((q) => [q.targetChannel, q.payload.quantity, q.payload.stockBuffer, q.payload.source])).toEqual([['ETSY', 7, 3, 'STOCK_BUFFER'], ['ETSY', 7, 3, 'STOCK_BUFFER']])
+    expect(state.addJob).toHaveBeenCalledTimes(2)
   })
 })

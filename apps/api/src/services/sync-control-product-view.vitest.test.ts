@@ -2,7 +2,7 @@
  * SCV.1 — product rollup reducer (pure).
  */
 import { describe, it, expect } from 'vitest'
-import { summarizeProductSync, marketMatches, resolveCanonicalMap, type SyncRowLike, rowMatchesScope } from './sync-control-product-view.js'
+import { summarizeProductSync, marketMatches, resolveCanonicalMap, type SyncRowLike, rowMatchesScope, rowMarkets } from './sync-control-product-view.js'
 
 const row = (over: Partial<SyncRowLike>): SyncRowLike => ({
   channel: 'EBAY',
@@ -233,5 +233,24 @@ describe('rowMatchesScope — SCT.3 act-on-what-you-see (display ≡ action)', (
 
   it('multi-select is a union within a dimension', () => {
     expect(rowMatchesScope(row({ marketplace: 'DE' }), { markets: ['IT', 'DE'] })).toBe(true)
+  })
+})
+
+describe('2026-10-01 — rowMarkets: the Market filter offers every market the rows are on', () => {
+  const rows = [
+    { channel: 'AMAZON', marketplace: 'IT' }, { channel: 'AMAZON', marketplace: 'de' }, { channel: 'EBAY', marketplace: 'EBAY_IT' },
+    { channel: 'SHOPIFY', marketplace: 'GLOBAL' }, { channel: 'ETSY', marketplace: 'GLOBAL' }, { channel: 'SHOPIFY', marketplace: 'DEFAULT' },
+  ]
+  it('named as the filter compares them (EBAY_IT ≡ IT, upper case), distinct and sorted; GLOBAL and DEFAULT included', () => {
+    expect(rowMarkets(rows)).toEqual(['DE', 'DEFAULT', 'GLOBAL', 'IT'])
+    expect(rowMarkets([])).toEqual([])
+  })
+  it('every market offered selects exactly the rows on it', () => {
+    for (const market of rowMarkets(rows)) {
+      const hit = rows.filter((r) => rowMatchesScope({ ...r, mode: 'FOLLOW' }, { markets: [market] }))
+      expect(hit.length, market).toBeGreaterThan(0)
+      expect(hit.every((r) => r.marketplace.toUpperCase().replace(/^EBAY_/, '') === market), market).toBe(true)
+    }
+    expect(rows.filter((r) => rowMatchesScope({ ...r, mode: 'FOLLOW' }, { markets: ['GLOBAL'] })).map((r) => r.channel)).toEqual(['SHOPIFY', 'ETSY'])
   })
 })

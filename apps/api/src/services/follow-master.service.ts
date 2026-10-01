@@ -30,6 +30,7 @@ import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { sellableAvailable } from './stock-pool/sync-ledgers.js'
+import { QUANTITY_PUSH_CHANNELS } from './sync-control-core.js'
 
 const FOLLOW_HOLD_MS = 30 * 1000
 
@@ -44,7 +45,6 @@ type QueueRowData = Prisma.OutboundSyncQueueCreateManyInput
  *  round-trips per tx — far inside the explicit 15s ceiling. */
 const BULK_TX_CHUNK = 25
 const BULK_TX_OPTS = { timeout: 15_000, maxWait: 5_000 }
-const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
 
 export type FollowMasterChannel = 'AMAZON' | 'EBAY'
 
@@ -303,7 +303,7 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
             marketplace: cl.marketplace, action: follow ? 'FOLLOW' : 'PIN', quantity: write.quantity,
           })
 
-          if (VALID_SYNC_TARGETS.has(cl.channel)) {
+          if (QUANTITY_PUSH_CHANNELS.has(cl.channel)) {
             toQueue.push({
               cl,
               data: {
@@ -540,7 +540,7 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
           acc.updated++
           acc.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity })
 
-          if (write.pushQuantity !== null && VALID_SYNC_TARGETS.has(cl.channel)) {
+          if (write.pushQuantity !== null && QUANTITY_PUSH_CHANNELS.has(cl.channel)) {
             toQueue.push({
               cl,
               data: {

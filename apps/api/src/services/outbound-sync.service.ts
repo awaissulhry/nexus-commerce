@@ -2477,6 +2477,10 @@ export class OutboundSyncService {
         dryRun: true };
     }
 
+    // What this row writes, decided once: the branch below follows the same three answers.
+    const isContent = syncType === "CONTENT_UPDATE";
+    const isPrice = !isContent && (syncType === "PRICE_UPDATE" || payload?.price != null);
+
     const destination = await this.destinationOf(queueItem);
     if (!destination.connectionId) {
       const error = noDestinationSentence("Etsy", destination.reason);
@@ -2496,6 +2500,31 @@ export class OutboundSyncService {
       return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_EXTERNAL_LISTING", retryable: false };
     }
 
+    // 2026-10-01 (Owner) — a STOCK row also needs Etsy order import: the switch on AND this account activated. Without
+    // either, Etsy's sales never reach Nexus stock, and the number sent would put back units Etsy has already sold.
+    // SKIPPED, naming what is missing, before any Etsy call; not retried (both are deliberate steps, not passing faults).
+    if (!isContent && !isPrice) {
+      const { etsyStockWriteRefusal } = await import("./etsy/order-ingest-switch.js");
+      let refusal: Awaited<ReturnType<typeof etsyStockWriteRefusal>>;
+      try {
+        refusal = await etsyStockWriteRefusal(destination.connectionId);
+      } catch (error) {
+        const message = `Nexus could not read whether Etsy order import is activated for this account, so nothing was sent. (${error instanceof Error ? error.message : String(error)})`;
+        return { success: false, queueId, channel: "ETSY", status: "FAILED", message, error: message, errorCode: "ETSY_ORDER_IMPORT_UNKNOWN", retryable: true };
+      }
+      if (refusal) return { success: true, queueId, channel: "ETSY", status: "SKIPPED", message: refusal.sentence, errorCode: refusal.code, retryable: false };
+    }
+
+    // SC.1 — the channel policy pause, re-checked at send time as the Amazon and eBay lanes do: a policy set after
+    // the row was queued still holds it. Etsy's market is GLOBAL, so a policy for '*' or GLOBAL applies.
+    try {
+      const scp = policyFor(await loadChannelPolicies(), 'ETSY', String(channelListing?.marketplace ?? 'GLOBAL'), destination.connectionId);
+      if (scp?.pushesPaused) {
+        // Not retried, as the listing pause above: a pause is the operator's state, not a passing fault.
+        return { success: false, queueId, channel: "ETSY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy", errorCode: "SYNC_PAUSED_POLICY", retryable: false };
+      }
+    } catch { /* fail-open: policy unreadable = not paused, as the other lanes */ }
+
     const t0 = Date.now();
     const failed = (message: string, errorCode?: string, retryable = true): SyncResult => {
       writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: destination.connectionId!, sku, productId: product?.id ?? null, mode: "live", outcome: "failed", payloadDigest: digestPayload(payload), errorMessage: message.slice(0, 300), durationMs: Date.now() - t0 });
@@ -2504,7 +2533,7 @@ export class OutboundSyncService {
 
     try {
       let message: string;
-      if (syncType === "CONTENT_UPDATE") {
+      if (isContent) {
         const { updateEtsyListingContent } = await import("./etsy/listing-write.service.js");
         await updateEtsyListingContent({
           accountId: destination.connectionId, listingId, pushLock: channelListing ? [channelListing] : undefined,
@@ -2520,7 +2549,6 @@ export class OutboundSyncService {
         const changes: Array<{ sku?: string | null; quantity?: number; price?: number }> = [];
         const offeringSku = channelListing?.sku ?? product?.etsySku ?? product?.sku ?? null;
         let priceCurrency: string | undefined;
-        const isPrice = syncType === "PRICE_UPDATE" || payload?.price != null;
         if (isPrice) {
           // 2026-09-30 — a price row with no usable price is refused by name. It used to reach the writer as "no
           // change" and come back SUCCESS: "Etsy already holds these values".
@@ -2559,6 +2587,8 @@ export class OutboundSyncService {
           : result.confirmed
             ? `Etsy listing ${listingId} updated and confirmed.`
             : `Etsy listing ${listingId} updated, but the read-back did not match. ${result.drift === null ? "Etsy could not be re-read." : `${result.drift.length} field(s) differ.`} An alert has been raised.`;
+        // 2026-10-01 — Etsy holds at most 999 of an item per offering; a higher stock number was sent as 999.
+        for (const clamp of result.clamped ?? []) message += ` Etsy holds at most ${clamp.sent} of an item, so ${clamp.requested} was sent as ${clamp.sent}.`;
         // Etsy has no sale price on a listing (its sales are shop promotions), so a Nexus sale is not in this write.
         if (isPrice && payload?.salePrice != null) message += " Etsy has no per-listing sale price, so the sale price stays in Nexus only.";
       }

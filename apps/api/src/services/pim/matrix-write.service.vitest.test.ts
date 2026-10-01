@@ -6,7 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MatrixCells, VerbChange } from '@nexus/shared/matrix-contract'
 
-vi.mock('../../db.js', () => ({ default: {} }))
+// The door's version bump runs in a transaction: a stand-in that lets every compare-and-set through (one row each).
+vi.mock('../../db.js', () => ({ default: { $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: async () => ({ count: 1 }) } }) } }))
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null }))
 vi.mock('../follow-master.service.js', () => ({ setFollowMasterQuantity: vi.fn(), setStockBuffer: vi.fn(), amazonManagedListingIds: vi.fn(async () => new Set<string>()) }))
 vi.mock('../stock-movement.service.js', () => ({ recascadeAfterSyncControlChange: vi.fn() }))
@@ -19,6 +20,7 @@ vi.mock('./matrix.service.js', () => ({ getMatrixRead: vi.fn() }))
 
 import { applyCell, paramsForChange, restoreWrites } from './matrix-write.service.js'
 import { writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
+import { setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
 
 const change = (over: Partial<VerbChange>): VerbChange => ({ rowId: 'r', sku: 'S', coordinateKey: 'AMAZON:EU', cell: 'syncQty', from: 1, to: 2, fromLabel: '', toLabel: '', ...over })
 
@@ -116,5 +118,28 @@ describe('an Etsy coordinate has no Sale cell', () => {
     // The fresh read the door re-reads serves no writable Sale cell there, so it is refused before any value check.
     expect(outcome).toMatchObject({ outcome: 'refused', reason: 'This cell cannot be changed here' })
     expect(door).not.toHaveBeenCalled()
+  })
+})
+
+// 2026-10-01 — Etsy stock joins the cascade. The door hands an Etsy inventory cell to the same primitives as every other
+// channel, which now queue the Etsy row (`follow-master.bulk.vitest.test.ts`, `etsy-stock-cascade.vitest.test.ts`).
+describe('an Etsy coordinate\'s Mode, Qty and Buffer cells go through the follow / pin / buffer primitives', () => {
+  const read = () => ({
+    rows: [{ id: 'row', cells: { 'ETSY:GLOBAL': { ...cells({ fulfilment: null }), listingId: 'listing', version: 3, writable: { syncMode: true, syncQty: true, syncBuffer: true } } } }],
+    coordinates: [{ key: 'ETSY:GLOBAL', kind: 'global', channel: 'ETSY', market: 'GLOBAL', label: 'Etsy', region: null }],
+  }) as never
+  const ctx = { productId: 'row', actor: 'tester', can: () => true }
+  const done = { updated: 1, skippedFba: 0, unchanged: 0, matched: 1, results: [] }
+
+  it.each([
+    ['syncMode', 'PINNED', () => expect(setFollowMasterQuantity).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], follow: false, actor: 'tester' })],
+    ['syncQty', 4, () => expect(setFollowMasterQuantity).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], follow: false, actor: 'tester' })],
+    ['syncBuffer', 2, () => expect(setStockBuffer).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], buffer: 2, actor: 'tester' })],
+  ] as const)('%s', async (cell, value, called) => {
+    vi.mocked(setFollowMasterQuantity).mockReset().mockResolvedValue(done)
+    vi.mocked(setStockBuffer).mockReset().mockResolvedValue({ ...done, results: [] })
+    const outcome = await applyCell(read(), { rowId: 'row', coordinateKey: 'ETSY:GLOBAL', cell, value, expectedVersion: 3 } as never, ctx)
+    expect(outcome).toMatchObject({ outcome: 'applied', version: 4 })
+    called()
   })
 })

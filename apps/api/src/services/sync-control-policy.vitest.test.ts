@@ -9,8 +9,16 @@ describe('SC.5 — validatePolicyInput', () => {
     expect(validatePolicyInput({ channel: 'AMAZON', marketplace: 'IT', pushesPaused: true })).toBeNull()
     expect(validatePolicyInput({ channel: 'ebay', marketplace: '*', newListingDefaultMode: 'PAUSED' })).toBeNull()
   })
+  it('2026-10-01 — an Etsy policy is accepted; Etsy has one market (GLOBAL), so its policy is for every market', () => {
+    expect(validatePolicyInput({ channel: 'ETSY', marketplace: '*', pushesPaused: true })).toBeNull()
+    expect(validatePolicyInput({ channel: 'etsy', marketplace: '*', newListingDefaultMode: 'PAUSED' })).toBeNull()
+    const policies = new Map([[policyKey('ETSY', '*'), { pushesPaused: true, newListingDefaultMode: 'FOLLOW' }]])
+    expect(policyFor(policies, 'ETSY', 'GLOBAL', 'etsy-acct')).toEqual({ pushesPaused: true, newListingDefaultMode: 'FOLLOW' })
+    // It pauses Etsy and nothing else.
+    expect(policyFor(policies, 'SHOPIFY', 'GLOBAL', null)).toBeNull()
+  })
   it('rejects unknown channel, bad market, empty change, bad types', () => {
-    expect(validatePolicyInput({ channel: 'ETSY', marketplace: 'IT', pushesPaused: true })).toMatch(/unknown channel/)
+    expect(validatePolicyInput({ channel: 'WISH', marketplace: 'IT', pushesPaused: true })).toMatch(/unknown channel/)
     expect(validatePolicyInput({ channel: 'AMAZON', marketplace: 'ITALY!', pushesPaused: true })).toMatch(/marketplace/)
     expect(validatePolicyInput({ channel: 'AMAZON', marketplace: 'IT' })).toMatch(/nothing to change/)
     expect(validatePolicyInput({ channel: 'AMAZON', marketplace: 'IT', pushesPaused: 'yes' })).toMatch(/boolean/)

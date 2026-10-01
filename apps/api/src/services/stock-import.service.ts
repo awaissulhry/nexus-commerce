@@ -33,7 +33,7 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { resolveListingFulfillmentMethod, resolveCascadePushMethod } from './stock-movement.service.js'
-import { resolveIntendedQuantity, resolveMembershipIntended, syncLedgerOf } from './sync-control-core.js'
+import { QUANTITY_PUSH_CHANNELS, resolveIntendedQuantity, resolveMembershipIntended, syncLedgerOf } from './sync-control-core.js'
 import { loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
@@ -631,9 +631,9 @@ export async function ensureDraftImportJob(opts: {
 
 // Mirrors stock-movement.service DEFAULT_HOLD_MS for cascade-sourced rows.
 const CASCADE_HOLD_MS = 30 * 1000
-// SyncChannel enum values OutboundSyncQueue.targetChannel accepts.
-const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
-// Channels the explicit CHANNEL/BOTH writer targets (parity with IM.2).
+// The cascade queues a quantity row for QUANTITY_PUSH_CHANNELS (sync-control-core.ts), the one set every producer
+// shares. Channels the explicit CHANNEL/BOTH writer targets (parity with IM.2) — Etsy is deliberately NOT one of
+// them yet (Owner, 2026-10-01): an import names Etsy only through the cascade.
 const EXPLICIT_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
 
 export interface ApplyProgress {
@@ -1173,7 +1173,7 @@ async function executeApplyImport(args: {
         const newListingQty = scRes.kind === 'FOLLOW' ? scRes.quantity : null
         if (newListingQty != null && newListingQty !== listing.quantity) {
           plan.cascadeWrites.push({ listingId: listing.id, masterQuantity: snapshotTotal, quantity: newListingQty })
-          if (VALID_SYNC_TARGETS.has(listing.channel)) {
+          if (QUANTITY_PUSH_CHANNELS.has(listing.channel)) {
             plan.queueRows.push({
               id: randomUUID(),
               kind: 'CASCADE',

@@ -11,9 +11,10 @@ import { raiseChannelAlert, writeDriftAlert } from '../cx/channel-alerts.service
 import { etsyReader } from './read-client.js'
 import { etsyWriter } from './write-client.js'
 import {
-  applyOfferingChanges, EtsyPriceRefusal, etsyPriceCurrencyRefusal, inventoryDrift, toInventoryWrite,
-  type EtsyInventoryWrite, type EtsyReadInventory, type InventoryDrift, type OfferingChange,
+  applyOfferingChanges, EtsyPriceRefusal, etsyPriceCurrencyRefusal, EtsyQuantityRefusal, inventoryDrift, toInventoryWrite,
+  type EtsyInventoryWrite, type EtsyQuantityClamp, type EtsyReadInventory, type InventoryDrift, type OfferingChange,
 } from './inventory.js'
+import { etsyStockWriteRefusal } from './order-ingest-switch.js'
 import type { GatewayRequest } from '../gateway/gateway.js'
 import { withEtsyListingLock, type EtsyListingLease } from './listing-lock.js'
 
@@ -46,6 +47,8 @@ export interface EtsyInventoryWriteResult {
   drift: InventoryDrift[] | null
   confirmed: boolean
   reason?: string
+  /** Quantities sent lower than asked: Etsy holds at most 999 of an item per offering. Empty when none was. */
+  clamped: EtsyQuantityClamp[]
 }
 
 const DEFAULT_READ_BACK_DELAY_MS = 2_000
@@ -53,6 +56,13 @@ const DEFAULT_READ_BACK_DELAY_MS = 2_000
 export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promise<EtsyInventoryWriteResult> {
   const listingId = String(input.listingId)
   if (!/^[1-9]\d*$/.test(listingId)) throw new Error('That is not an Etsy listing id; nothing was sent.')
+  // 2026-10-01 (Owner) — a stock number needs Etsy order import on AND activated for this account, or it puts back
+  // units Etsy already sold. Checked here as well as in the queue lane, before the lock and before any Etsy call, so
+  // no other caller can skip it.
+  if (input.changes.some((change) => change.quantity !== undefined)) {
+    const refusal = await etsyStockWriteRefusal(input.accountId)
+    if (refusal) throw new EtsyQuantityRefusal(refusal.sentence, refusal.code)
+  }
 
   // 2026-09-30 — one read → change → replace per listing at a time (`listing-lock.ts`): two overlapping writes to one
   // listing would each replace the inventory the other had just changed. Held through the read-back, so a sibling
@@ -69,7 +79,10 @@ async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: strin
     if (refusal) throw new EtsyPriceRefusal(refusal)
   }
   const current = toInventoryWrite(before)
-  const body = applyOfferingChanges(current, input.changes)
+  const report = { clamped: [] as EtsyQuantityClamp[] }
+  const body = applyOfferingChanges(current, input.changes, report)
+  if (report.clamped.length > 0) logger.warn('[etsy] a quantity above Etsy\'s maximum was sent as the maximum', { listingId, accountId: input.accountId, clamped: report.clamped })
+  const { clamped } = report
 
   /**
    * 🔴 Decision 1 — a change that changes nothing is NOT sent.
@@ -83,7 +96,7 @@ async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: strin
    * Etsy's own answer — not on the caller's intent, which cannot see what Etsy holds.
    */
   if (JSON.stringify(body) === JSON.stringify(current)) {
-    return { sent: false, body: null, drift: [], confirmed: true, reason: 'Etsy already holds these values; nothing was sent.' }
+    return { sent: false, body: null, drift: [], confirmed: true, reason: 'Etsy already holds these values; nothing was sent.', clamped }
   }
 
   const writer = await etsyWriter(input.accountId)
@@ -120,7 +133,7 @@ async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: strin
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     logger.warn('[etsy] the inventory change was sent but could not be confirmed', { listingId, accountId: input.accountId, reason })
-    return { sent: true, body, drift: null, confirmed: false, reason }
+    return { sent: true, body, drift: null, confirmed: false, reason, clamped }
   }
 
   if (drift.length > 0) {
@@ -128,5 +141,5 @@ async function writeHoldingLock(input: EtsyInventoryWriteInput, listingId: strin
     const alert = writeDriftAlert('Etsy', listingId, drift)
     if (alert) await raiseChannelAlert(alert)
   }
-  return { sent: true, body, drift, confirmed: drift.length === 0 }
+  return { sent: true, body, drift, confirmed: drift.length === 0, clamped }
 }
