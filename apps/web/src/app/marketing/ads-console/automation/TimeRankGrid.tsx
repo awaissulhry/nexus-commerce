@@ -23,7 +23,7 @@ export type Level = 'max' | 'strong' | 'normal' | 'light' | 'pause'
 export interface LevelDef { k: Level; label: string; mult: number | null; pause?: boolean; color: string; text: string }
 export const LEVELS: LevelDef[] = [
   { k: 'max', label: 'Max push', mult: 100, color: '#0a7d48', text: '#fff' },
-  { k: 'strong', label: 'Strong', mult: 50, color: '#3aa873', text: '#fff' },
+  { k: 'strong', label: 'Strong', mult: 50, color: '#3aa873', text: '#1e293b' }, // dark ink: white on this green is 2.99:1
   { k: 'normal', label: 'Normal', mult: 0, color: '#e2e8f0', text: '#334155' },
   { k: 'light', label: 'Light', mult: -40, color: '#e6b067', text: '#5b3d12' },
   { k: 'pause', label: 'Pause', mult: null, pause: true, color: '#d97757', text: '#fff' },

@@ -94,6 +94,8 @@ export function BreakdownPie({
             height={28}
             iconType="circle"
             wrapperStyle={{ fontSize: 11 }}
+            // Label in the text colour; the circle icon carries the slice colour (see TrendChart).
+            formatter={(value) => <span className="text-secondary">{String(value)}</span>}
           />
         </PieChart>
       </ResponsiveContainer>

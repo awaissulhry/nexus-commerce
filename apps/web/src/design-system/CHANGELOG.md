@@ -1,3 +1,11 @@
+## The accent identity chip reads in light mode again — 2026-10-01
+
+Older pages' dark-mode audit (`fix/dark-mode-older-pages`). **`.nds-cell-chip-accent`** (the "P" parent pill in the product sheet's identity band, `grid/theme/grid.css`) filled with `--nds-rail-text`. Since the rail joined the dark chrome (TB, 2026-08-31) that token is the chrome's LIGHT ink in light mode, so the white "P" sat on #aab6c2 at 2.06:1. It now fills with **`--nds-text-2`**: white on #3a4452 is 9.9:1 light, and the dark-mode inverse ink on #c3ccd6 is 9.8:1. Mirrored in Factory.
+
+In **`grid/workspace/workspace.css`** the group-row count (`.gc`) and the market tag (`.mk`) read **`--nds-wsgrid-text-secondary`** instead of `--nds-wsgrid-text-muted` (grey-500, 2.74:1 on the group row's grey-100): 5.22:1. No token value changes. Web only (no Factory copy).
+
+Also, outside the DS: Tailwind gains one semantic text colour, **`text-placeholder`** (`--nds-placeholder`, 5.9:1 light and dark), for placeholder-style hints that are not a real `<input>` placeholder (the legacy flat-file grid's empty-cell "e.g. …"); and the shared light pin in `app/_shared/shared-shell.css` now also covers the ads console (`.az-root`) and the fleet (`.fleet-surface`, `.fleet-portal`), so DS components inside those light-pinned surfaces stop drawing their dark values.
+
 ## Field placeholders get their own token, at 4.5:1 — 2026-10-01
 
 Dark-mode token clash (`fix/dark-mode-token-clash`), lead browser audit. DS placeholders used **`--nds-text-disabled`**: 2.04:1 on a white field, 2.78:1 on the dark one. New **`--nds-placeholder`**: `var(--nds-grey-600)` light (#5b6573, 5.91 on `--nds-surface`, worst 5.22 on sunken) and #97a3b1 dark (5.94, worst 5.51). Read by `.nds-field > input`, `.nds-textarea`, `.nds-combo-in`, `.nds-combo-search input` and `.nds-range-in input` placeholders. Pinned light on `body:has(.h10-shell)` and the fleet surface. `scripts/check-nds-contrast.mjs` measures it on every surface (group `placeholder`, AA bar). Mirrored in Factory: `tokens/css-vars.ts` (+ `npm run tokens:gen:factory`), `styles/primitives.css`, `styles/components.css`, `styles/patterns.css`.

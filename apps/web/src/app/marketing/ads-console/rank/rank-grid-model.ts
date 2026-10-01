@@ -142,12 +142,20 @@ export function targetColor(t?: { key: string; color?: string | null } | null): 
   return (t && FALLBACK_COLOR[t.key]) || '#cbd5e1'
 }
 
-// Readable text colour for a swatch background (relative-luminance threshold).
+// Readable text colour for a swatch background: whichever of white and the dark ink has the higher
+// WCAG contrast on it. The old perceived-brightness cut-off (> 0.62 → dark) put white on mid greens:
+// on the default #3aa873 "Defend Top" swatch that was 2.99:1, where the dark ink reads 4.90:1.
+const DARK_INK = '#1e293b'
+function relativeLuminance(r: number, g: number, b: number): number {
+  const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
 export function textOn(bg: string): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(bg.trim())
   if (!m) return '#fff'
   const n = parseInt(m[1], 16)
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-  return lum > 0.62 ? '#1e293b' : '#fff'
+  const L = relativeLuminance((n >> 16) & 255, (n >> 8) & 255, n & 255)
+  const onWhite = 1.05 / (L + 0.05)
+  const onDark = (L + 0.05) / (relativeLuminance(0x1e, 0x29, 0x3b) + 0.05)
+  return onDark > onWhite ? DARK_INK : '#fff'
 }

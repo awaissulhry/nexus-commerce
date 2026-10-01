@@ -432,7 +432,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => setShowFilter((v) => !v)}><Filter size={14} />Filter by{countFilters(filters) > 0 ? ` (${countFilters(filters)})` : ''} <ChevronDown size={14} /></span>
           {showFilter && <FilterPanel filters={filters} setFilters={setFilters} portfolios={portfolios} onClose={() => setShowFilter(false)} />}
         </span>
-        <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, opacity: sel.size ? 1 : .6 }}>Bulk actions{sel.size ? ` · ${sel.size}` : ''} <ChevronDown size={14} /></span>
+        <span className="az-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, ...(sel.size ? {} : { color: 'var(--ink2)' }) }}>Bulk actions{sel.size ? ` · ${sel.size}` : ''} <ChevronDown size={14} /></span>
         <span style={{ flex: 1 }} />
       </div>
 

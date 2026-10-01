@@ -166,9 +166,12 @@ export function TrendChart({
               height={24}
               iconType="plainline"
               wrapperStyle={{ fontSize: 11 }}
+              // The label in the text colour, not the series colour Recharts paints it with — the
+              // line icon beside it carries the series colour. Emerald/amber/teal-500 text measured
+              // 2.2–2.5:1 on white.
               formatter={(value) => {
                 const def = series.find((s) => s.key === String(value))
-                return def?.label ?? String(value)
+                return <span className="text-secondary">{def?.label ?? String(value)}</span>
               }}
             />
           )}

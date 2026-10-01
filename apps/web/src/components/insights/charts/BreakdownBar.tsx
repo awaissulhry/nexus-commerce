@@ -84,8 +84,11 @@ export function BreakdownBar({
                 style={{ width: `${widthPct}%` }}
               />
               {showShare && (
-                <span className="absolute inset-0 flex items-center px-2 text-[10px] font-semibold text-white mix-blend-difference">
-                  {sharePct.toFixed(1)}%
+                // The label sits on a card-coloured chip, not `text-white mix-blend-difference`:
+                // difference-blending turned it pink on the green fill and orange on the blue one
+                // (unreadable over every fill colour, light and dark).
+                <span className="absolute inset-0 flex items-center px-2 text-[10px] font-semibold">
+                  <span className="rounded-sm bg-card/85 px-1 text-primary">{sharePct.toFixed(1)}%</span>
                 </span>
               )}
             </div>
