@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { addColumns, effectiveLocks, inViewCount, moveVisible, orderedForDisplay, removeColumns, setHas, toggleColumn, toggleLock, togglableKeysOf, resolveAttributeGroups, moveAttributesToGroup, moveAttributeGroup, moveAttributeColumn, resetAttributeGroups } from './preferencesLogic'
+import { addColumns, effectiveLocks, inViewCount, moveVisible, orderedForDisplay, removeColumns, setHas, toggleColumn, toggleLock, togglableKeysOf, resolveAttributeGroups, moveAttributesToGroup, moveAttributeGroup, moveAttributeColumn, resetAttributeGroups, placeColumns } from './preferencesLogic'
 import type { PreferencesColumnSpec, PreferencesValue } from './PreferencesModal'
 
 const COLS: PreferencesColumnSpec[] = [
@@ -268,5 +268,50 @@ describe('lockSide — a right-side lock (an actions bookend) reads in SCREEN or
   })
   it('inViewCount counts the right bookend like any other locked column', () => {
     expect(inViewCount(COLS_R, V({ visibleColumns: ['brand'], lockedColumns: ['product', 'actions'] }), DEF)).toEqual({ shown: 3, total: 4 })
+  })
+})
+
+describe('a group\'s colour (2026-10-01 — the product sheet\'s groups wear the old flat file\'s colours)', () => {
+  const toned: PreferencesColumnSpec[] = [
+    { key: 'title', label: 'Title', group: 'Listing', groupKey: 'sheet:listing', groupTone: 'blue' },
+    { key: 'note', label: 'Note', group: 'Listing', groupKey: 'sheet:listing' },
+    { key: 'price', label: 'Price', group: 'Pricing', groupKey: 'sheet:pricing', groupTone: 'emerald' },
+    { key: 'misc', label: 'Misc', group: 'Other' },
+  ]
+  const value: PreferencesValue = { visibleColumns: ['title', 'note', 'price', 'misc'], stickyFirstColumn: true, stickyLastColumn: false, pageSize: 0, sortBy: '', sortDir: 'asc' }
+
+  it('is the colour its columns name; a group that names none has none', () => {
+    expect(resolveAttributeGroups(toned, value).map((g) => [g.key, g.tone])).toEqual([['sheet:listing', 'blue'], ['sheet:pricing', 'emerald'], ['Other', undefined]])
+  })
+
+  it('stays the group\'s colour when a column is moved into it from another group', () => {
+    const moved = moveAttributesToGroup(toned, value, ['price'], 'sheet:listing')
+    const listing = resolveAttributeGroups(toned, moved).find((g) => g.key === 'sheet:listing')!
+    expect(listing.tone).toBe('blue')
+    expect(listing.columns.map((c) => c.key)).toContain('price')
+  })
+})
+
+describe('placeColumns — a drag\'s drop (2026-10-01)', () => {
+  const cols: PreferencesColumnSpec[] = [
+    { key: 'a', label: 'A', groupKey: 'g1', group: 'G1' }, { key: 'b', label: 'B', groupKey: 'g1', group: 'G1' },
+    { key: 'c', label: 'C', groupKey: 'g2', group: 'G2' }, { key: 'd', label: 'D', groupKey: 'g2', group: 'G2' }, { key: 'e', label: 'E', groupKey: 'g2', group: 'G2' },
+  ]
+  const value: PreferencesValue = { visibleColumns: ['a', 'b', 'c', 'd', 'e'], columnOrder: ['a', 'b', 'c', 'd', 'e'], stickyFirstColumn: true, stickyLastColumn: false, pageSize: 0, sortBy: '', sortDir: 'asc' }
+  const order = (v: PreferencesValue) => resolveAttributeGroups(cols, v).map((g) => `${g.key}:${g.columns.map((c) => c.key).join('')}`).join(' ')
+
+  it('moves one column before or after another, into that column\'s group', () => {
+    expect(order(placeColumns(cols, value, ['a'], { before: 'd' }))).toBe('g1:b g2:cade')
+    expect(order(placeColumns(cols, value, ['e'], { after: 'a' }))).toBe('g1:aeb g2:cd')
+  })
+
+  it('moves a ticked set together, in its order, whichever side it lands on', () => {
+    expect(order(placeColumns(cols, value, ['a', 'b'], { before: 'e' }))).toBe('g1: g2:cdabe')
+    expect(order(placeColumns(cols, value, ['c', 'e'], { after: 'a' }))).toBe('g1:aceb g2:d')
+  })
+
+  it('drops onto a group at its end, and does nothing without a target', () => {
+    expect(order(placeColumns(cols, value, ['a'], { group: 'g2' }))).toBe('g1:b g2:cdea')
+    expect(placeColumns(cols, value, ['a'], null)).toBe(value)
   })
 })

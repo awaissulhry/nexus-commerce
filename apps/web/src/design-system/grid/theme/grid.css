@@ -1916,3 +1916,34 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-axes-newattr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); min-width: 0; }
 .nds-axes-newattr > p { margin: 0; flex: 1 1 200px; min-width: 0; }
 .nds-axes-newattr > button { flex: none; }
+
+/* 2026-10-01 — a column NAME that wears its group's colour (the product sheet's attribute groups wear the old flat
+   file's group colours, `tokens/groupTones.ts`; the sheet sets these classes through `headerClass`). The name takes the
+   group's tint and a slight step in; the first column of a group draws the group's edge. Header cells only — never a
+   grid ancestor, which would restyle the whole grid. A grid whose columns name no tone is untouched. */
+.nds-ag-nexus .ag-header-cell.nds-ag-head-tone {
+  background: var(--nds-ag-tone-bg);
+  color: var(--nds-ag-tone-fg);
+}
+.nds-ag-nexus .ag-header-cell.nds-ag-head-tone:hover {
+  background: color-mix(in srgb, var(--nds-ag-tone-bg) 82%, var(--nds-ag-tone-rule));
+}
+.nds-ag-nexus .ag-header-cell.nds-ag-head-tone .ag-header-cell-text {
+  color: inherit;
+}
+.nds-ag-nexus .ag-header-cell.nds-ag-head-tone .ag-header-cell-label {
+  padding-left: var(--nds-grid-group-indent);
+}
+.nds-ag-nexus .ag-header-cell.nds-ag-head-tone--start {
+  box-shadow: inset 2px 0 0 var(--nds-ag-tone-rule);
+}
+.nds-ag-head-tone--slate { --nds-ag-tone-bg: var(--nds-grid-tone-slate-bg); --nds-ag-tone-fg: var(--nds-grid-tone-slate-fg); --nds-ag-tone-rule: var(--nds-grid-tone-slate-rule); }
+.nds-ag-head-tone--purple { --nds-ag-tone-bg: var(--nds-grid-tone-purple-bg); --nds-ag-tone-fg: var(--nds-grid-tone-purple-fg); --nds-ag-tone-rule: var(--nds-grid-tone-purple-rule); }
+.nds-ag-head-tone--emerald { --nds-ag-tone-bg: var(--nds-grid-tone-emerald-bg); --nds-ag-tone-fg: var(--nds-grid-tone-emerald-fg); --nds-ag-tone-rule: var(--nds-grid-tone-emerald-rule); }
+.nds-ag-head-tone--pink { --nds-ag-tone-bg: var(--nds-grid-tone-pink-bg); --nds-ag-tone-fg: var(--nds-grid-tone-pink-fg); --nds-ag-tone-rule: var(--nds-grid-tone-pink-rule); }
+.nds-ag-head-tone--orange { --nds-ag-tone-bg: var(--nds-grid-tone-orange-bg); --nds-ag-tone-fg: var(--nds-grid-tone-orange-fg); --nds-ag-tone-rule: var(--nds-grid-tone-orange-rule); }
+.nds-ag-head-tone--blue { --nds-ag-tone-bg: var(--nds-grid-tone-blue-bg); --nds-ag-tone-fg: var(--nds-grid-tone-blue-fg); --nds-ag-tone-rule: var(--nds-grid-tone-blue-rule); }
+.nds-ag-head-tone--yellow { --nds-ag-tone-bg: var(--nds-grid-tone-yellow-bg); --nds-ag-tone-fg: var(--nds-grid-tone-yellow-fg); --nds-ag-tone-rule: var(--nds-grid-tone-yellow-rule); }
+.nds-ag-head-tone--red { --nds-ag-tone-bg: var(--nds-grid-tone-red-bg); --nds-ag-tone-fg: var(--nds-grid-tone-red-fg); --nds-ag-tone-rule: var(--nds-grid-tone-red-rule); }
+.nds-ag-head-tone--violet { --nds-ag-tone-bg: var(--nds-grid-tone-violet-bg); --nds-ag-tone-fg: var(--nds-grid-tone-violet-fg); --nds-ag-tone-rule: var(--nds-grid-tone-violet-rule); }
+.nds-ag-head-tone--cyan { --nds-ag-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-ag-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-ag-tone-rule: var(--nds-grid-tone-cyan-rule); }

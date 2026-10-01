@@ -1,6 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  defaultDropAnimationSideEffects, DndContext, DragOverlay, KeyboardSensor, MeasuringStrategy, MouseSensor, TouchSensor, useSensor, useSensors,
+  type DragEndEvent, type DragOverEvent, type DragStartEvent,
+} from '@dnd-kit/core'
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { canLandOn, DragCard, dragId, followPointer, parseDragId, pointerFirst, SLIDE, Sortable, type DragKind } from './preferencesDnd'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Lock, Plus, Search, Unlock, X } from 'lucide-react'
 // The component FILE, not the `../components` barrel: that barrel exports
 // `DataGrid`, which now imports this module, and a barrel import here would
@@ -16,6 +23,7 @@ import {
   moveAttributeColumn,
   moveAttributeGroup,
   moveAttributesToGroup,
+  placeColumns,
   normalizeGroupedPreferences,
   orderedForDisplay as orderForDisplay,
   removeColumns as removeColumnsFrom,
@@ -83,6 +91,12 @@ export interface PreferencesColumnSpec {
   group?: string
   /** Stable schema-owned group identity; labels are for display only. */
   groupKey?: string
+  /**
+   * The group's colour, a `--nds-grid-tone-<tone>-*` name (2026-10-01: the product sheet's groups wear the old flat
+   * file's colours). The group heading takes its tint, so the dialog and the grid header match colour for colour.
+   * Absent ⇒ the heading is drawn as before.
+   */
+  groupTone?: string
   /**
    * Listed and tickable, but left out of every count the dialog prints ("240 columns", "In view · n of N") —
    * a column that is not one of the things the host counts (2026-09-27: the sheet's progress columns, so the dialog
@@ -331,10 +345,10 @@ export function usePreferencesPanes({
     if (attributeGroups) {
       const structural = allColumns.filter((c) => c.locked)
       return [
-        ...(structural.length ? [{ key: '__grid_fixed', heading: 'Fixed columns', columns: structural }] : []),
+        ...(structural.length ? [{ key: '__grid_fixed', heading: 'Fixed columns', columns: structural, tone: undefined as string | undefined }] : []),
         // A group whose every column was moved into another lists nothing to tick: it is left out here (2026-09-27).
         // The In-view pane keeps it as a drop target, marked Empty.
-        ...attributeSections.filter((g) => g.columns.length > 0).map((g) => ({ key: g.key, heading: g.label, columns: g.columns })),
+        ...attributeSections.filter((g) => g.columns.length > 0).map((g) => ({ key: g.key, heading: g.label, columns: g.columns, tone: g.tone })),
       ]
     }
     const byHeading = new Map<string, PreferencesColumnSpec[]>()
@@ -344,7 +358,7 @@ export function usePreferencesPanes({
       if (bucket) bucket.push(c)
       else byHeading.set(heading, [c])
     }
-    return [...byHeading.entries()].map(([heading, columns]) => ({ key: heading, heading, columns }))
+    return [...byHeading.entries()].map(([heading, columns]) => ({ key: heading, heading, columns, tone: undefined as string | undefined }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allColumns, listLabel, attributeGroups, attributeSections])
 
@@ -365,7 +379,6 @@ export function usePreferencesPanes({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set<string>())
   const [viewCollapsed, setViewCollapsed] = useState<ReadonlySet<string>>(() => new Set<string>())
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set<string>())
-  const [groupDrag, setGroupDrag] = useState<string | null>(null)
 
   const needle = query.trim().toLowerCase()
   const filteredSections = useMemo(() => {
@@ -374,6 +387,7 @@ export function usePreferencesPanes({
       .map((section) => ({
         key: section.key,
         heading: section.heading,
+        tone: section.tone,
         columns: section.columns.filter(
           (c) => c.label.toLowerCase().includes(needle) || c.key.toLowerCase().includes(needle) || (attributeGroups && section.heading.toLowerCase().includes(needle)),
         ),
@@ -414,19 +428,52 @@ export function usePreferencesPanes({
   // box would be a heading over the only thing there is.
   const showHeadings = pickSections.length > 1
 
-  // ── Drag-reorder ──
+  // ── Drag-reorder (dnd-kit since 2026-10-01; `preferencesDnd.tsx`) ──
   // Two orders live in one flat list: the frozen block (lock order) and the visible rest. A drop is
   // honoured only WITHIN a block — `preferencesLogic.moveVisible` refuses a cross-boundary drop by
-  // returning the same value, and the list stays exactly as it was. No group constraint otherwise.
-  const [dragKey, setDragKey] = useState<string | null>(null)
+  // returning the same value, and the list stays exactly as it was. In the grouped list a column lands
+  // among columns or on a group (`placeColumns`); a group among groups.
   const sideOf = (key: string): 'left' | 'right' => (allColumns.find((c) => c.key === key)?.lockSide === 'right' ? 'right' : 'left')
-  const onDrop = (targetKey: string) => (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (dragKey) setDraft((d) => attributeGroups && !operatorLocks.includes(dragKey)
-      ? moveAttributeColumn(allColumns, d, dragKey, targetKey)
-      : moveVisible(d, dragKey, targetKey, defaultLocked, sideOf))
-    setDragKey(null)
+  /** The drag in flight: what was lifted, and every column that moves with it (a ticked set). */
+  const [drag, setDrag] = useState<{ kind: DragKind; key: string; keys: string[] } | null>(null)
+  /** What just landed glows once, so the eye finds it. */
+  const [justMoved, setJustMoved] = useState<ReadonlySet<string>>(() => new Set<string>())
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+    if (expandTimer.current) clearTimeout(expandTimer.current)
+  }, [])
+  // Escape during a drag cancels the DRAG, never the dialog: the dialog ignores an Escape already handled (measured on
+  // :3650: Escape mid-drag closed Customise and dropped the draft).
+  useEffect(() => {
+    if (!drag || typeof window === 'undefined') return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') event.preventDefault() }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [drag])
+  const [still, setStill] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setStill(query.matches)
+    update()
+    query.addEventListener?.('change', update)
+    return () => query.removeEventListener?.('change', update)
+  }, [])
+  // A mouse lifts after a 4 px move (a click stays a click); a finger after a short press, so a swipe still scrolls.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  /** The card floats above the dialog (`--nds-z-overlay`) and its menus (`--nds-z-popover`); dnd-kit's own 999 sat under it. */
+  const overlayZ = useMemo(() => (typeof document === 'undefined' ? 1451
+    : (Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nds-z-popover'), 10) || 1450) + 1), [])
+  const flash = (ids: string[]) => {
+    setJustMoved(new Set(ids))
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+    flashTimer.current = setTimeout(() => setJustMoved(new Set<string>()), 900)
   }
 
   // An `alwaysShown` column is never hidden, by any route (see `PreferencesColumnSpec.alwaysShown`).
@@ -467,10 +514,10 @@ export function usePreferencesPanes({
     if (target) setDraft((d) => moveAttributesToGroup(allColumns, d, selectedKeys, target))
   }
   const resetInteraction = () => {
-    setQuery(''); setCollapsed(new Set()); setViewCollapsed(new Set()); setSelected(new Set()); setDragKey(null); setGroupDrag(null)
+    setQuery(''); setCollapsed(new Set()); setViewCollapsed(new Set()); setSelected(new Set()); setDrag(null)
   }
   /** Only what must never outlive a close: the bulk selection and a drag in flight. */
-  const resetSelection = () => { setSelected(new Set()); setDragKey(null); setGroupDrag(null) }
+  const resetSelection = () => { setSelected(new Set()); setDrag(null) }
 
   /**
    * The grid's defaults, as a value — the modal drafts it, the popover applies it.
@@ -700,7 +747,7 @@ export function usePreferencesPanes({
                   const groupKeys = section.columns.filter((c) => !isLocked(c) && !c.alwaysShown).map((c) => c.key)
                   const groupAllIn = groupKeys.length > 0 && groupKeys.every((k) => draft.visibleColumns.includes(k))
                   return (
-                  <div key={section.key} className="nds-prefs-group" {...groupProps(section.heading)}>
+                  <div key={section.key} className="nds-prefs-group" data-tone={section.tone} {...groupProps(section.heading)}>
                     {showHeadings && groupToggles && groupKeys.length > 0 ? (
                       <div className="nds-prefs-grouprow">
                         {headingButton}
@@ -760,7 +807,7 @@ export function usePreferencesPanes({
       disabled={!eligible.length} ref={(node) => { if (node) node.indeterminate = count > 0 && count < eligible.length }}
       onChange={() => selectKeys(eligible)} />
   }
-  const renderViewRow = (c: PreferencesColumnSpec, peers: readonly PreferencesColumnSpec[] = shownColumns) => {
+  const renderViewRow = (c: PreferencesColumnSpec, peers: readonly PreferencesColumnSpec[], kind: DragKind) => {
     const locked = isLocked(c)
     const draggable = !c.locked
     const index = peers.findIndex((p) => p.key === c.key)
@@ -771,41 +818,159 @@ export function usePreferencesPanes({
         ? moveVisible(d, c.key, target.key, defaultLocked, sideOf)
         : moveAttributeColumn(allColumns, d, c.key, target.key, direction === 1))
     }
+    const companion = !!drag && drag.key !== c.key && drag.keys.includes(c.key)
     return (
-      <div key={c.key} className={['nds-prefs-row', draggable ? 'draggable' : '', dragKey === c.key ? 'dragging' : '', locked ? 'locked' : '', selected.has(c.key) ? 'selected' : ''].filter(Boolean).join(' ')}
-        draggable={draggable}
-        onDragStart={draggable ? (e) => { e.stopPropagation(); setDragKey(c.key); setGroupDrag(null); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.key) } : undefined}
-        onDragEnd={() => setDragKey(null)}
-        onDragOver={draggable && dragKey ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
-        onDrop={draggable ? onDrop(c.key) : undefined}>
-        <GripVertical size={14} className="nds-prefs-grip" aria-hidden />
-        {attributeGroups && !c.locked && selectionBox([c.key], `Select ${nameOf(c)} for bulk actions`)}
-        <span className="nds-prefs-lbl" title={nameOf(c)}>{nameOf(c)}</span>
-        {attributeGroups && draggable && <span className="nds-prefs-orderbtns">
-          <Button size="xs" variant="ghost" onClick={() => moveOne(-1)} disabled={index === 0 || !!peers[index - 1]?.locked} aria-label={`Move ${nameOf(c)} up`}><ArrowUp size={12} /></Button>
-          <Button size="xs" variant="ghost" onClick={() => moveOne(1)} disabled={index === peers.length - 1 || !!peers[index + 1]?.locked} aria-label={`Move ${nameOf(c)} down`}><ArrowDown size={12} /></Button>
-        </span>}
-        {c.locked ? <span className="nds-prefs-locked">{attributeGroups ? 'Fixed' : 'Locked'}</span> : locksPersist ? (
-          <button type="button" className={`nds-prefs-lockbtn${locked ? ' on' : ''}`} onClick={() => toggleLock(c.key)} aria-pressed={locked}
-            aria-label={locked ? `Unlock ${nameOf(c)} — back into the scrolling columns` : `Lock ${nameOf(c)} — frozen while you scroll`}
-            title={locked ? 'Unlock — back into the scrolling columns' : 'Lock — frozen while you scroll'}>
-            {locked ? <Lock size={13} aria-hidden /> : <Unlock size={13} aria-hidden />}
-          </button>
-        ) : locked && <span className="nds-prefs-locked">Locked</span>}
-        <span className="nds-prefs-xslot">{!locked && !c.alwaysShown && <button type="button" className="nds-prefs-x" onClick={() => toggleColumn(c.key)} aria-label={`Remove ${nameOf(c)} from the view`}><X size={13} aria-hidden /></button>}</span>
-      </div>
+      <Sortable key={c.key} id={dragId(kind, c.key)} disabled={!draggable} still={still} toneOf={kind === 'col' ? toneOfTarget : undefined}
+        grip={{ label: `Drag ${nameOf(c)} — Space to lift, arrow keys to move, Space to drop` }}
+        className={['nds-prefs-row', draggable ? 'draggable' : '', locked ? 'locked' : '', selected.has(c.key) ? 'selected' : '',
+          companion ? 'is-drag-companion' : '', justMoved.has(c.key) ? 'just-moved' : ''].filter(Boolean).join(' ')}>
+        <>
+          {attributeGroups && !c.locked && selectionBox([c.key], `Select ${nameOf(c)} for bulk actions`)}
+          <span className="nds-prefs-lbl" title={nameOf(c)}>{nameOf(c)}</span>
+          {attributeGroups && draggable && <span className="nds-prefs-orderbtns">
+            <Button size="xs" variant="ghost" onClick={() => moveOne(-1)} disabled={index === 0 || !!peers[index - 1]?.locked} aria-label={`Move ${nameOf(c)} up`}><ArrowUp size={12} /></Button>
+            <Button size="xs" variant="ghost" onClick={() => moveOne(1)} disabled={index === peers.length - 1 || !!peers[index + 1]?.locked} aria-label={`Move ${nameOf(c)} down`}><ArrowDown size={12} /></Button>
+          </span>}
+          {c.locked ? <span className="nds-prefs-locked">{attributeGroups ? 'Fixed' : 'Locked'}</span> : locksPersist ? (
+            <button type="button" className={`nds-prefs-lockbtn${locked ? ' on' : ''}`} onClick={() => toggleLock(c.key)} aria-pressed={locked}
+              aria-label={locked ? `Unlock ${nameOf(c)} — back into the scrolling columns` : `Lock ${nameOf(c)} — frozen while you scroll`}
+              title={locked ? 'Unlock — back into the scrolling columns' : 'Lock — frozen while you scroll'}>
+              {locked ? <Lock size={13} aria-hidden /> : <Unlock size={13} aria-hidden />}
+            </button>
+          ) : locked && <span className="nds-prefs-locked">Locked</span>}
+          <span className="nds-prefs-xslot">{!locked && !c.alwaysShown && <button type="button" className="nds-prefs-x" onClick={() => toggleColumn(c.key)} aria-label={`Remove ${nameOf(c)} from the view`}><X size={13} aria-hidden /></button>}</span>
+        </>
+      </Sortable>
     )
   }
   const pinnedColumns = shownColumns.filter((c) => isLocked(c))
+  const pinnedOn = (side: 'left' | 'right') => pinnedColumns.filter((c) => (c.lockSide === 'right' ? 'right' : 'left') === side && matchesColumn(c))
   const renderPinned = (side: 'left' | 'right') => {
-    const columns = pinnedColumns.filter((c) => (c.lockSide === 'right' ? 'right' : 'left') === side && matchesColumn(c))
+    const columns = pinnedOn(side)
+    const kind: DragKind = side === 'left' ? 'pin-left' : 'pin-right'
     return columns.length > 0 && <div className="nds-prefs-group" role="group" aria-label={side === 'left' ? 'Pinned columns' : 'Pinned right columns'}>
       <div className="nds-prefs-pinnedhd"><Lock size={12} /> {side === 'left' ? 'Pinned' : 'Pinned right'} · {columns.length}</div>
-      {columns.map((c) => renderViewRow(c, columns))}
+      <SortableContext items={columns.map((c) => dragId(kind, c.key))} strategy={verticalListSortingStrategy}>
+        {columns.map((c) => renderViewRow(c, columns, kind))}
+      </SortableContext>
     </div>
   }
   const matchingShown = shownColumns.filter((c) => matchesColumn(c, attributeSections.find((g) => g.columns.some((x) => x.key === c.key))?.label))
   const concealedSelected = selectedKeys.filter((key) => !matchingShown.some((c) => c.key === key)).length
+
+  /* The grouped list, worked out once for the rows AND the drag: what each group shows, and in which order. A group
+     being dragged folds every group to its heading, so it is placed among headings, not among 228 rows. */
+  const groupDragging = drag?.kind === 'group'
+  const viewSections = attributeSections.flatMap((group, groupIndex) => {
+    const matching = group.columns.filter((c) => matchesColumn(c, group.label))
+    if (needle && !matching.length) return []
+    const visible = matching.filter((c) => !isLocked(c) && draft.visibleColumns.includes(c.key))
+    const pinned = group.columns.filter((c) => isLocked(c)).length
+    const shown = group.columns.filter((c) => isLocked(c) || draft.visibleColumns.includes(c.key)).length
+    const isCollapsed = groupDragging || (!needle && viewCollapsed.has(group.key))
+    return [{ group, groupIndex, matching, visible, pinned, shown, isCollapsed }]
+  })
+  const groupedIds = viewSections.flatMap((s) => [dragId('group', s.group.key), ...(s.isCollapsed ? [] : s.visible.map((c) => dragId('col', c.key)))])
+  const toneOfColumn = (key: string) => attributeSections.find((g) => g.columns.some((c) => c.key === key))?.tone
+  /** A lifted column takes the colour of the group it is over: the card's edge and the slot say where it will land. */
+  const toneOfTarget = (overId: string | null) => {
+    const over = parseDragId(overId)
+    if (!over) return undefined
+    return over.kind === 'group' ? attributeSections.find((g) => g.key === over.key)?.tone : toneOfColumn(over.key)
+  }
+  const labelOfDrag = (id: string | number | null | undefined) => {
+    const p = parseDragId(id)
+    if (!p) return ''
+    if (p.kind === 'group') return attributeSections.find((g) => g.key === p.key)?.label ?? p.key
+    const column = allColumns.find((c) => c.key === p.key)
+    return column ? nameOf(column) : p.key
+  }
+
+  /** Only a place the lifted thing may go is a target: a column among columns or on a group; the rest among their own.
+      The target is what is under the pointer (`pointerFirst`). */
+  const companions = new Set((drag?.keys ?? []).filter((key) => key !== drag?.key).map((key) => dragId('col', key)))
+  const collisionDetection = pointerFirst((id) => {
+    const lifted = drag ? { kind: drag.kind } : null
+    const over = parseDragId(id)
+    return !!lifted && !!over && canLandOn(lifted.kind, over.kind) && !companions.has(id)
+  })
+  const onDragStart = ({ active }: DragStartEvent) => {
+    const lifted = parseDragId(active.id)
+    if (!lifted) return
+    // A ticked row carries the whole ticked set with it, in the order the list shows them.
+    const keys = lifted.kind === 'col' && selected.has(lifted.key) && selectedKeys.length > 1
+      ? attributeSections.flatMap((g) => g.columns).filter((c) => selected.has(c.key) && !isLocked(c) && draft.visibleColumns.includes(c.key)).map((c) => c.key)
+      : [lifted.key]
+    setDrag({ kind: lifted.kind, key: lifted.key, keys })
+  }
+  const onDragOver = ({ over }: DragOverEvent) => {
+    const id = over ? String(over.id) : null
+    if (expandTimer.current) { clearTimeout(expandTimer.current); expandTimer.current = null }
+    const target = parseDragId(id)
+    // Held over a folded group, a column opens it — so it can land anywhere inside.
+    if (drag?.kind === 'col' && target?.kind === 'group' && viewCollapsed.has(target.key)) {
+      expandTimer.current = setTimeout(() => setViewCollapsed((prev) => { const next = new Set(prev); next.delete(target.key); return next }), 450)
+    }
+  }
+  const endDrag = () => {
+    if (expandTimer.current) { clearTimeout(expandTimer.current); expandTimer.current = null }
+    setDrag(null)
+  }
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    const current = drag
+    endDrag()
+    const lifted = parseDragId(active.id), target = parseDragId(over?.id)
+    if (!current || !lifted || !target || !over || active.id === over.id) return
+    if (lifted.kind === 'group') {
+      const ids = viewSections.map((s) => dragId('group', s.group.key))
+      const from = ids.indexOf(String(active.id)), to = ids.indexOf(String(over.id))
+      if (from < 0 || to < 0) return
+      setDraft((d) => moveAttributeGroup(allColumns, d, lifted.key, target.key, to > from))
+      flash([dragId('group', lifted.key)])
+      return
+    }
+    if (lifted.kind === 'col') {
+      // Where it lands is decided by its new neighbours: before the next column, after the previous one, or into the
+      // group whose heading it now follows (an empty or folded group).
+      const order = arrayMove(groupedIds, groupedIds.indexOf(String(active.id)), groupedIds.indexOf(String(over.id)))
+      const at = order.indexOf(String(active.id))
+      const moving = new Set(current.keys.map((key) => dragId('col', key)))
+      const next = parseDragId(order.slice(at + 1).find((id) => !moving.has(id)))
+      const previous = parseDragId(order.slice(0, at).reverse().find((id) => !moving.has(id)))
+      const place = next?.kind === 'col' ? { before: next.key } : previous?.kind === 'col' ? { after: previous.key } : previous?.kind === 'group' ? { group: previous.key } : null
+      setDraft((d) => placeColumns(allColumns, d, current.keys, place))
+      flash(current.keys)
+      return
+    }
+    // The frozen blocks and a grid without groups keep the within-block rule.
+    setDraft((d) => moveVisible(d, lifted.key, target.key, defaultLocked, sideOf))
+    flash([lifted.key])
+  }
+  const announcements = {
+    onDragStart: ({ active }: DragStartEvent) => `Picked up ${labelOfDrag(active.id)}. Arrow keys move it, Space drops it, Escape cancels.`,
+    onDragOver: ({ active, over }: DragOverEvent) => over ? `${labelOfDrag(active.id)} is over ${labelOfDrag(over.id)}.` : `${labelOfDrag(active.id)} is not over a place it can go.`,
+    onDragEnd: ({ active, over }: DragEndEvent) => over ? `${labelOfDrag(active.id)} dropped at ${labelOfDrag(over.id)}.` : `${labelOfDrag(active.id)} put back.`,
+    onDragCancel: ({ active }: DragEndEvent) => `Moving ${labelOfDrag(active.id)} cancelled. It is back where it was.`,
+  }
+  const draggedGroup = drag?.kind === 'group' ? attributeSections.find((g) => g.key === drag.key) : undefined
+  const dragOverlay = drag && (draggedGroup
+    ? <DragCard group label={draggedGroup.label} tone={draggedGroup.tone} count={draggedGroup.columns.length} />
+    : <DragCard label={labelOfDrag(dragId(drag.kind, drag.key))} tone={toneOfColumn(drag.key)} toneOf={drag.kind === 'col' ? toneOfTarget : undefined} count={drag.keys.length} />)
+  /** One drag context for the whole In-view list; the lifted card floats above the dialog (portalled, so a transformed
+      ancestor cannot misplace it). */
+  const withDrag = (list: ReactNode) => (
+    <DndContext sensors={sensors} collisionDetection={collisionDetection} modifiers={[followPointer]} onDragStart={onDragStart} onDragOver={onDragOver}
+      onDragEnd={onDragEnd} onDragCancel={endDrag} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+      autoScroll={{ threshold: { x: 0, y: 0.18 }, acceleration: 14 }}
+      accessibility={{ announcements, screenReaderInstructions: { draggable: 'To move a column or a group, focus its grip and press Space. Arrow keys move it, Space drops it, Escape cancels.' } }}>
+      {list}
+      {typeof document !== 'undefined' && createPortal(
+        <DragOverlay className="nds-prefs-dragoverlay" zIndex={overlayZ} dropAnimation={still ? null : { duration: 200, easing: SLIDE.easing, sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0' } } }) }}>
+          {dragOverlay}
+        </DragOverlay>, document.body)}
+    </DndContext>
+  )
+
   const groupedInView = <>
     <div className="nds-prefs-group-tools">
       {selectionBox(matchingShown.map((c) => c.key), needle ? 'Select matching columns in view' : 'Select all columns in view')}
@@ -827,46 +992,43 @@ export function usePreferencesPanes({
       </>}
       <Button size="xs" variant="ghost" onClick={() => setDraft((d) => resetAttributeGroups(d, selectedKeys))} disabled={!selectedKeys.some((key) => draft.groupOverrides?.[key])}>Reset group</Button>
     </div>}
-    <div className="nds-prefs-cols nds-prefs-viewgroups">
+    {withDrag(<div className={['nds-prefs-cols', 'nds-prefs-viewgroups', drag ? 'is-sorting' : ''].filter(Boolean).join(' ')}>
       {renderPinned('left')}
-      {attributeSections.map((group, groupIndex) => {
-        const matching = group.columns.filter((c) => matchesColumn(c, group.label))
-        if (needle && !matching.length) return null
-        const visible = matching.filter((c) => !isLocked(c) && draft.visibleColumns.includes(c.key))
-        const pinned = group.columns.filter((c) => isLocked(c)).length
-        const shown = group.columns.filter((c) => isLocked(c) || draft.visibleColumns.includes(c.key)).length
-        const isCollapsed = !needle && viewCollapsed.has(group.key)
-        const reorder = (direction: -1 | 1) => {
-          const target = attributeSections[groupIndex + direction]
-          if (target) setDraft((d) => moveAttributeGroup(allColumns, d, group.key, target.key, direction === 1))
-        }
-        return <div key={group.key} className="nds-prefs-group" role="group" aria-label={`${group.label} in view`}
-          onDragOver={(e) => { if (groupDrag || dragKey) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
-          onDrop={(e) => { e.preventDefault(); if (groupDrag) setDraft((d) => moveAttributeGroup(allColumns, d, groupDrag, group.key)); else if (dragKey) setDraft((d) => moveAttributesToGroup(allColumns, d, selected.has(dragKey) ? selectedKeys : [dragKey], group.key)); setGroupDrag(null); setDragKey(null) }}>
-          <div className="nds-prefs-viewgrouphd" draggable onDragStart={(e) => { setGroupDrag(group.key); setDragKey(null); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', group.key) }} onDragEnd={() => setGroupDrag(null)}>
-            <GripVertical size={13} aria-hidden />
-            {selectionBox(visible.map((c) => c.key), `Select ${needle ? 'matching ' : ''}${group.label} columns in view`)}
-            <button type="button" className="nds-prefs-group-label" aria-expanded={!isCollapsed} onClick={() => setViewCollapsed((prev) => { const next = new Set(prev); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next })}>
-              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}<span>{group.label}</span>
-            </button>
-            <span className="nds-prefs-groupcount" title={`${shown} shown of ${group.columns.length} columns${pinned ? `, including ${pinned} pinned` : ''}`}>{shown}/{group.columns.length}{pinned > 0 ? ` · ${pinned} pinned` : ''}</span>
-            <span className="nds-prefs-orderbtns">
-              <Button size="xs" variant="ghost" onClick={() => reorder(-1)} disabled={groupIndex === 0} aria-label={`Move ${group.label} group up`}><ArrowUp size={12} /></Button>
-              <Button size="xs" variant="ghost" onClick={() => reorder(1)} disabled={groupIndex === attributeSections.length - 1} aria-label={`Move ${group.label} group down`}><ArrowDown size={12} /></Button>
-            </span>
+      <SortableContext items={groupedIds} strategy={verticalListSortingStrategy}>
+        {viewSections.map(({ group, groupIndex, matching, visible, pinned, shown, isCollapsed }) => {
+          const reorder = (direction: -1 | 1) => {
+            const target = attributeSections[groupIndex + direction]
+            if (target) setDraft((d) => moveAttributeGroup(allColumns, d, group.key, target.key, direction === 1))
+          }
+          const headingId = dragId('group', group.key)
+          return <div key={group.key} className="nds-prefs-group" data-tone={group.tone} role="group" aria-label={`${group.label} in view`}>
+            <Sortable id={headingId} still={still} heading grip={{ size: 13, label: `Drag the ${group.label} group — Space to lift, arrow keys to move, Space to drop` }}
+              className={['nds-prefs-viewgrouphd', justMoved.has(headingId) ? 'just-moved' : ''].filter(Boolean).join(' ')}>
+              <>
+                {selectionBox(visible.map((c) => c.key), `Select ${needle ? 'matching ' : ''}${group.label} columns in view`)}
+                <button type="button" className="nds-prefs-group-label" aria-expanded={!isCollapsed} onClick={() => setViewCollapsed((prev) => { const next = new Set(prev); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next })}>
+                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}<span>{group.label}</span>
+                </button>
+                <span className="nds-prefs-groupcount" title={`${shown} shown of ${group.columns.length} columns${pinned ? `, including ${pinned} pinned` : ''}`}>{shown}/{group.columns.length}{pinned > 0 ? ` · ${pinned} pinned` : ''}</span>
+                <span className="nds-prefs-orderbtns">
+                  <Button size="xs" variant="ghost" onClick={() => reorder(-1)} disabled={groupIndex === 0} aria-label={`Move ${group.label} group up`}><ArrowUp size={12} /></Button>
+                  <Button size="xs" variant="ghost" onClick={() => reorder(1)} disabled={groupIndex === attributeSections.length - 1} aria-label={`Move ${group.label} group down`}><ArrowDown size={12} /></Button>
+                </span>
+              </>
+            </Sortable>
+            {!isCollapsed && <>
+              {visible.map((c) => renderViewRow(c, visible, 'col'))}
+              {visible.length === 0 && (group.columns.length === 0
+                // Every column of this group was moved into another one: say so, and leave it as a drop target.
+                ? <p className="nds-prefs-groupempty">Empty · drag a column here to put it back</p>
+                : <p className="nds-prefs-groupempty">{pinned ? `${pinned} pinned above` : 'No scrolling columns in view'}<Button size="xs" variant="ghost" onClick={() => addColumns(matching.map((c) => c.key))} disabled={matching.every((c) => isLocked(c) || draft.visibleColumns.includes(c.key))}>Show {needle ? 'matches' : 'group'}</Button></p>)}
+            </>}
           </div>
-          {!isCollapsed && <>
-            {visible.map((c) => renderViewRow(c, visible))}
-            {visible.length === 0 && (group.columns.length === 0
-              // Every column of this group was moved into another one: say so, and leave it as a drop target.
-              ? <p className="nds-prefs-groupempty">Empty · drag a column here to put it back</p>
-              : <p className="nds-prefs-groupempty">{pinned ? `${pinned} pinned above` : 'No scrolling columns in view'}<Button size="xs" variant="ghost" onClick={() => addColumns(matching.map((c) => c.key))} disabled={matching.every((c) => isLocked(c) || draft.visibleColumns.includes(c.key))}>Show {needle ? 'matches' : 'group'}</Button></p>)}
-          </>}
-        </div>
-      })}
+        })}
+      </SortableContext>
       {renderPinned('right')}
       {needle && !matchingShown.length && <p className="nds-prefs-nomatch nds-prefs-help">No columns in view match “{query.trim()}”.</p>}
-    </div>
+    </div>)}
   </>
   const inView = (
     <>
@@ -881,7 +1043,12 @@ export function usePreferencesPanes({
             </legend>
             <p className="nds-prefs-help">{attributeGroups ? 'Select columns to move or edit together. Drag groups or columns to reorder.' : 'Drag to reorder · ✕ removes a column from the view.'}</p>
           </div>
-          {attributeGroups ? groupedInView : <div className="nds-prefs-cols">{shownColumns.map((c) => renderViewRow(c))}</div>}
+          {attributeGroups ? groupedInView : withDrag(
+            <div className={['nds-prefs-cols', drag ? 'is-sorting' : ''].filter(Boolean).join(' ')}>
+              <SortableContext items={shownColumns.map((c) => dragId('flat', c.key))} strategy={verticalListSortingStrategy}>
+                {shownColumns.map((c) => renderViewRow(c, shownColumns, 'flat'))}
+              </SortableContext>
+            </div>)}
     </>
   )
 

@@ -325,6 +325,39 @@
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
   --nds-grid-pinned-shadow: 4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08);
+
+  /* ── Tier 3: column-group tones (tokens/groupTones.ts — the old flat file's group colours) ── */
+  --nds-grid-group-indent: 8px;
+  --nds-grid-tone-slate-bg: #f1f5f9;
+  --nds-grid-tone-slate-fg: #334155;
+  --nds-grid-tone-slate-rule: #cbd5e1;
+  --nds-grid-tone-purple-bg: #f3e8ff;
+  --nds-grid-tone-purple-fg: #6b21a8;
+  --nds-grid-tone-purple-rule: #d8b4fe;
+  --nds-grid-tone-emerald-bg: #d1fae5;
+  --nds-grid-tone-emerald-fg: #065f46;
+  --nds-grid-tone-emerald-rule: #6ee7b7;
+  --nds-grid-tone-pink-bg: #fce7f3;
+  --nds-grid-tone-pink-fg: #9d174d;
+  --nds-grid-tone-pink-rule: #f9a8d4;
+  --nds-grid-tone-orange-bg: #ffedd5;
+  --nds-grid-tone-orange-fg: #9a3412;
+  --nds-grid-tone-orange-rule: #fdba74;
+  --nds-grid-tone-blue-bg: #dbeafe;
+  --nds-grid-tone-blue-fg: #1e40af;
+  --nds-grid-tone-blue-rule: #93c5fd;
+  --nds-grid-tone-yellow-bg: #fef9c3;
+  --nds-grid-tone-yellow-fg: #854d0e;
+  --nds-grid-tone-yellow-rule: #fde047;
+  --nds-grid-tone-red-bg: #fee2e2;
+  --nds-grid-tone-red-fg: #991b1b;
+  --nds-grid-tone-red-rule: #fca5a5;
+  --nds-grid-tone-violet-bg: #ede9fe;
+  --nds-grid-tone-violet-fg: #5b21b6;
+  --nds-grid-tone-violet-rule: #c4b5fd;
+  --nds-grid-tone-cyan-bg: #cffafe;
+  --nds-grid-tone-cyan-fg: #155e75;
+  --nds-grid-tone-cyan-rule: #67e8f9;
   --nds-wsgrid-surface: var(--nds-white);
   --nds-wsgrid-surface-raised: var(--nds-grey-25);
   --nds-wsgrid-surface-hover: var(--nds-grey-75);
@@ -592,4 +625,36 @@
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
   --nds-grid-pinned-shadow: 4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08);
+
+  /* ── Dark: column-group tones (tokens/groupTones.ts) ── */
+  --nds-grid-tone-slate-bg: color-mix(in srgb, #1e293b 60%, transparent);
+  --nds-grid-tone-slate-fg: #cbd5e1;
+  --nds-grid-tone-slate-rule: #334155;
+  --nds-grid-tone-purple-bg: color-mix(in srgb, #581c87 50%, transparent);
+  --nds-grid-tone-purple-fg: #e9d5ff;
+  --nds-grid-tone-purple-rule: #7e22ce;
+  --nds-grid-tone-emerald-bg: color-mix(in srgb, #064e3b 50%, transparent);
+  --nds-grid-tone-emerald-fg: #a7f3d0;
+  --nds-grid-tone-emerald-rule: #047857;
+  --nds-grid-tone-pink-bg: color-mix(in srgb, #831843 50%, transparent);
+  --nds-grid-tone-pink-fg: #fbcfe8;
+  --nds-grid-tone-pink-rule: #be185d;
+  --nds-grid-tone-orange-bg: color-mix(in srgb, #7c2d12 50%, transparent);
+  --nds-grid-tone-orange-fg: #fed7aa;
+  --nds-grid-tone-orange-rule: #c2410c;
+  --nds-grid-tone-blue-bg: color-mix(in srgb, #1e3a8a 50%, transparent);
+  --nds-grid-tone-blue-fg: #bfdbfe;
+  --nds-grid-tone-blue-rule: #1d4ed8;
+  --nds-grid-tone-yellow-bg: color-mix(in srgb, #713f12 50%, transparent);
+  --nds-grid-tone-yellow-fg: #fef08a;
+  --nds-grid-tone-yellow-rule: #a16207;
+  --nds-grid-tone-red-bg: color-mix(in srgb, #7f1d1d 50%, transparent);
+  --nds-grid-tone-red-fg: #fecaca;
+  --nds-grid-tone-red-rule: #b91c1c;
+  --nds-grid-tone-violet-bg: color-mix(in srgb, #4c1d95 50%, transparent);
+  --nds-grid-tone-violet-fg: #ddd6fe;
+  --nds-grid-tone-violet-rule: #6d28d9;
+  --nds-grid-tone-cyan-bg: color-mix(in srgb, #164e63 50%, transparent);
+  --nds-grid-tone-cyan-fg: #a5f3fc;
+  --nds-grid-tone-cyan-rule: #0e7490;
 }

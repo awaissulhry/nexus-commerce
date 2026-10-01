@@ -56,7 +56,8 @@ import type { ResolvedCell } from './mapping/resolve-batch.service.js'
 import type { ResolvedCategory } from './mapping/category-mapping.service.js'
 import { buildCoordinateValidators, evaluateRow, type FlatRow } from './readiness.service.js'
 import { columnApplies, columnEditableOnRow, columnRequiredByAny, columnRequiredHere, columnForCategory, familyRowHoldsValue, productRoleOf } from '@nexus/shared/master-sheet'
-import { relationshipColumns, relationshipValues, RELATIONSHIP_GROUP } from './studio-relationships.js'
+import { relationshipColumns, relationshipValues } from './studio-relationships.js'
+import { groupSheetColumns } from '@nexus/shared/sheet-groups'
 import { storedChannelState } from './channel-value-mutation.js'
 import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { UnknownMarketError, VARIATION_THEME_KEY, type SheetColumn, type SheetCoordinate, type SheetGroup, type SheetSpecCoverage } from './sheet-columns.service.js'
@@ -1149,6 +1150,11 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     }
   }
 
+  // 2026-10-01 — the sheet's groups: the Amazon names, order and one colour each, on every sheet (`@nexus/shared/sheet-groups`).
+  // Here, before the rows are built, so each row's completeness counts by the groups the sheet shows. Presentation only:
+  // the channel specs keep their own groups for the mapping page and the sharing rules.
+  ;({ columns, groups: columnGroups } = groupSheetColumns(columns, coordinate?.channel))
+
   // ── 3b. what the MAPPING ENGINE would ship for these cells ────────
   // Composed IN-PROCESS (hub ruling #15.2 / #20.1): one payload, no second HTTP
   // hop, and PES.2/3 are barred from fetching PES.6 separately. `status` and
@@ -1995,8 +2001,10 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       variationAxes: (root.variationAxes as string[]) ?? [],
       axes: familyAxes,
     },
-    columns: [...relationshipColumns.map(col => ({ ...col, ...resolveWriteRouting(col, coordinate, null), writable: false, affectsAllChannels: false, writeBlockedReason: col.helpText, formulaWritable: false, axis: false })), ...columnsWithRouting],
-    groups: [RELATIONSHIP_GROUP, ...(columnGroups ?? [])],
+    // The relationship columns join the sheet's groups too (Offer Identity, on every sheet).
+    ...groupSheetColumns(
+      [...relationshipColumns.map(col => ({ ...col, ...resolveWriteRouting(col, coordinate, null), writable: false, affectsAllChannels: false, writeBlockedReason: col.helpText, formulaWritable: false, axis: false })), ...columnsWithRouting],
+      coordinate?.channel),
     aliases,
     rows,
     // D14.3 — counts are SERVER-STATED. A client deriving them from the rows it

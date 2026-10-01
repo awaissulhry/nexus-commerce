@@ -232,6 +232,8 @@ export const ENTRIES: Entry[] = [
   RW(F.pimManage, F.pimManage, pfx('/api/workflow-comments')),
   RW(F.productsEdit, F.productsEdit, pfx('/api/tags')),
   RW(F.productsView, F.productsEdit, pfx('/api/saved-views')),
+  // 2026-10-01 — a person's own product sheet layout (the same in every business profile), read and kept like saved views.
+  RW(F.productsView, F.productsEdit, pfx('/api/sheet-layouts')),
   RW(F.productsView, F.productsEdit, pfx('/api/bundles')),
   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-ops')),
 
