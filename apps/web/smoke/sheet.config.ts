@@ -18,6 +18,9 @@ export const SHEET_STORAGE_STATE = process.env.SHEET_STORAGE_STATE ?? join(tmpdi
 export default defineConfig({
   testDir: './sheet',
   testMatch: '*.spec.ts',
+  // CI runs the commit sweep in its own parts (`SHEET_SWEEP_PART`, sheet/editors.spec.ts); the part for everything else
+  // leaves it out.
+  testIgnore: process.env.SHEET_SKIP_SWEEP === '1' ? ['**/editors.spec.ts'] : undefined,
   grep: /@sheet/,
   fullyParallel: true,
   // One worker by default: two saves racing on one database lose its serialization race now and then (a 503 "busy" the

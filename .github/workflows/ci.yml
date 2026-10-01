@@ -9,8 +9,9 @@
 #                migration upgrade check run once, in part 1
 #   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
 #                database login, seeded disposable database, production hosts fenced off
-#   sheet (1..3) the product-sheet commit sweep (@sheet): every editable column of every scope the seed
-#                builds, committed by keyboard, mouse and paste, on the same kind of stack as smoke
+#   sheet (1..6) the product-sheet commit sweep (@sheet): every editable column of every scope the seed
+#                builds, committed by keyboard, mouse and paste, on the same kind of stack as smoke; parts 1..5
+#                share the sweep's chunks in turn, part 6 runs the other sheet specs
 #   db-security  one profiles-ON report per API shard, the profiles-ON ratchet over them, and every real-PG
 #                suite passed in exactly one PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
@@ -385,13 +386,15 @@ jobs:
   sheet:
     needs: [sheet-changes]
     if: needs.sheet-changes.outputs.run == 'true'
-    name: Sheet commit sweep (${{ matrix.shard }}/3) — production build
+    name: Sheet commit sweep (${{ matrix.part }}/6) — production build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # Parts 1..5 deal the sweep's chunks in turn (editors.spec.ts, SHEET_SWEEP_PART), so Amazon's slow chunks spread
+      # over all five; in three contiguous Playwright shards they filled one past the time limit (2026-10-01).
       matrix:
-        shard: [1, 2, 3]
+        part: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -476,7 +479,10 @@ jobs:
           SHEET_EDITOR_DATABASE_URL: ${{ env.ADMIN_DATABASE_URL }}
           SMOKE_OUTPUT_DIR: ${{ runner.temp }}/sheet-results
           SMOKE_REPORT_DIR: ${{ runner.temp }}/sheet-report
-        run: npx playwright test -c smoke/sheet.config.ts --shard=${{ matrix.shard }}/3
+          PART: ${{ matrix.part }}
+        run: |
+          if [ "$PART" -le 5 ]; then SHEET_SWEEP_PART="$PART/5" npx playwright test -c smoke/sheet.config.ts sheet/editors.spec.ts
+          else SHEET_SKIP_SWEEP=1 npx playwright test -c smoke/sheet.config.ts; fi
 
       - name: Authenticated GET and bulk SQL budgets
         # A browser failure must not hide SQL evidence. Both steps still make this required job fail.
@@ -491,7 +497,7 @@ jobs:
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: sheet-${{ matrix.shard }}
+          name: sheet-${{ matrix.part }}
           path: |
             ${{ runner.temp }}/sheet-report
             ${{ runner.temp }}/sheet-results
