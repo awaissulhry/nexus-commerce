@@ -27,6 +27,10 @@ import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
 import { listActiveConnections, tryResolveConnection } from './connection-resolver.service.js';
 import { assertPushAllowed } from '@nexus/shared/push-lock';
+import { listingSendPrice } from './pim/follower-price.js';
+import { marketCurrency } from './pim/market-currency.js';
+import { priceBoundsOf, priceBoundsRefusal, zeroPriceReason } from './price-bounds.service.js';
+import { masterCurrency } from './fx-rate.service.js';
 // The ONE channel price write: a bulk price override goes through it like every other channel price edit.
 import { writeChannelPrices } from './pim/channel-price-write.service.js';
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULES, type PricingRuleName } from '@nexus/shared/listing-price';
@@ -2635,14 +2639,15 @@ export class BulkActionService {
    *
    * Skips when:
    *   - no ChannelListing for this product on the requested channel/marketplace
-   *   - the listing has no priceOverride (for price ops) or no
-   *     resolved stock (for stock ops)
+   *   - (price ops) the listing has no price to send — its send price, as the price door answers it — or its market
+   *     has no currency, or the price is not above 0 or is outside the product's floor/ceiling: said by name on the
+   *     item (`reason`, the item's message)
    */
   private async processChannelBatch(
     item: Product,
     payload: Record<string, any>,
     jobChannel: string | null,
-  ): Promise<{ status: 'processed' | 'skipped' }> {
+  ): Promise<{ status: 'processed' | 'skipped'; reason?: string }> {
     const channel = String(payload.channel ?? jobChannel ?? '').toUpperCase();
     if (!['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) {
       throw new Error(
@@ -2668,13 +2673,36 @@ export class BulkActionService {
     });
     if (!listing) return { status: 'skipped' };
 
-    // Defaults derived from product / env so we don't reach for
-    // ChannelListing columns that don't exist on this schema:
-    //   - sku is read from Product.sku
-    //   - currency defaults to 'EUR' (Xavia's primary market is IT)
-    //   - quantity / price fall back to master totals
+    // The SKU is read from Product.sku; a stock op's quantity falls back to the product's sellable total.
     const sku = item.sku;
-    const currency = 'EUR';
+    // Round 7 (2026-10-01) — a price op sends THE send price (`listingSendPrice`: a pin's own price, a follower's rule
+    // price from the current master in the master currency, else the price it holds — the price door's and the
+    // publishers' answer), in the listing market's OWN currency, held to the product's floor and ceiling as every
+    // other price sender holds it (`priceBoundsRefusal`, the check `priceRefusalFor` makes; read through this job's own
+    // client). It sent `listing.price ?? product.basePrice` in a hard-coded EUR: a pin's own price could be ignored, a
+    // "master +10%" follower could get the master, and eBay UK the EUR number. Nothing to send is a skip with its
+    // reason (the item's message), never a guess.
+    const channelName = channel === 'AMAZON' ? 'Amazon' : channel === 'EBAY' ? 'eBay' : 'Shopify';
+    const sendable = async (row: ChannelListing): Promise<{ value: number; currency: string } | { skip: string }> => {
+      const where = `${channelName} ${row.marketplace}`;
+      // Unreadable or unconfigured, the market has no currency: nothing is sent there (refuse, don't guess).
+      let marketCur: string | null = null;
+      try {
+        const rows = await this.prisma.marketplace.findMany({ where: { channel: row.channel }, select: { channel: true, code: true, currency: true } });
+        marketCur = marketCurrency(row.channel, row.marketplace, rows);
+      } catch { marketCur = null; }
+      const send = listingSendPrice(row, { masterPrice: item.basePrice, marketCurrency: marketCur, where });
+      if (send.price == null) return { skip: `${sku}: ${send.reason} Nothing was sent.` };
+      if (!marketCur) return { skip: `${sku}: no currency is configured for ${where}. Set the market's currency. Nothing was sent.` };
+      const zero = zeroPriceReason(send.price);
+      if (zero) return { skip: `${sku}: ${zero}. Nothing was sent.` };
+      // A floor or ceiling that cannot be read is no bound, as `loadPriceBounds` treats it (it guards one that exists).
+      let bounds: { minPrice?: unknown; maxPrice?: unknown } | null = null;
+      try { bounds = await this.prisma.product.findUnique({ where: { id: item.id }, select: { minPrice: true, maxPrice: true } }); } catch { bounds = null; }
+      const outside = priceBoundsRefusal({ price: send.price, bounds: priceBoundsOf(bounds ?? {}), channel: channelName, sku, currency: marketCur, masterCurrency: masterCurrency() });
+      if (outside) return { skip: outside };
+      return { value: send.price, currency: marketCur };
+    };
 
     if (channel === 'AMAZON') {
       const { submitAmazonListingsBatch } = await import(
@@ -2694,14 +2722,12 @@ export class BulkActionService {
       }
       const marketplaceIds = marketplace ? [marketplace] : [];
       if (operation === 'price') {
-        const value = Number(listing.price ?? item.basePrice ?? 0);
-        if (!Number.isFinite(value) || value <= 0) {
-          return { status: 'skipped' };
-        }
+        const sent = await sendable(listing);
+        if ('skip' in sent) return { status: 'skipped', reason: sent.skip };
         await submitAmazonListingsBatch({
           marketplaceIds,
           sellerId,
-          operations: [{ type: 'price', sku, currency, value }],
+          operations: [{ type: 'price', sku, currency: sent.currency, value: sent.value }],
         });
       } else {
         // FBA-flip fix — a batch stock op emits fulfillment_channel_code:DEFAULT,
@@ -2742,10 +2768,11 @@ export class BulkActionService {
       let batch: Awaited<ReturnType<typeof submitEbayParallelBatch>>;
       if (operation === 'price') {
         if (!offerId) return { status: 'skipped' };
-        const value = String(listing.price ?? item.basePrice ?? 0);
+        const sent = await sendable(listing);
+        if ('skip' in sent) return { status: 'skipped', reason: sent.skip };
         batch = await submitEbayParallelBatch({
           connectionId: connection.id,
-          operations: [{ type: 'price', sku, offerId, currency, value }],
+          operations: [{ type: 'price', sku, offerId, currency: sent.currency, value: sent.value.toFixed(2) }],
         });
       } else {
         const qty = Number(listing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0);
@@ -2792,8 +2819,9 @@ export class BulkActionService {
     }
     const { syncShopifyLinkedListing } = await import('./shopify/listing-write.service.js');
     if (operation === 'price') {
-      const value = Number(shopifyListing.price ?? item.basePrice ?? 0);
-      if (!Number.isFinite(value) || value <= 0) return { status: 'skipped' };
+      const sent = await sendable(shopifyListing);
+      if ('skip' in sent) return { status: 'skipped', reason: sent.skip };
+      const value = sent.value;
       await syncShopifyLinkedListing(shopifyRow, accountId, { price: value });
     } else {
       await syncShopifyLinkedListing(shopifyRow, accountId, { quantity: Number(shopifyListing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0) });

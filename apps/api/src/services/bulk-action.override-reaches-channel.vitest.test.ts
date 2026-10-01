@@ -444,6 +444,8 @@ describe('the source scan — the bulk action writes no channel price itself', (
     ['preview display', '? Number(listing.priceOverride ?? listing.price)'],
     ['CHANNEL_BATCH reads the listing', 'price: true,'],
     ['CHANNEL_BATCH sends through its account', 'await syncShopifyLinkedListing(shopifyRow, accountId, { price: value });'],
+    // Round 7 — the batch's send price held to the product's floor/ceiling: a check of the price it sends, not a write.
+    ['CHANNEL_BATCH checks the floor and ceiling', 'const outside = priceBoundsRefusal({ price: send.price,'],
   ]
   const source = readFileSync(fileURLToPath(new URL('./bulk-action.service.ts', import.meta.url)), 'utf8')
   const lines = source.split('\n').map((text, i) => ({ line: i + 1, text: text.trim() }))
