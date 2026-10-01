@@ -189,7 +189,9 @@ function decideRecord(out: EbayWorkbookResult, table: EbayWorkbookTable, record:
 }
 
 /** Invalid identities block their whole row. Resolved rows account for every populated cell. */
-export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookTarget[], specs: Map<string, ChannelSpec>, options: EbayResolveOptions & { notInNexus?: string; knownSkus?: ReadonlySet<string>; mapping?: ReaderMapping; mappingSpecs?: ReadonlyMap<string, ChannelSpec>; accountPolicyIds?: readonly string[] } = {}): EbayWorkbookResult {
+export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookTarget[], specs: Map<string, ChannelSpec>, options: EbayResolveOptions & { notInNexus?: string; knownSkus?: ReadonlySet<string>; mapping?: ReaderMapping; mappingSpecs?: ReadonlyMap<string, ChannelSpec>; accountPolicyIds?: readonly string[]
+  /** Categories whose eBay rules could not be loaded (`ebayFileSpecs`), with the reason. */
+  unloadedCategories?: ReadonlyMap<string, string> } = {}): EbayWorkbookResult {
   const out = emptyResult()
   const warned = new Set<string>()
   const value = (r: Record<string, string>, header: string) => (r[header] ?? '').trim()
@@ -256,6 +258,15 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
   // A listing named by more than one row is refused on EVERY such row: no row may be applied as "the" value.
   const rowsByListing = new Map<string, number[]>()
   for (const m of matched) rowsByListing.set(m.t.id, [...(rowsByListing.get(m.t.id) ?? []), m.record.row])
+  // A category without saved eBay rules is ONE problem, on its first parent row; its other rows point to it (2026-10-01:
+  // a new business refused every row with "Refresh this marketplace and category schema", and nothing said how).
+  const absent = (category: string) => { const spec = specs.get(category); return !spec || spec.absent }
+  const anchors = new Map<string, { row: number; parent: boolean; rows: number }>()
+  for (const m of matched) if (rowsByListing.get(m.t.id)!.length === 1 && absent(m.category)) {
+    const anchor = anchors.get(m.category)
+    if (!anchor) anchors.set(m.category, { row: m.record.row, parent: m.parentage === 'parent', rows: 1 })
+    else { anchor.rows++; if (!anchor.parent && m.parentage === 'parent') Object.assign(anchor, { row: m.record.row, parent: true }) }
+  }
   // Pass 2 — the values of each uniquely identified listing.
   for (const { record, t, category, parentage, parentRow } of matched) {
     const r = record.values
@@ -263,7 +274,13 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
     const sameListing = rowsByListing.get(t.id)!
     if (sameListing.length > 1) { refuseRow('SKU', `Duplicate rows ${sameListing.join(', ')} name the same eBay listing for ${t.sku}; keep one row per listing and import again`); continue }
     const spec = specs.get(category)
-    if (!spec || spec.absent || spec.marketplace !== table.marketplace) { refuseRow('Category ID', 'Refresh this marketplace and category schema before importing'); continue }
+    if (!spec || spec.absent) {
+      const anchor = anchors.get(category)!
+      if (record.row === anchor.row) refuseRow('Category ID', `Nexus could not load eBay ${table.marketplace}'s rules for category ${category} (${options.unloadedCategories?.get(category) ?? 'they are not saved in this business'}). Check the eBay account in Settings → Channels, then import again. Nothing in this category is imported (${anchor.rows} ${anchor.rows === 1 ? 'row' : 'rows'}).`)
+      else decideRecord(out, table, record, 'skipped-row', 'Category ID', `Not imported: eBay ${table.marketplace}'s rules for category ${category} are missing (see row ${anchor.row}).`)
+      continue
+    }
+    if (spec.marketplace !== table.marketplace) { refuseRow('Category ID', 'Refresh this marketplace and category schema before importing'); continue }
     // Action: a delete-like lifecycle word ends the listing in Nexus (nothing is sent), only when confirmed.
     const action = value(r, 'Action')
     const fileSkuHere = fileSkuOf(record)
@@ -623,8 +640,8 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
       if (!axis.column) { familyProblem = `The Variation Theme names ${axis.label}, but the file has no ${axis.label} column. Add the column, then import again.`; break }
       const found = axisAttribute([axis.label, ...headerNames(axis.column)], dictionary)
       if (!found.attribute) {
-        familyProblem = 'candidates' in found ? `The axis ${axis.label} matches several attributes (${found.candidates.join(', ')}). Keep one of them in Settings › Attributes, then import again.`
-          : `Nexus has no attribute for the axis ${axis.label}. Add it in Settings › Attributes, then import again.`
+        familyProblem = 'candidates' in found ? `The axis ${axis.label} matches several attributes (${found.candidates.join(', ')}). Keep one of them in Settings → Attributes, then import again.`
+          : `Nexus has no attribute for the axis ${axis.label}. Add it in Settings → Attributes, then import again.`
         break
       }
       const twin = axes.find(a => a.code === found.attribute!.code)
@@ -736,9 +753,58 @@ export async function ebayAccountFor(prisma: Pick<Db, 'channelListing'>, rootId:
   }
   try { return { id: chooseConnection(active, { channel: 'EBAY', wantPrimary: true }).id } } catch (error) {
     return { problem: error instanceof AmbiguousConnectionError
-      ? 'Several eBay accounts are connected and none is the primary one. Make one primary in Settings › Channels, then import again.'
-      : 'Connect an eBay account in Settings › Channels, then import again: Nexus creates the listings of this file on it.' }
+      ? 'Several eBay accounts are connected and none is the primary one. Make one primary in Settings → Channels, then import again.'
+      : 'Connect an eBay account in Settings → Channels, then import again: Nexus creates the listings of this file on it.' }
   }
+}
+
+/** Where a category's eBay rules come from: this business's saved rules, and the one writer that saves them from eBay. */
+export interface EbayRulesSource {
+  load(marketplace: string, category: string): Promise<ChannelSpec>
+  save(marketplace: string, category: string): Promise<void>
+}
+const savedEbayRules: EbayRulesSource = {
+  load: async (marketplace, category) => (await import('./channel-specs/index.js')).loadEbaySpec(marketplace, [category]),
+  // The category page's own writer (`CategorySchemaService`): eBay's aspects and conditions through the channel gateway,
+  // saved as this business's CategorySchema. The sheet columns built from the old rules are dropped, as that page does.
+  save: async (marketplace, category) => {
+    const [{ default: prisma }, { CategorySchemaService }, { AmazonService }, { clearSheetColumnCache }, { clearStudioColumnCache }] = await Promise.all([import('../../db.js'),
+      import('../categories/schema-sync.service.js'), import('../marketplaces/amazon.service.js'), import('./sheet-columns.service.js'), import('./studio-columns.js')])
+    await new CategorySchemaService(prisma as never, new AmazonService()).getSchema({ channel: 'EBAY', marketplace, productType: category }, { force: true })
+    clearSheetColumnCache(); clearStudioColumnCache()
+  },
+}
+
+/**
+ * The eBay rules of every category the file names. A category this business never saved the rules of (a new business's
+ * first import) is loaded from eBay first, then read again; one that cannot be loaded keeps the reason, in plain words.
+ */
+export async function ebayFileSpecs(table: EbayWorkbookTable, rules: EbayRulesSource = savedEbayRules) {
+  const specs = new Map<string, ChannelSpec>(), unloaded = new Map<string, string>()
+  for (const category of new Set(table.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))) {
+    let spec = await rules.load(table.marketplace, category)
+    if (spec.absent) {
+      try {
+        await rules.save(table.marketplace, category)
+        spec = await rules.load(table.marketplace, category)
+        if (spec.absent) unloaded.set(category, 'eBay sent no rules for it')
+      } catch (error) {
+        unloaded.set(category, plainRulesReason(error))
+      }
+    }
+    specs.set(category, spec)
+  }
+  return { specs, unloaded }
+}
+
+/** Why eBay's rules could not be loaded, for the person importing: no setting names or developer words. */
+function plainRulesReason(error: unknown): string {
+  const message = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').trim()
+  if (/^No active EBAY connection|NoConnection/i.test(message)) return 'no eBay account is connected'
+  if (/Ambiguous/i.test(message)) return 'several eBay accounts are connected and none is the primary one'
+  if (/^auth:|credentials|reconnect|token|unauthori[sz]ed/i.test(message)) return 'the eBay account is not signed in'
+  if (/^network:|ECONN|ETIMEDOUT|fetch failed|timed? ?out/i.test(message)) return 'eBay did not answer'
+  return message.replace(/[.\s]+$/, '').slice(0, 160) || 'eBay did not answer'
 }
 
 /** The policy IDs this business's eBay accounts use by default (`connectionMetadata.ebayPolicies`). */
@@ -756,8 +822,7 @@ async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptio
   const plan: EbayListingPlan = { names: [], creates: [], families: [], mains: [] }
   const proposals = new Map<string, ListingProposal>()
   // CHMAP M2 — one mapping version for the whole file: its columns against every category it names.
-  const fileSpecs = new Map<string, ChannelSpec>()
-  for (const category of new Set(table.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))) fileSpecs.set(category, await loadEbaySpec(table.marketplace, [category]))
+  const { specs: fileSpecs, unloaded } = await ebayFileSpecs(table)
   const { ebayImportMapping } = await import('../channel-mapping/ebay-import.js')
   let chmap: Awaited<ReturnType<typeof ebayImportMapping>> | null = null, mappingProblem = ''
   try { chmap = await ebayImportMapping(table, fileSpecs) } catch (error) { mappingProblem = error instanceof Error ? error.message : String(error) }
@@ -789,7 +854,7 @@ async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptio
     const specs = new Map<string, ChannelSpec>()
     const categories = new Set(sub.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))
     for (const category of categories) specs.set(category, fileSpecs.get(category) ?? await loadEbaySpec(table.marketplace, [category]))
-    const mapped = mapEbayWorkbook(sub, targets, specs, { ...options, knownSkus: group.knownSkus, accountPolicyIds: await accountPolicyIds(prisma, targets), ...(chmap?.mapping ? { mapping: chmap.mapping, mappingSpecs: fileSpecs } : {}) })
+    const mapped = mapEbayWorkbook(sub, targets, specs, { ...options, knownSkus: group.knownSkus, accountPolicyIds: await accountPolicyIds(prisma, targets), unloadedCategories: unloaded, ...(chmap?.mapping ? { mapping: chmap.mapping, mappingSpecs: fileSpecs } : {}) })
     const problem = choice && 'problem' in choice ? choice.problem : ''
     for (const [sku, p] of mine) {
       if (p.aliasId) { const t = named.find(n => n.aliasKey === p.aliasId); if (t) plan.names.push({ aliasId: p.aliasId, sku, rootId: p.rootId, rootSku: p.rootSku, label: p.label ?? sku, accountId: t.accountId, marketplace: t.marketplace }); continue }

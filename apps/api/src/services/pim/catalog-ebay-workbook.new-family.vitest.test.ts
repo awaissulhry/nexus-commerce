@@ -4,8 +4,8 @@
  * Fixtures are built here in memory, in the shape of the Owner's GALE IT file; the Owner's own files are never read by a test.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { checkEbayLedger, clusterFileParents, ebayAccountFor, mapEbayWorkbook, planEbayGroups, varyingColumns, NEW_LISTING_KEY,
-  type EbayFamilyContext, type EbayWorkbookResult, type EbayWorkbookTable, type EbayWorkbookTarget } from './catalog-ebay-workbook.js'
+import { checkEbayLedger, clusterFileParents, ebayAccountFor, ebayFileSpecs, mapEbayWorkbook, planEbayGroups, varyingColumns, NEW_LISTING_KEY,
+  type EbayFamilyContext, type EbayRulesSource, type EbayWorkbookResult, type EbayWorkbookTable, type EbayWorkbookTarget } from './catalog-ebay-workbook.js'
 import { ebaySpecFromCache } from './channel-specs/ebay.js'
 import type { DictionaryAttribute } from './family-variations-core.js'
 
@@ -125,7 +125,7 @@ describe('a new family from the file — what it never does', () => {
     table.records.forEach(r => { r.values['Scollatura ↕'] = 'Coreana' })
     const { out, groups } = await plan(table)
     expect(groups).toEqual([])
-    expect(new Set(out.issues.map(i => i.message))).toEqual(new Set(['Nexus has no attribute for the axis Scollatura. Add it in Settings › Attributes, then import again.']))
+    expect(new Set(out.issues.map(i => i.message))).toEqual(new Set(['Nexus has no attribute for the axis Scollatura. Add it in Settings → Attributes, then import again.']))
     expect(out.issues).toHaveLength(4)
   })
   it('two variations with the same values are both refused, by name', async () => {
@@ -171,7 +171,7 @@ describe('the eBay account of a new listing', () => {
   })
   it('names the problem with several accounts and no primary, and with none', async () => {
     connections.active = [account('acc-1', false), account('acc-2', false)]
-    expect(await ebayAccountFor(db(), '')).toEqual({ problem: 'Several eBay accounts are connected and none is the primary one. Make one primary in Settings › Channels, then import again.' })
+    expect(await ebayAccountFor(db(), '')).toEqual({ problem: 'Several eBay accounts are connected and none is the primary one. Make one primary in Settings → Channels, then import again.' })
     connections.active = []
     expect(await ebayAccountFor(db(), '')).toEqual({ problem: expect.stringContaining('Connect an eBay account') })
   })
@@ -186,5 +186,45 @@ describe('a listing this import creates', () => {
     const result = mapEbayWorkbook(table, [target('GALE', true), ...KIDS.map(([sku]) => target(sku, false))], new Map([['177104', spec]]))
     expect(result.rows.filter(r => r.field === 'categoryId').map(r => [r.sku, r.value, r.entity])).toEqual([['GALE', '177104', 'Listings'], ...KIDS.map(([sku]) => [sku, '177104', 'Listings'])])
     expect(checkEbayLedger(table, result)).toEqual({ unaccounted: [], duplicated: [], danglingRows: [], phantom: [] })
+  })
+})
+
+// 2026-10-01 (live check) — a business that never loaded eBay IT category 177104's rules refused EVERY row with "Refresh this
+// marketplace and category schema before importing", and nothing in the import said how. Now the import loads them first.
+describe('a category whose eBay rules this business never saved', () => {
+  const rules = (aspects: boolean) => { const spec = ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects: [] }); spec.absent = !aspects; return spec }
+  const targets = (table: EbayWorkbookTable): EbayWorkbookTarget[] => [...new Set(table.records.map(r => r.values.SKU))].map(sku =>
+    ({ id: `L-${sku}`, sku, parentSku: 'GALE', sourceParentSku: 'GALE', isParent: sku === 'GALE', itemId: '', accountId: 'acc-1', marketplace: 'IT', aliasKey: '', version: 1 }))
+  it('loads them from eBay first (the one writer), reads them again, and the rows map', async () => {
+    let saved = false
+    const source: EbayRulesSource = { load: async () => rules(saved), save: async (marketplace, category) => { expect([marketplace, category]).toEqual(['IT', '177104']); saved = true } }
+    const table = galeTable(['GALE'])
+    const { specs, unloaded } = await ebayFileSpecs(table, source)
+    expect(saved).toBe(true)
+    expect(unloaded.size).toBe(0)
+    const result = mapEbayWorkbook(table, targets(table), specs, { unloadedCategories: unloaded })
+    expect(result.issues).toEqual([])
+    expect(result.rows.filter(r => r.field === 'title')).toHaveLength(4)
+  })
+  it('never asks eBay for rules the business already has', async () => {
+    const source: EbayRulesSource = { load: async () => rules(true), save: async () => { throw new Error('no call expected') } }
+    expect((await ebayFileSpecs(galeTable(['GALE']), source)).unloaded.size).toBe(0)
+  })
+  it('says why in plain words: no developer settings in the sentence', async () => {
+    const failing = (message: string): EbayRulesSource => ({ load: async () => rules(false), save: async () => { throw new Error(message) } })
+    const reason = async (message: string) => (await ebayFileSpecs(galeTable(['GALE']), failing(message))).unloaded.get('177104')
+    expect(await reason('auth: No eBay credentials available. Link an eBay account in Settings or configure EBAY_CLIENT_ID + EBAY_CLIENT_SECRET')).toBe('the eBay account is not signed in')
+    expect(await reason('network: connect ECONNREFUSED')).toBe('eBay did not answer')
+  })
+  it('when eBay cannot be reached: ONE plain problem on the parent row, the other rows point to it', async () => {
+    const source: EbayRulesSource = { load: async () => rules(false), save: async () => { throw new Error('No active EBAY connection.') } }
+    const table = galeTable(['GALE'])
+    const { specs, unloaded } = await ebayFileSpecs(table, source)
+    expect([...unloaded]).toEqual([['177104', 'no eBay account is connected']])
+    const result = mapEbayWorkbook(table, targets(table), specs, { unloadedCategories: unloaded })
+    expect(result.issues.map(i => [i.row, i.message])).toEqual([[2, "Nexus could not load eBay IT's rules for category 177104 (no eBay account is connected). Check the eBay account in Settings → Channels, then import again. Nothing in this category is imported (4 rows)."]])
+    expect(result.exclusions.map(e => [e.row, e.message])).toEqual([3, 4, 5].map(row => [row, "Not imported: eBay IT's rules for category 177104 are missing (see row 2)."]))
+    expect(result.rows).toEqual([])
+    expect(checkEbayLedger(table, result).unaccounted).toEqual([])
   })
 })
