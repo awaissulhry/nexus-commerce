@@ -42,7 +42,8 @@ export async function exportEbayWorkbook(request: { marketplace: string; setId: 
 
   const records: EbayExportRecord[] = []
   for (const rootId of roots) {
-    const targets = await groupTargets(prisma, { marketplace } as never, rootId)
+    // An extra listing is written under its own SKU; one without a SKU yet under its label, which the import offers to make its SKU.
+    const targets = await groupTargets(prisma, { marketplace } as never, rootId, { unnamedByLabel: true })
     for (const t of targets) {
       const values = new Map<string, unknown>()
       for (const r of rows) {

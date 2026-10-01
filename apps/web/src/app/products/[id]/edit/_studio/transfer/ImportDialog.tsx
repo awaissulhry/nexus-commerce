@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SheetImportChange, SheetImportChangesPage, SheetImportStatus } from '@nexus/shared/catalog-transfer'
 import { Button, Checkbox, SegmentedControl, Tag } from '@/design-system/primitives'
-import { Banner, FileDropzone, FileRow, JobProgress, MetricStrip, Modal, Pagination, useToast } from '@/design-system/components'
+import { Banner, Disclosure, FileDropzone, FileRow, JobProgress, MetricStrip, Modal, Pagination, useToast } from '@/design-system/components'
 // The DS grid's DataGrid (AG Grid, identical props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -16,7 +16,7 @@ import styles from './sheetTransfer.module.css'
 const POLL_MS = 700
 type Filter = 'all' | 'problems'
 type Decisions = { links: Record<string, string>; confirmDeletes: string[] }
-const TONES: Record<SheetImportChange['status'], 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = { ready: 'info', problem: 'danger', saved: 'success', failed: 'danger', skipped: 'warning' }
+const TONES: Record<SheetImportChange['status'], 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = { ready: 'info', new: 'info', problem: 'danger', saved: 'success', failed: 'danger', skipped: 'warning' }
 /** A check or save still running when the page reloads is picked up again; a finished one never is. */
 const runningKey = (productId: string) => `psie:running-import:${productId}`
 const remember = (productId: string, jobId: string | null) => {
@@ -222,7 +222,10 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
             action={<a className={styles.link} href={sheetTransferApi.problemsUrl(status.jobId)}>Download the list</a>}>
             {status.format === 'undo' ? 'These values changed again after the import, or cannot be put back here. They are skipped; change them in the sheet.' : 'Rows with a problem are skipped. Fix them in your file and import it again.'}
           </Banner>}
-          {status.warnings.map(warning => <Banner key={warning} tone="info">{warning}</Banner>)}
+          {/* One closed section for the notes (2026-10-01): they inform, they block nothing. */}
+          {status.warnings.length > 0 && <Disclosure summary={`${status.warnings.length} ${status.warnings.length === 1 ? 'note' : 'notes'}`}>
+            <ul className={styles.list}>{status.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>
+          </Disclosure>}
           {needsConfirmation && file && <Banner tone="warning" title="Confirm before applying"
             action={<Button size="sm" variant="secondary" onClick={() => void upload(file, decisions)}>Check again</Button>}>
             <ul className={styles.list}>

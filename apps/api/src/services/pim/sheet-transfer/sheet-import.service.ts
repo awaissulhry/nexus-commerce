@@ -33,6 +33,8 @@ import {
   type SheetImportDelete, type SheetImportLink, type SheetImportChangeStatus,
 } from '@nexus/shared/catalog-transfer'
 import { readEditorTransfer, type ChannelFileDecisions, type ImportLog } from '../catalog-editor-workbook.js'
+import type { EbayListingPlan } from '../catalog-ebay-workbook.js'
+import { archiveAlias, createAlias, nameListingAlias } from '../listing-alias.service.js'
 import { productTransferOptions, resolveProductTransferBoundary, assertProductTransferRows } from '../catalog-product-transfer.js'
 import { buildTransferPlan, fingerprint, isEmptyChannelValue, transferContracts, type TransferTarget } from '../catalog-transfer-plan.js'
 import { loadTransferContext, TransferConflict } from '../catalog-transfer.service.js'
@@ -83,7 +85,15 @@ interface Payload {
   labels: Record<string, string>
   /** The families whose readiness is rebuilt right after the save, and how that went. */
   readiness?: { state: 'pending' | 'done' | 'failed'; roots: string[]; error?: string }
+  /** eBay files (2026-10-01): the extra listings Apply names or creates first; `listingsDone` is what it did (a resumed save and Undo read it). */
+  listingPlan?: EbayListingPlan
+  listingsDone?: ListingsDone
+  /** An undo of an import that made listings: clear those SKUs and archive those listings. */
+  listingUndo?: ListingsDone
 }
+interface ListingsDone { named: { aliasId: string; sku: string; rootSku: string; label: string; marketplace: string }[]; created: { aliasId: string; sku: string; rootId: string; rootSku: string; accountId: string; marketplace: string }[] }
+const planSize = (plan?: EbayListingPlan) => plan ? plan.names.length + plan.creates.length : 0
+const undoSize = (undo?: ListingsDone) => undo ? undo.named.length + undo.created.length : 0
 interface Dependency { sku: string; key?: string; before?: Record<string, unknown> | null; ignoreParent?: true }
 /** The record shape `applyTransferRecord` reads, plus what the review page shows. */
 interface RecordPayload {
@@ -114,7 +124,7 @@ export interface StartSheetImport {
  */
 export async function startSheetImport(input: StartSheetImport): Promise<SheetImportStatus> {
   const started = performance.now()
-  const parsed = await readEditorTransfer(input.buffer, input.filename, input.productId, input.userId, input.log, input.decisions ?? {}, { changesOnly: true })
+  const parsed = await readEditorTransfer(input.buffer, input.filename, input.productId, input.userId, input.log, input.decisions ?? {}, { changesOnly: true, listingPlan: true })
   input.log?.('sheet-import.read', { ms: Math.round(performance.now() - started), rows: parsed.rows.length, issues: parsed.issues.length })
   const kinds = parsed.kinds ?? []
   const format: SheetImportFormat = kinds.includes('amazon') ? 'amazon' : kinds.includes('ebay') ? 'ebay' : kinds.includes('shopify') ? 'shopify'
@@ -125,7 +135,7 @@ export async function startSheetImport(input: StartSheetImport): Promise<SheetIm
   return createSheetImport({
     rows: scoped.rows, issues: [...parsed.issues, ...scoped.outside], boundary: scoped.boundary, market: input.market, format, filename: input.filename, userId: input.userId,
     warnings: parsed.editing === false && format !== 'csv' ? [] : parsed.warnings ?? [], links: parsed.links ?? [], exportId: parsed.exportId, labels,
-    deletes: deletesOf(parsed.rows, parsed.issues), log: input.log,
+    deletes: deletesOf(parsed.rows, parsed.issues), listingPlan: parsed.listingPlan, log: input.log,
   })
 }
 
@@ -180,15 +190,17 @@ function deletesOf(rows: TransferRow[], issues: TransferIssue[]): SheetImportDel
 interface CreateInput {
   rows: TransferRow[]; issues: TransferIssue[]; boundary?: ProductTransferBoundary; market: string; format: SheetImportFormat; filename: string; userId: string | null
   warnings: string[]; links: SheetImportLink[]; deletes: SheetImportDelete[]; exportId?: string; labels: Record<string, string>; undoOf?: string; autoApply?: boolean
+  listingPlan?: EbayListingPlan; listingUndo?: ListingsDone
   log?: ImportLog
 }
 
 async function createSheetImport(input: CreateInput): Promise<SheetImportStatus> {
-  if (!input.rows.length && !input.issues.length) throw new Error('This file changes nothing: every cell is as it was exported. Change a value, then import it again.')
+  if (!input.rows.length && !input.issues.length && !planSize(input.listingPlan) && !undoSize(input.listingUndo)) throw new Error('This file changes nothing: every cell is as it was exported. Change a value, then import it again.')
   const boundary = input.boundary
-  const payload: Payload = { kind: SHEET_IMPORT_KIND, productId: boundary?.productId ?? '', market: input.market, format: input.format, boundary: boundary as ProductTransferBoundary,
+  const payload: Payload = { kind: SHEET_IMPORT_KIND, productId: boundary?.productId ?? input.listingPlan?.creates[0]?.rootId ?? input.listingPlan?.names[0]?.rootId ?? '', market: input.market, format: input.format, boundary: boundary as ProductTransferBoundary,
     exportId: input.exportId, summary: emptySummary(), warnings: input.warnings, links: input.links, deletes: input.deletes, destinations: [], listingIds: [], startedAt: new Date().toISOString(),
-    labels: input.labels, ...(input.undoOf ? { undoOf: input.undoOf } : {}), ...(input.autoApply ? { autoApply: true } : {}) }
+    labels: input.labels, ...(input.undoOf ? { undoOf: input.undoOf } : {}), ...(input.autoApply ? { autoApply: true } : {}),
+    ...(planSize(input.listingPlan) ? { listingPlan: input.listingPlan } : {}), ...(undoSize(input.listingUndo) ? { listingUndo: input.listingUndo } : {}) }
   const job = await prisma.$transaction(async tx => {
     const history = await tx.importJob.create({ data: { jobName: input.filename, source: 'upload', filename: input.filename, fileKind: input.filename.split('.').pop()?.toLowerCase() ?? 'xlsx',
       targetEntity: SHEET_IMPORT_KIND, status: 'CHECKING', totalRows: 0, createdBy: input.userId } })
@@ -305,7 +317,14 @@ async function finishCheck(jobId: string, input: CreateInput, records: { key: st
     await prisma.importJobRow.createMany({ data: records.slice(offset, offset + 500).map((record, i) => ({ jobId, rowIndex: offset + i + 1, targetId: record.key,
       parsedValues: json(record.payload), status: record.status })) })
   }
-  const ready = records.filter(r => r.status === 'REVIEWED').length
+  const plan = input.listingPlan, undo = input.listingUndo
+  // The listings Apply names or creates are changes too; a created listing's values become records when it exists.
+  const creates = plan?.creates ?? []
+  const pendingRecords = creates.reduce((n, c) => n + new Set(c.rows.map(r => r.sku)).size, 0)
+  summary.changes += planSize(plan) + undoSize(undo) + creates.reduce((n, c) => n + c.rows.length, 0)
+  summary.listings += pendingRecords + (undo?.created.length ?? 0)
+  summary.created += creates.length
+  const ready = records.filter(r => r.status === 'REVIEWED').length + planSize(plan) + pendingRecords + undoSize(undo)
   const next: Payload = { ...payload, summary, destinations: extra.destinations, listingIds: extra.listingIds, warnings: [...new Set([...payload.warnings, ...(extra.warnings ?? [])])],
     reviewToken: fingerprint([jobId, summary, records.length, Date.now()]), reviewExpiresAt: new Date(Date.now() + REVIEW_MS).toISOString() }
   const claimed = await prisma.$transaction(async tx => {
@@ -359,9 +378,10 @@ async function saveSheetImport(jobId: string) {
   if (saving.has(jobId)) return
   saving.add(jobId)
   try {
-    const job = await prisma.bulkOperation.findUnique({ where: { id: jobId } }), payload = payloadOf(job?.changes)
-    if (!job || !payload || job.status !== 'SAVING') return
+    const job = await prisma.bulkOperation.findUnique({ where: { id: jobId } }), loadedPayload = payloadOf(job?.changes)
+    if (!job || !loadedPayload || job.status !== 'SAVING') return
     const started = performance.now()
+    const payload = await applyListingPlan(jobId, loadedPayload)
     const all = await prisma.importJobRow.findMany({ where: { jobId }, orderBy: { rowIndex: 'asc' }, select: { id: true, targetId: true, parsedValues: true, status: true } })
     const pending = all.filter(r => r.status === 'REVIEWED')
     // R-AE-17 — every shared product this job declares, whatever its outcome.
@@ -430,7 +450,7 @@ async function saveSheetImport(jobId: string) {
     })
     const counts = await prisma.importJobRow.groupBy({ by: ['status'], where: { jobId }, _count: { _all: true } })
     const count = (status: string) => counts.find(c => c.status === status)?._count._all ?? 0
-    const receipt = { saved: count('SUCCESS'), failed: count('FAILED'), skipped: count('INVALID') }
+    const receipt = { saved: count('SUCCESS') + undoSize(payload.listingsDone) + undoSize(payload.listingUndo), failed: count('FAILED'), skipped: count('INVALID') }
     const state: SheetImportState = receipt.failed && !receipt.saved ? 'FAILED' : receipt.failed ? 'PARTIAL' : 'DONE'
     const next: Payload = { ...payload, receipt, ...(families.size ? { readiness: { state: 'pending' as const, roots: [...families] } } : {}) }
     await prisma.$transaction(async tx => {
@@ -467,6 +487,108 @@ export async function refreshSheetReadiness(jobId: string) {
       jobId, failures.length ? 'failed' : 'done', failures[0] ?? '')
     console.info(`[sheet-import] ${jobId} readiness of ${readiness.roots.length} famil${readiness.roots.length === 1 ? 'y' : 'ies'} ${failures.length ? 'FAILED' : 'rebuilt'} in ${Math.round(performance.now() - started)} ms`)
   } finally { refreshing.delete(jobId) }
+}
+
+// ── extra listings (eBay files, 2026-10-01) ───────────────────────────────────────────────────
+
+/**
+ * Apply's first step for an eBay file (the Owner: "simply import", one step): give each extra listing without a SKU the
+ * file's SKU, create each missing listing as inert drafts and make the file's rows for it records of this job; the save
+ * then writes every record. An undo clears those SKUs and archives those listings instead. It runs once: `listingsDone`
+ * is stored with the new records in one transaction, so a resumed save goes straight to the records.
+ */
+async function applyListingPlan(jobId: string, payload: Payload): Promise<Payload> {
+  const plan = payload.listingPlan, undo = payload.listingUndo
+  if (payload.listingsDone || (!planSize(plan) && !undoSize(undo))) return payload
+  const done: ListingsDone = { named: [], created: [] }
+  if (undo) {
+    for (const n of undo.named) await prisma.productListingAlias.updateMany({ where: { id: n.aliasId, sku: n.sku }, data: { sku: null } })
+    for (const c of undo.created) await archiveAlias(c.aliasId, { productId: c.rootId, accountId: c.accountId })
+    const next: Payload = { ...payload, listingsDone: done }
+    await prisma.bulkOperation.updateMany({ where: { id: jobId, status: 'SAVING' }, data: { changes: json(next), processed: { increment: undoSize(undo) } } })
+    return next
+  }
+  for (const n of plan!.names) {
+    const alias = await prisma.productListingAlias.findFirst({ where: { id: n.aliasId }, select: { sku: true } })
+    if (alias?.sku !== n.sku) await nameListingAlias(n.aliasId, n.sku)
+    done.named.push({ aliasId: n.aliasId, sku: n.sku, rootSku: n.rootSku, label: n.label, marketplace: n.marketplace })
+  }
+  const rows: TransferRow[] = []
+  for (const c of plan!.creates) {
+    // A save resumed after the listing was made finds it by its SKU; it never makes a second one.
+    const existing = await prisma.productListingAlias.findFirst({ where: { sku: c.sku, productId: c.rootId, status: 'ACTIVE' }, select: { id: true } })
+    const alias = existing ?? await createAlias({ productId: c.rootId, channel: 'EBAY', marketplace: c.marketplace, accountId: c.accountId, label: c.sku, sku: c.sku })
+    done.created.push({ aliasId: alias.id, sku: c.sku, rootId: c.rootId, rootSku: c.rootSku, accountId: c.accountId, marketplace: c.marketplace })
+    const listings = await prisma.channelListing.findMany({ where: { aliasKey: alias.id }, select: { productId: true, version: true } })
+    const products = await prisma.product.findMany({ where: { id: { in: listings.map(l => l.productId) } }, select: { id: true, sku: true } })
+    const versionOf = new Map(products.map(p => [p.sku, listings.find(l => l.productId === p.id)!.version]))
+    for (const row of c.rows) if (versionOf.has(row.sku)) rows.push({ ...row, aliasKey: alias.id, accountId: c.accountId, version: versionOf.get(row.sku)! })
+  }
+  // The new listings join the job's scope, so the save may write them.
+  let boundary = payload.boundary
+  const newListings = done.created.length ? await prisma.channelListing.findMany({ where: { aliasKey: { in: done.created.map(c => c.aliasId) } }, select: { id: true } }) : []
+  if (newListings.length) {
+    const rootId = done.created[0].rootId
+    const family = await prisma.product.findMany({ where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null }, select: { id: true } })
+    boundary = await resolveProductTransferBoundary(payload.boundary?.productId || rootId, {
+      productIds: [...new Set([...(payload.boundary?.products.map(p => p.id) ?? []), ...family.map(p => p.id)])],
+      includeShared: payload.boundary?.includeShared ?? false, locales: payload.boundary?.locales ?? [],
+      listingIds: [...new Set([...(payload.boundary?.listings.map(l => l.id) ?? []), ...newListings.map(l => l.id)])] })
+  }
+  const records = rows.length ? await planListingRecords(rows, payload.market) : []
+  const last = await prisma.importJobRow.aggregate({ where: { jobId }, _max: { rowIndex: true } })
+  const next: Payload = { ...payload, boundary, listingsDone: done, listingIds: [...new Set([...payload.listingIds, ...newListings.map(l => l.id)])] }
+  await prisma.$transaction(async tx => {
+    if (records.length) await tx.importJobRow.createMany({ data: records.map((record, i) => ({ jobId, rowIndex: (last._max.rowIndex ?? 0) + i + 1, targetId: record.key,
+      parsedValues: json(record.payload), status: record.status })) })
+    await tx.bulkOperation.updateMany({ where: { id: jobId, status: 'SAVING' }, data: { changes: json(next), processed: { increment: done.named.length + done.created.length } } })
+  })
+  return next
+}
+
+/** The records of a listing Apply just created: the file's rows for it, checked now against its new drafts. */
+async function planListingRecords(rows: TransferRow[], market: string) {
+  clearSheetColumnCache(); clearFieldCatalogueCache()
+  const contracts = transferContracts(market)
+  contracts.reference = createReferenceResolver()
+  const { plan, context } = await withCachedSchemas(async () => {
+    const context = await loadTransferContext(rows)
+    return { plan: await buildTransferPlan(rows, 'update', context, contracts), context }
+  })
+  const groups = new Map<string, TransferRow[]>()
+  for (const row of rows) groups.set(transferTargetKey(row), [...(groups.get(transferTargetKey(row)) ?? []), row])
+  const targets = new Map(plan.targets.map(t => [t.key, t]))
+  return [...groups].map(([key, group]) => {
+    const target = targets.get(key)
+    const issues: TransferIssue[] = plan.issues.filter(i => 'entity' in i && transferTargetKey(i as unknown as TransferRow) === key)
+    const changed = !!target && (target.create || target.cells.some(c => c.verdict === 'changed') || !!target.presence || !!target.priceWrite)
+    if (!target && !issues.length) issues.push({ ...group[0], message: 'This row could not be checked. Import the file again.' })
+    const status: RecordStatus = issues.length || !target ? 'INVALID' : changed ? 'REVIEWED' : 'UNCHANGED'
+    const product = context.products.get(group[0].sku)
+    const parent = product?.parentId ? [...context.products.values()].find(p => p.id === product.parentId) : undefined
+    const dependencies = [...new Set([group[0].sku, ...(parent ? [parent.sku] : [])])].map(sku => ({ sku, before: context.products.get(sku) ?? null }))
+    const payload: RecordPayload = { rows: group, issues, ...(target && status === 'REVIEWED' ? { target, changed, dependencies } : {}), ...(target && status === 'INVALID' ? { cells: target.cells.filter(c => c.verdict === 'changed') } : {}) }
+    return { key, status, payload }
+  })
+}
+
+/** The review rows of the listing plan: first in the list. A created listing's values show here until they are records. */
+function planChanges(payload: Payload): SheetImportChange[] {
+  const out: SheetImportChange[] = []
+  const change = (id: string, at: { sku: string; marketplace: string; accountId: string; aliasKey: string }, destination: string, field: string, label: string, before: unknown, after: unknown, status: SheetImportChangeStatus): SheetImportChange =>
+    ({ id, sku: at.sku, destination, entity: 'Listings', channel: 'EBAY', marketplace: at.marketplace, accountId: at.accountId, aliasKey: at.aliasKey, locale: '', field, label, before, after, beforeState: 'stored', afterState: 'stored', status })
+  const done = payload.listingsDone
+  for (const n of payload.listingUndo?.named ?? []) out.push(change(`plan:u:${n.aliasId}`, { sku: n.rootSku, marketplace: n.marketplace, accountId: '', aliasKey: n.aliasId }, `eBay · ${n.marketplace} · ${n.label}`, 'listingSku', 'Listing SKU', n.sku, null, done ? 'saved' : 'new'))
+  for (const c of payload.listingUndo?.created ?? []) out.push(change(`plan:a:${c.aliasId}`, { sku: c.rootSku, marketplace: c.marketplace, accountId: c.accountId, aliasKey: c.aliasId }, `eBay · ${c.marketplace} · ${c.sku}`, 'listing', 'Listing', `Listing ${c.sku} (draft)`, 'Archived', done ? 'saved' : 'new'))
+  for (const n of payload.listingPlan?.names ?? []) out.push(change(`plan:n:${n.aliasId}`, { sku: n.rootSku, marketplace: n.marketplace, accountId: n.accountId, aliasKey: n.aliasId }, `eBay · ${n.marketplace} · ${n.label}`, 'listingSku', 'Listing SKU', null, n.sku, done ? 'saved' : 'new'))
+  for (const c of payload.listingPlan?.creates ?? []) {
+    const at = { sku: c.rootSku, marketplace: c.marketplace, accountId: c.accountId, aliasKey: '' }
+    out.push(change(`plan:c:${c.sku}`, at, `eBay · ${c.marketplace} · ${c.sku}`, 'listing', 'Listing', null, `New listing ${c.sku} (draft)`, done ? 'saved' : 'new'))
+    if (done) continue
+    c.rows.forEach((row, i) => out.push(change(`plan:c:${c.sku}:${i}`, { ...at, sku: row.sku }, `eBay · ${c.marketplace} · ${c.sku}`, row.field,
+      payload.labels[labelKey(row, row.field)] ?? humanize(row.field), null, row.value, 'new')))
+  }
+  return out
 }
 
 function transient(error: unknown) {
@@ -514,9 +636,11 @@ export async function undoSheetImport(jobId: string, userId: string | null): Pro
   if (!['DONE', 'PARTIAL'].includes(job.status)) throw new TransferConflict('Only a saved import can be undone.')
   const saved = await prisma.importJobRow.findMany({ where: { jobId, status: 'SUCCESS' }, orderBy: { rowIndex: 'asc' }, select: { parsedValues: true } })
   const rows: TransferRow[] = []
+  // A listing the import created is archived as a whole; its cells are not put back one by one.
+  const created = new Set(payload.listingsDone?.created.map(c => c.aliasId) ?? [])
   for (const item of saved) {
     const target = (item.parsedValues as unknown as RecordPayload).target
-    if (!target || target.create) continue
+    if (!target || target.create || created.has(target.identity.aliasKey)) continue
     for (const cell of target.cells) {
       if (cell.verdict !== 'changed' || NOT_UNDONE.has(cell.field)) continue
       const { before, after, beforeState, afterState, verdict: _verdict, channelRead: _read, effectiveBefore: _eb, effectiveAfter: _ea, label: _label, expected: _expected, version: _version, ...identity } = cell
@@ -525,9 +649,9 @@ export async function undoSheetImport(jobId: string, userId: string | null): Pro
         expected: { action: afterState === 'inherited' ? 'INHERIT' : 'SET', value: after } })
     }
   }
-  if (!rows.length) throw new TransferConflict('This import saved nothing that can be undone.')
+  if (!rows.length && !undoSize(payload.listingsDone)) throw new TransferConflict('This import saved nothing that can be undone.')
   const status = await createSheetImport({ rows, issues: [], boundary: payload.boundary, market: payload.market, format: 'undo', filename: `Undo · ${job.uploadFilename ?? 'import'}`, userId,
-    warnings: [], links: [], deletes: [], labels: payload.labels, undoOf: jobId, autoApply: true })
+    warnings: [], links: [], deletes: [], labels: payload.labels, undoOf: jobId, autoApply: true, ...(undoSize(payload.listingsDone) ? { listingUndo: payload.listingsDone } : {}) })
   // Only `undoneBy` changes: a readiness rebuild may be writing its own keys at the same time.
   await prisma.$executeRawUnsafe(`UPDATE "BulkOperation" SET "changes" = jsonb_set("changes", '{undoneBy}', to_jsonb($2::text)) WHERE "id" = $1`, jobId, status.jobId)
   return status
@@ -558,7 +682,7 @@ export async function sheetImportChanges(jobId: string, userId: string | null, q
   if (!loaded) return null
   const { payload } = loaded
   const records = await prisma.importJobRow.findMany({ where: { jobId }, orderBy: { rowIndex: 'asc' }, select: { id: true, status: true, errorMessage: true, parsedValues: true } })
-  const out: SheetImportChange[] = []
+  const out: SheetImportChange[] = planChanges(payload)
   for (const record of records) {
     const value = record.parsedValues as unknown as RecordPayload
     const base: SheetImportChangeStatus = record.status === 'SUCCESS' ? 'saved' : record.status === 'FAILED' ? 'failed' : record.status === 'INVALID' ? 'skipped' : 'ready'

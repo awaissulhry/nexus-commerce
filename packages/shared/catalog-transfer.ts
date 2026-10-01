@@ -187,7 +187,8 @@ export interface SheetImportStatus {
   readiness?: 'pending' | 'done' | 'failed'
   error?: string
 }
-export type SheetImportChangeStatus = 'ready' | 'problem' | 'saved' | 'failed' | 'skipped'
+/** `new` (2026-10-01): a listing SKU or a new listing Apply makes, and the values of a listing it creates. */
+export type SheetImportChangeStatus = 'ready' | 'new' | 'problem' | 'saved' | 'failed' | 'skipped'
 export interface SheetImportChange {
   id: string
   sku: string

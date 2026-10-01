@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false } }))
+const m = vi.hoisted(() => ({ ebayNotices: [] as string[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false } }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -12,7 +12,7 @@ vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.
 vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => ({ kind: 'amazon', sellerId: 'seller', marketplaceId: 'market',
   products: [{ productId: 'parent', sku: 'SELLER-SKU' }, { productId: 'child', sku: 'SELLER-CHILD' }],
   feed: { header: { version: '2.0' }, messages: [{ sku: 'SELLER-SKU' }, { sku: 'SELLER-CHILD' }] } }), sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
-vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async (facts: any) => ({ kind: 'ebay', marketplace: 'IT', itemId: '123', xml: '<Item/>',
+vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async (facts: any) => ({ kind: 'ebay', marketplace: 'IT', itemId: '123', xml: '<Item/>', ...(m.ebayNotices.length ? { notices: m.ebayNotices } : {}),
   products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })) }), sendEbayPublication: m.ebay, readEbayPublication: m.ebayStatus,
   ebayPublicationRequest: (plan: any) => ({ operation: 'ReviseFixedPriceItem', xml: plan.xml }), usesEbayInventory: () => false, prepareEbayInventoryPublication: vi.fn() }))
 vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map(), revision: 'baseline-1' }) }))
@@ -74,7 +74,7 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'seller-b', lis
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alias-b' }, account: { displayName: 'Store B' }, parent: { id: 'parent' },
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
-beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
+beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.ebayNotices = []; m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
   m.snapshots.mockResolvedValue([]); m.findListings.mockResolvedValue([]); m.events.length = 0
   m.fill.mockImplementation(async () => { m.events.push('fill'); return { dryRun: false, rows: [], counts: {} } }) })
 
@@ -222,6 +222,15 @@ it('never offers a live send for a blocked or simulated destination', async () =
   m.mode.mockReturnValue('dry-run')
   expect(await previewStudioPublication('parent', scope, 'user')).toMatchObject({ id: null, issues: expect.arrayContaining([expect.objectContaining({ severity: 'error' })]) })
   expect(m.rows.size).toBe(0); expect(m.amazon).not.toHaveBeenCalled()
+})
+
+// Owner 2026-10-01: a new eBay listing at stock 0 is not refused; the eBay prepare step returns a note, and the review shows it
+// as a note that blocks nothing.
+it('shows an eBay review note as a warning, not a blocker', async () => {
+  m.ebayNotices = ['The stock is 0. eBay keeps this listing hidden from search until it has stock.']
+  const review = await previewRaw('parent', { ...scope, channel: 'EBAY' }, 'user')
+  expect(review.issues).toContainEqual({ severity: 'warning', message: 'The stock is 0. eBay keeps this listing hidden from search until it has stock.' })
+  expect(review.issues.filter(issue => issue.severity === 'error')).toEqual([])
 })
 
 it('refuses an expired review and a gate changed after review', async () => {
