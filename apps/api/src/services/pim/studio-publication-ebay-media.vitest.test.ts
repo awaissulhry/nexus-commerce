@@ -135,3 +135,34 @@ describe('eBay Trading publish of a family on the media plan', () => {
     expect(m.calls).toEqual([])
   })
 })
+
+// 2026-10-01 — eBay takes the country with a postal code OR a city (Trading `Item.PostalCode` / `Item.Location`: one of the
+// two). A new Motovento listing held "IT" and "47822" on its main row and was refused for the missing city.
+describe('the item location of a new eBay listing', () => {
+  const located = (sheet: Record<string, unknown>, account: Record<string, unknown> = {}) => {
+    const f = facts()
+    f.account.connectionMetadata.itemLocation = account
+    f.listings[0].platformAttributes = { ...f.listings[0].platformAttributes, ...sheet }
+    return f
+  }
+  it('a country and a postal code on the listing are enough: both are sent, with no city', async () => {
+    const plan = await prepareEbayPublication(located({ itemLocationCountry: 'IT', itemPostalCode: '47822' }))
+    expect(plan.xml).toContain('<Country>IT</Country>')
+    expect(plan.xml).toContain('<PostalCode>47822</PostalCode>')
+    expect(plan.xml).not.toMatch(/<Location>/)
+  })
+  it('a country and a city still work', async () => {
+    const plan = await prepareEbayPublication(located({ itemLocationCountry: 'IT', itemLocation: 'Riccione' }))
+    expect(plan.xml).toContain('<Location>Riccione</Location>')
+  })
+  it('a blank cell falls through to the account default', async () => {
+    const plan = await prepareEbayPublication(located({ itemLocationCountry: 'IT', itemLocation: ' ', itemPostalCode: '' }, { postalCode: '47822' }))
+    expect(plan.xml).toContain('<PostalCode>47822</PostalCode>')
+  })
+  it('no postal code and no city: refused, naming the cells to set', async () => {
+    await expect(prepareEbayPublication(located({ itemLocationCountry: 'IT' }))).rejects.toThrow('eBay needs the item location country and a postal code or city to create a listing. Set "Item location country" and "Item location postal code"')
+  })
+  it('no country: refused', async () => {
+    await expect(prepareEbayPublication(located({ itemPostalCode: '47822' }))).rejects.toThrow('eBay needs the item location country')
+  })
+})

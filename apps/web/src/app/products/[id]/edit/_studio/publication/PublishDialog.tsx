@@ -158,7 +158,8 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
           <ul className={styles.issues}>{review.issues.map((issue, i) => <li key={i}>{issue.sku && <strong>{issue.sku}: </strong>}{issue.message}</li>)}</ul>
         </Banner>}
         {sparse && review.changes && <PublicationChanges changes={review.changes} selectedIds={selectedIds} onSelectionChange={chooseFields} disabled={!review.id || !!busy || uncertain || !!result} photosOnly={review.photosOnly} />}
-        {sparse && !review.changes && <Banner tone="warning" title="Field review unavailable">Refresh this review after the server update before publishing.</Banner>}
+        {/* An error above already says why no fields are listed: this banner is only for a review that names no error. */}
+        {sparse && !review.changes && !blockers.length && <Banner tone="warning" title="Field review unavailable">The review did not list the fields to send. Refresh the review.</Banner>}
         {selectedReview && <div ref={selectionPreview} tabIndex={-1} role="region" aria-label="Selected publication request"><Banner tone="info" title="Selected request ready">
           <p>{selectedReview.fieldCount} {selectedReview.fieldCount === 1 ? 'change' : 'changes'} affecting {selectedReview.products.length} {selectedReview.products.length === 1 ? 'product' : 'products'}.</p>
           <p>{review.accountLabel} · {review.scope.marketplace}</p>
@@ -167,7 +168,7 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
         </Banner></div>}
         {!sparse && review.overwrite && <PublicationOverwrite overwrite={review.overwrite} confirmed={confirmedReviewId === review.id && !!review.id}
           onConfirm={confirmed => setConfirmedReviewId(confirmed ? review.id : null)} disabled={!review.id || !!busy || uncertain || !!result} />}
-        {!sparse && !review.overwrite && review.rows.some(row => row.existing) && <Banner tone="warning" title="Overwrite review unavailable">Refresh this review after the server update before publishing existing listings.</Banner>}
+        {!sparse && !review.overwrite && !blockers.length && review.rows.some(row => row.existing) && <Banner tone="warning" title="Overwrite review unavailable">The review did not check what this overwrites on the existing listings. Refresh the review.</Banner>}
         <div className={styles.products} role="region" aria-label="Products in this publication" tabIndex={0}>
           {review.rows.map(row => <div key={row.productId} className={styles.product}><strong>{row.sku}</strong><span>{row.title}</span><span>{row.existing ? 'Existing listing' : 'New listing'}</span></div>)}
         </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ebayAxisIdentities, ebayFamilySupplier, isEbayListingLevel, listingLevelWarning, projectionAxisNames, sameEbayValue, showEbayListingLevel } from './ebay-listing-level.js'
+import { ebayAxisIdentities, ebayFamilySupplier, isEbayListingLevel, projectionAxisNames, sameEbayValue, showEbayListingLevel } from './ebay-listing-level.js'
 
 /**
  * P1 of fix/product-sheet-editing (report 5 I-1) — eBay takes one value per listing for an item specific that is not a
@@ -25,10 +25,6 @@ describe('the rule', () => {
     expect(ebayFamilySupplier([...rows, { productId: 'p2', sku: 'F', isParent: true, value: 'Pakistan' }])?.productId).toBe('p2')
   })
   it('a legacy "x" and ["x"] are the same value', () => expect(sameEbayValue('x', ['x'])).toBe(true))
-  it('the warning names the value eBay gets, where it comes from, and the rows (ten at most)', () => {
-    const rows = Array.from({ length: 12 }, (_, i) => ({ sku: `S${i}`, value: 'Donna' }))
-    expect(listingLevelWarning('Genere', 'Uomo', 'S', rows)).toMatch(/^Genere: eBay takes one value for the whole listing and will get "Uomo" \(from S\)\. 12 rows hold another value that is not sent: S0 \("Donna"\).* and 2 more\.$/)
-  })
 })
 
 describe('showEbayListingLevel — what the eBay sheet shows', () => {

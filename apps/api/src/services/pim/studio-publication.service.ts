@@ -149,7 +149,11 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
       prepared = { kind: 'shopify', revision: preview.revision, remoteRevision: preview.remoteRevision, initialized: preview.initialized, draft: preview.draft, products }
     } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'ETSY' ? 'Etsy' : scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
     if (prepared && prepared.kind !== 'shopify') {
-      const baseline = await readPublicationBaseline(facts, prepared.products)
+      // An Inventory listing is reviewed and sent by its owner alone (`prepareEbayInventoryChanges` addresses every change
+      // to it), so its baseline is the owner's. Judged against all included products, a family failed every review.
+      const owner = prepared.kind === 'ebay-inventory' ? prepared.owner.productId : null
+      const baselineFacts = owner ? { ...facts, products: facts.products.filter(product => product.id === owner) } : facts
+      const baseline = await readPublicationBaseline(baselineFacts, prepared.products)
       baselineRevision = baseline.revision
       changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values)
         : prepared.kind === 'ebay-inventory' ? prepareEbayInventoryChanges({ owner: prepared.owner, ours: prepared.ours, live: prepared.live, destination: prepared.destination, baselineValues: baseline.values })
