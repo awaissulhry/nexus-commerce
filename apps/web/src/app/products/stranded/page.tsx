@@ -1,5 +1,6 @@
 import { prisma } from "@nexus/database";
 import Link from '@/lib/workspaces/Link';
+import { productStudioPath } from '@/lib/products/studio-path';
 import PageHeader from "@/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";
@@ -120,7 +121,7 @@ export default async function StrandedInventoryPage() {
                       <div className="flex items-center gap-2">
                         <Link href={`/products/${product.id}/edit`} className="text-xs text-blue-600 hover:text-blue-700 font-medium">Edit</Link>
                         <span className="text-gray-300 dark:text-slate-600">|</span>
-                        <Link href={`/products/${product.id}/list-wizard`} className="text-xs text-blue-600 hover:text-blue-700 font-medium">Create Listing</Link>
+                        <Link href={productStudioPath(product.id)} className="text-xs text-blue-600 hover:text-blue-700 font-medium">Create Listing</Link>
                       </div>
                     </td>
                   </tr>

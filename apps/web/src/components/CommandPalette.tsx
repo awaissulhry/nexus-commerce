@@ -586,20 +586,6 @@ export const PAGE_COMMANDS: Command[] = [
     keywords: 'matrix variant grid size color bulk',
   },
   {
-    id: 'page-products-edit-open-list-wizard',
-    label: 'Open listing wizard (publish to a channel)',
-    icon: Boxes,
-    run: () =>
-      window.dispatchEvent(
-        new CustomEvent('nexus:products-edit:goto-route', {
-          detail: { route: 'list-wizard' },
-        }),
-      ),
-    group: 'On this page',
-    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
-    keywords: 'list publish channel amazon ebay shopify woocommerce wizard guida pubblica',
-  },
-  {
     id: 'page-products-edit-open-images',
     label: 'Open image manager',
     icon: FileText,

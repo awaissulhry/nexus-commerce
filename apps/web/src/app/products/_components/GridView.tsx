@@ -34,6 +34,8 @@ import {
   useState,
 } from 'react'
 import Link from '@/lib/workspaces/Link'
+import { productStudioPath } from '@/lib/products/studio-path'
+import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import {
   AlertCircle,
   CheckCircle2,
@@ -429,8 +431,8 @@ function RowContextMenuContent({
       {item(<ExternalLink size={14} />, 'Open edit page', () => {
         window.location.href = `/products/${product.id}/edit`
       })}
-      {item(<Sparkles size={14} />, 'Open list wizard', () => {
-        window.location.href = `/products/${product.id}/list-wizard`
+      {item(<Sparkles size={14} />, 'Publish in the product studio', () => {
+        window.location.href = workspaceHref(browserWorkspaceId(), productStudioPath(product.id))
       })}
       <div className="my-1 border-t border-subtle dark:border-slate-800" />
       {product.status !== 'ACTIVE' &&
@@ -1512,7 +1514,7 @@ const ProductCell = memo(function ProductCell({
             return (
               <Link
                 key={ch}
-                href={`/products/${p.id}/list-wizard?channel=${ch}`}
+                href={productStudioPath(p.id, { channel: ch })}
                 title={t('products.grid.notListedOn', { channel: ch })}
                 className="inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-card text-tertiary rounded hover:border-blue-300 hover:text-link hover:bg-info-soft"
               >
