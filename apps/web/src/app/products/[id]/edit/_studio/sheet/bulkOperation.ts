@@ -83,9 +83,10 @@ function waitForRetry(delay: number, signal?: AbortSignal): Promise<boolean> {
   })
 }
 
-type OperationPayload = { units?: Array<{ key: string; status: number; body: unknown }> } | null
+export type OperationPayload = { units?: Array<{ key: string; status: number; body: unknown }> } | null
 
-async function postWithBusyRetry(post: BulkSavePost, id: string, units: BulkSaveUnitWire[], retrySignal?: AbortSignal) {
+/** One post with the bounded known-rollback retry; also used for the ordinary part of a mixed Shopify operation. */
+export async function postWithBusyRetry(post: BulkSavePost, id: string, units: BulkSaveUnitWire[], retrySignal?: AbortSignal) {
   // Freeze the wire values for this intent, even if a later edit changes an object held by the row.
   const snapshot = JSON.parse(JSON.stringify(units)) as BulkSaveUnitWire[]
   for (let attempt = 0; ; attempt++) {

@@ -1,6 +1,6 @@
 import { completenessFor } from '../pim/sheet-rows.service.js'
 import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
-import { informationRestriction, informationSharingRule, informationSharedValue, sharedInformationSource } from '@nexus/shared/shopify-information-editing'
+import { informationRestriction, informationSharingRule, informationSharedValue, informationSharingFacts, sharedInformationSource } from '@nexus/shared/shopify-information-editing'
 import { createHash } from 'node:crypto'
 import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, nativeFieldValueError, type InformationField, type InformationSnapshot } from '@nexus/shared/shopify-information'
 import type { ShopifyLinkedDraft, ShopifyLinkedWorkspace, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
@@ -130,7 +130,7 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
         resettable: pinned || pending !== undefined || mapped, linkGroupId: null, mapped: rule || ownValue ? null : base.mapped, affectsAllChannels: false,
         ...(ownValue ? { needsTranslation: false, requestedLocale: undefined, effectiveLocale: undefined, translationState: undefined } : {}),
         writeField: column.writeField, writeTarget: 'channelListing', writeVerb: 'channel', editable: !reason, writable: !reason, writeBlockedReason: reason,
-        shopifyWrite: { ownerId: remote.id, fieldId: field.id, token: shopifyCellToken(workspace, remote.id, field, remote.locale), baseline },
+        shopifyWrite: { ownerId: remote.id, fieldId: field.id, token: shopifyCellToken(workspace, remote.id, field, remote.locale), baseline, sharing: informationSharingFacts(remote, field, workspace.draft) },
       }
       if (sharedConflict) fieldIssues.push({ key: column.key, label: column.label, message: conflictMessage, severity: 'warn' })
       if (ownValue || sharedValue) {

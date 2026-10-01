@@ -16,6 +16,12 @@ export function informationSharingRule(row: InformationRow, field: InformationFi
     : undefined
 }
 
+/** The sharing facts a cell reports (`ShopifySheetWrite.sharing`): the rule's source and whether this owner follows it. */
+export function informationSharingFacts(row: InformationRow, field: InformationField, draft: ShopifyLinkedDraft): { sourceOwnerId: string; follows: boolean } | null {
+  const rule = informationSharingRule(row, field, draft)
+  return rule ? { sourceOwnerId: rule.sourceProductId, follows: rule.sourceProductId !== row.id && !rule.excludedProductIds.includes(row.id) } : null
+}
+
 /** The value the shared-content publisher will copy. Null is an intentional empty source, never a fallback. */
 export function informationSharedValue(row: InformationRow, field: InformationField, draft: ShopifyLinkedDraft, rows: InformationRow[]) {
   const rule = row.locale ? undefined : informationSharingRule(row, field, draft)

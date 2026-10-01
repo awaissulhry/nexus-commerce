@@ -16,7 +16,8 @@ import { formulaCandidates, formulaColumnId } from '../formulaColumns';
 import { columnLanguages } from '../languages';
 import { ShopifySheetReview } from '../../shopify/ShopifySheetReview';
 import { recoverSheetRow } from '../sheetRecovery';
-import { runBulkOperation, type BulkSend } from '../bulkOperation';
+import { newOperationId, runBulkOperation, type BulkSend } from '../bulkOperation';
+import { createShopifyBulkPost, orderShopifyColumnRequests } from '../../shopify/channelSheetWriter';
 import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo } from '../useSheetUndo';
 import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
@@ -378,7 +379,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             commit: (req: SheetWriteRequest<ChannelSheetRow>) => commitOne(req),
             // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29: one request per
             // row made 224 of 250 rows fail or go unconfirmed).
-            commitBatch: (requests) => runBulkOperation(requests, commitOne, { retrySignal: writerRef.current!.retrySignal }),
+            // Shopify (lane01): ONE stable action id for the whole batch — the root-creation proof and every cells request
+            // carry it, unlike the engine's per-round request keys — and rows in write order (follower detach, sources,
+            // follower attach). A batch without Shopify units leaves exactly as before.
+            commitBatch: (requests) => runBulkOperation(orderShopifyColumnRequests(requests), commitOne, { retrySignal: writerRef.current!.retrySignal,
+                post: createShopifyBulkPost(newOperationId(), { signal: writerRef.current!.retrySignal }) }),
             readBackBatch: async (requests) => {
                 const reads = await readScope(requests);
                 if (!reads)

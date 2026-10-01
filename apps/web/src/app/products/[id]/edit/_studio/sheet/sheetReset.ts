@@ -14,6 +14,7 @@ import { isCellEditable, offersCascade } from './channel/rows'
 import type { ChannelSheetRow } from './channel/types'
 import type { ColDef, ColGroupDef } from '@/design-system/grid'
 import type { SheetColumn as MasterColumn, StudioRow } from './master/types'
+import { shopifyColumnControl } from '../shopify/columnControl'
 
 export type ResetIntent = 'reset' | 'reset-list'
 
@@ -138,7 +139,7 @@ export interface SetColumnFacts {
   options?: string[]
   optionLabels?: Record<string, string>
   mode?: 'strict' | 'open'
-  /** `false`: the column takes no "Set every row…" (a Shopify field keeps its own draft editor). */
+  /** `false`: the column takes no "Set every row…" (a Shopify field other than a supported scalar keeps its own draft editor). */
   settable?: boolean
 }
 
@@ -152,7 +153,8 @@ export function controlColumnFacts(col: { key: string; label: string; kind?: str
   if (!col || col.editable === false || isProductRelationshipColumn(col.key) || col.kind === 'variationTheme' || col.shape === 'axes') return null
   if (col.key === 'productMedia' || col.key.startsWith('progress:') || col.key.startsWith('slots:')) return null
   return { colId: col.key, label: col.label, kind: col.kind, shape: col.shape, options: col.options, optionLabels: col.optionLabels, mode: col.mode,
-    ...(col.shopifyField ? { settable: false } : {}) }
+    // A Shopify field takes "Set every row…" only for a supported scalar metafield; the rest keep their own draft editor.
+    ...(col.shopifyField ? shopifyColumnControl(col.shopifyField) : {}) }
 }
 
 /** "Clear" or "Reset to inherited" — the Delete key's question, asked once for the whole selection. */

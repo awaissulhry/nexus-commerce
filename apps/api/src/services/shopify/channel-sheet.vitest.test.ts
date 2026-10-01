@@ -72,6 +72,48 @@ async function sharedPublishPlan() {
 
 
 describe('Shopify behind the common channel sheet', () => {
+  it('returns separate per-owner receipts for one physical column, including a stale owner', async () => {
+    const { fieldId, sourceId, siblingId } = sharedFixture()
+    const good = { ...change(fieldId, 'false', product), colId: 'flag', receiptKey: 'row-a' }
+    const stale = { ...change(fieldId, 'false', siblingId), colId: 'flag', receiptKey: 'row-b', token: 'stale' }
+    const source = { ...change(fieldId, 'true', sourceId), colId: 'flag', receiptKey: 'row-c' }
+    const result = await saveShopifySheetCells('family', scope, { cells: [good, stale, source] }, 'editor')
+    expect(Object.keys(result.cells)).toEqual(['row-a', 'row-b', 'row-c'])
+    expect(result.cells['row-a']).toMatchObject({ ok: true, shopifyWrite: { ownerId: product, fieldId } })
+    expect(result.cells['row-b']).toMatchObject({ ok: false, reason: expect.stringContaining('Another editor') })
+    expect(result.cells['row-c']).toMatchObject({ ok: true, shopifyWrite: { ownerId: sourceId, fieldId } })
+    expect(s.workspace.draft.sheetValues.map((v: any) => v.ownerId)).toEqual([product, sourceId])
+    expect(s.workspace.draft.sharedFields[0].excludedProductIds).toEqual([product])
+  })
+  it('reports exact sharing facts on every write address, and the follower’s new facts after its own write', async () => {
+    const { fieldId, sourceId, siblingId } = sharedFixture()
+    s.workspace.draft.sharedFields[0].excludedProductIds = [siblingId]
+    s.workspace.draft.sheetValues = [{ ownerId: product, fieldId, type: 'boolean', locale: '', value: 'true' }]
+    const rows = projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    // The legacy follower pin still FOLLOWS by the rule; its pin does not make it own.
+    expect(rows[0].values[fieldId].shopifyWrite?.sharing).toEqual({ sourceOwnerId: sourceId, follows: true })
+    expect(rows[0].values[fieldId].pinned).toBe(true)
+    // A field no sharing rule covers says so explicitly (null), never by omission.
+    expect(rows[0].values.vendor.shopifyWrite?.sharing).toBeNull()
+    s.workspace.draft.sheetValues = []
+    const result = await saveShopifySheetCells('family', scope, { cells: [
+      { ...change(fieldId, 'false', product), colId: fieldId, receiptKey: 'follower' },
+      { ...change(fieldId, 'true', sourceId), colId: fieldId, receiptKey: 'source' },
+      { ...change(fieldId, 'false', siblingId), colId: fieldId, receiptKey: 'excluded' },
+    ] }, 'editor')
+    expect(result.cells.follower.shopifyWrite?.sharing).toEqual({ sourceOwnerId: sourceId, follows: false })
+    expect(result.cells.source.shopifyWrite?.sharing).toEqual({ sourceOwnerId: sourceId, follows: false })
+    expect(result.cells.excluded.shopifyWrite?.sharing).toEqual({ sourceOwnerId: sourceId, follows: false })
+  })
+  it('refuses duplicate effective receipt identities before writing any draft', async () => {
+    const { fieldId, sourceId } = sharedFixture(), before = structuredClone(s.workspace.draft)
+    const a = { ...change(fieldId, 'false'), colId: 'flag', receiptKey: 'same' }
+    const b = { ...change(fieldId, 'true', sourceId), colId: 'same' }
+    await expect(saveShopifySheetCells('family', scope, { cells: [a, b] }, 'editor')).rejects.toThrow(/conflicting/)
+    expect(s.workspace.draft).toEqual(before)
+    expect(s.writes).toEqual([])
+  })
   it('creates an own override and resets to the shared source without changing its siblings', async () => {
     const { sourceId, siblingId, fieldId } = sharedFixture()
     const untouched = structuredClone(s.snapshot.rows.filter((r: any) => [sourceId, siblingId].includes(r.id)))
