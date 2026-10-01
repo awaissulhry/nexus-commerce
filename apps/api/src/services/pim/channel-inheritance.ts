@@ -1,5 +1,6 @@
 import type { ChannelStore } from './channel-specs/types.js'
 import { readPath } from './sheet-values.js'
+import { aspectCanonicalName } from '../ebay-theme-axes.js'
 
 export const CHANNEL_OVERRIDE_COLUMNS: Record<string, string> = {
   title: 'titleOverride', description: 'descriptionOverride',
@@ -30,6 +31,15 @@ export function readStoredChannelValue(store: ChannelStore | undefined, listing:
   if (store?.kind === 'platformAttributes') for (const path of store.legacyPaths ?? []) {
     const value = readPath(row.platformAttributes, path)
     if (value !== undefined) return value
+  }
+  // An eBay aspect stored only under another spelling (GENERE for Genere, Brand for Marca) is still this listing's
+  // value: the publisher sends it, so the sheet must show it. A write removes the other spelling (applyPlatformMutations).
+  if (store?.kind === 'platformAttributes' && store.path.length === 2 && store.path[0] === 'itemSpecifics') {
+    const bag = readPath(row.platformAttributes, ['itemSpecifics'])
+    if (bag && typeof bag === 'object' && !Array.isArray(bag)) {
+      const identity = aspectCanonicalName(store.path[1])
+      for (const [key, value] of Object.entries(bag)) if (key !== store.path[1] && aspectCanonicalName(key) === identity) return value
+    }
   }
   return undefined
 }

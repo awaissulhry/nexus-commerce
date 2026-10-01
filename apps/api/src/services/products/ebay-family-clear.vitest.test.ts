@@ -52,6 +52,7 @@ import { buildEbayListingInput } from '../pim/studio-publication-ebay.js'
 import { resolveBatch } from '../pim/mapping/resolve-batch.service.js'
 import { writeContent } from '../pim/content-write.js'
 import type { ContentAddress } from '@nexus/shared/content-language'
+import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { seedClearEnvironment, seedClearFamily, seedClearListings, clearListings, clearUnit, itemSpecifics,
   COUNTRY_FIELD, COUNTRY_NAME, CUSTOM_FIELD, COLOR_FIELD, type ClearEnvironment, type ClearFamily } from '../../test-support/ebay-family-clear-fixture.js'
 
@@ -117,6 +118,62 @@ it('clears parent/A/B once and returns final owner counters for every unit', () 
   const answer = await save(units)
   confirmed(answer); await cleared(family); await finalReceipts(family, units, answer)
   for (const row of await clearListings(prisma, family)) expect(row.version).toBe(before.find(prior => prior.id === row.id)!.version + 1)
+}))
+
+it.each([
+  { field: CUSTOM_FIELD, name: 'Genere', legacyValue: 'Legacy value' },
+  { field: COUNTRY_FIELD, name: COUNTRY_NAME, legacyValue: 'Italia' },
+])('clears every casing of $name from storage and the actual offline payload', ({ field, name, legacyValue }) => scoped(async () => {
+  const family = await seedClearFamily(prisma, environment), row = (await children(family))[1]
+  const legacyName = name.toUpperCase(), specifics = { ...itemSpecifics(row) }
+  delete specifics[name]; specifics[legacyName] = legacyValue
+  await prisma.channelListing.update({ where: { id: row.id }, data: { platformAttributes: {
+    ...(row.platformAttributes as Prisma.JsonObject), itemSpecifics: specifics,
+  } } })
+  const before = await clearListings(prisma, family)
+  const column = (await read(family)).columns.find(column => column.key === field.slice(5))!
+  expect(column.editable).toBe(true)
+  const store = Object.values(column.channels ?? {})[0].store
+  expect(store).toMatchObject({ kind: 'platformAttributes', path: ['itemSpecifics', name] })
+  const units = (await children(family)).map(row => clearUnit(family, row, field))
+  const answer = await save(units)
+  confirmed(answer); await finalReceipts(family, units, answer)
+  const after = await clearListings(prisma, family)
+  const payload = await offline(family)
+  // Check logical identity, not merely one spelling: a surviving GENERE must not evade a Genere assertion.
+  expect.soft(Object.entries(payload.shared.itemSpecifics).filter(([key]) => aspectCanonicalName(key) === aspectCanonicalName(name))).toEqual([])
+  for (const current of after) {
+    expect.soft(itemSpecifics(current)).not.toHaveProperty(legacyName)
+    expect.soft(Object.entries(itemSpecifics(current)).filter(([key, value]) => aspectCanonicalName(key) === aspectCanonicalName(name) && value !== null)).toEqual([])
+    expect(current.version).toBe(before.find(prior => prior.id === current.id)!.version + 1)
+    expect(itemSpecifics(current).Colore).toEqual(itemSpecifics(before.find(prior => prior.id === current.id)!).Colore)
+  }
+  expect(itemSpecifics(after.find(current => current.productId === family.parentId)!)).toHaveProperty(name, null)
+}))
+
+it.each([
+  { field: CUSTOM_FIELD, name: 'Genere', legacyValue: 'Legacy value' },
+  { field: COUNTRY_FIELD, name: COUNTRY_NAME, legacyValue: 'Italia' },
+])('shows the listing-level $name that eBay receives when the first variant holds another spelling', ({ field, name, legacyValue }) => scoped(async () => {
+  const family = await seedClearFamily(prisma, environment)
+  const parent = (await clearListings(prisma, family)).find(row => row.productId === family.parentId)!
+  const first = (await children(family))[0]
+  // eBay takes ONE listing-level value per aspect: the parent first, then each variant in order. Move the parent's and
+  // the first variant's value to a legacy spelling so that spelling is the one the payload chooses.
+  for (const row of [parent, first]) {
+    const specifics = { ...itemSpecifics(row) }
+    if (!(name in specifics) && row !== first) continue
+    delete specifics[name]
+    if (row === first) specifics[name.toUpperCase()] = legacyValue
+    await prisma.channelListing.update({ where: { id: row.id }, data: { platformAttributes: {
+      ...(row.platformAttributes as Prisma.JsonObject), itemSpecifics: specifics,
+    } } })
+  }
+  const sent = Object.entries((await offline(family)).shared.itemSpecifics)
+    .filter(([key]) => aspectCanonicalName(key) === aspectCanonicalName(name)).map(([, value]) => value)
+  // Positive control: the payload really sends the legacy spelling's value, so the sheet must not show another one.
+  expect(sent).toEqual([legacyValue])
+  for (const row of (await read(family)).rows) expect.soft(row.values[field.slice(5)].value, row.id).toEqual(legacyValue)
 }))
 
 for (const shape of ['scalar', 'list'] as const) it(`keeps a stored ${shape} other-specific clear editable in later units and a new operation`, () => scoped(async () => {
