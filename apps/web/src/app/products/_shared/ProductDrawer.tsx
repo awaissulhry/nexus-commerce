@@ -1447,8 +1447,10 @@ function ListingsTab({
   // P.12 — same shape for the "Snap to master" action. Calls
   // /api/listings/bulk-action with action='follow-master' for a
   // single listing id, which flips every followMaster* flag back to
-  // true. Next sync tick resets the listing's local values to the
-  // master snapshots.
+  // true. The price goes through the channel price door: it is
+  // recomputed by the listing's rule and queued for the channel now
+  // (30 s hold), or the job fails it by name. The other fields follow
+  // the master from their next sync or publish.
   const [snapping, setSnapping] = useState<string | null>(null)
   const [snapError, setSnapError] = useState<{
     listingId: string

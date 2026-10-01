@@ -5,7 +5,7 @@
  * decision surface in one screen:
  *
  *   - Channel / market label + currency it operates in
- *   - Effective price (followMasterPrice resolved) — formatted in
+ *   - Effective price (followMasterPrice + the pricing rule resolved) — formatted in
  *     the market's native currency (GBP for UK, USD for US, EUR
  *     elsewhere; VAT-inclusive per EU + UK marketplace convention)
  *   - Sale price when set (G.3)
@@ -30,6 +30,7 @@
  */
 
 import { prisma } from '@nexus/database'
+import { followerListingPrice } from '@nexus/shared/listing-price'
 import Link from '@/lib/workspaces/Link'
 import { Activity, AlertTriangle } from 'lucide-react'
 import { prettyChannelMarketplace } from '@/lib/marketplace-code'
@@ -218,10 +219,12 @@ export default async function PricingTab({
           </thead>
           <tbody>
             {listings.map((l) => {
+              // A following listing carries its RULE's price (FIXED = master, PERCENT_OF_MASTER = master × (1 + %)),
+              // computed by the API's own maths; it used to show the master as if every rule were FIXED. Match Amazon
+              // takes no price from the master: its stored price is the effective one.
               const effective = l.followMasterPrice
-                ? l.masterPrice == null
-                  ? null
-                  : Number(l.masterPrice)
+                ? followerListingPrice(masterBase ?? l.masterPrice, l.pricingRule, l.priceAdjustmentPercent) ??
+                  (l.price == null ? null : Number(l.price))
                 : l.priceOverride == null
                   ? l.price == null
                     ? null

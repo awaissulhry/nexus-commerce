@@ -3025,7 +3025,7 @@
   "products.drawer.listings.resyncTitle": "Re-queue this listing for the next sync tick",
   "products.drawer.listings.queuing": "Queuing…",
   "products.drawer.listings.syncNow": "Sync now",
-  "products.drawer.listings.snapTitle": "Re-enable follow-master for every field. Next sync resets local values to master.",
+  "products.drawer.listings.snapTitle": "Follow the master again for every field. The price is recomputed by the listing’s rule and sent to the channel after a 30-second hold; the other fields follow from their next sync or publish.",
   "products.drawer.listings.snapping": "Snapping…",
   "products.drawer.listings.snap": "Snap to master",
   "products.drawer.listings.open": "Open",

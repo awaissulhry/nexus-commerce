@@ -31,6 +31,9 @@ interface DriftRow {
   masterPrice: string | null
   price: string | null
   priceDelta: number | null
+  /** Price rows: the listing's rule price from the master (FIXED = master, PERCENT_OF_MASTER = master × (1 + %)). */
+  expectedPrice?: number | null
+  priceAdjustmentPercent?: string | null
   followMasterQuantity: boolean
   followMasterPrice: boolean
   pricingRule: string | null
@@ -139,9 +142,13 @@ export default function StockDriftPanel() {
           toast.success(
             `Resynced ${sku}: quantity → ${body.newValue}; sync queued`,
           )
+        } else if (body.notSent) {
+          toast.warning(`${sku}: ${body.notSent}`)
         } else {
           toast.success(
-            `Resynced ${sku}: price → ${body.newValue}; sync queued`,
+            body.queued
+              ? `Resynced ${sku}: price → ${body.newValue}; sent to the channel in 30 seconds`
+              : `${sku}: price ${body.newValue} already matches its rule; nothing to send`,
           )
         }
         await fetchData()
@@ -237,7 +244,7 @@ export default function StockDriftPanel() {
             )}
           >
             <span className="text-sm font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-              Price drift (FIXED rule)
+              Price drift (rule price)
             </span>
             <Badge
               variant={data.priceDrift.totalCount > 0 ? 'warning' : 'success'}
@@ -276,7 +283,7 @@ export default function StockDriftPanel() {
               <tr>
                 <th className="text-left font-medium px-3 py-2">Listing</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Channel</th>
-                <th className="text-right font-medium px-3 py-2 w-28">Master</th>
+                <th className="text-right font-medium px-3 py-2 w-28">{tab === 'price' ? 'Expected' : 'Master'}</th>
                 <th className="text-right font-medium px-3 py-2 w-28">Displayed</th>
                 <th className="text-right font-medium px-3 py-2 w-24">Delta</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Last sync</th>
@@ -308,15 +315,19 @@ export default function StockDriftPanel() {
                       {row.pricingRule && !isQty && (
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           rule: {row.pricingRule}
+                          {row.pricingRule === 'PERCENT_OF_MASTER' && row.priceAdjustmentPercent != null ? ` ${Number(row.priceAdjustmentPercent) > 0 ? '+' : ''}${Number(row.priceAdjustmentPercent)}%` : ''}
+                          {row.masterPrice ? ` · master ${Number(row.masterPrice).toFixed(2)}` : ''}
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
                       {isQty
                         ? (row.masterQuantity ?? '—')
-                        : row.masterPrice
-                          ? Number(row.masterPrice).toFixed(2)
-                          : '—'}
+                        : row.expectedPrice != null
+                          ? Number(row.expectedPrice).toFixed(2)
+                          : row.masterPrice
+                            ? Number(row.masterPrice).toFixed(2)
+                            : '—'}
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-900 dark:text-slate-100 font-medium">
                       {isQty
@@ -346,7 +357,7 @@ export default function StockDriftPanel() {
                         onClick={() => handleResync(row, isQty ? 'quantity' : 'price')}
                         disabled={resyncing === row.id}
                         className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-50 dark:hover:bg-blue-950/40 disabled:opacity-50"
-                        title={`Set ${isQty ? 'quantity' : 'price'} = master and queue immediate sync`}
+                        title={isQty ? 'Set quantity = master and queue immediate sync' : 'Recompute the price by its rule and send it (30-second hold)'}
                       >
                         {resyncing === row.id ? (
                           <Loader2 className="w-3 h-3 animate-spin" />

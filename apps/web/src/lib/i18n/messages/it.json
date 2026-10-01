@@ -3013,7 +3013,7 @@
   "products.drawer.listings.resyncTitle": "Rimetti questo listing in coda per la prossima sync",
   "products.drawer.listings.queuing": "In coda…",
   "products.drawer.listings.syncNow": "Sincronizza ora",
-  "products.drawer.listings.snapTitle": "Riattiva follow-master per ogni campo. La prossima sync ripristinerà i valori locali al master.",
+  "products.drawer.listings.snapTitle": "Segui di nuovo il master per ogni campo. Il prezzo viene ricalcolato con la regola dell’annuncio e inviato al canale dopo 30 secondi; gli altri campi seguono dalla prossima sincronizzazione o pubblicazione.",
   "products.drawer.listings.snapping": "Riallineamento…",
   "products.drawer.listings.snap": "Allinea al master",
   "products.drawer.listings.open": "Apri",

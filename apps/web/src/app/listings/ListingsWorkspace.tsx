@@ -70,6 +70,8 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adjustmentPercentProblem } from '@nexus/shared/listing-price'
+import { inlineCellPatchBody, priceDriftView } from './listing-price-view'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import {
   emitInvalidation,
@@ -1345,6 +1347,9 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
 // from another tab). 409 surfaces as a "Reload required" toast; the
 // caller's onSaved refreshes the grid on success so the new value
 // reads through cleanly.
+// 2026-10-01 — a typed price is a PIN (`priceOverride`): the price door
+// stores it, stops following the master and queues it for the channel
+// (30 s hold). It used to send `{ price }`, which the PATCH refused.
 // ────────────────────────────────────────────────────────────────────
 function InlineNumberCell({
   value,
@@ -1405,7 +1410,7 @@ function InlineNumberCell({
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ [field]: finalValue, expectedVersion: version }),
+          body: JSON.stringify(inlineCellPatchBody(field, finalValue, version)),
         },
       )
       if (res.status === 409) {
@@ -1414,11 +1419,17 @@ function InlineNumberCell({
         setDraft(value != null ? String(value) : '')
         return
       }
+      const j = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
         throw new Error(j.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`${field === 'price' ? 'Price' : 'Stock'} updated`)
+      if (field === 'price') {
+        // Say what happened to the channel, not just to Nexus.
+        if (j.notSent) toast.warning(j.notSent)
+        else toast.success(j.queued ? `Price pinned at ${format(finalValue)}; it is sent to the channel in 30 seconds` : `Price pinned at ${format(finalValue)}`)
+      } else {
+        toast.success('Stock updated')
+      }
       emitInvalidation({
         type: 'listing.updated',
         id: listingId,
@@ -1433,7 +1444,7 @@ function InlineNumberCell({
     } finally {
       setBusy(false)
     }
-  }, [draft, value, field, listingId, version, integer, toast, onSaved])
+  }, [draft, value, field, listingId, version, integer, toast, onSaved, format])
 
   if (editing) {
     return (
@@ -2462,8 +2473,11 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
 // so undo is meaningless; set-price loses the previous explicit price
 // and the safe inverse is "follow master", which the operator can
 // trigger explicitly if they want it.
+// 2026-10-01 — "Follow master" now recomputes each price by its rule and
+// queues it for the channel, and the listing's own price is cleared. An
+// "unfollow" cannot bring that price back or stop the queued send, so it is
+// not offered as an Undo. "Unfollow" sends nothing, so following again is.
 const INVERSE_BULK_ACTION: Record<string, string> = {
-  'follow-master': 'unfollow-master',
   'unfollow-master': 'follow-master',
 }
 
@@ -2742,7 +2756,8 @@ function SetPriceModal({
           <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 rounded-md p-2.5">
             <strong className="text-slate-700 dark:text-slate-300">Heads up:</strong> setting a
             price unfollows the master price for these listings — they
-            won&apos;t auto-update from the catalog basePrice anymore. Use
+            won&apos;t auto-update from the catalog basePrice anymore. Each
+            price is sent to its channel after a 30-second hold. Use
             &quot;Follow master&quot; to re-link later.
           </div>
         </div>
@@ -3292,8 +3307,8 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
     }
     if (kind === 'suppressed') return cell.listingStatus === 'SUPPRESSED'
     if (kind === 'drift') {
-      const priceDrift =
-        masterPrice != null && cell.price != null && Number(masterPrice) !== Number(cell.price)
+      // Rule-aware: a listing following at "master +10%" is on its rule, not drift.
+      const priceDrift = (priceDriftView(cell, masterPrice).drift ?? 0) !== 0
       const qtyDrift =
         masterQty != null && cell.quantity != null && Number(masterQty) !== Number(cell.quantity)
       const titleDrift =
@@ -4088,14 +4103,13 @@ function MatrixCell({
     cell.lastSyncStatus === 'FAILED' ||
     cell.syncStatus === 'FAILED'
 
-  // Drift computations — independent of follow* flags. We compare the
-  // channel's effective value against the master reference and surface
-  // every divergence, leaving the operator to decide whether it's
-  // intentional or a sync bug.
-  const priceDrift =
-    cell.price != null && master.price != null && cell.price !== master.price
-      ? cell.price - master.price
-      : null
+  // Drift computations. We compare the channel's effective value against
+  // the master reference and surface every divergence, leaving the operator
+  // to decide whether it's intentional or a sync bug. The price is compared
+  // with its RULE's price when the listing follows the master (a listing at
+  // "master +10%" is on its rule), with the master when it is pinned.
+  const priceView = priceDriftView(cell, master.price)
+  const priceDrift = priceView.drift != null && priceView.drift !== 0 ? priceView.drift : null
   const qtyDrift =
     cell.quantity != null &&
     master.quantity != null &&
@@ -4118,9 +4132,7 @@ function MatrixCell({
     `${cell.channel} ${cell.marketplace}`,
     cell.listingStatus,
     cell.price != null ? `price ${cell.price.toFixed(2)}` : null,
-    priceDrift != null
-      ? `${priceDrift > 0 ? '+' : ''}${priceDrift.toFixed(2)} vs master`
-      : null,
+    priceDrift != null ? priceView.label : null,
     cell.quantity != null ? `${cell.quantity} units` : null,
     qtyDrift != null ? `${qtyDrift > 0 ? '+' : ''}${qtyDrift} vs master` : null,
     titleDrift ? 'title differs from master' : null,
@@ -4880,6 +4892,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<DrawerTab>('detail')
   const [actionPending, setActionPending] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const loadListing = useCallback(async () => {
     setLoading(true)
@@ -4919,11 +4932,15 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, expectedVersion: listing.version }),
       })
+      const answer = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setError(err?.error ?? `HTTP ${res.status}`)
+        setError(answer?.error ?? `HTTP ${res.status}`)
         return false
       }
+      // A pricing change was saved but its price not sent (another currency, paused, a draft, Match Amazon…): say so.
+      // When a price was queued, say when it leaves.
+      if (answer?.notSent) toast.warning(answer.notSent)
+      else if (answer?.queued) toast.success('Price recomputed; it is sent to the channel in 30 seconds')
       onChanged()
       emitInvalidation({ type: 'listing.updated', id })
       await loadListing()
@@ -4932,7 +4949,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
       setError(e?.message ?? String(e))
       return false
     }
-  }, [id, listing, loadListing, onChanged])
+  }, [id, listing, loadListing, onChanged, toast])
 
   const resync = async () => {
     setActionPending('resync')
@@ -5112,6 +5129,18 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
   const [editingRule, setEditingRule] = useState(false)
   const [editingBuffer, setEditingBuffer] = useState(false)
   const [editingPercent, setEditingPercent] = useState(false)
+  const { toast } = useToast()
+  // The same check the API's price door makes: a number, 2 decimals, above -100, at most 999.99.
+  const savePercent = async (raw: string) => {
+    const problem = adjustmentPercentProblem(raw)
+    if (problem) {
+      toast.error(problem)
+      setEditingPercent(false)
+      return
+    }
+    await patch({ priceAdjustmentPercent: Number(raw) })
+    setEditingPercent(false)
+  }
 
   // S.3 — HealthPanel quick-fix dispatchers wired to existing endpoints.
   const healthHandlers = useMemo(
@@ -5136,10 +5165,10 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
 
   const masterPrice = listing.product?.basePrice ?? listing.masterPrice
   const channelPrice = listing.price
-  const priceDrift =
-    masterPrice != null && channelPrice != null
-      ? Number(channelPrice) - Number(masterPrice)
-      : null
+  // Rule-aware (the API's own maths, @nexus/shared/listing-price): a listing following at "master +10%" is ON its
+  // rule at 11, not 1.00 of drift. A pinned listing is compared with the master, as before; Match Amazon has no
+  // master price to drift from.
+  const { drift: priceDrift, label: priceDriftLabel } = priceDriftView(listing, masterPrice)
 
   const expectedQuantity =
     listing.product?.totalStock != null
@@ -5178,11 +5207,7 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
         channelValue={channelPrice != null ? Number(channelPrice).toFixed(2) : '—'}
         followingMaster={listing.followMasterPrice}
         drifted={priceDrift != null && priceDrift !== 0}
-        driftLabel={
-          priceDrift != null
-            ? `${priceDrift > 0 ? '+' : ''}${priceDrift.toFixed(2)} vs master`
-            : null
-        }
+        driftLabel={priceDriftLabel}
         onSnapToMaster={async () => {
           await patch({ followMasterPrice: true })
         }}
@@ -5276,13 +5301,11 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
                 defaultValue={listing.priceAdjustmentPercent ?? 0}
                 autoFocus
                 onBlur={async (e) => {
-                  await patch({ priceAdjustmentPercent: Number(e.currentTarget.value) })
-                  setEditingPercent(false)
+                  await savePercent(e.currentTarget.value)
                 }}
                 onKeyDown={async (e) => {
                   if (e.key === 'Enter') {
-                    await patch({ priceAdjustmentPercent: Number(e.currentTarget.value) })
-                    setEditingPercent(false)
+                    await savePercent(e.currentTarget.value)
                   } else if (e.key === 'Escape') {
                     setEditingPercent(false)
                   }
@@ -5802,6 +5825,8 @@ function ChannelsTab({
         hasQuantityOverride={listing.quantityOverride != null}
         hasTitleOverride={listing.titleOverride != null && listing.titleOverride.length > 0}
         followMasterPrice={listing.followMasterPrice}
+        pricingRule={listing.pricingRule}
+        priceAdjustmentPercent={listing.priceAdjustmentPercent}
         isCurrent
       />
 
@@ -5823,6 +5848,8 @@ function ChannelsTab({
           hasQuantityOverride={c.hasQuantityOverride}
           hasTitleOverride={c.hasTitleOverride}
           followMasterPrice={c.followMasterPrice}
+          pricingRule={c.pricingRule}
+          priceAdjustmentPercent={c.priceAdjustmentPercent}
           onClick={() => onSwitchListing(c.id)}
         />
       ))}
@@ -5890,6 +5917,8 @@ function CompanionCard({
   hasQuantityOverride,
   hasTitleOverride,
   followMasterPrice,
+  pricingRule,
+  priceAdjustmentPercent,
   onClick,
   isCurrent,
 }: {
@@ -5907,6 +5936,8 @@ function CompanionCard({
   hasQuantityOverride?: boolean
   hasTitleOverride?: boolean
   followMasterPrice?: boolean
+  pricingRule?: string | null
+  priceAdjustmentPercent?: number | null
   onClick?: () => void
   isCurrent?: boolean
 }) {
@@ -5916,10 +5947,9 @@ function CompanionCard({
   // followMaster flags (a "follows master" cell with stale value IS
   // drift), and explicit override badges so the operator can tell at
   // a glance which fields were touched per-marketplace vs inherited.
-  const priceDrift =
-    price != null && master.price != null && price !== master.price
-      ? price - master.price
-      : null
+  // A following cell is compared with its RULE's price (master +10% is 11).
+  const priceView = priceDriftView({ price, followMasterPrice, pricingRule, priceAdjustmentPercent }, master.price)
+  const priceDrift = priceView.drift != null && priceView.drift !== 0 ? priceView.drift : null
   const qtyDrift =
     quantity != null &&
     master.quantity != null &&
