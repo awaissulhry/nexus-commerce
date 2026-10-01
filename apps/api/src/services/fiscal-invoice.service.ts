@@ -92,13 +92,15 @@ export async function assignInvoiceNumber(
     // — Prisma's upsert+update would race under concurrent
     // assignment for the same (year, issuer). The raw query takes
     // a row-lock on the counter and returns the new value in one
-    // round-trip.
+    // round-trip. The conflict target must be the table's real unique
+    // key, its primary key ("fiscalYear", "issuer"); any other column
+    // set makes PostgreSQL refuse every call (42P10).
     const rows = await tx.$queryRaw<
       Array<{ current: number }>
     >`
       INSERT INTO "FiscalInvoiceCounter" ("fiscalYear", "issuer", "current", "updatedAt")
       VALUES (${fiscalYear}, ${issuer}, 1, CURRENT_TIMESTAMP)
-      ON CONFLICT ("workspaceId", "fiscalYear", "issuer") DO UPDATE
+      ON CONFLICT ("fiscalYear", "issuer") DO UPDATE
         SET "current" = "FiscalInvoiceCounter"."current" + 1,
             "updatedAt" = CURRENT_TIMESTAMP
       RETURNING "current"

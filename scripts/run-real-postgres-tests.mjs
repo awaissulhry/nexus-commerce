@@ -39,6 +39,8 @@
  *     that such a variation has no column there, and that its inherited row must link, not be refused.
  *   · `category-tree-concurrency.vitest.test.ts` (2026-09-26) — concurrent category moves, creates, membership
  *     replacements and Categories workspace commands serialize on the business's category-tree lock.
+ *   · `fiscal-numbering-postgres.vitest.test.ts` (MCP full control #14, 2026-10-01) — invoice and credit-note numbers:
+ *     the counter's ON CONFLICT target must be its real key, and a forced race numbers 1…N with no duplicate or gap.
  *   · `routes/mcp-cross-business-postgres.vitest.test.ts` (MCP.8, 2026-09-30) — Claude's connection for one business
  *     never reaches another: the /mcp route, the Approvals and Connected apps routes and every tool, run as the
  *     restricted runtime login, so row-level security holds exactly as it does in production.
@@ -134,6 +136,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'eBay mixed own and pool stock (global Product locks, durable cancellation retries)', file: 'src/services/ebay-order-pool-postgres.vitest.test.ts', expect: 12 },
   { name: 'dormant eBay ORDER_CONFIRMATION execution (one read, own account, atomic receipt)', file: 'src/services/cx/ingress/ebay-order-processing-postgres.vitest.test.ts', expect: 13 },
   { name: 'order cancellation gives back what the order took at ingest, never shipped units (eBay, Amazon FBM/FBA, Shopify; markers, races, re-run, owner notice)', file: 'src/services/order-cancellation/order-cancellation-postgres.vitest.test.ts', expect: 17 },
+  { name: 'invoice and credit-note numbers (counter conflict key; sequential, and a forced race gives 1…N with no duplicate or gap)', file: 'src/services/fiscal-numbering-postgres.vitest.test.ts', expect: 4 },
   { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 16 },
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
   { name: 'Link copy: variations inherit an attribute with no column in the receiving business (AE.3)', file: 'src/services/assortment/copy-inherited-attribute.vitest.test.ts', expect: 3 },
