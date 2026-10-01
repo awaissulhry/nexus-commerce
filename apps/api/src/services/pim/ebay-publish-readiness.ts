@@ -16,6 +16,7 @@ import {
   EBAY_POLICY_FIELD, EBAY_POLICY_KINDS, ebayLocationKnownMissing, ebayPolicyKnownMissing, isCompleteEbayLocation, resolveEbayItemLocation,
 } from '../ebay-account-defaults.js'
 import type { ReadinessIssue } from './sheet-rows.service.js'
+import { isEbayItemLevel } from './ebay-listing-level.js'
 
 type Store = { kind?: string; path?: string[] } | undefined
 interface RowLike {
@@ -73,5 +74,42 @@ export async function addEbayPublishReadiness(input: { rows: RowLike[]; columns:
     row.readiness.issues.push(...found)
     // The row's own state rule (as the variation items above do): an error dominates every other state.
     row.readiness.state = 'errors'
+  }
+}
+
+interface VariationRowLike<C> {
+  parentId: string | null
+  aliasId?: string | null
+  values: Record<string, { mapped?: { errors?: string[] } | null } | undefined>
+  readiness: { state: string; issues: ReadinessIssue[] }
+  completeness: C
+}
+
+/** Whether a sheet column holds an eBay item-level field (`isEbayItemLevel`) on this coordinate. */
+export const isEbayItemLevelColumn = (column: ColumnLike, label: string) => isEbayItemLevel(column.channels?.[label]?.store as Parameters<typeof isEbayItemLevel>[0])
+
+/**
+ * Follow-up 2026-10-01 (live check: "Condition is required" on all 20 variations of GALE-JACKET) — an eBay variation
+ * listing takes its item-level fields once, from its main row; a variation row's own value is never sent. So on a
+ * VARIATION row of a listing that has a main row, those fields name no readiness issue and no cell error, and the row's
+ * completeness is counted without them. The main row is judged as before. `recount` and `restate` are the sheet's own
+ * rules (`completenessFor`, the row state rule), handed in so this stays one rule with them.
+ */
+export function judgeEbayItemLevelOnMainRow<C, R extends VariationRowLike<C>>(input: { rows: R[]; columns: ColumnLike[]; label: string
+  recount: (row: R, columns: ColumnLike[]) => C; restate: (row: R) => string }) {
+  const itemLevel = input.columns.filter(column => isEbayItemLevelColumn(column, input.label))
+  if (!itemLevel.length) return
+  const keys = new Set(itemLevel.map(column => column.key))
+  const rest = input.columns.filter(column => !keys.has(column.key))
+  const withMain = new Set(input.rows.filter(row => row.parentId === null).map(row => row.aliasId ?? ''))
+  for (const row of input.rows) {
+    if (row.parentId === null || !withMain.has(row.aliasId ?? '')) continue
+    for (const key of keys) {
+      const cell = row.values[key]
+      if (cell?.mapped?.errors?.length) row.values[key] = { ...cell, mapped: { ...cell.mapped, errors: [] } }
+    }
+    row.readiness.issues = row.readiness.issues.filter(issue => !keys.has(issue.key))
+    row.readiness.state = input.restate(row)
+    row.completeness = input.recount(row, rest)
   }
 }

@@ -13,7 +13,7 @@ import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { isBlankValue } from './sheet-values.js'
 import { familyPublicationOrder } from './family-publication-order.js'
 
-type Store = { kind: string; path?: string[] } | null | undefined
+type Store = { kind: string; path?: string[]; column?: string } | null | undefined
 
 /** Axis identities from the names an axis goes by (its eBay name, its family key, its label). */
 export function ebayAxisIdentities(names: Array<string | null | undefined>): Set<string> {
@@ -53,6 +53,28 @@ export function isEbayListingLevel(field: { store?: Store; names?: Array<string 
   const store = field.store
   if (store?.kind !== 'platformAttributes' || store.path?.[0] !== 'itemSpecifics' || !store.path[1]) return false
   return !isEbayAxis([store.path[1], ...(field.names ?? [])], axes)
+}
+
+/**
+ * Follow-up 2026-10-01 (live check, GALE-JACKET) — the eBay Trading fields a variation listing takes ONCE, from its MAIN
+ * row (`buildSharedListingInput` reads them from the parent row; `ebayPublicationXml` from the parent's settings): a
+ * variation row's own value is never sent, so it is never judged. "Condition is required" was named on all 20 variations.
+ * What IS per variation stays per variation: price, quantity, SKU, EAN, axis values, photos (`imageUrls`).
+ */
+export const EBAY_ITEM_LEVEL_FIELDS: ReadonlySet<string> = new Set([
+  'conditionId', 'categoryId', 'subtitle', 'descriptionThemeId', 'listingFormat', 'listingDuration',
+  'bestOffer', 'bestOfferFloor', 'bestOfferCeiling', 'handlingTime', 'vatRate', 'videoId', 'quantityLimitPerBuyer',
+  'itemLocationCountry', 'itemLocation', 'itemPostalCode', 'merchantLocationKey',
+  'packageType', 'packageWeight', 'weightUnit', 'packageLength', 'packageWidth', 'packageHeight', 'dimensionUnit',
+  'paymentPolicyId', 'returnPolicyId', 'fulfillmentPolicyId', 'sharedSkuListing', 'compatibility', 'regulatory',
+])
+const ITEM_LEVEL_COLUMNS: ReadonlySet<string> = new Set(['title', 'description', 'variationTheme'])
+
+/** A field stored where an eBay variation listing takes it from the main row only (not an item specific: see above). */
+export function isEbayItemLevel(store: Store): boolean {
+  if (store?.kind === 'platformAttributes') return store.path?.length === 1 && EBAY_ITEM_LEVEL_FIELDS.has(store.path[0])
+  if (store?.kind === 'listingColumn') return !!store.column && ITEM_LEVEL_COLUMNS.has(store.column)
+  return false
 }
 
 export interface FamilyRow { productId: string; sku: string; isParent: boolean; value: unknown }

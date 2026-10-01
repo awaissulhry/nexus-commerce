@@ -12,7 +12,7 @@ import { foreignOwnTextIssues } from './foreign-own-text.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
 import { familyPublicationOrder } from './family-publication-order.js'
-import { ebayListingLevelValues, isEbayListingLevel, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
+import { ebayListingLevelValues, isEbayItemLevel, isEbayListingLevel, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
 
@@ -90,11 +90,14 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
       valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value }) : []
     const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])
     const reporterOf = (field: string) => levels.find(level => level.field.key === field)?.supplier.productId ?? parent.id
+    // Follow-up 2026-10-01 — Condition, policies, location, package… go to eBay once, from the main row: only it is judged.
+    const itemLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayItemLevel(field.store)).map(field => field.key) : [])
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
       if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
       // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
       if (listingLevelKeys.has(field) && row.productId !== reporterOf(field)) continue
+      if (itemLevelKeys.has(field) && row.productId !== parent.id) continue
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
       for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
@@ -108,13 +111,17 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     const listing = listings.find(l => l.productId === product.id)
     const content = await resolvePublishContent({ product: product as any, parent: product.id === parent.id ? null : parent as any,
       listing, channel: scope.channel, marketplace: scope.marketplace })
+    // An eBay variation listing sends ONE title and description, the main row's: a variation's own text is not judged.
+    const variationText = !!ebayAxes && product.id !== parent.id
     for (const issue of publishContentIssues(content)) {
       if (issue.severity === 'ERROR' && !requireReviewedContent()) continue
+      if (variationText && ['title', 'description'].includes(issue.field ?? '')) continue
       issues.push({ productId: product.id, sku: product.sku, field: issue.field, message: issue.message, severity: issue.severity === 'ERROR' ? 'error' : 'warning' })
     }
     // A-32 (R-30) — a pinned own text that is the primary-language text, on a market that speaks another language.
     for (const issue of foreignOwnTextIssues({ channel: scope.channel, marketplace: scope.marketplace, marketLanguages: languages,
       product: product as any, parent: product.id === parent.id ? null : parent as any, listing: listing as any })) {
+      if (variationText && ['title', 'description'].includes(issue.field)) continue
       issues.push({ productId: product.id, sku: product.sku, field: issue.field, message: issue.message, severity: 'warning' })
     }
   }

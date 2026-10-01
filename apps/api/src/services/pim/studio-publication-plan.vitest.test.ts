@@ -284,3 +284,42 @@ it('P4 control: a started eBay family, an alias, and Amazon keep the VTR step-0 
   m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: '' })
   expect((await readPublicationFacts('parent', scope)).products.map(p => p.id)).toEqual(['parent'])
 })
+
+// Follow-up 2026-10-01 (live check, GALE-JACKET + 20 variations) — "Condition: Field 'Condition' is required." was named on
+// every variation, though eBay takes ONE Condition for the listing, from its main row. Item-level fields are judged on the
+// main row only; what is per variation (price, quantity, axis values…) is still judged per variation.
+describe('eBay item-level fields are judged on the main row only', () => {
+  const ITEM_LEVEL = [
+    { fieldKey: 'conditionId', label: 'Condition', channelStore: { kind: 'platformAttributes', path: ['conditionId'] } },
+    { fieldKey: 'fulfillmentPolicyId', label: 'Shipping policy', channelStore: { kind: 'platformAttributes', path: ['fulfillmentPolicyId'] } },
+    { fieldKey: 'itemPostalCode', label: 'Item location postal code', channelStore: { kind: 'platformAttributes', path: ['itemPostalCode'] } },
+    { fieldKey: 'title', label: 'Title', channelStore: { kind: 'listingColumn', column: 'title' } },
+    { fieldKey: 'price', label: 'Listing price', channelStore: { kind: 'listingColumn', column: 'price' } },
+  ]
+  const required = (label: string) => ({ value: null, label, errors: [`Field '${label}' is required.`] })
+  const ebay = { ...scope, channel: 'EBAY', listingId: undefined }
+  beforeEach(() => {
+    m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: '' })
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
+    m.excluded.mockResolvedValue(new Set())
+    m.languages.mockResolvedValue(['it'])
+  })
+  const resolveWith = (parentCells: Record<string, unknown>) => m.resolve.mockImplementation(async ({ productIds }: any) => ({ missingProductIds: [], catalogue: { fields: ITEM_LEVEL },
+    products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: productId === 'parent' ? parentCells : {
+      conditionId: required('Condition'), fulfillmentPolicyId: required('Shipping policy'), itemPostalCode: required('Item location postal code'), title: required('Title'),
+      price: required('Listing price'),
+    } })) }))
+
+  it('set on the parent only: no problem from the variations\' empty item-level cells; their price is still named', async () => {
+    resolveWith({ conditionId: { value: 'NEW', label: 'Condition', errors: [] }, title: { value: 'Giacca', label: 'Title', errors: [] } })
+    const facts = await readPublicationFacts('parent', ebay)
+    const errors = facts.issues.filter(i => i.severity === 'error')
+    expect(errors.filter(i => ['conditionId', 'fulfillmentPolicyId', 'itemPostalCode', 'title'].includes(i.field!))).toEqual([])
+    expect(errors.map(i => `${i.sku}:${i.field}`).sort()).toEqual(['CHILD:price', 'EXCLUDED:price'])
+  })
+  it('the parent lacks Condition: ONE problem, on the parent', async () => {
+    resolveWith({ conditionId: required('Condition'), title: { value: 'Giacca', label: 'Title', errors: [] } })
+    const facts = await readPublicationFacts('parent', ebay)
+    expect(facts.issues.filter(i => i.field === 'conditionId')).toEqual([{ productId: 'parent', sku: 'PARENT', field: 'conditionId', severity: 'error', message: 'Condition: Field \'Condition\' is required.' }])
+  })
+})

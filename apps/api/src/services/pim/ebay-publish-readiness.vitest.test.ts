@@ -14,7 +14,7 @@ vi.mock('../../db.js', () => ({ default: {
 } }))
 vi.mock('../../lib/database-context.js', async original => ({ ...(await original<object>()), inDatabaseTransaction: async (_db: unknown, work: () => Promise<unknown>) => work() }))
 
-import { addEbayPublishReadiness, ebayPublishReadinessIssues } from './ebay-publish-readiness.js'
+import { addEbayPublishReadiness, ebayPublishReadinessIssues, judgeEbayItemLevelOnMainRow } from './ebay-publish-readiness.js'
 import { rebuildImportedFamily } from './readiness-index.service.js'
 
 const READ = { ebayAccountRead: { locations: { readAt: '2026-10-01T10:00:00Z', found: false }, policies: { EBAY_IT: { shipping: false, payment: true, return: true, readAt: '2026-10-01T10:00:00Z' } } } }
@@ -60,5 +60,36 @@ describe('after an import (P6)', () => {
     m.anyRow = { id: 'r1' }
     await expect(rebuildImportedFamily('root')).resolves.toBe(0)
     expect(m.built).toEqual([])
+  })
+})
+
+// Follow-up 2026-10-01 — the sheet (and so readiness) agrees with publish: Condition on a variation row is not the listing's.
+describe('item-level fields on an eBay variation listing, in the sheet', () => {
+  const columns = [
+    { key: 'conditionId', label: 'Condition', channels: { 'eBay · IT': { store: { kind: 'platformAttributes', path: ['conditionId'] } } } },
+    { key: 'title', label: 'Title', channels: { 'eBay · IT': { store: { kind: 'listingColumn', column: 'title' } } } },
+    { key: 'price', label: 'Listing price', channels: { 'eBay · IT': { store: { kind: 'listingColumn', column: 'price' } } } },
+    { key: 'imageUrls', label: 'Image URLs', channels: { 'eBay · IT': { store: { kind: 'platformAttributes', path: ['imageUrls'] } } } },
+  ]
+  const issue = (key: string) => ({ key, label: key, severity: 'error' as const, message: `Field '${key}' is required.` })
+  const row = (parentId: string | null, aliasId: string | null = null) => ({ parentId, aliasId, values: { conditionId: { mapped: { errors: ['Field \'Condition\' is required.'] } } } as Record<string, any>,
+    readiness: { state: 'errors', issues: [issue('conditionId'), issue('price'), issue('imageUrls')] }, completeness: [] as string[] })
+  const judge = (rows: ReturnType<typeof row>[]) => judgeEbayItemLevelOnMainRow({ rows, columns, label: 'eBay · IT',
+    recount: (_row, kept) => kept.map(c => c.key), restate: r => r.readiness.issues.some(i => i.severity === 'error') ? 'errors' : 'ready' })
+
+  it('a variation row keeps its per-variation issues and loses the listing\'s; its completeness skips them', () => {
+    const main = row(null), variation = row('p')
+    judge([main, variation])
+    expect(variation.readiness.issues.map(i => i.key)).toEqual(['price', 'imageUrls'])
+    expect(variation.values.conditionId.mapped.errors).toEqual([])
+    expect(variation.completeness).toEqual(['price', 'imageUrls'])
+    // The main row is judged as before: ONE Condition problem, there.
+    expect(main.readiness.issues.map(i => i.key)).toEqual(['conditionId', 'price', 'imageUrls'])
+    expect(main.completeness).toEqual([])
+  })
+  it('a row with no main row in its listing (a single product) is left alone', () => {
+    const lone = row('p', 'alias-1')
+    judge([row(null), lone])
+    expect(lone.readiness.issues.map(i => i.key)).toEqual(['conditionId', 'price', 'imageUrls'])
   })
 })

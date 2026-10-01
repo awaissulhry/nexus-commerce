@@ -241,19 +241,26 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
       effective.platformAttributes.itemSpecifics = Object.fromEntries(Object.entries(object(effective.platformAttributes.itemSpecifics)).filter(([name]) => !names.has(foldName(name))))
     }
     const pa = effective.platformAttributes
+    // Follow-up 2026-10-01 — item-level fields (`EBAY_ITEM_LEVEL_FIELDS`) go to eBay once, from the main row: a variation
+    // row's own value is never sent, so only the main row's is judged.
+    const mainRow = product.id === parent.id
     // Saved fields this builder cannot send; silently omitting them would publish a different product. Audit P8 — the Best
     // Offer floor and ceiling only matter while Best Offer is on (eBay ignores them otherwise), so they are ignored when it is off.
-    if (!itemId) {
+    if (!itemId && mainRow) {
       if (filled(pa.videoId)) problems.add(`${ebayFieldLabel('videoId')}: Nexus cannot send a video with a new eBay listing yet. Clear the "${ebayFieldLabel('videoId')}" cell on this row in the sheet.`, { ...at, field: 'videoId' })
       for (const key of ['compatibility', 'regulatory']) if (filled(pa[key])) problems.add(`${ebayFieldLabel(key)}: Nexus cannot send this with a new eBay listing yet.`, { ...at, field: key })
       if (pa.bestOffer === true) for (const key of ['bestOfferFloor', 'bestOfferCeiling']) {
         if (filled(pa[key])) problems.add(`${ebayFieldLabel(key)}: Nexus cannot send it with a new eBay listing yet. Clear it on this row, or turn "${ebayFieldLabel('bestOffer')}" off.`, { ...at, field: key })
       }
     }
-    // #36 — eBay takes ONE package per listing (item level): every row must hold the main row's package, or none.
-    if (!itemId) packages.set(product.id, problems.attempt(() => ebayPackageXml(pa, product.sku), { ...at, field: 'package' }) ?? '')
-    if (pa.listingFormat && pa.listingFormat !== 'FIXED_PRICE') problems.add(`${ebayFieldLabel('listingFormat')}: Nexus publishes fixed-price eBay listings only. Set it to FIXED_PRICE.`, { field: 'listingFormat' })
-    if (products.length > 1 && pa.bestOffer === true) problems.add(`${ebayFieldLabel('bestOffer')}: eBay does not take Best Offer on a listing with variations. Turn it off on this row.`, { ...at, field: 'bestOffer' })
+    // #36 — eBay takes ONE package per listing (item level): every row must hold the main row's package, or none. The main
+    // row's is checked; a variation's that cannot be read counts as a different package (named once, below).
+    if (!itemId) {
+      if (mainRow) packages.set(product.id, problems.attempt(() => ebayPackageXml(pa, product.sku), { ...at, field: 'package' }) ?? '')
+      else { try { packages.set(product.id, ebayPackageXml(pa, product.sku)) } catch { packages.set(product.id, 'unreadable') } }
+    }
+    if (mainRow && pa.listingFormat && pa.listingFormat !== 'FIXED_PRICE') problems.add(`${ebayFieldLabel('listingFormat')}: Nexus publishes fixed-price eBay listings only. Set it to FIXED_PRICE.`, { ...at, field: 'listingFormat' })
+    if (mainRow && products.length > 1 && pa.bestOffer === true) problems.add(`${ebayFieldLabel('bestOffer')}: eBay does not take Best Offer on a listing with variations. Turn it off on this row.`, { ...at, field: 'bestOffer' })
     if (product.id === parent.id) settings = pa
     // Round 6 — THE send price (`listingSendPrice`): a pin's own price, a follower's rule price from the current master in
     // the master currency, else the price the listing holds. It sent a follower the master price (the resolved price cell
