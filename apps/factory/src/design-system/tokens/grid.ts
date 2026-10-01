@@ -182,6 +182,12 @@ export const gridVars: ReadonlyArray<GridCssVar> = [
    * either is touched. Emitted at `:root`, so a panel that is not a grid can read it too.
    */
   { name: '--nds-grid-ai-draft-bg', value: 'color-mix(in srgb, var(--nds-purple-600) 10%, transparent)' },
+  /**
+   * Shared stock by SKU (2026-10-01): a quantity that follows ANOTHER business profile's stock (the Matrix's Qty cell
+   * of a SKU connected to a lent stock). Teal, not the blue of an inherited value or the violet of an AI draft; the cell
+   * says it in words too (its tooltip, and the row's "Shared" tag), never by colour alone.
+   */
+  { name: '--nds-grid-shared-stock-bg', value: 'color-mix(in srgb, var(--nds-cyan-700) 14%, transparent)' },
   // ── overlays ──
   { name: '--nds-grid-skeleton-bg', value: 'var(--nds-surface-sunken)' },
   { name: '--nds-grid-skeleton-shine', value: 'var(--nds-border-subtle)' },

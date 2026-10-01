@@ -164,6 +164,16 @@ function StockCell(p: ICellRendererParams<StudioRow> & { rowOf?: (id: string) =>
   return number
 }
 
+/**
+ * Shared stock by SKU (Owner 2026-10-01): a Qty or Mode cell whose number follows ANOTHER business's stock right now —
+ * the row sells from a lent stock and the listing follows it (a fixed, paused or Amazon-managed listing does not). Such a
+ * cell carries the DS state `nds-cell-is-shared-stock` (teal) and says the lender in its tooltip: never colour alone.
+ */
+export const SHARED_STOCK_CELL = 'nds-cell-is-shared-stock'
+export function sharedStockOf(sync: MatrixCells['sync'] | null | undefined, source: MatrixRowRead['stock']['source']): NonNullable<MatrixRowRead['stock']['source']> | null {
+  return source && sync?.kind === 'FOLLOW' ? source : null
+}
+
 /** The Stock cell's tooltip: where the number comes from, and which warehouses hold it. */
 export function stockTooltip(s: MatrixRowRead['stock']): string {
   if (s.uncounted) return MATRIX_COPY.uncountedHint
@@ -306,12 +316,19 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
         const def = matrixColumnDef<StudioRow>(kind, o)
         const cellTooltip = def.tooltipValueGetter
         const colId = matrixColId(coord.key, kind)
+        // Shared stock by SKU: the Qty and Mode cells of a row that follows another business's stock.
+        const marksShared = kind === 'syncQty' || kind === 'syncMode'
+        const sharedFrom = (data: StudioRow | undefined) => (marksShared && data ? sharedStockOf(cellsOf(data.id, coord.key)?.sync, rowOf(data.id)?.stock.source ?? null) : null)
         /* A refused cell's hover leads with WHY (`refusals.ts`); the footer note is the view, this elaborates. */
         children.push({
           ...def,
+          ...(marksShared ? { cellClassRules: { ...(def.cellClassRules as Record<string, unknown>), [SHARED_STOCK_CELL]: (p: { data?: StudioRow }) => !!sharedFrom(p.data) } as ColDef<StudioRow>['cellClassRules'] } : {}),
           tooltipValueGetter: (p) => {
             const mark = p.data ? tracker.get(rowId(p.data), colId) : undefined
-            return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, cellTooltip?.(p) as string | undefined)
+            const base = cellTooltip?.(p) as string | undefined
+            const shared = sharedFrom(p.data)
+            const withSource = shared ? [base, `Follows ${shared.lenderName}'s stock (shared stock).`].filter(Boolean).join('\n') : base
+            return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, withSource)
           },
         })
       }

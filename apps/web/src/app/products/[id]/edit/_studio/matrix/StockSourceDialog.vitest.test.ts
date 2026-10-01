@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SwitchPreview } from '@/app/settings/sharing/stockPoolApi'
 
-import { stockTooltip } from './columns'
+import { sharedStockOf, stockTooltip } from './columns'
 import { parseMatrixRead } from './source'
 import { defaultStockChoice, stockSourcePlan, type StockSourceTarget } from './StockSourceDialog'
 
@@ -68,5 +68,15 @@ describe('the Stock cell names where the number comes from', () => {
     expect(read(undefined)).toBeNull()
     expect(read({ kind: 'pool', grantId: 7 })).toBeNull()
     expect(read({ kind: 'own' })).toBeNull()
+  })
+})
+
+describe('the Qty and Mode cells show the shared-stock colour only while they follow the lent stock', () => {
+  const sync = (kind: string) => ({ kind } as never)
+  it('a following listing of a SKU on a lent stock: yes; own stock, fixed, paused or Amazon-managed: no', () => {
+    expect(sharedStockOf(sync('FOLLOW'), XAVIA)).toEqual(XAVIA)
+    expect(sharedStockOf(sync('FOLLOW'), null)).toBeNull()
+    for (const kind of ['PINNED', 'PAUSED', 'FBA_EXCLUDED', 'CLOSED', 'UNCOUNTED']) expect(sharedStockOf(sync(kind), XAVIA)).toBeNull()
+    expect(sharedStockOf(null, XAVIA)).toBeNull()
   })
 })
