@@ -27,7 +27,9 @@
  *
  * 3. **State is a ref plus a class toggle**, never the URL and never the provider. A provider change
  *    would re-render every consumer — including the sheet — on each threshold crossing, which is a
- *    lot of work to move 16 pixels.
+ *    lot of work to move 16 pixels. The class goes on the BANDS, not the frame: a class flip restyles
+ *    the whole subtree it sits on, and the frame's subtree is the grid (2026-10-01, measured on a
+ *    40-row family: ~7 ms per fold, which made the fold frames the only slow ones in a scroll).
  */
 
 import { useCallback, useEffect, useRef } from 'react'
@@ -49,13 +51,17 @@ const REPLACEMENT_SETTLE_MS = 20_000
 const SCROLLER = '.ag-grid-viewport'
 
 export interface HeaderCollapse {
-  /** Put on the frame element; drives the CSS. */
+  /** Put on the bands element; drives the CSS. */
   collapsedClass: string
   /** Call when something changes the row count, the viewport, the view or the drawer. */
   reassess: () => void
 }
 
-export function useHeaderCollapse(frameRef: React.RefObject<HTMLElement | null>, collapsedClass: string) {
+export function useHeaderCollapse(
+  frameRef: React.RefObject<HTMLElement | null>,
+  bandsRef: React.RefObject<HTMLElement | null>,
+  collapsedClass: string,
+) {
   const collapsed = useRef(false)
   const armed = useRef(false)
   /** A sheet was just swapped in and the #549 question has not been answered yet. */
@@ -67,9 +73,9 @@ export function useHeaderCollapse(frameRef: React.RefObject<HTMLElement | null>,
     (next: boolean) => {
       if (collapsed.current === next) return
       collapsed.current = next
-      frameRef.current?.classList.toggle(collapsedClass, next)
+      bandsRef.current?.classList.toggle(collapsedClass, next)
     },
-    [frameRef, collapsedClass],
+    [bandsRef, collapsedClass],
   )
 
   const evaluate = useCallback(

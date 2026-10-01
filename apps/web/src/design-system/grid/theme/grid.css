@@ -1147,6 +1147,12 @@
 /* The gutter is 8px, not 24. §2.2 wants 74.8% of the viewport in ROWS, and a full-bleed sheet has
    no bottom gutter to spend — 16px of the last 20 in the whole §2 budget was sitting here. It stays
    a variable so a host inside a padded shell can put its own back. */
+/* 2026-10-01 — the top is NOT inherited. Only the sheet's own height reads it, but the host re-stamps it
+   whenever the space above moves (the studio header folding 48 → 32), and an inherited custom property
+   restyled every element inside the grid on each stamp: 7.4 ms for the ~3,350 elements of a 40-row
+   family, measured, which pushed the fold frames past 16.7 ms. Registered non-inherited, a stamp
+   restyles the host alone. */
+@property --nds-grid-sheet-top { syntax: '<length>'; inherits: false; initial-value: 0px; }
 .nds-grid-sheet { display: flex; flex-direction: column; height: calc(100dvh - var(--nds-grid-sheet-top, 0px) - var(--nds-grid-sheet-gutter, 8px)); min-height: 360px; }
 /* 36px, not the base 40 — SCOPED to the sheet on purpose. The 4px is a layout-v2 budget line, and
    layout v2 is this host; the GridCard pages have no such budget and no reason to inherit a
