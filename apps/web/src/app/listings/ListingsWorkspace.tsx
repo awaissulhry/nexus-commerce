@@ -4944,6 +4944,10 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
       // When a price was queued, say when it leaves.
       if (answer?.notSent) toast.warning(answer.notSent)
       else if (answer?.queued) toast.success('Price recomputed; it is sent to the channel in 30 seconds')
+      // The quantity's follow flag goes through the Studio matrix's Mode write: Amazon EU is one number for the group,
+      // and an Amazon-managed (FBA) quantity is Amazon's.
+      if (answer?.quantity?.note) toast.warning(answer.quantity.note)
+      else if (Array.isArray(answer?.quantity?.expandedTo) && answer.quantity.expandedTo.length > 1) toast.success(`Quantity mode set for the Amazon EU group (${answer.quantity.expandedTo.join(' ')})`)
       onChanged()
       emitInvalidation({ type: 'listing.updated', id })
       await loadListing()

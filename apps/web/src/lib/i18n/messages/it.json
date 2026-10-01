@@ -1727,7 +1727,7 @@
   "pricing.drawer.suggestion": "Suggerimento del motore (non è il prezzo dell'annuncio; non viene inviato)",
   "pricing.drawer.warnings": "Avvisi",
   "pricing.drawer.pushTitle": "Invia al marketplace",
-  "pricing.drawer.pushDescription": "Invia il prezzo dell'annuncio a {channel} tramite l'API del canale. Registra in ChannelListingOverride per l'audit; rispetta la finestra di attesa di 5 minuti se il canale è configurato.",
+  "pricing.drawer.pushDescription": "Mette in coda il prezzo dell'annuncio per {channel} tramite la porta prezzi di Nexus: viene inviato dopo un'attesa di 30 secondi, con il blocco di invio, la valuta, il minimo e il massimo verificati. Un annuncio in pausa o una bozza non viene inviato.",
   "pricing.drawer.pushButton": "Invia prezzo",
   "pricing.drawer.pushing": "Invio in corso…",
   "pricing.drawer.lastComputed": "Ultimo calcolo {when}",

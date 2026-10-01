@@ -1499,8 +1499,9 @@ function PricingDetailDrawer({
       })
       const json = await res.json()
       if (json.ok) {
+        // Queued, not sent: the one dispatcher sends it after the 30-second hold (2026-10-01).
         toast.success(
-          `Pushed ${json.pushedPrice} ${json.currency} to ${json.channel}:${json.marketplace}.`,
+          `Queued ${Number(json.pushedPrice).toFixed(2)}${json.currency ? ` ${json.currency}` : ''} for ${json.channel}:${json.marketplace}; it is sent after a 30-second hold.`,
         )
         onPushed()
       } else {
