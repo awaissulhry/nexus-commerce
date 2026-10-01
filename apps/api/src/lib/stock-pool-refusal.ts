@@ -10,7 +10,7 @@
 import type { FastifyInstance } from 'fastify'
 
 // The guards' three sentences (stock-pool.sql); the SKU and the business name are in them.
-const SENTENCE = /([^\n`"]*? (?:(?:sells from the stock of|shares its stock with) [^\n`"]*? Disconnect it (?:first|there first)[^\n`"]*?, then change it\.|sells from the stock of [^\n`"]*?, so its quantity follows that stock\. Change the stock in [^\n`"]*?, or disconnect it first \(Matrix, Stock source\)\.))/
+const SENTENCE = /([^\n`"]*? (?:(?:sells from the stock of|shares its stock with) [^\n`"]*? Disconnect it (?:first|there first)[^\n`"]*?, then change it\.|sells from the stock of [^\n`"]*?, so its quantity follows that stock\. Change the stock in [^\n`"]*?, or disconnect it first \(Matrix, Stock source\)\. To stop selling there, fix it at 0\.))/
 
 /** The guard's sentence when `error` (or one of its causes) carries it; otherwise null. */
 export function stockPoolConnectedRefusal(error: unknown): string | null {

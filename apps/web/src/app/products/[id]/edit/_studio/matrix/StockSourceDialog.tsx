@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Banner, Modal } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
-import { Button, RadioCard } from '@/design-system/primitives'
+import { Button, Pill, RadioCard } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import type { Grant, ListingPreview, SwitchPreview } from '@/app/settings/sharing/stockPoolApi'
@@ -64,10 +64,31 @@ export function stockSourcePlan(targets: readonly StockSourceTarget[], choice: s
  * Pure: the default choice — back to own stock when every SKU already borrows; otherwise the lent stock this family
  * already uses (`suggested`, when it is still on), else the first lent stock.
  */
+/** How many of the chosen SKUs take their stock from each source now (OWN, or a grant id). */
+export function stockInUse(targets: readonly StockSourceTarget[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const t of targets) { const key = t.source?.grantId ?? OWN; counts.set(key, (counts.get(key) ?? 0) + 1) }
+  return counts
+}
+
+/**
+ * The pop-up opens on where the chosen SKUs take their stock NOW (Owner 2026-10-01: it opened on "Own stock" for SKUs
+ * on Xavia's stock, and read as if the connect had not held). Mixed: the source most of them use; a tie goes to the
+ * lent stock this family uses, then to a lent stock. A source that is no longer on is not offered.
+ */
 export function defaultStockChoice(targets: readonly StockSourceTarget[], grants: readonly Pick<Grant, 'id'>[], suggested?: string | null): string {
-  if (targets.length > 0 && targets.every((t) => t.source !== null)) return OWN
-  if (suggested && grants.some((g) => g.id === suggested)) return suggested
+  const offered = (key: string) => key === OWN || grants.some((g) => g.id === key)
+  const rank = (key: string) => (key === suggested ? 0 : key === OWN ? 2 : 1)
+  const inUse = [...stockInUse(targets)].filter(([key]) => offered(key)).sort(([a, n], [b, m]) => m - n || rank(a) - rank(b))
+  if (inUse.length > 0) return inUse[0]![0]
+  if (suggested && offered(suggested)) return suggested
   return grants[0]?.id ?? OWN
+}
+
+/** The tag on a source's card: which source the chosen SKUs use now, and how many when they differ. */
+export function inUseWords(inUse: number, total: number): string | null {
+  if (inUse === 0) return null
+  return inUse === total ? 'In use now' : `In use now · ${inUse} of ${total}`
 }
 
 interface PreviewRow { key: string; sku: string; listing: string; showsNow: number | null; after: string }
@@ -75,7 +96,7 @@ interface PreviewRow { key: string; sku: string; listing: string; showsNow: numb
 export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, onClose, onSwitched }: {
   open: boolean
   targets: readonly StockSourceTarget[]
-  /** The lent stock most of this family's SKUs use now: the default when the chosen SKUs use their own. */
+  /** The lent stock most of this family's SKUs use now: it breaks a tie between the sources the chosen SKUs use. */
   suggestedGrantId?: string | null
   /** The person may change where stock comes from (inventory.adjust; the API also asks for an owner). */
   canSwitch: boolean
@@ -128,6 +149,7 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
   }, [open, choice, loadPreview])
 
   const plan = useMemo(() => stockSourcePlan(targets, choice ?? OWN, preview), [targets, choice, preview])
+  const inUse = useMemo(() => stockInUse(targets), [targets])
   // Listings whose fixed number ends when they join the lent stock (a shared SKU has no fixed number; the API does it).
   const endsFixed = useMemo(() => {
     if (!preview || to !== 'pool') return 0
@@ -172,7 +194,11 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
     { key: 'after', label: 'After', width: 160, render: (r) => r.after },
   ]
   const action = to === 'pool' ? 'Connect' : 'Disconnect'
-  const summary = !preview ? null : [
+  const chosenStock = to === 'pool' ? `${lender}’s stock` : 'this business’s own stock'
+  const nothingToChange = !!preview && plan.will.length === 0 && plan.refused.length === 0 && plan.already.length > 0
+  const summary = !preview ? null : nothingToChange
+    ? `${plan.already.length === 1 ? `${plan.already[0]!.sku} already uses` : `All ${plan.already.length} SKUs already use`} ${chosenStock}. To change it, choose another stock above.`
+    : [
     plan.will.length > 0 && (to === 'pool'
       ? `${oneSku ? plan.will[0]!.sku : count(plan.will.length, 'SKU')} will use ${lender}’s stock.`
       : `${oneSku ? plan.will[0]!.sku : count(plan.will.length, 'SKU')} will use this business’s own stock again.`),
@@ -188,7 +214,7 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
         <Button disabled={busy} onClick={onClose}>Cancel</Button>
         {canSwitch && (
           <Button variant="primary" disabled={busy || !preview || plan.will.length === 0} onClick={() => { void run() }}>
-            {busy ? `${action === 'Connect' ? 'Connecting' : 'Disconnecting'}…` : `${action} ${count(plan.will.length, 'SKU')}`}
+            {busy ? `${action === 'Connect' ? 'Connecting' : 'Disconnecting'}…` : nothingToChange ? 'Nothing to change' : `${action} ${count(plan.will.length, 'SKU')}`}
           </Button>
         )}
       </>}>
@@ -199,10 +225,10 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
         <fieldset className={styles.choices} disabled={busy || grants === null}>
           <legend className={styles.legend}>Stock from</legend>
           <RadioCard name="stock-source" value={OWN} checked={choice === OWN} selected={choice === OWN} onChange={() => setChoice(OWN)}
-            title="Own stock" description="This business’s own warehouses." />
+            title={<SourceTitle name="Own stock" inUse={inUseWords(inUse.get(OWN) ?? 0, targets.length)} />} description="This business’s own warehouses." />
           {(grants ?? []).map((g) => (
             <RadioCard key={g.id} name="stock-source" value={g.id} checked={choice === g.id} selected={choice === g.id} onChange={() => setChoice(g.id)}
-              title={`${g.ownerWorkspaceName}’s stock`} description={warehousesWords(g)} />
+              title={<SourceTitle name={`${g.ownerWorkspaceName}’s stock`} inUse={inUseWords(inUse.get(g.id) ?? 0, targets.length)} />} description={warehousesWords(g)} />
           ))}
         </fieldset>
         {grants === null && !error && <p role="status" className={styles.note}>Reading the stock lent to this business…</p>}
@@ -225,4 +251,9 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
       </div>
     </Modal>
   )
+}
+
+/** A source card's title, with the "In use now" tag (words, not colour alone) on the source the SKUs use now. */
+function SourceTitle({ name, inUse }: { name: string; inUse: string | null }) {
+  return <span className={styles.sourceTitle}>{name}{inUse && <Pill tone="info">{inUse}</Pill>}</span>
 }

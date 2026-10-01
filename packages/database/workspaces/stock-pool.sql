@@ -487,20 +487,25 @@ CREATE TRIGGER nexus_stock_pool_product_guard BEFORE UPDATE OF sku, "deletedAt",
 -- eBay variant of it may become pinned (SharedListingMembership."pinnedQuantity" → a number): its quantity is the
 -- lender's stock, changed in the lender. Connecting turns the fixed numbers it had back to follow
 -- (pool-links.service.ts). Amazon-managed (FBA) listings show Amazon's own number and are not touched. A buffer stays
--- allowed: it only holds units back. Turning a fixed number back to follow is always allowed.
+-- allowed: it only holds units back. Turning a fixed number back to follow is always allowed. A fixed 0 is allowed
+-- (Owner D1-A, 2026-10-01: "Stop selling here", Sync Control's Zero & Pin): it never offers stock that is not there.
+-- An existing fixed number may not be changed to another number except 0.
 CREATE OR REPLACE FUNCTION nexus_stock_pool_quantity_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   lender_name text;
   product_sku text;
 BEGIN
   IF TG_TABLE_NAME = 'ChannelListing' THEN
+    -- The fixed number is quantityOverride (every pin writes it; quantity is its copy).
     IF NEW."followMasterQuantity" IS DISTINCT FROM false OR NEW."fulfillmentMethod" = 'FBA'
-       OR (TG_OP = 'UPDATE' AND OLD."followMasterQuantity" IS NOT DISTINCT FROM false) THEN
+       OR COALESCE(NEW."quantityOverride", NEW.quantity, 0) = 0
+       OR (TG_OP = 'UPDATE' AND OLD."followMasterQuantity" IS NOT DISTINCT FROM false
+           AND NEW."quantityOverride" IS NOT DISTINCT FROM OLD."quantityOverride") THEN
       RETURN NEW;
     END IF;
   ELSE
-    IF NEW."pinnedQuantity" IS NULL OR NEW."productId" IS NULL
-       OR (TG_OP = 'UPDATE' AND OLD."pinnedQuantity" IS NOT NULL) THEN
+    IF NEW."pinnedQuantity" IS NULL OR NEW."pinnedQuantity" = 0 OR NEW."productId" IS NULL
+       OR (TG_OP = 'UPDATE' AND NEW."pinnedQuantity" IS NOT DISTINCT FROM OLD."pinnedQuantity") THEN
       RETURN NEW;
     END IF;
   END IF;
@@ -512,14 +517,14 @@ BEGIN
   WHERE l."productId" = NEW."productId" AND l.status = 'active'
   LIMIT 1;
   IF FOUND THEN
-    RAISE EXCEPTION '% sells from the stock of %, so its quantity follows that stock. Change the stock in %, or disconnect it first (Matrix, Stock source).',
+    RAISE EXCEPTION '% sells from the stock of %, so its quantity follows that stock. Change the stock in %, or disconnect it first (Matrix, Stock source). To stop selling there, fix it at 0.',
       product_sku, lender_name, lender_name USING ERRCODE = '23514';
   END IF;
   RETURN NEW;
 END $$;
 
 DROP TRIGGER IF EXISTS nexus_stock_pool_quantity_guard ON "ChannelListing";
-CREATE TRIGGER nexus_stock_pool_quantity_guard BEFORE INSERT OR UPDATE OF "followMasterQuantity" ON "ChannelListing"
+CREATE TRIGGER nexus_stock_pool_quantity_guard BEFORE INSERT OR UPDATE OF "followMasterQuantity", "quantityOverride" ON "ChannelListing"
   FOR EACH ROW EXECUTE FUNCTION nexus_stock_pool_quantity_guard();
 DROP TRIGGER IF EXISTS nexus_stock_pool_quantity_guard ON "SharedListingMembership";
 CREATE TRIGGER nexus_stock_pool_quantity_guard BEFORE INSERT OR UPDATE OF "pinnedQuantity" ON "SharedListingMembership"

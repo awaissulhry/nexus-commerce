@@ -163,6 +163,15 @@ describe('the Matrix says where a SKU takes its stock from', () => {
     await sql(`INSERT INTO "SharedListingMembership" (id, "workspaceId", marketplace, sku, "itemId", "parentSku", "productId", "variationSpecifics", "updatedAt") VALUES ($1,$2,'IT','JACKET-M','ITEM-1','JACKET',$3,'{}'::jsonb,now())`, [membership, B, id.bM])
     expect(await dbError(as(B, user.ownerB, () => state.db.client.sharedListingMembership.update({ where: { id: membership }, data: { pinnedQuantity: 3 } }))))
       .toMatch(/sells from the stock of Lender A/)
+    // A fixed 0 is allowed: it stops selling there (Owner D1-A, Sync Control's Zero & Pin). It may not become another number.
+    const stop = (data: Record<string, unknown>) => dbError(as(B, user.ownerB, () => state.db.client.channelListing.update({ where: { id: listing.id }, data })))
+    expect(await stop({ followMasterQuantity: false, quantityOverride: 0, quantity: 0 })).toBe('NO ERROR')
+    expect(await stop({ quantityOverride: 3, quantity: 3 })).toMatch(/To stop selling there, fix it at 0\./)
+    expect(await stop({ followMasterQuantity: true, quantityOverride: null })).toBe('NO ERROR')
+    const pin = (pinnedQuantity: number | null) => dbError(as(B, user.ownerB, () => state.db.client.sharedListingMembership.update({ where: { id: membership }, data: { pinnedQuantity } })))
+    expect(await pin(0)).toBe('NO ERROR')
+    expect(await pin(3)).toMatch(/sells from the stock of Lender A/)
+    expect(await pin(null)).toBe('NO ERROR')
     // Amazon-managed (FBA): Amazon's own number; the rule does not touch it.
     const fba = randomUUID()
     await sql(`INSERT INTO "ChannelListing" ("workspaceId", id, "productId", channel, marketplace, region, "channelMarket", "listingStatus", "fulfillmentMethod", quantity, "followMasterQuantity", "updatedAt") VALUES ($1,$2,$3,'AMAZON','IT','IT','AMAZON_IT','ACTIVE','FBA',6,true,now())`, [B, fba, id.bM])
@@ -175,5 +184,16 @@ describe('the Matrix says where a SKU takes its stock from', () => {
     expect(await dbError(as(B, user.ownerB, () => state.db.client.channelListing.update({ where: { id: listing.id }, data: { followMasterQuantity: false } })))).toBe('NO ERROR')
     const r = await read()
     expect(rowOf(r, id.bM).cells[ebayIt(r)]!.writable).toMatchObject({ syncQty: true, syncMode: true })
+  })
+
+  it('connecting keeps a fixed 0 (it stops selling there); a fixed number above 0 ends', async () => {
+    const listing = await ebayListing(id.bM)
+    await sql(`UPDATE "ChannelListing" SET "followMasterQuantity" = false, "quantityOverride" = 0, quantity = 0 WHERE id = $1`, [listing.id])
+    const preview = await as(B, user.ownerB, () => links.previewSwitch({ productIds: [id.bM], to: 'pool', grantId, withVariations: false }))
+    const row = preview.products[0]!.listings.find((l) => l.listingId === listing.id)!
+    expect(row.rule).toBe('fixed')
+    expect(row.wasFixed).toBeUndefined()
+    await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bM], to: 'pool', grantId, withVariations: false }))
+    expect(await ebayListing(id.bM)).toMatchObject({ followMasterQuantity: false, quantity: 0 })
   })
 })

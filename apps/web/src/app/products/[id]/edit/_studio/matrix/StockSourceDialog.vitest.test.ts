@@ -4,7 +4,7 @@ import type { SwitchPreview } from '@/app/settings/sharing/stockPoolApi'
 
 import { sharedStockOf, stockTooltip } from './columns'
 import { parseMatrixRead } from './source'
-import { defaultStockChoice, stockSourcePlan, type StockSourceTarget } from './StockSourceDialog'
+import { defaultStockChoice, inUseWords, stockInUse, stockSourcePlan, type StockSourceTarget } from './StockSourceDialog'
 
 const XAVIA = { kind: 'pool' as const, grantId: 'g-xavia', lenderName: 'Xavia Racing' }
 const sku = (id: string, source: StockSourceTarget['source'] = null): StockSourceTarget => ({ id, sku: `SKU-${id}`, source })
@@ -39,14 +39,25 @@ describe('Stock source — which SKUs switch, and the default choice (shared sto
     expect(plan.refused).toEqual([])
   })
 
-  it('the default: own stock when every SKU borrows; else the stock this family uses; else the first lent stock', () => {
+  it('the pop-up opens on the stock the SKUs use NOW (the Owner read "Own stock" as "the connect did not hold")', () => {
     const grants = [{ id: 'g-helmet' }, { id: 'g-xavia' }]
-    expect(defaultStockChoice([sku('a', XAVIA), sku('b', XAVIA)], grants, 'g-xavia')).toBe('own')
+    expect(defaultStockChoice([sku('a', XAVIA), sku('b', XAVIA)], grants, 'g-xavia')).toBe('g-xavia')
+    expect(defaultStockChoice([sku('a'), sku('b')], grants, 'g-xavia')).toBe('own')
+    // Mixed: the source most of them use; a tie goes to the family's lent stock, then to a lent stock before own.
+    expect(defaultStockChoice([sku('a'), sku('b'), sku('c', XAVIA)], grants, 'g-xavia')).toBe('own')
     expect(defaultStockChoice([sku('a'), sku('b', XAVIA)], grants, 'g-xavia')).toBe('g-xavia')
-    expect(defaultStockChoice([sku('a')], grants, null)).toBe('g-helmet')
-    // A suggestion that is no longer on (ended, paused) is not offered.
-    expect(defaultStockChoice([sku('a')], grants, 'g-ended')).toBe('g-helmet')
-    expect(defaultStockChoice([sku('a')], [], null)).toBe('own')
+    expect(defaultStockChoice([sku('a'), sku('b', XAVIA)], grants, null)).toBe('g-xavia')
+    // A source that is no longer on (ended, paused) is not offered.
+    expect(defaultStockChoice([sku('a', { kind: 'pool', grantId: 'g-ended', lenderName: 'Gone' })], grants, 'g-ended')).toBe('g-helmet')
+    expect(defaultStockChoice([], grants, 'g-xavia')).toBe('g-xavia')
+    expect(defaultStockChoice([], [], null)).toBe('own')
+  })
+
+  it('the "In use now" tag: on the source the SKUs use now, with the count when they differ', () => {
+    expect(stockInUse([sku('a'), sku('b', XAVIA), sku('c', XAVIA)])).toEqual(new Map([['own', 1], ['g-xavia', 2]]))
+    expect(inUseWords(21, 21)).toBe('In use now')
+    expect(inUseWords(2, 3)).toBe('In use now · 2 of 3')
+    expect(inUseWords(0, 3)).toBeNull()
   })
 })
 

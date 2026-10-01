@@ -24,6 +24,14 @@
   color: var(--nds-text);
 }
 
+/* The "In use now" tag always on its own line under the name: the same on a wide and a narrow card. */
+.sourceTitle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+}
+
 .note {
   margin: 0;
   color: var(--nds-text-2);

@@ -10,7 +10,7 @@ Invalid \`prisma.product.update()\` invocation:
 Database error. Code: \`23514\`. Message: \`${sentence}\``), { code: 'P2010' })
 const borrower = 'GALE-JACKET-BLACK-M sells from the stock of Xavia Racing. Disconnect it first (Matrix, Stock source), then change it.'
 const lender = 'GALE-JACKET-BLACK-M shares its stock with Motovento. Disconnect it there first, then change it.'
-const fixedNumber = 'GALE-JACKET-BLACK-M sells from the stock of Xavia Racing, so its quantity follows that stock. Change the stock in Xavia Racing, or disconnect it first (Matrix, Stock source).'
+const fixedNumber = 'GALE-JACKET-BLACK-M sells from the stock of Xavia Racing, so its quantity follows that stock. Change the stock in Xavia Racing, or disconnect it first (Matrix, Stock source). To stop selling there, fix it at 0.'
 
 describe('a product that shares stock: the refusal reaches the person in words', () => {
   let apps: FastifyInstance[] = []
