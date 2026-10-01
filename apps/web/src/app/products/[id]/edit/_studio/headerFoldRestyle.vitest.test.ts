@@ -14,8 +14,8 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 describe('the header fold restyles the header, not the grid', () => {
   it('the fold class goes on the bands, which hold the header and not the tab body', () => {
     const frame = read('./StudioFrame.tsx')
-    expect(frame).toMatch(/useHeaderCollapse\(frameRef, bandsRef, styles\.collapsed\)/)
-    const bands = frame.indexOf('<div ref={bandsRef} className={styles.bands}>')
+    expect(frame).toMatch(/useHeaderCollapse\(frameRef, bandsRef, DETAIL_HEADER_FOLD\.folded\)/)
+    const bands = frame.indexOf('<div ref={bandsRef} className={`${styles.bands} ${DETAIL_HEADER_FOLD.host}`}>')
     expect(bands).toBeGreaterThan(-1)
     expect(frame.indexOf('<StudioTabHost', bands)).toBeGreaterThan(frame.indexOf('</div>', bands))
     const hook = read('./useHeaderCollapse.ts')
@@ -23,11 +23,13 @@ describe('the header fold restyles the header, not the grid', () => {
     expect(hook).not.toMatch(/frameRef\.current\?\.classList/)
   })
 
-  it('every collapsed rule is scoped to the bands', () => {
-    const css = read('./studio.module.css')
-    const selectors = [...css.matchAll(/^\s*([^{}/]*\.collapsed[^{}]*)\{/gm)].map((m) => m[1].trim())
+  // Step 4 (D6) — the fold's look moved into the design system; the studio no longer restyles the DS header.
+  it('every folded rule is scoped to the fold host, and the studio restyles no DS header', () => {
+    const css = read('../../../../../design-system/styles/patterns.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    const selectors = [...css.matchAll(/^\s*([^{}/]*\.is-folded[^{}]*)\{/gm)].map((m) => m[1].trim())
     expect(selectors.length).toBe(4)
-    for (const selector of selectors) for (const part of selector.split(',')) expect(part.trim()).toMatch(/^\.bands\.collapsed /)
+    for (const selector of selectors) for (const part of selector.split(',')) expect(part.trim()).toMatch(/^\.nds-detailhdr-fold\.is-folded /)
+    expect(read('./studio.module.css')).not.toMatch(/nds-detailhdr/)
   })
 
   it('the sheet top is a non-inherited property, in the web and Factory copies alike', () => {

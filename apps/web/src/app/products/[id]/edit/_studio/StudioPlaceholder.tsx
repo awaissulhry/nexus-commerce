@@ -19,6 +19,7 @@
 import type { ReactNode } from 'react'
 
 import { EmptyState } from '@/design-system/components'
+import styles from './studio.module.css'
 
 export interface StudioPlaceholderProps {
   /** The surface's own name, exactly as the navigation spells it. */
@@ -32,12 +33,12 @@ export interface StudioPlaceholderProps {
 
 export function StudioPlaceholder({ title, children, status, icon }: StudioPlaceholderProps) {
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className={styles.placeholder}>
       <EmptyState
         icon={icon}
         title={title}
         description={
-          <span style={{ display: 'grid', gap: 6, maxWidth: 520 }}>
+          <span className={styles.placeholderText}>
             <span>{children}</span>
             {status != null && <span className="nds-cell-muted">{status}</span>}
           </span>

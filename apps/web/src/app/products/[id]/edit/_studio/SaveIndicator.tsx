@@ -14,6 +14,7 @@
  */
 
 import { AlertTriangle, Check } from 'lucide-react'
+import { Spinner } from '@/design-system/primitives'
 
 import { useStudioSave, useStudioScope, useStudioSaveMessage } from './contracts'
 import { describeSaveState } from './saveState'
@@ -75,7 +76,8 @@ export function SaveIndicator() {
   if (d.kind === 'saving') {
     return (
       <span className={styles.saveState} role="status" aria-live="polite">
-        <span className={styles.saveSpinner} aria-hidden />
+        {/* The DS ring, silent: the status line beside it says "Saving…". */}
+        <span aria-hidden><Spinner size={12} /></span>
         {d.text}
       </span>
     )
