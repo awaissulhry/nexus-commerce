@@ -36,11 +36,6 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
        whenever they are rebuilt — a progress refresh, a readiness read — and the variation theme slid behind the
        identity fields (measured 2026-09-27 after a scope round trip). */
     maintainColumnOrder
-    /* 2026-10-01 (P2 horizontal scroll ≤ 60 renders a frame) — every column is drawn once. With AG's column window,
-       each 90 px of sideways scroll re-rendered every row and mounted a new column of cells: 150.7 renders a frame on
-       the 21-row, 59-field fixture, and 63 even with a one-element cell, so no cell renderer could meet the budget.
-       Drawn once: 0 a frame; the first editable cell is unchanged (p50 0.96 s either way). */
-    suppressColumnVirtualisation
     /* A header drag is kept like a Customise Save (`useSheetColumns.onColumnMoved`). */
     onColumnMoved={columns.onColumnMoved}
     onColumnPinned={columns.onColumnPinned}
