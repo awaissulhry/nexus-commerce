@@ -67,34 +67,34 @@ export default function BulkActionsDashboardPage() {
 
       {/* Error Alert */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800 font-medium">Error loading bulk action jobs</p>
-          <p className="text-red-700 text-sm mt-1">{error}</p>
+        <div className="mb-6 p-4 bg-danger-soft border border-red-200 rounded-lg">
+          <p className="text-danger-strong font-medium">Error loading bulk action jobs</p>
+          <p className="text-danger-strong text-sm mt-1">{error}</p>
         </div>
       )}
 
       {/* Summary Stats */}
       {!loading && (
         <div className="mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs text-gray-600 font-medium">Total Jobs</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+          <div className="bg-card rounded-lg border border-default p-4">
+            <p className="text-xs text-secondary font-medium">Total Jobs</p>
+            <p className="text-2xl font-bold text-primary mt-1">{stats.total}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs text-gray-600 font-medium">Pending</p>
-            <p className="text-2xl font-bold text-yellow-600 mt-1">{stats.pending}</p>
+          <div className="bg-card rounded-lg border border-default p-4">
+            <p className="text-xs text-secondary font-medium">Pending</p>
+            <p className="text-2xl font-bold text-warning-strong mt-1">{stats.pending}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs text-gray-600 font-medium">In Progress</p>
-            <p className="text-2xl font-bold text-blue-600 mt-1">{stats.inProgress}</p>
+          <div className="bg-card rounded-lg border border-default p-4">
+            <p className="text-xs text-secondary font-medium">In Progress</p>
+            <p className="text-2xl font-bold text-info-strong mt-1">{stats.inProgress}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs text-gray-600 font-medium">Completed</p>
-            <p className="text-2xl font-bold text-green-600 mt-1">{stats.completed}</p>
+          <div className="bg-card rounded-lg border border-default p-4">
+            <p className="text-xs text-secondary font-medium">Completed</p>
+            <p className="text-2xl font-bold text-success-strong mt-1">{stats.completed}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs text-gray-600 font-medium">Failed</p>
-            <p className="text-2xl font-bold text-red-600 mt-1">{stats.failed}</p>
+          <div className="bg-card rounded-lg border border-default p-4">
+            <p className="text-xs text-secondary font-medium">Failed</p>
+            <p className="text-2xl font-bold text-danger-strong mt-1">{stats.failed}</p>
           </div>
         </div>
       )}
@@ -113,8 +113,8 @@ export default function BulkActionsDashboardPage() {
       {/* Loading State */}
       {loading ? (
         <div className="space-y-4">
-          <div className="h-12 bg-gray-100 rounded-lg animate-pulse" />
-          <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />
+          <div className="h-12 bg-sunken rounded-lg animate-pulse" />
+          <div className="h-96 bg-sunken rounded-lg animate-pulse" />
         </div>
       ) : (
         <BulkActionsTable

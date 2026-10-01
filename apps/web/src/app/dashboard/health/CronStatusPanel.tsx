@@ -175,13 +175,13 @@ export default function CronStatusPanel() {
 
       {data && data.staleRunning.length > 0 && (
         <div className="px-4 py-3 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900">
-          <div className="text-base font-semibold text-amber-900 mb-1.5 inline-flex items-center gap-1.5">
+          <div className="text-base font-semibold text-warning-strong mb-1.5 inline-flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5" />
             {data.staleRunning.length} stale RUNNING (likely crashed mid-run)
           </div>
           <div className="space-y-0.5">
             {data.staleRunning.map((s) => (
-              <div key={s.id} className="text-sm text-amber-800">
+              <div key={s.id} className="text-sm text-warning-strong">
                 <span className="font-mono">{s.jobName}</span>
                 <span className="text-amber-600 dark:text-amber-400"> · started {relativeTime(s.startedAt)}</span>
               </div>
@@ -250,7 +250,7 @@ export default function CronStatusPanel() {
           </div>
           <div className="space-y-1">
             {data.recentFailures.slice(0, 5).map((f) => (
-              <div key={f.id} className="text-sm text-red-800">
+              <div key={f.id} className="text-sm text-danger-strong">
                 <span className="font-mono">{f.jobName}</span>
                 <span className="text-red-600 dark:text-red-400"> · {relativeTime(f.startedAt)}</span>
                 {f.errorMessage && (

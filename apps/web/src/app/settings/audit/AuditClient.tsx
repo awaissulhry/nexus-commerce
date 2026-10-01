@@ -228,7 +228,7 @@ export default function AuditClient({
                   ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
                   : c.count > 0
                     ? 'bg-white text-slate-700 border-default hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600'
-                    : 'bg-slate-50 text-tertiary border-default dark:bg-slate-900 dark:border-slate-800 dark:text-slate-600',
+                    : 'bg-slate-50 text-tertiary border-default dark:bg-slate-900 dark:border-slate-800',
               )}
             >
               {c.label}

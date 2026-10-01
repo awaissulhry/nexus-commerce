@@ -379,7 +379,7 @@ export default function CustomersClient() {
             <div className="space-y-3">
               <div className="rounded-md border border-default dark:border-slate-700 p-2.5">
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-medium text-slate-700">Returning</span>
+                  <span className="font-medium text-secondary">Returning</span>
                   <span className="tabular-nums font-semibold">
                     {formatCurrency(report.totals.revenueReturning, 'EUR')}
                   </span>
@@ -390,13 +390,13 @@ export default function CustomersClient() {
                     style={{ width: `${newReturningPct}%` }}
                   />
                 </div>
-                <div className="text-[10px] text-slate-500 mt-1">
+                <div className="text-[10px] text-tertiary mt-1">
                   {newReturningPct.toFixed(1)}% of window revenue
                 </div>
               </div>
               <div className="rounded-md border border-default dark:border-slate-700 p-2.5">
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-medium text-slate-700">New</span>
+                  <span className="font-medium text-secondary">New</span>
                   <span className="tabular-nums font-semibold">
                     {formatCurrency(report.totals.revenueNew, 'EUR')}
                   </span>
@@ -407,7 +407,7 @@ export default function CustomersClient() {
                     style={{ width: `${100 - newReturningPct}%` }}
                   />
                 </div>
-                <div className="text-[10px] text-slate-500 mt-1">
+                <div className="text-[10px] text-tertiary mt-1">
                   {(100 - newReturningPct).toFixed(1)}% of window revenue
                 </div>
               </div>

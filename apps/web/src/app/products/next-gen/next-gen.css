@@ -16,7 +16,10 @@
   height: 100%;
   padding: 20px 24px;
   gap: 16px;
-  background: var(--nds-surface-canvas, var(--nds-grey-50));
+  /* --nds-bg, not `var(--nds-surface-canvas, var(--nds-grey-50))`: no --nds-surface-canvas exists, so the
+     fallback ramp step pinned the ground light while the text tokens followed the theme (dark-mode
+     title 1.11:1). --nds-bg is grey-50 in light, so light mode is unchanged. */
+  background: var(--nds-bg);
 }
 
 .lf-head {

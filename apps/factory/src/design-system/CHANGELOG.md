@@ -1,3 +1,7 @@
+## The accent identity chip reads in light mode again — 2026-10-01
+
+**`.nds-cell-chip-accent`** (`grid/theme/grid.css`) filled with `--nds-rail-text`, which the dark chrome turned into a light ink in light mode (white "P" at 2.06:1). It now fills with **`--nds-text-2`** (9.9:1 light, 9.8:1 dark). Mirrored from the web app.
+
 ## Closed editors leave no pending attachment work — 2026-09-30
 
 The pinned AG React patch checks that its cell is alive and still owns the same editor before a delayed attachment runs. Closing an editor, removing its row, or destroying the grid cannot attach a stale tooltip or cancel a replacement editor. Both published module formats have direct regression tests. Mirrored in Factory.

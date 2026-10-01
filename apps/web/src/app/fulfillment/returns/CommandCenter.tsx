@@ -180,7 +180,7 @@ export default function CommandCenter({
                   className={[
                     'group relative flex flex-col items-start gap-1 rounded-lg border px-3 py-2.5 text-left transition-all',
                     isActive ? tone.active : tone.idle,
-                    empty && !isActive ? 'opacity-55' : '',
+                    empty && !isActive ? 'opacity-75' : '',
                     'focus:outline-none focus:ring-2 ' + tone.ring,
                   ].join(' ')}
                   title={isActive ? 'Clear this queue filter' : `Filter to ${t.label.toLowerCase()}`}

@@ -68,7 +68,7 @@ export function FlatFileMarketStrip({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-slate-400 font-medium">{label}</span>
+      <span className="text-xs text-tertiary font-medium">{label}</span>
       <div className="flex gap-0.5">
         {markets.map((m, idx) => {
           const isActive = active === m

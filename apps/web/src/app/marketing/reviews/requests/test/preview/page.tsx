@@ -54,7 +54,10 @@ function PreviewInner() {
   if (html === null) {
     return <p className="p-4 font-mono text-sm text-slate-500">Loading preview…</p>
   }
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
+  // An email renders in a mail client, which does not know the app's theme: text the template leaves
+  // uncoloured is the client's default ink. Without this, dark mode handed it the app's light text
+  // (`body` reads --nds-text), and the heading went light-on-white (1.2:1) on the email's white card.
+  return <div style={{ colorScheme: 'light', color: 'initial' }} dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 export default function PreviewPage() {

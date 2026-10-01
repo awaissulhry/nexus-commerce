@@ -173,10 +173,10 @@ export default function SyncHealthClient({
   const errorRatePct = data.logs24h.errorRate * 100
   const headlineTone =
     errorRatePct >= 5
-      ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40'
+      ? 'border-rose-200 dark:border-rose-900 bg-danger-soft/40'
       : errorRatePct >= 1
-        ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40'
-        : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/40'
+        ? 'border-amber-200 dark:border-amber-900 bg-warning-soft/40'
+        : 'border-emerald-200 dark:border-emerald-900 bg-success-soft/40'
 
   const stuckThresholdMs = 10 * 60 * 1000
   const queueStuck =
@@ -262,9 +262,9 @@ export default function SyncHealthClient({
         <div
           className={`border rounded-md p-3 ${
             queueStuck
-              ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40'
+              ? 'border-rose-200 dark:border-rose-900 bg-danger-soft/40'
               : data.queue.failed > 0
-                ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40'
+                ? 'border-amber-200 dark:border-amber-900 bg-warning-soft/40'
                 : 'border-default dark:border-slate-700 bg-white dark:bg-slate-900'
           }`}
         >

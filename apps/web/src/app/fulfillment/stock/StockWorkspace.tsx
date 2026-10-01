@@ -1875,7 +1875,7 @@ export default function StockWorkspace() {
             Cycle counts
             {cycleCountActive > 0 && (
               <span
-                className="absolute top-1 right-6 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
+                className="absolute top-1 right-6 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-warning-strong text-inverse tabular-nums"
                 aria-label={`${cycleCountActive} open cycle count session${cycleCountActive === 1 ? '' : 's'}`}
               >
                 {cycleCountActive}

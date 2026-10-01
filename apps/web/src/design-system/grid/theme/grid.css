@@ -487,7 +487,7 @@
 }
 .nds-cell-chip-auto { background: var(--nds-targeting-auto); }
 .nds-cell-chip-manual { background: var(--nds-targeting-manual); }
-.nds-cell-chip-accent { background: var(--nds-rail-text); }
+.nds-cell-chip-accent { background: var(--nds-text-2); } /* not --nds-rail-text: the rail joined the dark chrome (TB), so that token is a LIGHT ink in light mode — white "P" on it was 2.06:1 */
 .nds-cell-chip-program { font-size: 9px; letter-spacing: -0.3px; color: var(--nds-grid-muted-fg); background: var(--nds-grid-bg); border: 1px solid var(--nds-grid-frame); }
 .nds-cell-chip-neutral { color: var(--nds-text-2); background: var(--nds-surface-sunken); }
 /* Both containers on purpose: `.nds-cell-identity` is the older identity cell (products/next, the

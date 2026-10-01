@@ -1505,7 +1505,7 @@ const ProductCell = memo(function ProductCell({
                   className={`inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border rounded ${tone} hover:opacity-80`}
                 >
                   {ch.slice(0, 3)}
-                  <span className="opacity-60">{c.total}</span>
+                  <span className="opacity-80">{c.total}</span>
                 </Link>
               )
             }
@@ -1514,7 +1514,7 @@ const ProductCell = memo(function ProductCell({
                 key={ch}
                 href={`/products/${p.id}/list-wizard?channel=${ch}`}
                 title={t('products.grid.notListedOn', { channel: ch })}
-                className="inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-white text-tertiary rounded hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
+                className="inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-card text-tertiary rounded hover:border-blue-300 hover:text-link hover:bg-info-soft"
               >
                 {ch.slice(0, 3)}
                 <span className="text-xs leading-none">+</span>
@@ -1644,7 +1644,7 @@ const ProductCell = memo(function ProductCell({
     }
     case 'variants':
       return (
-        <span className="text-base tabular-nums text-slate-600">
+        <span className="text-base tabular-nums text-secondary">
           {p.variantCount}
         </span>
       )

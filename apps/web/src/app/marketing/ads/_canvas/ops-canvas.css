@@ -1,4 +1,6 @@
 .ops-canvas { width: 100%; height: 100%; min-height: 560px; background: var(--nds-white); }
+/* React Flow's own stylesheet paints its attribution link a light grey (2.85:1 on this white canvas). */
+.ops-canvas .react-flow__attribution a { color: var(--nds-grey-600); }
 
 .opsn {
   position: relative;

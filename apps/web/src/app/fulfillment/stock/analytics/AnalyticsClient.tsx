@@ -196,10 +196,10 @@ function formatCents(cents: number): string {
 
 function dohTone(doh: number | null): string {
   if (doh == null) return 'text-tertiary'
-  if (doh < 30)  return 'text-emerald-700'
-  if (doh < 90)  return 'text-blue-700'
-  if (doh < 180) return 'text-amber-700'
-  return 'text-rose-700'
+  if (doh < 30)  return 'text-success-strong'
+  if (doh < 90)  return 'text-info-strong'
+  if (doh < 180) return 'text-warning-strong'
+  return 'text-danger-strong'
 }
 
 // ── Component ──────────────────────────────────────────────────────────
@@ -401,7 +401,7 @@ export default function AnalyticsClient() {
         return <span className="tabular-nums text-slate-500 dark:text-slate-400">{row.currentReorderThreshold ?? <span className="text-slate-300">—</span>}</span>
       case 'recRop':
         return (
-          <span className={`tabular-nums font-semibold ${ropChanged ? 'text-blue-700' : 'text-tertiary'}`}>
+          <span className={`tabular-nums font-semibold ${ropChanged ? 'text-info-strong' : 'text-tertiary'}`}>
             {row.recommendation.rop ?? <span className="text-slate-300 font-normal">—</span>}
           </span>
         )
@@ -644,7 +644,7 @@ export default function AnalyticsClient() {
                           <div className="text-2xl font-bold tabular-nums mt-1">{count.toLocaleString()}</div>
                           <div className="text-xs mt-0.5 opacity-80 flex items-baseline gap-1.5">
                             <span className="font-semibold tabular-nums">{sharePct.toFixed(1)}%</span>
-                            <span className="opacity-80">{t(`stock.abc.band.${cls}.description`)}</span>
+                            <span>{t(`stock.abc.band.${cls}.description`)}</span>
                           </div>
                         </div>
                       )
@@ -701,7 +701,7 @@ export default function AnalyticsClient() {
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm uppercase tracking-wider font-semibold text-rose-700 inline-flex items-center gap-1.5 mb-2">
+                  <div className="text-sm uppercase tracking-wider font-semibold text-danger-strong inline-flex items-center gap-1.5 mb-2">
                     <AlertTriangle size={12} />
                     {t('stock.deadStock.dead.title', { days: deadDays })}
                     <span className="text-slate-500 dark:text-slate-400 font-normal">· {deadStock.dead.length}</span>
@@ -720,12 +720,12 @@ export default function AnalyticsClient() {
                             <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
                               {p.sku} · {t('stock.analytics.onHand', { n: p.totalStock })}
                               {p.daysSinceLastMovement != null
-                                ? <span className="text-rose-600"> · {p.daysSinceLastMovement}d ago</span>
-                                : <span className="text-rose-600"> · {t('stock.deadStock.neverMoved')}</span>}
+                                ? <span className="text-danger-strong"> · {p.daysSinceLastMovement}d ago</span>
+                                : <span className="text-danger-strong"> · {t('stock.deadStock.neverMoved')}</span>}
                             </div>
                           </div>
                           <div className="text-right text-sm tabular-nums flex-shrink-0">
-                            <div className="font-semibold text-rose-700">{formatCents(p.valueAtRiskCents)}</div>
+                            <div className="font-semibold text-danger-strong">{formatCents(p.valueAtRiskCents)}</div>
                             <div className="text-xs text-tertiary">{t('stock.deadStock.atRisk')}</div>
                           </div>
                         </li>
@@ -737,7 +737,7 @@ export default function AnalyticsClient() {
                   )}
                 </div>
                 <div>
-                  <div className="text-sm uppercase tracking-wider font-semibold text-amber-700 inline-flex items-center gap-1.5 mb-2">
+                  <div className="text-sm uppercase tracking-wider font-semibold text-warning-strong inline-flex items-center gap-1.5 mb-2">
                     <TrendingDown size={12} />
                     {t('stock.deadStock.slow.title', { v: deadStock.slowVelocityThreshold })}
                     <span className="text-slate-500 dark:text-slate-400 font-normal">· {deadStock.slow.length}</span>
@@ -758,7 +758,7 @@ export default function AnalyticsClient() {
                             </div>
                           </div>
                           <div className="text-right text-sm tabular-nums flex-shrink-0">
-                            <div className="font-semibold text-amber-700">{formatCents(p.valueAtRiskCents)}</div>
+                            <div className="font-semibold text-warning-strong">{formatCents(p.valueAtRiskCents)}</div>
                             <div className="text-xs text-tertiary">{t('stock.deadStock.atRisk')}</div>
                           </div>
                         </li>
@@ -912,7 +912,7 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
           {data.notes && <span className="text-tertiary">{data.notes}</span>}
         </div>
       )}
-      {err && <div className="text-sm text-rose-600 mb-2">{err}</div>}
+      {err && <div className="text-sm text-danger-strong mb-2">{err}</div>}
       {data && (
         <div className="space-y-3">
           <div className="flex items-baseline gap-3 border-b border-subtle dark:border-slate-800 pb-2">
@@ -949,18 +949,18 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
               <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('stock.analytics.yearEnd.vat')}</div>
               <ul className="space-y-1 text-sm">
                 <li className="flex justify-between gap-2">
-                  <span className="text-emerald-700">{t('stock.analytics.yearEnd.netCapitalised')}</span>
+                  <span className="text-success-strong">{t('stock.analytics.yearEnd.netCapitalised')}</span>
                   <span className="tabular-nums">{formatCents(data.vatTreatment.netCapitalised.valueEurCents)}</span>
                 </li>
                 {data.vatTreatment.grossCapitalised.units > 0 && (
                   <li className="flex justify-between gap-2">
-                    <span className="text-rose-700">{t('stock.analytics.yearEnd.grossCapitalised')}</span>
+                    <span className="text-danger-strong">{t('stock.analytics.yearEnd.grossCapitalised')}</span>
                     <span className="tabular-nums">{formatCents(data.vatTreatment.grossCapitalised.valueEurCents)}</span>
                   </li>
                 )}
                 {data.vatTreatment.unknownVat.units > 0 && (
                   <li className="flex justify-between gap-2">
-                    <span className="text-amber-700">{t('stock.analytics.yearEnd.unknownVat')}</span>
+                    <span className="text-warning-strong">{t('stock.analytics.yearEnd.unknownVat')}</span>
                     <span className="tabular-nums">{formatCents(data.vatTreatment.unknownVat.valueEurCents)}</span>
                   </li>
                 )}

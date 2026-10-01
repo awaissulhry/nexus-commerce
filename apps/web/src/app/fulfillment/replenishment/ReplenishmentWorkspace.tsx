@@ -1533,7 +1533,7 @@ export default function ReplenishmentWorkspace() {
           <button
             type="button"
             onClick={() => setPreferencesOpen(true)}
-            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+            className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-default dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-secondary"
             title={t('grid.preferences.trigger')}
             aria-haspopup="dialog"
           >

@@ -843,7 +843,7 @@ function PlatformCard({
               </div>
               {isComingSoon && (
                 <Tooltip content="Available in next release" placement="top">
-                  <span className="inline-flex items-center h-5 px-1.5 rounded text-xs uppercase tracking-wide font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-800 border border-amber-200 dark:border-amber-900">
+                  <span className="inline-flex items-center h-5 px-1.5 rounded text-xs uppercase tracking-wide font-semibold bg-amber-50 dark:bg-amber-950/40 text-warning-strong border border-amber-200 dark:border-amber-900">
                     Coming soon
                   </span>
                 </Tooltip>

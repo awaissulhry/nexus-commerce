@@ -11,7 +11,7 @@
 .h10-stub { max-width: 1100px; }
 .h10-stub h1 { font-size: 22px; font-weight: 800; color: var(--nds-grey-900); margin: 0 0 6px; }
 .h10-stub p { font-size: 13.5px; color: var(--nds-grey-600); margin: 0 0 16px; }
-.h10-stub .crumb { font-size: 12px; color: var(--nds-grey-500); margin-bottom: 4px; }
+.h10-stub .crumb { font-size: 12px; color: var(--nds-grey-600); margin-bottom: 4px; }
 .h10-stub .panel { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 40px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
 
 /* CBN.2 — Ad Manager (campaigns grid) */
@@ -105,7 +105,7 @@
 .h10-dd-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 7px 11px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); cursor: pointer; text-align: left; }
 .h10-dd-btn:hover { border-color: var(--nds-grey-300); }
 .h10-dd-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-dd-btn > span.ph { color: var(--nds-grey-400); }
+.h10-dd-btn > span.ph { color: var(--nds-grey-600); }
 .h10-dd-btn svg { color: var(--nds-grey-500); flex-shrink: 0; }
 .h10-dd.open .h10-dd-btn { border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
 .h10-dd-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
@@ -127,9 +127,9 @@
 .h10-ms-opt.sel:hover { background: var(--nds-blue-100); }
 .h10-ms-opt.all { border-bottom: 1px solid var(--nds-grey-100); border-radius: 0; margin-bottom: 3px; font-weight: 600; color: var(--nds-grey-900); }
 .h10-ms-opt input { width: 15px; height: 15px; accent-color: var(--nds-blue-600); }
-.h10-ms-btn.ph span { color: var(--nds-grey-400); }
+.h10-ms-btn.ph span { color: var(--nds-grey-600); }
 /* Campaign searchable multi-select (H10) — reuses the .h10-ms shell + .h10-ms-pop */
-.h10-cms .h10-ms-btn.ph span { color: var(--nds-grey-400); }
+.h10-cms .h10-ms-btn.ph span { color: var(--nds-grey-600); }
 .h10-cms-search { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 7px; margin: 0 0 5px; padding: 6px 9px; background: var(--nds-white); border: 1px solid var(--nds-grey-300); border-radius: var(--nds-radius-md); color: var(--nds-grey-500); }
 .h10-cms-search input { flex: 1; min-width: 0; border: none; outline: none; font: inherit; font-size: 13px; background: transparent; color: var(--nds-grey-900); }
 .h10-cms-search input::placeholder { color: var(--nds-grey-400); }
@@ -1206,10 +1206,10 @@
 .h10-aig-bcard.on .bic { background: var(--nds-blue-600); color: var(--nds-white); }
 .h10-aig-bcard .bt { font-size: 14.5px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-aig-bcard .bd { font-size: 12.5px; line-height: 1.5; color: var(--nds-grey-600); margin-bottom: 12px; }
-.h10-aig-bcard .ba { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--nds-grey-500); margin-bottom: 12px; }
+.h10-aig-bcard .ba { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--nds-grey-600); margin-bottom: 12px; }
 .h10-aig-bcard .ba svg { color: var(--nds-grey-450); }
 .h10-aig-bcard .bchips { display: flex; flex-wrap: wrap; gap: 8px; }
-.h10-aig-bcard .chip { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-500); background: var(--nds-grey-75); border-radius: var(--nds-radius-2xl); padding: 4px 11px; }
+.h10-aig-bcard .chip { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); background: var(--nds-grey-75); border-radius: var(--nds-radius-2xl); padding: 4px 11px; }
 .h10-aig-bcard .chip.on { color: var(--nds-blue-600); background: var(--nds-blue-100); }
 
 /* Total Budget */
@@ -1408,7 +1408,7 @@
 .h10-spw-steps { display: flex; align-items: center; gap: 8px; margin: 20px 0 0; padding: 0 0 18px; border-bottom: 1px solid var(--nds-grey-150); }
 .h10-spw-step { display: inline-flex; align-items: center; gap: 9px; background: none; border: none; font: inherit; cursor: pointer; padding: 2px; }
 .h10-spw-step .circ { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; background: var(--nds-white); border: 1.5px solid #c2cdda; color: var(--nds-grey-500); flex-shrink: 0; transition: background .12s, border-color .12s, color .12s; }
-.h10-spw-step .lbl { font-size: 14px; font-weight: 500; color: var(--nds-grey-500); white-space: nowrap; }
+.h10-spw-step .lbl { font-size: 14px; font-weight: 500; color: var(--nds-grey-600); white-space: nowrap; }
 /* Only the ACTIVE step is blue; past + future steps are identical grey (matches H10). */
 .h10-spw-step.on .circ { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
 .h10-spw-step.on .lbl { color: var(--nds-blue-600); font-weight: 700; }
@@ -1851,7 +1851,7 @@
 .h10-spw-ps-list .row.sk .skm span { height: 9px; border-radius: 4px; background: var(--nds-grey-100); }
 .h10-spw-ps-list .row.sk .skm span:first-child { width: 80%; }
 .h10-spw-ps-list .row.sk .skm span:last-child { width: 40%; }
-.h10-spw-ps-empty { padding: 30px 0; text-align: center; font-size: 13px; color: #a4adba; }
+.h10-spw-ps-empty { padding: 30px 0; text-align: center; font-size: 13px; color: var(--nds-grey-600); }
 .h10-spw-ps-pager { display: flex; align-items: center; gap: 4px; justify-content: center; padding-top: 14px; }
 .h10-spw-ps-pager button { min-width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 12.5px; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); cursor: pointer; padding: 0 6px; }
 .h10-spw-ps-pager button:hover:not(:disabled) { background: var(--nds-grey-75); }
@@ -1872,7 +1872,7 @@
 .h10-spw-ps-rlist { flex: 1; min-height: 220px; max-height: 480px; overflow-y: auto; }
 .h10-spw-ps-rlist .row .x { flex-shrink: 0; background: none; border: none; color: #a4adba; cursor: pointer; padding: 4px; display: inline-flex; }
 .h10-spw-ps-rlist .row .x:hover { color: var(--nds-imgup-err); }
-.h10-spw-ps-nodata { display: flex; align-items: center; justify-content: center; min-height: 220px; font-size: 13px; color: #a4adba; }
+.h10-spw-ps-nodata { display: flex; align-items: center; justify-content: center; min-height: 220px; font-size: 13px; color: var(--nds-grey-600); }
 
 /* Structure selection — tabs + diagram */
 .h10-spw-st-card { padding: 18px 20px 22px; }

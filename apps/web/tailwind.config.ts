@@ -257,6 +257,10 @@ const config: Config = {
         disabled:  ds('--nds-text-disabled'), // decorative / disabled only
         inverse:   'rgb(var(--text-inverse) / <alpha-value>)',
         link:      ds('--nds-text-link'),
+        // Placeholder-style hints that are not a real <input> placeholder — the legacy flat-file
+        // grid's empty-cell "e.g. …" and "Click to search …" prompts. The DS field placeholder token,
+        // 5.9:1 light and dark (check-nds-contrast). Not for disabled text: that is `text-disabled`.
+        placeholder: ds('--nds-placeholder'),
       },
 
       // ── Semantic SURFACE tokens (P0) ──────────────────────────────

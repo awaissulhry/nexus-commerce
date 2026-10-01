@@ -47,8 +47,8 @@ export default function ReportsClient({ reports }: { reports: ReportDefinition[]
         <div
           className={`px-4 py-3 rounded-lg text-sm ${
             message.type === "success"
-              ? "bg-green-50 text-green-700 border border-green-200"
-              : "bg-red-50 text-red-700 border border-red-200"
+              ? "bg-success-soft text-success-strong border border-green-200"
+              : "bg-danger-soft text-danger-strong border border-red-200"
           }`}
         >
           {message.type === "success" ? "✅" : "❌"} {message.text}
@@ -64,7 +64,7 @@ export default function ReportsClient({ reports }: { reports: ReportDefinition[]
             className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
               filter === cat
                 ? "bg-blue-600 text-white"
-                : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                : "bg-card text-secondary border border-strong hover:bg-sunken"
             }`}
           >
             {cat === "all" ? "All Reports" : cat}
@@ -77,33 +77,33 @@ export default function ReportsClient({ reports }: { reports: ReportDefinition[]
         {filtered.map((report) => (
           <div
             key={report.id}
-            className="bg-white rounded-lg shadow border border-gray-200 p-5 hover:shadow-md transition-shadow"
+            className="bg-card rounded-lg shadow border border-default p-5 hover:shadow-md transition-shadow"
           >
             <div className="flex items-start gap-3 mb-3">
               <span className="text-2xl">{report.icon}</span>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-gray-900">{report.name}</h3>
-                <span className="inline-block px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 mt-1">
+                <h3 className="text-sm font-semibold text-primary">{report.name}</h3>
+                <span className="inline-block px-2 py-0.5 rounded text-xs bg-sunken text-secondary mt-1">
                   {report.category}
                 </span>
               </div>
             </div>
-            <p className="text-xs text-gray-500 mb-4 line-clamp-2">{report.description}</p>
+            <p className="text-xs text-tertiary mb-4 line-clamp-2">{report.description}</p>
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-tertiary">
                 Generated: {formatDate(report.lastGenerated)}
               </p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleGenerate(report.id)}
                   disabled={isPending && generatingId === report.id}
-                  className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium bg-info-soft text-info-strong rounded-lg hover:opacity-80 disabled:opacity-50 transition"
                 >
                   {isPending && generatingId === report.id ? "⏳" : "🔄"} Generate
                 </button>
                 <Link
                   href={`/dashboard/reports/${report.id}`}
-                  className="px-3 py-1.5 text-xs font-medium bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium bg-sunken text-secondary rounded-lg hover:opacity-80 transition"
                 >
                   View →
                 </Link>
@@ -114,9 +114,9 @@ export default function ReportsClient({ reports }: { reports: ReportDefinition[]
       </div>
 
       {filtered.length === 0 && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-12 text-center">
+        <div className="bg-card rounded-lg shadow border border-default p-12 text-center">
           <span className="text-3xl">📊</span>
-          <p className="text-sm text-gray-500 mt-3">No reports found in this category</p>
+          <p className="text-sm text-tertiary mt-3">No reports found in this category</p>
         </div>
       )}
     </div>

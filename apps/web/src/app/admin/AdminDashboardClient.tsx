@@ -242,7 +242,7 @@ export default function AdminDashboardClient({
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium text-gray-700 mb-3">Individual Repairs:</p>
+          <p className="text-sm font-medium text-secondary mb-3">Individual Repairs:</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {[
               { id: 'orphaned-variations', label: 'Remove Orphaned Variants' },

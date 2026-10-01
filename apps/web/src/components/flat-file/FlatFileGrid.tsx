@@ -684,8 +684,8 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
         <div className={cn('px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell', contentAboveOverlay)} style={hStyle}>
           {custom != null ? custom : (
             <span className={cn('text-xs truncate flex-1 flex items-center gap-1',
-              strictInvalid ? 'text-amber-600 dark:text-amber-400'
-              : isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
+              strictInvalid ? 'text-warning-strong'
+              : isEmpty ? 'text-placeholder italic' : 'text-slate-800 dark:text-slate-200')}>
               {strictInvalid && <AlertCircle className="w-3 h-3 shrink-0" aria-hidden />}
               <span className="truncate">{shownLabel || (isRequired ? '⚠ required' : enumOptions[1] ? `e.g. ${labelFor(enumOptions[1])}` : '—')}</span>
             </span>
@@ -747,7 +747,7 @@ function SpreadsheetCellImpl({ col, row, value, isActive, cellBg, width, cellHei
         {stickyOverlay}
         {fillHandle}
         <div className={cn('px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate', contentAboveOverlay)} style={hStyle}>
-          {custom ?? (displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{isRequired ? '⚠ required' : ''}</span>)}
+          {custom ?? (displayValue || <span className="text-placeholder italic">{isRequired ? '⚠ required' : ''}</span>)}
         </div>
       </td>
     )
@@ -2555,7 +2555,7 @@ export default function FlatFileGrid({
           {/* P4 — Group by: Family | Custom | None */}
           {enableCustomGroups && (
             <div className="flex items-center gap-1">
-              <span className="text-[11px] text-slate-400">Group by</span>
+              <span className="text-[11px] text-tertiary">Group by</span>
               <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
                 {(['family', ...(bucketMode ? (['bucket'] as CustomGroupMode[]) : []), 'custom', 'none'] as CustomGroupMode[]).map((m) => (
                   <button key={m} type="button" onClick={() => setGroupMode(m)}
@@ -2587,7 +2587,7 @@ export default function FlatFileGrid({
             currentState={{ closedGroups: [...closedGroups], ffFilter: filterState, cfRules, frozenColCount, sortConfig: [] } satisfies FFViewState}
             onApply={(state: FFViewState) => { const nextClosed = new Set(state.closedGroups); setClosedGroups(nextClosed); setFilterState(state.ffFilter); setCfRules(state.cfRules); onGroupStateChange?.(nextClosed, internalGroupOrder) }} />
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-xs text-slate-400 mr-1">Columns:</span>
+            <span className="text-xs text-tertiary mr-1">Columns:</span>
             {orderedGroups.map((g) => {
               const open = openGroups.has(g.id); const isDragging = draggingGroupId === g.id
               return (
@@ -2618,7 +2618,7 @@ export default function FlatFileGrid({
                     isDragging && 'opacity-30 scale-95')}>
                   <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
                   <span className="font-medium">{g.label}</span>
-                  <span className="opacity-60 tabular-nums">{g.columns.length}</span>
+                  <span className="opacity-80 tabular-nums">{g.columns.length}</span>
                 </button>
               )
             })}
@@ -2925,7 +2925,7 @@ export default function FlatFileGrid({
                       // UFX P7 (item 7) — right-click a column header opens its menu
                       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setColMenu({ colId: col.id, x: e.clientX, y: e.clientY }) }}>
                       {col.label}{col.required && <span className="ml-0.5 text-red-500">*</span>}
-                      {col.maxLength != null && <span className="ml-1 font-normal font-mono text-[10px] text-slate-300 dark:text-slate-600">max {col.maxLength}</span>}
+                      {col.maxLength != null && <span className="ml-1 font-normal font-mono text-[10px] text-tertiary">max {col.maxLength}</span>}
                       {/* Column menu (hide / reorder) — UFX P7 item 7 */}
                       <button type="button"
                         className={cn('ml-0.5 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0',
@@ -3169,7 +3169,7 @@ export default function FlatFileGrid({
                                 </div>
                               )
                             })()}
-                            <span className={cn('tabular-nums leading-none', showRowImages ? 'text-[9px] text-slate-400' : 'text-xs text-slate-400')}>{rowNum + 1}</span>
+                            <span className={cn('tabular-nums leading-none text-tertiary', showRowImages ? 'text-[9px]' : 'text-xs')}>{rowNum + 1}</span>
                             {renderRowMeta?.(row, ri)}
                           </div>
                           {/* Row resize handle */}

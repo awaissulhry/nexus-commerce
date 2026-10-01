@@ -101,12 +101,12 @@ export function buildColumns() {
                 className="flex flex-col min-w-0"
                 style={{ paddingLeft: depth * 16 }}
               >
-                <span className="truncate text-sm font-medium text-slate-900">
+                <span className="truncate text-sm font-medium text-primary">
                   {row.original.isMaster
                     ? `Master: ${row.original.name}`
                     : row.original.name}
                 </span>
-                <span className="truncate text-xs text-slate-500 font-mono">
+                <span className="truncate text-xs text-tertiary font-mono">
                   {row.original.sku}
                 </span>
               </div>

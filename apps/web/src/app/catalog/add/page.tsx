@@ -408,21 +408,21 @@ export default function AddProductPage() {
           </div>
 
           <div className="mb-8 border-t border-gray-200 pt-8">
-            <p className="text-gray-600 mb-6 font-medium">Or create a single product manually:</p>
+            <p className="text-secondary mb-6 font-medium">Or create a single product manually:</p>
           </div>
 
-          <p className="text-gray-600 mb-8">Select a product type to get started.</p>
+          <p className="text-secondary mb-8">Select a product type to get started.</p>
           {typesError && <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg"><p className="text-red-700 dark:text-red-300">{typesError}</p></div>}
           {loadingTypes ? (
-            <div className="text-center py-12"><div className="inline-block"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div><p className="mt-4 text-gray-600">Loading product types...</p></div>
+            <div className="text-center py-12"><div className="inline-block"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div><p className="mt-4 text-secondary">Loading product types...</p></div>
           ) : productTypes.length === 0 ? (
-            <div className="text-center py-12"><p className="text-gray-600">No product types available</p></div>
+            <div className="text-center py-12"><p className="text-secondary">No product types available</p></div>
           ) : (
             <div className="space-y-3">
               {productTypes.map((type) => (
                 <button key={type.value} onClick={() => handleProductTypeSelect(type.value)} className="w-full p-4 text-left border border-gray-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:border-blue-500 transition-colors">
-                  <div className="font-semibold text-gray-900">{type.label}</div>
-                  <div className="text-sm text-gray-500">Click to view required fields</div>
+                  <div className="font-semibold text-primary">{type.label}</div>
+                  <div className="text-sm text-tertiary">Click to view required fields</div>
                 </button>
               ))}
             </div>

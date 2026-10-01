@@ -101,7 +101,7 @@
 .sbw-who .ky {
   display: block;
   font-size: 10.5px;
-  color: var(--nds-grey-450);
+  color: var(--nds-grey-600);
   font-family: var(--nds-font-mono);
 }
 
@@ -123,8 +123,8 @@
 }
 
 /* ── small shared bits ────────────────────────────────────────────────────── */
-.sbw-dim { color: var(--nds-grey-450); }
-.sbw-note { font-size: 11px; color: var(--nds-grey-500); }
+.sbw-dim { color: var(--nds-grey-600); }
+.sbw-note { font-size: 11px; color: var(--nds-grey-600); }
 
 /* ── teaching empty state ─────────────────────────────────────────────────
    FX.4's rule: what will appear here, when, and what has to be true first.
@@ -329,7 +329,7 @@ button.acr-pg-stat {
 /* ── W.3 · freshness ────────────────────────────────────────────────────── */
 .sbw-asof {
   font-size: 11.5px;
-  color: var(--nds-grey-450);
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

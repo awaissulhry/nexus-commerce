@@ -4818,10 +4818,10 @@ export default function AmazonFlatFileClient({
       )}
       {!manifest && !loading && loadError && (
         <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-          <div className="text-center text-slate-400">
+          <div className="text-center text-tertiary">
             <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 opacity-40" />
             <p className="text-sm mb-1">Couldn&apos;t load the Amazon schema for {marketplace}{productType ? ` · ${productType}` : ''}.</p>
-            <p className="text-xs mb-3 text-slate-500">{loadError.message}</p>
+            <p className="text-xs mb-3 text-secondary">{loadError.message}</p>
             <Button size="sm" onClick={() => { setLoadError(null); void loadData(marketplace, productType, true) }}>
               Retry
             </Button>
