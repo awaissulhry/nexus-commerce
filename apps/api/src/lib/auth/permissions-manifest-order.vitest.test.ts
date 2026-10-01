@@ -186,6 +186,22 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('POST', '/api/products/:id/studio/sheet')).toBe('products.edit')
   })
 
+  it('a refund from a return needs orders.refund, not only returns.process (MCP full control #15)', () => {
+    // Written from purpose: issuing or retrying a refund sends money back to the buyer through the channel, the same
+    // act `orders.refund` guards on /api/orders. The returns rule matched these first, so anyone who could process a
+    // return could also refund it.
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/refund')).toBe('orders.refund')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/refund/retry')).toBe('orders.refund')
+    // The neighbours: refund READS stay with returns.view, the other return writes with returns.process.
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/:id/refunds')).toBe('returns.view')
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/:id/refund/retry-status')).toBe('returns.view')
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/refund-deadline-summary')).toBe('returns.view')
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/refund-channel-status')).toBe('returns.view')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/receive')).toBe('returns.process')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/restock')).toBe('returns.process')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/bulk/approve')).toBe('returns.process')
+  })
+
   it('PES.5 studio routes inherit the products prefix rule', () => {
     // The studio adds no permission wiring; it relies entirely on living under
     // /api/products. If that ever stops being true these go null (= deny + CI
