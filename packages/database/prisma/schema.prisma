@@ -19872,8 +19872,10 @@ model StockPoolGrant {
 }
 
 /// The product switch. One product of the BORROWER sells from the lender's pool, through the
-/// grant and through the catalog link that says which lender product it is. One active link per
-/// product. Never deleted: switching to own stock, or a grant or share ending, ends it.
+/// grant and through an identity that says which lender product it is: the SAME SKU in both
+/// businesses (a SKU link, `sku` set — every new link since 2026-10-01), or, for older links, the
+/// catalog link of a product share. One active link per product. Never deleted: switching to own
+/// stock, or a grant or share ending, ends it.
 model StockPoolLink {
   // Business ownership comes from verified database context. This is the BORROWER.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -19881,13 +19883,17 @@ model StockPoolLink {
 
   grantId       String
   grant         StockPoolGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
-  catalogLinkId String
-  catalogLink   CatalogLink    @relation(fields: [catalogLinkId], references: [id], onDelete: Restrict)
+  /// Older links only (made through a product share). Null on a SKU link.
+  catalogLinkId String?
+  catalogLink   CatalogLink?   @relation(fields: [catalogLinkId], references: [id], onDelete: Restrict)
+  /// A SKU link: the SKU both products have. Neither business may rename it while the link is active
+  /// (stock-pool.sql, nexus_stock_pool_product_guard). Null on an older link.
+  sku           String?
 
   /// The borrower's own product.
   productId       String
   product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  /// The lender's product whose stock this product sells. Checked against the catalog link.
+  /// The lender's product whose stock this product sells. Checked against the SKU (or the catalog link).
   sourceProductId String
 
   /// active | ended. Checked in the database.

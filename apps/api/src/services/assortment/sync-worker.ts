@@ -20,6 +20,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { WorkspaceError, requireWorkspace, withWorkspace } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
+import { listenUrlFrom } from '../../lib/pg-wake-listener.js'
 import { notifyOwners } from '../stock-pool/pool-notify.js'
 import { createWorkspaceService } from '../workspace.service.js'
 import { FOLLOW_AGAIN, readState, type AppliedState } from './sync-fields.js'
@@ -306,22 +307,8 @@ export interface SyncWorkerOptions {
   listenUrl?: string | null
 }
 
-/**
- * The URL to LISTEN on: DIRECT_URL, else DATABASE_URL with Neon's `-pooler` taken off the host — the rule
- * packages/database/scripts/migrate-direct.mjs uses for migrations (one credential, so it follows a rotation).
- * A notify does not reach a LISTEN made through the pooler (PgBouncer in transaction mode gives the server
- * session back after each statement). Nothing else in this repo reads DIRECT_URL (migrate-direct.mjs names only
- * DIRECT_DATABASE_URL on Railway): with DATABASE_URL alone the worker would only poll there (up to 60 s when
- * quiet) while the local measurement said 0.1 s (build doc §7).
- */
-export function listenUrlFrom(env: NodeJS.ProcessEnv): string | null {
-  if (env.DIRECT_URL) return env.DIRECT_URL
-  if (!env.DATABASE_URL) return null
-  let url: URL
-  try { url = new URL(env.DATABASE_URL) } catch { throw new Error('Listener requires a valid PostgreSQL URL') }
-  if (url.hostname.endsWith('.neon.tech')) url.hostname = url.hostname.replace(/-pooler(?=\.)/, '')
-  return url.toString()
-}
+// The URL to LISTEN on (DIRECT_URL, else DATABASE_URL without Neon's `-pooler`): lib/pg-wake-listener.ts.
+export { listenUrlFrom }
 
 export function startAssortmentSyncWorker(options: SyncWorkerOptions = {}): () => Promise<void> {
   const listenUrl = options.listenUrl === undefined ? listenUrlFrom(process.env) : options.listenUrl

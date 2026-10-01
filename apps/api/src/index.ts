@@ -236,6 +236,7 @@ import { registerProductGraph } from "./graph/index.js";
 import prisma from "./db.js";
 import { registerCommandIdempotency } from './lib/command-idempotency.js';
 import { endEventStreamsOnClose } from './lib/sse.js';
+import { installStockPoolRefusalReplies } from './lib/stock-pool-refusal.js';
 import { markProcessReady } from './lib/runtime-status/process-snapshot.js';
 import { startRuntimeStatusPublisher } from './services/runtime-status/publisher.service.js';
 
@@ -529,6 +530,9 @@ app.addHook('preHandler', rbacHook);
 // too) and is a no-op in shadow mode. SSE + export writers bypass this and
 // call filterFinancialPayload() directly (S2 follow-up).
 app.addHook('preSerialization', financialFilterHook);
+// Shared stock by SKU (Owner D1, 2026-10-01): a rename or delete of a product that shares stock is refused by the
+// database; reply 409 with its sentence ("… Disconnect it first …"). Every other error goes on to the default handler.
+installStockPoolRefusalReplies(app);
 // Before the routes: open event streams end when shutdown starts (lib/sse.ts).
 endEventStreamsOnClose(app);
 // After the workspace and RBAC hooks (a replay is served only to callers they

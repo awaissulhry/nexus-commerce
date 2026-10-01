@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * The product switch (plan docs/2026-09-19-shared-stock-plan.md §4, switch 2): the products the lender
- * shared with this business, which stock each one uses now, and a switch to the shared stock or back to
+ * The product switch (plan docs/2026-09-19-shared-stock-plan.md §4, switch 2): the products whose SKU the
+ * lender also has (shared stock by SKU, 2026-10-01), which stock each one uses now, and a switch to the shared stock or back to
  * this business's own stock. Before any switch the preview shows the exact number each listing will
  * show afterwards (API: the derivation core on the ledger the product would follow). All or nothing: if
  * one product cannot switch, the preview says which and why, and nothing is switched.
@@ -39,9 +39,9 @@ export function PoolProductsSection({ grant, canAct, onChanged }: { grant: Grant
   useEffect(() => { void load() }, [load])
 
   if (error) return <Banner tone="danger" action={<Button onClick={() => { void load() }}>Retry</Button>}>{error}</Banner>
-  if (!products) return <p role="status" className="shared-products-note">Loading the products {grant.ownerWorkspaceName} shared…</p>
-  if (products.length === 0) return <EmptyState title="No shared products yet"
-    description={`Only products ${grant.ownerWorkspaceName} shared with this business, and that were copied or linked here, can use this stock.`} />
+  if (!products) return <p role="status" className="shared-products-note">Loading the products {grant.ownerWorkspaceName} also has…</p>
+  if (products.length === 0) return <EmptyState title="No matching SKUs yet"
+    description={`A product can use this stock when ${grant.ownerWorkspaceName} has a product with exactly the same SKU.`} />
 
   const chosen = products.filter((p) => selected.has(p.productId))
   const toPool = chosen.filter((p) => p.source === 'own').map((p) => p.productId)
@@ -65,7 +65,7 @@ export function PoolProductsSection({ grant, canAct, onChanged }: { grant: Grant
         : <p className="shared-products-note">This shared stock is paused: products can switch to it again when {grant.ownerWorkspaceName} resumes it.</p>)}
       {toOwn.length > 0 && <Button onClick={() => setSwitching({ to: 'own', productIds: toOwn })}>Use own stock for {count(toOwn.length, 'product')}</Button>}
     </div>}
-    <DataGrid maxHeight={420} ariaLabel={`Products shared by ${grant.ownerWorkspaceName}`} columns={columns} rows={products} rowKey={(p) => p.productId}
+    <DataGrid maxHeight={420} ariaLabel={`Products whose SKU ${grant.ownerWorkspaceName} also has`} columns={columns} rows={products} rowKey={(p) => p.productId}
       selectable={canAct} selected={selected} onSelectedChange={setSelected}
       selectAllHint="Choose every product in this list" selectRowHint="Choose this product" />
     {cursor && <div className="business-profile-actions"><Button onClick={() => { void load(cursor) }}>Show more products</Button></div>}

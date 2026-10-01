@@ -4,9 +4,11 @@
  * contract docs/2026-09-19-shared-stock-build.md §2.
  *
  * The database decides (stock-pool.sql, the link guard): an OWNER of this business, an active grant,
- * an active catalog link naming the lender's product, no chains, no lot or serial products. This
- * service explains refusals in words first, shows the exact numbers a switch will send (the preview
- * runs the same derivation core the cascade runs, on both ledgers), and records the switch.
+ * the lender's product with EXACTLY the same SKU (Owner 2026-10-01: the SKU is a product's identity in
+ * its business), no chains, no lot or serial products. This service explains refusals in words first
+ * (nexus_pool_sku_matches), shows the exact numbers a switch will send (the preview runs the same
+ * derivation core the cascade runs, on both ledgers), and records the switch. Links made before
+ * 2026-10-01 through a product share keep their catalog link; every new link is a SKU link.
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -99,6 +101,29 @@ function target(value: unknown): SwitchTarget {
   throw new WorkspaceError('invalid_target', 'Choose "pool" (use the shared stock) or "own" (use this business\'s own stock).', 400)
 }
 
+/** Why a product cannot connect by SKU (nexus_pool_sku_matches codes), in words. */
+export type SkuRefusal = 'product_deleted' | 'no_match' | 'source_deleted' | 'product_lends' | 'source_borrows' | 'tracked'
+export function skuRefusalText(code: SkuRefusal, sku: string, lender: string): string {
+  switch (code) {
+    case 'product_deleted': return 'This product is deleted.'
+    case 'no_match': return `${lender} has no product with the SKU ${sku}, so this product cannot use its stock.`
+    case 'source_deleted': return `${lender} deleted its product ${sku}, so this product cannot use its stock.`
+    case 'product_lends': return `${sku} lends its own stock to another business. A product either lends or borrows, never both.`
+    case 'source_borrows': return `${sku} in ${lender} sells from another business's stock itself. Shared stock cannot be passed on.`
+    case 'tracked': return `${sku} is tracked by lot or serial number in ${lender}. Shared stock does not support that yet.`
+  }
+}
+
+export interface SkuMatch { sku: string; sourceProductId: string | null; refusal: SkuRefusal | null }
+
+/** Per product of this business: the lender's product with the same SKU, or why there is none. Reads only. */
+export async function loadSkuMatches(db: Pick<typeof prisma, '$queryRaw'>, grantId: string, productIds: string[]): Promise<Map<string, SkuMatch>> {
+  if (productIds.length === 0) return new Map()
+  const rows = await db.$queryRaw<Array<{ product_id: string; sku: string; source_product_id: string | null; refusal_code: SkuRefusal | null }>>(
+    Prisma.sql`SELECT product_id, sku, source_product_id, refusal_code FROM nexus_pool_sku_matches(${grantId}, ${productIds}::text[])`)
+  return new Map(rows.map((r) => [r.product_id, { sku: r.sku, sourceProductId: r.source_product_id, refusal: r.refusal_code }]))
+}
+
 /** The given products, plus the variations of any that are parents (a family switches together). */
 async function withVariations(productIds: string[], include: boolean): Promise<string[]> {
   if (!include) return productIds
@@ -107,7 +132,7 @@ async function withVariations(productIds: string[], include: boolean): Promise<s
 }
 
 /**
- * This business's products linked (by a product share) to products of the lender of `grantId`, with
+ * This business's products whose SKU the lender of `grantId` also has (or that use this grant now), with
  * where their listings take their number now. Page by product id.
  */
 export async function listPoolProducts(input: { grantId?: unknown; cursor?: unknown; take?: unknown }): Promise<{ products: PoolProductRow[]; nextCursor: string | null }> {
@@ -115,13 +140,9 @@ export async function listPoolProducts(input: { grantId?: unknown; cursor?: unkn
   const grant = await borrowedGrant(input.grantId, workspaceId)
   const take = Math.min(Math.max(Number(input.take) || 100, 1), 200)
   const cursor = typeof input.cursor === 'string' && input.cursor ? input.cursor : undefined
-  const catalog = await prisma.catalogLink.findMany({
-    where: { targetWorkspaceId: workspaceId, sourceWorkspaceId: grant.ownerWorkspaceId, status: 'active', ...(cursor ? { targetProductId: { gt: cursor } } : {}) },
-    select: { targetProductId: true },
-    orderBy: { targetProductId: 'asc' },
-    take: take + 1,
-  })
-  const page = catalog.slice(0, take).map((c) => c.targetProductId)
+  const candidates = await prisma.$queryRaw<Array<{ product_id: string }>>(
+    Prisma.sql`SELECT product_id FROM nexus_pool_sku_candidates(${grant.id}, ${cursor ?? null}::text, ${take + 1}::integer)`)
+  const page = candidates.slice(0, take).map((c) => c.product_id)
   const [products, current, choices] = await Promise.all([
     prisma.product.findMany({ where: { id: { in: page }, deletedAt: null }, select: { id: true, sku: true, name: true, parentId: true, costPrice: true } }),
     loadSyncLedgers(prisma, page),
@@ -143,7 +164,7 @@ export async function listPoolProducts(input: { grantId?: unknown; cursor?: unkn
       costPriceMissing: costMissing(product.costPrice),
     })
   }
-  return { products: rows, nextCursor: catalog.length > take ? page[page.length - 1] : null }
+  return { products: rows, nextCursor: candidates.length > take ? page[page.length - 1] : null }
 }
 
 /** No cost price, or zero: profit reports would count the product's sales at no cost. */
@@ -170,7 +191,7 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
   const grant = to === 'pool' ? await borrowedGrant(input.grantId, workspaceId) : null
   const ids = await withVariations(idList(input.productIds, 'products', 500), input.withVariations !== false)
 
-  const [products, current, choices, listings, memberships, policies] = await Promise.all([
+  const [products, current, choices, listings, memberships, policies, matches] = await Promise.all([
     prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, sku: true, fulfillmentMethod: true, deletedAt: true, costPrice: true } }),
     loadSyncLedgers(prisma, ids),
     loadLedgerChoices(prisma, ids, grant?.status === 'active' ? grant.id : null),
@@ -186,8 +207,10 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
       select: { itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, channelConnectionId: true, channelConnection: { select: { channelType: true, id: true, externalAccountId: true, accountLabel: true, ebayStoreName: true, displayName: true, ebaySignInName: true } } },
     }),
     loadChannelPolicies(),
+    grant ? loadSkuMatches(prisma, grant.id, ids) : Promise.resolve(new Map<string, SkuMatch>()),
   ])
   const byId = new Map(products.map((p) => [p.id, p]))
+  const lender = grant?.ownerWorkspace.name ?? 'the lending business'
   const out: SwitchPreview[] = []
   for (const productId of ids) {
     const product = byId.get(productId)
@@ -196,11 +219,14 @@ export async function previewSwitch(input: { productIds?: unknown; to?: unknown;
     const from = now?.source.kind === 'pool' ? 'pool' : 'own'
     const choice = choices.get(productId)
     const after: ProductLedger | null | undefined = to === 'pool' ? choice?.pool : choice?.own
+    const match = matches.get(productId)
+    const joinsNow = to === 'pool' && !(now?.source.kind === 'pool' && now.source.grantId === grant?.id)
     let refusal: string | null = null
     if (product.deletedAt) refusal = 'This product is deleted.'
     else if (to === 'pool' && grant && grant.status !== 'active') refusal = 'This shared stock is not on. Products can only switch to shared stock that is on.'
-    else if (to === 'pool' && !after) refusal = `This product was not shared with this business by ${grant?.ownerWorkspace.name ?? 'the lending business'}, so it cannot use its stock.`
     else if (to === 'pool' && now?.source.kind === 'pool' && now.source.grantId !== grant?.id) refusal = 'This product already uses shared stock from another business. Switch it to its own stock first.'
+    else if (joinsNow && match?.refusal) refusal = skuRefusalText(match.refusal, product.sku, lender)
+    else if (to === 'pool' && !after) refusal = `${lender} has no product with the SKU ${product.sku}, so this product cannot use its stock.`
 
     const rows: ListingPreview[] = []
     if (!refusal && after) {
@@ -272,20 +298,20 @@ export async function switchProducts(input: { productIds?: unknown; to?: unknown
     } else {
       const products = await tx.product.findMany({ where: { id: { in: ids } }, select: { id: true, sku: true } })
       const skuOf = new Map(products.map((p) => [p.id, p.sku]))
-      const catalog = await tx.catalogLink.findMany({
-        where: { targetWorkspaceId: workspaceId, targetProductId: { in: ids }, sourceWorkspaceId: grant!.ownerWorkspaceId, status: 'active' },
-        select: { id: true, targetProductId: true, sourceProductId: true },
-      })
-      const catalogByProduct = new Map(catalog.map((c) => [c.targetProductId, c]))
+      // The lender's product with the same SKU — the database checks it again on insert (the link guard).
+      const matches = await loadSkuMatches(tx, grant!.id, ids)
       for (const productId of ids) {
         const existing = activeByProduct.get(productId)
         if (existing?.grantId === grant!.id) { unchanged++; continue }
         const sku = skuOf.get(productId) ?? productId
         if (existing) throw new WorkspaceError('product_already_pooled', `${sku} already uses shared stock from another business. Switch it to its own stock first.`, 409)
-        const link = catalogByProduct.get(productId)
-        if (!link) throw new WorkspaceError('product_not_shared', `${sku} was not shared with this business by ${grant!.ownerWorkspace.name}, so it cannot use its stock.`, 409)
+        const match = matches.get(productId)
+        if (!match) throw new WorkspaceError('product_not_found', `${sku} is not a product of this business.`, 404)
+        if (match.refusal || !match.sourceProductId) {
+          throw new WorkspaceError(match.refusal === 'no_match' ? 'product_not_shared' : 'product_refused', skuRefusalText(match.refusal ?? 'no_match', sku, grant!.ownerWorkspace.name), 409)
+        }
         try {
-          await tx.stockPoolLink.create({ data: { grantId: grant!.id, catalogLinkId: link.id, productId, sourceProductId: link.sourceProductId, createdByUserId: actorUserId } })
+          await tx.stockPoolLink.create({ data: { grantId: grant!.id, catalogLinkId: null, sku: match.sku, productId, sourceProductId: match.sourceProductId, createdByUserId: actorUserId } })
         } catch (error) {
           throw new WorkspaceError('product_refused', `${sku}: ${databaseReason(error)}`, 409)
         }

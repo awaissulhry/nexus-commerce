@@ -14,6 +14,8 @@
  *     update, and a control that removes the door's lock and must break.
  *   · `stock-pool-e2e.vitest.test.ts` (shared stock) — the switches end to end through the real services,
  *     cascade and pool worker; the worker runs on several connections at once.
+ *   · `stock-pool-sku-e2e.vitest.test.ts` (shared stock by SKU, 2026-10-01) — connect by the same SKU with no
+ *     product share, every listing kind, and the worker woken by the database's LISTEN/NOTIFY within 2 s of a sale.
  *   · `listing-end-times.vitest.test.ts` (shared stock step 3) — "Fixed number until …" and "Paused
  *     until …" end to end: the Sync Control route and Excel import, the end-time job, the real writer and
  *     cascade, and the database triggers that clear an end time with its mode.
@@ -125,6 +127,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },
   { name: 'shared stock race test (pool doors)', file: 'src/services/stock-pool/stock-pool-concurrency.vitest.test.ts', expect: 6 },
   { name: 'shared stock end to end (switches, worker, cascade)', file: 'src/services/stock-pool/stock-pool-e2e.vitest.test.ts', expect: 9 },
+  { name: 'shared stock by SKU end to end (no product share: connect by SKU, every listing, real-time wake under 2 s, D1 SKU lock, disconnect)', file: 'src/services/stock-pool/stock-pool-sku-e2e.vitest.test.ts', expect: 7 },
   { name: 'listing end times (Sync Control, the job, the database rule)', file: 'src/services/listing-end-times.vitest.test.ts', expect: 25 },
   { name: 'shared stock orders (sales, holds, cancellations, returns, repair, stock pages)', file: 'src/services/stock-pool/stock-pool-orders.vitest.test.ts', expect: 24 },
   { name: 'transactional eBay order writer (atomic lines and stock, shortfalls, races, locks, attribution)', file: 'src/services/ebay-order-writer-postgres.vitest.test.ts', expect: 32 },
