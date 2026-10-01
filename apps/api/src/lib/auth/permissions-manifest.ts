@@ -374,9 +374,13 @@ export const ENTRIES: Entry[] = [
   P(F.fulfillmentExport, (m, p) => p.startsWith('/api/fulfillment') && has('/export')(m, p)),
   RW(F.returnsView, F.returnsProcess, pfx('/api/fulfillment/returns')),
   RW(F.returnsView, F.returnsProcess, pfx('/api/returns')),
+  // PO approval and receiving have their own permissions, so these come BEFORE the PO rule below, which matches every
+  // PO path (first match wins; behind it they never applied). The legacy …/:id/submit moves any PO straight to
+  // SUBMITTED past approval, so it is an approval. Approving through …/transition and …/bulk-transition is checked in
+  // those routes: the transition is in the body, which this manifest cannot see.
+  P(F.poApprove, (m, p) => p.startsWith('/api/fulfillment/purchase-orders') && (has('/approve')(m, p) || (!isRead(m) && p.endsWith('/:id/submit')))),
+  P(F.poReceive, (m, p) => p.startsWith('/api/fulfillment/purchase-orders') && (has('/receiv')(m, p) || has('/quick-receive')(m, p))),
   RW(F.poView, F.poCreate, pfx('/api/fulfillment/purchase-orders')),
-  P(F.poApprove, (m, p) => p.startsWith('/api/fulfillment/purchase-orders') && has('/approve')(m, p)),
-  P(F.poReceive, (m, p) => p.startsWith('/api/fulfillment/purchase-orders') && has('/receiv')(m, p)),
   RW(F.suppliersView, F.suppliersManage, pfx('/api/fulfillment/suppliers')),
   RW(F.suppliersView, F.suppliersManage, pfx('/api/fulfillment/development')),
   RW(F.replenishmentView, F.replenishmentRun, pfx('/api/fulfillment/replenishment')),

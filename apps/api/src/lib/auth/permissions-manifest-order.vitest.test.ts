@@ -186,6 +186,22 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('POST', '/api/products/:id/studio/sheet')).toBe('products.edit')
   })
 
+  it('receiving a PO needs po.receive and the legacy straight-to-SUBMITTED route needs po.approve (MCP full control #21, F1)', () => {
+    // Written from purpose: receiving books goods into stock (po.receive); `…/:id/submit` moves any PO to SUBMITTED
+    // past the approval step, so it is an approval (po.approve). The PO rule matched every PO path first, so both
+    // permissions were dead and po.create did everything. Approving through `…/:id/transition` is checked in the
+    // route itself, because the transition is in the body (po-transition-permission.vitest.test.ts).
+    expect(permissionForRoute('POST', '/api/fulfillment/purchase-orders/:id/receive')).toBe('po.receive')
+    expect(permissionForRoute('POST', '/api/fulfillment/purchase-orders/:id/quick-receive')).toBe('po.receive')
+    expect(permissionForRoute('POST', '/api/fulfillment/purchase-orders/:id/submit')).toBe('po.approve')
+    // The neighbours stay with the PO pair.
+    expect(permissionForRoute('POST', '/api/fulfillment/purchase-orders/:id/transition')).toBe('po.create')
+    expect(permissionForRoute('POST', '/api/fulfillment/purchase-orders')).toBe('po.create')
+    expect(permissionForRoute('PATCH', '/api/fulfillment/purchase-orders/:id')).toBe('po.create')
+    expect(permissionForRoute('GET', '/api/fulfillment/purchase-orders/:id')).toBe('po.view')
+    expect(permissionForRoute('GET', '/api/fulfillment/purchase-orders/:id/match')).toBe('po.view')
+  })
+
   it('PES.5 studio routes inherit the products prefix rule', () => {
     // The studio adds no permission wiring; it relies entirely on living under
     // /api/products. If that ever stops being true these go null (= deny + CI

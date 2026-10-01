@@ -55,6 +55,10 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   ['POST', '/api/amazon/listings/fill-asins', ['ADMIN', 'OPS_MANAGER']],
   // Fulfillment
   ['POST', '/api/fulfillment/stock/adjust', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT']],
+  // Purchase orders (MCP full control #21): FULFILLMENT creates and receives POs but does not approve them.
+  ['POST', '/api/fulfillment/purchase-orders/:id/receive', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT']],
+  ['POST', '/api/fulfillment/purchase-orders/:id/submit', ['ADMIN', 'OPS_MANAGER']],
+  ['POST', '/api/fulfillment/purchase-orders', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT']],
   // Advertising
   ['POST', '/api/advertising/campaigns', ['ADMIN', 'OPS_MANAGER']],
   ['POST', '/api/advertising/autopilot-plans/1/apply', ['ADMIN']],

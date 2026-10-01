@@ -1,5 +1,5 @@
 import { workspaceKey } from '@nexus/database/workspace-context'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
@@ -213,6 +213,7 @@ import {
 import { renderInboundDiscrepancyPdf } from '../services/inbound-discrepancy-pdf.service.js'
 import { isSharedStockAddress, OWN_WAREHOUSES, SHARED_ADDRESS_REFUSED } from '../services/stock-pool/shared-warehouses.js'
 import { lenderBorrowers, lenderPoolDemand, poolCoverStock, POOL_DEMAND_CHANNEL, pooledProductIds } from '../services/stock-pool/pool-demand.js'
+import { assertRequestPermission } from '../lib/auth/request-permission.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -351,6 +352,19 @@ function generatePoNumber(): string {
   const yymmdd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
   return `PO-${yymmdd}-${rand}`
+}
+
+/**
+ * Approving a PO needs po.approve (MCP full control #21). The two transition routes carry the transition in the body,
+ * which the route manifest cannot see, so they check it here; every other transition stays with po.create.
+ */
+async function poApprovalGate(request: FastifyRequest, reply: FastifyReply) {
+  if ((request.body as { transition?: unknown } | undefined)?.transition !== 'approve') return
+  try {
+    await assertRequestPermission(request, 'po.approve')
+  } catch (error: any) {
+    return reply.code(error?.statusCode ?? 403).send({ error: error?.message ?? 'Access denied', code: 'forbidden', required: 'po.approve' })
+  }
 }
 
 const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
@@ -6892,12 +6906,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // R.7 — workflow state machine. submit-for-review / approve / send /
   // acknowledge / cancel. Auto-advance through REVIEW when
   // BrandSettings.requireApprovalForPo=false (Xavia default).
-  fastify.post('/fulfillment/purchase-orders/:id/transition', async (request, reply) => {
+  fastify.post('/fulfillment/purchase-orders/:id/transition', { preHandler: poApprovalGate }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
       const body = (request.body ?? {}) as {
         transition?: WorkflowTransition
-        userId?: string
         reason?: string
       }
       if (!body.transition) {
@@ -6906,7 +6919,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const r = await transitionPo({
         poId: id,
         transition: body.transition,
-        userId: body.userId ?? null,
+        // The signed-in user, never a userId from the body (MCP full control #21, F2).
+        userId: request.authUser?.id ?? null,
         cancelReason: body.reason ?? null,
       })
       // PO.4 — broadcast on real change. Skip the no-op idempotent
@@ -16742,13 +16756,12 @@ Return ONLY valid JSON, no prose:
     }
   })
 
-  fastify.post('/fulfillment/purchase-orders/bulk-transition', async (request, reply) => {
+  fastify.post('/fulfillment/purchase-orders/bulk-transition', { preHandler: poApprovalGate }, async (request, reply) => {
     try {
       const body = (request.body ?? {}) as {
         ids?: string[]
         transition?: WorkflowTransition
         reason?: string
-        userId?: string
       }
       const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : []
       if (ids.length === 0) return reply.code(400).send({ error: 'ids[] required' })
@@ -16769,7 +16782,8 @@ Return ONLY valid JSON, no prose:
           const r = await transitionPo({
             poId: id,
             transition: body.transition,
-            userId: body.userId ?? null,
+            // The signed-in user, never a userId from the body (MCP full control #21, F2).
+            userId: request.authUser?.id ?? null,
             cancelReason: body.reason ?? null,
           })
           // Same idempotent-skip check as the single-transition route.
