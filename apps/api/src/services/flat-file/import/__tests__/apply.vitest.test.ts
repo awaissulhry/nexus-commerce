@@ -201,12 +201,12 @@ describe('applyChanges', () => {
   it('P — a pricing rule or percent cell goes through the door; an emptied price hands back; a refusal is the FAILED detail', async () => {
     const prisma = makeMockPrisma({
       channelListingRow: { id: 'listing-p', followMasterPrice: true, priceOverride: null },
-      productRow: { sku: 'GALE-M', deletedAt: null },
+      productRow: { sku: 'TEST-FF2-P', deletedAt: null },
     })
     const cells = [
-      makeChannelChange({ column: 'pricing_rule@IT', base: 'pricing_rule', to: 'PERCENT_OF_MASTER', kind: 'update' }),
-      makeChannelChange({ column: 'price_adj_pct@IT', base: 'price_adj_pct', to: '12.5', kind: 'update' }),
-      makeChannelChange({ column: 'price@IT', base: 'price', to: '', kind: 'delete' }),
+      makeChannelChange({ sku: 'TEST-FF2-P', column: 'pricing_rule@IT', base: 'pricing_rule', to: 'PERCENT_OF_MASTER', kind: 'update' }),
+      makeChannelChange({ sku: 'TEST-FF2-P', column: 'price_adj_pct@IT', base: 'price_adj_pct', to: '12.5', kind: 'update' }),
+      makeChannelChange({ sku: 'TEST-FF2-P', column: 'price@IT', base: 'price', to: '', kind: 'delete' }),
     ]
     const door = fakeDoor()
     const result = await applyChanges(prisma, { ...makeEmptyDiff(), changes: cells }, { scope: SCOPE_AMAZON_IT, writePrices: door.writePrices })
@@ -222,12 +222,12 @@ describe('applyChanges', () => {
     const refusing = fakeDoor({ outcome: 'refused', reason: 'This listing on AMAZON IT would follow the master price +12.5% at 112.50, but 112.50 is above its pricing ceiling of 100.00.' })
     const refused = await applyChanges(prisma, { ...makeEmptyDiff(), changes: [cells[1]] }, { scope: SCOPE_AMAZON_IT, writePrices: refusing.writePrices })
     expect(refused).toMatchObject({ applied: 0, failed: 1 })
-    expect(refused.rows[0]).toEqual({ sku: 'GALE-M', status: 'FAILED', detail: expect.stringContaining('pricing ceiling') })
+    expect(refused.rows[0]).toEqual({ sku: 'TEST-FF2-P', status: 'FAILED', detail: expect.stringContaining('pricing ceiling') })
     expect(prisma._calls.channelListingUpdateMany).toHaveLength(0)
 
     // An emptied rule cell cannot be stored (the column always holds one): FAILED by name, the door not asked.
     const empty = fakeDoor()
-    const emptied = await applyChanges(prisma, { ...makeEmptyDiff(), changes: [makeChannelChange({ column: 'pricing_rule@IT', base: 'pricing_rule', to: '', kind: 'delete' })] }, { scope: SCOPE_AMAZON_IT, writePrices: empty.writePrices })
+    const emptied = await applyChanges(prisma, { ...makeEmptyDiff(), changes: [makeChannelChange({ sku: 'TEST-FF2-P', column: 'pricing_rule@IT', base: 'pricing_rule', to: '', kind: 'delete' })] }, { scope: SCOPE_AMAZON_IT, writePrices: empty.writePrices })
     expect(emptied.rows[0]).toMatchObject({ status: 'FAILED', detail: expect.stringContaining('cannot be empty') })
     expect(empty.calls).toHaveLength(0)
   })
