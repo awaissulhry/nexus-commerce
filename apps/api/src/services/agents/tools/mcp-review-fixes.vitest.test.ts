@@ -243,7 +243,8 @@ describe('set-price', { timeout: DB_TEST_TIMEOUT }, () => {
   it('refuses a price outside the floor or ceiling set on the product, in the preview and when it runs', async () => {
     const low = await dryRun('set-price', { productId: ids.bounded, price: 30 })
     expect(low).toMatchObject({ ok: false })
-    expect(low.error).toBe('REV-BOUNDED would go to 30.00, but 30.00 is below its pricing floor of 40.00. Change the price, or the floor or ceiling on the product in Nexus. Nothing was queued.')
+    // The shared verdict (`storedPriceReason`), in the master-price write's own words: the preview says what the run would.
+    expect(low.error).toBe('Not changed: 30.00 is below its pricing floor of 40.00.')
     const high = await dryRun('set-price', { productId: ids.bounded, price: 90 })
     expect(high.error).toContain('90.00 is above its pricing ceiling of 80.00')
     expect(await dryRun('set-price', { productId: ids.bounded, price: 60 })).toMatchObject({ ok: true, preview: { changes: { 'base price': { from: 50, to: 60 } } } })
@@ -251,7 +252,7 @@ describe('set-price', { timeout: DB_TEST_TIMEOUT }, () => {
     // Approved at 60, then the floor rose to 70: the run refuses and changes nothing.
     await inside(() => database.client.product.update({ where: { id: ids.bounded }, data: { minPrice: '70.00' } }))
     const ran = (await inside(() => executeTool(ALL, 'set-price', { productId: ids.bounded, price: 60 }))).raw
-    expect(ran).toMatchObject({ ok: false, error: 'REV-BOUNDED would go to 60.00, but 60.00 is below its pricing floor of 70.00. Nothing changed.' })
+    expect(ran).toMatchObject({ ok: false, error: 'Not changed: 60.00 is below its pricing floor of 70.00.' })
     expect(await basePrice(ids.bounded)).toBe(50)
     await inside(() => database.client.product.update({ where: { id: ids.bounded }, data: { minPrice: '40.00' } }))
   })

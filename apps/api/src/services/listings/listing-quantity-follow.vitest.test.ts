@@ -44,8 +44,8 @@ const STOCK = 12
 beforeAll(async () => {
   await scoped(async () => {
     const market = (channel: string, code: string) => prisma.marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language: 'en', languages: ['en'] } })
-    await market('AMAZON', 'IT'); await market('AMAZON', 'DE'); await market('EBAY', 'DE')
-    for (const channel of ['AMAZON', 'EBAY']) {
+    await market('AMAZON', 'IT'); await market('AMAZON', 'DE'); await market('EBAY', 'DE'); await market('ETSY', 'GLOBAL')
+    for (const channel of ['AMAZON', 'EBAY', 'ETSY']) {
       accounts[channel] = (await prisma.channelConnection.create({ data: { channelType: channel, accountLabel: `qty-follow-${channel}`, isActive: true, isPrimary: true } as never })).id
     }
     warehouse = (await prisma.stockLocation.create({ data: { code: 'TEST-QTY-FOLLOW-WH', name: 'Quantity follow warehouse', type: 'WAREHOUSE' } })).id
@@ -61,7 +61,7 @@ beforeAll(async () => {
 }, 180_000)
 afterAll(async () => { await app?.close(); await state.db?.close() }, 60_000)
 
-type ListingSeed = { channel: 'AMAZON' | 'EBAY'; marketplace: string; fba?: boolean; follow?: boolean; quantity?: number }
+type ListingSeed = { channel: 'AMAZON' | 'EBAY' | 'ETSY'; marketplace: string; fba?: boolean; follow?: boolean; quantity?: number }
 /** A product with STOCK units in the warehouse, and its listings: each shows `quantity` (5), following unless told. */
 async function seed(id: string, listings: ListingSeed[]) {
   await prisma.product.create({ data: { id, sku: `TEST-${id.toUpperCase()}`, name: id, basePrice: 10, totalStock: STOCK, fulfillmentMethod: 'FBM' } as never })
@@ -107,6 +107,22 @@ describe('the listing drawer\'s quantity toggle (PATCH /api/listings/:id) is the
     expect(again.statusCode, again.body).toBe(200)
     expect(again.json()).toMatchObject({ listing: { version: l.version + 1 }, quantity: { outcome: 'noop' } })
     expect(await quantityRows(l.id)).toHaveLength(1)
+  })
+
+  it('🔴 Etsy is in the shared quantity set (QUANTITY_PUSH_CHANNELS, #229): FOLLOW queues ONE Etsy QUANTITY_UPDATE (its lane gates the send), PIN queues the pinned number', async () => {
+    const [l] = await scoped(() => seed('qf-drawer-etsy', [{ channel: 'ETSY', marketplace: 'GLOBAL', follow: false, quantity: 3 }]))
+    const res = await patch(l.id, { followMasterQuantity: true, expectedVersion: l.version })
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.json()).toMatchObject({ quantity: { outcome: 'applied' } })
+    expect(await quantityColumns(l.id)).toEqual({ followMasterQuantity: true, quantity: STOCK, quantityOverride: null })
+    const rows = await quantityRows(l.id)
+    expect(rows.map((r) => [r.targetChannel, (r.payload as { quantity?: number }).quantity])).toEqual([['ETSY', STOCK]])
+
+    const pin = await patch(l.id, { followMasterQuantity: false })
+    expect(pin.statusCode, pin.body).toBe(200)
+    expect(await quantityColumns(l.id)).toEqual({ followMasterQuantity: false, quantity: STOCK, quantityOverride: STOCK })
+    // The waiting row is replaced by the pin's: one pending Etsy row, carrying the pinned number.
+    expect((await quantityRows(l.id)).map((r) => [r.targetChannel, (r.payload as { follow?: boolean }).follow])).toEqual([['ETSY', false]])
   })
 
   it('a stale version is 409 and nothing is written', async () => {
