@@ -38,6 +38,24 @@ describe('a product that shares stock: the refusal reaches the person in words',
     expect(res.json()).toEqual({ error: borrower, code: 'stock_shared' })
   })
 
+  it('a route that catches the error and answers 500 with its text gets the same 409', async () => {
+    const instance = Fastify({ logger: false })
+    installStockPoolRefusalReplies(instance)
+    instance.post('/delete', async (_request, reply) => {
+      try { throw prismaStyle(lender) } catch (err) { return reply.code(500).send({ error: (err as Error).message }) }
+    })
+    instance.get('/plain500', async (_request, reply) => reply.code(500).send({ error: 'Something else broke' }))
+    instance.get('/ok', async () => ({ note: lender }))
+    apps.push(instance)
+    const refused = await instance.inject({ method: 'POST', url: '/delete' })
+    expect([refused.statusCode, refused.json()]).toEqual([409, { error: lender, code: 'stock_shared' }])
+    const other = await instance.inject({ method: 'GET', url: '/plain500' })
+    expect([other.statusCode, other.json()]).toEqual([500, { error: 'Something else broke' }])
+    // A success that merely mentions the words is never touched.
+    const ok = await instance.inject({ method: 'GET', url: '/ok' })
+    expect([ok.statusCode, ok.json()]).toEqual([200, { note: lender }])
+  })
+
   it('leaves every other error exactly as the default handler answers it', async () => {
     const cases: unknown[] = [
       new Error('boom'),
