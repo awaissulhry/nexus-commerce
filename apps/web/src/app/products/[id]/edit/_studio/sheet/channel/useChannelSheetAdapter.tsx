@@ -20,7 +20,8 @@ import { newOperationId, runBulkOperation, type BulkSend } from '../bulkOperatio
 import { createShopifyBulkPost, orderShopifyColumnRequests } from '../../shopify/channelSheetWriter';
 import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo } from '../useSheetUndo';
-import { useShopifyDraftCell } from '../../shopify/ShopifyDraftCell';
+import { useShopifyDraftCell, type ShopifyHistoryRefused } from '../../shopify/ShopifyDraftCell';
+import { shopifyHistoryChange, shopifyHistoryRefusal, takeShopifyReplayIntent } from '../../shopify/draftHistory';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
 import { withShopifyColumns } from '../../shopify/unlinkedInformationColumns';
 import { channelScopeUrl } from './useChannelSheet';
@@ -612,8 +613,12 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             });
             return;
         }
-        undo.record({ rowId: e.data.rowId, colId, before: e.oldValue, after: e.newValue }, e.source);
-        writer.set(e.data.rowId, colId, e.newValue, { row: e.data, intent: 'set' });
+        /* Shopify (lane01): the history keeps the cell's own/follow state with its value, and an undo/redo replay writes
+           with the intent that state needs (`reset` restores following, also when the values are equal). */
+        const history = shopifyValue ? shopifyHistoryChange(e.data.values?.[colId], e.oldValue, e.newValue) : null;
+        undo.record({ rowId: e.data.rowId, colId, before: history ? history.before : e.oldValue, after: history ? history.after : e.newValue }, e.source);
+        const replay = shopifyValue ? takeShopifyReplayIntent(e.data.values?.[colId]) : undefined;
+        writer.set(e.data.rowId, colId, replay === 'reset' ? null : e.newValue, { row: e.data, intent: replay ?? 'set' });
     }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
@@ -727,7 +732,19 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     authRef.current = auth;
     const authKey = `${auth.status}:${auth.isOwner}:${[...auth.permissions].sort().join(',')}`;
     const authLive = useMemo(() => ({ has: (permission: string) => authRef.current.has(permission) }), [authKey]);
-    const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi);
+    /* Shopify undo (lane01, Owner decision (a)): a step whose earlier state was a saved pin under a following sharing rule
+       is refused, not approximated. One message per undo, naming each earlier value for review. */
+    const historyRefusals = useRef<Array<{ where: string; earlier: string }>>([]);
+    const shopifyHistoryRefused = useCallback<ShopifyHistoryRefused>((row, column, earlier) => {
+        historyRefusals.current.push({ where: `${column.label} on ${row.sku}`, earlier });
+        if (historyRefusals.current.length > 1) return;
+        setTimeout(() => {
+            const refused = historyRefusals.current.splice(0);
+            toastRef.current(refused.length === 1 ? shopifyHistoryRefusal(refused[0].where, refused[0].earlier)
+                : `Undo did not change ${refused.length} Shopify cells: before that edit each kept a saved Nexus draft while its sharing rule still copied the shared source, which undo cannot recreate exactly. Nothing was saved for them. Review the earlier values: ${refused.map(r => `${r.where}: ${r.earlier}`).join('; ')}.`, 'danger');
+        }, 0);
+    }, []);
+    const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi, shopifyHistoryRefused);
     const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in

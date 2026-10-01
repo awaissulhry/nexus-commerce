@@ -19,6 +19,7 @@ import { InformationTagsEditor } from './InformationTagsEditor'
 import { informationValueLabel, informationDraftCellError } from './informationEditing'
 import { linkedEndpoint, linkedRequest } from './api'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { isShopifyHistoryValue, noteShopifyEdit, noteShopifyReplay, replayShopifyHistory } from './draftHistory'
 import styles from './information.module.css'
 
 export const shopifyRawValue = (value: unknown): string | null => value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
@@ -174,7 +175,7 @@ export function shopifyPanelSave(p: { field: InformationField; schema: ShopifySt
   return { kind: 'commit', value }
 }
 
-export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefined, getApi: () => GridApi<ChannelSheetRow> | null) {
+export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefined, getApi: () => GridApi<ChannelSheetRow> | null, historyRefused?: ShopifyHistoryRefused) {
   const scope = useStudioScope()
   const canPublish = usePermission('products.publish')
   const canEdit = usePermission('products.edit'), canAdjustInventory = usePermission('inventory.adjust')
@@ -244,7 +245,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   const divergence = selected?.row.values[selected.column.key]?.divergence
   const warning = !locked && field && !(translated && value === null) && !informationDraftCellError(field, value, selected?.baseline ?? null, contentWrite)
     ? field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected?.baseline ?? null) : null
-  return { open, closed, element: selected && field && schema ? <><CellPanel anchor={selected.anchor} label={`${field.label}: ${selected.row.sku}`} onSave={save} onCancel={() => close()}
+  return { open, closed, historyRefused, element: selected && field && schema ? <><CellPanel anchor={selected.anchor} label={`${field.label}: ${selected.row.sku}`} onSave={save} onCancel={() => close()}
     footer={<><span className="nds-editor-keyhint">{EDITOR_KEY_HINT_PANEL}</span><span className={styles.hint}>{template ? 'Switching on changes the Shopify store at once' : 'Saves in Nexus · Publish to send it to Shopify'}</span></>}>
     <div className={styles.stack}>
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
@@ -273,7 +274,9 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
       if (entry.copy || !entry.id) setEntry(null)
     }} />}</> : null }
 }
-export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Closed): Partial<ColDef<ChannelSheetRow>> {
+/** A history step this cell cannot restore exactly (`draftHistory.ts`): the row, the column and the earlier value. */
+export type ShopifyHistoryRefused = (row: ChannelSheetRow, column: SheetColumn, earlier: string) => void
+export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Closed, onHistoryRefused?: ShopifyHistoryRefused): Partial<ColDef<ChannelSheetRow>> {
   const field = column.shopifyField!
   return {
     cellEditor: Gateway, cellEditorSelector: undefined, cellEditorPopup: true, cellEditorParams: { open, closed: closed ?? (() => undefined), definition: column },
@@ -281,7 +284,19 @@ export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Clo
     valueSetter: p => {
       const old = p.data?.values[column.key]
       if (!p.data || !old || !old.writable) return false
-      p.data.values = { ...p.data.values, [column.key]: { ...old, value: p.newValue, pinned: true, inherited: false } }
+      /* An undo/redo step of this cell: its value AND its own/follow state. The envelope stops here — the cell gets the
+         raw value, and the write takes the intent the state needs. */
+      if (isShopifyHistoryValue(p.newValue)) {
+        const replay = replayShopifyHistory(old, p.newValue)
+        if (replay.kind === 'refuse') onHistoryRefused?.(p.data, column, informationValueLabel(field.type, shopifyRawValue(replay.earlier)))
+        if (replay.kind !== 'apply') return false
+        noteShopifyReplay(replay)
+        p.data.values = { ...p.data.values, [column.key]: replay.cell }
+        return true
+      }
+      const next = { ...old, value: p.newValue, pinned: true, inherited: false }
+      noteShopifyEdit(old, next)
+      p.data.values = { ...p.data.values, [column.key]: next }
       return true
     },
     valueFormatter: p => {
