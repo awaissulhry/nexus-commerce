@@ -39,6 +39,7 @@ import { recordPriceChange } from './price-history.service.js'
 import { endPromotionSales, runPromotionScheduler } from './promotion-scheduler.service.js'
 import { writeChannelPrices } from './pim/channel-price-write.service.js'
 import { resetSaleWindowColumnCache } from './pim/sale-window.js'
+import { logger } from '../utils/logger.js'
 
 const A = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const scoped = <T>(work: () => Promise<T>) => withWorkspace(A, work)
@@ -216,6 +217,128 @@ describe('a promotion starts: its sale goes through the price door', () => {
     await runPromotionScheduler(prisma as never)
     expect(Number((await listingRow(amazon.id)).salePrice)).toBe(8.59)
     expect(await rows(amazon.id)).toHaveLength(1)
+  }))
+})
+
+// ── 2026-10-01 review: a sale is a price in ONE currency, held to the product's own bounds, sent or not set ───────
+describe('🔴 a promotion\'s sale: one currency, the product\'s own floor/ceiling, and only where a sale is sent', () => {
+  type Market = { channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE'; marketplace: string }
+  beforeAll(() => scoped(async () => {
+    const market = (channel: string, code: string, currency: string) => prisma.marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency, region: 'EU', language: 'en', languages: ['en'] } })
+    await market('AMAZON', 'UK', 'GBP'); await market('AMAZON', 'SE', 'SEK'); await market('AMAZON', 'PL', 'PLN'); await market('AMAZON', 'DE', 'EUR')
+    await market('EBAY', 'UK', 'GBP'); await market('SHOPIFY', 'GLOBAL', 'EUR'); await market('WOOCOMMERCE', 'GLOBAL', 'EUR')
+    for (const channel of ['SHOPIFY', 'WOOCOMMERCE']) {
+      accounts[channel] = (await prisma.channelConnection.create({ data: { channelType: channel, accountLabel: `promo-${channel}`, externalAccountId: `test-promo-${channel}`, isActive: true } as never })).id
+    }
+  }), 60_000)
+
+  /** A product of its own type (floor/ceiling as given) with a live listing pinned at 20 on each market asked. */
+  async function seedMarkets(id: string, markets: Market[], product: Record<string, unknown> = {}) {
+    await prisma.product.create({ data: { id, sku: id.toUpperCase(), name: id, basePrice: 20, productType: `TYPE_${id.toUpperCase()}`, ...product } as never })
+    const out: Record<string, { id: string }> = {}
+    for (const m of markets) {
+      out[`${m.channel}:${m.marketplace}`] = await prisma.channelListing.create({ data: {
+        productId: id, channel: m.channel, channelConnectionId: accounts[m.channel], channelMarket: `${m.channel}_${m.marketplace}`, marketplace: m.marketplace, region: 'EU',
+        listingStatus: 'ACTIVE', isPublished: true, externalListingId: `ITEM-${id}-${m.channel}-${m.marketplace}`,
+        price: 20, priceOverride: 20, followMasterPrice: false, masterPrice: 20,
+      } as never })
+    }
+    return out
+  }
+  async function promotionAt(id: string, action: { action: 'FIXED_PRICE' | 'PERCENT_OFF'; value: number; channel: string | null; marketplace?: string }) {
+    const start = enteringStart()
+    const event = await prisma.retailEvent.create({ data: { name: `Promo ${id}`, startDate: start, endDate: new Date(start.getTime() + 2 * DAY), source: 'CUSTOM' } })
+    await prisma.retailEventPriceAction.create({ data: { eventId: event.id, channel: action.channel, marketplace: action.marketplace ?? null, productType: `TYPE_${id.toUpperCase()}`, action: action.action, value: action.value } as never })
+    return event
+  }
+  /** One tick: its result, and the listings it skipped by name ([listingId, reason]). */
+  async function tick() {
+    const info = vi.spyOn(logger, 'info')
+    try {
+      const result = await runPromotionScheduler(prisma as never)
+      const skipped = info.mock.calls.filter((c) => c[0] === 'promotion skipped on a listing').map((c) => c[1] as { listingId: string; reason: string })
+      return { result, skipped }
+    } finally {
+      info.mockRestore()
+    }
+  }
+  const untouched = async (listingId: string) => {
+    expect((await listingRow(listingId)).salePrice).toBeNull()
+    expect(await rows(listingId)).toEqual([])
+    expect(await saleAudits(listingId)).toEqual([])
+  }
+
+  it('🔴 FIXED_PRICE 15 with no market named is EUR (the master currency): set on Amazon IT and DE; Amazon UK (GBP), SE (SEK) and PL (PLN) are skipped by name and counted, nothing written', () => scoped(async () => {
+    const l = await seedMarkets('promo-fx-none', [
+      { channel: 'AMAZON', marketplace: 'IT' }, { channel: 'AMAZON', marketplace: 'DE' },
+      { channel: 'AMAZON', marketplace: 'UK' }, { channel: 'AMAZON', marketplace: 'SE' }, { channel: 'AMAZON', marketplace: 'PL' },
+    ])
+    await promotionAt('promo-fx-none', { action: 'FIXED_PRICE', value: 15, channel: 'AMAZON' })
+    const { result, skipped } = await tick()
+    for (const key of ['AMAZON:IT', 'AMAZON:DE']) {
+      expect(Number((await listingRow(l[key].id)).salePrice), key).toBe(15)
+      expect((await pending(l[key].id)).map((r) => (r.payload as { salePrice?: number }).salePrice), key).toEqual([15])
+    }
+    for (const [key, currency] of [['AMAZON:UK', 'GBP'], ['AMAZON:SE', 'SEK'], ['AMAZON:PL', 'PLN']] as const) {
+      await untouched(l[key].id)
+      expect(skipped.find((x) => x.listingId === l[key].id)?.reason, key).toBe(`The fixed price EUR 15.00 is not set on a market that sells in ${currency}.`)
+    }
+    // Counted: every skip of this tick is a named log line, and the result counts exactly those.
+    expect(result.listingsSkipped).toBe(skipped.length)
+    expect(skipped.length).toBeGreaterThanOrEqual(3)
+  }))
+
+  it('🔴 FIXED_PRICE 15 for market UK is GBP: the Amazon UK listing gets £15 — never compared with the product\'s EUR ceiling of 10; eBay UK has no listing sale and is skipped', () => scoped(async () => {
+    const l = await seedMarkets('promo-fx-uk', [{ channel: 'AMAZON', marketplace: 'UK' }, { channel: 'EBAY', marketplace: 'UK' }, { channel: 'AMAZON', marketplace: 'IT' }], { maxPrice: 10 })
+    await promotionAt('promo-fx-uk', { action: 'FIXED_PRICE', value: 15, channel: null, marketplace: 'UK' })
+    const { skipped } = await tick()
+    expect(Number((await listingRow(l['AMAZON:UK'].id)).salePrice)).toBe(15)
+    expect(await pending(l['AMAZON:UK'].id)).toHaveLength(1)
+    await untouched(l['EBAY:UK'].id)
+    expect(skipped.find((x) => x.listingId === l['EBAY:UK'].id)?.reason).toBeTruthy()
+    // The Italian listing is not in this promotion's scope (market UK): not touched, not skipped.
+    await untouched(l['AMAZON:IT'].id)
+    expect(skipped.some((x) => x.listingId === l['AMAZON:IT'].id)).toBe(false)
+  }))
+
+  it('🔴 a sale outside the product\'s own EUR floor/ceiling is skipped with the shared verdict, nothing written', () => scoped(async () => {
+    const l = await seedMarkets('promo-fx-ceiling', [{ channel: 'AMAZON', marketplace: 'IT' }], { maxPrice: 12 })
+    const floor = await seedMarkets('promo-fx-floor', [{ channel: 'AMAZON', marketplace: 'IT' }], { minPrice: 18 })
+    await promotionAt('promo-fx-ceiling', { action: 'FIXED_PRICE', value: 15, channel: 'AMAZON' })
+    await promotionAt('promo-fx-floor', { action: 'PERCENT_OFF', value: 25, channel: 'AMAZON' })
+    const { skipped } = await tick()
+    await untouched(l['AMAZON:IT'].id)
+    expect(skipped.find((x) => x.listingId === l['AMAZON:IT'].id)?.reason).toBe('Not changed: 15.00 is above its pricing ceiling of 12.00.')
+    // 20 − 25 % = 15.00, below the floor of 18.
+    await untouched(floor['AMAZON:IT'].id)
+    expect(skipped.find((x) => x.listingId === floor['AMAZON:IT'].id)?.reason).toBe('Not changed: 15.00 is below its pricing floor of 18.00.')
+  }))
+
+  it('🔴 a sale of 0 is skipped — PERCENT_OFF 100 in the master currency, and a FIXED 0 in another currency (no bounds there, the zero rule still)', () => scoped(async () => {
+    const pct = await seedMarkets('promo-pct-zero', [{ channel: 'AMAZON', marketplace: 'IT' }])
+    const gbp = await seedMarkets('promo-gbp-zero', [{ channel: 'AMAZON', marketplace: 'UK' }])
+    await promotionAt('promo-pct-zero', { action: 'PERCENT_OFF', value: 100, channel: 'AMAZON' })
+    await promotionAt('promo-gbp-zero', { action: 'FIXED_PRICE', value: 0, channel: 'AMAZON', marketplace: 'UK' })
+    const { skipped } = await tick()
+    for (const id of [pct['AMAZON:IT'].id, gbp['AMAZON:UK'].id]) {
+      await untouched(id)
+      expect(skipped.find((x) => x.listingId === id)?.reason, id).toBe('Not changed: the new price would be 0.00, and a price must be above 0.')
+    }
+  }))
+
+  it('🔴 Shopify and WooCommerce send no sale price: their listings are skipped by name, no row, and not counted as updated', () => scoped(async () => {
+    const l = await seedMarkets('promo-shopify', [{ channel: 'SHOPIFY', marketplace: 'GLOBAL' }, { channel: 'WOOCOMMERCE', marketplace: 'GLOBAL' }, { channel: 'AMAZON', marketplace: 'IT' }])
+    await promotionAt('promo-shopify', { action: 'FIXED_PRICE', value: 15, channel: null })
+    const before = vi.mocked(recordPriceChange).mock.calls.length
+    const { result, skipped } = await tick()
+    await untouched(l['SHOPIFY:GLOBAL'].id)
+    await untouched(l['WOOCOMMERCE:GLOBAL'].id)
+    expect(skipped.find((x) => x.listingId === l['SHOPIFY:GLOBAL'].id)?.reason).toBe("Shopify's price sender does not send a sale price, so a promotion is not set on Shopify listings.")
+    expect(skipped.find((x) => x.listingId === l['WOOCOMMERCE:GLOBAL'].id)?.reason).toBe("WooCommerce's price sender does not send a sale price, so a promotion is not set on WooCommerce listings.")
+    // Only the Amazon listing was updated in this tick (the other arms' promotions were entered already).
+    expect(Number((await listingRow(l['AMAZON:IT'].id)).salePrice)).toBe(15)
+    expect(result.listingsUpdated).toBe(1)
+    expect(vi.mocked(recordPriceChange).mock.calls.length - before).toBe(1)
   }))
 })
 

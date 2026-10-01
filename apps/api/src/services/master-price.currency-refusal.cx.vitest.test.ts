@@ -24,6 +24,8 @@ function fakeClient(listings: Listing[], productExtra: Record<string, unknown> =
   const listingUpdates: Array<{ id: string; data: Record<string, unknown> }> = []
   const audits: Array<Record<string, any>> = []
   const tx = {
+    // The product row lock the cascade takes first (`lockProductStock`): nothing to lock in a stand-in.
+    $queryRaw: vi.fn(async () => []),
     product: { findUnique: vi.fn(async () => ({ id: 'p1', basePrice: 10, sku: 'SKU-P1', ...productExtra })), update: vi.fn(async () => ({})) },
     channelListing: { findMany: vi.fn(async () => listings), update: vi.fn(async ({ where, data }: any) => { listingUpdates.push({ id: where.id, data }); return {} }) },
     marketplace: { findMany: vi.fn(async () => MARKETS) },

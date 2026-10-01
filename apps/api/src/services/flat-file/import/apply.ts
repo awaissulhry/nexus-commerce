@@ -41,7 +41,7 @@ import { MASTER_FIELDS } from '../registry/master-fields.js'
 import { CHANNEL_MARKET_FIELDS } from '../registry/channel-fields.js'
 import type { FieldDefinition } from '../registry/types.js'
 import { productEventService } from '../../product-event.service.js'
-import { activeDatabaseTransaction, inDatabaseTransaction } from '../../../lib/database-context.js'
+import { activeDatabaseTransaction, inDatabaseTransaction, inSavepoint, transactionMustRestart } from '../../../lib/database-context.js'
 // Types only at load: the door (and the queue it loads) is imported when an import carries a pricing cell.
 import type { writeChannelPrices, PriceWriteTarget } from '../../pim/channel-price-write.service.js'
 
@@ -154,6 +154,8 @@ const PRICING_COLUMNS = ['price', 'priceOverride', 'followMasterPrice', 'pricing
 
 /** Thrown for a pricing cell the door cannot take; recorded as the row's FAILED detail. */
 class PricingCellError extends Error {}
+/** The door refused a pricing cell: thrown inside the cell's savepoint so nothing it wrote stays; the row is FAILED with it. */
+class CellRefusedError extends Error {}
 
 /**
  * The door's half of a pricing cell: a price pins (an emptied cell hands the listing back to the master), a follow
@@ -273,6 +275,19 @@ export async function applyChanges(
 
   // ── Inner apply function (runs inside $transaction or directly) ────────────
 
+  /**
+   * One cell's writes in a SAVEPOINT of the import's transaction (`inSavepoint`): if the cell fails part-way, only its
+   * own statements are undone (and its after-commit sends with them), the error goes to the row's catch (FAILED, with
+   * its message), and the rest of the import carries on and commits. Without a database transaction (a client with no
+   * `$transaction`: the mock-client tests) there is nothing to roll back to: the cell runs as it is.
+   */
+  const inCell = async <T,>(work: () => Promise<T>): Promise<T> => {
+    if (!activeDatabaseTransaction()) return work()
+    const outcome = await inSavepoint(work)
+    if (outcome.ok === true) return outcome.value
+    throw (outcome as { error: unknown }).error
+  }
+
   const applyFn = async (tx: any): Promise<void> => {
     // A restarted transaction starts over: nothing from the abandoned attempt is counted.
     rows.length = 0; inverseDiff.length = 0; touchedProductIds.clear(); applied = 0; skipped = 0; failed = 0
@@ -376,8 +391,9 @@ export async function applyChanges(
               continue
             }
             // A price outside the product's own floor or ceiling, or 0, is refused whole by the writer ("Not changed: …",
-            // MasterPriceRefusedError, before anything is written): the row is FAILED with that sentence, below.
-            await updateMasterPrice(String(before.id), value, { tx, actor: opts.actor ?? 'flat-file-import', reason: `Flat-file import ${change.column}` })
+            // MasterPriceRefusedError, before anything is written): the row is FAILED with that sentence, below. Any
+            // failure part-way (the cascade, a queue row) is rolled back to this cell's savepoint (`inCell`).
+            await inCell(() => updateMasterPrice(String(before.id), value, { tx, actor: opts.actor ?? 'flat-file-import', reason: `Flat-file import ${change.column}` }))
             inverseDiff.push({ model: 'Product', sku, data: captureInverse({ basePrice: value }, before) })
             applied++
             rows.push({ sku, status: 'SUCCESS' })
@@ -464,29 +480,32 @@ export async function applyChanges(
               }
               throw err
             }
-            // A new listing is created first (its other columns only); the door then prices it in this transaction.
-            const listingId: string | undefined = before
-              ? (before as Record<string, unknown>).id as string | undefined
-              : (await tx.channelListing.create({
-                  data: { product: { connect: { sku } }, channel, marketplace: market, channelMarket: `${channel}_${market}`, region: market },
-                  select: { id: true },
-                }))?.id
+            // One cell, one savepoint (`inCell`): a new listing is created first (its other columns only), then the door
+            // prices it in this transaction. A refusal, or a failure part-way (a queue row that cannot be written after
+            // the listing was stored and its waiting send cancelled), rolls back to the savepoint: the FAILED row leaves
+            // nothing behind — not a stored price with no send, not an empty listing — and the rest of the import commits.
+            const outcome = await inCell(async () => {
+              const listingId: string | undefined = before
+                ? (before as Record<string, unknown>).id as string | undefined
+                : (await tx.channelListing.create({
+                    data: { product: { connect: { sku } }, channel, marketplace: market, channelMarket: `${channel}_${market}`, region: market },
+                    select: { id: true },
+                  }))?.id
+              const written = await writePrices({
+                tx,
+                targets: [{ listingId: listingId ?? '', ...cell, unguardedReason: 'flat-file-import' } as PriceWriteTarget],
+                actor: opts.actor ?? 'flat-file-import', source: 'BULK_OVERRIDE', reason: `Flat-file import ${change.column}`,
+              })
+              const result = written.results[0]
+              if (!result || result.outcome === 'refused' || result.outcome === 'conflict') throw new CellRefusedError(result?.reason ?? 'The price write refused this cell.')
+              return result
+            })
+            // Only a cell that committed is undone by the inverse, and touches its product.
             if (before) {
               inverseDiff.push({ model: 'ChannelListing', sku, channel, market,
                 data: Object.fromEntries(PRICING_COLUMNS.map((column) => [column, (before as Record<string, unknown>)[column] ?? null])) })
               const pid = (before as Record<string, unknown>).productId
               if (pid) touchedProductIds.add(String(pid))
-            }
-            const written = await writePrices({
-              tx,
-              targets: [{ listingId: listingId ?? '', ...cell, unguardedReason: 'flat-file-import' } as PriceWriteTarget],
-              actor: opts.actor ?? 'flat-file-import', source: 'BULK_OVERRIDE', reason: `Flat-file import ${change.column}`,
-            })
-            const outcome = written.results[0]
-            if (!outcome || outcome.outcome === 'refused' || outcome.outcome === 'conflict') {
-              failed++
-              rows.push({ sku, status: 'FAILED', detail: outcome?.reason ?? 'The price write refused this cell.' })
-              continue
             }
             applied++
             rows.push({ sku, status: 'SUCCESS', ...(outcome.notSent ? { detail: outcome.notSent } : {}) })
@@ -610,6 +629,8 @@ export async function applyChanges(
           rows.push({ sku, status: 'SKIPPED', detail: err.message })
           continue
         }
+        // A failure that kills the whole transaction is not a row's: the transaction runs again from the start.
+        if (transactionMustRestart(err)) throw err
         // Per-row errors don't abort the batch; they are recorded as FAILED.
         failed++
         rows.push({

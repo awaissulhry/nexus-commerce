@@ -27,6 +27,10 @@ import { roundCents } from '@nexus/shared/listing-price'
 import { logger } from '../utils/logger.js'
 import { writeChannelPrices } from './pim/channel-price-write.service.js'
 import { channelShape } from './pim/matrix-cells.js'
+import { listingMarketCurrency } from './pim/follower-price.js'
+import type { MarketCurrencyRow } from './pim/market-currency.js'
+import { masterCurrency } from './fx-rate.service.js'
+import { boundsApply, priceBoundsOf, storedPriceReason, zeroPriceReason } from './price-bounds.service.js'
 import { refreshSnapshotsForSkus } from './pricing-snapshot.service.js'
 import { isPriceRefusal, resolvePrice } from './pricing-engine.service.js'
 import { recordPriceChange } from './price-history.service.js'
@@ -34,9 +38,36 @@ import { recordPriceChange } from './price-history.service.js'
 interface PromotionTickResult {
   enteredEvents: number
   exitedEvents: number
+  /** Sales actually written through the price door (set or ended). */
   listingsUpdated: number
+  /** Listings in a promotion's scope that got no sale, each logged with its reason (see `skipPromotion`). */
+  listingsSkipped: number
   snapshotsRefreshed: number
   durationMs: number
+}
+
+/**
+ * Channels whose price sender sends no sale price: a promotion set on them would sit in Nexus and never reach the
+ * channel, so it is not set (2026-10-01). eBay's and Etsy's listings have no sale at all (`channelShape(...).absent`,
+ * the Studio matrix's own sentences); Shopify and WooCommerce send the regular price only
+ * (`syncToShopify` → `work.price = payload.price`, `syncNativeShopifyOffer` writes `price`; the WooCommerce payload
+ * carries `regular_price` only).
+ */
+const SALE_NOT_SENT: Readonly<Record<string, string>> = {
+  SHOPIFY: "Shopify's price sender does not send a sale price, so a promotion is not set on Shopify listings.",
+  WOOCOMMERCE: "WooCommerce's price sender does not send a sale price, so a promotion is not set on WooCommerce listings.",
+}
+
+/**
+ * The one currency a FIXED_PRICE value is in: the named marketplace's (on the action's channel, or the one currency
+ * every channel's row for that market agrees on), else the master currency. `null` = the market names no single
+ * configured currency, so the value cannot be placed anywhere.
+ */
+function actionCurrency(action: { channel: string | null; marketplace: string | null }, rows: readonly MarketCurrencyRow[], master: string): string | null {
+  if (!action.marketplace) return master
+  const channels = action.channel ? [action.channel] : [...new Set(rows.map((r) => r.channel))]
+  const found = new Set(channels.map((channel) => listingMarketCurrency({ channel, marketplace: action.marketplace! }, rows)).filter((c): c is string => !!c))
+  return found.size === 1 ? [...found][0]! : null
 }
 
 export async function runPromotionScheduler(
@@ -60,7 +91,19 @@ export async function runPromotionScheduler(
   })
 
   let listingsUpdated = 0
+  let listingsSkipped = 0
   const skusTouched = new Set<string>()
+  // A listing in scope that gets no sale: said by name, and counted.
+  const skipPromotion = (l: { id: string; channel: string; marketplace: string }, eventId: string, reason: string, extra: Record<string, unknown> = {}) => {
+    listingsSkipped++
+    logger.info('promotion skipped on a listing', { listingId: l.id, channel: l.channel, marketplace: l.marketplace, eventId, reason, ...extra })
+  }
+  // Every market's currency (the door reads them the same way), and the master currency the product's floor and
+  // ceiling are in. Read once per tick, only when a promotion starts.
+  const currencyRows: MarketCurrencyRow[] = enteringActions.length
+    ? await prisma.marketplace.findMany({ select: { channel: true, code: true, currency: true } })
+    : []
+  const master = masterCurrency()
 
   for (const action of enteringActions) {
     // Find every ChannelListing matching the action's scope. Listings
@@ -84,15 +127,30 @@ export async function runPromotionScheduler(
         priceOverride: true,
         salePrice: true,
         lastOverrideBy: true,
-        product: { select: { sku: true, variations: { select: { sku: true } } } },
+        product: { select: { sku: true, minPrice: true, maxPrice: true, variations: { select: { sku: true } } } },
       },
     })
+    // A FIXED_PRICE value is a number in ONE currency (2026-10-01): it was applied to every listing in scope whatever
+    // its market's currency, so "15" became €15, £15, 15 SEK and 15 PLN.
+    const fixedCurrency = action.action === 'FIXED_PRICE' ? actionCurrency(action, currencyRows, master) : null
 
     for (const l of listings) {
       // A promotion puts a listing on sale ONCE. Taken again, a PERCENT_OFF would discount its own sale (the engine
       // answers the active sale as the price: 10.10 → 8.59 → 7.30 … on every tick, each one queued), and a sale an
       // operator changed since would be overwritten.
       if (await promotionEntered(prisma, action.eventId, l)) continue
+      // A channel whose listings have no sale, or whose sender never sends one: skipped by name, before any pricing.
+      const absent = channelShape(l.channel).absent.find((a) => a.cell === 'salePrice')
+      const notSent = absent?.reason ?? SALE_NOT_SENT[l.channel.toUpperCase()]
+      if (notSent) { skipPromotion(l, action.eventId, notSent); continue }
+      const listingCurrency = listingMarketCurrency(l, currencyRows)
+      if (action.action === 'FIXED_PRICE' && (!fixedCurrency || listingCurrency !== fixedCurrency)) {
+        skipPromotion(l, action.eventId, !fixedCurrency
+          ? `The promotion's market ${action.marketplace} has no single configured currency, so its fixed price ${Number(action.value).toFixed(2)} is not set anywhere.`
+          : `The fixed price ${fixedCurrency} ${Number(action.value).toFixed(2)} is not set on a market that sells in ${listingCurrency ?? 'no configured currency'}.`,
+        { listingCurrency, actionCurrency: fixedCurrency })
+        continue
+      }
       // Promo price computed against the engine's resolved base. For
       // FIXED_PRICE we don't need a base; for PERCENT_OFF we resolve
       // the parent product's SKU on this marketplace and apply the
@@ -113,24 +171,24 @@ export async function runPromotionScheduler(
         } catch (err) {
           if (!isPriceRefusal(err)) throw err
           // CX (review 2026-09-26) — no FX rate or no market currency: this listing gets no promotion price.
-          logger.warn('promotion skipped: this market cannot be priced (configuration)', { listingId: l.id, marketplace: l.marketplace, error: (err as Error).message })
+          skipPromotion(l, action.eventId, `This market cannot be priced (configuration): ${(err as Error).message}`)
           continue
         }
         // Another sale already on the listing is not this promotion's base: the listing's own price is.
         const base = resolution.source === 'SCHEDULED_SALE' ? Number(l.priceOverride ?? l.price ?? 0) : resolution.price
-        if (!(base > 0)) continue
+        if (!(base > 0)) { skipPromotion(l, action.eventId, 'This listing has no price to take the percentage off.'); continue }
         promoPrice = base * (1 - Number(action.value) / 100)
       } else {
         continue
       }
       promoPrice = roundCents(promoPrice)
       const promoStr = promoPrice.toFixed(2)
-      // eBay's and Etsy's listings have no sale (the Studio matrix's own sentences): skipped by name.
-      const absent = channelShape(l.channel).absent.find((a) => a.cell === 'salePrice')
-      if (absent) {
-        logger.info('promotion skipped: this channel has no listing sale', { listingId: l.id, channel: l.channel, eventId: action.eventId, reason: absent.reason })
-        continue
-      }
+      // Every sale value is held to the rules of a stored price (`storedPriceReason`): above 0, and inside the product's
+      // own floor and ceiling where those apply — a market in the master currency only (refuse, don't convert).
+      const refusal = boundsApply(listingCurrency, master)
+        ? storedPriceReason(promoPrice, priceBoundsOf(l.product ?? {}))
+        : zeroPriceReason(promoPrice)
+      if (refusal) { skipPromotion(l, action.eventId, `Not changed: ${refusal}.`, { salePrice: promoPrice }); continue }
       // The sale through the door, with the event's window as its dates; the same sale again is the door's no-op.
       const written = await writeChannelPrices({
         targets: [{ listingId: l.id, sale: { value: promoPrice, start: isoDay(action.event.startDate), end: isoDay(action.event.endDate) }, unguardedReason: 'promotion' }],
@@ -138,7 +196,7 @@ export async function runPromotionScheduler(
       })
       const outcome = written.results[0]
       if (!outcome || outcome.outcome !== 'applied') {
-        if (outcome?.outcome === 'refused') logger.warn('promotion not applied to a listing', { listingId: l.id, eventId: action.eventId, reason: outcome.reason })
+        if (outcome?.outcome === 'refused') skipPromotion(l, action.eventId, outcome.reason ?? 'The price door refused the sale.')
         continue
       }
       // PH.1 — record the promo start on the unified timeline. oldPrice is
@@ -245,6 +303,7 @@ export async function runPromotionScheduler(
     enteredEvents: enteringActions.length,
     exitedEvents: exitingActions.length,
     listingsUpdated,
+    listingsSkipped,
     snapshotsRefreshed,
     durationMs,
   })
@@ -253,6 +312,7 @@ export async function runPromotionScheduler(
     enteredEvents: enteringActions.length,
     exitedEvents: exitingActions.length,
     listingsUpdated,
+    listingsSkipped,
     snapshotsRefreshed,
     durationMs,
   }

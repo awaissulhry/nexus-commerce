@@ -221,6 +221,18 @@ describe('POST /api/listings/bulk-action', () => {
     expect(await prices(c.id)).toEqual([11])
   })
 
+  it('🔴 bulk Set price on a paused listing: stored, nothing queued, and the job names it (not a failure)', async () => {
+    const l = await scoped(async () => {
+      const row = await seed('bulk-pin-paused')
+      return prisma.channelListing.update({ where: { id: row.id }, data: { syncPaused: true } })
+    })
+    const sentence = 'Not sent: The price 15.00 is saved in Nexus. Nothing was sent: this listing\'s sync is paused.'
+    const job = await run('set-price', [l.id], { price: 15 })
+    expect(job).toMatchObject({ status: 'COMPLETED', processedItems: 1, failedItems: 0, lastError: sentence })
+    expect(Number((await listing(l.id)).priceOverride)).toBe(15)
+    expect(await queued(l.id)).toEqual([])
+  })
+
   it('🔴 follow-master on an Amazon-managed (FBA) listing: the price follows, the quantity is Amazon\'s — left alone and named on the job, not a failure', async () => {
     const l = await scoped(async () => {
       const row = await seed('bulk-follow-fba', { channel: 'AMAZON', follow: false, price: 25 })

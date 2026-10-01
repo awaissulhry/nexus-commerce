@@ -74,7 +74,7 @@ async function runPromotionTick(): Promise<void> {
     await recordCronRun('pricing-promotion-scheduler', async () => {
       const result = await runPromotionScheduler(prisma)
       logger.info('pricing cron: promotion tick complete', result)
-      return `listingsUpdated=${result.listingsUpdated} snapshotsRefreshed=${result.snapshotsRefreshed}`
+      return `listingsUpdated=${result.listingsUpdated} listingsSkipped=${result.listingsSkipped} snapshotsRefreshed=${result.snapshotsRefreshed}`
     })
   } catch (err) {
     logger.error('pricing cron: promotion tick failed', {

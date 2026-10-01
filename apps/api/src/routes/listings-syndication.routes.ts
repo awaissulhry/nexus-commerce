@@ -3476,13 +3476,15 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
                 payload: body.payload,
               })
               // The quantity of an Amazon-managed (FBA) listing is Amazon's: the rest of the change is applied, the
-              // quantity is not, and the job says so by listing (not a failure).
+              // quantity is not, and the job says so by listing (not a failure). Likewise a price kept in Nexus and not
+              // sent (a paused listing or a draft, a market in another currency): the job names it.
+              if (priced.notSent) quantityNotes.push({ listingId: id, reason: `Not sent: ${priced.notSent}` })
               if (priced.quantitySkipped) quantityNotes.push({ listingId: id, reason: `Quantity not changed: ${priced.quantitySkipped}` })
             }
             succeeded += 1
 
             // A2 — journal followMasterQuantity toggle when it actually changed.
-            if ((action === 'follow-master' || action === 'unfollow-master') && !quantityNotes.some((n) => n.listingId === id)) {
+            if ((action === 'follow-master' || action === 'unfollow-master') && !quantityNotes.some((n) => n.listingId === id && n.reason.startsWith('Quantity not changed: '))) {
               const newVal = action === 'follow-master'
               const oldVal = followQtyBefore.get(id) ?? true // default is true
               if (oldVal !== newVal) {

@@ -54,9 +54,17 @@ export function holdsCascadedPrice(listing: HoldFacts): boolean {
 
 /** The sentence for a follower price kept in Nexus by `holdsCascadedPrice`. */
 export function heldPriceSentence(listing: HoldFacts, price: number): string {
+  return heldSentence(listing, `The price ${price.toFixed(2)}`)
+}
+
+/**
+ * The same sentence for any change kept in Nexus by `holdsCascadedPrice` — a follower price, a typed (pinned) price,
+ * a sale: `what` names it ("The price 25.00", "The sale 19.90").
+ */
+export function heldSentence(listing: HoldFacts, what: string): string {
   return listing.syncPaused
-    ? `The price ${price.toFixed(2)} is saved in Nexus. Nothing was sent: this listing's sync is paused.`
-    : `The price ${price.toFixed(2)} is saved in Nexus. Nothing was sent: this listing is a draft that has not been published; Publish sends it.`
+    ? `${what} is saved in Nexus. Nothing was sent: this listing's sync is paused.`
+    : `${what} is saved in Nexus. Nothing was sent: this listing is a draft that has not been published; Publish sends it.`
 }
 
 /** The listing market's configured currency, or `null` when the market has none (then it is never the master currency). */

@@ -85,6 +85,7 @@ import {
   logFollowerBoundsRefusals, logMasterCurrencyRefusals, type FollowerBoundsRefusal, type MasterCurrencyRefusal,
 } from './pim/follower-price.js'
 import { priceBoundsOf, storedPriceReason } from './price-bounds.service.js'
+import { lockProductStock } from './stock-lock.js'
 export { computeListingPrice, holdsCascadedPrice }
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
@@ -192,6 +193,11 @@ export class MasterPriceService {
     const runner = async (
       tx: Prisma.TransactionClient | PrismaClient,
     ): Promise<MasterPriceUpdateResult> => {
+      // 2026-10-01 — the product row is locked FIRST (the lock every stock writer takes, `lockProductStock`), so the
+      // master price, its floor and ceiling, and the listings read below cannot move under this cascade; the price door
+      // reads them FOR SHARE inside its own transaction, so a door write and this cascade never interleave on a
+      // product (a door write computed from the old master is re-done with the new one).
+      await lockProductStock(tx as Prisma.TransactionClient, [productId])
       const product = await tx.product.findUnique({
         where: { id: productId },
         select: { id: true, basePrice: true, sku: true, minPrice: true, maxPrice: true },

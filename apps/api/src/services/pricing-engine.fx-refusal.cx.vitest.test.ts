@@ -25,7 +25,11 @@ function fakePrisma(opts: { rates?: Record<string, number> } = {}) {
   const key = (w: any) => `${w.sku}|${w.channel}|${w.marketplace}|${w.fulfillmentMethod ?? ''}`
   const client = {
     // A market with no Marketplace row answers null (as Prisma does).
-    marketplace: { findUnique: vi.fn(async ({ where }: any) => (CURRENCY[where.channel_code.code] === undefined ? null : { currency: CURRENCY[where.channel_code.code], vatRate: null, taxInclusive: false })) },
+    marketplace: {
+      findUnique: vi.fn(async ({ where }: any) => (CURRENCY[where.channel_code.code] === undefined ? null : { currency: CURRENCY[where.channel_code.code], vatRate: null, taxInclusive: false })),
+      // The promotion scheduler reads every market's currency once per tick (the rows behind `listingMarketCurrency`).
+      findMany: vi.fn(async () => Object.entries(CURRENCY).map(([code, currency]) => ({ channel: 'AMAZON', code, currency }))),
+    },
     productVariation: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []) },
     product: {
       findFirst: vi.fn(async ({ where }: any) => ({ id: `p-${where.sku}`, basePrice: 10, costPrice: null, minPrice: null, maxPrice: null })),

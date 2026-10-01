@@ -33,6 +33,7 @@ vi.mock('./readiness-index.service.js', async () => (await import('../../test-su
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { writeChannelPrices } from './channel-price-write.service.js'
+import { MasterPriceService } from '../master-price.service.js'
 import { applyProductBulkEdits } from '../products/bulk-edit.service.js'
 import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/concurrent-database.js'
 
@@ -190,5 +191,41 @@ it('A-17 race: a price write that lands in the gap keeps the conflict and its pr
   const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
   expect(Number(stored.price)).toBe(27)
   expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(0)
+}), 60_000)
+
+// ── Review 2026-10-01 — a hand-back and a master price change on the same product never interleave ────────────────
+// MasterPriceService locks the product row first; the door reads it FOR SHARE inside its transaction and decides again
+// when the master moved (a snapshot-only cascade write does not bump the listing's version). Forced: a third connection
+// holds the PRODUCT row, both writers block on it, and only then is it released. Whichever goes first, the listing ends
+// following the NEW master: the door first → the cascade then moves the follower to 12; the cascade first → the door
+// decides again and hands back at 12. Before, the door wrote the hand-back from the master it had read (10).
+it('a hand-back racing a master price change: the listing follows the final master price, whichever commits first', () => scoped(async () => {
+  const { listing } = await seed('race-master-handback')
+  const locker = await state.db.pool.connect()
+  let results: unknown[] = []
+  try {
+    await locker.query('BEGIN')
+    await locker.query('SELECT id FROM "Product" WHERE id = $1 FOR UPDATE', [listing.productId])
+    const running = [
+      scoped(() => writeChannelPrices({ targets: [{ listingId: listing.id, follow: true, unguardedReason: 'channel-follows' }], actor: 'race', source: 'MANUAL_OVERRIDE' })),
+      scoped(() => new MasterPriceService(prisma as never).update(listing.productId, 12, { actor: 'race' })),
+    ]
+    let waiting = 0
+    for (let i = 0; i < 600 && waiting < 2; i++) {
+      await new Promise(resolve => setTimeout(resolve, 25))
+      const { rows } = await state.db.pool.query(
+        `SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND wait_event_type = 'Lock'`, [state.db.name])
+      waiting = rows[0].n
+    }
+    // The positive control: both writers are blocked on the product row — the door too, before it writes the listing.
+    expect(waiting, 'both writers must be blocked on the product row before it is released').toBe(2)
+    await locker.query('COMMIT')
+    results = await Promise.all(running)
+  } finally {
+    locker.release()
+  }
+  expect((results[0] as { results: Array<{ outcome: string }> }).results[0].outcome).toBe('applied')
+  const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
+  expect([stored.followMasterPrice, Number(stored.price), Number(stored.masterPrice)]).toEqual([true, 12, 12])
 }), 60_000)
 })

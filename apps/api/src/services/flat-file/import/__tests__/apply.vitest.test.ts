@@ -366,7 +366,9 @@ describe('applyChanges', () => {
       ],
     }
 
-    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT })
+    // The cell goes through the price door (a fake one here); only a cell that was applied has an inverse (2026-10-01:
+    // a failed cell rolls back to its savepoint, so there is nothing to undo).
+    const result = await applyChanges(prisma, diff, { scope: SCOPE_AMAZON_IT, writePrices: fakeDoor().writePrices })
 
     expect(result.inverseDiff).toHaveLength(1)
     const inv = result.inverseDiff[0]

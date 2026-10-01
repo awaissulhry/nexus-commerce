@@ -46,6 +46,7 @@ let account = ''
 beforeAll(async () => {
   await scoped(async () => {
     await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'DE', name: 'Germany', currency: 'EUR', region: 'EU', language: 'de', languages: ['de'] } })
+    await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'UK', name: 'United Kingdom', currency: 'GBP', region: 'EU', language: 'en', languages: ['en'] } })
     account = (await prisma.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'drift-rule', isActive: true } })).id
   })
   const { default: dashboardRoutes } = await import('./dashboard.routes.js')
@@ -56,9 +57,9 @@ beforeAll(async () => {
 }, 180_000)
 afterAll(async () => { await app?.close(); await state.db?.close() }, 60_000)
 
-async function seed(id: string, price: number, rule: 'FIXED' | 'PERCENT_OF_MASTER' | 'MATCH_AMAZON', adj: number | null = null) {
+async function seed(id: string, price: number, rule: 'FIXED' | 'PERCENT_OF_MASTER' | 'MATCH_AMAZON', adj: number | null = null, marketplace = 'DE') {
   await prisma.product.create({ data: { id, sku: id.toUpperCase(), name: id, basePrice: 10 } })
-  return prisma.channelListing.create({ data: { productId: id, channel: 'EBAY', channelConnectionId: account, channelMarket: 'EBAY_DE', marketplace: 'DE', region: 'EU',
+  return prisma.channelListing.create({ data: { productId: id, channel: 'EBAY', channelConnectionId: account, channelMarket: `EBAY_${marketplace}`, marketplace, region: 'EU',
     listingStatus: 'ACTIVE', isPublished: true, externalListingId: `ITEM-${id}`,
     price, masterPrice: 10, followMasterPrice: true, pricingRule: rule, priceAdjustmentPercent: adj } })
 }
@@ -96,5 +97,15 @@ describe('the drift surfaces judge a following listing by its RULE\'s price', ()
     expect(resync.json()).toMatchObject({ success: true, newValue: 11, queued: true })
     const queue = await prisma.outboundSyncQueue.findMany({ where: { channelListingId: drifted.id } })
     expect(queue.map((r) => [r.syncType, (r.payload as any).price])).toEqual([['PRICE_UPDATE', 11]])
+  }))
+
+  it('🔴 Resync on a follower in another currency says WHY nothing is sent (the currency refusal), not "already matches its rule"', () => scoped(async () => {
+    const gbp = await seed('dash-gbp', 17, 'FIXED', null, 'UK')
+    const resync = await app.inject({ method: 'POST', url: `/api/dashboard/stock-drift/${gbp.id}/resync`, payload: { kind: 'price' } })
+    expect(resync.statusCode).toBe(200)
+    const body = resync.json()
+    expect(body).toMatchObject({ success: true, newValue: 17, queued: false })
+    expect(body.notSent).toMatch(/GBP/)
+    expect(await prisma.outboundSyncQueue.count({ where: { channelListingId: gbp.id } })).toBe(0)
   }))
 })
