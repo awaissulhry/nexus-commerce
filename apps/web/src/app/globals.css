@@ -208,7 +208,7 @@ body {
    is light in dark mode, as it should be on the dark page. Until then
    the value was invalid and all such text was BLACK — unreadable on the
    page, but readable on the light boxes legacy markup draws without a
-   `dark:` partner. These three rules keep those boxes readable.
+   `dark:` partner. These rules keep those boxes and plain fields right.
 
    1. `color-scheme: dark` — the browser draws unstyled form controls,
       scrollbars and pickers dark, so an input with no `bg-*` class is a
@@ -222,6 +222,8 @@ body {
    3. Placeholders of plain inputs follow their field's own text colour
       at 75% (Tailwind's preflight grey-400 is 2.5:1 on white). DS
       fields and `placeholder:` utilities set their own and win.
+   4. Plain fields (no `bg-*` class) outside those light boxes take the
+      DS field surface and border in dark mode (see the rule below).
    ═══════════════════════════════════════════════════════════════════ */
 .dark {
   color-scheme: dark;
@@ -241,6 +243,30 @@ body {
 ):not([class*="dark:bg-"])) {
   color: var(--nds-grey-900);
   color-scheme: light;
+}
+/* 4. Plain fields in dark mode — an input, textarea or select with no
+      `bg-*` class of its own, and not inside a light box from rule 2 —
+      take the design system's field surface and border (.nds-field:
+      --nds-surface, --nds-border) instead of the browser's neutral grey.
+      Dark only, so light mode is untouched; zero specificity, so any
+      class or component stylesheet still wins. */
+:where(.dark :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"],
+  [type="file"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"]),
+  textarea, select):not([class*="bg-"]):not(:is(
+  .bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200, .bg-gray-50, .bg-gray-100, .bg-gray-200,
+  .bg-zinc-50, .bg-zinc-100, .bg-zinc-200, .bg-neutral-50, .bg-neutral-100, .bg-neutral-200,
+  .bg-stone-50, .bg-stone-100, .bg-stone-200, .bg-red-50, .bg-red-100, .bg-red-200, .bg-orange-50,
+  .bg-orange-100, .bg-orange-200, .bg-amber-50, .bg-amber-100, .bg-amber-200, .bg-yellow-50,
+  .bg-yellow-100, .bg-yellow-200, .bg-lime-50, .bg-lime-100, .bg-lime-200, .bg-green-50,
+  .bg-green-100, .bg-green-200, .bg-emerald-50, .bg-emerald-100, .bg-emerald-200, .bg-teal-50,
+  .bg-teal-100, .bg-teal-200, .bg-cyan-50, .bg-cyan-100, .bg-cyan-200, .bg-sky-50, .bg-sky-100,
+  .bg-sky-200, .bg-blue-50, .bg-blue-100, .bg-blue-200, .bg-indigo-50, .bg-indigo-100,
+  .bg-indigo-200, .bg-violet-50, .bg-violet-100, .bg-violet-200, .bg-purple-50, .bg-purple-100,
+  .bg-purple-200, .bg-fuchsia-50, .bg-fuchsia-100, .bg-fuchsia-200, .bg-pink-50, .bg-pink-100,
+  .bg-pink-200, .bg-rose-50, .bg-rose-100, .bg-rose-200
+):not([class*="dark:bg-"]) *)) {
+  background-color: var(--nds-surface);
+  border-color: var(--nds-border);
 }
 input::placeholder,
 textarea::placeholder {

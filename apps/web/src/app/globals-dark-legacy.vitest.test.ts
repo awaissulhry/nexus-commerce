@@ -67,6 +67,46 @@ describe('light boxes without a dark partner keep dark ink', () => {
   })
 })
 
+describe('plain fields in dark mode take the DS field surface', () => {
+  const rule = /:where\(\.dark :is\(input:not\(([^)]*)\),\s*textarea, select\):not\(\[class\*="bg-"\]\):not\(:is\(([^)]*)\):not\(\[class\*="dark:bg-"\]\) \*\)\)\s*\{([^}]*)\}/.exec(globals)
+  const lightBox = /:where\(\.dark :is\(([^)]*)\):not\(\[class\*="dark:bg-"\]\)\)\s*\{/.exec(globals)
+  const list = (raw: string) => raw.split(',').map((x) => x.trim()).filter(Boolean)
+  const tokens = read('design-system/styles/tokens-global.css')
+  const dark = /\.dark, \.dark body[^{]*\{([^}]*)\}/.exec(tokens)?.[1] ?? ''
+  const hex = (name: string) => new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, 'i').exec(dark)?.[1] ?? ''
+  const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+  const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+  const lum = (c: number[]) => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+  const ratio = (a: number[], b: number[]) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05) }
+
+  it('is dark-only and weighs nothing — the whole selector inside :where(.dark …)', () => {
+    expect(rule).not.toBeNull()
+    expect(rule![0].startsWith(':where(.dark ')).toBe(true)
+  })
+
+  it('skips buttons, toggles and hidden inputs, fields with a bg-* class, and fields inside a pinned light box', () => {
+    expect(list(rule![1])).toEqual(expect.arrayContaining(['[type="checkbox"]', '[type="radio"]', '[type="hidden"]', '[type="submit"]', '[type="button"]']))
+    expect(lightBox).not.toBeNull()
+    expect(list(rule![2])).toEqual(list(lightBox![1]))
+  })
+
+  it('uses the tokens .nds-field uses for its surface and border', () => {
+    const field = /\.nds-field\s*\{([^}]*)\}/.exec(read('design-system/styles/primitives.css'))?.[1] ?? ''
+    expect(field).toMatch(/background:\s*var\(--nds-surface\)/)
+    expect(field).toMatch(/border:\s*1px solid var\(--nds-border\)/)
+    expect(rule![3]).toMatch(/background-color:\s*var\(--nds-surface\)/)
+    expect(rule![3]).toMatch(/border-color:\s*var\(--nds-border\)/)
+  })
+
+  it('typed text, caret and placeholder clear 4.5:1 on that surface (dark values)', () => {
+    const surface = rgb(hex('--nds-surface')), ink = rgb(hex('--nds-text'))
+    expect(surface.every(Number.isFinite) && ink.every(Number.isFinite)).toBe(true)
+    expect(ratio(ink, surface)).toBeGreaterThanOrEqual(4.5) // text and caret (caret-color: auto = currentColor)
+    const placeholder = ink.map((c, i) => 0.75 * c + 0.25 * surface[i]) // rule 3: currentColor at 75%
+    expect(ratio(placeholder, surface)).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
 describe('plain-input placeholders', () => {
   it("follow the field's own text colour instead of preflight grey-400", () => {
     expect(globals).toMatch(/input::placeholder,\s*textarea::placeholder\s*\{\s*color:\s*color-mix\(in srgb, currentColor 75%, transparent\);\s*\}/)
