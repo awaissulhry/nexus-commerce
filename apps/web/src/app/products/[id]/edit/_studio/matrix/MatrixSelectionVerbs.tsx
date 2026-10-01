@@ -29,6 +29,11 @@ export interface MatrixSelectionVerbsProps {
   scopeLabel: string
   busy: boolean
   onVerb: (verb: MatrixVerbSpec) => void
+  /**
+   * Items that are not Matrix-protocol verbs, added at the end of the Stock menu — "Stock source…" (shared stock by SKU,
+   * 2026-10-01) opens its own dialog. The Stock menu is drawn for them even when no stock verb is offered.
+   */
+  stockItems?: readonly MenuItemDef[]
 }
 
 /** The toolbar's three menus, by what a verb changes. Order inside a group is the declaration's. */
@@ -47,8 +52,12 @@ export function matrixVerbMenus(verbs: readonly MatrixVerbSpec[]): Array<{ id: s
   return menus.filter(m => m.verbs.length > 0)
 }
 
-export const MatrixSelectionVerbs = memo(function MatrixSelectionVerbs({ verbs, scopeLabel, busy, onVerb }: MatrixSelectionVerbsProps) {
+export const MatrixSelectionVerbs = memo(function MatrixSelectionVerbs({ verbs, scopeLabel, busy, onVerb, stockItems = [] }: MatrixSelectionVerbsProps) {
   const menus = matrixVerbMenus(verbs)
+  if (stockItems.length > 0 && !menus.some((m) => m.id === 'stock')) {
+    const at = menus.findIndex((m) => m.id === 'sync' || m.id === 'more')
+    menus.splice(at < 0 ? menus.length : at, 0, { id: 'stock', label: 'Stock', verbs: [] })
+  }
   return (
     <>
       <SelectionNote>{scopeLabel}</SelectionNote>
@@ -64,16 +73,19 @@ export const MatrixSelectionVerbs = memo(function MatrixSelectionVerbs({ verbs, 
             onSelect: () => { if (!held && !busy) onVerb(verb) },
           }
         })
-        const runnable = menu.verbs.filter(v => !v.unavailable).length
+        const extra = menu.id === 'stock' ? stockItems.map(item => ({ ...item, disabled: item.disabled || busy })) : []
+        const all = [...items, ...extra]
+        const runnable = menu.verbs.filter(v => !v.unavailable).length + extra.filter(item => !item.disabled).length
+        const offered = menu.verbs.length + extra.length
         return (
           <Menu
             key={menu.id}
             label={<>{menu.label}<ChevronDown size={11} aria-hidden /></>}
-            items={items}
+            items={all}
             triggerProps={{
               className: 'nds-btn sm',
               disabled: busy,
-              'aria-label': `${menu.label}: ${runnable} of ${menu.verbs.length} ${menu.verbs.length === 1 ? 'action' : 'actions'} available for this selection`,
+              'aria-label': `${menu.label}: ${runnable} of ${offered} ${offered === 1 ? 'action' : 'actions'} available for this selection`,
             }}
           />
         )

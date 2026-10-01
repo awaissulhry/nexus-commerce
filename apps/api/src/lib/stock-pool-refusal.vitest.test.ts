@@ -10,6 +10,7 @@ Invalid \`prisma.product.update()\` invocation:
 Database error. Code: \`23514\`. Message: \`${sentence}\``), { code: 'P2010' })
 const borrower = 'GALE-JACKET-BLACK-M sells from the stock of Xavia Racing. Disconnect it first (Matrix, Stock source), then change it.'
 const lender = 'GALE-JACKET-BLACK-M shares its stock with Motovento. Disconnect it there first, then change it.'
+const fixedNumber = 'GALE-JACKET-BLACK-M sells from the stock of Xavia Racing, so its quantity follows that stock. Change the stock in Xavia Racing, or disconnect it first (Matrix, Stock source). To stop selling there, fix it at 0.'
 
 describe('a product that shares stock: the refusal reaches the person in words', () => {
   let apps: FastifyInstance[] = []
@@ -27,6 +28,7 @@ describe('a product that shares stock: the refusal reaches the person in words',
     expect(stockPoolConnectedRefusal(prismaStyle(lender))).toBe(lender)
     expect(stockPoolConnectedRefusal(new Error(borrower))).toBe(borrower)
     expect(stockPoolConnectedRefusal(new Error('wrapped', { cause: prismaStyle(lender) }))).toBe(lender)
+    expect(stockPoolConnectedRefusal(prismaStyle(fixedNumber))).toBe(fixedNumber) // a fixed number on a shared SKU
     expect(stockPoolConnectedRefusal(new Error('Unique constraint failed on the fields: (`workspaceId`,`sku`)'))).toBeNull()
     expect(stockPoolConnectedRefusal(new Error('The product sells from the stock of nobody'))).toBeNull()
     expect(stockPoolConnectedRefusal(null)).toBeNull()
@@ -46,9 +48,14 @@ describe('a product that shares stock: the refusal reaches the person in words',
     })
     instance.get('/plain500', async (_request, reply) => reply.code(500).send({ error: 'Something else broke' }))
     instance.get('/ok', async () => ({ note: lender }))
+    instance.post('/bulk', async (_request, reply) => {
+      try { throw prismaStyle(fixedNumber) } catch (err) { return reply.code(500).send({ error: 'Bulk update failed', detail: (err as Error).message }) }
+    })
     apps.push(instance)
     const refused = await instance.inject({ method: 'POST', url: '/delete' })
     expect([refused.statusCode, refused.json()]).toEqual([409, { error: lender, code: 'stock_shared' }])
+    const bulk = await instance.inject({ method: 'POST', url: '/bulk' })
+    expect([bulk.statusCode, bulk.json()]).toEqual([409, { error: fixedNumber, code: 'stock_shared' }])
     const other = await instance.inject({ method: 'GET', url: '/plain500' })
     expect([other.statusCode, other.json()]).toEqual([500, { error: 'Something else broke' }])
     // A success that merely mentions the words is never touched.

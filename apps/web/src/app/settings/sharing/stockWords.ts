@@ -101,9 +101,9 @@ export function borrowerConsequence(grant: Grant, action: BorrowerDecision): str
 }
 
 /** One preview row: what the listing will show after the switch, and why. */
-export function previewRuleWords(row: Pick<ListingPreview, 'rule' | 'willShow'>): string {
+export function previewRuleWords(row: Pick<ListingPreview, 'rule' | 'willShow'> & Partial<Pick<ListingPreview, 'wasFixed'>>): string {
   switch (row.rule) {
-    case 'follows': return row.willShow === null ? 'Follows the stock' : `Shows ${row.willShow}`
+    case 'follows': return `${row.willShow === null ? 'Follows the stock' : `Shows ${row.willShow}`}${row.wasFixed ? ' (its fixed number ends)' : ''}`
     case 'fixed': return 'Keeps its Fixed number'
     case 'paused': return 'Paused: nothing is sent'
     case 'excluded': return 'Excluded: nothing is sent'

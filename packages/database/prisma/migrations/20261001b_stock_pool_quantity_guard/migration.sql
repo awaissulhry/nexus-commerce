@@ -1,3 +1,12 @@
+-- Shared stock by SKU, PR 2 (Owner 2026-10-01): "I should not be able to change the quantity unless it's deriving from
+-- its own pool or unless I'm changing it directly from the profile we are sourcing from."
+--
+-- No table changes. The shared policy file packages/database/workspaces/stock-pool.sql, which this migration ENDS WITH
+-- byte for byte (policy-migrations.json), adds nexus_stock_pool_quantity_guard: while a product sells from another
+-- business's stock, none of its listings may get a fixed number above 0 and no shared eBay variant of it may be pinned
+-- above 0 (a fixed 0 stops selling there, Owner D1-A; Amazon-managed listings excepted; buffers and turning a fixed
+-- number back to follow stay allowed).
+
 -- Shared stock between business profiles — the lending permission, the product links, the work
 -- queue and the safe doors. Plan: docs/2026-09-19-shared-stock-plan.md; contract:
 -- docs/2026-09-19-shared-stock-build.md §1.

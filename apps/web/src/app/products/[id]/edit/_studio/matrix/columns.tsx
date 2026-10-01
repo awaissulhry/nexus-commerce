@@ -21,7 +21,8 @@
 import type { MutableRefObject } from 'react'
 
 import type { MenuItemDef } from '@/design-system/components'
-import { Tag } from '@/design-system/primitives'
+import { Pill, Tag } from '@/design-system/primitives'
+import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
 import { matrixColumnDef, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
 
 import { buildMasterColumns } from '../sheet/master/columns'
@@ -32,6 +33,7 @@ import type { AxisSummary } from '../variants/family/coverage'
 
 import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
+import styles from './matrix.module.css'
 
 /**
  * The identity column's id — `identity`, the same id the Variants page uses and the one
@@ -156,7 +158,28 @@ function StockCell(p: ICellRendererParams<StudioRow> & { rowOf?: (id: string) =>
   const s = d ? stockOf(p.rowOf?.(d.id) ?? null) : null
   if (!s) return null
   if (s.uncounted) return <span className="nds-cell-value nds-cell-stock-out"><span className="nds-cell-value-text">⚠ {MATRIX_COPY.uncounted}</span></span>
-  return <span className="nds-cell-value nds-cell-num"><span className="nds-cell-value-text">{s.available ?? '—'}</span></span>
+  const number = <span className="nds-cell-value nds-cell-num"><span className="nds-cell-value-text">{s.available ?? '—'}</span></span>
+  // Shared stock by SKU: a SKU that sells from another business's stock says so; the tooltip names the business.
+  if (s.source) return <span className={styles.stockShared}>{number}<Pill tone="info">Shared</Pill></span>
+  return number
+}
+
+/**
+ * Shared stock by SKU (Owner 2026-10-01): a Qty or Mode cell whose number follows ANOTHER business's stock right now —
+ * the row sells from a lent stock and the listing follows it (a fixed, paused or Amazon-managed listing does not). Such a
+ * cell carries the DS state `nds-cell-is-shared-stock` (violet) and says the lender in its tooltip: never colour alone.
+ */
+export const SHARED_STOCK_CELL = 'nds-cell-is-shared-stock'
+export function sharedStockOf(sync: MatrixCells['sync'] | null | undefined, source: MatrixRowRead['stock']['source']): NonNullable<MatrixRowRead['stock']['source']> | null {
+  return source && sync?.kind === 'FOLLOW' ? source : null
+}
+
+/** The Stock cell's tooltip: where the number comes from, and which warehouses hold it. */
+export function stockTooltip(s: MatrixRowRead['stock']): string {
+  if (s.uncounted) return MATRIX_COPY.uncountedHint
+  const where = s.locations.length ? s.locations.map((l) => `${l.code} ${l.available}`).join(' · ') : 'No routed location'
+  if (!s.source) return where
+  return `${poolSourceSentence({ lenderName: s.source.lenderName, available: s.available ?? 0 })} ${where}. This business's own stock is not used.`
 }
 
 function NotListedCell() {
@@ -240,8 +263,8 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
   const stock: ColDef<StudioRow> = {
     colId: STOCK_COL,
     headerName: 'Stock',
-    headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. Parent = the family total.',
-    width: 96, minWidth: 96,
+    headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. "Shared": the stock another business lends. Parent = the family total.',
+    width: 112, minWidth: 96,
     editable: false, suppressMovable: true, suppressHeaderMenuButton: true, sortable: true, resizable: true,
     cellClass: 'nds-ag-cell',
     valueGetter: (p) => (p.data ? stockOf(rowOf(p.data.id))?.available ?? null : null),
@@ -250,10 +273,9 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     tooltipValueGetter: (p) => {
       const s = p.data ? stockOf(rowOf(p.data.id)) : null
       if (!s) return undefined
-      if (s.uncounted) return MATRIX_COPY.uncountedHint
-      return s.locations.length ? s.locations.map((l) => `${l.code} ${l.available}`).join(' · ') : 'No routed location'
+      return stockTooltip(s)
     },
-    getQuickFilterText: (p) => { const s = p.data ? stockOf(rowOf(p.data.id)) : null; return s?.uncounted ? MATRIX_COPY.uncounted : String(s?.available ?? '') },
+    getQuickFilterText: (p) => { const s = p.data ? stockOf(rowOf(p.data.id)) : null; return s?.uncounted ? MATRIX_COPY.uncounted : `${s?.available ?? ''}${s?.source ? ` shared ${s.source.lenderName}` : ''}` },
   }
 
   const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [
@@ -294,12 +316,19 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
         const def = matrixColumnDef<StudioRow>(kind, o)
         const cellTooltip = def.tooltipValueGetter
         const colId = matrixColId(coord.key, kind)
+        // Shared stock by SKU: the Qty and Mode cells of a row that follows another business's stock.
+        const marksShared = kind === 'syncQty' || kind === 'syncMode'
+        const sharedFrom = (data: StudioRow | undefined) => (marksShared && data ? sharedStockOf(cellsOf(data.id, coord.key)?.sync, rowOf(data.id)?.stock.source ?? null) : null)
         /* A refused cell's hover leads with WHY (`refusals.ts`); the footer note is the view, this elaborates. */
         children.push({
           ...def,
+          ...(marksShared ? { cellClassRules: { ...(def.cellClassRules as Record<string, unknown>), [SHARED_STOCK_CELL]: (p: { data?: StudioRow }) => !!sharedFrom(p.data) } as ColDef<StudioRow>['cellClassRules'] } : {}),
           tooltipValueGetter: (p) => {
             const mark = p.data ? tracker.get(rowId(p.data), colId) : undefined
-            return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, cellTooltip?.(p) as string | undefined)
+            const base = cellTooltip?.(p) as string | undefined
+            const shared = sharedFrom(p.data)
+            const withSource = shared ? [base, `Follows ${shared.lenderName}'s stock (shared stock).`].filter(Boolean).join('\n') : base
+            return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, withSource)
           },
         })
       }

@@ -140,6 +140,7 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
     await q(`INSERT INTO "ProductListingAlias" (id, "workspaceId", "productId", channel, marketplace, "channelConnectionId", label, position, "updatedAt") VALUES ($1,$2,$3,'EBAY','IT',$4,'Winter listing',1,now())`, [id.bAlias, B, id.bJacket, id.bStore])
     id.bEbayAlias = await listing(B, id.bJacket, 'EBAY', 'IT', { quantity: 3, syncPaused: true, channelConnectionId: id.bStore, aliasId: id.bAlias, aliasKey: id.bAlias })
     id.bAmazonFba = await listing(B, id.bJacket, 'AMAZON', 'IT', { quantity: 6, fulfillmentMethod: 'FBA' })
+    // A fixed number (2): connecting ends it, because a shared SKU's quantity is changed only in the lender (Owner, 2026-10-01).
     id.bAmazonPinned = await listing(B, id.bJacket, 'AMAZON', 'DE', { quantity: 2, followMasterQuantity: false, fulfillmentMethod: 'FBM' })
     id.bShopifyPaused = await listing(B, id.bJacket, 'SHOPIFY', 'GLOBAL', { quantity: 7, syncPaused: true })
     id.aEbay = await listing(A, id.jacket, 'EBAY', 'IT', { quantity: 14 })
@@ -200,7 +201,7 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
       'EBAY:IT#0': ['follows', 9], // 10 lent − hold back 1
       'EBAY:IT#1': ['paused', null], // the alias keeps its own number
       'AMAZON:IT': ['amazon-managed', null],
-      'AMAZON:DE': ['fixed', null],
+      'AMAZON:DE': ['follows', 10], // its fixed number ends: 10 lent, no hold-back
       'SHOPIFY:GLOBAL': ['paused', null],
       'EBAY:IT:ITEM-FOLLOW': ['follows', 10],
       'EBAY:IT:ITEM-EXCLUDED': ['excluded', null],
@@ -209,13 +210,17 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
     expect(products[0].listings.filter((l) => l.channel === 'EBAY' && !l.itemId).map((l) => [l.listingId, l.accountLabel, l.listingMark, l.aliasLabel]).sort())
       .toEqual([[id.bEbay, 'Main store', 0, null], [id.bEbayAlias, 'Main store', 1, 'Winter listing']].sort())
     expect(products[0].listings.find((l) => l.channel === 'AMAZON' && l.marketplace === 'IT')).toMatchObject({ accountLabel: null, listingMark: null, aliasLabel: null })
+    expect(products[0].listings.filter((l) => l.wasFixed).map((l) => l.listingId)).toEqual([id.bAmazonPinned])
   })
 
-  it('3. switching to the pool moves only the listings that follow; every other listing keeps its number', async () => {
+  it('3. switching to the pool moves the listings that follow and ends a fixed number; paused and Amazon-managed keep theirs', async () => {
     const before = await snapshot()
     expect(await as(B, user.ownerB, () => links.switchProducts({ productIds: [id.bJacket], to: 'pool', grantId }))).toEqual({ switched: 1, unchanged: 0 })
     await drain()
-    expect(await snapshot()).toEqual({ ...before, bEbay: 9 })
+    expect(await snapshot()).toEqual({ ...before, bEbay: 9, bAmazonPinned: 10 })
+    expect(await q(`SELECT "followMasterQuantity" FROM "ChannelListing" WHERE id = $1`, [id.bAmazonPinned])).toEqual([{ followMasterQuantity: true }])
+    // While it sells from A's stock, nothing in B can fix its number again (the database refuses it).
+    await expect(q(`UPDATE "ChannelListing" SET "followMasterQuantity" = false WHERE id = $1`, [id.bAmazonPinned])).rejects.toThrow(/sells from the stock of Lender A/)
     expect(await lastPush(id.bEbay)).toBe(9)
     expect(await memberPush('ITEM-FOLLOW')).toBe(10)
     expect(await memberPush('ITEM-EXCLUDED')).toBeNull()
@@ -279,12 +284,12 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
     const impact = await as(A, user.ownerA, () => grants.grantImpact(grantId))
     expect(impact).toEqual({
       grantId, linkedProducts: 1,
-      listings: { toZero: 1, toOwn: 0, pinned: 1, paused: 2, closed: 0, fba: 1 },
+      listings: { toZero: 2, toOwn: 0, pinned: 0, paused: 2, closed: 0, fba: 1 },
       sharedVariants: { toZero: 1, toOwn: 0, excluded: 1 },
     })
     // The same pause for every account does.
     await q(`UPDATE "SyncChannelPolicy" SET "channelConnectionId" = NULL WHERE id = $1`, [policy])
-    expect((await as(A, user.ownerA, () => grants.grantImpact(grantId))).listings).toMatchObject({ toZero: 0, paused: 3 })
+    expect((await as(A, user.ownerA, () => grants.grantImpact(grantId))).listings).toMatchObject({ toZero: 1, paused: 3 })
     await q(`DELETE FROM "SyncChannelPolicy" WHERE id = $1`, [policy])
   })
 
@@ -293,7 +298,7 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
     const paused = await as(A, user.ownerA, () => grants.lenderAction(grantId, 'pause', { expectedVersion: grantVersion }))
     grantVersion = paused.version
     await drain()
-    expect(await snapshot()).toEqual({ ...before, bEbay: 0 })
+    expect(await snapshot()).toEqual({ ...before, bEbay: 0, bAmazonPinned: 0 })
     expect(await memberPush('ITEM-FOLLOW')).toBe(0)
     const resumed = await as(A, user.ownerA, () => grants.lenderAction(grantId, 'resume', { expectedVersion: grantVersion }))
     grantVersion = resumed.version
@@ -325,7 +330,7 @@ describe.skipIf(!serverUrl)(`Shared stock step 2 — the switches end to end (ne
     const after = await snapshot()
     expect(after.bEbay).toBe(2) // own 3 − 1
     expect(after.bAmazonFba).toBe(6)
-    expect(after.bAmazonPinned).toBe(2)
+    expect(after.bAmazonPinned).toBe(3) // it follows now, so it falls back to own stock too: own 3
     expect(after.bShopifyPaused).toBe(7)
     expect(await q(`SELECT status, "endedReason" FROM "StockPoolLink" WHERE "productId" = $1 ORDER BY "createdAt" DESC LIMIT 1`, [id.bJacket]))
       .toEqual([{ status: 'ended', endedReason: 'The lending business ended the shared stock.' }])

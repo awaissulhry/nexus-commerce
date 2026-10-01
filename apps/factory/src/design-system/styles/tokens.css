@@ -306,6 +306,7 @@
   --nds-grid-delta-fg: var(--nds-text-inverse);
   --nds-grid-locked-fg: var(--nds-text-muted);
   --nds-grid-ai-draft-bg: color-mix(in srgb, var(--nds-purple-600) 10%, transparent);
+  --nds-grid-shared-stock-bg: color-mix(in srgb, var(--nds-cyan-700) 14%, transparent);
   --nds-grid-skeleton-bg: var(--nds-surface-sunken);
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
@@ -529,6 +530,7 @@
   --nds-grid-delta-fg: var(--nds-text-inverse);
   --nds-grid-locked-fg: var(--nds-text-muted);
   --nds-grid-ai-draft-bg: color-mix(in srgb, var(--nds-purple-600) 10%, transparent);
+  --nds-grid-shared-stock-bg: color-mix(in srgb, var(--nds-cyan-700) 14%, transparent);
   --nds-grid-skeleton-bg: var(--nds-surface-sunken);
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);

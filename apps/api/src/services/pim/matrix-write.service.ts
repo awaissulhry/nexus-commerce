@@ -60,7 +60,7 @@ import { canonical } from './import-diff.service.js'
 import { setFulfillmentMethod, type FulfilmentWrite } from './fulfillment-method.service.js'
 import { writeChannelPrices } from './channel-price-write.service.js'
 import { getMatrixRead } from './matrix.service.js'
-import { PRICE_PERMISSION_REASON } from './matrix-cells.js'
+import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
 
 export interface DoorContext {
   productId: string
@@ -155,6 +155,8 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const mode = w.value === 'PINNED' ? 'PINNED' : w.value === 'FOLLOW' ? 'FOLLOW' : null
         if (!mode) return refuse('Mode is Follow or Pinned')
         if (s.mode === mode) return noop()
+        // Shared stock by SKU: a SKU that sells from a lent stock gets no fixed number (the database refuses it too).
+        if (mode === 'PINNED' && row.stock?.source) return refuse(sharedStockReason(row.stock.source.lenderName))
         if (await amazonManaged()) return managedRefusal()
         await bumpTx(targets)
         const r = await setFollowMasterQuantity({ productIds: [row.id], channel, markets, follow: mode === 'FOLLOW', actor: ctx.actor })

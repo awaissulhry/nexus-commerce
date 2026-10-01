@@ -83,6 +83,8 @@ import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type Fulfil
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
 import { MatrixBanner } from './MatrixBanner'
 import { MatrixSelectionVerbs } from './MatrixSelectionVerbs'
+import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } from './StockSourceDialog'
+import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
 import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
@@ -232,6 +234,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const [verb, setVerb] = useState<{ spec: MatrixVerbSpec; targets: MatrixVerbTarget[]; label: string; initial?: VerbDialogInitial } | null>(null)
   const [selectedRows, setSelectedRows] = useState<StudioRow[]>([])
   const canEdit = has('products.edit')
+  // Shared stock by SKU (2026-10-01): "Stock source…" — the ticked SKUs, or the whole family when the parent is ticked.
+  const [stockSourceTargets, setStockSourceTargets] = useState<StockSourceTarget[] | null>(null)
+  const canSwitchStock = has('inventory.adjust')
+  const onReloadRef = useRef<() => void>(() => {})
 
   /**
    * SELECTION = the ticked rows × the focused coordinate group, or every visible group.
@@ -547,6 +553,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const onGridReady = useCallback((e: GridReadyEvent<StudioRow>) => { bindGridApi(e.api); bindGrid(e.api); views.bind(e.api as unknown as GridApi) }, [bindGridApi, bindGrid, views])
   const onGridPreDestroyed = useCallback((e: { api: GridApi<StudioRow> }) => { releaseGrid(e); bindGrid(null) }, [releaseGrid, bindGrid])
   const onReload = useCallback(() => { matrix.reload(); reload(); projectionsQuery.reload() }, [matrix, reload, projectionsQuery])
+  onReloadRef.current = onReload
 
   const [pending, setPending] = useState(0)
   useEffect(() => writer.subscribe(() => setPending(writer.pending)), [writer])
@@ -557,6 +564,52 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const hasParent = rows.some((r) => r.isParent)
   const busy = loading || matrix.status === 'loading'
   const emptyState = useMemo(() => sheetEmptyState(total, () => { setSearch(''); chipBar.setActive(null) }, onReload), [total, chipBar, onReload])
+  // The lent stock most of this family's SKUs sell from now (the dialog's default for SKUs that use their own).
+  const familyGrantId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of rows) { const g = matrix.rowOf(r.id)?.stock.source?.grantId; if (g) counts.set(g, (counts.get(g) ?? 0) + 1) }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  }, [rows, matrix])
+  const stockItems = useMemo<MenuItemDef[]>(() => {
+    if (selectedRows.length === 0) return []
+    const family = selectedRows.some((r) => r.isParent) ? rows : selectedRows
+    return [{
+      id: 'matrix-stock-source', label: 'Stock source…',
+      description: selectedRows.some((r) => r.isParent) ? `The whole family: ${family.length} SKUs` : 'Own stock, or the stock another business lends',
+      onSelect: () => setStockSourceTargets(family.map((r) => ({ id: r.id, sku: r.sku, source: matrix.rowOf(r.id)?.stock.source ?? null }))),
+    }]
+  }, [selectedRows, rows, matrix])
+
+  // After a switch: the Matrix re-reads now, and once more when the background has sent the new numbers.
+  const reloadSoonAgain = useCallback(() => { onReloadRef.current(); setTimeout(() => onReloadRef.current(), 1500) }, [])
+  const undoStockSource = useCallback(async (result: StockSourceSwitched) => {
+    try {
+      if (result.to === 'pool') {
+        await sharingApi('stock-pool/products/switch', { productIds: result.switched.map((s) => s.id), to: 'own', withVariations: false })
+      } else {
+        const byGrant = new Map<string, string[]>()
+        for (const s of result.switched) if (s.previous) byGrant.set(s.previous.grantId, [...(byGrant.get(s.previous.grantId) ?? []), s.id])
+        for (const [grantId, productIds] of byGrant) await sharingApi('stock-pool/products/switch', { productIds, to: 'pool', grantId, withVariations: false })
+      }
+      toast.toast(`Undone: ${result.switched.length} ${result.switched.length === 1 ? 'SKU uses' : 'SKUs use'} the stock ${result.switched.length === 1 ? 'it' : 'they'} used before`, 'info')
+    } catch (e) {
+      toast.toast(e instanceof Error ? e.message : String(e), 'danger')
+    } finally {
+      reloadSoonAgain()
+    }
+  }, [toast, reloadSoonAgain])
+  const onStockSourceSwitched = useCallback(async (result: StockSourceSwitched) => {
+    setStockSourceTargets(null)
+    const n = result.switched.length
+    const what = result.to === 'pool' ? `${n} ${n === 1 ? 'SKU uses' : 'SKUs use'} ${result.lenderName ?? 'the lent'}’s stock` : `${n} ${n === 1 ? 'SKU uses' : 'SKUs use'} this business’s own stock`
+    toast.toast(
+      <span className="nds-matrix-toast">{what} <Button size="sm" variant="link" onClick={() => { void undoStockSource(result) }}>Undo</Button></span>,
+      'success',
+      { duration: 12000 },
+    )
+    reloadSoonAgain()
+  }, [toast, undoStockSource, reloadSoonAgain])
+
   const coordinateOptions = useMemo(() => (read ? read.coordinates.filter((c) => c.connected && c.cells.includes('price')).map((c) => ({ value: c.key, label: c.label })) : []), [read])
   const currency = verb?.targets[0] ? read?.coordinates.find((c) => c.key === verb.targets[0]!.coordinateKey)?.currency ?? 'EUR' : 'EUR'
   const viewsEmptyLabel = `Custom (${visibleColIds().length})`
@@ -575,7 +628,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
             onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel}
             onCustomise={openCustomise} onExport={onExport} exportDisabled={!read || busy} onReload={onReload}
             /* Selection in the TOOLBAR, as on the sheet and the Variants tab (Owner, 2026-09-26). */
-            selectionActions={<MatrixSelectionVerbs verbs={verbSpecs} scopeLabel={selectionLabel} busy={run.busy} onVerb={onSelectionVerb} />}
+            selectionActions={<MatrixSelectionVerbs verbs={verbSpecs} scopeLabel={selectionLabel} busy={run.busy} onVerb={onSelectionVerb} stockItems={stockItems} />}
             onClearSelection={() => getGridApi()?.deselectAll()}
           />
         }
@@ -659,6 +712,15 @@ export function MatrixSurface({ productId }: { productId: string }) {
           </>
         )}
       </GridSheet>
+
+      <StockSourceDialog
+        open={!!stockSourceTargets}
+        targets={stockSourceTargets ?? []}
+        suggestedGrantId={familyGrantId}
+        canSwitch={canSwitchStock}
+        onClose={() => setStockSourceTargets(null)}
+        onSwitched={onStockSourceSwitched}
+      />
 
       <VerbDialog
         open={!!verb}
