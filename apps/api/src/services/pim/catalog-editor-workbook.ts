@@ -23,7 +23,7 @@ interface SavedExport extends EditingWorkbookBaseline { kind: typeof EXPORT_KIND
 /** CFI-4 — an identity the file suggests but the Owner must confirm (BUILD.md §1, D4). */
 export interface IdentityProposal { fileSku: string; proposedSku: string; reason: string }
 interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[]; links?: IdentityProposal[]
-  /** eBay files: the extra listings Apply names or creates before it saves their values (2026-10-01). */
+  /** eBay files: the families, main listings and extra listings Apply creates or names before it saves their values (2026-10-01). */
   listingPlan?: EbayListingPlan
   /** PSIE — what each part was (the parse worker's verdict), in upload order. */
   kinds?: ('editing' | 'wide' | 'transfer' | 'ebay' | 'amazon' | 'shopify')[]
@@ -176,8 +176,9 @@ export async function readEditorTransfer(buffer: Buffer, filename: string, produ
       out.warnings!.push(...(parsed.warnings ?? []))
       if (parsed.links?.length) (out.links ??= []).push(...parsed.links)
       if (parsed.listingPlan) {
-        out.listingPlan ??= { names: [], creates: [] }
+        out.listingPlan ??= { names: [], creates: [], families: [], mains: [] }
         out.listingPlan.names.push(...parsed.listingPlan.names); out.listingPlan.creates.push(...parsed.listingPlan.creates)
+        out.listingPlan.families!.push(...parsed.listingPlan.families ?? []); out.listingPlan.mains!.push(...parsed.listingPlan.mains ?? [])
       }
       if (out.rows.length + out.issues.length + out.exclusions!.length > PRODUCT_TRANSFER_MAX_OUTCOMES) throw new Error('Import at most 250,000 attribute outcomes in one batch')
       if (parsed.boundary) {

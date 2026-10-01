@@ -33,8 +33,12 @@ import {
   type SheetImportDelete, type SheetImportLink, type SheetImportChangeStatus,
 } from '@nexus/shared/catalog-transfer'
 import { readEditorTransfer, type ChannelFileDecisions, type ImportLog } from '../catalog-editor-workbook.js'
-import type { EbayListingPlan } from '../catalog-ebay-workbook.js'
+import { SHEET_IMPORT_SOURCE, type EbayFamilyPlan, type EbayListingPlan } from '../catalog-ebay-workbook.js'
 import { archiveAlias, createAlias, nameListingAlias } from '../listing-alias.service.js'
+import { ensureDraftListings } from '../draft-listing.service.js'
+import { setFamilyAxes, setFamilyVariationValues } from '../family-variations.service.js'
+import { promoteProduct } from '../product-relationship.service.js'
+import { productEventService } from '../../product-event.service.js'
 import { productTransferOptions, resolveProductTransferBoundary, assertProductTransferRows } from '../catalog-product-transfer.js'
 import { buildTransferPlan, fingerprint, isEmptyChannelValue, transferContracts, type TransferTarget } from '../catalog-transfer-plan.js'
 import { loadTransferContext, TransferConflict } from '../catalog-transfer.service.js'
@@ -90,10 +94,27 @@ interface Payload {
   listingsDone?: ListingsDone
   /** An undo of an import that made listings: clear those SKUs and archive those listings. */
   listingUndo?: ListingsDone
+  /** The product the Import was opened on. A family the import creates is another product: the done screen offers to open it. */
+  openProductId?: string
+  /** Phase 2: the families and main listings Apply made, in one transaction with this record (a resumed save skips that step). */
+  familiesDone?: FamiliesDone
+  /** Phase 2: the scopes of the other families this import created; each record is saved against its own family's scope. */
+  familyBoundaries?: ProductTransferBoundary[]
 }
-interface ListingsDone { named: { aliasId: string; sku: string; rootSku: string; label: string; marketplace: string }[]; created: { aliasId: string; sku: string; rootId: string; rootSku: string; accountId: string; marketplace: string }[] }
-const planSize = (plan?: EbayListingPlan) => plan ? plan.names.length + plan.creates.length : 0
-const undoSize = (undo?: ListingsDone) => undo ? undo.named.length + undo.created.length : 0
+/** A family Apply created (or made the open product the parent of): `products` are the ones it created or brought back. */
+interface FamilyDone { rootId: string; rootSku: string; adopted: boolean; axes: string[]; products: { id: string; sku: string }[] }
+/** The main listing drafts Apply made (`listings`: only rows this import inserted). */
+interface MainDone { rootId: string; rootSku: string; accountId: string; marketplace: string; listings: { id: string; productId: string }[] }
+interface FamiliesDone { families: FamilyDone[]; mains: MainDone[] }
+interface ListingsDone {
+  named: { aliasId: string; sku: string; rootSku: string; label: string; marketplace: string }[]
+  created: { aliasId: string; sku: string; rootId: string; rootSku: string; accountId: string; marketplace: string }[]
+  families?: FamilyDone[]
+  mains?: MainDone[]
+}
+const familySize = (family: EbayFamilyPlan) => 1 + family.children.length
+const planSize = (plan?: EbayListingPlan) => plan ? plan.names.length + plan.creates.length + (plan.families ?? []).reduce((n, f) => n + familySize(f), 0) + (plan.mains?.length ?? 0) : 0
+const undoSize = (undo?: ListingsDone) => undo ? undo.named.length + undo.created.length + (undo.families ?? []).reduce((n, f) => n + f.products.length, 0) + (undo.mains?.length ?? 0) : 0
 interface Dependency { sku: string; key?: string; before?: Record<string, unknown> | null; ignoreParent?: true }
 /** The record shape `applyTransferRecord` reads, plus what the review page shows. */
 interface RecordPayload {
@@ -133,9 +154,26 @@ export async function startSheetImport(input: StartSheetImport): Promise<SheetIm
   const scoped = parsed.boundary ? { boundary: parsed.boundary, rows: parsed.rows, outside: [] as TransferIssue[] } : await scopeFromRows(input.productId, parsed.rows)
   const labels = parsed.exportId ? await exportLabels(parsed.exportId, input.userId) : {}
   return createSheetImport({
-    rows: scoped.rows, issues: [...parsed.issues, ...scoped.outside], boundary: scoped.boundary, market: input.market, format, filename: input.filename, userId: input.userId,
+    rows: scoped.rows, issues: [...parsed.issues, ...outsideRows(parsed.exclusions ?? []), ...scoped.outside], boundary: scoped.boundary, market: input.market, format, filename: input.filename, userId: input.userId,
     warnings: parsed.editing === false && format !== 'csv' ? [] : parsed.warnings ?? [], links: parsed.links ?? [], exportId: parsed.exportId, labels,
-    deletes: deletesOf(parsed.rows, parsed.issues), listingPlan: parsed.listingPlan, log: input.log,
+    deletes: deletesOf(parsed.rows, parsed.issues), listingPlan: parsed.listingPlan, openProductId: input.productId, log: input.log,
+    nothing: (parsed.exclusions ?? []).find(e => !OUTSIDE_PRODUCT.test(e.message))?.message,
+  })
+}
+
+/** The readers' sentence for a row of another product (`Outside this product; use Catalog import`, maybe after a sheet name). */
+const OUTSIDE_PRODUCT = /Outside this product/
+/**
+ * Never drop a row (2026-10-01): a row a reader skipped because it belongs to another product is a problem the review names,
+ * once per row. Before this, a file of another family read as "This file changes nothing".
+ */
+function outsideRows(exclusions: readonly TransferIssue[]): TransferIssue[] {
+  const seen = new Set<string>()
+  return exclusions.filter(e => OUTSIDE_PRODUCT.test(e.message)).flatMap(e => {
+    const key = JSON.stringify([e.source?.file ?? '', e.source?.sheet ?? '', e.row])
+    if (seen.has(key)) return []
+    seen.add(key)
+    return [{ ...e, message: `${e.sku || 'This row'} is not in this product family. Import it from its own product.` }]
   })
 }
 
@@ -190,17 +228,24 @@ function deletesOf(rows: TransferRow[], issues: TransferIssue[]): SheetImportDel
 interface CreateInput {
   rows: TransferRow[]; issues: TransferIssue[]; boundary?: ProductTransferBoundary; market: string; format: SheetImportFormat; filename: string; userId: string | null
   warnings: string[]; links: SheetImportLink[]; deletes: SheetImportDelete[]; exportId?: string; labels: Record<string, string>; undoOf?: string; autoApply?: boolean
-  listingPlan?: EbayListingPlan; listingUndo?: ListingsDone
+  listingPlan?: EbayListingPlan; listingUndo?: ListingsDone; openProductId?: string
+  /** Why the file holds nothing to import, when a reader said (a reference-only column). */
+  nothing?: string
   log?: ImportLog
 }
 
 async function createSheetImport(input: CreateInput): Promise<SheetImportStatus> {
-  if (!input.rows.length && !input.issues.length && !planSize(input.listingPlan) && !undoSize(input.listingUndo)) throw new Error('This file changes nothing: every cell is as it was exported. Change a value, then import it again.')
+  if (!input.rows.length && !input.issues.length && !planSize(input.listingPlan) && !undoSize(input.listingUndo)) {
+    // "Every cell is as it was exported" is only true of a file Nexus exported; any other file is told what it holds.
+    throw new Error(input.exportId ? 'This file changes nothing: every cell is as it was exported. Change a value, then import it again.'
+      : `This file holds nothing Nexus can import into this product.${input.nothing ? ` ${input.nothing}` : ''}`)
+  }
   const boundary = input.boundary
-  const payload: Payload = { kind: SHEET_IMPORT_KIND, productId: boundary?.productId ?? input.listingPlan?.creates[0]?.rootId ?? input.listingPlan?.names[0]?.rootId ?? '', market: input.market, format: input.format, boundary: boundary as ProductTransferBoundary,
+  const payload: Payload = { kind: SHEET_IMPORT_KIND, productId: boundary?.productId ?? input.listingPlan?.creates[0]?.rootId ?? input.listingPlan?.names[0]?.rootId ?? input.openProductId ?? '', market: input.market, format: input.format, boundary: boundary as ProductTransferBoundary,
     exportId: input.exportId, summary: emptySummary(), warnings: input.warnings, links: input.links, deletes: input.deletes, destinations: [], listingIds: [], startedAt: new Date().toISOString(),
     labels: input.labels, ...(input.undoOf ? { undoOf: input.undoOf } : {}), ...(input.autoApply ? { autoApply: true } : {}),
-    ...(planSize(input.listingPlan) ? { listingPlan: input.listingPlan } : {}), ...(undoSize(input.listingUndo) ? { listingUndo: input.listingUndo } : {}) }
+    ...(planSize(input.listingPlan) ? { listingPlan: input.listingPlan } : {}), ...(undoSize(input.listingUndo) ? { listingUndo: input.listingUndo } : {}),
+    ...(input.openProductId ? { openProductId: input.openProductId } : {}) }
   const job = await prisma.$transaction(async tx => {
     const history = await tx.importJob.create({ data: { jobName: input.filename, source: 'upload', filename: input.filename, fileKind: input.filename.split('.').pop()?.toLowerCase() ?? 'xlsx',
       targetEntity: SHEET_IMPORT_KIND, status: 'CHECKING', totalRows: 0, createdBy: input.userId } })
@@ -318,10 +363,11 @@ async function finishCheck(jobId: string, input: CreateInput, records: { key: st
       parsedValues: json(record.payload), status: record.status })) })
   }
   const plan = input.listingPlan, undo = input.listingUndo
-  // The listings Apply names or creates are changes too; a created listing's values become records when it exists.
-  const creates = plan?.creates ?? []
+  // The products and listings Apply makes or names are changes too; a new listing's values become records when it exists.
+  const creates = [...plan?.creates ?? [], ...plan?.mains ?? []]
   const pendingRecords = creates.reduce((n, c) => n + new Set(c.rows.map(r => r.sku)).size, 0)
   summary.changes += planSize(plan) + undoSize(undo) + creates.reduce((n, c) => n + c.rows.length, 0)
+  summary.products += (plan?.families ?? []).reduce((n, f) => n + familySize(f), 0) + (undo?.families ?? []).reduce((n, f) => n + f.products.length, 0)
   summary.listings += pendingRecords + (undo?.created.length ?? 0)
   summary.created += creates.length
   const ready = records.filter(r => r.status === 'REVIEWED').length + planSize(plan) + pendingRecords + undoSize(undo)
@@ -381,7 +427,7 @@ async function saveSheetImport(jobId: string) {
     const job = await prisma.bulkOperation.findUnique({ where: { id: jobId } }), loadedPayload = payloadOf(job?.changes)
     if (!job || !loadedPayload || job.status !== 'SAVING') return
     const started = performance.now()
-    const payload = await applyListingPlan(jobId, loadedPayload)
+    const payload = await applyListingPlan(jobId, loadedPayload, job.userId)
     const all = await prisma.importJobRow.findMany({ where: { jobId }, orderBy: { rowIndex: 'asc' }, select: { id: true, targetId: true, parsedValues: true, status: true } })
     const pending = all.filter(r => r.status === 'REVIEWED')
     // R-AE-17 — every shared product this job declares, whatever its outcome.
@@ -391,7 +437,10 @@ async function saveSheetImport(jobId: string) {
     contracts.reference = createReferenceResolver()
     const referenceRows = pending.flatMap(r => (r.parsedValues as unknown as RecordPayload).rows)
     const reference = referenceRows.length ? await loadTransferContext(referenceRows) : undefined
-    const save = (item: typeof pending[number], readCacheIds: Set<string>) => applyTransferRecord({ jobId, item, boundary: payload.boundary, mode: 'update', sharedCopy: false,
+    // Each record is checked against its own family's scope: a file can create a family besides the open product's.
+    const scopes = [payload.boundary, ...payload.familyBoundaries ?? []].filter(Boolean)
+    const scopeOf = (item: typeof pending[number]) => { const sku = (item.parsedValues as unknown as RecordPayload).rows[0]?.sku; return scopes.find(b => b.products.some(p => p.sku === sku)) ?? payload.boundary }
+    const save = (item: typeof pending[number], readCacheIds: Set<string>) => applyTransferRecord({ jobId, item, boundary: scopeOf(item), mode: 'update', sharedCopy: false,
       contracts, reference, declaredProductSkus, userId: job.userId, options: { queueOutbound: false, readCacheIds } })
     const refresh = async (ids: Set<string>) => { if (ids.size) await productReadCacheService.refreshInTransaction(prisma as unknown as Prisma.TransactionClient, [...ids]) }
     // 🔴 Readiness is NOT rebuilt inside the save transactions (the Owner's choice, 2026-09-26): each family is noted,
@@ -489,61 +538,182 @@ export async function refreshSheetReadiness(jobId: string) {
   } finally { refreshing.delete(jobId) }
 }
 
-// ── extra listings (eBay files, 2026-10-01) ───────────────────────────────────────────────────
+// ── new families and extra listings (eBay files, 2026-10-01) ──────────────────────────────────
 
 /**
- * Apply's first step for an eBay file (the Owner: "simply import", one step): give each extra listing without a SKU the
- * file's SKU, create each missing listing as inert drafts and make the file's rows for it records of this job; the save
- * then writes every record. An undo clears those SKUs and archives those listings instead. It runs once: `listingsDone`
- * is stored with the new records in one transaction, so a resumed save goes straight to the records.
+ * Apply's first step for an eBay file (the Owner: "simply import", one step), in the order the save needs: the new families
+ * and their main listings (`applyFamilies`), then each extra listing without a SKU gets the file's SKU, each missing one is
+ * created as inert drafts, and the file's rows for every new listing become records of this job; the save then writes every
+ * record. An undo puts back what an import made instead. It runs once: `listingsDone` is stored with the new records in one
+ * transaction, so a resumed save goes straight to the records.
  */
-async function applyListingPlan(jobId: string, payload: Payload): Promise<Payload> {
-  const plan = payload.listingPlan, undo = payload.listingUndo
-  if (payload.listingsDone || (!planSize(plan) && !undoSize(undo))) return payload
+async function applyListingPlan(jobId: string, payload: Payload, userId: string | null): Promise<Payload> {
+  const undo = payload.listingUndo
+  if (payload.listingsDone || (!planSize(payload.listingPlan) && !undoSize(undo))) return payload
   const done: ListingsDone = { named: [], created: [] }
   if (undo) {
     for (const n of undo.named) await prisma.productListingAlias.updateMany({ where: { id: n.aliasId, sku: n.sku }, data: { sku: null } })
     for (const c of undo.created) await archiveAlias(c.aliasId, { productId: c.rootId, accountId: c.accountId })
+    await undoFamilies(undo, jobId, userId)
     const next: Payload = { ...payload, listingsDone: done }
     await prisma.bulkOperation.updateMany({ where: { id: jobId, status: 'SAVING' }, data: { changes: json(next), processed: { increment: undoSize(undo) } } })
     return next
   }
-  for (const n of plan!.names) {
+  if ((payload.listingPlan!.families?.length || payload.listingPlan!.mains?.length) && !payload.familiesDone) payload = await applyFamilies(jobId, payload, userId)
+  const plan = payload.listingPlan!, made = payload.familiesDone ?? { families: [], mains: [] }
+  Object.assign(done, made)
+  /** A listing of a family Apply just created is planned by its root SKU: the root had no id when the file was checked. */
+  const rootIdOf = (rootId: string, rootSku: string) => rootId || made.families.find(f => f.rootSku === rootSku)?.rootId || ''
+  for (const n of plan.names) {
     const alias = await prisma.productListingAlias.findFirst({ where: { id: n.aliasId }, select: { sku: true } })
     if (alias?.sku !== n.sku) await nameListingAlias(n.aliasId, n.sku)
     done.named.push({ aliasId: n.aliasId, sku: n.sku, rootSku: n.rootSku, label: n.label, marketplace: n.marketplace })
   }
   const rows: TransferRow[] = []
-  for (const c of plan!.creates) {
-    // A save resumed after the listing was made finds it by its SKU; it never makes a second one.
-    const existing = await prisma.productListingAlias.findFirst({ where: { sku: c.sku, productId: c.rootId, status: 'ACTIVE' }, select: { id: true } })
-    const alias = existing ?? await createAlias({ productId: c.rootId, channel: 'EBAY', marketplace: c.marketplace, accountId: c.accountId, label: c.sku, sku: c.sku })
-    done.created.push({ aliasId: alias.id, sku: c.sku, rootId: c.rootId, rootSku: c.rootSku, accountId: c.accountId, marketplace: c.marketplace })
-    const listings = await prisma.channelListing.findMany({ where: { aliasKey: alias.id }, select: { productId: true, version: true } })
+  /** Every listing that joins the job's scope, per family root. */
+  const joined = new Map<string, string[]>()
+  const join = (rootId: string, ids: string[]) => joined.set(rootId, [...joined.get(rootId) ?? [], ...ids])
+  /** The file's rows for new drafts: each row gets its listing's account and current version. */
+  const takeRows = async (source: TransferRow[], where: Prisma.ChannelListingWhereInput, at: { aliasKey: string; accountId: string }, rootId: string) => {
+    const listings = await prisma.channelListing.findMany({ where, select: { id: true, productId: true, version: true } })
     const products = await prisma.product.findMany({ where: { id: { in: listings.map(l => l.productId) } }, select: { id: true, sku: true } })
     const versionOf = new Map(products.map(p => [p.sku, listings.find(l => l.productId === p.id)!.version]))
-    for (const row of c.rows) if (versionOf.has(row.sku)) rows.push({ ...row, aliasKey: alias.id, accountId: c.accountId, version: versionOf.get(row.sku)! })
+    for (const row of source) if (versionOf.has(row.sku)) rows.push({ ...row, ...at, version: versionOf.get(row.sku)! })
+    join(rootId, listings.map(l => l.id))
   }
-  // The new listings join the job's scope, so the save may write them.
+  for (const m of made.mains) {
+    const main = plan.mains?.find(x => x.rootSku === m.rootSku && x.marketplace === m.marketplace)
+    const family = await prisma.product.findMany({ where: { OR: [{ id: m.rootId }, { parentId: m.rootId }], deletedAt: null }, select: { id: true } })
+    await takeRows(main?.rows ?? [], { productId: { in: family.map(p => p.id) }, channel: 'EBAY', marketplace: m.marketplace, channelConnectionId: m.accountId, aliasKey: '' }, { aliasKey: '', accountId: m.accountId }, m.rootId)
+  }
+  for (const c of plan.creates) {
+    const rootId = rootIdOf(c.rootId, c.rootSku)
+    if (!rootId) throw new TransferConflict(`The product ${c.rootSku} was not created. Drop the file again.`)
+    // A save resumed after the listing was made finds it by its SKU; it never makes a second one.
+    const existing = await prisma.productListingAlias.findFirst({ where: { sku: c.sku, productId: rootId, status: 'ACTIVE' }, select: { id: true } })
+    const alias = existing ?? await createAlias({ productId: rootId, channel: 'EBAY', marketplace: c.marketplace, accountId: c.accountId, label: c.sku, sku: c.sku })
+    done.created.push({ aliasId: alias.id, sku: c.sku, rootId, rootSku: c.rootSku, accountId: c.accountId, marketplace: c.marketplace })
+    await takeRows(c.rows, { aliasKey: alias.id }, { aliasKey: alias.id, accountId: c.accountId }, rootId)
+  }
+  // The new listings join the job's scope, so the save may write them. A family other than the job's own gets its own scope.
   let boundary = payload.boundary
-  const newListings = done.created.length ? await prisma.channelListing.findMany({ where: { aliasKey: { in: done.created.map(c => c.aliasId) } }, select: { id: true } }) : []
-  if (newListings.length) {
-    const rootId = done.created[0].rootId
+  const familyBoundaries = [...payload.familyBoundaries ?? []]
+  for (const [rootId, listingIds] of joined) {
     const family = await prisma.product.findMany({ where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null }, select: { id: true } })
-    boundary = await resolveProductTransferBoundary(payload.boundary?.productId || rootId, {
-      productIds: [...new Set([...(payload.boundary?.products.map(p => p.id) ?? []), ...family.map(p => p.id)])],
-      includeShared: payload.boundary?.includeShared ?? false, locales: payload.boundary?.locales ?? [],
-      listingIds: [...new Set([...(payload.boundary?.listings.map(l => l.id) ?? []), ...newListings.map(l => l.id)])] })
+    const scope = (base?: ProductTransferBoundary) => resolveProductTransferBoundary(base?.productId || rootId, {
+      productIds: [...new Set([...(base?.products.map(p => p.id) ?? []), ...family.map(p => p.id)])],
+      includeShared: base?.includeShared ?? false, locales: base?.locales ?? [],
+      listingIds: [...new Set([...(base?.listings.map(l => l.id) ?? []), ...listingIds])] })
+    if (!boundary || boundary.rootId === rootId) boundary = await scope(boundary)
+    else {
+      const index = familyBoundaries.findIndex(b => b.rootId === rootId)
+      if (index < 0) familyBoundaries.push(await scope())
+      else familyBoundaries[index] = await scope(familyBoundaries[index])
+    }
   }
   const records = rows.length ? await planListingRecords(rows, payload.market) : []
   const last = await prisma.importJobRow.aggregate({ where: { jobId }, _max: { rowIndex: true } })
-  const next: Payload = { ...payload, boundary, listingsDone: done, listingIds: [...new Set([...payload.listingIds, ...newListings.map(l => l.id)])] }
+  const next: Payload = { ...payload, boundary: boundary as ProductTransferBoundary, ...(familyBoundaries.length ? { familyBoundaries } : {}), listingsDone: done,
+    listingIds: [...new Set([...payload.listingIds, ...[...joined.values()].flat()])] }
   await prisma.$transaction(async tx => {
     if (records.length) await tx.importJobRow.createMany({ data: records.map((record, i) => ({ jobId, rowIndex: (last._max.rowIndex ?? 0) + i + 1, targetId: record.key,
       parsedValues: json(record.payload), status: record.status })) })
     await tx.bulkOperation.updateMany({ where: { id: jobId, status: 'SAVING' }, data: { changes: json(next), processed: { increment: done.named.length + done.created.length } } })
   })
   return next
+}
+
+/**
+ * Phase 2 (the Owner, 2026-10-01: "import any files to then create new products based on the SKUs") — in ONE transaction,
+ * stored in the job with what it made (a resumed save skips it): each family's products as DRAFT (the open product becomes
+ * the parent instead of a new one; a product an undone import put in the recycle bin comes back), its axes and values
+ * through the one writer (`family-variations.service.ts`), then the main eBay listing's inert drafts (`ensureDraftListings`).
+ */
+async function applyFamilies(jobId: string, payload: Payload, userId: string | null): Promise<Payload> {
+  const plan = payload.listingPlan!
+  return inDatabaseTransaction(prisma, async () => {
+    const tx = prisma as unknown as Prisma.TransactionClient
+    const done: FamiliesDone = { families: [], mains: [] }
+    for (const family of plan.families ?? []) done.families.push(await createFamily(tx, family, jobId, userId))
+    for (const main of plan.mains ?? []) {
+      const rootId = main.rootId || done.families.find(f => f.rootSku === main.rootSku)?.rootId
+      if (!rootId) throw new TransferConflict(`The product ${main.rootSku} was not created. Drop the file again.`)
+      const family = await tx.product.findMany({ where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null }, select: { id: true } })
+      const ensured = await ensureDraftListings(tx, { channel: 'EBAY', market: main.marketplace, accountId: main.accountId, productIds: family.map(p => p.id), family: true })
+      done.mains.push({ rootId, rootSku: main.rootSku, accountId: main.accountId, marketplace: main.marketplace, listings: ensured.filter(l => l.created).map(l => ({ id: l.id, productId: l.productId })) })
+      // `ensureDraftListings` leaves the read cache to its caller.
+      await productReadCacheService.refreshInTransaction(tx, family.map(p => p.id))
+    }
+    const next: Payload = { ...payload, familiesDone: done }
+    const step = (plan.families ?? []).reduce((n, f) => n + familySize(f), 0) + (plan.mains?.length ?? 0)
+    const saved = await tx.bulkOperation.updateMany({ where: { id: jobId, status: 'SAVING' }, data: { changes: json(next), processed: { increment: step } } })
+    if (!saved.count) throw new TransferConflict('This import stopped before its products were created. Drop the file again.')
+    return next
+  }, { isolationLevel: 'Serializable', timeoutMs: 120_000 })
+}
+
+/** One family: its root (created, brought back or the open product), its variations, then their axes and values. */
+async function createFamily(tx: Prisma.TransactionClient, family: EbayFamilyPlan, jobId: string, userId: string | null): Promise<FamilyDone> {
+  const products: { id: string; sku: string }[] = []
+  const make = async (sku: string, fields: { name: string; parentId: string | null; isParent: boolean; variationTheme?: string }) => {
+    const binned = family.restore[sku]
+    const data = { name: fields.name, status: 'DRAFT', parentId: fields.parentId, isParent: fields.isParent, ...(fields.variationTheme ? { variationTheme: fields.variationTheme } : {}) }
+    let id: string
+    if (binned) {
+      // An earlier import of this file made it, and its undo put it in the recycle bin: it comes back as a draft.
+      const back = await tx.product.updateMany({ where: { id: binned, sku, deletedAt: { not: null } }, data: { ...data, deletedAt: null, version: { increment: 1 } } })
+      if (back.count !== 1) throw new TransferConflict(`${sku} changed since the check. Drop the file again.`)
+      id = binned
+    } else {
+      id = (await tx.product.create({ data: { sku, basePrice: 0, importSource: SHEET_IMPORT_SOURCE, importedAt: new Date(), ...data } as Prisma.ProductUncheckedCreateInput, select: { id: true } })
+        .catch(error => { throw (error as { code?: string })?.code === 'P2002' ? new TransferConflict(`${sku} was added to Nexus after the check. Drop the file again.`) : error })).id
+    }
+    await tx.auditLog.create({ data: { userId, entityType: 'Product', entityId: id, action: binned ? 'restore' : 'create', before: json(binned ? { deletedAt: 'recycle bin' } : null),
+      after: json({ sku, ...data }), metadata: { source: 'sheet-import', jobId } } })
+    await productEventService.emitTx(tx, { aggregateId: id, aggregateType: 'Product', eventType: 'PRODUCT_CREATED', data: { sku, ...data }, metadata: { source: 'OPERATOR', writer: 'sheet-import', importJobId: jobId } })
+    products.push({ id, sku })
+    return id
+  }
+  let rootId: string
+  if (family.adoptId) {
+    const root = await tx.product.findFirst({ where: { id: family.adoptId, deletedAt: null }, select: { id: true, sku: true, parentId: true, _count: { select: { children: { where: { deletedAt: null } } } } } })
+    if (!root || root.sku !== family.rootSku || root.parentId || root._count.children) throw new TransferConflict(`${family.rootSku} changed since the check. Drop the file again.`)
+    if (family.children.length) await promoteProduct(tx, root.id, family.theme)
+    rootId = root.id
+  } else rootId = await make(family.rootSku, { name: family.name, parentId: null, isParent: family.children.length > 0, ...(family.children.length ? { variationTheme: family.theme } : {}) })
+  for (const child of family.children) await make(child.sku, { name: child.name, parentId: rootId, isParent: false })
+  if (family.axes.length) {
+    // THE writers of axes and values: dictionary codes, values matched to options, unknown values added as options.
+    const root = await tx.product.findUniqueOrThrow({ where: { id: rootId }, select: { version: true } })
+    let { version } = await setFamilyAxes(rootId, { expectedVersion: root.version, codes: family.axes.map(a => a.code), labels: family.axes.map(a => a.label) })
+    const idOf = new Map(products.map(p => [p.sku, p.id]))
+    const changes = family.children.flatMap(c => family.axes.map(a => ({ productId: idOf.get(c.sku)!, axis: a.code, value: c.values[a.code] ?? null, addOption: true })))
+    for (let offset = 0; offset < changes.length; offset += 2000) ({ version } = await setFamilyVariationValues(rootId, { expectedVersion: version, changes: changes.slice(offset, offset + 2000) }))
+  }
+  await productReadCacheService.refreshInTransaction(tx, [rootId, ...products.map(p => p.id)])
+  return { rootId, rootSku: family.rootSku, adopted: !!family.adoptId, axes: family.axes.map(a => a.label), products }
+}
+
+/**
+ * Undo of what `applyFamilies` made: the products it created or brought back go to the recycle bin (never the open product it
+ * made a parent: that stays a parent), and the inert drafts it made on a product it did not create are removed.
+ */
+async function undoFamilies(undo: ListingsDone, jobId: string, userId: string | null) {
+  const binned = (undo.families ?? []).flatMap(f => f.products.map(p => p.id))
+  const drafts = (undo.mains ?? []).flatMap(m => m.listings.filter(l => !binned.includes(l.productId)))
+  if (!binned.length && !drafts.length) return
+  await prisma.$transaction(async tx => {
+    const live = binned.length ? await tx.product.findMany({ where: { id: { in: binned }, deletedAt: null }, select: { id: true, sku: true } }) : []
+    const at = new Date()
+    if (live.length) {
+      await tx.product.updateMany({ where: { id: { in: live.map(p => p.id) } }, data: { deletedAt: at } })
+      await tx.auditLog.createMany({ data: live.map(p => ({ userId, entityType: 'Product', entityId: p.id, action: 'soft-delete', before: { deletedAt: null }, after: { deletedAt: at.toISOString() },
+        metadata: { sku: p.sku, source: 'sheet-import-undo', jobId } })) })
+    }
+    // Only a draft nothing sent anywhere: one published since stays.
+    if (drafts.length) await tx.channelListing.deleteMany({ where: { id: { in: drafts.map(l => l.id) }, externalListingId: null, isPublished: false, listingStatus: 'DRAFT' } })
+    await productReadCacheService.refreshInTransaction(tx, [...new Set([...binned, ...drafts.map(l => l.productId)])])
+  }, { timeout: 60_000 })
 }
 
 /** The records of a listing Apply just created: the file's rows for it, checked now against its new drafts. */
@@ -572,14 +742,50 @@ async function planListingRecords(rows: TransferRow[], market: string) {
   })
 }
 
-/** The review rows of the listing plan: first in the list. A created listing's values show here until they are records. */
-function planChanges(payload: Payload): SheetImportChange[] {
+/**
+ * The review rows of what Apply makes, first in the list and in the order it makes them: the new products ("New product
+ * GALE-JACKET (varies by Colore, Taglia)", "New variation GALE-JACKET-BLACK-MEN-M (Nero · M)"), the main listing
+ * ("New listing (draft)"), the listing SKUs and extra listings, then the values of each new listing until they are records.
+ */
+export function planChanges(payload: Payload): SheetImportChange[] {
   const out: SheetImportChange[] = []
   const change = (id: string, at: { sku: string; marketplace: string; accountId: string; aliasKey: string }, destination: string, field: string, label: string, before: unknown, after: unknown, status: SheetImportChangeStatus): SheetImportChange =>
     ({ id, sku: at.sku, destination, entity: 'Listings', channel: 'EBAY', marketplace: at.marketplace, accountId: at.accountId, aliasKey: at.aliasKey, locale: '', field, label, before, after, beforeState: 'stored', afterState: 'stored', status })
+  const product = (id: string, sku: string, field: string, label: string, before: unknown, after: unknown, status: SheetImportChangeStatus): SheetImportChange =>
+    ({ id, sku, destination: 'Shared', entity: 'Products', channel: '', marketplace: '', accountId: '', aliasKey: '', locale: '', field, label, before, after, beforeState: 'stored', afterState: 'stored', status })
   const done = payload.listingsDone
-  for (const n of payload.listingUndo?.named ?? []) out.push(change(`plan:u:${n.aliasId}`, { sku: n.rootSku, marketplace: n.marketplace, accountId: '', aliasKey: n.aliasId }, `eBay · ${n.marketplace} · ${n.label}`, 'listingSku', 'Listing SKU', n.sku, null, done ? 'saved' : 'new'))
-  for (const c of payload.listingUndo?.created ?? []) out.push(change(`plan:a:${c.aliasId}`, { sku: c.rootSku, marketplace: c.marketplace, accountId: c.accountId, aliasKey: c.aliasId }, `eBay · ${c.marketplace} · ${c.sku}`, 'listing', 'Listing', `Listing ${c.sku} (draft)`, 'Archived', done ? 'saved' : 'new'))
+  const made: SheetImportChangeStatus = done || payload.familiesDone ? 'saved' : 'new'
+  // An undo: what goes to the recycle bin, what stays (the open product stays a parent), what is removed.
+  const undone: SheetImportChangeStatus = done ? 'saved' : 'new'
+  const binned = new Set((payload.listingUndo?.families ?? []).flatMap(f => f.products.map(p => p.id)))
+  for (const f of payload.listingUndo?.families ?? []) {
+    const variations = f.products.filter(p => p.id !== f.rootId).length
+    if (f.adopted) out.push(product(`plan:uf:${f.rootSku}`, f.rootSku, 'variations', 'Variations', `${variations} ${variations === 1 ? 'variation' : 'variations'}`,
+      `${f.rootSku} stays a product with variations${f.axes.length ? ` (${f.axes.join(', ')})` : ''}. Its variations go to the recycle bin.`, undone))
+    for (const p of f.products) out.push(product(`plan:ud:${p.sku}`, p.sku, 'product', 'Product', `Product ${p.sku}`, 'In the recycle bin', undone))
+  }
+  for (const m of payload.listingUndo?.mains ?? []) {
+    if (m.listings.some(l => !binned.has(l.productId))) out.push(change(`plan:um:${m.rootSku}`, { sku: m.rootSku, marketplace: m.marketplace, accountId: m.accountId, aliasKey: '' }, `eBay · ${m.marketplace}`, 'listing', 'Listing', 'Draft listing', 'Removed', undone))
+  }
+  for (const n of payload.listingUndo?.named ?? []) out.push(change(`plan:u:${n.aliasId}`, { sku: n.rootSku, marketplace: n.marketplace, accountId: '', aliasKey: n.aliasId }, `eBay · ${n.marketplace} · ${n.label}`, 'listingSku', 'Listing SKU', n.sku, null, undone))
+  for (const c of payload.listingUndo?.created ?? []) out.push(change(`plan:a:${c.aliasId}`, { sku: c.rootSku, marketplace: c.marketplace, accountId: c.accountId, aliasKey: c.aliasId }, `eBay · ${c.marketplace} · ${c.sku}`, 'listing', 'Listing', `Listing ${c.sku} (draft)`, 'Archived', undone))
+  // An import: the families, then the main listings, then the extra listings.
+  for (const f of payload.listingPlan?.families ?? []) {
+    const varies = f.axes.length ? ` (varies by ${f.axes.map(a => a.label).join(', ')})` : ''
+    out.push(f.adoptId ? product(`plan:f:${f.rootSku}`, f.rootSku, 'variations', 'Variations', 'No variations', `${f.rootSku} becomes a product with variations${varies}`, made)
+      : product(`plan:f:${f.rootSku}`, f.rootSku, 'product', 'Product', null, `${f.restore[f.rootSku] ? `${f.rootSku} back from the recycle bin` : `New product ${f.rootSku}`}${varies}`, made))
+    for (const c of f.children) {
+      const values = f.axes.length ? ` (${f.axes.map(a => c.values[a.code]).join(' · ')})` : ''
+      out.push(product(`plan:v:${c.sku}`, c.sku, 'variation', 'Variation', null, `${f.restore[c.sku] ? `${c.sku} back from the recycle bin` : `New variation ${c.sku}`}${values}`, made))
+    }
+  }
+  for (const m of payload.listingPlan?.mains ?? []) {
+    const at = { sku: m.rootSku, marketplace: m.marketplace, accountId: m.accountId, aliasKey: '' }
+    out.push(change(`plan:m:${m.rootSku}`, at, `eBay · ${m.marketplace}`, 'listing', 'Listing', null, 'New listing (draft)', made))
+    if (done) continue
+    m.rows.forEach((row, i) => out.push(change(`plan:m:${m.rootSku}:${i}`, { ...at, sku: row.sku }, `eBay · ${m.marketplace}`, row.field,
+      payload.labels[labelKey(row, row.field)] ?? humanize(row.field), null, row.value, 'new')))
+  }
   for (const n of payload.listingPlan?.names ?? []) out.push(change(`plan:n:${n.aliasId}`, { sku: n.rootSku, marketplace: n.marketplace, accountId: n.accountId, aliasKey: n.aliasId }, `eBay · ${n.marketplace} · ${n.label}`, 'listingSku', 'Listing SKU', null, n.sku, done ? 'saved' : 'new'))
   for (const c of payload.listingPlan?.creates ?? []) {
     const at = { sku: c.rootSku, marketplace: c.marketplace, accountId: c.accountId, aliasKey: '' }
@@ -636,11 +842,14 @@ export async function undoSheetImport(jobId: string, userId: string | null): Pro
   if (!['DONE', 'PARTIAL'].includes(job.status)) throw new TransferConflict('Only a saved import can be undone.')
   const saved = await prisma.importJobRow.findMany({ where: { jobId, status: 'SUCCESS' }, orderBy: { rowIndex: 'asc' }, select: { parsedValues: true } })
   const rows: TransferRow[] = []
-  // A listing the import created is archived as a whole; its cells are not put back one by one.
+  // A listing the import created is archived as a whole, a product it created goes to the recycle bin, a draft it made on the
+  // open product is removed: their cells are not put back one by one.
   const created = new Set(payload.listingsDone?.created.map(c => c.aliasId) ?? [])
+  const madeProducts = new Set((payload.listingsDone?.families ?? []).flatMap(f => f.products.map(p => p.sku)))
+  const madeListings = new Set((payload.listingsDone?.mains ?? []).flatMap(m => m.listings.map(l => l.id)))
   for (const item of saved) {
     const target = (item.parsedValues as unknown as RecordPayload).target
-    if (!target || target.create || created.has(target.identity.aliasKey)) continue
+    if (!target || target.create || created.has(target.identity.aliasKey) || madeProducts.has(target.identity.sku) || madeListings.has(String(target.before?.id ?? ''))) continue
     for (const cell of target.cells) {
       if (cell.verdict !== 'changed' || NOT_UNDONE.has(cell.field)) continue
       const { before, after, beforeState, afterState, verdict: _verdict, channelRead: _read, effectiveBefore: _eb, effectiveAfter: _ea, label: _label, expected: _expected, version: _version, ...identity } = cell
@@ -673,6 +882,8 @@ function statusOf(job: { id: string; status: string; processed: number | null; t
     ...(payload.undoOf ? { undoOf: payload.undoOf } : {}), ...(payload.undoneBy ? { undoneBy: payload.undoneBy } : {}),
     canUndo: ['DONE', 'PARTIAL'].includes(state) && !payload.undoneBy && (payload.receipt?.saved ?? 0) > 0 && payload.format !== 'undo',
     ...(payload.readiness ? { readiness: payload.readiness.state } : {}),
+    // Phase 2 — a family this import created is another product than the open one: the done screen offers to open it.
+    ...(!payload.undoneBy && payload.listingsDone?.families?.some(f => !f.adopted) ? { newFamilies: payload.listingsDone.families.filter(f => !f.adopted).map(f => ({ productId: f.rootId, sku: f.rootSku })) } : {}),
     ...(Array.isArray(job.errors) && (job.errors[0] as { message?: string })?.message ? { error: (job.errors[0] as { message: string }).message } : {}) }
 }
 
@@ -708,8 +919,10 @@ export async function sheetImportChanges(jobId: string, userId: string | null, q
 function changeOf(id: string, cell: Partial<TransferCell> & Pick<TransferIssue, 'sku' | 'field'>, payload: Payload, status: SheetImportChangeStatus, problem?: string): SheetImportChange {
   const entity = cell.entity ?? 'Products'
   const identity = { entity, channel: cell.channel ?? '', accountId: cell.accountId ?? '', marketplace: cell.marketplace ?? '', aliasKey: cell.aliasKey ?? '', sku: cell.sku, locale: cell.locale ?? '' }
-  const listing = entity !== 'Products' && payload.boundary ? payload.boundary.listings.find(l => l.channel === identity.channel && l.marketplace === identity.marketplace && l.accountId === identity.accountId && l.aliasKey === identity.aliasKey)?.aliasLabel : undefined
-  return { id, ...identity, destination: cell.field ? destinationOf(identity as TransferRow, payload.boundary) : 'File', ...(listing ? { listing } : {}),
+  const scopes = [payload.boundary, ...payload.familyBoundaries ?? []].filter(Boolean)
+  const scope = scopes.find(b => b.products.some(p => p.sku === identity.sku)) ?? payload.boundary
+  const listing = entity !== 'Products' && scope ? scope.listings.find(l => l.channel === identity.channel && l.marketplace === identity.marketplace && l.accountId === identity.accountId && l.aliasKey === identity.aliasKey)?.aliasLabel : undefined
+  return { id, ...identity, destination: cell.field ? destinationOf(identity as TransferRow, scope) : 'File', ...(listing ? { listing } : {}),
     field: cell.field, label: cell.field ? payload.labels[labelKey(identity as TransferRow, cell.field)] ?? humanize(cell.field) : 'Row',
     before: cell.before ?? null, after: cell.after ?? null, beforeState: cell.beforeState ?? 'stored', afterState: cell.afterState ?? 'stored', status,
     ...(problem ? { problem } : {}), ...(cell.row ? { row: cell.row } : {}), ...(cell.source?.sheet ? { sheet: cell.source.sheet } : {}), ...(cell.source?.column ? { column: cell.source.column } : {}) }
