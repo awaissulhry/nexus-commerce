@@ -51,6 +51,8 @@ const GATES = {
   'dark alias scope': node('scripts/check-dark-alias-scope.mjs', '--check'),
   'raw primitives': node('scripts/check-raw-primitives-ratchet.mjs', '--check'),
   'alias form': node('scripts/check-alias-form.mjs', '--check'),
+  // 2026-10-01 — Tailwind's text-primary/bg-card/border-default read --nds-*; the old channel form must stay refused.
+  'alias form self-test': node('scripts/check-alias-form.mjs', '--self-test'),
   'DS fork drift (web ⇄ factory)': node('scripts/check-ds-fork-drift.mjs', '--check'),
   'CSS radius': node('scripts/check-css-radius-ratchet.mjs', '--check'),
   'DS fonts (no Arial)': node('scripts/check-font-families.mjs', '--check'),

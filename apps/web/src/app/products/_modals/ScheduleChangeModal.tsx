@@ -191,7 +191,7 @@ export default function ScheduleChangeModal({
                 onClick={() => setKind(k)}
                 className={`px-4 h-8 text-base ${
                   kind === k
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-inverse'
                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
@@ -214,7 +214,7 @@ export default function ScheduleChangeModal({
                     onClick={() => setStatus(s)}
                     className={`px-4 h-8 text-base ${
                       status === s
-                        ? 'bg-slate-900 dark:bg-slate-100 text-white'
+                        ? 'bg-slate-900 dark:bg-slate-100 text-inverse'
                         : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                   >
@@ -236,7 +236,7 @@ export default function ScheduleChangeModal({
                   onClick={() => setPriceMode('percent')}
                   className={`px-4 h-8 text-base ${
                     priceMode === 'percent'
-                      ? 'bg-slate-900 dark:bg-slate-100 text-white'
+                      ? 'bg-slate-900 dark:bg-slate-100 text-inverse'
                       : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
@@ -247,7 +247,7 @@ export default function ScheduleChangeModal({
                   onClick={() => setPriceMode('absolute')}
                   className={`px-4 h-8 text-base ${
                     priceMode === 'absolute'
-                      ? 'bg-slate-900 dark:bg-slate-100 text-white'
+                      ? 'bg-slate-900 dark:bg-slate-100 text-inverse'
                       : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
@@ -340,7 +340,7 @@ export default function ScheduleChangeModal({
           <Button
             onClick={submit}
             disabled={submitting}
-            className="bg-slate-900 dark:bg-slate-100 text-white border-slate-900 hover:bg-slate-800"
+            className="bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900 hover:opacity-90"
             icon={
               submitting ? (
                 <Loader2 size={12} className="animate-spin" />

@@ -1270,16 +1270,16 @@
 .h10-pt-input { flex: 1 1 200px; min-width: 160px; }
 .h10-pt-input.reason { flex: 1 1 180px; }
 .h10-pt-sel { height: 30px; padding: 0 8px; font-size: 12px; border-radius: var(--nds-radius-sm);
-  border: 1px solid var(--border-default, var(--nds-grey-200)); background: var(--bg-input, var(--nds-white)); }
+  border: 1px solid var(--nds-border); background: var(--bg-input, var(--nds-white)); }
 .h10-pt-ck { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
 .h10-pt-hd { margin: 12px 0 5px; font-size: 11px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: .04em; color: var(--text-tertiary, #7b8794); }
+  letter-spacing: .04em; color: var(--nds-text-3); }
 .h10-pt-term { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .h10-pt-term b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-pt-flag { flex: none; padding: 1px 5px; border-radius: 4px; font-size: 10px; font-style: normal;
-  background: var(--bg-subtle, var(--nds-grey-100)); color: var(--text-secondary, var(--nds-grey-600)); }
+  background: var(--bg-subtle, var(--nds-grey-100)); color: var(--nds-text-2); }
 .h10-pt-reason { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-size: 11px; color: var(--text-tertiary, #7b8794); }
+  white-space: nowrap; font-size: 11px; color: var(--nds-text-3); }
 
 /* ── ACR.6 (R1) — roll back a whole execution, from the history drawer ────────
    The button lives in the timestamp column so the row keeps its three-column

@@ -128,7 +128,7 @@ export default function MobileReceiveClient({ id }: { id: string }) {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-800 p-6 flex flex-col items-center justify-center">
         <div className="text-lg text-rose-700 dark:text-rose-300 mb-3">Failed to load shipment</div>
         <div className="text-base text-slate-500 dark:text-slate-400 mb-4">{error}</div>
-        <button onClick={() => router.push('/fulfillment/inbound')} className="h-11 px-4 bg-slate-900 dark:bg-slate-100 text-white rounded">
+        <button onClick={() => router.push('/fulfillment/inbound')} className="h-11 px-4 bg-slate-900 dark:bg-slate-100 text-inverse rounded">
           Back to inbound
         </button>
       </div>

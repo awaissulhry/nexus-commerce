@@ -16,13 +16,16 @@ const OUT = resolve(__dirname, '../styles/tokens.css')
 const OUT_GLOBAL = resolve(__dirname, '../styles/tokens-global.css')
 
 /**
- * The eleven names `globals.css` and `ads.css` ALSO define, as space-separated RGB channels
- * for Tailwind's `rgb(var(--x) / <alpha-value>)`. They are emitted into `tokens.css` (which
- * pages opt into) but NEVER into `tokens-global.css`, which the root layout loads on every
- * route: defining them app-wide as colours would make `rgb(var(--border-default))` resolve to
- * `rgb(#d8dde4)` — invalid, and every Tailwind utility built on them would die across 636
- * files. Phase 9.0b removed the design system's own dependence on these, which is the only
- * reason a global stylesheet is possible at all. See docs/PHASE-9-0B-TOKEN-FORM.md.
+ * The eleven platform-alias names the app also defined as space-separated RGB channels. They are
+ * emitted into `tokens.css` (which pages opt into) but NEVER into `tokens-global.css`, which the
+ * root layout loads on every route. The reason was Tailwind: `globals.css` defined them as channels
+ * for `rgb(var(--x) / <alpha-value>)`, and a global colour definition would have made every
+ * utility built on them `rgb(#d8dde4)` — invalid. Since 2026-10-01 `globals.css` no longer defines
+ * them and Tailwind reads `--nds-*` (apps/web/tailwind.config.ts), so that reason is gone; only the
+ * ads shell (`app/_shared/shared-shell.css`) still pins them as channels, and nothing reads them
+ * there. Publishing them globally is an open follow-up, not done here. Phase 9.0b removed the
+ * design system's own dependence on these, which is what made a global stylesheet possible at all.
+ * See docs/PHASE-9-0B-TOKEN-FORM.md.
  */
 const CONTESTED = new Set([
   '--text-primary', '--text-secondary', '--text-tertiary', '--text-disabled', '--text-link',

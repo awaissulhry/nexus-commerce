@@ -156,6 +156,11 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-text-3', value: '#48505b' },
   { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
   { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
+  // Placeholder text in every DS field (2026-10-01). It used --nds-text-disabled, which is 2.04:1 on a
+  // white field and 2.78:1 on the dark one — a placeholder is read, so it needs 4.5:1. grey-600 is
+  // 5.91 on --nds-surface and 5.22 on --nds-surface-sunken, and stays lighter than every text tier
+  // so a hint never reads as a value. Held by check-nds-contrast.mjs (group `placeholder`).
+  { name: '--nds-placeholder', value: 'var(--nds-grey-600)' },
   { name: '--nds-text-inverse', value: 'var(--nds-white)' },
   // NOT --nds-blue-600. Measured 2026-08-25: #1f6fde is 4.79:1 on a white card but only 4.42:1 on
   // the ads console's own ground (.h10-shell #f4f6f9) and 4.50:1 on --nds-surface-sunken — i.e.
@@ -494,9 +499,10 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // 🔴 DS stylesheets DO NOT consume these. `token-guard` check D enforces it.
   //
   // This tier is published for APP CSS only. Eleven of these names — --text-*,
-  // --surface-* and --border-* — are ALSO defined by globals.css (`:root`) and
-  // ads.css (`.h10-shell`) as space-separated RGB CHANNELS, because Tailwind
-  // composes them as `rgb(var(--x) / <alpha-value>)`. Custom properties resolve
+  // --surface-* and --border-* — are ALSO defined by the ads shell (`.h10-shell`,
+  // app/_shared/shared-shell.css) as space-separated RGB CHANNELS; globals.css
+  // (`:root`) defined them too, for Tailwind's `rgb(var(--x) / <alpha-value>)`,
+  // until 2026-10-01, when Tailwind moved to `--nds-*`. Custom properties resolve
   // from the nearest defining ANCESTOR, not by source order, so inside the shell
   // those definitions shadow these and `background: var(--surface-card)` becomes
   // `background: 255 255 255` — invalid at computed-value time, silently dropped.
@@ -505,13 +511,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   //
   // The tier is KEPT rather than deleted: --color-primary and the --status-*
   // family are NOT contested (nothing else defines them) and app stylesheets
-  // depend on them — reporting.css alone has 47 uses, plus trust.css and
+  // depend on them — reporting.css alone has 60 uses, plus trust.css and
   // /products/next. Deleting the tier would break ~70 app declarations to fix a
   // problem the guard already prevents.
   //
   // If you add a name here, first `grep -rn -- "--<name>:" apps/web/src/app`.
-  // If globals.css or ads.css already defines it, adding it is a landmine, not a
-  // fix — that is why --surface-raised is deliberately absent.
+  // If globals.css or shared-shell.css already defines it, adding it is a landmine,
+  // not a fix — that is why --surface-raised is deliberately absent.
   // ── Tier 3: grid (GDS) ───────────────────────────────────────────
   // The AG-Grid-based design-system grid's own tokens, defined once in ./grid.ts so the
   // TypeScript numbers a page hands AG (row height, header height, widths) and the CSS custom
@@ -587,6 +593,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-text-2', value: '#c3ccd6' },   // R-49 (A-51): 8.03 worst dark ground (was #aab6c2, 6.32)
   { name: '--nds-text-3', value: '#b3bac6' },   // R-49 (A-51): 7.24 worst dark surface (was #8a94a6, 4.62)
   { name: '--nds-text-disabled', value: '#5b6b7b' },
+  { name: '--nds-placeholder', value: '#97a3b1' },   // 5.94 on --nds-surface, 5.51 on raised (disabled was 2.78)
   { name: '--nds-text-inverse', value: '#14223a' },
 
   { name: '--nds-bg', value: '#14223a' },

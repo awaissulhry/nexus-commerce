@@ -1173,7 +1173,7 @@
   color: var(--nds-grey-900);
 }
 .aq-note::placeholder {
-  color: var(--nds-grey-450);
+  color: var(--nds-placeholder);
 }
 
 /* ── AQ.8 · edit-then-approve ───────────────────────────────────────────── */

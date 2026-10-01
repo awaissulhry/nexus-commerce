@@ -207,9 +207,10 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
  * #3f4754, grey-150 vs its #e3e7ec).
  *
  * 🔴 The label colour uses the PALETTE token `--nds-text-2`, not the semantic `--text-secondary`,
- * and must stay that way. `globals.css` and `ads.css` both redefine the semantic text aliases as
- * bare RGB CHANNELS (`--text-secondary: 71 85 105`) for `rgb()` composition, so inside those
- * scopes `color: var(--text-secondary)` is an invalid declaration and is DROPPED — the label
+ * and must stay that way. The ads shell (`.h10-shell`, shared-shell.css) redefines the semantic
+ * text aliases as bare RGB CHANNELS (`--text-secondary: 71 85 105`) for `rgb()` composition, as
+ * globals.css did app-wide until 2026-10-01, so inside that scope `color: var(--text-secondary)`
+ * is an invalid declaration and is DROPPED — the label
  * silently inherits the page's near-black instead. That is measurable on prod: the tabs computed
  * to rgb(28,37,48) while the rule "said" grey. It also means SG.1's own
  * `color: var(--text-primary)` never applied either — its near-black came from inheritance, and
@@ -979,7 +980,7 @@ body.nds-drawer-resizing * {
   box-shadow: var(--nds-focus-ring);
 }
 .nds-combo-in::placeholder {
-  color: var(--nds-text-disabled);
+  color: var(--nds-placeholder);
 }
 .nds-combo .chev {
   position: absolute;
@@ -1076,7 +1077,7 @@ body.nds-drawer-resizing * {
   color: var(--nds-text);
 }
 .nds-combo-search input::placeholder {
-  color: var(--nds-text-disabled);
+  color: var(--nds-placeholder);
 }
 .nds-combo-pop button {
   position: relative;
@@ -1924,12 +1925,12 @@ body.nds-drawer-resizing * {
 .nds-burn-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .nds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: var(--nds-font-size-micro-plus); font-weight: 600; color: var(--nds-text-2); }
 /* `--nds-surface-raised`, not `--surface-raised`: that platform name is defined by
-   globals.css / ads.css as RGB CHANNELS (`255 255 255`), and this file loads alongside
-   both. `var(--surface-raised, #fff)` therefore resolved to `background: 255 255 255`
-   — invalid at computed-value time, so the tip painted TRANSPARENT and the `#fff`
-   fallback never applied (a fallback covers an undefined var, not an invalid one).
-   Aliasing the platform name to a colour here would have broken the reverse case:
-   reporting.css's `rgb(var(--surface-raised))` on a page that loads this file. */
+   globals.css and the ads shell (shared-shell.css) as RGB CHANNELS (`255 255 255`), and this
+   file loads alongside both. `var(--surface-raised, #fff)` therefore resolved to
+   `background: 255 255 255` — invalid at computed-value time, so the tip painted TRANSPARENT
+   and the `#fff` fallback never applied (a fallback covers an undefined var, not an invalid one).
+   Aliasing the platform name to a colour here would have broken the reverse case: Tailwind's
+   `bg-raised` (`rgb(var(--surface-raised) / …)`), and reporting.css until 2026-10-01. */
 /* The hue arrives as `--c` so the dash gradient survives; an inline `background` shorthand would
    reset `background-image` and render every swatch solid. */
 .nds-burn-key .ln { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }

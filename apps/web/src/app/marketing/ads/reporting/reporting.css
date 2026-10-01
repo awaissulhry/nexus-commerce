@@ -3,28 +3,28 @@
  *
  * Tokens only; no raw hex, so a palette change follows — the same rule trust.css states.
  *
- * 🔴 R0 — every surface/border/text token MUST be written `rgb(var(--x))`, never `var(--x)`.
- * `.h10-shell` (ads.css) pins those tokens to space-separated RGB CHANNELS — `--surface-card`
- * is `255 255 255`, not `#fff` — because Tailwind composes them as `rgb(var(--x) / <alpha>)`.
- * Used raw they are invalid values, and CSS silently discards the ENTIRE declaration: the
- * background computes to `rgba(0,0,0,0)` and `border: 1px solid var(--border-subtle)` computes
- * to `border-width: 0px`. This file shipped with all 155 of them raw, so every panel on the
- * page rendered with no surface, no border, and primary/secondary/tertiary text collapsed to
- * one inherited ink. Measured on prod 2026-08-19; do not reintroduce the bare form.
+ * 🔴 R0 — every surface/border/text colour reads an `--nds-*` token (`var(--nds-text-2)`,
+ * `var(--nds-surface)`, `var(--nds-border-subtle)`…), never the platform aliases `--text-*`,
+ * `--surface-*`, `--border-*`. Those aliases have TWO forms: inside `.h10-shell` (shared-shell.css)
+ * they are space-separated RGB channels (`--surface-card: 255 255 255`), at `:root` tokens.css
+ * makes them whole colours (`#fff`). No way of writing them works in both: `var(--x)` is invalid
+ * inside the shell (this file shipped with 155 of those on 2026-08-19 — no surfaces, no borders,
+ * one inherited ink), and `rgb(var(--x))` is invalid at `:root` — which is where a `Modal` renders,
+ * because it portals to `<body>`, outside the shell. That second form is what this file used until
+ * 2026-10-01, so the Custom metrics, Deliveries, Share and saved-report dialogs drew their text in
+ * the inherited colour and their wells and borders not at all. `--nds-*` has one form everywhere,
+ * and `.h10-shell` and `body:has(.h10-shell)` pin it to its light value, so the page and its
+ * dialogs get the same colours in both OS themes. `scripts/check-alias-form.mjs` refuses the
+ * aliases anywhere under app/marketing/ads/.
  *
- * The status tokens are the exception and are NOT channels — `--color-primary` and
- * `--status-*-strong` are real hex, so they are used bare and must stay that way. That mismatch
- * is what made the bug so hard to see: pills and accents rendered while every surface did not.
- *
- * 🔴 And do NOT copy `rgb(var(--x))` to a stylesheet outside this console. It is correct here
- * only because `app/marketing/ads/layout.tsx` wraps every ads page in `.h10-shell`. At plain
- * `:root` the DS wins and `--surface-card` is `#fff`, where `rgb(var(--surface-card))` would be
- * `rgb(#fff)` — invalid, and the same silent failure in the other direction. Measured both ways
- * on prod 2026-08-19; `app/shared/report/[token]/shared-report.css` sits outside the shell and
- * its bare `var(--x)` form is right for where it lives.
+ * The same goes for the brand/status aliases (`--color-primary`, `--status-*`): read `--nds-primary`,
+ * `--nds-success-strong`, `--nds-warning-soft`… instead. The aliases are declared at `:root`, so they
+ * resolve there — under a dark OS to the DARK values — and the light pin on `body:has(.h10-shell)`
+ * re-pins the `--nds-*` targets, not the aliases. Until 2026-10-01 that put light-green "ahead"
+ * figures, the "Today so far" label and dark amber notes on this light console (1.4–1.5:1).
  *
  * ACR.1.6 — this file used to carry two `.dark` overrides. It no longer does: the ads console
- * is deliberately light and `.h10-shell` pins the DS tokens to prove it (ads.css). Do not add
+ * is deliberately light and `.h10-shell` pins the DS tokens to prove it (shared-shell.css). Do not add
  * `.dark` rules or `prefers-color-scheme` here; both would fire on an operator whose OS is dark
  * (useTheme defaults to 'system') and paint dark chart colours onto a permanently white card.
  */
@@ -45,22 +45,22 @@
   gap: 12px;
   align-items: flex-start;
   padding: 12px 14px;
-  border: 1px solid rgb(var(--border-subtle));
+  border: 1px solid var(--nds-border-subtle);
   border-left-width: 3px;
-  border-left-color: var(--status-info-strong);
+  border-left-color: var(--nds-info-strong);
   border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  background: var(--nds-surface);
   font-size: 13px;
   line-height: 1.55;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
 }
-.rpt-lede > svg { flex: 0 0 auto; margin-top: 2px; color: var(--status-info-strong); }
-.rpt-lede b { color: rgb(var(--text-primary)); font-weight: 650; }
+.rpt-lede > svg { flex: 0 0 auto; margin-top: 2px; color: var(--nds-info-strong); }
+.rpt-lede b { color: var(--nds-text); font-weight: 650; }
 
-.rpt-lede.is-error { border-left-color: var(--status-danger-strong); }
-.rpt-lede.is-error > svg { color: var(--status-danger-strong); }
-.rpt-lede.is-warn { border-left-color: var(--status-warning-strong); }
-.rpt-lede.is-warn > svg { color: var(--status-warning-strong); }
+.rpt-lede.is-error { border-left-color: var(--nds-danger-strong); }
+.rpt-lede.is-error > svg { color: var(--nds-danger-strong); }
+.rpt-lede.is-warn { border-left-color: var(--nds-warning-strong); }
+.rpt-lede.is-warn > svg { color: var(--nds-warning-strong); }
 
 .rpt-group { display: flex; flex-direction: column; gap: 10px; }
 .rpt-group-hd {
@@ -72,13 +72,13 @@
   font-weight: 700;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 .rpt-group-hd .count {
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
   opacity: .75;
 }
 
@@ -89,52 +89,52 @@
 .rpt-today {
   display: flex; flex-direction: column; gap: 8px;
   padding: 12px 14px;
-  border: 1px solid rgb(var(--border-subtle));
-  border-left: 3px solid var(--status-success-strong);
+  border: 1px solid var(--nds-border-subtle);
+  border-left: 3px solid var(--nds-success-strong);
   border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  background: var(--nds-surface);
 }
 .rpt-today.is-loading { opacity: .6; transition: opacity .12s; }
 .rpt-today .hd { display: flex; align-items: center; gap: 10px; }
 .rpt-today .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--status-success-strong);
+  text-transform: uppercase; color: var(--nds-success-strong);
 }
 /* The stream lags about an hour. A total labelled "today" that hides that reads as a slump. */
-.rpt-today .thru { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
+.rpt-today .thru { font-size: 11.5px; color: var(--nds-text-3); }
 .rpt-today .rf {
   display: inline-flex; align-items: center; border: 0; background: transparent;
-  cursor: pointer; padding: 2px; color: rgb(var(--text-tertiary)); border-radius: 4px;
+  cursor: pointer; padding: 2px; color: var(--nds-text-3); border-radius: 4px;
 }
-.rpt-today .rf:hover { color: var(--color-primary); background: rgb(var(--surface-sunken)); }
+.rpt-today .rf:hover { color: var(--nds-primary); background: var(--nds-surface-sunken); }
 .rpt-today .open {
   display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
-  font-size: 12px; font-weight: 600; text-decoration: none; color: var(--color-primary);
+  font-size: 12px; font-weight: 600; text-decoration: none; color: var(--nds-primary);
 }
 
 .rpt-today .figs { display: flex; flex-wrap: wrap; gap: 6px 26px; }
 .rpt-today .fig { display: flex; flex-direction: column; gap: 1px; }
 .rpt-today .fig .k {
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
 .rpt-today .fig b {
   font-size: 17px; font-weight: 700; line-height: 1.2;
-  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
+  color: var(--nds-text); font-variant-numeric: tabular-nums;
 }
 
-.rpt-today-wait { font-size: 12.5px; line-height: 1.5; color: rgb(var(--text-secondary)); }
+.rpt-today-wait { font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2); }
 
 .rpt-today .mkts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; }
 .rpt-today .mkt {
   display: inline-flex; align-items: baseline; gap: 5px;
   padding: 1px 7px; border-radius: 5px;
-  border: 1px solid rgb(var(--border-subtle));
-  font-size: 11px; line-height: 1.5; color: rgb(var(--text-tertiary));
+  border: 1px solid var(--nds-border-subtle);
+  font-size: 11px; line-height: 1.5; color: var(--nds-text-3);
 }
-.rpt-today .mkt .code { font-weight: 700; color: rgb(var(--text-secondary)); }
+.rpt-today .mkt .code { font-weight: 700; color: var(--nds-text-2); }
 .rpt-today .mkt .sh { font-variant-numeric: tabular-nums; }
-.rpt-today .of { font-size: 11px; color: rgb(var(--text-tertiary)); }
+.rpt-today .of { font-size: 11px; color: var(--nds-text-3); }
 
 /* ── R1 · the library grid ──────────────────────────────────────────────────
    Cells for the one `AdsDataGrid` that replaced thirteen cards. Everything here
@@ -148,28 +148,28 @@
 /* The reason a report is not simply "Ready". Present on four rows of thirteen;
    the other nine stay a single line. */
 .rpt-name .why {
-  font-size: 11.5px; line-height: 1.45; color: rgb(var(--text-tertiary));
+  font-size: 11.5px; line-height: 1.45; color: var(--nds-text-3);
   white-space: normal;
 }
 
 .rpt-i {
   display: inline-flex; flex: 0 0 auto; align-items: center;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
-.rpt-i:hover { color: var(--color-primary); }
+.rpt-i:hover { color: var(--nds-primary); }
 
 /* A report we cannot open should not read as an equal peer of one we can. */
-.rpt-open.is-off { color: rgb(var(--text-tertiary)); }
+.rpt-open.is-off { color: var(--nds-text-3); }
 
 .rpt-vol { font-variant-numeric: tabular-nums; }
-.rpt-vol b { font-weight: 700; color: rgb(var(--text-primary)); }
-.rpt-vol .u { font-size: 11px; color: rgb(var(--text-tertiary)); }
+.rpt-vol b { font-weight: 700; color: var(--nds-text); }
+.rpt-vol .u { font-size: 11px; color: var(--nds-text-3); }
 
 .rpt-period { display: flex; flex-direction: column; gap: 1px; line-height: 1.4; }
-.rpt-period b { font-weight: 650; color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums; }
-.rpt-period .w { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
+.rpt-period b { font-weight: 650; color: var(--nds-text); font-variant-numeric: tabular-nums; }
+.rpt-period .w { font-size: 11.5px; color: var(--nds-text-3); }
 
-.rpt-dash { color: rgb(var(--text-tertiary)); }
+.rpt-dash { color: var(--nds-text-3); }
 
 /* What the report settles, in one line. Wraps rather than truncating: a clipped
    question is a question you have to hover to finish reading, which is the cost
@@ -177,7 +177,7 @@
 .rpt-ans {
   display: block; max-width: 46ch;
   font-size: 12.5px; line-height: 1.45;
-  color: rgb(var(--text-secondary)); white-space: normal;
+  color: var(--nds-text-2); white-space: normal;
 }
 
 /* Per-market freshness. The lagging market is called out rather than averaged
@@ -186,16 +186,16 @@
 .rpt-mkt {
   display: inline-flex; align-items: baseline; gap: 5px;
   padding: 2px 7px; border-radius: 5px;
-  border: 1px solid rgb(var(--border-subtle));
-  font-size: 11px; line-height: 1.5; color: rgb(var(--text-tertiary));
+  border: 1px solid var(--nds-border-subtle);
+  font-size: 11px; line-height: 1.5; color: var(--nds-text-3);
 }
-.rpt-mkt .code { font-weight: 700; color: rgb(var(--text-secondary)); letter-spacing: .02em; }
+.rpt-mkt .code { font-weight: 700; color: var(--nds-text-2); letter-spacing: .02em; }
 .rpt-mkt .lag { font-variant-numeric: tabular-nums; }
 .rpt-mkt.is-lagging {
-  border-color: var(--status-warning-strong);
-  color: var(--status-warning-strong);
+  border-color: var(--nds-warning-strong);
+  color: var(--nds-warning-strong);
 }
-.rpt-mkt.is-lagging .code { color: var(--status-warning-strong); }
+.rpt-mkt.is-lagging .code { color: var(--nds-warning-strong); }
 
 
 
@@ -213,7 +213,7 @@
 .rpt-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .rpt-field > span {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -231,34 +231,34 @@
 .rpt-saved {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
   padding: 8px 12px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
 }
 .rpt-saved-lbl {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
-.rpt-saved-empty { font-size: 12px; color: rgb(var(--text-tertiary)); }
+.rpt-saved-empty { font-size: 12px; color: var(--nds-text-3); }
 .rpt-saved-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 
 .rpt-saved-err {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--status-danger-strong);
+  font-size: 12px; color: var(--nds-danger-strong);
 }
 .rpt-saved-err button { border: 0; background: transparent; cursor: pointer; color: inherit; padding: 0; }
 
-.rpt-modal-p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; color: rgb(var(--text-secondary)); }
+.rpt-modal-p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--nds-text-2); }
 
 .rpt-versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rpt-versions li {
   padding: 9px 11px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-sm);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm);
 }
-.rpt-versions li.is-current { border-color: var(--status-success-strong); }
-.rpt-versions .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(var(--text-primary)); }
-.rpt-versions .when { color: rgb(var(--text-tertiary)); font-size: 11.5px; }
-.rpt-versions .note { margin-top: 3px; font-size: 12px; line-height: 1.5; color: rgb(var(--text-secondary)); }
+.rpt-versions li.is-current { border-color: var(--nds-success-strong); }
+.rpt-versions .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--nds-text); }
+.rpt-versions .when { color: var(--nds-text-3); font-size: 11.5px; }
+.rpt-versions .note { margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--nds-text-2); }
 /* `.nds-menu` is a fixed 180px, which wrapped "Download Excel · 36,672 rows" onto two lines
    (measured on prod: that one item rendered 55px tall against the others' 36px). Written at
    0,2,0 so it outranks the DS rule on specificity, not on stylesheet order. */
@@ -275,14 +275,14 @@
 .rpt-dl-h {
   display: flex; align-items: center; gap: 7px;
   margin: 16px 0 8px; padding-top: 12px;
-  border-top: 1px solid rgb(var(--border-subtle));
+  border-top: 1px solid var(--nds-border-subtle);
   font-size: 11px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
 .rpt-dl-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .rpt-dl-h .n {
   margin-left: 2px; padding: 0 6px; border-radius: var(--nds-radius-full);
-  background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
   font-size: 11px; letter-spacing: 0; font-variant-numeric: tabular-nums;
 }
 
@@ -291,34 +291,34 @@
 .rpt-sched {
   display: flex; flex-direction: column; gap: 8px;
   padding: 12px 14px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
 }
-.rpt-sched-empty { margin: 0; font-size: 12.5px; color: rgb(var(--text-tertiary)); }
-.rpt-sched-msg { margin: 2px 0 0; font-size: 12.5px; color: rgb(var(--text-secondary)); }
+.rpt-sched-empty { margin: 0; font-size: 12.5px; color: var(--nds-text-3); }
+.rpt-sched-msg { margin: 2px 0 0; font-size: 12.5px; color: var(--nds-text-2); }
 .rpt-sched-foot { display: flex; align-items: center; gap: 10px; }
 
 .rpt-sched-row {
   display: flex; align-items: flex-start; gap: 12px;
   padding: 9px 11px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-sm);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm);
 }
 .rpt-sched-row.is-off { opacity: .6; }
 .rpt-sched-row .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .rpt-sched-row .nm {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; color: rgb(var(--text-primary));
+  font-size: 13px; color: var(--nds-text);
 }
-.rpt-sched-row .sub { font-size: 12px; color: rgb(var(--text-secondary)); }
+.rpt-sched-row .sub { font-size: 12px; color: var(--nds-text-2); }
 .rpt-sched-row .last {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  margin-top: 2px; font-size: 11.5px; color: rgb(var(--text-tertiary));
+  margin-top: 2px; font-size: 11.5px; color: var(--nds-text-3);
 }
 .rpt-sched-row .stale {
   display: inline-flex; align-items: center; gap: 4px;
-  color: var(--status-warning-strong);
+  color: var(--nds-warning-strong);
 }
-.rpt-sched-row .err { color: var(--status-danger-strong); }
+.rpt-sched-row .err { color: var(--nds-danger-strong); }
 .rpt-sched-row .acts { display: inline-flex; gap: 6px; flex-shrink: 0; }
 
 .rpt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
@@ -331,7 +331,7 @@
    console's card surface (#ffffff).
 
    ACR.1.6 — the dark variant is gone because the surface it was tuned for cannot occur here:
-   `.h10-shell` now pins the DS tokens light (see ads.css), so a card under this console is
+   `.h10-shell` now pins the DS tokens light (see shared-shell.css), so a card under this console is
    always #ffffff. Keeping a `.dark` override would have put a dark-tuned accent on a white
    card the moment an operator's OS went dark — and `useTheme` defaults to 'system', so that
    was reachable without anyone choosing it. */
@@ -340,12 +340,12 @@
 .rpt-summary {
   display: flex; flex-direction: column; gap: 10px;
   padding: 12px 14px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
 }
 .rpt-summary.is-loading { opacity: .6; transition: opacity .12s; }
 .rpt-summary-hd { display: flex; align-items: center; gap: 12px; }
-.rpt-summary-hd .ttl { font-size: 12px; color: rgb(var(--text-tertiary)); }
+.rpt-summary-hd .ttl { font-size: 12px; color: var(--nds-text-3); }
 
 /* `SegmentedControl` owns the track; only its place in the header row is local. */
 .rpt-seg { margin-left: auto; }
@@ -355,52 +355,52 @@
 .rpt-kpi {
   display: flex; flex-direction: column; gap: 2px;
   padding: 9px 11px 6px; text-align: left; cursor: pointer;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-md);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md);
   background: transparent; font: inherit;
 }
-.rpt-kpi:hover { border-color: var(--color-primary); }
-.rpt-kpi.on { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); }
+.rpt-kpi:hover { border-color: var(--nds-primary); }
+.rpt-kpi.on { border-color: var(--nds-primary); box-shadow: inset 0 0 0 1px var(--nds-primary); }
 .rpt-kpi .lbl {
   display: flex; align-items: center; gap: 6px;
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
 /* R4 — the tile carries its line's colour, so a tile and its series identify each other
    without the eye having to match a label against a legend. Reserved even when the metric is
    not plotted, so ticking one does not shunt the label sideways. */
 .rpt-kpi .lbl .sw {
   width: 8px; height: 8px; border-radius: var(--nds-radius-full); flex-shrink: 0;
-  border: 1px solid rgb(var(--border-default));
+  border: 1px solid var(--nds-border);
 }
 .rpt-kpi.on .lbl .sw { border-color: transparent; }
 .rpt-kpi .val {
   font-size: 19px; font-weight: 700; line-height: 1.25;
-  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
+  color: var(--nds-text); font-variant-numeric: tabular-nums;
 }
 /* Status colour is ALWAYS paired with an arrow and a signed number — the dataviz
    rule that a status hue never carries meaning on its own. Metrics with no
    preferred direction (spend) stay in ink. */
 .rpt-kpi .dlt {
   display: inline-flex; align-items: center; gap: 3px;
-  font-size: 11.5px; font-variant-numeric: tabular-nums; color: rgb(var(--text-secondary));
+  font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--nds-text-2);
 }
 .rpt-kpi .dlt.t-good { color: #0ca30c; }
 .rpt-kpi .dlt.t-bad { color: #d03b3b; }
-.rpt-kpi .dlt .prev { margin-left: 4px; color: rgb(var(--text-tertiary)); }
+.rpt-kpi .dlt .prev { margin-left: 4px; color: var(--nds-text-3); }
 
 .rpt-spark { height: 30px; margin-top: 4px; }
 .rpt-spark-empty { height: 30px; margin-top: 4px; }
 
 .rpt-noseries {
   margin: 0; padding: 10px 12px;
-  border-left: 3px solid rgb(var(--border-subtle)); border-radius: 4px;
-  background: rgb(var(--surface-sunken));
-  font-size: 12.5px; line-height: 1.5; color: rgb(var(--text-secondary));
+  border-left: 3px solid var(--nds-border-subtle); border-radius: 4px;
+  background: var(--nds-surface-sunken);
+  font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2);
 }
 
 .rpt-chart { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .rpt-chart figcaption {
-  font-size: 12px; font-weight: 650; color: rgb(var(--text-secondary));
+  font-size: 12px; font-weight: 650; color: var(--nds-text-2);
 }
 .rpt-chart .plot { height: 240px; width: 100%; }
 
@@ -409,58 +409,58 @@
 .rpt-biz {
   display: flex; flex-direction: column; gap: 12px;
   padding: 14px 15px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
 }
 .rpt-biz-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .rpt-biz-kpi { display: flex; flex-direction: column; gap: 2px; }
 .rpt-biz-kpi.wide { grid-column: span 2; min-width: 0; }
 .rpt-biz-kpi .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
 .rpt-biz-kpi .val {
   font-size: 22px; font-weight: 700; line-height: 1.2;
-  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
+  color: var(--nds-text); font-variant-numeric: tabular-nums;
 }
-.rpt-biz-kpi .sub { font-size: 11.5px; color: rgb(var(--text-secondary)); }
+.rpt-biz-kpi .sub { font-size: 11.5px; color: var(--nds-text-2); }
 
 /* Two fills with a 2px surface gap between them; both are also labelled in
    text below, so the split never depends on colour alone. ACR.1.6 — light-only, as above. */
 .rpt-split { display: flex; gap: 2px; height: 10px; margin: 5px 0 3px; }
 .rpt-split .ad { background: #2a78d6; border-radius: 3px 0 0 3px; }
-.rpt-split .org { background: rgb(var(--surface-sunken)); border: 1px solid rgb(var(--border-subtle)); border-radius: 0 3px 3px 0; }
+.rpt-split .org { background: var(--nds-surface-sunken); border: 1px solid var(--nds-border-subtle); border-radius: 0 3px 3px 0; }
 
 /* The per-market table is the DS `DataGrid`; it owns the box and the alignment. */
 
 .rpt-biz-waste {
   padding: 10px 12px; border-radius: var(--nds-radius-sm);
-  border: 1px solid rgb(var(--border-subtle)); background: rgb(var(--surface-sunken));
+  border: 1px solid var(--nds-border-subtle); background: var(--nds-surface-sunken);
 }
 .rpt-biz-waste .hd {
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px;
-  font-size: 12.5px; color: rgb(var(--text-secondary));
+  font-size: 12.5px; color: var(--nds-text-2);
 }
-.rpt-biz-waste .hd > svg { align-self: center; color: var(--status-warning-strong); }
+.rpt-biz-waste .hd > svg { align-self: center; color: var(--nds-warning-strong); }
 .rpt-biz-waste .amt {
-  font-size: 18px; font-weight: 700; color: rgb(var(--text-primary));
+  font-size: 18px; font-weight: 700; color: var(--nds-text);
   font-variant-numeric: tabular-nums;
 }
-.rpt-biz-waste .rule { margin: 4px 0 0; font-size: 11.5px; color: rgb(var(--text-tertiary)); }
+.rpt-biz-waste .rule { margin: 4px 0 0; font-size: 11.5px; color: var(--nds-text-3); }
 .rpt-biz-waste .top { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .rpt-biz-waste .top li {
-  display: flex; gap: 10px; font-size: 11.5px; color: rgb(var(--text-secondary));
+  display: flex; gap: 10px; font-size: 11.5px; color: var(--nds-text-2);
   font-variant-numeric: tabular-nums;
 }
-.rpt-biz-waste .top .s { min-width: 62px; text-align: right; font-weight: 650; color: rgb(var(--text-primary)); }
+.rpt-biz-waste .top .s { min-width: 62px; text-align: right; font-weight: 650; color: var(--nds-text); }
 .rpt-biz-waste .top .c { min-width: 66px; }
-.rpt-biz-waste .top .m { min-width: 26px; color: rgb(var(--text-tertiary)); }
+.rpt-biz-waste .top .m { min-width: 26px; color: var(--nds-text-3); }
 .rpt-biz-waste .top .q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .rpt-biz-caveats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .rpt-biz-caveats li {
   display: flex; gap: 6px; align-items: flex-start;
-  font-size: 11.5px; line-height: 1.5; color: rgb(var(--text-tertiary));
+  font-size: 11.5px; line-height: 1.5; color: var(--nds-text-3);
 }
 .rpt-biz-caveats li > svg { flex: 0 0 auto; margin-top: 3px; }
 
@@ -475,9 +475,9 @@
 .rpt-back {
   display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
   margin-right: 4px;
-  font-size: 12.5px; font-weight: 600; text-decoration: none; color: rgb(var(--text-secondary));
+  font-size: 12.5px; font-weight: 600; text-decoration: none; color: var(--nds-text-2);
 }
-.rpt-back:hover { color: var(--color-primary); }
+.rpt-back:hover { color: var(--nds-primary); }
 
 /* Fields inside the console filter panel: same label treatment as .ffield. */
 
@@ -502,10 +502,10 @@
    the total covers the whole result while the rows below show one page, and it says so. */
 .rpt-total-label {
   display: inline-flex; align-items: baseline; gap: 8px;
-  font-weight: 700; color: rgb(var(--text-primary));
+  font-weight: 700; color: var(--nds-text);
 }
 .rpt-total-label .scope {
-  font-weight: 500; font-size: 11px; color: rgb(var(--text-tertiary));
+  font-weight: 500; font-size: 11px; color: var(--nds-text-3);
   white-space: nowrap;
 }
 
@@ -519,52 +519,52 @@
    `cursor: pointer` — and at 0,3,2 it outranks anything scoped to `.rpt-feed`. A feed name
    is not a link and has nowhere to go, so text that looks and behaves like one is a promise
    the row cannot keep. The fix is to stop opting into that rule, not to out-specify it. */
-.rpt-feed .fl { display: block; font-weight: 650; color: rgb(var(--text-primary)); }
-.rpt-feed .fs { display: block; margin-top: 1px; font-size: 11px; color: rgb(var(--text-tertiary)); }
+.rpt-feed .fl { display: block; font-weight: 650; color: var(--nds-text); }
+.rpt-feed .fs { display: block; margin-top: 1px; font-size: 11px; color: var(--nds-text-3); }
 
 /* RPT.12 — custom metrics */
 .rpt-cm-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.rpt-cm-list li { padding: 8px 10px; border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-sm); }
+.rpt-cm-list li { padding: 8px 10px; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm); }
 .rpt-cm-list .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
 .rpt-cm-list code {
   font-size: 11.5px; padding: 1px 5px; border-radius: 4px;
-  background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
 }
 .rpt-cm-list .hd > button { margin-left: auto; }
-.rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: var(--status-danger-strong); }
+.rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: var(--nds-danger-strong); }
 .rpt-cm-check {
   display: flex; align-items: center; gap: 5px;
   margin: 8px 0 0; font-size: 12px;
 }
-.rpt-cm-check.ok { color: var(--status-success-strong); }
-.rpt-cm-check.bad { color: var(--status-danger-strong); }
-.rpt-cm-avail { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: rgb(var(--text-tertiary)); }
+.rpt-cm-check.ok { color: var(--nds-success-strong); }
+.rpt-cm-check.bad { color: var(--nds-danger-strong); }
+.rpt-cm-avail { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--nds-text-3); }
 .rpt-cm-avail code {
   font-size: 11px; padding: 1px 5px; margin-right: 4px; border-radius: 4px;
-  background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
 }
 
 /* ── RPT.15 share links ─────────────────────────────────────────────────
    Tokens only, so the dialog follows the console's light/dark theme. */
 .rpt-share { display: flex; flex-direction: column; gap: 16px; }
-.rpt-share-lede { margin: 0; font-size: 13px; line-height: 1.55; color: rgb(var(--text-secondary)); }
-.rpt-share-lede b { color: rgb(var(--text-primary)); font-weight: 620; }
+.rpt-share-lede { margin: 0; font-size: 13px; line-height: 1.55; color: var(--nds-text-2); }
+.rpt-share-lede b { color: var(--nds-text); font-weight: 620; }
 
 .rpt-share-err {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12.5px; color: var(--status-danger-strong);
+  font-size: 12.5px; color: var(--nds-danger-strong);
 }
 
 .rpt-share-form { display: flex; flex-direction: column; gap: 10px; }
 .rpt-share-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
-.rpt-share-form label > span { color: rgb(var(--text-secondary)); font-weight: 550; }
-.rpt-share-form label em { font-style: normal; color: rgb(var(--text-tertiary)); font-weight: 400; }
+.rpt-share-form label > span { color: var(--nds-text-2); font-weight: 550; }
+.rpt-share-form label em { font-style: normal; color: var(--nds-text-3); font-weight: 400; }
 
 /* Shown once and unrecoverable — it has to read as a warning, not a receipt. */
 .rpt-share-minted { display: flex; flex-direction: column; gap: 8px; }
 .rpt-share-once {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12.5px; font-weight: 600; color: var(--status-warning-strong);
+  font-size: 12.5px; font-weight: 600; color: var(--nds-warning-strong);
 }
 .rpt-share-copyrow { display: flex; gap: 8px; align-items: center; }
 /* The show-once token is the DS `Input` now that the primitive forwards refs — `tokenRef.current
@@ -575,16 +575,16 @@
 .rpt-share-copyrow .mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
 
 .rpt-share-list { display: flex; flex-direction: column; gap: 6px; }
-.rpt-share-list h4 { margin: 4px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; color: rgb(var(--text-secondary)); }
-.rpt-share-empty { margin: 0; font-size: 12.5px; color: rgb(var(--text-tertiary)); }
+.rpt-share-list h4 { margin: 4px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--nds-text-2); }
+.rpt-share-empty { margin: 0; font-size: 12.5px; color: var(--nds-text-3); }
 .rpt-share-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-sm);
-  background: rgb(var(--surface-raised));
+  padding: 8px 10px; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface); /* white in both themes, as `--surface-raised` was in light */
 }
 .rpt-share-meta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rpt-share-meta b { font-size: 13px; font-weight: 600; }
-.rpt-share-meta span { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
+.rpt-share-meta span { font-size: 11.5px; color: var(--nds-text-3); }
 
 /* ── ACR.6 (R7) — incremental return (iROAS), modeled ───────────────────────────
    Light-only, same as the rest of this file: the ads console does not ship a dark
@@ -592,32 +592,32 @@
 /* `Button block variant="quiet"` supplies the row and the reset; this header inherits the section
    heading's type, so it keeps `font: inherit` at 0,3,0 rather than taking the DS button's 13px. */
 .nds-btn.block.rpt-iro-t { padding: 0; gap: 6px; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; }
-.rpt-iro-t svg { transition: transform .15s; color: rgb(var(--text-tertiary)); }
+.rpt-iro-t svg { transition: transform .15s; color: var(--nds-text-3); }
 .rpt-iro-t svg.open { transform: rotate(180deg); }
 .rpt-iro-tag {
   display: inline-flex; align-items: center; gap: 4px;
-  color: var(--status-warning-strong); opacity: 1;
+  color: var(--nds-warning-strong); opacity: 1;
 }
 
 .rpt-iro {
-  padding: 14px 15px; border: 1px solid rgb(var(--border-subtle));
-  border-radius: var(--nds-radius-lg); background: rgb(var(--surface-card));
+  padding: 14px 15px; border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg); background: var(--nds-surface);
 }
 .rpt-iro-lede {
-  margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: rgb(var(--text-secondary));
+  margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--nds-text-2);
 }
-.rpt-iro-lede b { color: rgb(var(--text-primary)); }
+.rpt-iro-lede b { color: var(--nds-text); }
 
 .rpt-iro-ctl { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-bottom: 14px; }
 /* `SegmentedControl` owns the track and the states; nothing local is left to say. */
 .rpt-iro-f { display: flex; flex-direction: column; gap: 3px; }
 .rpt-iro-f > span {
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
 /* Only the width: the DS `Input` owns the border, radius, padding and ink. */
 .rpt-iro-text { width: 180px; }
-.rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--color-primary); }
+.rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--nds-primary); }
 /* Only its place in the control row: the DS `Button` owns the rest. */
 .rpt-iro-csv { margin-left: auto; }
 
@@ -625,47 +625,48 @@
 .rpt-iro-k { display: flex; flex-direction: column; gap: 2px; }
 .rpt-iro-k .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
 /* "est." rides in the label itself — a modelled figure that only says so in a
    tooltip is a modelled figure nobody knows is modelled. */
-.rpt-iro-k .lbl i { font-style: normal; color: var(--status-warning-strong); }
+.rpt-iro-k .lbl i { font-style: normal; color: var(--nds-warning-strong); }
 .rpt-iro-k .val {
   font-size: 22px; font-weight: 700; line-height: 1.2;
-  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
+  color: var(--nds-text); font-variant-numeric: tabular-nums;
 }
-.rpt-iro-k .val.em { color: var(--status-info-strong); }
-.rpt-iro-k .sub { font-size: 11.5px; color: rgb(var(--text-secondary)); }
+.rpt-iro-k .val.em { color: var(--nds-info-strong); }
+.rpt-iro-k .sub { font-size: 11.5px; color: var(--nds-text-2); }
 
 /* The iROAS table is the DS `DataGrid` at `sm`: wrapper, header, padding, hover, right-align and
    the empty state all come from it (`maxHeight` replaces `.rpt-iro-scroll`). Only the cell inks
    are local, and they hang off spans now rather than `<td>`s. */
-.rpt-iro-tbl .nm { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; color: rgb(var(--text-primary)); }
-.rpt-iro-tbl .dim { color: rgb(var(--text-tertiary)); }
-.rpt-iro-tbl .em { color: var(--status-info-strong); }
+.rpt-iro-tbl .nm { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; color: var(--nds-text); }
+.rpt-iro-tbl .dim { color: var(--nds-text-3); }
+.rpt-iro-tbl .em { color: var(--nds-info-strong); }
 .rpt-iro-tbl .em.b { font-weight: 700; }
 .rpt-iro-b { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; }
 .rpt-iro-b.br { background: #ede9fe; color: var(--nds-purple-700); }
 .rpt-iro-b.nb { background: #e0f2fe; color: #0369a1; }
-.rpt-iro-note { margin: 10px 0 0; font-size: 11.5px; color: rgb(var(--text-tertiary)); line-height: 1.55; }
+.rpt-iro-note { margin: 10px 0 0; font-size: 11.5px; color: var(--nds-text-3); line-height: 1.55; }
 
 /* ── BM.1 · category benchmarks ──────────────────────────────────────────────
    The card is deliberately small and repeated: fourteen of them read as one
    instrument panel, where fourteen full-width panels would read as a list.
 
-   🔴 Every surface/border/text token below is `rgb(var(--x))` — see the header
-   note. `--color-primary` and the `--status-*-strong` tokens are real hex and
-   are used bare. Getting that backwards is silent: the declaration is dropped
-   and the element renders with no background and a zero-width border. */
+   🔴 Every colour below is an `--nds-*` token — see the header note (R0).
+   Reading a `--text-*`/`--surface-*`/`--border-*` alias instead is silent: the
+   declaration is dropped and the element renders with no background and a
+   zero-width border; a `--status-*` / `--color-primary` alias turns dark under a
+   dark OS. */
 
 .rpt-bm {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px 18px 18px;
-  border: 1px solid rgb(var(--border-subtle));
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
-  background: rgb(var(--surface-card));
+  background: var(--nds-surface);
 }
 
 .rpt-bm-head {
@@ -678,20 +679,20 @@
   margin: 0;
   font-size: 14px;
   font-weight: 650;
-  color: rgb(var(--text-primary));
+  color: var(--nds-text);
 }
 /* The category path is not decoration — it names which of the seven nodes these
    numbers belong to, which is the difference between a correct figure and one
    counted seven times. */
 .rpt-bm-node {
   font-size: 12px;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
 }
-.rpt-bm-head svg { color: rgb(var(--text-tertiary)); }
+.rpt-bm-head svg { color: var(--nds-text-3); }
 .rpt-bm-scope {
   margin-left: auto;
   font-size: 11px;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -701,9 +702,9 @@
   max-width: 68ch;
   font-size: 13px;
   line-height: 1.55;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
 }
-.rpt-bm-why b { color: rgb(var(--text-primary)); font-weight: 650; }
+.rpt-bm-why b { color: var(--nds-text); font-weight: 650; }
 
 .rpt-bm-markets { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -716,9 +717,9 @@
   font-weight: 650;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
-.rpt-bm-sub svg { color: rgb(var(--text-tertiary)); }
+.rpt-bm-sub svg { color: var(--nds-text-3); }
 
 .rpt-bm-grid {
   display: grid;
@@ -739,9 +740,9 @@
   flex-direction: column;
   gap: 6px;
   padding: 11px 12px 10px;
-  border: 1px solid rgb(var(--border-subtle));
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-sunken));
+  background: var(--nds-surface-sunken);
   min-width: 0;
 }
 
@@ -751,16 +752,16 @@
   gap: 5px;
   font-size: 11px;
   line-height: 1.35;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
   min-height: 30px;
 }
-.rpt-bm-label svg { flex: 0 0 auto; color: rgb(var(--text-tertiary)); }
+.rpt-bm-label svg { flex: 0 0 auto; color: var(--nds-text-3); }
 
 .rpt-bm-value {
   font-size: 19px;
   font-weight: 650;
   line-height: 1.1;
-  color: rgb(var(--text-primary));
+  color: var(--nds-text);
   font-variant-numeric: tabular-nums;
   /* A band reads "0–5%" and must not wrap mid-range. */
   white-space: nowrap;
@@ -776,7 +777,7 @@
   position: relative;
   height: 6px;
   border-radius: 3px;
-  background: rgb(var(--border-subtle));
+  background: var(--nds-border-subtle);
   overflow: hidden;
 }
 .rpt-bm-bar .fill {
@@ -784,15 +785,15 @@
   inset: 0 auto 0 0;
   display: block;
   border-radius: 3px;
-  background: rgb(var(--text-tertiary));
+  background: var(--nds-text-3);
 }
 /* Ahead of the category median or behind it — the one comparison worth carrying
    in colour rather than leaving to the reader to compute from two numbers.
    `is-level` and `is-unknown` deliberately have no rule and keep the neutral
    fill: sitting exactly ON the median is not an achievement, and an absent
    figure is not a result. */
-.rpt-bm-bar.is-ahead .fill { background: var(--status-success-strong); }
-.rpt-bm-bar.is-behind .fill { background: var(--status-warning-strong); }
+.rpt-bm-bar.is-ahead .fill { background: var(--nds-success-strong); }
+.rpt-bm-bar.is-behind .fill { background: var(--nds-warning-strong); }
 
 /* The median's position on the same 0→top scale. `overflow:hidden` on the bar
    clips it at both ends, so a median sitting at 100% still reads as a tick. */
@@ -803,7 +804,7 @@
   width: 2px;
   margin-left: -1px;
   display: block;
-  background: rgb(var(--text-primary));
+  background: var(--nds-text);
   opacity: .55;
 }
 
@@ -812,12 +813,12 @@
   justify-content: space-between;
   gap: 8px;
   font-size: 10.5px;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
   font-variant-numeric: tabular-nums;
 }
 .rpt-bm-scale b {
   font-weight: 600;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
 }
 
 /* NAV.1 — "this report lives on another page". Quiet on purpose: it is a
@@ -827,7 +828,7 @@
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: .03em;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
   white-space: nowrap;
 }
 
@@ -839,8 +840,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1px;
-  background: rgb(var(--border-subtle));
-  border: 1px solid rgb(var(--border-subtle));
+  background: var(--nds-border-subtle);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-lg);
   overflow: hidden;
 }
@@ -852,7 +853,7 @@
   flex-direction: column;
   gap: 7px;
   padding: 13px 15px 14px;
-  background: rgb(var(--surface-card));
+  background: var(--nds-surface);
 }
 
 .rpt-bm-stage-hd {
@@ -863,7 +864,7 @@
   font-weight: 650;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 .rpt-bm-stage-hd svg { flex: 0 0 auto; }
 
@@ -871,13 +872,13 @@
   font-size: 26px;
   font-weight: 650;
   line-height: 1.05;
-  color: rgb(var(--text-primary));
+  color: var(--nds-text);
   font-variant-numeric: tabular-nums;
 }
 
 /* The index bar's track IS its full domain (0–1), so it takes the primary accent
    rather than the ahead/behind ramp — there is no median to be ahead of. */
-.rpt-bm-bar.is-index .fill { background: var(--color-primary); }
+.rpt-bm-bar.is-index .fill { background: var(--nds-primary); }
 
 .rpt-bm-stage-counts {
   display: flex;
@@ -889,13 +890,13 @@
 .rpt-bm-stage-counts dt {
   margin: 0;
   font-size: 11px;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 .rpt-bm-stage-counts dd {
   margin: 0;
   font-size: 12.5px;
   font-weight: 600;
-  color: rgb(var(--text-secondary));
+  color: var(--nds-text-2);
   font-variant-numeric: tabular-nums;
 }
 
@@ -906,15 +907,15 @@
   max-width: 92ch;
   font-size: 11.5px;
   line-height: 1.55;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
-.rpt-bm-foot b { color: rgb(var(--text-secondary)); font-weight: 650; }
+.rpt-bm-foot b { color: var(--nds-text-2); font-weight: 650; }
 
 /* ══ RPX — the strategy tabs ═════════════════════════════════════════════════
-   Token forms follow this file's existing convention: the text/surface/border tier is
-   CHANNELS inside the ads shell (`rgb(var(--x))`), the brand/status tier is whole colours.
-   Mixing the two forms is silently invalid at computed-value time — see the notes in
-   ads.css and the DS token guard. */
+   Token forms follow this file's convention (R0 at the top): every colour is an `--nds-*`
+   token. The `--text-*`/`--surface-*`/`--border-*` aliases have a different form inside the
+   shell and in a portal, and the `--status-*` / `--color-primary` aliases resolve at `:root`
+   and follow a dark OS, so neither belongs under this light console. */
 
 .rpx-shell .nds-tabs { margin-bottom: 14px; }
 .rpx { display: flex; flex-direction: column; gap: 14px; }
@@ -923,15 +924,15 @@
 .rpx-prov {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px;
   padding: 10px 14px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-card));
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
 }
 .rpx-prov .k {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
-.rpx-prov .v { font-size: 12.5px; font-weight: 500; color: rgb(var(--text-primary)); }
-.rpx-prov .sep { width: 1px; height: 14px; background: rgb(var(--border-subtle)); }
+.rpx-prov .v { font-size: 12.5px; font-weight: 500; color: var(--nds-text); }
+.rpx-prov .sep { width: 1px; height: 14px; background: var(--nds-border-subtle); }
 .rpx-prov-fresh { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .rpx-nodesel { max-width: 280px; }
 
@@ -939,58 +940,58 @@
 .rpx-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .rpx-stat {
   padding: 11px 13px 10px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-md);
-  background: rgb(var(--surface-card));
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
 }
 .rpx-stat .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 .rpx-stat .val {
   font-size: 22px; font-weight: 700; line-height: 1.25; margin-top: 3px;
-  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
+  color: var(--nds-text); font-variant-numeric: tabular-nums;
 }
-.rpx-stat .sub { font-size: 11.5px; color: rgb(var(--text-secondary)); margin-top: 3px; font-variant-numeric: tabular-nums; }
-.rpx-stat.is-warn { border-color: var(--status-warning-strong); }
-.rpx-stat.is-warn .val { color: var(--status-warning-strong); }
+.rpx-stat .sub { font-size: 11.5px; color: var(--nds-text-2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.rpx-stat.is-warn { border-color: var(--nds-warning-strong); }
+.rpx-stat.is-warn .val { color: var(--nds-warning-strong); }
 
 /* ── funnel ───────────────────────────────────────────────────────────────── */
 .rpx-funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .rpx-stage {
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg);
   padding: 13px 14px; display: flex; flex-direction: column; gap: 10px;
 }
 .rpx-stage .hd { display: flex; align-items: baseline; justify-content: space-between; }
 .rpx-stage .hd .n { font-size: 13.5px; font-weight: 700; }
 .rpx-stage .hd .i { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rpx-stage .bar { height: 6px; border-radius: var(--nds-radius-pill); background: rgb(var(--surface-sunken)); overflow: hidden; }
-.rpx-stage .bar span { display: block; height: 6px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
-.rpx-stage .cap { font-size: 11px; color: rgb(var(--text-tertiary)); }
-.rpx-stage .rule { height: 1px; background: rgb(var(--border-subtle)); }
+.rpx-stage .bar { height: 6px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); overflow: hidden; }
+.rpx-stage .bar span { display: block; height: 6px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
+.rpx-stage .cap { font-size: 11px; color: var(--nds-text-3); }
+.rpx-stage .rule { height: 1px; background: var(--nds-border-subtle); }
 .rpx-stage-metric { display: flex; flex-direction: column; gap: 3px; }
 .rpx-stage-metric .row { display: flex; justify-content: space-between; font-size: 12.5px; }
-.rpx-stage-metric .row .l { color: rgb(var(--text-secondary)); font-weight: 600; }
+.rpx-stage-metric .row .l { color: var(--nds-text-2); font-weight: 600; }
 .rpx-stage-metric .row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
 .rpx-stage-metric .cmp {
   display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px;
-  color: rgb(var(--text-tertiary)); font-variant-numeric: tabular-nums;
+  color: var(--nds-text-3); font-variant-numeric: tabular-nums;
 }
 .rpx-stage-metric .cmp .vd { margin-left: auto; font-weight: 700; }
-.rpx-stage-metric .cmp .vd.is-ahead { color: var(--status-success-strong); }
-.rpx-stage-metric .cmp .vd.is-behind { color: var(--status-warning-strong); }
+.rpx-stage-metric .cmp .vd.is-ahead { color: var(--nds-success-strong); }
+.rpx-stage-metric .cmp .vd.is-behind { color: var(--nds-warning-strong); }
 .rpx-stage-metric .cmp .vd.is-level,
 .rpx-stage-metric .cmp .vd.is-mute,
 .rpx-stage-metric .cmp .vd.is-no-value,
-.rpx-stage-metric .cmp .vd.is-no-median { color: rgb(var(--text-secondary)); }
+.rpx-stage-metric .cmp .vd.is-no-median { color: var(--nds-text-2); }
 
 /* ── benchmark table head (the bar rows are the DS BenchmarkBar) ───────────── */
 .rpx-bmk-head {
   display: grid;
   grid-template-columns: minmax(120px, 1.4fr) minmax(60px, 0.6fr) minmax(60px, 0.6fr) minmax(180px, 3fr) minmax(92px, 0.9fr);
   gap: 0 12px; align-items: center;
-  padding: 0 0 8px; border-bottom: 1px solid rgb(var(--border-default));
+  padding: 0 0 8px; border-bottom: 1px solid var(--nds-border);
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 .rpx-bmk-head > span:nth-child(2), .rpx-bmk-head > span:nth-child(3) { text-align: right; }
 .rpx-bmk-head > span:last-child { text-align: right; }
@@ -999,87 +1000,87 @@
   position: absolute; top: 0; transform: translateX(-50%); font-style: normal;
   text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 10.5px; white-space: nowrap;
 }
-.rpx-bmk-head .scale i.mid { font-weight: 700; color: rgb(var(--text-secondary)); }
+.rpx-bmk-head .scale i.mid { font-weight: 700; color: var(--nds-text-2); }
 
 /* ── new-to-brand + engagement band ───────────────────────────────────────── */
 .rpx-ntb, .rpx-band { display: flex; flex-direction: column; gap: 3px; }
-.rpx-band { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgb(var(--border-subtle)); }
+.rpx-band { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--nds-border-subtle); }
 .rpx-ntb .lbl, .rpx-band .lbl, .rpx-waste .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
 .rpx-ntb .big, .rpx-band .big, .rpx-waste .big {
   font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums;
 }
 .rpx-ntb .sub, .rpx-band .sub, .rpx-waste .sub {
-  font-size: 12px; color: rgb(var(--text-secondary)); line-height: 1.5;
+  font-size: 12px; color: var(--nds-text-2); line-height: 1.5;
 }
-.rpx-band .mute { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-size: 11.5px; color: rgb(var(--text-secondary)); line-height: 1.5; }
+.rpx-band .mute { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-size: 11.5px; color: var(--nds-text-2); line-height: 1.5; }
 
 /* ── all-markets ratio view ───────────────────────────────────────────────── */
 .rpx-mkts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .rpx-idx { display: flex; flex-direction: column; gap: 9px; }
-.rpx-idx .row { display: flex; justify-content: space-between; font-size: 12px; color: rgb(var(--text-secondary)); }
-.rpx-idx .row b { color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums; }
-.rpx-idx .bar { height: 5px; border-radius: var(--nds-radius-pill); background: rgb(var(--surface-sunken)); overflow: hidden; margin-top: 4px; }
-.rpx-idx .bar span { display: block; height: 5px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-idx .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--nds-text-2); }
+.rpx-idx .row b { color: var(--nds-text); font-variant-numeric: tabular-nums; }
+.rpx-idx .bar { height: 5px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); overflow: hidden; margin-top: 4px; }
+.rpx-idx .bar span { display: block; height: 5px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-ratio-grid { display: grid; gap: 0; }
 .rpx-ratio-grid .hd {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary)); padding: 0 10px 8px; border-bottom: 1px solid rgb(var(--border-default));
+  color: var(--nds-text-3); padding: 0 10px 8px; border-bottom: 1px solid var(--nds-border);
 }
 .rpx-ratio-grid .hd.c, .rpx-ratio-grid .cell.c { text-align: center; }
 .rpx-ratio-grid .lbl {
-  font-size: 13px; font-weight: 600; color: rgb(var(--text-primary));
-  padding: 12px 10px; border-bottom: 1px solid rgb(var(--border-subtle)); display: flex; align-items: center;
+  font-size: 13px; font-weight: 600; color: var(--nds-text);
+  padding: 12px 10px; border-bottom: 1px solid var(--nds-border-subtle); display: flex; align-items: center;
 }
-.rpx-ratio-grid .cell { padding: 10px; border-bottom: 1px solid rgb(var(--border-subtle)); }
+.rpx-ratio-grid .cell { padding: 10px; border-bottom: 1px solid var(--nds-border-subtle); }
 .rpx-ratio-grid .cell .mini { position: relative; height: 14px; margin: 0 auto 5px; max-width: 150px; }
-.rpx-ratio-grid .cell .mini .ax { position: absolute; left: 50%; top: 0; width: 1px; height: 14px; background: rgb(var(--border-default)); }
-.rpx-ratio-grid .cell .mini .fill { position: absolute; top: 3px; height: 8px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-ratio-grid .cell .mini .ax { position: absolute; left: 50%; top: 0; width: 1px; height: 14px; background: var(--nds-border); }
+.rpx-ratio-grid .cell .mini .fill { position: absolute; top: 3px; height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-ratio-grid .cell .vd { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rpx-ratio-grid .cell .vd.is-ahead { color: var(--status-success-strong); }
-.rpx-ratio-grid .cell .vd.is-behind { color: var(--status-warning-strong); }
+.rpx-ratio-grid .cell .vd.is-ahead { color: var(--nds-success-strong); }
+.rpx-ratio-grid .cell .vd.is-behind { color: var(--nds-warning-strong); }
 .rpx-ratio-grid .cell .vd.is-level,
 .rpx-ratio-grid .cell .vd.is-mute,
 .rpx-ratio-grid .cell .vd.is-no-value,
-.rpx-ratio-grid .cell .vd.is-no-median { color: rgb(var(--text-secondary)); font-weight: 600; }
-.rpx-ratio-grid .cell .raw { font-size: 11px; color: rgb(var(--text-tertiary)); font-variant-numeric: tabular-nums; margin-top: 2px; }
-.rpx-ratio-grid .cell .dash { color: rgb(var(--text-tertiary)); }
+.rpx-ratio-grid .cell .vd.is-no-median { color: var(--nds-text-2); font-weight: 600; }
+.rpx-ratio-grid .cell .raw { font-size: 11px; color: var(--nds-text-3); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.rpx-ratio-grid .cell .dash { color: var(--nds-text-3); }
 
 /* ── market-share funnel ──────────────────────────────────────────────────── */
 .rpx-share-funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .rpx-share-stage {
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg); padding: 13px 14px;
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); padding: 13px 14px;
 }
-.rpx-share-stage.is-zero { border-color: var(--status-warning-strong); }
+.rpx-share-stage.is-zero { border-color: var(--nds-warning-strong); }
 .rpx-share-stage .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary));
+  color: var(--nds-text-3);
 }
-.rpx-share-stage.is-zero .lbl { color: var(--status-warning-strong); }
+.rpx-share-stage.is-zero .lbl { color: var(--nds-warning-strong); }
 .rpx-share-stage .val { font-size: 26px; font-weight: 700; line-height: 1.2; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.rpx-share-stage.is-zero .val { color: var(--status-warning-strong); }
-.rpx-share-stage .sub { font-size: 12px; color: rgb(var(--text-secondary)); margin-top: 4px; font-variant-numeric: tabular-nums; }
-.rpx-share-stage .bar { height: 8px; border-radius: var(--nds-radius-pill); background: rgb(var(--surface-sunken)); margin-top: 10px; overflow: hidden; }
-.rpx-share-stage .bar span { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
-.rpx-buyshare .d { color: rgb(var(--text-tertiary)); font-size: 11px; margin-left: 4px; }
+.rpx-share-stage.is-zero .val { color: var(--nds-warning-strong); }
+.rpx-share-stage .sub { font-size: 12px; color: var(--nds-text-2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.rpx-share-stage .bar { height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); margin-top: 10px; overflow: hidden; }
+.rpx-share-stage .bar span { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
+.rpx-buyshare .d { color: var(--nds-text-3); font-size: 11px; margin-left: 4px; }
 .rpx-q { font-weight: 600; }
 
 /* ── coverage strip under a trend ─────────────────────────────────────────── */
 .rpx-coverage { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .rpx-coverage .k {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary)); margin-right: 4px; align-self: center;
+  color: var(--nds-text-3); margin-right: 4px; align-self: center;
 }
 .rpx-coverage .c {
   display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 4px 9px; border-radius: var(--nds-radius-sm); background: rgb(var(--surface-sunken));
+  padding: 4px 9px; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken);
 }
 .rpx-coverage .c b { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.rpx-coverage .c i { font-style: normal; font-size: 10px; color: rgb(var(--text-tertiary)); }
-.rpx-coverage .c.is-thin { background: var(--status-warning-soft); }
-.rpx-coverage .c.is-thin b { color: var(--status-warning-strong); font-weight: 700; }
+.rpx-coverage .c i { font-style: normal; font-size: 10px; color: var(--nds-text-3); }
+.rpx-coverage .c.is-thin { background: var(--nds-warning-soft); }
+.rpx-coverage .c.is-thin b { color: var(--nds-warning-strong); font-weight: 700; }
 
 /* ── business tables ──────────────────────────────────────────────────────── */
 .rpx-weeks, .rpx-mktrows { display: flex; flex-direction: column; font-size: 13px; }
@@ -1087,52 +1088,52 @@
 .rpx-mktrows .hd, .rpx-mktrows .row { display: grid; grid-template-columns: 1fr repeat(5, minmax(0, 1fr)); gap: 10px; align-items: center; }
 .rpx-weeks .hd, .rpx-mktrows .hd {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary)); padding-bottom: 8px; border-bottom: 1px solid rgb(var(--border-default));
+  color: var(--nds-text-3); padding-bottom: 8px; border-bottom: 1px solid var(--nds-border);
 }
-.rpx-weeks .row, .rpx-mktrows .row { padding: 9px 0; border-bottom: 1px solid rgb(var(--border-subtle)); }
+.rpx-weeks .row, .rpx-mktrows .row { padding: 9px 0; border-bottom: 1px solid var(--nds-border-subtle); }
 .rpx-weeks .row:last-child, .rpx-mktrows .row:last-child { border-bottom: none; }
 .rpx-weeks .n, .rpx-mktrows .n { text-align: right; font-variant-numeric: tabular-nums; }
 .rpx-weeks .b, .rpx-mktrows .b { font-weight: 700; }
-.rpx-weeks .row.is-partial { color: rgb(var(--text-secondary)); }
+.rpx-weeks .row.is-partial { color: var(--nds-text-2); }
 .rpx-weeks .tag {
   margin-left: 8px; font-size: 10px; font-weight: 600; padding: 1px 6px;
-  border-radius: var(--nds-radius-pill); background: rgb(var(--surface-sunken)); color: rgb(var(--text-tertiary));
+  border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); color: var(--nds-text-3);
 }
 .rpx-wastelist { display: flex; flex-direction: column; margin-top: 12px; font-size: 12.5px; }
-.rpx-wastelist .r { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgb(var(--border-subtle)); }
+.rpx-wastelist .r { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--nds-border-subtle); }
 .rpx-wastelist .r:last-child { border-bottom: none; }
 .rpx-wastelist .q { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rpx-wastelist .m, .rpx-wastelist .c { color: rgb(var(--text-tertiary)); font-variant-numeric: tabular-nums; }
+.rpx-wastelist .m, .rpx-wastelist .c { color: var(--nds-text-3); font-variant-numeric: tabular-nums; }
 .rpx-wastelist .s { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ── notes, caveats, states ───────────────────────────────────────────────── */
 .rpx-foot, .rpx-lede {
-  font-size: 12.5px; color: rgb(var(--text-secondary)); line-height: 1.6; margin: 12px 0 0;
+  font-size: 12.5px; color: var(--nds-text-2); line-height: 1.6; margin: 12px 0 0;
 }
 .rpx-lede { margin: 0; }
 .rpx-blocked {
   display: flex; flex-direction: column; gap: 4px; margin-top: 12px;
   padding: 11px 12px; border-radius: var(--nds-radius-lg);
 }
-.rpx-blocked.is-warn { background: var(--status-warning-soft); }
-.rpx-blocked.is-danger { background: var(--status-danger-soft); }
-.rpx-blocked.is-neutral { background: rgb(var(--surface-sunken)); }
+.rpx-blocked.is-warn { background: var(--nds-warning-soft); }
+.rpx-blocked.is-danger { background: var(--nds-danger-soft); }
+.rpx-blocked.is-neutral { background: var(--nds-surface-sunken); }
 .rpx-blocked .t { font-size: 12.5px; font-weight: 700; }
 .rpx-blocked.is-warn .t, .rpx-blocked.is-warn p { color: var(--nds-warning-text); }
 .rpx-blocked p { margin: 0; font-size: 12px; line-height: 1.55; }
 .rpx-caveats {
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-sunken)); padding: 12px 14px;
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken); padding: 12px 14px;
 }
 .rpx-caveats .hd {
   display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700;
-  color: rgb(var(--text-secondary)); margin-bottom: 7px;
+  color: var(--nds-text-2); margin-bottom: 7px;
 }
 .rpx-caveats ul { margin: 0; padding-left: 20px; }
-.rpx-caveats li { font-size: 12px; color: rgb(var(--text-secondary)); line-height: 1.6; margin-bottom: 5px; }
+.rpx-caveats li { font-size: 12px; color: var(--nds-text-2); line-height: 1.6; margin-bottom: 5px; }
 .rpx-caveats li:last-child { margin-bottom: 0; }
-.rpx-loading { padding: 40px; text-align: center; color: rgb(var(--text-tertiary)); font-size: 13px; }
-.rpx-empty { padding: 28px 24px; text-align: center; color: rgb(var(--text-secondary)); font-size: 13px; line-height: 1.6; }
+.rpx-loading { padding: 40px; text-align: center; color: var(--nds-text-3); font-size: 13px; }
+.rpx-empty { padding: 28px 24px; text-align: center; color: var(--nds-text-2); font-size: 13px; line-height: 1.6; }
 
 @media (max-width: 1100px) {
 }
@@ -1140,38 +1141,38 @@
 .rpt-nototals {
   display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0;
   padding: 10px 12px; border-radius: var(--nds-radius-lg);
-  background: rgb(var(--surface-sunken));
-  font-size: 12px; line-height: 1.55; color: rgb(var(--text-secondary));
+  background: var(--nds-surface-sunken);
+  font-size: 12px; line-height: 1.55; color: var(--nds-text-2);
 }
 .rpt-nototals svg { flex: none; margin-top: 2px; }
-.rpt-nototals b { color: rgb(var(--text-primary)); }
+.rpt-nototals b { color: var(--nds-text); }
 
 .rpx-mix { display: flex; flex-direction: column; font-size: 13px; }
 .rpx-mix .row {
   display: grid; grid-template-columns: minmax(140px, 1.1fr) minmax(150px, 1fr) minmax(120px, 2fr) minmax(90px, auto);
-  gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+  gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--nds-border-subtle);
 }
 .rpx-mix .row:last-child { border-bottom: none; }
 .rpx-mix .n { font-weight: 600; }
-.rpx-mix .c { font-size: 12px; color: rgb(var(--text-secondary)); }
-.rpx-mix .bar { height: 10px; border-radius: var(--nds-radius-pill); background: rgb(var(--surface-sunken)); overflow: hidden; }
-.rpx-mix .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-mix .c { font-size: 12px; color: var(--nds-text-2); }
+.rpx-mix .bar { height: 10px; border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); overflow: hidden; }
+.rpx-mix .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 .rpx-mix .s { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rpx-mix .row.is-idle .n, .rpx-mix .row.is-idle .s { color: rgb(var(--text-secondary)); }
+.rpx-mix .row.is-idle .n, .rpx-mix .row.is-idle .s { color: var(--nds-text-2); }
 
 /* ── GX.3 · Explorer node cell ───────────────────────────────────────────── */
 .gx-node { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.gx-open { font-weight: 600; color: var(--color-primary); text-decoration: none; }
+.gx-open { font-weight: 600; color: var(--nds-primary); text-decoration: none; }
 .gx-open:hover { text-decoration: underline; }
-.gx-plain { font-weight: 600; color: rgb(var(--text-primary)); }
-.gx-rem { font-weight: 600; color: var(--status-warning-strong); }
+.gx-plain { font-weight: 600; color: var(--nds-text); }
+.gx-rem { font-weight: 600; color: var(--nds-warning-strong); }
 .gx-sub {
-  font-size: 11px; color: rgb(var(--text-tertiary)); font-weight: 500;
+  font-size: 11px; color: var(--nds-text-3); font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
 /* The affordance only appears on hover: a row of permanent chevrons reads as clutter, and the
    link itself already says the label is clickable. */
-.gx-go { color: rgb(var(--text-tertiary)); opacity: 0; transition: opacity .12s ease; flex: none; }
+.gx-go { color: var(--nds-text-3); opacity: 0; transition: opacity .12s ease; flex: none; }
 .nds-wsgrid .nds-ws-tr:hover .gx-go { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .gx-go { transition: none; } }
 
@@ -1190,47 +1191,47 @@
 .rpx-rows { display: flex; flex-direction: column; font-size: 13px; }
 .rpx-rows .row {
   display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
-  padding: 8px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+  padding: 8px 0; border-bottom: 1px solid var(--nds-border-subtle);
 }
 .rpx-rows .row:last-child { border-bottom: none; }
 .rpx-rows .wk { font-weight: 600; font-variant-numeric: tabular-nums; }
-.rpx-rows .c { font-size: 12px; color: rgb(var(--text-secondary)); }
+.rpx-rows .c { font-size: 12px; color: var(--nds-text-2); }
 .rpx-rows .n { text-align: right; font-variant-numeric: tabular-nums; }
-.rpx-rows .n.s { color: rgb(var(--text-tertiary)); min-width: 44px; }
+.rpx-rows .n.s { color: var(--nds-text-3); min-width: 44px; }
 .rpx-rows .bar {
   height: 8px; border-radius: var(--nds-radius-pill);
-  background: rgb(var(--surface-sunken)); overflow: hidden;
+  background: var(--nds-surface-sunken); overflow: hidden;
 }
-.rpx-rows .bar i { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+.rpx-rows .bar i { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--nds-primary); }
 /* A thin week, or an idle market: recessive, and never hidden — the row is the answer. */
-.rpx-rows .row.is-thin .wk, .rpx-rows .row.is-thin .n { color: rgb(var(--text-secondary)); }
-.rpx-rows .row.is-thin .bar i { background: rgb(var(--border-strong)); }
+.rpx-rows .row.is-thin .wk, .rpx-rows .row.is-thin .n { color: var(--nds-text-2); }
+.rpx-rows .row.is-thin .bar i { background: var(--nds-border-strong); }
 
 /* Pace — three bars, one scale. The whole-day bar is drawn hollow because it is
    not something today can be compared against yet. */
 .rpx-pace { display: flex; flex-direction: column; font-size: 13px; }
 .rpx-pace .row {
   display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr) auto; gap: 12px;
-  align-items: center; padding: 9px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+  align-items: center; padding: 9px 0; border-bottom: 1px solid var(--nds-border-subtle);
 }
 .rpx-pace .row:last-child { border-bottom: none; }
-.rpx-pace .lbl { color: rgb(var(--text-secondary)); }
+.rpx-pace .lbl { color: var(--nds-text-2); }
 .rpx-pace .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .rpx-pace .bar {
   height: 10px; border-radius: var(--nds-radius-pill);
-  background: rgb(var(--surface-sunken)); overflow: hidden;
+  background: var(--nds-surface-sunken); overflow: hidden;
 }
-.rpx-pace .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: rgb(var(--border-strong)); }
-.rpx-pace .row.is-now .lbl { color: rgb(var(--text-primary)); font-weight: 600; }
+.rpx-pace .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: var(--nds-border-strong); }
+.rpx-pace .row.is-now .lbl { color: var(--nds-text); font-weight: 600; }
 .rpx-pace .row.is-now .n { font-weight: 700; }
-.rpx-pace .row.is-now .bar i { background: var(--color-primary); }
-.rpx-pace .row.is-ghost .lbl, .rpx-pace .row.is-ghost .n { color: rgb(var(--text-tertiary)); }
+.rpx-pace .row.is-now .bar i { background: var(--nds-primary); }
+.rpx-pace .row.is-ghost .lbl, .rpx-pace .row.is-ghost .n { color: var(--nds-text-3); }
 /* 🔴 Outlined, not filled — and measured, not judged by eye. `--color-primary-soft` is #e7f0fd,
    which is 1.15:1 against this card's white: a fill nobody can see, on the one bar that is a
    MARKER rather than a measurement. An outline says "reference line" and is visible saying it. */
 .rpx-pace .row.is-ghost .bar i {
   background: transparent; box-sizing: border-box;
-  border: 1px solid rgb(var(--border-strong));
+  border: 1px solid var(--nds-border-strong);
 }
 
 /* Sales advertising did not claim — two segments of one whole, so one hue at two
@@ -1242,29 +1243,29 @@
 .rpx-organic .hd {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-  color: rgb(var(--text-tertiary)); padding-bottom: 8px;
-  border-bottom: 1px solid rgb(var(--border-default));
+  color: var(--nds-text-3); padding-bottom: 8px;
+  border-bottom: 1px solid var(--nds-border);
 }
 .rpx-organic .hd .n { text-align: right; }
 .rpx-organic .row {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px;
-  align-items: center; padding: 8px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+  align-items: center; padding: 8px 0; border-bottom: 1px solid var(--nds-border-subtle);
 }
 .rpx-organic .row:last-child { border-bottom: none; }
 .rpx-organic .wk { font-variant-numeric: tabular-nums; }
 .rpx-organic .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-.rpx-organic .n.s { color: rgb(var(--text-tertiary)); font-weight: 400; min-width: 40px; }
+.rpx-organic .n.s { color: var(--nds-text-3); font-weight: 400; min-width: 40px; }
 .rpx-organic .bar { display: flex; gap: 2px; height: 10px; }
 .rpx-organic .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); }
-.rpx-organic .bar i.ad { background: var(--color-primary); }
+.rpx-organic .bar i.ad { background: var(--nds-primary); }
 /* Neutral, not a tint. Same reason as the pace marker above: the soft primary is 1.15:1 on this
    card and disappears. Accent for the part in question, grey for the remainder, is also the
    honest emphasis — the rest is usually the larger share and must not shout louder than it. */
-.rpx-organic .bar i.or { background: rgb(var(--border-strong)); }
-.rpx-organic .row.is-partial { color: rgb(var(--text-secondary)); }
+.rpx-organic .bar i.or { background: var(--nds-border-strong); }
+.rpx-organic .row.is-partial { color: var(--nds-text-2); }
 .rpx-organic .tag {
   margin-left: 8px; font-size: 10px; font-weight: 600; padding: 1px 6px;
-  border-radius: var(--nds-radius-pill); background: rgb(var(--surface-sunken)); color: rgb(var(--text-tertiary));
+  border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); color: var(--nds-text-3);
 }
 /* The week where the two feeds disagree: the sentence replaces the bar rather
    than a clamped-at-zero segment pretending the subtraction worked. */
@@ -1273,23 +1274,23 @@
 }
 .rpx-key { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; }
 .rpx-key i { display: inline-block; width: 18px; height: 8px; border-radius: var(--nds-radius-pill); }
-.rpx-key i.ad { background: var(--color-primary); }
-.rpx-key i.or { background: rgb(var(--border-strong)); }
+.rpx-key i.ad { background: var(--nds-primary); }
+.rpx-key i.or { background: var(--nds-border-strong); }
 
 /* Category nodes Amazon holds. */
 .rpx-nodes { display: flex; flex-direction: column; font-size: 13px; }
 .rpx-nodes .row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
-  padding: 8px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+  padding: 8px 0; border-bottom: 1px solid var(--nds-border-subtle);
 }
 .rpx-nodes .row:last-child { border-bottom: none; }
 .rpx-nodes .nm { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rpx-nodes .nm i {
-  font-style: normal; font-size: 11px; color: rgb(var(--text-tertiary));
+  font-style: normal; font-size: 11px; color: var(--nds-text-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.rpx-nodes .d { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
-.rpx-nodes .w { font-variant-numeric: tabular-nums; color: rgb(var(--text-secondary)); min-width: 34px; text-align: right; }
+.rpx-nodes .d { font-size: 11.5px; color: var(--nds-text-3); }
+.rpx-nodes .w { font-variant-numeric: tabular-nums; color: var(--nds-text-2); min-width: 34px; text-align: right; }
 .rpx-nodes .row.is-current .nm { font-weight: 700; }
 
 /* ── GX.8 · saved views ────────────────────────────────────────────────────────
@@ -1302,7 +1303,7 @@
 .rpx-viewsave { display: flex; flex-direction: column; gap: 8px; }
 .rpx-viewsave label {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: rgb(var(--text-tertiary));
+  text-transform: uppercase; color: var(--nds-text-3);
 }
-.rpx-viewsave p { margin: 0; font-size: 12.5px; line-height: 1.55; color: rgb(var(--text-secondary)); }
-.rpx-viewsave p.mute { color: rgb(var(--text-tertiary)); }
+.rpx-viewsave p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--nds-text-2); }
+.rpx-viewsave p.mute { color: var(--nds-text-3); }

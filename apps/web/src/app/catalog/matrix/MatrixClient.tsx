@@ -627,7 +627,7 @@ export default function MatrixClient() {
               <span>
                 {data.totalRows}
                 {data.totalRows < data.totalParents && (
-                  <span className="text-zinc-400"> of {data.totalParents}</span>
+                  <span className="text-tertiary"> of {data.totalParents}</span>
                 )}{' '}
                 parents · {data.totalVariants} variants
               </span>
@@ -1037,7 +1037,7 @@ function ParentCell({
       return (
         <div className="text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
           <span className="truncate">
-            {row.name ?? <span className="italic text-zinc-400">unnamed</span>}
+            {row.name ?? <span className="italic text-tertiary">unnamed</span>}
           </span>
           {row.variantCount > 0 && (
             <span className="text-[11px] text-zinc-500">({row.variantCount})</span>
@@ -1094,7 +1094,7 @@ function ParentCell({
       return (
         <div className="flex items-center gap-1 flex-wrap overflow-hidden">
           {row.channelCoverage.length === 0 ? (
-            <span className="text-[11px] text-zinc-400 italic">none</span>
+            <span className="text-[11px] text-tertiary italic">none</span>
           ) : (
             row.channelCoverage.map((c, i) => <ChannelChip key={i} coverage={c} />)
           )}
@@ -1237,7 +1237,7 @@ function VariantCell({
     case 'name':
       return (
         <div className="text-zinc-700 dark:text-zinc-300 truncate text-xs">
-          {variant.name ?? <span className="italic text-zinc-400">inherits</span>}
+          {variant.name ?? <span className="italic text-tertiary">inherits</span>}
         </div>
       )
     case 'brand':
@@ -1298,7 +1298,7 @@ function VariantCell({
       return (
         <div className="flex items-center gap-1 flex-wrap overflow-hidden">
           {variant.channelCoverage.length === 0 ? (
-            <span className="text-[11px] text-zinc-400 italic">—</span>
+            <span className="text-[11px] text-tertiary italic">—</span>
           ) : (
             variant.channelCoverage.map((c, i) => <ChannelChip key={i} coverage={c} />)
           )}

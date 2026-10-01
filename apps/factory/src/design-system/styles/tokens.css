@@ -69,6 +69,7 @@
   --nds-text-muted: var(--nds-text-3);
   --nds-text-strong: var(--nds-grey-700);
   --nds-text-disabled: var(--nds-grey-400);
+  --nds-placeholder: var(--nds-grey-600);
   --nds-text-inverse: var(--nds-white);
   --nds-text-link: var(--nds-blue-800);
   --nds-tooltip-light-fg: var(--nds-grey-900);
@@ -422,6 +423,7 @@
   --nds-text-2: #c3ccd6;
   --nds-text-3: #b3bac6;
   --nds-text-disabled: #5b6b7b;
+  --nds-placeholder: #97a3b1;
   --nds-text-inverse: #14223a;
   --nds-bg: #14223a;
   --nds-surface: #18263b;

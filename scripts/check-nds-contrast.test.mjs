@@ -168,3 +168,74 @@ test('R-65: the label on the HOVER fill is measured in both themes; an inverted 
   const gone = run(['--tokens', variant('--nds-primary-hover: #0f4290;', '')])
   assert.ok(gone.out.unresolved.some((u) => u.bg === '--nds-primary-hover' && u.mode === 'light'))
 })
+
+// ── Tailwind status channels (2026-10-01): ported from the retired check-contrast.mjs ──────────────────────────────────
+const GLOBALS = join(ROOT, 'apps/web/src/app/globals.css')
+/** A copy of the real globals.css with one exact declaration swapped (asserted to exist exactly once). */
+function globalsVariant(from, to) {
+  const css = readFileSync(GLOBALS, 'utf8')
+  assert.equal(css.split(from).length - 1, 1, `fixture anchor must occur once: ${from}`)
+  const path = join(dir, `globals-${++n}.css`)
+  writeFileSync(path, css.replace(from, to))
+  return path
+}
+const twRows = (out) => out.rows.filter((r) => r.group === 'tw-status')
+
+test('Tailwind status: text-X-strong on bg-X-soft from globals.css, light and dark, all at or above AA', () => {
+  const { code, out } = run(['--max-failures', '0', '--max-aa-failures', '0'])
+  assert.equal(code, 0)
+  const rows = twRows(out)
+  assert.equal(rows.length, 8)
+  assert.deepEqual(rows.filter((r) => r.mode === 'light').map((r) => r.fg).sort(), ['--danger-strong', '--info-strong', '--success-strong', '--warning-strong'])
+  for (const r of rows) assert.ok(r.ratio >= 4.5 && !r.belowAA, `${r.mode} ${r.fg}: ${r.ratio}`)
+  // Each theme reads its own block: the :root value in light, the .dark value in dark.
+  assert.equal(rows.find((r) => r.mode === 'light' && r.fg === '--success-strong').fgHex, '#047857')
+  assert.equal(rows.find((r) => r.mode === 'dark' && r.fg === '--success-strong').fgHex, '#6ee7b7')
+  assert.equal(rows.find((r) => r.mode === 'dark' && r.fg === '--success-strong').bgHex, '#062e23')
+})
+
+test('Tailwind status: a strong text lightened below AA fails the gate at 0 / 0', () => {
+  const r = run(['--globals', globalsVariant('--success-strong: 4 120 87;', '--success-strong: 52 211 153;'), '--max-failures', '0', '--max-aa-failures', '0'])
+  assert.equal(r.code, 1)
+  assert.ok(r.out.ratchet.failed)
+  assert.ok(r.out.failing.some((x) => x.group === 'tw-status' && x.mode === 'light' && x.fg === '--success-strong' && x.belowAA))
+})
+
+test('Tailwind status: a dark value that is not declared falls back to :root, as the cascade does, and fails', () => {
+  const r = run(['--globals', globalsVariant('--success-strong: 110 231 183;', ''), '--max-aa-failures', '0'])
+  assert.equal(r.code, 1)
+  const row = twRows(r.out).find((x) => x.mode === 'dark' && x.fg === '--success-strong')
+  assert.equal(row.fgHex, '#047857')
+  assert.equal(row.belowAA, true)
+})
+
+test('Tailwind status: a globals file with no pair is refused, never a silent pass; Factory measures none', () => {
+  const empty = join(dir, 'globals-empty.css')
+  writeFileSync(empty, ':root { --accent: 99 102 241; }\n')
+  const r = run(['--globals', empty])
+  assert.notEqual(r.code, 0)
+  assert.equal(r.out, null)
+  const factory = run(['--tokens', 'apps/factory/src/design-system/styles/tokens.css']).out
+  assert.equal(factory.globals, null)
+  assert.equal(twRows(factory).length, 0)
+})
+
+// ── Field placeholders (2026-10-01): their own token, AA 4.5:1 on every surface, both themes ───────────────────────────
+test('placeholder: --nds-placeholder is measured on every surface in both themes and clears 4.5:1', () => {
+  const { code, out } = run(['--max-failures', '0', '--max-aa-failures', '0'])
+  assert.equal(code, 0)
+  const surfaces = new Set(out.rows.filter((r) => r.group === 'text').map((r) => r.bg)).size
+  for (const mode of ['light', 'dark']) {
+    const rows = out.rows.filter((r) => r.group === 'placeholder' && r.mode === mode)
+    assert.equal(rows.length, surfaces, `${mode}: one row per surface`)
+    for (const r of rows) assert.ok(r.ratio >= 4.5 && !r.belowAA, `${mode} on ${r.bg}: ${r.ratio}`)
+  }
+  assert.equal(out.rows.find((r) => r.group === 'placeholder' && r.mode === 'light').fgHex, '#5b6573')
+  assert.equal(out.rows.find((r) => r.group === 'placeholder' && r.mode === 'dark').fgHex, '#97a3b1')
+})
+
+test('placeholder: the old disabled grey (2.04:1) fails the gate at 0 / 0', () => {
+  const r = run(['--tokens', variant('--nds-placeholder: var(--nds-grey-600);', '--nds-placeholder: var(--nds-grey-400);'), '--max-failures', '0', '--max-aa-failures', '0'])
+  assert.equal(r.code, 1)
+  assert.ok(r.out.failing.some((x) => x.group === 'placeholder' && x.mode === 'light' && x.belowAA))
+})

@@ -124,12 +124,13 @@
 .rec-plan-stars { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; margin-bottom: 12px; }
 
 .rec-plan-ctl { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
-/* The DS secondary button renders BORDERLESS in this console, so "Preview plan" read as bold text
-   rather than a control. Cause (measured on prod 2026-08-05): primitives.css writes
-   `border: 1px solid var(--border-default)`, but globals.css and ads.css define --border-default
-   as a bare Tailwind triplet ("203 213 225") for `rgb(var(--x)/<alpha>)` use. The shorthand becomes
-   `1px solid 203 213 225`, which is invalid, so the declaration is dropped and Tailwind's
-   `border: 0px` preflight wins. Same for background via --surface-card.
+/* The DS secondary button rendered BORDERLESS in this console, so "Preview plan" read as bold text
+   rather than a control. Cause (measured on prod 2026-08-05): primitives.css then wrote
+   `border: 1px solid var(--border-default)`, and inside the ads shell --border-default is a bare
+   RGB triplet ("203 213 225"; globals.css defined one too, for Tailwind, until 2026-10-01). The
+   shorthand became `1px solid 203 213 225`, which is invalid, so the declaration was dropped and
+   Tailwind's `border: 0px` preflight won. Same for background via --surface-card. (The DS has read
+   `--nds-*` since Phase 9.0b.)
    Scoped literal here rather than a DS-wide change: ~164 DS declarations share that root cause and
    deciding their intended appearance is not this panel's call. See ACR.6.3. */
 .rec-plan-f { display: flex; flex-direction: column; gap: 3px; }

@@ -136,6 +136,11 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-text-muted', value: 'var(--nds-text-3)' },
   { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
   { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
+  // Placeholder text in every DS field (2026-10-01). It used --nds-text-disabled, which is 2.04:1 on a
+  // white field and 2.78:1 on the dark one — a placeholder is read, so it needs 4.5:1. grey-600 is
+  // 5.91 on --nds-surface and 5.22 on --nds-surface-sunken, and stays lighter than every text tier
+  // so a hint never reads as a value. Held by check-nds-contrast.mjs (group `placeholder`).
+  { name: '--nds-placeholder', value: 'var(--nds-grey-600)' },
   { name: '--nds-text-inverse', value: 'var(--nds-white)' },
   // NOT --nds-blue-600: 4.42:1 on the ads console's ground, i.e. AA inside a card and failing
   // the moment the card is removed. #1a60c4 clears AA on every ground. See apps/web's copy.
@@ -397,6 +402,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-text-2', value: '#c3ccd6' },   // R-49 (A-51): 8.03 worst dark ground (was #aab6c2, 6.32)
   { name: '--nds-text-3', value: '#b3bac6' },   // R-49 (A-51): 7.24 worst dark surface (was #8a94a6, 4.62)
   { name: '--nds-text-disabled', value: '#5b6b7b' },
+  { name: '--nds-placeholder', value: '#97a3b1' },   // 5.94 on --nds-surface, 5.51 on raised (disabled was 2.78)
   { name: '--nds-text-inverse', value: '#14223a' },
 
   { name: '--nds-bg', value: '#14223a' },

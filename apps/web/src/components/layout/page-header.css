@@ -2,8 +2,8 @@
  * The shared page header (112 pages), on DS tokens.
  *
  * It was coloured with Tailwind's `text-primary` / `text-secondary` / `text-tertiary`, which read
- * `rgb(var(--text-primary) / 1)`: globals.css defines those names as RGB channels, but tokens.css —
- * imported by 186 app files, and kept for the rest of a session once any page loaded it — redefines them
+ * `rgb(var(--text-primary) / 1)`: globals.css defined those names as RGB channels (until 2026-10-01), but
+ * tokens.css — imported by 186 app files, and kept for the rest of a session once any page loaded it — redefines them
  * at :root as whole colours. `rgb(#e7ebf1 / 1)` is invalid, so the colour fell back to the inherited
  * black: #000 on #020617 (1.04:1) in the app's dark mode, and black only by luck in light. The --nds-*
  * tokens have one form, are defined on every page (tokens-global.css) and flip with `.dark`, and the

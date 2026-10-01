@@ -717,7 +717,7 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
           <button
             onClick={add}
             disabled={!draft.trim()}
-            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 disabled:opacity-50"
           >
             Save
           </button>
@@ -893,7 +893,7 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
           </p>
           <button
             onClick={getQuotes}
-            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-inverse rounded hover:opacity-90 inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} /> Get rates
           </button>

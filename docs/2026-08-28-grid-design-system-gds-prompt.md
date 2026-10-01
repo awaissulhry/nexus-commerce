@@ -96,7 +96,7 @@ not apply, say so explicitly in the plan rather than skipping it.
   `DensityToggle`…), DS `WorkspaceGrid` pattern (1,074 L, 51 props; 2 importers), and **196 files
   with a raw `<table>`**. The AG migration plan for the ads console is
   `docs/2026-08-28-ag-grid-migration-ag.md` (read §5 load-bearing behaviours and §7 risks).
-- **Guards you must pass (pre-push, `.githooks/pre-push`):** `check-contrast`,
+- **Guards you must pass (pre-push, `.githooks/pre-push`):** `check-nds-contrast`,
   `check-css-hex-ratchet`, `check-css-radius-ratchet`, `check-css-ds-shadow-ratchet`,
   `check-raw-primitives-ratchet` (a file with no baseline is held at ZERO raw controls),
   `ds-conformance-guard` (native select/date input, inline fontSize/hex — ratchets DOWN only),

@@ -4,8 +4,9 @@
 // loads tokens-global -> primitives -> components -> patterns -> a11y for the whole app, in
 // that exact cascade order. This page used to re-import `tokens.css`, which additionally
 // republishes the eleven platform aliases (--text-*, --surface-*, --border-*) at :root for as
-// long as the page is mounted — the same names app/globals.css defines as Tailwind RGB
-// channels. Nothing here needs them any more: this page's CSS is entirely on `--nds-*`.
+// long as the page is mounted — the same names `.h10-shell` pins as RGB channels (and
+// app/globals.css defined for Tailwind until 2026-10-01). Nothing here needs them any more:
+// this page's CSS is entirely on `--nds-*`.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import Link from '@/lib/workspaces/Link'

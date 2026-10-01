@@ -103,7 +103,7 @@ export default function ColumnPicker({
           )}
 
           {dynamic.length === 0 && (
-            <div className="mt-4 text-xs italic text-zinc-400 px-1">
+            <div className="mt-4 text-xs italic text-tertiary px-1">
               No dynamic attributes discovered yet. Add technical attributes on the Global tab
               of any product to surface them here.
             </div>
@@ -150,7 +150,7 @@ function Section({
       <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 mb-1.5">
         {title}
       </div>
-      {hint && <div className="text-[11px] text-zinc-400 mb-2">{hint}</div>}
+      {hint && <div className="text-[11px] text-tertiary mb-2">{hint}</div>}
       <div className="flex flex-col">
         {cols.map((c) => {
           const visible = visibleIds.has(c.id)
@@ -170,7 +170,7 @@ function Section({
             >
               <span className="flex items-center gap-2 truncate">
                 {c.dynamic && (
-                  <span className="text-[10px] font-mono text-zinc-400 px-1 rounded bg-zinc-100 dark:bg-zinc-800">
+                  <span className="text-[10px] font-mono text-tertiary px-1 rounded bg-zinc-100 dark:bg-zinc-800">
                     attr
                   </span>
                 )}

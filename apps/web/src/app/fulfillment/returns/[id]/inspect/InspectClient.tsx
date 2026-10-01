@@ -387,7 +387,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
             className={`w-full h-14 text-lg font-semibold rounded inline-flex items-center justify-center gap-2 transition-colors ${
               allGraded
                 ? 'bg-emerald-600 dark:bg-emerald-700 hover:bg-emerald-500 text-white'
-                : 'bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 text-white'
+                : 'bg-slate-900 dark:bg-slate-100 hover:opacity-90 text-inverse'
             } disabled:opacity-50`}
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
@@ -572,7 +572,7 @@ function ItemChecklistEditor({
             onClick={() => setChk({ signsOfUse: s })}
             className={`h-9 px-2.5 text-sm rounded border ${
               checklist.signsOfUse === s
-                ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                ? 'bg-slate-900 dark:bg-slate-100 text-inverse border-slate-900'
                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >

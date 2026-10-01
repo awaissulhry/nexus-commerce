@@ -902,7 +902,8 @@ design, but it may not implement until the gate decision and Phase 2 land.**
 - **Do** — Raise `check-contrast.mjs` to 7:1, derive its token list from source, run it, count the
   failures.
 - **Where** — 🟩 `scripts/check-contrast.mjs:31` (`const AA = 4.5`), `:37-56` (the hand-written
-  colour map), `:87` (the console line).
+  colour map), `:87` (the console line). *(2026-10-01: done as `scripts/check-nds-contrast.mjs`;
+  `check-contrast.mjs` is retired — the globals.css palette it measured is no longer painted.)*
 - **Why now** — 🔴 **One day.** Without a number, the UI research designs blind. And "AAA" with no
   measured baseline is the same *kind* of claim as "it publishes correctly" — believed, never
   tested. You already have one of those.
@@ -966,7 +967,7 @@ In this order. Cheapest-unblocking first.
 
 | # | Claim | Measured by |
 |---|---|---|
-| 1 | **Contrast 7:1**, light and dark | `check-contrast.mjs` at 7:1, token list **derived from source**, in the hook |
+| 1 | **Contrast 7:1**, light and dark | `check-nds-contrast.mjs` at 7:1, token list **derived from source**, in the hook (`check-contrast.mjs` retired 2026-10-01) |
 | 2 | **One keyboard model**, identical on Master, Amazon and eBay | A gate |
 | 3 | **Keyboard parity for every pointer action**, with a live announcement | 🟩 `OrderedList` already does this; new work matches |
 | 4 | **No invented state** | Review + the control-census gate |
@@ -1065,7 +1066,7 @@ here. A rule with no row is a rule that will quietly stop being true.
 | One writer for a child's axis value | 🆕 writer-count gate | 🆕 | Add |
 | The two payload builders agree | 🆕 parity gate | 🆕 | Add |
 | Paste and fill cannot write an invalid value | Per-reason tests + positive control | 🆕 | 🟢 push hook — `apps/api` `test:hook` (A-8) |
-| Contrast is 7:1, from a derived token list | 🟩 `scripts/check-contrast.mjs`, raised | Raise | 🔴 **Add — 0 matches today** |
+| Contrast is 7:1, from a derived token list | 🟩 `scripts/check-contrast.mjs`, raised (retired 2026-10-01 → `scripts/check-nds-contrast.mjs`) | Raise | 🔴 **Add — 0 matches today** |
 | The cell editor opens | `editor-open` | Restore | 🔴 **Removed 09-16/17** |
 | Grid chrome holds | `grid-chrome` | Restore | 🔴 **Removed** |
 | The control census holds | `census` | Restore | 🔴 **Removed** |
