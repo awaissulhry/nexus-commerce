@@ -819,6 +819,12 @@ export class BulkActionService {
               data: {
                 status:
                   result.status === 'processed' ? 'SUCCEEDED' : 'SKIPPED',
+                // A skipped row says why when its handler gave the reason
+                // (PRICING_UPDATE); the item's message field, as the
+                // rollback's own skipped rows use it.
+                ...(result.status === 'skipped' && result.reason
+                  ? { errorMessage: result.reason }
+                  : {}),
                 afterState,
                 completedAt: new Date(),
                 durationMs: Date.now() - itemStartedAt,
@@ -1822,6 +1828,8 @@ export class BulkActionService {
       currentValue: unknown;
       newValue: unknown;
       status: 'processed' | 'skipped';
+      /** Why a skipped row is skipped, in the job item's own words (PRICING_UPDATE). */
+      reason?: string;
     }>;
   }> {
     if (input.actionType === 'AI_TRANSLATE_PRODUCT') {
@@ -1924,6 +1932,7 @@ export class BulkActionService {
         currentValue: computed.currentValue,
         newValue: computed.newValue,
         status: computed.status,
+        ...(computed.reason ? { reason: computed.reason } : {}),
       };
     });
 
@@ -1941,7 +1950,7 @@ export class BulkActionService {
     item: Product | ProductVariation,
     actionType: BulkActionType,
     payload: Record<string, any>,
-  ): { currentValue: unknown; newValue: unknown; status: 'processed' | 'skipped' } {
+  ): { currentValue: unknown; newValue: unknown; status: 'processed' | 'skipped'; reason?: string } {
     switch (actionType) {
       case 'PRICING_UPDATE': {
         // The run's own rule on the run's own row (`bulk-action/pricing-update.ts`): a PRICING_UPDATE item is a whole
@@ -1953,6 +1962,8 @@ export class BulkActionService {
           currentValue: currentBasePrice(product).toFixed(2),
           newValue: outcome.newPrice.toFixed(2),
           status: outcome.status,
+          // The same sentence the run stores on the skipped item.
+          ...(outcome.status === 'skipped' ? { reason: outcome.reason } : {}),
         };
       }
 
@@ -2533,7 +2544,7 @@ export class BulkActionService {
   private async processItem(
     item: any,
     job: BulkActionJob
-  ): Promise<{ status: 'processed' | 'skipped' }> {
+  ): Promise<{ status: 'processed' | 'skipped'; reason?: string }> {
     const payload = (job.actionPayload ?? {}) as Record<string, any>;
     const channel = job.channel ?? undefined;
     // Dispatcher casts to the entity each handler expects. Phase B-4
@@ -2978,16 +2989,17 @@ export class BulkActionService {
     item: Product,
     payload: Record<string, any>,
     jobId: string,
-  ): Promise<{ status: 'processed' | 'skipped' }> {
+  ): Promise<{ status: 'processed' | 'skipped'; reason?: string }> {
     // The preview's own rule (`computePreview`) on the same row (a whole
     // Product: basePrice, minPrice, maxPrice): the new price in stored
     // cents, or a skip — below zero, outside the job's minPrice /
     // maxPrice, nothing to round, a stored price of 0 or below, or
-    // outside the product's own floor / ceiling. Soft constraints skip
+    // outside the product's own floor / ceiling — with the reason in
+    // plain words, kept on the skipped item. Soft constraints skip
     // rather than fail so the rest of the job continues; a payload no
     // row can run throws (the item fails).
     const outcome = pricingUpdateOutcome(item, payload);
-    if (outcome.status === 'skipped') return { status: 'skipped' };
+    if (outcome.status === 'skipped') return { status: 'skipped', reason: outcome.reason };
 
     await this.masterPriceService.update(item.id, outcome.newPrice, {
       actor: 'bulk-action',

@@ -37,8 +37,8 @@ afterAll(async () => { await state.db?.close() }, 60_000)
 const price = async (id: string) => Number((await prisma.product.findUniqueOrThrow({ where: { id } })).basePrice).toFixed(2)
 
 /**
- * Preview the job, then run it. Returns, per product: the preview's current price, new price and status, and the
- * price before, the price the run wrote and the run's item status.
+ * Preview the job, then run it. Returns, per product: the preview's current price, new price, status and reason,
+ * and the price before, the price the run wrote, the run's item status and the item's message.
  */
 type Seed = number | { basePrice: number; minPrice?: number; maxPrice?: number }
 async function previewThenRun(prices: Record<string, Seed>, actionPayload: Record<string, unknown>) {
@@ -61,7 +61,10 @@ async function previewThenRun(prices: Record<string, Seed>, actionPayload: Recor
   for (const id of ids) {
     const s = preview.sampleItems.find((x) => x.id === id)!
     const item = items.find((i) => i.productId === id)!
-    rows[id] = { preview: [s.currentValue, s.newValue, s.status], run: [before[id], await price(id), item.status === 'SUCCEEDED' ? 'processed' : item.status === 'SKIPPED' ? 'skipped' : item.status] }
+    rows[id] = {
+      preview: [s.currentValue, s.newValue, s.status, s.reason ?? null],
+      run: [before[id], await price(id), item.status === 'SUCCEEDED' ? 'processed' : item.status === 'SKIPPED' ? 'skipped' : item.status, item.errorMessage],
+    }
   }
   return { result, rows }
 }
@@ -70,28 +73,31 @@ describe('🔴 a PRICING_UPDATE preview shows what the run then writes', () => {
   it('ABSOLUTE: the current price is the product\'s, and the new one is the cents the run stores', () => scoped(async () => {
     const { result, rows } = await previewThenRun({ 'abs-a': 25.4 }, { adjustmentType: 'ABSOLUTE', value: 1.045 })
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 1, failedItems: 0 })
-    expect(rows['abs-a']).toEqual({ preview: ['25.40', '1.05', 'processed'], run: ['25.40', '1.05', 'processed'] })
+    expect(rows['abs-a']).toEqual({ preview: ['25.40', '1.05', 'processed', null], run: ['25.40', '1.05', 'processed', null] })
   }), 60_000)
 
   it('PERCENT: the computed price, in the cents the run stores; a price over maxPrice is skipped in both', () => scoped(async () => {
     const { result, rows } = await previewThenRun({ 'pct-a': 1.3, 'pct-b': 90 }, { adjustmentType: 'PERCENT', value: 15, maxPrice: 100 })
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 1, skippedItems: 1, failedItems: 0 })
-    expect(rows['pct-a']).toEqual({ preview: ['1.30', '1.50', 'processed'], run: ['1.30', '1.50', 'processed'] })
-    expect(rows['pct-b']).toEqual({ preview: ['90.00', '103.50', 'skipped'], run: ['90.00', '90.00', 'skipped'] })
+    expect(rows['pct-a']).toEqual({ preview: ['1.30', '1.50', 'processed', null], run: ['1.30', '1.50', 'processed', null] })
+    const over = "Not changed: 103.50 is above this job's maximum price of 100.00."
+    expect(rows['pct-b']).toEqual({ preview: ['90.00', '103.50', 'skipped', over], run: ['90.00', '90.00', 'skipped', over] })
   }), 60_000)
 
   it('DELTA: the computed price, in the cents the run stores; a price that would go below zero is skipped in both', () => scoped(async () => {
     const { result, rows } = await previewThenRun({ 'delta-a': 3.04, 'delta-b': 1 }, { adjustmentType: 'DELTA', value: -1.995 })
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 1, skippedItems: 1, failedItems: 0 })
-    expect(rows['delta-a']).toEqual({ preview: ['3.04', '1.05', 'processed'], run: ['3.04', '1.05', 'processed'] })
-    expect(rows['delta-b']).toEqual({ preview: ['1.00', '-1.00', 'skipped'], run: ['1.00', '1.00', 'skipped'] })
+    expect(rows['delta-a']).toEqual({ preview: ['3.04', '1.05', 'processed', null], run: ['3.04', '1.05', 'processed', null] })
+    const zero = 'Not changed: the new price would be -1.00, and a price must be above 0.'
+    expect(rows['delta-b']).toEqual({ preview: ['1.00', '-1.00', 'skipped', zero], run: ['1.00', '1.00', 'skipped', zero] })
   }), 60_000)
 
   it('ROUND_DOWN_TO_99: the rounded price; already .99 is skipped in both', () => scoped(async () => {
     const { result, rows } = await previewThenRun({ 'round-a': 25.4, 'round-b': 25.99 }, { adjustmentType: 'ROUND_DOWN_TO_99' })
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 1, skippedItems: 1, failedItems: 0 })
-    expect(rows['round-a']).toEqual({ preview: ['25.40', '24.99', 'processed'], run: ['25.40', '24.99', 'processed'] })
-    expect(rows['round-b']).toEqual({ preview: ['25.99', '25.99', 'skipped'], run: ['25.99', '25.99', 'skipped'] })
+    expect(rows['round-a']).toEqual({ preview: ['25.40', '24.99', 'processed', null], run: ['25.40', '24.99', 'processed', null] })
+    const already = 'Not changed: the price already ends in .99.'
+    expect(rows['round-b']).toEqual({ preview: ['25.99', '25.99', 'skipped', already], run: ['25.99', '25.99', 'skipped', already] })
   }), 60_000)
 
   it('🔴 every mode: a price that would be stored as 0 or below is skipped in both — a bulk change never stores 0', () => scoped(async () => {
@@ -105,7 +111,8 @@ describe('🔴 a PRICING_UPDATE preview shows what the run then writes', () => {
     for (const [id, basePrice, payload] of cases) {
       const { result, rows } = await previewThenRun({ [id]: basePrice }, payload)
       expect(result, id).toMatchObject({ status: 'COMPLETED', processedItems: 0, skippedItems: 1, failedItems: 0 })
-      expect(rows[id], id).toEqual({ preview: [basePrice.toFixed(2), '0.00', 'skipped'], run: [basePrice.toFixed(2), basePrice.toFixed(2), 'skipped'] })
+      const zero = 'Not changed: the new price would be 0.00, and a price must be above 0.'
+      expect(rows[id], id).toEqual({ preview: [basePrice.toFixed(2), '0.00', 'skipped', zero], run: [basePrice.toFixed(2), basePrice.toFixed(2), 'skipped', zero] })
     }
   }), 60_000)
 
@@ -118,22 +125,47 @@ describe('🔴 a PRICING_UPDATE preview shows what the run then writes', () => {
       'bounds-on-floor': { basePrice: 50, minPrice: 45 },
     }, { adjustmentType: 'PERCENT', value: -10 })
     expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 2, skippedItems: 3, failedItems: 0 })
+    // The product bounds' own words (`masterPriceBoundsReason`).
+    const floor = 'Not changed: 45.00 is below its pricing floor of 46.00.'
+    const ceiling = 'Not changed: 45.00 is above its pricing ceiling of 44.00.'
+    const crossed = 'Not changed: its pricing floor (60.00) is above its pricing ceiling (40.00).'
     expect(rows).toEqual({
-      'bounds-floor': { preview: ['50.00', '45.00', 'skipped'], run: ['50.00', '50.00', 'skipped'] },
-      'bounds-ceiling': { preview: ['50.00', '45.00', 'skipped'], run: ['50.00', '50.00', 'skipped'] },
-      'bounds-crossed': { preview: ['50.00', '45.00', 'skipped'], run: ['50.00', '50.00', 'skipped'] },
-      'bounds-inside': { preview: ['50.00', '45.00', 'processed'], run: ['50.00', '45.00', 'processed'] },
-      'bounds-on-floor': { preview: ['50.00', '45.00', 'processed'], run: ['50.00', '45.00', 'processed'] },
+      'bounds-floor': { preview: ['50.00', '45.00', 'skipped', floor], run: ['50.00', '50.00', 'skipped', floor] },
+      'bounds-ceiling': { preview: ['50.00', '45.00', 'skipped', ceiling], run: ['50.00', '50.00', 'skipped', ceiling] },
+      'bounds-crossed': { preview: ['50.00', '45.00', 'skipped', crossed], run: ['50.00', '50.00', 'skipped', crossed] },
+      'bounds-inside': { preview: ['50.00', '45.00', 'processed', null], run: ['50.00', '45.00', 'processed', null] },
+      'bounds-on-floor': { preview: ['50.00', '45.00', 'processed', null], run: ['50.00', '45.00', 'processed', null] },
     })
-    for (const [id, actionPayload, seed] of [
-      ['bounds-absolute', { adjustmentType: 'ABSOLUTE', value: 12 }, { basePrice: 20, maxPrice: 10 }],
-      ['bounds-delta', { adjustmentType: 'DELTA', value: 5 }, { basePrice: 20, maxPrice: 24 }],
-      ['bounds-round', { adjustmentType: 'ROUND_DOWN_TO_99' }, { basePrice: 25.4, minPrice: 25 }],
+    for (const [id, actionPayload, seed, reason] of [
+      ['bounds-absolute', { adjustmentType: 'ABSOLUTE', value: 12 }, { basePrice: 20, maxPrice: 10 }, 'Not changed: 12.00 is above its pricing ceiling of 10.00.'],
+      ['bounds-delta', { adjustmentType: 'DELTA', value: 5 }, { basePrice: 20, maxPrice: 24 }, 'Not changed: 25.00 is above its pricing ceiling of 24.00.'],
+      ['bounds-round', { adjustmentType: 'ROUND_DOWN_TO_99' }, { basePrice: 25.4, minPrice: 25 }, 'Not changed: 24.99 is below its pricing floor of 25.00.'],
     ] as const) {
       const one = await previewThenRun({ [id]: seed }, { ...actionPayload })
       expect(one.result, id).toMatchObject({ status: 'COMPLETED', processedItems: 0, skippedItems: 1, failedItems: 0 })
-      expect(one.rows[id].preview[2], id).toBe('skipped')
-      expect(one.rows[id].run, id).toEqual([seed.basePrice.toFixed(2), seed.basePrice.toFixed(2), 'skipped'])
+      expect(one.rows[id].preview.slice(2), id).toEqual(['skipped', reason])
+      expect(one.rows[id].run, id).toEqual([seed.basePrice.toFixed(2), seed.basePrice.toFixed(2), 'skipped', reason])
+    }
+  }), 60_000)
+
+  it('🔴 every skipped row says why, in the same words in the preview and on the job item', () => scoped(async () => {
+    const cases: Array<[string, Seed, Record<string, unknown>, string]> = [
+      ['why-zero', 5, { adjustmentType: 'ABSOLUTE', value: 0 }, 'Not changed: the new price would be 0.00, and a price must be above 0.'],
+      ['why-floor', { basePrice: 50, minPrice: 46 }, { adjustmentType: 'PERCENT', value: -10 }, 'Not changed: 45.00 is below its pricing floor of 46.00.'],
+      ['why-ceiling', { basePrice: 50, maxPrice: 54 }, { adjustmentType: 'DELTA', value: 5 }, 'Not changed: 55.00 is above its pricing ceiling of 54.00.'],
+      ['why-job-min', 50, { adjustmentType: 'PERCENT', value: -10, minPrice: 46 }, "Not changed: 45.00 is below this job's minimum price of 46.00."],
+      ['why-job-max', 50, { adjustmentType: 'ABSOLUTE', value: 60, maxPrice: 55 }, "Not changed: 60.00 is above this job's maximum price of 55.00."],
+      // The job's bounds test the computed price, so the reason shows it unrounded when it is not whole cents.
+      ['why-job-min-exact', 10, { adjustmentType: 'DELTA', value: -0.004, minPrice: 10 }, "Not changed: 9.996 is below this job's minimum price of 10.00."],
+      ['why-already-99', 25.99, { adjustmentType: 'ROUND_DOWN_TO_99' }, 'Not changed: the price already ends in .99.'],
+      ['why-below-099', 0.5, { adjustmentType: 'ROUND_DOWN_TO_99' }, 'Not changed: 0.50 is below 0.99, so there is no lower price ending in .99.'],
+    ]
+    for (const [id, seed, payload, reason] of cases) {
+      const { result, rows } = await previewThenRun({ [id]: seed }, payload)
+      expect(result, id).toMatchObject({ status: 'COMPLETED', processedItems: 0, skippedItems: 1, failedItems: 0 })
+      const before = (typeof seed === 'number' ? seed : seed.basePrice).toFixed(2)
+      expect(rows[id].preview.slice(2), id).toEqual(['skipped', reason])
+      expect(rows[id].run, id).toEqual([before, before, 'skipped', reason])
     }
   }), 60_000)
 })

@@ -16,6 +16,9 @@ import { describe, expect, it } from 'vitest'
 import { currentBasePrice, pricingUpdateOutcome } from './pricing-update.js'
 
 /** A product row as the job loads it: the master price and the product's own floor and ceiling. */
+const ZERO = 'Not changed: the new price would be 0.00, and a price must be above 0.'
+const ALREADY_99 = 'Not changed: the price already ends in .99.'
+
 const product = (basePrice: number, minPrice: number | null = null, maxPrice: number | null = null) => ({
   basePrice: new Prisma.Decimal(basePrice.toFixed(2)),
   minPrice: minPrice == null ? null : new Prisma.Decimal(minPrice.toFixed(2)),
@@ -41,39 +44,45 @@ describe('pricingUpdateOutcome — each mode', () => {
 
   it('ROUND_DOWN_TO_99 needs no value, and keeps its own skips', () => {
     expect(pricingUpdateOutcome(product(25.4), { adjustmentType: 'ROUND_DOWN_TO_99' })).toEqual({ newPrice: 24.99, status: 'processed' })
-    expect(pricingUpdateOutcome(product(25.99), { adjustmentType: 'ROUND_DOWN_TO_99' })).toEqual({ newPrice: 25.99, status: 'skipped' })
-    expect(pricingUpdateOutcome(product(0.5), { adjustmentType: 'ROUND_DOWN_TO_99' })).toEqual({ newPrice: 0.5, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(25.99), { adjustmentType: 'ROUND_DOWN_TO_99' })).toEqual({ newPrice: 25.99, status: 'skipped', reason: ALREADY_99 })
+    expect(pricingUpdateOutcome(product(0.5), { adjustmentType: 'ROUND_DOWN_TO_99' })).toEqual({ newPrice: 0.5, status: 'skipped', reason: 'Not changed: 0.50 is below 0.99, so there is no lower price ending in .99.' })
+    // The job's bounds apply to the rounded price, as to every mode's.
+    expect(pricingUpdateOutcome(product(25.4), { adjustmentType: 'ROUND_DOWN_TO_99', minPrice: 25 })).toEqual({ newPrice: 24.99, status: 'skipped', reason: "Not changed: 24.99 is below this job's minimum price of 25.00." })
+    expect(pricingUpdateOutcome(product(25.4), { adjustmentType: 'ROUND_DOWN_TO_99', minPrice: 24.99 })).toEqual({ newPrice: 24.99, status: 'processed' })
+    expect(pricingUpdateOutcome(product(25.4), { adjustmentType: 'ROUND_DOWN_TO_99', maxPrice: 20 })).toEqual({ newPrice: 24.99, status: 'skipped', reason: "Not changed: 24.99 is above this job's maximum price of 20.00." })
+    expect(pricingUpdateOutcome(product(25.4), { adjustmentType: 'ROUND_DOWN_TO_99', minPrice: '30' })).toEqual({ newPrice: 24.99, status: 'processed' })
   })
 
   it('skips below zero and outside the job\'s minPrice / maxPrice, testing the computed price as before', () => {
-    expect(pricingUpdateOutcome(product(1), { adjustmentType: 'DELTA', value: -1.995 })).toEqual({ newPrice: -1, status: 'skipped' })
-    expect(pricingUpdateOutcome(product(90), { adjustmentType: 'PERCENT', value: 15, maxPrice: 100 })).toEqual({ newPrice: 103.5, status: 'skipped' })
-    // 9.996 is below the job's floor of 10 even though its stored cents would be 10.00: skipped, as the run always did.
-    expect(pricingUpdateOutcome(product(10), { adjustmentType: 'DELTA', value: -0.004, minPrice: 10 })).toEqual({ newPrice: 10, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(1), { adjustmentType: 'DELTA', value: -1.995 })).toEqual({ newPrice: -1, status: 'skipped', reason: 'Not changed: the new price would be -1.00, and a price must be above 0.' })
+    expect(pricingUpdateOutcome(product(90), { adjustmentType: 'PERCENT', value: 15, maxPrice: 100 })).toEqual({ newPrice: 103.5, status: 'skipped', reason: "Not changed: 103.50 is above this job's maximum price of 100.00." })
+    // 9.996 is below the job's floor of 10 even though its stored cents would be 10.00: skipped, as the run always did,
+    // and the reason shows the price the bound tested.
+    expect(pricingUpdateOutcome(product(10), { adjustmentType: 'DELTA', value: -0.004, minPrice: 10 })).toEqual({ newPrice: 10, status: 'skipped', reason: "Not changed: 9.996 is below this job's minimum price of 10.00." })
     expect(pricingUpdateOutcome(product(10), { adjustmentType: 'DELTA', value: 1, minPrice: '20' })).toEqual({ newPrice: 11, status: 'processed' })
   })
 
   it('🔴 1. a price that would be stored as 0 or below is skipped, in every mode', () => {
-    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'ABSOLUTE', value: 0 })).toEqual({ newPrice: 0, status: 'skipped' })
-    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'DELTA', value: -5 })).toEqual({ newPrice: 0, status: 'skipped' })
-    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'PERCENT', value: -100 })).toEqual({ newPrice: 0, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'ABSOLUTE', value: 0 })).toEqual({ newPrice: 0, status: 'skipped', reason: ZERO })
+    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'DELTA', value: -5 })).toEqual({ newPrice: 0, status: 'skipped', reason: ZERO })
+    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'PERCENT', value: -100 })).toEqual({ newPrice: 0, status: 'skipped', reason: ZERO })
     // A positive computed price that the write would store as 0.00.
-    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'ABSOLUTE', value: 0.004 })).toEqual({ newPrice: 0, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(5), { adjustmentType: 'ABSOLUTE', value: 0.004 })).toEqual({ newPrice: 0, status: 'skipped', reason: ZERO })
     // The smallest storable price is fine.
     expect(pricingUpdateOutcome(product(5), { adjustmentType: 'ABSOLUTE', value: 0.01 })).toEqual({ newPrice: 0.01, status: 'processed' })
   })
 
   it('🔴 2. a new price outside the product\'s own floor or ceiling is skipped, in every mode; on the bound is fine', () => {
-    expect(pricingUpdateOutcome(product(50, 46), { adjustmentType: 'PERCENT', value: -10 })).toEqual({ newPrice: 45, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(50, 46), { adjustmentType: 'PERCENT', value: -10 })).toEqual({ newPrice: 45, status: 'skipped', reason: 'Not changed: 45.00 is below its pricing floor of 46.00.' })
     expect(pricingUpdateOutcome(product(50, 45), { adjustmentType: 'PERCENT', value: -10 })).toEqual({ newPrice: 45, status: 'processed' })
-    expect(pricingUpdateOutcome(product(20, null, 24), { adjustmentType: 'DELTA', value: 5 })).toEqual({ newPrice: 25, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(20, null, 24), { adjustmentType: 'DELTA', value: 5 })).toEqual({ newPrice: 25, status: 'skipped', reason: 'Not changed: 25.00 is above its pricing ceiling of 24.00.' })
     expect(pricingUpdateOutcome(product(20, null, 25), { adjustmentType: 'DELTA', value: 5 })).toEqual({ newPrice: 25, status: 'processed' })
-    expect(pricingUpdateOutcome(product(20, null, 10), { adjustmentType: 'ABSOLUTE', value: 12 })).toEqual({ newPrice: 12, status: 'skipped' })
-    expect(pricingUpdateOutcome(product(25.4, 25), { adjustmentType: 'ROUND_DOWN_TO_99' })).toEqual({ newPrice: 24.99, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(20, null, 10), { adjustmentType: 'ABSOLUTE', value: 12 })).toEqual({ newPrice: 12, status: 'skipped', reason: 'Not changed: 12.00 is above its pricing ceiling of 10.00.' })
+    expect(pricingUpdateOutcome(product(25.4, 25), { adjustmentType: 'ROUND_DOWN_TO_99' })).toEqual({ newPrice: 24.99, status: 'skipped', reason: 'Not changed: 24.99 is below its pricing floor of 25.00.' })
     // A floor above the ceiling is a contradiction the operator resolves: nothing is written.
-    expect(pricingUpdateOutcome(product(50, 60, 40), { adjustmentType: 'PERCENT', value: -10 })).toEqual({ newPrice: 45, status: 'skipped' })
+    expect(pricingUpdateOutcome(product(50, 60, 40), { adjustmentType: 'PERCENT', value: -10 })).toEqual({ newPrice: 45, status: 'skipped', reason: 'Not changed: its pricing floor (60.00) is above its pricing ceiling (40.00).' })
     // Bounds as numbers or strings read the same (`priceBoundsOf`).
-    expect(pricingUpdateOutcome({ basePrice: 50, minPrice: '46', maxPrice: null }, { adjustmentType: 'PERCENT', value: -10 })).toEqual({ newPrice: 45, status: 'skipped' })
+    expect(pricingUpdateOutcome({ basePrice: 50, minPrice: '46', maxPrice: null }, { adjustmentType: 'PERCENT', value: -10 })).toEqual({ newPrice: 45, status: 'skipped', reason: 'Not changed: 45.00 is below its pricing floor of 46.00.' })
   })
 
   it('refuses a payload no row can run', () => {
@@ -137,6 +146,10 @@ describe('🔴 the run writes what it wrote before this change, except the two i
           }
         }
         expect(now(row, payload), JSON.stringify({ current, own, payload })).toEqual(expected)
+        // Every skipped row says why; a processed row carries no reason.
+        const outcome = pricingUpdateOutcome(row, payload)
+        if (outcome.status === 'skipped') expect(outcome.reason, JSON.stringify(payload)).toMatch(/^Not changed: .+\.$/)
+        else expect('reason' in outcome).toBe(false)
       }
     }
     // Both differences actually occurred in the sample.

@@ -16,13 +16,16 @@
  *   - the price it would store is 0 or below — a bulk change never stores a master price of 0 (2026-10-01);
  *   - the price it would store is outside the PRODUCT's own floor / ceiling (`Product.minPrice` / `maxPrice`,
  *     2026-10-01). The push refuses such a price after Nexus stored it, so Nexus and the channel would disagree.
- * The last two are the agent price tools' rules (#225, `price-bounds.service.ts`).
+ * The last two are the agent price tools' rules (#225, `price-bounds.service.ts`). Every skipped row says why, in plain
+ * words: the job item keeps it as its message (`BulkActionItem.errorMessage`, status SKIPPED) and the preview shows it.
  */
-import type { Product } from '@prisma/client'
 import { masterPriceBoundsReason, priceBoundsOf } from '../price-bounds.service.js'
 import { ROUND_DOWN_TO_99, roundDownTo99Outcome } from './price-rounding.js'
 
-export type PricingUpdateOutcome = { newPrice: number; status: 'processed' | 'skipped' }
+/** One row's result. A skipped row always says why, in plain words (the job item's message and the preview's). */
+export type PricingUpdateOutcome =
+  | { newPrice: number; status: 'processed' }
+  | { newPrice: number; status: 'skipped'; reason: string }
 
 /**
  * The columns of the product row the rule reads: its master price and its own floor and ceiling. A whole Product row
@@ -43,10 +46,28 @@ function storedCents(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-/** The mode's own arithmetic and the job's own bounds, on the current price. */
-function modeOutcome(currentPrice: number, payload: Record<string, any>): PricingUpdateOutcome {
+/** A price in the cents it is stored in. */
+const money = (n: number) => n.toFixed(2)
+
+/**
+ * A price as the job's own bounds tested it: in cents when it is whole cents, otherwise to four places — those bounds
+ * test the computed price, so "10.00 is below the minimum of 10.00" would be a false sentence for 9.996.
+ */
+function asTested(n: number): string {
+  const four = Number(n.toFixed(4))
+  return Math.abs(four * 100 - Math.round(four * 100)) < 1e-6 ? four.toFixed(2) : String(four)
+}
+
+/** The mode's own arithmetic on the current price: the computed price and its stored cents, or the mode's own skip. */
+function modeOutcome(
+  currentPrice: number,
+  payload: Record<string, any>,
+): { computed: number; newPrice: number } | { newPrice: number; reason: string } {
   const adjustmentType = payload.adjustmentType
-  if (adjustmentType === ROUND_DOWN_TO_99) return roundDownTo99Outcome(currentPrice, payload)
+  if (adjustmentType === ROUND_DOWN_TO_99) {
+    const rounded = roundDownTo99Outcome(currentPrice)
+    return rounded.status === 'skipped' ? rounded : { computed: rounded.newPrice, newPrice: rounded.newPrice }
+  }
 
   const rawValue = payload.value
   const value = typeof rawValue === 'number' ? rawValue : Number(rawValue)
@@ -67,25 +88,32 @@ function modeOutcome(currentPrice: number, payload: Record<string, any>): Pricin
     default:
       throw new Error(`Invalid PRICING_UPDATE adjustmentType: ${adjustmentType}`)
   }
-
-  // The job's bounds test the computed price, as they always have; the price returned is the cents the write stores.
-  let status: PricingUpdateOutcome['status'] = 'processed'
-  if (computed < 0) status = 'skipped'
-  else if (typeof payload.minPrice === 'number' && computed < payload.minPrice) status = 'skipped'
-  else if (typeof payload.maxPrice === 'number' && computed > payload.maxPrice) status = 'skipped'
-  return { newPrice: storedCents(computed), status }
+  return { computed, newPrice: storedCents(computed) }
 }
 
 /**
- * The new price of one row and whether the row is processed or skipped. Throws on a payload no row can run (the item
- * then fails, as before).
+ * The new price of one row and whether the row is processed or skipped — and, when skipped, why. Throws on a payload
+ * no row can run (the item then fails, as before). In order:
+ *   1. the mode's own skip (ROUND_DOWN_TO_99: below 0.99, or already .99);
+ *   2. a stored price of 0 or below (a computed price below 0 included);
+ *   3. the job's own minPrice / maxPrice, on the computed price as always;
+ *   4. the product's own floor / ceiling, on the price that would be stored.
  */
 export function pricingUpdateOutcome(product: PricedProduct, payload: Record<string, any>): PricingUpdateOutcome {
-  const outcome = modeOutcome(currentBasePrice(product), payload)
-  if (outcome.status === 'skipped') return outcome
-  // Never a master price of 0 or below.
-  if (outcome.newPrice <= 0) return { ...outcome, status: 'skipped' }
+  const mode = modeOutcome(currentBasePrice(product), payload)
+  if ('reason' in mode) return { newPrice: mode.newPrice, status: 'skipped', reason: mode.reason }
+  const { computed, newPrice } = mode
+  const skip = (reason: string): PricingUpdateOutcome => ({ newPrice, status: 'skipped', reason: `Not changed: ${reason}.` })
+
+  if (newPrice <= 0) return skip(`the new price would be ${money(newPrice)}, and a price must be above 0`)
+  if (typeof payload.minPrice === 'number' && computed < payload.minPrice) {
+    return skip(`${asTested(computed)} is below this job's minimum price of ${asTested(payload.minPrice)}`)
+  }
+  if (typeof payload.maxPrice === 'number' && computed > payload.maxPrice) {
+    return skip(`${asTested(computed)} is above this job's maximum price of ${asTested(payload.maxPrice)}`)
+  }
   // Never a price the product's own floor or ceiling refuses (a floor above the ceiling refuses every price).
-  if (masterPriceBoundsReason(outcome.newPrice, priceBoundsOf(product)) !== null) return { ...outcome, status: 'skipped' }
-  return outcome
+  const outside = masterPriceBoundsReason(newPrice, priceBoundsOf(product))
+  if (outside !== null) return skip(outside)
+  return { newPrice, status: 'processed' }
 }

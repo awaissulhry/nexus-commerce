@@ -23,17 +23,17 @@ export function roundDownTo99(price: number): number | null {
 }
 
 /**
- * What the mode does to one price. Skipped, with the price kept, when there is nothing to write: no X.99 at or below
- * it (under 0.99), or it already ends in .99. Skipped, too, outside the job's `minPrice` / `maxPrice` — the bounds
- * every PRICING_UPDATE mode honours.
+ * What the mode does to one price. Skipped, with the price kept and the reason in plain words, when there is nothing
+ * to write: no X.99 at or below it (under 0.99), or it already ends in .99. The job's and the product's bounds apply
+ * after this, to every mode alike (`pricingUpdateOutcome`).
  */
 export function roundDownTo99Outcome(
   currentPrice: number,
-  bounds: { minPrice?: unknown; maxPrice?: unknown },
-): { newPrice: number; status: 'processed' | 'skipped' } {
+): { newPrice: number; status: 'processed' } | { newPrice: number; status: 'skipped'; reason: string } {
   const rounded = roundDownTo99(currentPrice)
-  if (rounded == null || rounded === currentPrice) return { newPrice: currentPrice, status: 'skipped' }
-  if (typeof bounds.minPrice === 'number' && rounded < bounds.minPrice) return { newPrice: rounded, status: 'skipped' }
-  if (typeof bounds.maxPrice === 'number' && rounded > bounds.maxPrice) return { newPrice: rounded, status: 'skipped' }
+  if (rounded == null) {
+    return { newPrice: currentPrice, status: 'skipped', reason: `Not changed: ${currentPrice.toFixed(2)} is below 0.99, so there is no lower price ending in .99.` }
+  }
+  if (rounded === currentPrice) return { newPrice: currentPrice, status: 'skipped', reason: 'Not changed: the price already ends in .99.' }
   return { newPrice: rounded, status: 'processed' }
 }

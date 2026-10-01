@@ -46,30 +46,22 @@ describe('roundDownTo99 — the largest X.99 at or below the price', () => {
   })
 })
 
-describe('roundDownTo99Outcome — what one row of the job does (the preview and the run share it)', () => {
+describe('roundDownTo99Outcome — the mode\'s own result for one price (the job\'s and the product\'s bounds come after, in pricing-update.ts)', () => {
   it('names the mode as stored in a payload', () => {
     expect(ROUND_DOWN_TO_99).toBe('ROUND_DOWN_TO_99')
   })
 
   it('a price that rounds down is processed at the rounded price', () => {
-    expect(roundDownTo99Outcome(25.4, {})).toEqual({ newPrice: 24.99, status: 'processed' })
-    expect(roundDownTo99Outcome(25, {})).toEqual({ newPrice: 24.99, status: 'processed' })
+    expect(roundDownTo99Outcome(25.4)).toEqual({ newPrice: 24.99, status: 'processed' })
+    expect(roundDownTo99Outcome(25)).toEqual({ newPrice: 24.99, status: 'processed' })
   })
 
-  it('a price that already ends in .99 is skipped and kept: nothing to write', () => {
-    expect(roundDownTo99Outcome(25.99, {})).toEqual({ newPrice: 25.99, status: 'skipped' })
+  it('a price that already ends in .99 is skipped and kept, and says so', () => {
+    expect(roundDownTo99Outcome(25.99)).toEqual({ newPrice: 25.99, status: 'skipped', reason: 'Not changed: the price already ends in .99.' })
   })
 
-  it('a price below 0.99 is skipped and kept', () => {
-    expect(roundDownTo99Outcome(0.5, {})).toEqual({ newPrice: 0.5, status: 'skipped' })
-    expect(roundDownTo99Outcome(0, {})).toEqual({ newPrice: 0, status: 'skipped' })
-  })
-
-  it('honours the minPrice / maxPrice bounds every PRICING_UPDATE honours', () => {
-    expect(roundDownTo99Outcome(25.4, { minPrice: 25 })).toEqual({ newPrice: 24.99, status: 'skipped' })
-    expect(roundDownTo99Outcome(25.4, { minPrice: 24.99 })).toEqual({ newPrice: 24.99, status: 'processed' })
-    expect(roundDownTo99Outcome(25.4, { maxPrice: 20 })).toEqual({ newPrice: 24.99, status: 'skipped' })
-    // A bound that is not a number is ignored, as in the other modes.
-    expect(roundDownTo99Outcome(25.4, { minPrice: '30' })).toEqual({ newPrice: 24.99, status: 'processed' })
+  it('a price below 0.99 is skipped and kept, and says so', () => {
+    expect(roundDownTo99Outcome(0.5)).toEqual({ newPrice: 0.5, status: 'skipped', reason: 'Not changed: 0.50 is below 0.99, so there is no lower price ending in .99.' })
+    expect(roundDownTo99Outcome(0)).toEqual({ newPrice: 0, status: 'skipped', reason: 'Not changed: 0.00 is below 0.99, so there is no lower price ending in .99.' })
   })
 })
