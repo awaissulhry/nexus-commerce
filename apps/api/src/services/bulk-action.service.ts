@@ -48,6 +48,8 @@ import {
   readProductAttribute,
   type ProductLike,
 } from './bulk-action/attribute-helpers.js';
+// The PRICING_UPDATE rounding mode ("Round prices to .99"), shared by the run and its preview.
+import { ROUND_DOWN_TO_99, roundDownTo99Outcome } from './bulk-action/price-rounding.js';
 
 // (Removed: a stubbed Decimal mock class whose `.plus()` returned
 // `this`, breaking every PRICING_UPDATE math op silently. Phase B-3
@@ -1942,6 +1944,13 @@ export class BulkActionService {
   ): { currentValue: unknown; newValue: unknown; status: 'processed' | 'skipped' } {
     switch (actionType) {
       case 'PRICING_UPDATE': {
+        if (payload.adjustmentType === ROUND_DOWN_TO_99) {
+          // The rounding mode reads the price its run reads: a PRICING_UPDATE item is a Product (`basePrice`).
+          const product = item as Product;
+          const current = product.basePrice != null ? Number(product.basePrice) : 0;
+          const outcome = roundDownTo99Outcome(current, payload);
+          return { currentValue: current.toFixed(2), newValue: outcome.newPrice.toFixed(2), status: outcome.status };
+        }
         const variation = item as ProductVariation;
         const currentPrice = Number(variation.price);
         const adjustmentType = payload.adjustmentType;
@@ -2990,10 +2999,14 @@ export class BulkActionService {
    * See DEVELOPMENT.md "Master-data cascade" for the propagation rules.
    *
    * Payload:
-   *   adjustmentType: 'ABSOLUTE' | 'PERCENT' | 'DELTA'
-   *   value: number              (the multiplier / delta / absolute)
+   *   adjustmentType: 'ABSOLUTE' | 'PERCENT' | 'DELTA' | 'ROUND_DOWN_TO_99'
+   *   value: number              (the multiplier / delta / absolute; none for ROUND_DOWN_TO_99)
    *   minPrice?: number          (skip if computed price below floor)
    *   maxPrice?: number          (skip if computed price above ceiling)
+   *
+   * ROUND_DOWN_TO_99: the largest X.99 at or below the current price
+   * (`bulk-action/price-rounding.ts`); skipped when there is none
+   * (under 0.99) or the price already ends in .99.
    */
   private async processPricingUpdate(
     item: Product,
@@ -3004,29 +3017,37 @@ export class BulkActionService {
       | 'ABSOLUTE'
       | 'PERCENT'
       | 'DELTA'
+      | typeof ROUND_DOWN_TO_99
       | undefined;
-    const rawValue = payload.value;
-    const value =
-      typeof rawValue === 'number' ? rawValue : Number(rawValue);
-    if (!adjustmentType || Number.isNaN(value)) {
-      throw new Error(
-        'Invalid PRICING_UPDATE payload: adjustmentType + numeric value required',
-      );
-    }
 
     // basePrice is a Decimal column — coerce to number for math.
     const currentPrice = item.basePrice != null ? Number(item.basePrice) : 0;
     let newPrice: number;
-    switch (adjustmentType) {
-      case 'ABSOLUTE':
-        newPrice = value;
-        break;
-      case 'PERCENT':
-        newPrice = currentPrice * (1 + value / 100);
-        break;
-      case 'DELTA':
-        newPrice = currentPrice + value;
-        break;
+    if (adjustmentType === ROUND_DOWN_TO_99) {
+      // The preview's own rule (computePreview), then the same write as every mode below.
+      const outcome = roundDownTo99Outcome(currentPrice, payload);
+      if (outcome.status === 'skipped') return { status: 'skipped' };
+      newPrice = outcome.newPrice;
+    } else {
+      const rawValue = payload.value;
+      const value =
+        typeof rawValue === 'number' ? rawValue : Number(rawValue);
+      if (!adjustmentType || Number.isNaN(value)) {
+        throw new Error(
+          'Invalid PRICING_UPDATE payload: adjustmentType + numeric value required',
+        );
+      }
+      switch (adjustmentType) {
+        case 'ABSOLUTE':
+          newPrice = value;
+          break;
+        case 'PERCENT':
+          newPrice = currentPrice * (1 + value / 100);
+          break;
+        case 'DELTA':
+          newPrice = currentPrice + value;
+          break;
+      }
     }
 
     // Soft constraints — skip rather than fail so the rest of the job
