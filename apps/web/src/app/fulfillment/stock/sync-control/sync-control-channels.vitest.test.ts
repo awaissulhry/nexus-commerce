@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { QUANTITY_CHANNELS, policyMarketFor, policyMarketOptions } from './sync-control-shared'
+import { QUANTITY_CHANNELS, marketFilterOptions, marketLabel, policyMarketFor, policyMarketOptions } from './sync-control-shared'
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(DIR, '../../../../../../..')
@@ -52,5 +52,35 @@ describe('the market of a new channel policy', () => {
     expect(policyMarketFor('ETSY', '*')).toBe('*')
     expect(policyMarketFor('AMAZON', 'IT')).toBe('IT')
     expect(policyMarketFor('EBAY', 'DE')).toBe('DE')
+  })
+})
+
+describe('the Market filter offers every market the rows are on', () => {
+  it('GLOBAL (Shopify, Etsy) is offered, named plainly, and DEFAULT when rows still use it', () => {
+    expect(marketFilterOptions(['GLOBAL', 'IT', 'DEFAULT', 'DE'])).toEqual([
+      { value: 'IT', label: 'IT' }, { value: 'DE', label: 'DE' }, { value: 'GLOBAL', label: 'Global (Shopify, Etsy)' }, { value: 'DEFAULT', label: 'DEFAULT' },
+    ])
+    expect(marketLabel('GLOBAL')).toBe('Global (Shopify, Etsy)')
+  })
+
+  it('countries first in the usual order, any other market A–Z, then GLOBAL and DEFAULT; no duplicates', () => {
+    expect(marketFilterOptions(['DEFAULT', 'UK', 'ES', 'GLOBAL', 'FR', 'SE', 'IT', 'DE', 'it']).map((o) => o.value))
+      .toEqual(['IT', 'DE', 'FR', 'ES', 'SE', 'UK', 'GLOBAL', 'DEFAULT'])
+  })
+
+  it('a market still selected stays offered, even before the overview has answered', () => {
+    expect(marketFilterOptions([], ['GLOBAL']).map((o) => o.value)).toEqual(['GLOBAL'])
+    expect(marketFilterOptions(['IT'], ['GLOBAL']).map((o) => o.value)).toEqual(['IT', 'GLOBAL'])
+  })
+
+  it('the page takes the options from the overview\'s markets, not from a list of its own', () => {
+    const src = read('SyncControlClient.tsx')
+    expect(src).toMatch(/options: marketFilterOptions\(overview\?\.markets \?\? \[\], markets\)/)
+    expect(src).not.toMatch(/\['IT', 'DE', 'FR', 'ES', 'DEFAULT'\]/)
+  })
+
+  it('the API sends those markets with the overview', () => {
+    const route = readFileSync(join(REPO, 'apps/api/src/routes/sync-control.routes.ts'), 'utf8')
+    expect(route).toMatch(/markets: rowMarkets\(rows\)/)
   })
 })

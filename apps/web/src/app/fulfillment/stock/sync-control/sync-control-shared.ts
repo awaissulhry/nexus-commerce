@@ -127,7 +127,7 @@ export const COLUMN_HELP: Record<string, string> = {
   sku: 'The variant SKU this listing sells. Sort to group a family together. One SKU can appear more than once: the same variant listed on several channels, markets, or shared eBay items.',
   variant: 'One row per variant SKU per listing. A variant listed on two eBay items appears twice, so you can control each item separately.',
   channel: 'Which sales channel this listing lives on (Amazon, eBay, Shopify, Etsy).',
-  market: 'Which marketplace/country this listing serves (IT, DE, FR, ES). Amazon Pan-EU listings share one ASIN across markets.',
+  market: 'Which marketplace/country this listing serves (IT, DE, FR, ES; Global for Shopify and Etsy). Amazon Pan-EU listings share one ASIN across markets.',
   lane: 'How the quantity reaches the marketplace. Listing = a normal one-listing-per-SKU push. Shared = a pooled eBay item where several variants share one quantity, revised together.',
   mode: 'How this row gets its quantity. Hover the chip for the full meaning.',
   routedFrom: 'The stock location this quantity is routed from, when a sync route narrows the pool to specific warehouses instead of the whole pool.',
@@ -235,6 +235,35 @@ const POLICY_MARKETS = ['IT', 'DE', 'FR', 'ES']
 export function policyMarketOptions(channel: string): Array<{ value: string; label: string }> {
   const all = { value: '*', label: 'All markets' }
   return channel === 'ETSY' ? [all] : [all, ...POLICY_MARKETS.map((m) => ({ value: m, label: m }))]
+}
+
+/** Country markets first, in the order the rest of Sync Control uses; any other market follows A–Z, GLOBAL and DEFAULT last. */
+const MARKET_ORDER = ['IT', 'DE', 'FR', 'ES']
+const MARKETS_LAST = ['GLOBAL', 'DEFAULT']
+
+/** How the Market filter names a market. GLOBAL is the one market of Shopify and Etsy listings. */
+export function marketLabel(code: string): string {
+  return code === 'GLOBAL' ? 'Global (Shopify, Etsy)' : code
+}
+
+/**
+ * The Market filter's options: the markets the rows are on, as the API's overview names them (`markets`, from the
+ * rows themselves), plus any market still selected so a choice never disappears from its own filter. It used to be a
+ * fixed IT/DE/FR/ES/DEFAULT list, so Shopify's and Etsy's GLOBAL rows could not be filtered.
+ */
+export function marketFilterOptions(markets: readonly string[], selected: readonly string[] = []): Array<{ value: string; label: string }> {
+  const rank = (code: string) => {
+    const first = MARKET_ORDER.indexOf(code)
+    if (first >= 0) return [0, first] as const
+    const last = MARKETS_LAST.indexOf(code)
+    return last >= 0 ? ([2, last] as const) : ([1, 0] as const)
+  }
+  return [...new Set([...markets, ...selected].map((code) => code.trim().toUpperCase()).filter(Boolean))]
+    .sort((a, b) => {
+      const [ga, ia] = rank(a), [gb, ib] = rank(b)
+      return ga - gb || ia - ib || a.localeCompare(b)
+    })
+    .map((code) => ({ value: code, label: marketLabel(code) }))
 }
 
 /** The market a new policy keeps when its channel changes: All markets when the old one is not offered there. */

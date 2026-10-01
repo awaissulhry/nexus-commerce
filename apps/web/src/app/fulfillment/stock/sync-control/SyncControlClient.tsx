@@ -31,7 +31,7 @@ import SyncProductsGrid from './SyncProductsGrid'
 import {
   listingTarget,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
-  QUANTITY_CHANNELS, policyMarketOptions, policyMarketFor,
+  QUANTITY_CHANNELS, policyMarketOptions, policyMarketFor, marketFilterOptions,
   type Mode, type Row, type Density,
 } from './sync-control-shared'
 
@@ -47,6 +47,8 @@ interface Overview {
     routedLocations: number
     policies: number
   }
+  /** Every market the rows are on (GLOBAL for Shopify and Etsy included): the Market filter's options. */
+  markets?: string[]
   locations: Array<{
     code: string
     name: string
@@ -473,7 +475,7 @@ export default function SyncControlClient() {
     {
       key: 'market', label: <TipText help={CONTROL_HELP.filterMarket}>Market</TipText>, kind: 'multiselect', value: markets,
       onChange: (v) => { setPage(1); setMarkets(v) },
-      options: ['IT', 'DE', 'FR', 'ES', 'DEFAULT'].map((m) => ({ value: m, label: m })),
+      options: marketFilterOptions(overview?.markets ?? [], markets),
     },
     {
       key: 'mode', label: <TipText help={CONTROL_HELP.filterMode}>Mode</TipText>, kind: 'multiselect', value: modes,
