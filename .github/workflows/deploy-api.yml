@@ -3,10 +3,10 @@
 # Railway's native GitHub integration is unreliable on this project
 # (it stops auto-deploying after rebases or after the worker crashes
 # on a Redis hiccup). This workflow takes over. A push to main that
-# changes a service's files runs the whole CI on that exact commit (`verify`)
-# and builds both Docker images beside it (`images`, images.yml). When the
-# API ships, it also asks eBay about the consent scopes (`ebay`). Only then
-# does anything ship; every service needs this commit's images.
+# changes a service's files builds both Docker images of that exact commit
+# (`images`, images.yml). When the API ships, it also asks eBay about the
+# consent scopes (`ebay`). Only then does anything ship; every service needs
+# this commit's images. Since 2026-10-01 no CI runs before a deploy (Owner).
 # The API applies migrations in Railway's pre-deploy step, and Railway waits
 # for /api/health/ready before switching traffic.
 #
@@ -121,14 +121,13 @@ jobs:
           WEB_SERVICE: ${{ secrets.RAILWAY_WEB_SERVICE }}
         run: scripts/ci/release-changes.sh
 
-  # The whole CI (ci.yml) on the exact commit being released. Before 2026-09-26 main deployed without
-  # waiting for any check. docs/ci-plan.md §2.4.
-  # No `secrets: inherit`: ci.yml reads no secret (the Turbo remote-cache values went with PR 3, #197).
-  verify:
-    name: Verify the exact release commit
-    uses: ./.github/workflows/ci.yml
+  # No `verify` job since 2026-10-01: the Owner turned the CI run before a deploy off to develop faster (as before
+  # 2026-09-26). To bring it back, restore the job below and add `verify` to the three ship jobs' `needs` and `if`:
+  #   verify:
+  #     name: Verify the exact release commit
+  #     uses: ./.github/workflows/ci.yml
 
-  # Both images of this commit, built and pushed beside `verify` (images.yml), so every release can be rolled back to.
+  # Both images of this commit, built and pushed (images.yml), so every release can be rolled back to.
   images:
     name: Images
     uses: ./.github/workflows/images.yml
@@ -144,7 +143,7 @@ jobs:
   # connected. This asks eBay before shipping: exit 1 names the refused scopes, exit 2 means
   # it could not measure (missing values, wrong app ID, eBay unreachable). Both stop the
   # deploy. The app ID and RuName are read from Railway, the one place production values
-  # live — never copy them into GitHub. Runs beside `verify` since 2026-09-30 (it was a step of the API deploy).
+  # live — never copy them into GitHub. Runs beside the images since 2026-09-30 (it was a step of the API deploy).
   ebay:
     needs: changes
     if: needs.changes.outputs.api == 'true'
@@ -175,10 +174,10 @@ jobs:
 
   # No npm ci here: the job selects and deploys an image; it does not run the application code.
   deploy:
-    needs: [changes, verify, images, ebay]
+    needs: [changes, images, ebay]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.api == 'true' &&
-      needs.verify.result == 'success' && needs.ebay.result == 'success' &&
+      needs.ebay.result == 'success' &&
       needs.images.result == 'success'
     name: Ship the API to Railway
     runs-on: ubuntu-latest
@@ -265,10 +264,10 @@ jobs:
   # 40 minutes: railway-deploy-image.sh can take about 27 when every Railway request hangs to its limit, and it should
   # still print its own "✗ …" line before GitHub ends the job (review of PR 2, 2026-09-30).
   deploy-background:
-    needs: [changes, verify, images, deploy]
+    needs: [changes, images, deploy]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.background != '[]' &&
-      needs.verify.result == 'success' && needs.images.result == 'success' &&
+      needs.images.result == 'success' &&
       (needs.changes.outputs.api != 'true' || needs.deploy.result == 'success')
     name: Ship ${{ matrix.role }} to Railway
     runs-on: ubuntu-latest
@@ -323,10 +322,9 @@ jobs:
   # needs.changes.result too: a failed `changes` job still hands over the outputs it wrote (actions/runner#2598).
   # The image deploy script waits for Railway's SUCCESS before the production smoke can run.
   deploy-web:
-    needs: [changes, verify, images, deploy]
+    needs: [changes, images, deploy]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.web == 'true' &&
-      needs.verify.result == 'success' &&
       needs.images.result == 'success' &&
       (needs.changes.outputs.api != 'true' || needs.deploy.result == 'success')
     name: Ship the web to Railway
