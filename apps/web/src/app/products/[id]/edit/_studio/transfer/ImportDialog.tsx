@@ -7,10 +7,11 @@ import { Banner, Disclosure, FileDropzone, FileRow, JobProgress, MetricStrip, Mo
 // The DS grid's DataGrid (AG Grid, identical props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import Link from '@/lib/workspaces/Link'
 import { useStudioSave } from '../contracts'
 import { PublishDialog } from '../publication/PublishDialog'
 import { sheetTransferApi } from './sheetTransferApi'
-import { applyLabel, cellValue, changeCells, doneView, formatLabel, IMPORT_ACCEPT, IMPORT_MAX_BYTES, isBusy, isFinished, STATUS_LABELS, summaryLine, whereInFile } from './importModel'
+import { applyLabel, cellValue, changeCells, doneView, formatLabel, IMPORT_ACCEPT, IMPORT_MAX_BYTES, isBusy, isFinished, openFamilyActions, STATUS_LABELS, summaryLine, whereInFile } from './importModel'
 import styles from './sheetTransfer.module.css'
 
 const POLL_MS = 700
@@ -166,6 +167,8 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   const needsConfirmation = !!status && (status.links.length > 0 || status.deletes.some(d => !d.confirmed))
   const label = status?.state === 'READY' ? applyLabel(status) : null
   const done = isFinished(status) ? doneView(status!) : null
+  // A family the file created is another product: the done screen opens it, and it is published from there.
+  const opens = openFamilyActions(status)
   const columns: Column<SheetImportChange>[] = [
     { key: 'sku', label: 'SKU', width: 190, className: styles.skuCol, render: c => <span className={styles.mono} title={c.sku}>{c.sku}</span> },
     { key: 'where', label: 'Where', width: 120, className: styles.whereCol, render: c => c.destination },
@@ -186,10 +189,11 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
     </>}
     {done && <>
       {status?.canUndo && <Button size="sm" variant="secondary" onClick={undo}>Undo</Button>}
-      {status?.format !== 'undo' && (status?.receipt?.saved ?? 0) > 0 && <Button size="sm" variant="secondary" onClick={() => { setPublishing(true); close() }}>Publish…</Button>}
+      {status?.format !== 'undo' && (status?.receipt?.saved ?? 0) > 0 && !opens.length && <Button size="sm" variant="secondary" onClick={() => { setPublishing(true); close() }}>Publish…</Button>}
       <Button size="sm" variant="secondary" onClick={reset}>Import another file</Button>
       <span className="grow" />
-      <Button size="sm" variant="primary" onClick={close}>Done</Button>
+      {opens.map(action => <Button key={action.href} asChild size="sm" variant="primary"><Link href={action.href} onClick={close}>{action.label}</Link></Button>)}
+      <Button size="sm" variant={opens.length ? 'secondary' : 'primary'} onClick={close}>Done</Button>
     </>}
     {(!status || busy) && <><span className="grow" /><Button size="sm" variant="secondary" onClick={close}>{busy ? 'Close' : 'Cancel'}</Button></>}
   </>
