@@ -9,12 +9,15 @@
 #                migration upgrade check run once, in part 1
 #   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
 #                database login, seeded disposable database, production hosts fenced off
+#   sheet (1..6) the product-sheet commit sweep (@sheet): every editable column of every scope the seed
+#                builds, committed by keyboard, mouse and paste, on the same kind of stack as smoke; parts 1..5
+#                share the sweep's chunks in turn, part 6 runs the other sheet specs
 #   db-security  one profiles-ON report per API shard, the profiles-ON ratchet over them, and every real-PG
 #                suite passed in exactly one PostgreSQL part (fixed name, so a branch rule can require it)
 #   ci-ok        one required status for the whole run
 #
-# Nothing here is path-filtered except the typecheck of the other workspaces (turbo --affected; the two apps are always
-# type-checked) and the small-workspace tests.
+# Sheet runs for web/API/shared/DB and build dependencies; release/manual runs always include it.
+# Both apps are always type-checked. Other workspaces (turbo --affected) and the small-workspace tests use change selection.
 # Selecting "security" tests by file name misses real ones, so the API suite always runs whole.
 
 name: CI
@@ -41,6 +44,26 @@ env:
   ENABLE_QUEUE_WORKERS: '0'
 
 jobs:
+  sheet-changes:
+    name: Sheet dependency paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: node apps/web/smoke/sheet/ci-policy.mjs paths >> "$GITHUB_OUTPUT"
+
   checks:
     name: Static gates, typecheck, web and workspace tests
     runs-on: ubuntu-latest
@@ -80,6 +103,9 @@ jobs:
           # (adsScope 'dates are read from LOCAL parts'); on a UTC runner their control cannot hold.
           TZ: Europe/Rome
         run: npm run test --workspace=@nexus/web
+
+      - name: Sheet smoke drivers and seed types
+        run: npx tsc --noEmit -p apps/web/smoke/sheet/tsconfig.json
 
       - name: Factory, shared and events tests (affected)
         run: npx turbo run test --affected --filter=@nexus/factory --filter=@nexus/shared --filter=@nexus/events
@@ -341,6 +367,145 @@ jobs:
             ${{ runner.temp }}/web.log
           retention-days: 7
 
+  # P3 guardrail 1 (2026-09-30) — apps/web/smoke/sheet/editors.spec.ts. The 2026-09-29 sheet defects (Enter and Tab
+  # kept the old value, the chevron did nothing, the first typed key was lost) lived between the key and the wire, where
+  # no CI job looked: the smoke seed has no family, listing or channel schema, so nothing ever opened a channel sheet.
+  #
+  # It CANNOT touch production, by construction and by check:
+  #   · the only database is this job's service container on loopback; prepare-test-database, seed-smoke and
+  #     seed-sheet-fixture each refuse any database that is not loopback with "test" in its name;
+  #   · no production credential reaches this job (the workflow's only secret is the Turbo cache token), and the
+  #     production API and web hosts resolve to 0.0.0.0 (the fence below), so a web app that fell back to production
+  #     could reach nothing;
+  #   · the API runs on the restricted app login of that container; the web is built against localhost and proxies to it;
+  #   · the sweep refuses a base URL that is not localhost, and refuses to start until the sheet seed's random NONCE comes
+  #     back through the UI (only this run's database holds it); every request a test page makes must stay on loopback;
+  #   · the seeded channel connections carry no credentials and every listing is an unpublished DRAFT with no external
+  #     id; the one channel read that needs the network (eBay business policies) is answered by the sweep itself.
+  # Steps are the smoke job's, plus the sheet seed; keep the two in step.
+  sheet:
+    needs: [sheet-changes]
+    if: needs.sheet-changes.outputs.run == 'true'
+    name: Sheet commit sweep (${{ matrix.part }}/6) — production build
+    runs-on: ubuntu-latest
+    # The slowest part measured 24.5 min on the first six-part run (one chunk then timed out at 10 min); 40 leaves room.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      # Parts 1..5 deal the sweep's chunks in turn (editors.spec.ts, SHEET_SWEEP_PART), so Amazon's slow chunks spread
+      # over all five; in three contiguous Playwright shards they filled one past the time limit (2026-10-01).
+      matrix:
+        part: [1, 2, 3, 4, 5, 6]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_sheet_test
+        ports: ['5432:5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      ADMIN_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_sheet_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Fence production off (the web app falls back to the production API when a variable is missing)
+        run: |
+          echo "0.0.0.0 nexusapi-production-b7bb.up.railway.app api.xavia.it app.xavia.it" | sudo tee -a /etc/hosts
+          echo "SMOKE_SEED=$RUNNER_TEMP/smoke.json" >> "$GITHUB_ENV"
+          echo "SHEET_SEED=$RUNNER_TEMP/sheet.json" >> "$GITHUB_ENV"
+          echo "SHEET_EDITOR_SEED=$RUNNER_TEMP/sheet-editors.json" >> "$GITHUB_ENV"
+
+      - name: Database, seeds (owner + sheet fixture) and restricted app login
+        run: |
+          psql postgresql://postgres@127.0.0.1:5432/postgres -qc "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
+          npx tsx scripts/ci/prepare-test-database.mts --url "$ADMIN_DATABASE_URL"
+          npx tsx scripts/ci/seed-smoke.mts --url "$ADMIN_DATABASE_URL" --out "$SMOKE_SEED"
+          npx tsx scripts/ci/seed-sheet-fixture.mts --url "$ADMIN_DATABASE_URL" --out "$SHEET_SEED"
+          npx tsx scripts/ci/seed-sheet-editor-fixture.mts --url "$ADMIN_DATABASE_URL" --smoke-seed "$SMOKE_SEED" --out "$SHEET_EDITOR_SEED"
+          node -e 'const s = require(process.env.SMOKE_SEED); console.log("::add-mask::" + new URL(s.appDatabaseUrl).password); console.log("::add-mask::" + s.password)'
+
+      - name: Start the API (NODE_ENV=production, restricted login, profiles ON, RBAC enforced)
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          cd apps/api
+          NODE_ENV=production PORT=8080 NEXUS_API_HOST=127.0.0.1 DATABASE_URL="$APP_DATABASE_URL" DIRECT_DATABASE_URL="$APP_DATABASE_URL" \
+          REDIS_URL=redis://127.0.0.1:6379 NEXUS_WORKSPACES_ENABLED=1 NEXUS_RBAC_MODE=enforce NEXUS_AMAZON_ENV_TOKEN=off \
+            nohup node --import tsx src/index.ts > "$RUNNER_TEMP/api.log" 2>&1 &
+
+      - name: Build the web app (production; type step skipped — the checks job type-checks)
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_WORKSPACES_ENABLED: '1'
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXUS_CI_SKIP_BUILD_TYPECHECK: '1'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npx next build
+
+      - name: Start the web app (next start)
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          for _ in $(seq 1 90); do curl -sf http://127.0.0.1:8080/api/health/ready >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/api/health/ready || { echo "✗ API did not become ready"; tail -50 "$RUNNER_TEMP/api.log"; exit 1; }
+          cd apps/web
+          NODE_ENV=production DATABASE_URL="$APP_DATABASE_URL" NEXUS_API_PROXY_TARGET=http://127.0.0.1:8080 NEXT_TELEMETRY_DISABLED=1 \
+            nohup npx next start -p 3000 -H localhost > "$RUNNER_TEMP/web.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/login && break; sleep 1; done
+          curl -sf -o /dev/null http://localhost:3000/login || { echo "✗ web did not start"; tail -50 "$RUNNER_TEMP/web.log"; exit 1; }
+
+      - name: Playwright browser
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: steps.browsers.outputs.cache-hit == 'true'
+
+      - name: '@sheet commit sweep'
+        id: sheet-sweep
+        working-directory: apps/web
+        env:
+          SMOKE_BASE_URL: http://localhost:3000
+          SHEET_STORAGE_STATE: ${{ runner.temp }}/sheet-state.json
+          SHEET_WORKERS: '1'
+          SHEET_EDITOR_DATABASE_URL: ${{ env.ADMIN_DATABASE_URL }}
+          SMOKE_OUTPUT_DIR: ${{ runner.temp }}/sheet-results
+          SMOKE_REPORT_DIR: ${{ runner.temp }}/sheet-report
+          PART: ${{ matrix.part }}
+        run: |
+          if [ "$PART" -le 5 ]; then SHEET_SWEEP_PART="$PART/5" npx playwright test -c smoke/sheet.config.ts sheet/editors.spec.ts
+          else SHEET_SKIP_SWEEP=1 npx playwright test -c smoke/sheet.config.ts; fi
+
+      - name: Authenticated GET and bulk SQL budgets
+        # A browser failure must not hide SQL evidence. Both steps still make this required job fail.
+        if: (success() || failure()) && steps.sheet-sweep.outcome != 'skipped'
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          cd apps/api
+          NODE_ENV=production DATABASE_URL="$APP_DATABASE_URL" DIRECT_DATABASE_URL="$APP_DATABASE_URL" \
+          REDIS_URL=redis://127.0.0.1:6379 NEXUS_WORKSPACES_ENABLED=1 NEXUS_RBAC_MODE=enforce \
+            npx tsx ../web/smoke/sheet/sql-budget.mts
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sheet-${{ matrix.part }}
+          path: |
+            ${{ runner.temp }}/sheet-report
+            ${{ runner.temp }}/sheet-results
+            ${{ runner.temp }}/api.log
+            ${{ runner.temp }}/web.log
+          retention-days: 7
+
   db-security:
     name: db-security
     needs: [api, postgres]
@@ -407,16 +572,16 @@ jobs:
 
   ci-ok:
     name: ci-ok
-    needs: [checks, api, postgres, smoke, db-security]
+    needs: [checks, api, postgres, smoke, sheet-changes, sheet, db-security]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Every job passed
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every required job passed (sheet may be intentionally skipped)
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: |
-          node -e '
-            const needs = JSON.parse(process.env.NEEDS)
-            for (const [job, v] of Object.entries(needs)) console.log((v.result === "success" ? "✓ " : "✗ ") + job + ": " + v.result)
-            process.exit(Object.values(needs).every(v => v.result === "success") ? 0 : 1)'
+        run: node apps/web/smoke/sheet/ci-policy.mjs result

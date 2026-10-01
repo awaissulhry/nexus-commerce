@@ -3,7 +3,8 @@
 import { FormulaGuidance, formulaSuggestions, useFormulaPreview } from './formulaAssistance'
 
 import { createElement, forwardRef, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import type { ICellEditorParams } from 'ag-grid-community'
+import { flushSync } from 'react-dom'
+import type { ICellEditorParams, SuppressKeyboardEventParams } from 'ag-grid-community'
 import { useGridCellEditor } from 'ag-grid-react'
 import { History, Link2, Sparkles } from 'lucide-react'
 import { Button, Input, Textarea, ToolbarButton, TooltipPortalProvider } from '../../primitives'
@@ -72,8 +73,21 @@ export function FormulaGlyph({ title = 'Formula' }: { title?: string }) {
  * arrows are its own while completions are open; and Tab is also its own on a FORMULA (Option A, 2026-09-26), so a broken
  * formula is refused the same way Enter refuses it instead of being committed by AG and failing on the cell.
  */
-export function suppressFormulaKeys({ event, editing }: { event: KeyboardEvent; editing: boolean }): boolean {
-  if (!editing || !(event.target instanceof Element)) return false
+export function suppressFormulaKeys({ event, editing, api, column, node }:
+  Pick<SuppressKeyboardEventParams, 'event' | 'editing'> & Partial<Pick<SuppressKeyboardEventParams, 'api' | 'column' | 'node'>>,
+): boolean {
+  if (!(event.target instanceof Element)) return false
+  if (!editing) {
+    if (event.type !== 'keydown' || event.key.length !== 1 || event.key === ' ' || event.ctrlKey || event.metaKey || event.altKey ||
+      event.isComposing || event.defaultPrevented || !event.target.matches('.ag-cell') ||
+      !api || !column || !node || node.rowIndex == null || !column.isCellEditable(node)) return false
+    // AG mounts a React popup after the cell enters edit mode. Fast later keys otherwise
+    // reach the old cell and disappear. Finish that mount in this native key event only.
+    const rowIndex = node.rowIndex
+    event.preventDefault()
+    flushSync(() => api.startEditingCell({ rowIndex, rowPinned: node.rowPinned, colKey: column, key: event.key }))
+    return true
+  }
   const editor = event.target.closest('.nds-formula-editor')
   if (!editor) return false
   return event.key === 'Enter' || event.key === 'Escape' ||

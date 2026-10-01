@@ -197,6 +197,14 @@
     "./shopify-lab-store": {
       "types": "./dist/shopify-lab-store.d.ts",
       "default": "./dist/shopify-lab-store.js"
+    },
+    "./formula-functions": {
+      "types": "./dist/formula-functions.d.ts",
+      "default": "./dist/formula-functions.js"
+    },
+    "./readiness-wire": {
+      "types": "./dist/readiness-wire.d.ts",
+      "default": "./dist/readiness-wire.js"
     }
   },
   "scripts": {

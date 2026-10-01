@@ -6,9 +6,37 @@ Dark-mode token clash (`fix/dark-mode-token-clash`), lead browser audit. DS plac
 
 Dark-mode token clash (`fix/dark-mode-token-clash`). In `apps/web/tailwind.config.ts`, `text-{primary,secondary,tertiary,disabled,link}`, `bg-{canvas,card,sunken}`, `border-{subtle,default,strong}` and `surface.{background,card,border,border-strong}` now read **`--nds-text`**, **`--nds-text-2`**, **`--nds-text-3`**, **`--nds-text-disabled`**, **`--nds-text-link`**, **`--nds-bg`**, **`--nds-surface`**, **`--nds-surface-sunken`**, **`--nds-border-subtle`**, **`--nds-border`**, **`--nds-border-strong`** through `color-mix` (`ds()`), so `/NN`, `*-opacity-*` and variants keep working. They read `rgb(var(--text-primary) / 1)` over globals.css channels, and `tokens.css` redefines those eleven names at `:root` as whole colours: on almost every route the value was invalid (inherited black text on the dark page, transparent cards, borders in the text colour). globals.css no longer defines the eleven; `body` reads `--nds-bg` / `--nds-text`. Light mode changes too: borders are the DS's light-grey lines and muted text its greys. Held by `src/app/tailwind-token-form.vitest.test.ts` and `scripts/check-alias-form.mjs` (`--self-test` is a static gate). `scripts/check-contrast.mjs` (the old globals palette) is retired; `check-nds-contrast.mjs` measures these tokens, and now also the Tailwind status pairs it held (`text-X-strong` on `bg-X-soft`, globals.css channels, light and dark, at AA). The ads console's `reporting.css`, `trust.css`, `launch-receipt.css` and four `rules-automation.css` rules read `--nds-*` instead of the aliases, so their dialogs (which portal to `<body>`, outside `.h10-shell`) get real colours. Not in Factory (no Tailwind).
 
+## Closed editors leave no pending attachment work — 2026-09-30
+
+The pinned AG React patch checks that its cell is alive and still owns the same editor before a delayed attachment runs. Closing an editor, removing its row, or destroying the grid cannot attach a stale tooltip or cancel a replacement editor. Both published module formats have direct regression tests. Mirrored in Factory.
+
+## Fast typing keeps the whole value — 2026-09-30
+
+**`FormulaCellEditor`** finishes opening a typed edit inside the first native key event, so later keys reach the input. Shortcuts, composition, locked cells, and editor-owned keys keep their existing handling. The pinned AG React patch creates the popup in layout, retains the same wrapper through StrictMode replay, and keeps its original cleanup lifetime. Mirrored in Factory.
+
+## Saved views can share one initial read — 2026-09-30
+
+## 2026-09-30 — Cancel pending save retries on discard or exit
+
+SheetWriter exposes a retry-only signal tied to its lifetime. Discard and exit cancel pending retry waits. Re-arming starts a fresh lifetime without reviving old retries or canceling an in-flight save.
+
+## 2026-09-30 — Preserve unsafe whole-number input
+
+Numeric cells and lists keep unsafe whole-number text intact so the API can refuse it by name without storing a rounded value. Safe values and text IDs keep their existing types.
+
+**`useGridViews`** and **`useGridState`** accept an optional keyed initial reader. A sheet can load its named views and working layouts in one bounded request. Explicit refresh stays a fresh read. Scope and request guards reject old replies. **`parseWorkingLayout`** applies the same checks to either transport. These files exist only in the web app; there is no Factory counterpart.
+
+## Sheet save progress stays in the status strip — 2026-09-30
+
+**`GridSheetStatus`** can read an optional live status source. Save progress updates the existing strip without a host render. Plain props and rendered markup stay the same. This host exists only in the web app; there is no Factory counterpart.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Factory.
+
+## Numeric list editors keep the declared value type — 2026-09-30
+
+**`ListPanelEditor`** uses the column parser for chips and pending text, as paste and whole-column edits do. Number lists send JSON numbers. Text IDs, invalid number text, and formula drafts keep their meaning. Mirrored in Factory.
 
 ## Replacement rows keep confirmed write versions — 2026-09-30
 

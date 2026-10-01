@@ -18,6 +18,28 @@ export interface SheetCellChange {
   after: unknown
 }
 
+/**
+ * A value only this history may hold: a host's private envelope (the Shopify draft history keeps a cell's own/follow
+ * state with its value, `shopify/draftHistory.ts`). It is replayed only into a column whose definition says it reads
+ * one (`context.readsHistoryValue`); for any other column the cell is skipped, so it can never reach a cell's value, a
+ * sort, a copy, a validation or a save. Plain values are untouched.
+ */
+export const HISTORY_ONLY: unique symbol = Symbol('nexus.sheet.historyOnly')
+export const isHistoryOnly = (value: unknown): boolean => typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[HISTORY_ONLY] === true
+
+/** The part of AG's API a replay writes through. */
+export interface HistoryGridApi {
+  getRowNode(id: string): { setDataValue(colId: string, value: unknown, source: string): unknown } | undefined | null
+  getColumn(colId: string): { getColDef(): { context?: unknown } } | null | undefined
+}
+/** Each value back through the grid (`setDataValue`); a private history value only into a column that reads it. */
+export function writeHistoryValues(api: HistoryGridApi, values: Array<{ rowId: string; colId: string; value: unknown }>, direction: 'undo' | 'redo'): void {
+  for (const { rowId, colId, value } of values) {
+    if (isHistoryOnly(value) && (api.getColumn(colId)?.getColDef().context as { readsHistoryValue?: boolean } | undefined)?.readsHistoryValue !== true) continue
+    api.getRowNode(rowId)?.setDataValue(colId, value, direction)
+  }
+}
+
 /** Writes values back into the grid; the host wraps it in one save (see `useSheetUndo`). */
 export type ApplyCellValues = (values: Array<{ rowId: string; colId: string; value: unknown }>, direction: 'undo' | 'redo') => void
 

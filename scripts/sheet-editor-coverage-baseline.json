@@ -1,0 +1,22 @@
+{
+  "note": "P3 guardrail 3 \u2014 sheet editors and kinds no test drives. Entries may only be REMOVED (cover the gap); networkStubs and knownDefects may only go down.",
+  "updatedAt": "2026-09-30",
+  "networkStubs": 1,
+  "knownDefects": 0,
+  "gaps": [
+    "R3 kind date: no open mode in EDITOR_MODE_BY_KIND",
+    "R3 kind variationTheme: no driver serves it",
+    "R3 kind variationTheme: no open mode in EDITOR_MODE_BY_KIND"
+  ],
+  "abstentions": [
+    "AxesPanelEditor: all gestures",
+    "FormulaUnavailableEditor: all gestures",
+    "Gateway: all gestures",
+    "ImpactProtectorsEditor: all gestures",
+    "MediaEditorGateway: all gestures",
+    "StructuredAttributeEditor: all gestures",
+    "agLargeTextCellEditor: all gestures",
+    "agNumberCellEditor: all gestures",
+    "agTextCellEditor: all gestures"
+  ]
+}

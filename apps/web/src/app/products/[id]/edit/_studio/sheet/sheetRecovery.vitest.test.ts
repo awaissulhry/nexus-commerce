@@ -62,3 +62,39 @@ describe('scoped save recovery', () => {
     expect((await recoverSheetRow(page, { ...req, cells: [{ colId: 'descriptionThemeId', value: 'Modern', intent: 'set' }] }, scope))?.matches.descriptionThemeId).toBeNull()
   })
 })
+
+describe('Shopify draft read-back confirms own and follow only from reported sharing facts', () => {
+  const shopifyScope = { channel: 'SHOPIFY', market: 'GLOBAL', locale: 'en', accountId: 'store' }
+  const owner = 'gid://shopify/Product/10', source = 'gid://shopify/Product/20', key = 'metafield:PRODUCT:custom.label'
+  const shopifyCell = (value: unknown, pinned: boolean, sharing?: { sourceOwnerId: string; follows: boolean } | null) => ({ value, pinned, follows: !pinned, writeTarget: 'channelListing', writeField: key,
+    shopifyWrite: { ownerId: owner, fieldId: key, token: 'read-token', baseline: 'Provider', ...(sharing === undefined ? {} : { sharing }) } })
+  const shopifyRequest = (intent: 'set' | 'pin' | 'reset' = 'pin') => ({ rowId: 'primary:family', row: { id: 'family', version: 3, aliasId: null, listing: { id: 'listing', version: 7 },
+    values: { [key]: shopifyCell('Label', true, { sourceOwnerId: source, follows: true }) } }, cells: [{ colId: key, value: intent === 'reset' ? null : 'Label', intent }] })
+  const page = (stored: ReturnType<typeof shopifyCell>) => ({ scope: { kind: 'channel', channel: 'SHOPIFY', marketplace: 'GLOBAL', locale: 'en', connectionId: 'store' },
+    rows: [{ id: 'family', version: 3, aliasId: null, listing: { id: 'listing', version: 8 }, values: { [key]: stored } }] })
+  const recovered = async (stored: ReturnType<typeof shopifyCell>, intent: 'set' | 'pin' | 'reset' = 'pin') => {
+    const req = shopifyRequest(intent), result = await recoverSheetRow(page(stored), req, shopifyScope)
+    return { match: result?.matches[key], token: req.row.values[key].shopifyWrite.token }
+  }
+
+  it('a legacy follower pin with the same value and pinned flag does NOT confirm an own write', async () => {
+    expect(await recovered(shopifyCell('Label', true, { sourceOwnerId: source, follows: true }))).toEqual({ match: false, token: 'read-token' })
+    expect(await recovered(shopifyCell('Label', true, { sourceOwnerId: source, follows: true }), 'set')).toEqual({ match: false, token: 'read-token' })
+  })
+  it('missing sharing facts never prove an own or a following value', async () => {
+    expect((await recovered(shopifyCell('Label', true))).match).toBe(false)
+    expect((await recovered(shopifyCell('Shared', false), 'reset')).match).toBe(false)
+  })
+  it('confirms an own write that landed: an excluded follower, the source, or a field no rule covers', async () => {
+    for (const sharing of [{ sourceOwnerId: source, follows: false }, { sourceOwnerId: owner, follows: false }, null]) {
+      const stored = shopifyCell('Label', true, sharing)
+      stored.shopifyWrite.token = 'saved-token'
+      expect(await recovered(stored)).toEqual({ match: true, token: 'saved-token' })
+    }
+  })
+  it('confirms a follower reset only when the read-back follows the rule again', async () => {
+    expect((await recovered(shopifyCell('Shared', false, { sourceOwnerId: source, follows: true }), 'reset')).match).toBe(true)
+    expect((await recovered(shopifyCell('Shared', true, { sourceOwnerId: source, follows: false }), 'reset')).match).toBe(false)
+    expect((await recovered(shopifyCell('Provider', false, null), 'reset')).match).toBe(true)
+  })
+})

@@ -65,6 +65,7 @@ import { useFamilyProductPicker } from '../../sheet/master/FamilyProductPicker'
 import { useFamily } from '../../sheet/master/useFamily'
 import { useMasterSheet } from '../../sheet/master/useMasterSheet'
 import { useReferenceNames } from '../../sheet/useReferenceNames'
+import { useUnpinOnNarrowSheet } from '../../sheet/useNarrowSheet'
 import type { NewVariationDraft } from '../../sheet/master/addVariation'
 import type { StudioRow } from '../../sheet/master/types'
 
@@ -421,11 +422,16 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
   const rowSelection = useMemo(() => gridSelection<StudioRow>(), [])
   const getRowId = useCallback((p: { data: StudioRow }) => p.data.id, [])
 
+  /* 2026-10-01 — the same narrow-screen rule as the master and channel sheets: below 640px the pinned 380px Product column
+     was wider than a 390px phone's grid, so no value cell could be tapped (final local browser round, Variants long text). */
+  const [gridReady, setGridReady] = useState(false)
+  useUnpinOnNarrowSheet(getGridApi, gridReady)
   const onGridReady = useCallback((e: GridReadyEvent<StudioRow>) => {
     bindGridApi(e.api)
     bindGrid(e.api)
+    setGridReady(true)
   }, [bindGridApi, bindGrid])
-  const onGridPreDestroyed = useCallback((e: { api: GridApi<StudioRow> }) => { releaseGrid(e); bindGrid(null) }, [releaseGrid, bindGrid])
+  const onGridPreDestroyed = useCallback((e: { api: GridApi<StudioRow> }) => { releaseGrid(e); bindGrid(null); setGridReady(false) }, [releaseGrid, bindGrid])
 
   const onSelectionChanged = useCallback((e: { api: GridApi<StudioRow> }) => {
     const rs = e.api.getSelectedNodes().map(n => n.data).filter((d): d is StudioRow => !!d)

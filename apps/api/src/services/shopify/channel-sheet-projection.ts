@@ -1,6 +1,6 @@
 import { completenessFor } from '../pim/sheet-rows.service.js'
 import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
-import { informationRestriction } from '@nexus/shared/shopify-information-editing'
+import { informationRestriction, informationSharingRule, informationSharedValue, informationSharingFacts, sharedInformationSource } from '@nexus/shared/shopify-information-editing'
 import { createHash } from 'node:crypto'
 import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, nativeFieldValueError, type InformationField, type InformationSnapshot } from '@nexus/shared/shopify-information'
 import type { ShopifyLinkedDraft, ShopifyLinkedWorkspace, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
@@ -18,10 +18,20 @@ function pendingRecord(draft: ShopifyLinkedDraft, ownerId: string, field: Inform
     : draft.nativeEdits?.find(e => e.ownerId === ownerId && e.field === field.id) ?? null
 }
 const fieldSignatures = new WeakMap<InformationField, string>()
-export function shopifyCellToken(workspace: ShopifyLinkedWorkspace, ownerId: string, field: InformationField, locale?: string) {
+/**
+ * A cell's draft token: everything a save must find unchanged. The family root is its PHYSICAL listing id; an absent root
+ * is named by its exact normalized alias key ('' for the primary listing), so two absent aliases with equal cells never
+ * share a token. The same alias value is used by the projection, the save check, the continuation and the returned token.
+ */
+export function shopifyCellToken(workspace: ShopifyLinkedWorkspace, ownerId: string, field: InformationField, locale?: string, aliasKey = '') {
   let signature = fieldSignatures.get(field)
   if (!signature) { signature = linkedDigest(field); fieldSignatures.set(field, signature) }
-  return linkedDigest([workspace.destination.accountId, workspace.destination.listingId, workspace.familyId, ownerId, locale ?? '', signature, pendingRecord(workspace.draft, ownerId, field, locale), workspace.draft.sheetValues?.find(v => v.ownerId === ownerId && v.fieldId === field.id && v.locale === (locale ?? '')) ?? null])
+  const rule = !locale && field.owner === 'PRODUCT' && field.definition ? workspace.draft.sharedFields?.find(r => r.namespace === field.definition!.namespace && r.key === field.definition!.key) : undefined
+  const follows = rule && rule.sourceProductId !== ownerId && !rule.excludedProductIds.includes(ownerId)
+  const shared = rule ? [rule.sourceProductId, rule.excludedProductIds.includes(ownerId), rule.baseline.find(v => v.ownerId === ownerId) ?? null,
+    follows ? pendingRecord(workspace.draft, rule.sourceProductId, field) : null] : null
+  const root = workspace.destination.listingId ?? ['absent-root', aliasKey]
+  return linkedDigest([shared, workspace.destination.accountId, root, workspace.familyId, ownerId, locale ?? '', signature, pendingRecord(workspace.draft, ownerId, field, locale), workspace.draft.sheetValues?.find(v => v.ownerId === ownerId && v.fieldId === field.id && v.locale === (locale ?? '')) ?? null])
 }
 
 /** Keep the common sheet's Nexus identities and hierarchy. Shopify owners are cell addresses,
@@ -99,23 +109,39 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
       const pending = informationPendingValue(remote, field, workspace.draft), baseline = informationStoredValue(remote, field)
       const saved = workspace.draft.sheetValues?.find(v => v.ownerId === remote.id && v.fieldId === field.id && v.locale === (remote.locale ?? ''))
       const pin = saved && !saved.inherited ? saved : undefined
-      const mapped = field.id !== 'inventory' && base?.mapped?.status === 'mapped' && base.mapped.sourceOwner?.kind !== 'listing'
+      const rule = informationSharingRule(remote, field, workspace.draft)
+      const sharedValue = informationSharedValue(remote, field, workspace.draft, snapshot.rows)
+      const excluded = !remote.locale && rule?.excludedProductIds.includes(remote.id) === true
+      const sharedConflict = rule && rule.sourceProductId !== remote.id && !excluded && pin ? sharedInformationSource(rule, field, workspace.draft, snapshot.rows) : undefined
+      const conflictMessage = 'The saved draft conflicts with the sharing rule. Shopify will use the shared source. Edit or reset this field to resolve it.'
+      const mapped = !rule && field.id !== 'inventory' && base?.mapped?.status === 'mapped' && base.mapped.sourceOwner?.kind !== 'listing'
       const reason = pin && pin.type !== field.type ? 'This definition changed type. The saved override is preserved; review and migrate it before editing.' : informationRestriction(remote, field, workspace.draft, active(workspace))
-      const value = pending !== undefined ? pending : pin ? pin.value : mapped ? informationSheetValue(field, base.value) : baseline
-      const ownValue = pending !== undefined || !!pin || !mapped
+      // The common content writer owns these values, source facts and save tokens. A provider read must not
+      // replace a confirmed Nexus pin (including a blank). Keep older pending Shopify drafts visible for review.
+      if (!rule && base?.contentAcknowledgement && pending === undefined && !pin) {
+        row.values[column.key] = { ...base, shopifyWrite: undefined, editable: !reason, writable: !reason, writeBlockedReason: reason }
+        continue
+      }
+      const value = pending !== undefined ? pending : pin ? pin.value : sharedValue ? sharedValue.value : mapped ? informationSheetValue(field, base.value) : baseline
+      const ownValue = !sharedValue && (pending !== undefined || !!pin || !mapped)
       // Remaining fields are provider-owned facts. Only the content resolver above assigns language readiness.
-      const pinned = !!pin || pending !== undefined && !saved?.inherited || !saved && !!base?.pinned
-      row.values[column.key] = { ...base, value, nexusDraft: pending !== undefined || !!pin, source: pinned || !mapped ? 'channelExplicit' : base.source,
-        layer: pinned || !mapped ? 'channel' : base.layer, pinned,
-        inherited: !pinned && mapped, inheritedFrom: mapped ? base.inheritedFrom : null, follows: pinned ? false : mapped ? true : null,
-        resettable: !!pin || pending !== undefined || mapped, linkGroupId: null, mapped: ownValue ? null : base.mapped, affectsAllChannels: false,
+      const pinned = excluded || !!pin || pending !== undefined && !saved?.inherited || !rule && !saved && !!base?.pinned
+      row.values[column.key] = { ...base,
+        ...(rule ? { contentAddress: undefined, contentAcknowledgement: undefined, contentVersion: undefined, contentAcknowledged: undefined,
+          tier: undefined, language: undefined, requested: undefined, provenance: undefined, translation: undefined } : {}),
+        divergence: sharedConflict ? { publishesAs: sharedConflict.value, note: conflictMessage } : rule ? undefined : base?.divergence,
+        value, nexusDraft: pending !== undefined || !!pin, source: pinned || !mapped ? 'channelExplicit' : base.source,
+        layer: sharedValue ? 'linked' : pinned || !mapped ? 'channel' : base.layer, pinned,
+        inherited: !!sharedValue || !pinned && mapped, inheritedFrom: sharedValue ? productRows.get(sharedValue.sourceProductId) ?? null : mapped ? base.inheritedFrom : null, follows: sharedValue ? true : pinned ? false : mapped ? true : null,
+        resettable: pinned || pending !== undefined || mapped, linkGroupId: null, mapped: rule || ownValue ? null : base.mapped, affectsAllChannels: false,
         ...(ownValue ? { needsTranslation: false, requestedLocale: undefined, effectiveLocale: undefined, translationState: undefined } : {}),
         writeField: column.writeField, writeTarget: 'channelListing', writeVerb: 'channel', editable: !reason, writable: !reason, writeBlockedReason: reason,
-        shopifyWrite: { ownerId: remote.id, fieldId: field.id, token: shopifyCellToken(workspace, remote.id, field, remote.locale), baseline },
+        shopifyWrite: { ownerId: remote.id, fieldId: field.id, token: shopifyCellToken(workspace, remote.id, field, remote.locale, aliasId ?? ''), baseline, sharing: informationSharingFacts(remote, field, workspace.draft) },
       }
-      if (ownValue) {
+      if (sharedConflict) fieldIssues.push({ key: column.key, label: column.label, message: conflictMessage, severity: 'warn' })
+      if (ownValue || sharedValue) {
         refreshed.add(column.key)
-        const error = value == null && pending === undefined && !pin ? null : field.definition ? validateShopifyField(field.definition, value == null ? null : String(value))
+        const error = value == null && pending === undefined && !pin && !sharedValue ? null : field.definition ? validateShopifyField(field.definition, value == null ? null : String(value))
           : field.id !== 'media' && !field.reason ? nativeFieldValueError(field.id as any, value == null ? null : String(value), baseline) : null
         if (error) fieldIssues.push({ key: column.key, label: column.label, message: error, severity: 'error' })
         if (pin && pin.type !== field.type) fieldIssues.push({ key: column.key, label: column.label, message: reason!, severity: 'error' })

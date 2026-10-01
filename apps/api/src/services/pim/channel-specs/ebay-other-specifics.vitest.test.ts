@@ -14,8 +14,8 @@ describe('otherItemSpecificColumns', () => {
     listing({ Marca: 'Xavia', Brand: 'Xavia', 'Paese di origine': 'Pakistan', Genere: 'Uomo', Condizione: 'Nuovo', Vuoto: '' }),
     listing({ Genere: 'Donna', Caratteristiche: ['Ventilato', 'Leggero'], 'Team name': null }),
   ] })
-  it('serves only what no column stores (any spelling of the name), never the condition, never a cleared value', () => {
-    expect(columns.map(c => c.label)).toEqual(['Caratteristiche', 'Genere'])
+  it('serves uncovered stored keys, including an explicit clear, but never the condition or a legacy empty string', () => {
+    expect(columns.map(c => c.label)).toEqual(['Caratteristiche', 'Genere', 'Team name'])
   })
   it('a column the ordinary writer can edit and clear: the listing\'s item specific, eBay\'s 65-character limit, one group', () => {
     expect(columns.find(c => c.label === 'Genere')).toMatchObject({ key: 'other_specific_genere', writeField: 'attr_other_specific_genere', storage: 'listing',
@@ -25,5 +25,11 @@ describe('otherItemSpecificColumns', () => {
   })
   it('nothing stored outside the category: no column', () => {
     expect(otherItemSpecificColumns({ coordinateLabel: label, columns: [aspect('Marca')], listings: [listing({ Marca: 'Xavia' }), { platformAttributes: null }] })).toEqual([])
+  })
+  it('keeps explicit null editable for a new save, while a reset or absent key grants no field', () => {
+    const input = { coordinateLabel: label, columns: [] }
+    expect(otherItemSpecificColumns({ ...input, listings: [listing({ Genere: null })] }))
+      .toEqual([expect.objectContaining({ key: 'other_specific_genere', editable: true })])
+    expect(otherItemSpecificColumns({ ...input, listings: [listing({})] })).toEqual([])
   })
 })

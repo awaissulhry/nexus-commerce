@@ -257,4 +257,4 @@ export function mediaMoves(before: readonly string[], after: readonly string[]) 
   return after.flatMap((id, index) => { if (current[index] === id) return []; current = moveMedia(current, id, index); return [{ id, newPosition: String(index) }] })
 }
 
-export { informationPendingValue, informationStoredValue, informationSheetValue, type ShopifySheetWrite, type ShopifySheetRow } from './shopify-sheet.js'
+export { informationPendingValue, informationStoredValue, informationSheetValue, type ShopifySheetWrite, type ShopifySheetRow, type ShopifySharingFacts } from './shopify-sheet.js'

@@ -256,6 +256,11 @@ export function refreshProgressItem(refresh: () => void, readAt: number | null |
   return { name: at ? `Refresh progress · read ${at}` : 'Refresh progress', action: refresh, ...(failed ? { tooltip: `The last refresh failed: ${failed}` } : {}) }
 }
 
+/** Two progress cell values that draw the same cell. Built by the same functions, so the key order is stable. */
+export function sameProgressReading(a: unknown, b: unknown): boolean {
+  return a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+}
+
 export function progressColumn<Row>(input: {
   colId: string
   headerName: string
@@ -278,7 +283,15 @@ export function progressColumn<Row>(input: {
     sortable: false,
     editable: false,
     cellClass: 'nds-ag-cell nds-cell-is-locked nds-progress-col',
-    valueGetter: p => (p.data ? input.value(p.data) : null),
+    /* 2026-10-01 (P2 scroll/edit budgets) — the value carries the row the card names, and `equals` compares what the
+       cell draws: a reading rebuilt from unchanged facts does not repaint (it repainted three times per edit), while a
+       changed number, empty field, reason, note, reading time or SKU still does. */
+    valueGetter: p => {
+      if (!p.data) return null
+      const value = input.value(p.data)
+      return value && input.cell.subjectOf ? { ...value, subject: input.cell.subjectOf(p as unknown as ICellRendererParams) } : value
+    },
+    equals: sameProgressReading,
     valueFormatter: p => (p.data ? progressText(p.value as ProgressValue | null) : ''),
     // Enter / Space on the locked cell opens the card; Esc in the card returns here.
     suppressKeyboardEvent: cellDetailKeys,

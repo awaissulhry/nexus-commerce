@@ -16,6 +16,8 @@
  * view turns that off: the columns follow what was asked for last.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useParams } from '@/lib/workspaces/navigation'
+import { useAuth } from '@/lib/auth/AuthProvider'
 import type { GridApi, GridState } from '@/design-system/grid'
 import {
   ALL_VIEW_ID, arrangementColumnState, columnStateToPrefs, columnsViewPayload,
@@ -27,7 +29,9 @@ import {
 import type { GridDensityName } from '@/design-system/tokens/grid'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns/PreferencesModal'
 import { moveAttributeColumn } from '@/design-system/patterns/preferencesLogic'
-import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
+import { loadWorkingLayout, parseWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
+import { createInitialSavedViewRead } from './initialSavedViewRead'
+import { isUserColumnPin, readSheetWorkingLayout } from './sheetWorkingLayoutRead'
 import { viewChipColumns, type ViewChip } from '../contracts'
 import type { SheetColumn } from './master/types'
 import { alwaysColumnsFor, GAPS_VIEW_ID, orderColumnKeys, REQUIRED_VIEW_ID, sheetViews, structuralColumnKeys, type ViewContext } from './views'
@@ -167,8 +171,16 @@ const isOwnView = (view: SavedGridView<unknown>) => view.owned !== false && !vie
 export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>): SheetColumnsApi<TPage> {
   const { apiRef, gridReady, columns, viewCtx, serverViews, identityColumn, prefsBridge, activeChip, layoutSurface, legacyLayoutSurface } = a
   const baseUrl = a.grid.baseUrl
-  const scopeRef = useRef(layoutSurface)
-  scopeRef.current = layoutSurface
+  const params = useParams()
+  const workspaceId = typeof params?.workspaceId === 'string' ? params.workspaceId : null
+  const { user } = useAuth()
+  const viewsSurface = a.grid.viewsSurface ?? a.grid.surface
+  const initialViews = useMemo(() => createInitialSavedViewRead(baseUrl, JSON.stringify([workspaceId, user?.id]),
+    [viewsSurface, layoutSurface, ...(legacyLayoutSurface ? [legacyLayoutSurface] : [])]),
+  [baseUrl, workspaceId, user?.id, viewsSurface, layoutSurface, legacyLayoutSurface])
+  const scopeKey = initialViews.key
+  const scopeRef = useRef(scopeKey)
+  scopeRef.current = scopeKey
 
   /* Rule 1 — everything below works on FIELDS. The grid's language columns are mapped at the edge (`toGrid`). */
   const keyMap = useMemo(() => languageKeyMap(columns), [columns])
@@ -258,7 +270,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   useEffect(() => { const stored = readSheetDensity(); if (stored) setDensityState(stored) }, [])
   const setDensity = useCallback((next: GridDensityName) => { setDensityState(next); writeSheetDensity(next) }, [])
   const applySavedRef = useRef<(payload: ColumnsViewPayload, view: SavedGridView<TPage>) => void>(() => {})
-  const gridState = useGridState<TPage>({ ...a.grid, persistKeys: SHEET_PERSIST_KEYS, applyColumnsView: (payload, view) => applySavedRef.current(payload, view) })
+  const gridState = useGridState<TPage>({ ...a.grid, initialRead: { key: initialViews.key, read: () => initialViews.read(viewsSurface) }, persistKeys: SHEET_PERSIST_KEYS, applyColumnsView: (payload, view) => applySavedRef.current(payload, view) })
   const recoveryState = recovery?.surface === layoutSurface ? recovery.state : undefined
   const captureGridState = useCallback(() => {
     const api = apiRef.current
@@ -280,33 +292,34 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     return [...new Set([...alwaysColumns, ...progress, ...matches])]
   }, [keyMap, knownKeys, progressSet, alwaysColumns])
 
-  const fetchLayout = useCallback(async () => {
+  const fetchLayout = useCallback(async (initial = false) => {
     const sequence = ++requestSequence.current
     try {
-      const record = await loadWorkingLayout<WorkingLayoutPayload>(baseUrl, layoutSurface)
-      let layout = record ? layoutPart(record.filters) : null
+      const read = (surface: string) => initial
+        ? initialViews.read(surface).then(body => parseWorkingLayout<WorkingLayoutPayload>(body))
+        : loadWorkingLayout<WorkingLayoutPayload>(baseUrl, surface)
       /* Before 2026-09-27 the layout was kept per market. A scope with no record of its own starts from the one this
          market had; the first pick or save writes the scope's record and leaves the old row as it was. */
-      if (!record && legacyLayoutSurface) layout = layoutPart((await loadWorkingLayout(baseUrl, legacyLayoutSurface).catch(() => null))?.filters)
-      if (scopeRef.current !== layoutSurface || sequence !== requestSequence.current) throw new Error('The sheet scope changed. Reopen Customise in the current scope.')
+      const { record, layout, error } = await readSheetWorkingLayout(read, layoutSurface, legacyLayoutSurface)
+      if (scopeRef.current !== scopeKey || sequence !== requestSequence.current) throw new Error('The sheet scope changed. Reopen Customise in the current scope.')
       setWorking({ surface: layoutSurface, record, layout, ready: true })
-      setLoadState({ surface: layoutSurface, ready: true, error: null })
+      setLoadState({ surface: layoutSurface, ready: true, error })
       return { record, layout }
     } catch (error) {
-      if (scopeRef.current === layoutSurface && sequence === requestSequence.current) {
+      if (scopeRef.current === scopeKey && sequence === requestSequence.current) {
         setWorking({ surface: layoutSurface, record: null, layout: null, ready: false })
         setLoadState({ surface: layoutSurface, ready: false, error: error instanceof Error ? error.message : 'Could not load your saved layout' })
       }
       throw error
     }
-  }, [baseUrl, layoutSurface, legacyLayoutSurface, setWorking])
+  }, [baseUrl, layoutSurface, legacyLayoutSurface, setWorking, initialViews, scopeKey])
 
   useEffect(() => {
     setLandedScope(null)
     layoutRef.current = null
     setWorking({ surface: layoutSurface, record: null, layout: null, ready: false })
     setLoadState({ surface: layoutSurface, ready: false, error: null })
-    void fetchLayout().catch(() => {})
+    void fetchLayout(true).catch(() => {})
     return () => { requestSequence.current += 1 }
   }, [layoutSurface, fetchLayout, setWorking])
 
@@ -319,28 +332,33 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const surface = layoutSurface
     const attempt = async (retry: boolean): Promise<void> => {
       const w = workingRef.current
-      if (w.surface !== surface || !w.ready) {
+      if (scopeRef.current !== scopeKey || w.surface !== surface || !w.ready) {
         if (opts.throwOnError) throw new Error('Load your saved layout before saving. Use Reload saved layout to retry.')
         return
       }
       try {
         const stored = await saveWorkingLayout<WorkingLayoutPayload>(baseUrl, surface, build(w.layout), w.record)
-        if (workingRef.current.surface === surface) setWorking({ surface, record: stored, layout: layoutPart(stored.filters), ready: true })
-        setMemoryError((previous) => (previous?.surface === surface ? null : previous))
+        if (scopeRef.current === scopeKey && workingRef.current.surface === surface) {
+          // The confirmed modern record supersedes any older empty/failed fallback read.
+          requestSequence.current += 1
+          setWorking({ surface, record: stored, layout: layoutPart(stored.filters), ready: true })
+          setLoadState({ surface, ready: true, error: null })
+        }
+        if (scopeRef.current === scopeKey) setMemoryError((previous) => (previous?.surface === surface ? null : previous))
       } catch (error) {
-        if (retry && (error as { status?: number }).status === 409) {
+        if (scopeRef.current === scopeKey && retry && (error as { status?: number }).status === 409) {
           await fetchLayout().catch(() => {})
           return attempt(false)
         }
         const message = error instanceof Error ? error.message : 'Could not save your layout'
-        if (scopeRef.current === surface) setMemoryError({ surface, message: `Your view choice was not saved: ${message}` })
+        if (scopeRef.current === scopeKey) setMemoryError({ surface, message: `Your view choice was not saved: ${message}` })
         if (opts.throwOnError) throw error
       }
     }
     const run = writes.current.then(() => attempt(true))
     writes.current = run.catch(() => {})
     return run
-  }, [layoutSurface, baseUrl, setWorking, fetchLayout])
+  }, [layoutSurface, baseUrl, setWorking, fetchLayout, scopeKey])
   /** Remember an explicit pick: in this tab at once, and on the server. */
   const remember = useCallback((pick: SheetPick) => {
     rememberPick(layoutSurface, pick)
@@ -595,7 +613,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const persistDraft = useCallback(async (value: PreferencesValue, named?: { name: string; view?: SavedGridView<TPage> }) => {
     if (saving.current) throw new Error('A layout save is already in progress')
     const working = workingRef.current
-    if (scopeRef.current !== layoutSurface || working.surface !== layoutSurface || !working.ready) throw new Error('Load your saved layout before saving. Use Reload saved layout to retry.')
+    if (scopeRef.current !== scopeKey || working.surface !== layoutSurface || !working.ready) throw new Error('Load your saved layout before saving. Use Reload saved layout to retry.')
     /* A NAMED view keeps everything on screen (2026-09-26): widths, sort and row height ride with its
        columns. My layout stays columns-only — its widths follow the browser. */
     const payload: ColumnsViewPayload = { ...layoutFromPreferences(specs, value, identityKeys), ...(named ? captureDisplay() : {}) }
@@ -611,20 +629,20 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     try {
       if (named) {
         const saved = await gridState.saveRecord(named.name, { id: named.view?.id, isDefault: named.view?.isDefault, expectedUpdatedAt: named.view?.updatedAt, payload })
-        if (scopeRef.current !== layoutSurface) return saved.id
+        if (scopeRef.current !== scopeKey) return saved.id
         activate({ kind: 'saved', id: saved.id, name: named.name, missing: payload.columns.filter((k) => !knownKeys.has(k)) }, payload)
         gridState.markActive(saved.id)
         remember({ kind: 'saved', id: saved.id })
         return saved.id
       }
       await writeWorking(() => withPick(payload, { kind: 'custom' }), { throwOnError: true })
-      if (scopeRef.current !== layoutSurface) return null
+      if (scopeRef.current !== scopeKey) return null
       rememberPick(layoutSurface, { kind: 'custom' })
       activate({ kind: 'custom', count: countOf(payload) }, payload)
       gridState.markActive(null)
       return null
     } finally { saving.current = false }
-  }, [layoutSurface, specs, identityKeys, captureDisplay, gridState, activate, knownKeys, remember, writeWorking, countOf])
+  }, [layoutSurface, specs, identityKeys, captureDisplay, gridState, activate, knownKeys, remember, writeWorking, countOf, scopeKey])
   const savePreferences = useCallback(async (value: PreferencesValue) => { await persistDraft(value) }, [persistDraft])
   const savePreferencesAs = useCallback(async (name: string, value: PreferencesValue) => (await persistDraft(value, { name }))!, [persistDraft])
   const updatePreferences = useCallback(async (view: SavedGridView<TPage>, value: PreferencesValue) => { await persistDraft(value, { name: view.name, view }) }, [persistDraft])
@@ -632,14 +650,15 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const updateView = useCallback((view: SavedGridView<TPage>) => updatePreferences(view, currentPreferences()), [updatePreferences, currentPreferences])
   const reloadSavedPreferences = useCallback(async () => {
     const { layout } = await fetchLayout()
+    if (scopeRef.current !== scopeKey) throw new Error('The sheet scope changed. Reopen Customise in the current scope.')
     await gridState.refresh()
-    if (scopeRef.current !== layoutSurface) throw new Error('The sheet scope changed. Reopen Customise in the current scope.')
+    if (scopeRef.current !== scopeKey) throw new Error('The sheet scope changed. Reopen Customise in the current scope.')
     setMemoryError(null)
     const payload = hasMyLayout(layout) ? layout : columnsViewPayload(landingKeys)
     activate(hasMyLayout(layout) ? { kind: 'custom', count: countOf(layout) } : { kind: 'all' }, payload)
     gridState.markActive(null)
     return preferencesFromLayout(payload, specs)
-  }, [fetchLayout, gridState, layoutSurface, landingKeys, activate, countOf, specs])
+  }, [fetchLayout, gridState, layoutSurface, landingKeys, activate, countOf, specs, scopeKey])
 
   const describeView = useCallback((view: SavedGridView<TPage>) => {
     if (!isColumnsViewPayload(view.payload)) return view.payload ? { note: 'Saved in an older format — open it to convert' } : { note: 'Holds no columns' }
@@ -682,10 +701,11 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   moveLive.current = { landed, ownActiveView, currentPreferences, savePreferences, updatePreferences, layoutSurface, narrowed: () => narrowedKeys() !== null }
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const movedKeys = useRef(new Set<string>())
-  useEffect(() => () => { if (moveTimer.current) clearTimeout(moveTimer.current) }, [])
+  useEffect(() => () => { if (moveTimer.current) clearTimeout(moveTimer.current); movedKeys.current = new Set() }, [scopeKey])
   const saveArrangementSoon = useCallback(() => {
     if (moveTimer.current) clearTimeout(moveTimer.current)
     moveTimer.current = setTimeout(() => {
+      if (scopeRef.current !== scopeKey) return
       moveTimer.current = null
       const live = moveLive.current
       const moved = keyMap.toFields([...movedKeys.current])
@@ -702,9 +722,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
         return next ? moveAttributeColumn(specs, draft, key, next, false) : previous ? moveAttributeColumn(specs, draft, key, previous, true) : draft
       }, live.currentPreferences())
       void (live.ownActiveView ? live.updatePreferences(live.ownActiveView, value) : live.savePreferences(value))
-        .catch((error: unknown) => setMemoryError({ surface: live.layoutSurface, message: `Your column order was not saved: ${error instanceof Error ? error.message : String(error)}` }))
+        .catch((error: unknown) => { if (scopeRef.current === scopeKey) setMemoryError({ surface: live.layoutSurface, message: `Your column order was not saved: ${error instanceof Error ? error.message : String(error)}` }) })
     }, 400)
-  }, [keyMap, apiRef, knownKeys, specs])
+  }, [keyMap, apiRef, knownKeys, specs, scopeKey])
   const onColumnMoved = useCallback((event: { finished?: boolean; source?: string; column?: { getColId: () => string } | null }) => {
     if (!event.finished || (event.source !== 'uiColumnMoved' && event.source !== 'uiColumnDragged')) return
     const colId = event.column?.getColId()
@@ -713,7 +733,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   }, [saveArrangementSoon])
   /** A pin or unpin from a column's header menu (or a drag into the pinned area) is kept the same way. */
   const onColumnPinned = useCallback((event: { source?: string }) => {
-    if (event.source === 'api' || event.source === 'gridOptionsChanged' || event.source === 'gridInitializing') return
+    if (!isUserColumnPin(event.source)) return
     saveArrangementSoon()
   }, [saveArrangementSoon])
   return {

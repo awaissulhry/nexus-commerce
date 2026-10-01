@@ -148,8 +148,9 @@ export function useGridState<TPage>({
   omitScroll = false,
   persistKeys,
   viewsSurface,
+  initialRead,
 }: UseGridStateOptions<TPage>) {
-  const views = useGridViews<TPage>({ surface: viewsSurface ?? surface, baseUrl, getPageState, applyPageState, applyColumnsView })
+  const views = useGridViews<TPage>({ surface: viewsSurface ?? surface, baseUrl, getPageState, applyPageState, applyColumnsView, initialRead })
   const apiRef = useRef<GridApi | null>(null)
   const pageRef = useRef(getPageState)
   pageRef.current = getPageState

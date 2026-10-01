@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": ["./**/*.ts", "./**/*.mts", "../sheet.config.ts", "../../../../scripts/ci/seed-sheet-fixture.mts", "../../../../scripts/ci/seed-sheet-editor-fixture.mts"],
+  "exclude": ["node_modules"]
+}

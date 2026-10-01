@@ -21,7 +21,8 @@ import { getInformationSheet } from '../services/pim/information-sheet.js'
  */
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
-import { encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
+import { encodePooledSheetCells, encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
+import { encodeReadiness } from '@nexus/shared/readiness-wire'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
 import { resolveWorkspaceDestination, resolveWorkspaceListing, WorkspaceScopeError } from '../services/pim/workspace-destination.js'
 import { AmbiguousConnectionError, NoConnectionError } from '../services/connection-resolver.service.js'
@@ -34,6 +35,8 @@ import {
   type StudioScopeKind,
 } from '../services/pim/studio-sheet.service.js'
 import { getProductReadiness } from '../services/pim/scope-readiness.service.js'
+import { withSelectedReferenceNames } from '../services/pim/sheet-reference-names.js'
+import { outsideDatabaseTransaction } from '../lib/database-context.js'
 import { getRestorePoints } from '../services/pim/restore-points.service.js'
 import { getCellHistory } from '../services/pim/cell-history.service.js'
 import { getProductSyncQueue, type SyncQueueFilter } from '../services/pim/sync-queue.service.js'
@@ -564,7 +567,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     const channel = sc.channel
 
     try {
-      const result = await getInformationSheet({
+      const sheet = await getInformationSheet({
         accountId: q.accountId ? String(q.accountId) : undefined,
         productId: id,
         scope: rawScope,
@@ -573,13 +576,17 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
         locale: q.locale ? String(q.locale) : undefined,
         locales: q.locales !== undefined ? String(q.locales).split(',').filter(Boolean) : undefined,
       })
+      // Optional display lookups run after the read transaction, once for the combined Languages view.
+      const result = await outsideDatabaseTransaction(() => withSelectedReferenceNames(sheet))
       // The read reports its own duration, so a slow scope is visible rather
       // than being felt as "the grid is laggy".
       reply.header('Server-Timing', `studio;dur=${result.meta.tookMs}`)
       reply.header('Cache-Control', 'no-store')
       // P2 — `cells=compact`: each column's shared cell once, each cell as its difference (@nexus/shared/sheet-cell-wire).
-      // Opt-in, so every other reader of this route keeps today's shape.
-      return q.cells === 'compact' ? encodeSheetCells(result) : result
+      // Opt-in, so every other reader of this route keeps today's shape. `patches=pooled` on top: each repeated patch
+      // once more (the fewest bytes of plain, compact and pooled). A reader that does not ask keeps exactly the compact form.
+      if (q.cells !== 'compact') return result
+      return q.patches === 'pooled' ? encodePooledSheetCells(result) : encodeSheetCells(result)
     } catch (err) {
       return sendError(reply, err, request.log, { id, market, scope: rawScope, channel })
     }
@@ -604,9 +611,11 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       // P2 — `only=coordinate`: just the named channel coordinate (scope-readiness.service.ts). Any other value is refused
       // rather than read as "everything", which is a different, much larger answer.
       if (q.only !== undefined && q.only !== 'coordinate') return reply.code(400).send({ error: 'bad_only', message: 'only must be "coordinate", or be omitted.' })
+      if (q.details !== undefined && q.details !== 'compact') return reply.code(400).send({ error: 'bad_details', message: 'details must be "compact", or be omitted.' })
       const result = await getProductReadiness({ productId: id, market, channel, accountId, ...(q.locale ? { locale: String(q.locale) } : {}), ...(q.workspace === '1' ? { selectedOnly: true } : {}), ...(q.listingId ? { listingId: String(q.listingId) } : {}), ...(q.only === 'coordinate' ? { onlyCoordinate: true } : {}) })
+      const body = q.details === 'compact' ? encodeReadiness(result) : result
       reply.header('Server-Timing', `readiness;dur=${Date.now() - t0}`)
-      return result
+      return body
     } catch (err) {
       return sendError(reply, err, request.log, { id, market })
     }

@@ -1,22 +1,25 @@
 'use client'
+
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { NativeEdit } from '@nexus/shared/shopify-information'
 import { nativeFieldValueError, nativeNullableFields } from '@nexus/shared/shopify-information'
 import { validateShopifyField, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { Banner } from '@/design-system/components'
+import { Banner, KeyValue } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { EDITOR_CAPS, EDITOR_KEY_HINT_PANEL, editorBox, type ColDef, type GridApi } from '@/design-system/grid'
 import { useStudioScope } from '../contracts'
-import type { ChannelSheetRow, SheetColumn } from '../sheet/channel/types'
+import type { ChannelSheetRow, SheetColumn, StudioCellValue } from '../sheet/channel/types'
+import type { InformationField } from '@nexus/shared/shopify-information'
 import { LinkedFieldEditor } from './LinkedFieldEditor'
 import { EntryEditor } from './EntryEditor'
 import { ShopifyNativeEditor } from './ShopifyNativeEditor'
 import { InformationTagsEditor } from './InformationTagsEditor'
-import { informationValueLabel } from './informationEditing'
+import { informationValueLabel, informationDraftCellError } from './informationEditing'
 import { linkedEndpoint, linkedRequest } from './api'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { isShopifyHistoryValue, noteShopifyEdit, noteShopifyReplay, replayShopifyHistory } from './draftHistory'
 import styles from './information.module.css'
 
 export const shopifyRawValue = (value: unknown): string | null => value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
@@ -138,7 +141,41 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
   )
 }
 
-export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefined, getApi: () => GridApi<ChannelSheetRow> | null) {
+/**
+ * A follower that keeps a saved Nexus draft value while its sharing rule still copies the source (the API's `divergence`,
+ * `channel-sheet-projection.ts`). Both facts are shown: the value kept here and the value Shopify receives on publish —
+ * also when they are equal, because the conflict is the rule, not the text. Showing them writes nothing.
+ */
+export function ShopifyDivergenceBanner({ type, kept, divergence }: { type: string; kept: string | null; divergence: StudioCellValue['divergence'] }) {
+  if (!divergence) return null
+  return <Banner tone="warning" title="Publishing uses the shared value">
+    <KeyValue dense items={[
+      { label: 'Saved draft, kept here', value: informationValueLabel(type, kept) },
+      { label: 'Shopify receives', value: informationValueLabel(type, shopifyRawValue(divergence.publishesAs)) },
+    ]} />
+    <p>{divergence.note}</p>
+  </Banner>
+}
+
+export type ShopifyPanelSave = { kind: 'close' } | { kind: 'refuse'; message: string } | { kind: 'commit'; value: string | null }
+/**
+ * What Enter / a click outside does with the pop-up's value. Reading a cell and leaving it unchanged closes without a
+ * write — also for a cell that shows a sharing conflict. Pure, so the no-write rule is tested without a grid.
+ */
+export function shopifyPanelSave(p: { field: InformationField; schema: ShopifyStoreSchema; value: string | null; baseline: string | null; locked: boolean
+  translated: boolean; contentWrite: boolean; current: string | null | undefined; hasSession: boolean }): ShopifyPanelSave {
+  const { field, schema, value, baseline } = p
+  if (p.locked || value === baseline) return { kind: 'close' }
+  const current = schema.definitions.find(d => d.ownerType === field.owner && d.namespace === field.definition?.namespace && d.key === field.definition?.key)
+  const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'Shopify changed this field’s rules. Your value stays here; reload the sheet to use the new rules.'
+    : p.translated && value === null ? null : informationDraftCellError(field, value, baseline, p.contentWrite)
+  if (problem) return { kind: 'refuse', message: `Not saved: ${problem}` }
+  if (p.current === undefined || p.current !== baseline) return { kind: 'refuse', message: 'Not saved: the cell changed while this editor was open. Reopen it to review both values.' }
+  if (!p.hasSession) return { kind: 'refuse', message: 'Not saved: the cell edit session ended. Reopen this editor to save your value.' }
+  return { kind: 'commit', value }
+}
+
+export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefined, getApi: () => GridApi<ChannelSheetRow> | null, historyRefused?: ShopifyHistoryRefused) {
   const scope = useStudioScope()
   const canPublish = usePermission('products.publish')
   const canEdit = usePermission('products.edit'), canAdjustInventory = usePermission('inventory.adjust')
@@ -175,18 +212,16 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   const locked = !!permissionReason || !selected?.row.values[selected.column.key]?.writable || !!field?.reason
   const path = selected ? `/api/products/${encodeURIComponent(selected.row.shopify?.productId ?? selected.row.id)}/shopify-linked?${new URLSearchParams({ accountId: scope.accountId ?? '', market: 'GLOBAL', ...(selected.row.shopify?.listingId ?? selected.row.listing?.id ? { listingId: (selected.row.shopify?.listingId ?? selected.row.listing?.id)! } : {}), ...(scope.locale ? { locale: scope.locale } : {}) })}` : ''
   const translated = !!scope.locale && scope.locale !== 'und' && scope.locale !== schema?.locales.find(l => l.primary)?.locale
+  const contentWrite = !!selected?.row.values[selected.column.key]?.contentAcknowledgement && !selected?.row.values[selected.column.key]?.shopifyWrite
   /** Save = the old "Save draft" checks, then commit. Returns false (and says why) when the value may not be saved. */
   const save = (): boolean => {
     if (!selected || !field || !schema) return true
-    if (locked || value === selected.baseline) { close(); return true }
-    const current = schema.definitions.find(d => d.ownerType === field.owner && d.namespace === field.definition?.namespace && d.key === field.definition?.key)
-    const problem = field.definition && JSON.stringify(current) !== JSON.stringify(field.definition) ? 'Shopify changed this field’s rules. Your value stays here; reload the sheet to use the new rules.'
-      : translated && value === null ? null : field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected.baseline)
-    if (problem) { setError(`Not saved: ${problem}`); return false }
     const node = getApi()?.getRowNode(selected.row.rowId)
-    if (!node || shopifyRawValue(node.data?.values[selected.column.key]?.value) !== selected.baseline) { setError('Not saved: the cell changed while this editor was open. Reopen it to review both values.'); return false }
-    if (!selected.session) { setError('Not saved: the cell edit session ended. Reopen this editor to save your value.'); return false }
-    selected.session.commit(value)
+    const decision = shopifyPanelSave({ field, schema, value, baseline: selected.baseline, locked, translated, contentWrite, hasSession: !!selected.session,
+      current: node ? shopifyRawValue(node.data?.values[selected.column.key]?.value) : undefined })
+    if (decision.kind === 'close') { close(); return true }
+    if (decision.kind === 'refuse') { setError(decision.message); return false }
+    selected.session!.commit(decision.value)
     close(true)
     return true
   }
@@ -207,17 +242,22 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   }
   /* A field not switched on explains itself in its own banner below; the generic read-only note would repeat it. */
   const reason = permissionReason || (template ? null : field?.reason || (selected ? selected.row.values[selected.column.key]?.writeBlockedReason : null))
-  return { open, closed, element: selected && field && schema ? <><CellPanel anchor={selected.anchor} label={`${field.label}: ${selected.row.sku}`} onSave={save} onCancel={() => close()}
+  const divergence = selected?.row.values[selected.column.key]?.divergence
+  const warning = !locked && field && !(translated && value === null) && !informationDraftCellError(field, value, selected?.baseline ?? null, contentWrite)
+    ? field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected?.baseline ?? null) : null
+  return { open, closed, historyRefused, element: selected && field && schema ? <><CellPanel anchor={selected.anchor} label={`${field.label}: ${selected.row.sku}`} onSave={save} onCancel={() => close()}
     footer={<><span className="nds-editor-keyhint">{EDITOR_KEY_HINT_PANEL}</span><span className={styles.hint}>{template ? 'Switching on changes the Shopify store at once' : 'Saves in Nexus · Publish to send it to Shopify'}</span></>}>
     <div className={styles.stack}>
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
       {error && <Banner tone="danger">{error}</Banner>}{reason && <Banner tone="neutral">{reason}</Banner>}
+      {warning && <Banner tone="warning" title="Can save as a Nexus draft">Fix this before publishing: {warning}</Banner>}
+      <ShopifyDivergenceBanner type={field.type} kept={selected.baseline} divergence={divergence} />
       {template ? <Banner tone={switchOn === 'done' ? 'success' : 'info'} title={switchOn === 'done' ? `${field.label} is switched on in Shopify` : `${field.label} is not switched on in this Shopify store`}
           action={switchOn === 'done' ? undefined : <Button size="sm" variant="primary" disabled={!canPublish || switchOn === 'busy'} onClick={() => void switchOnField()}>{switchOn === 'busy' ? 'Switching on…' : 'Switch on in Shopify'}</Button>}>
           {switchOn === 'done' ? 'The sheet reloads this field. Open the cell again to choose its values.'
             : `Shopify offers it for this product’s category. Switch it on to add it to the store; you choose values after that.${canPublish ? '' : ' Your Nexus role needs publish permission to switch it on.'}`}
         </Banner>
-        : field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} referenceVersion={referenceVersion} onChange={next => { setValue(next); setError('') }}
+        : field.definition ? <LinkedFieldEditor path={path} schema={schema} definition={field.definition} value={value} disabled={locked} showErrors={!warning} referenceVersion={referenceVersion} onChange={next => { setValue(next); setError('') }}
         onOpenEntry={id => setEntry({ id })} onCopyEntry={!locked && canPublish ? id => setEntry({ id, copy: true }) : undefined}
         onCreateEntry={!locked && canPublish ? type => setEntry({ id: null, type }) : undefined} />
         : field.id === 'tags' ? <InformationTagsEditor original={selected.baseline} disabled={locked} onChange={setValue} />
@@ -234,7 +274,9 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
       if (entry.copy || !entry.id) setEntry(null)
     }} />}</> : null }
 }
-export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Closed): Partial<ColDef<ChannelSheetRow>> {
+/** A history step this cell cannot restore exactly (`draftHistory.ts`): the row, the column and the earlier value. */
+export type ShopifyHistoryRefused = (row: ChannelSheetRow, column: SheetColumn, earlier: string) => void
+export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Closed, onHistoryRefused?: ShopifyHistoryRefused): Partial<ColDef<ChannelSheetRow>> {
   const field = column.shopifyField!
   return {
     cellEditor: Gateway, cellEditorSelector: undefined, cellEditorPopup: true, cellEditorParams: { open, closed: closed ?? (() => undefined), definition: column },
@@ -242,7 +284,19 @@ export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Clo
     valueSetter: p => {
       const old = p.data?.values[column.key]
       if (!p.data || !old || !old.writable) return false
-      p.data.values = { ...p.data.values, [column.key]: { ...old, value: p.newValue, pinned: true, inherited: false } }
+      /* An undo/redo step of this cell: its value AND its own/follow state. The envelope stops here — the cell gets the
+         raw value, and the write takes the intent the state needs. */
+      if (isShopifyHistoryValue(p.newValue)) {
+        const replay = replayShopifyHistory(old, p.newValue)
+        if (replay.kind === 'refuse') onHistoryRefused?.(p.data, column, informationValueLabel(field.type, shopifyRawValue(replay.earlier)))
+        if (replay.kind !== 'apply') return false
+        noteShopifyReplay(replay)
+        p.data.values = { ...p.data.values, [column.key]: replay.cell }
+        return true
+      }
+      const next = { ...old, value: p.newValue, pinned: true, inherited: false }
+      noteShopifyEdit(old, next)
+      p.data.values = { ...p.data.values, [column.key]: next }
       return true
     },
     valueFormatter: p => {

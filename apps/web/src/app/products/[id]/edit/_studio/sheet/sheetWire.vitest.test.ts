@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
+import { encodePooledSheetCells, encodeSheetCells, POOLED_SHEET_CELL_ENCODING } from '@nexus/shared/sheet-cell-wire'
 import { channelSheetResponse, compactSheetUrl } from './channel/useChannelSheet'
 
 /**
  * P2 (2026-09-30) — the sheet reads ask for the compact wire form (each column's shared cell once, each cell as its
  * difference) and restore today's shape in ONE place per read, so nothing past the read changes. The encoding is
- * proven in packages/shared/sheet-cell-wire.vitest.test.ts.
+ * proven in packages/shared/sheet-cell-wire.vitest.test.ts. Since 2026-10-01 they also ask for pooled patches
+ * (`patches=pooled`); an older API answers the compact form, which reads the same.
  */
 const cell = (value: string | null, pinned: boolean) => ({
   value, pinned, layer: 'channel', writeField: 'attr_colore', writeVerb: 'channel', writeTarget: 'channelListing',
@@ -32,9 +33,26 @@ describe('the channel sheet read', () => {
     expect(channelSheetResponse(plain)).toBe(plain)
   })
 
-  it('asks for the compact form without changing the read\'s identity', () => {
+  it('restores a pooled answer to the sheet it encodes', () => {
+    // Enough rows that the same cell patch repeats: the pooled form is then the smallest and is what the API sends.
+    const many = { ...page(), rows: Array.from({ length: 12 }, (_, r) => ({ id: `p${r}`, values: { colore: cell(r % 3 ? 'Rosso' : `Blu ${r}`, r % 2 === 0) } })) }
+    const pooled = JSON.parse(JSON.stringify(encodePooledSheetCells(many)))
+    expect(pooled.meta.cellEncoding).toBe(POOLED_SHEET_CELL_ENCODING)
+    expect(pooled.patchPool.length).toBeGreaterThan(0)
+    expect(channelSheetResponse(pooled)).toEqual(many)
+  })
+
+  it('refuses a pooled answer whose references do not resolve, instead of showing patches as cells', () => {
+    const many = { ...page(), rows: Array.from({ length: 12 }, (_, r) => ({ id: `p${r}`, values: { colore: cell(r % 3 ? 'Rosso' : `Blu ${r}`, r % 2 === 0) } })) }
+    const pooled = JSON.parse(JSON.stringify(encodePooledSheetCells(many)))
+    pooled.rows[1].values.colore = pooled.patchPool.length
+    expect(() => channelSheetResponse(pooled)).toThrow(/could not be read/)
+  })
+
+  it('asks for the compact form with pooled patches without changing the read\'s identity', () => {
     const url = 'https://api.test/api/products/p/studio/sheet?scope=channel&channel=EBAY&market=IT'
-    expect(compactSheetUrl(url)).toBe(`${url}&cells=compact`)
+    expect(compactSheetUrl(url)).toBe(`${url}&cells=compact&patches=pooled`)
+    expect(compactSheetUrl('https://api.test/sheet')).toBe('https://api.test/sheet?cells=compact&patches=pooled')
   })
 })
 

@@ -6,6 +6,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePathname } from 'next/navigation'
 import { WORKSPACES_ENABLED, workspaceFromPath } from '@/lib/workspaces/paths'
 import { fetchProfilePage } from '@/lib/workspaces/profile-directory'
+import { loadProfileScope } from '@/lib/workspaces/profile-scope-load'
 
 export interface BusinessProfile {
   id: string
@@ -42,16 +43,15 @@ export function ProfileScopeProvider({ children }: { children: ReactNode }) {
     if (!WORKSPACES_ENABLED || status !== 'authed') { setProfiles([]); setSelectedProfile(null); setHasMore(false); setError(null); setLoaded(status !== 'loading'); return }
     setError(null)
     try {
-      const [data, selected] = await Promise.all([
-        fetchProfilePage({ limit: 12 }),
-        id ? fetch(`${getBackendUrl()}/api/workspaces/${encodeURIComponent(id)}`, { credentials: 'include', cache: 'no-store' }).then(async response => {
+      const result = await loadProfileScope(id, {
+        page: () => fetchProfilePage({ limit: 12 }),
+        detail: selectedId => fetch(`${getBackendUrl()}/api/workspaces/${encodeURIComponent(selectedId)}`, { credentials: 'include', cache: 'no-store' }).then(async response => {
           const result = await response.json()
           if (!response.ok) throw new Error(result.error ?? 'The selected profile is unavailable.')
-          if (result.workspace?.id !== id) throw new Error('The selected profile could not be verified.')
           return result.workspace as BusinessProfile
-        }) : Promise.resolve(null),
-      ])
-      if (requestId === generation.current) { setProfiles(data.workspaces); setHasMore(!!data.nextCursor); setSelectedProfile(selected) }
+        }),
+      })
+      if (requestId === generation.current) { setProfiles(result.profiles); setHasMore(result.hasMore); setSelectedProfile(result.selected); setError(result.error) }
     } catch (err) { if (requestId === generation.current) { setProfiles([]); setSelectedProfile(null); setHasMore(false); setError(err instanceof Error ? err.message : 'Business profiles could not be loaded.') } }
     finally { if (requestId === generation.current) setLoaded(true) }
   }, [status, user?.id, id])

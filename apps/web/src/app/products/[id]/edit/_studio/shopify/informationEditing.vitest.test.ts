@@ -1,11 +1,42 @@
 import { describe, expect, it } from 'vitest'
 import { informationRegistry, type InformationRow } from '@nexus/shared/shopify-information'
-import { emptyShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
-import { acceptsTextTransfer, applyInformationCells, editTags, informationRestriction } from './informationEditing'
+import { emptyShopifyLinkedDraft, validateShopifyField } from '@nexus/shared/shopify-linked-products'
+import { acceptsTextTransfer, applyInformationCells, editTags, informationRestriction, informationDraftCellError } from './informationEditing'
 const product: InformationRow = { id: 'gid://shopify/Product/1', productId: 'gid://shopify/Product/1', title: 'MOSS', handle: 'moss', kind: 'PRODUCT', image: null, media: [], fields: [], values: { title: 'MOSS', tags: '[]' } }
 const variant: InformationRow = { ...product, id: 'gid://shopify/ProductVariant/11', title: 'S', kind: 'PRODUCTVARIANT', values: { price: '10.00', sku: '00001' } }
 const fields = informationRegistry(null), price = fields.find(f => f.id === 'price')!, sku = fields.find(f => f.id === 'sku')!
 describe('Information semantic commands', () => {
+  it.each(['', '   ', null])('stores blank title %j only with the common content-write capability', value => {
+    const title = fields.find(f => f.id === 'title')!
+    expect(informationDraftCellError(title, value, 'Old title', true)).toBeNull()
+    expect(informationDraftCellError(title, value, 'Old title', false)).toBeTruthy()
+  })
+  it('keeps native storage size, line shape, price, boolean and identity checks', () => {
+    for (const [key, value] of [['title', ' '.repeat(60001)], ['title', '\n'], ['price', '-1'], ['taxable', 'yes'], ['handle', 'BAD HANDLE']]) {
+      const field = fields.find(f => f.id === key)!
+      expect(informationDraftCellError(field, value, null, true), key).toBeTruthy()
+    }
+  })
+  it.each(['four', '', null])('stores the draft %j while retaining the store length/required verdict', value => {
+    const definition = { id: '1', namespace: 'custom', key: 'label', name: 'Label', ownerType: 'PRODUCT', type: 'single_line_text_field', required: true, validations: [{ name: 'max', value: '3' }], description: null, access: { admin: null, storefront: null } }
+    const field = informationRegistry({ revision: '1', definitions: [definition], types: [], metaobjectDefinitions: [], locales: [] }).find(f => f.definition)!
+    const row = { ...product, fields: [{ ownerId: product.id, namespace: 'custom', key: 'label', type: definition.type, value: 'old', compareDigest: 'baseline' }] }
+    const draft = emptyShopifyLinkedDraft()
+    const next = applyInformationCells(draft, [{ row, field, value }], [row], false)
+    expect(next.edits).toEqual([expect.objectContaining({ value: 'old', nextValue: value, compareDigest: 'baseline' })])
+    expect(validateShopifyField(definition, value)).toBe(value === null ? 'Enter a value. Shopify needs this field.' : value === '' ? 'Enter one line of text, or clear the field.' : 'Use 3 characters or fewer. Now: 4.')
+    expect(draft).toEqual(emptyShopifyLinkedDraft())
+  })
+  it.each([
+    ['number_integer', '1.5'], ['number_integer', '9007199254740993'], ['number_decimal', 'four'],
+    ['boolean', 'yes'], ['list.number_integer', '[1,"bad"]'], ['list.single_line_text_field', '{"not":"a list"}'],
+  ])('still refuses malformed %s storage', (type, value) => {
+    const definition = { id: '1', namespace: 'custom', key: 'value', name: 'Value', ownerType: 'PRODUCT', type, validations: [], description: null, access: { admin: null, storefront: null } }
+    const field = informationRegistry({ revision: '1', definitions: [definition], types: [], metaobjectDefinitions: [], locales: [] }).find(f => f.definition)!
+    const draft = emptyShopifyLinkedDraft()
+    expect(() => applyInformationCells(draft, [{ row: product, field, value }], [product], false)).toThrow()
+    expect(draft).toEqual(emptyShopifyLinkedDraft())
+  })
   it('applies category constraints to editing and fill without discarding existing values', () => {
     const definition = { id: '1', namespace: 'custom', key: 'material', name: 'Material', ownerType: 'PRODUCT', type: 'single_line_text_field', validations: [], description: null, access: { admin: null, storefront: null }, constraints: { key: 'category', values: ['aa-8-1'] } }
     const field = informationRegistry({ revision: '2', definitions: [definition], types: [], metaobjectDefinitions: [], locales: [] }).find(f => f.definition)!

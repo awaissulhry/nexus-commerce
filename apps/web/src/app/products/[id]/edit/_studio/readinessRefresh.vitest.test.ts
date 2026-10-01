@@ -14,10 +14,10 @@ const entry = (channel: string | null, market: string | null, pct: number, accou
 const scope = (id: string, pct: number) => ({ id, pct, state: 'warn', required: { filled: pct, total: 100 } })
 
 describe('readinessUrl', () => {
-  it('asks for the coordinate only when told to, with the family read unchanged', () => {
+  it('keeps the coordinate choice and asks for compact details', () => {
     const q = { market: 'IT', locale: 'it', channel: 'EBAY', accountId: 'acc-1' }
-    expect(readinessUrl('p1', q)).toMatch(/\/api\/products\/p1\/readiness\?market=IT&locale=it&channel=EBAY&accountId=acc-1$/)
-    expect(readinessUrl('p1', { ...q, only: 'coordinate' })).toMatch(/\?market=IT&locale=it&channel=EBAY&accountId=acc-1&only=coordinate$/)
+    expect(readinessUrl('p1', q)).toMatch(/\/api\/products\/p1\/readiness\?market=IT&details=compact&locale=it&channel=EBAY&accountId=acc-1$/)
+    expect(readinessUrl('p1', { ...q, only: 'coordinate' })).toMatch(/\?market=IT&details=compact&locale=it&channel=EBAY&accountId=acc-1&only=coordinate$/)
   })
 })
 

@@ -1,0 +1,82 @@
+diff --git a/node_modules/ag-grid-react/dist/package/index.esm.mjs b/node_modules/ag-grid-react/dist/package/index.esm.mjs
+--- a/node_modules/ag-grid-react/dist/package/index.esm.mjs
++++ b/node_modules/ag-grid-react/dist/package/index.esm.mjs
+@@ -2488,7 +2488,11 @@
+   const beans = useContext9(BeansContext);
+   const { context, popupSvc, gos, editSvc } = beans;
+   const { editDetails, cellCtrl, eParentCell } = props;
+-  useEffectOnce(() => {
++  const destroyPopup = useRef9();
++  useLayoutEffect6(() => {
++    if (destroyPopup.current) {
++      return;
++    }
+     const { compDetails } = editDetails;
+     const useModelPopup = gos.get("stopEditingWhenCellsLoseFocus");
+     let hideEditorPopup = void 0;
+@@ -2528,11 +2532,12 @@
+       setPopupEditorWrapper(wrapper);
+       props.jsChildComp?.afterGuiAttached?.();
+     }
+-    return () => {
++    destroyPopup.current = () => {
+       hideEditorPopup?.();
+       context.destroyBean(wrapper);
+     };
+-  });
++  }, []);
++  useEffectOnce(() => () => destroyPopup.current?.());
+   useLayoutEffect6(() => {
+     return () => {
+       if (cellCtrl.isCellFocused() && popupEditorWrapper?.getGui().contains(_getActiveDomElement(beans))) {
+@@ -2717,6 +2722,9 @@
+       if (cellEditor) {
+         const editingCancelledByUserComp = cellEditor.isCancelBeforeStart && cellEditor.isCancelBeforeStart();
+         setTimeout(() => {
++          if (!cellCtrl.isAlive() || cellEditorRef.current !== cellEditor) {
++            return;
++          }
+           if (editingCancelledByUserComp) {
+             cellCtrl.stopEditing(true);
+             cellCtrl.focusCell({ forceBrowserFocus: true });
+diff --git a/node_modules/ag-grid-react/dist/package/index.cjs.js b/node_modules/ag-grid-react/dist/package/index.cjs.js
+--- a/node_modules/ag-grid-react/dist/package/index.cjs.js
++++ b/node_modules/ag-grid-react/dist/package/index.cjs.js
+@@ -2487,7 +2487,11 @@
+   const beans = (0, import_react16.useContext)(BeansContext);
+   const { context, popupSvc, gos, editSvc } = beans;
+   const { editDetails, cellCtrl, eParentCell } = props;
+-  useEffectOnce(() => {
++  const destroyPopup = (0, import_react16.useRef)();
++  (0, import_react16.useLayoutEffect)(() => {
++    if (destroyPopup.current) {
++      return;
++    }
+     const { compDetails } = editDetails;
+     const useModelPopup = gos.get("stopEditingWhenCellsLoseFocus");
+     let hideEditorPopup = void 0;
+@@ -2527,11 +2531,12 @@
+       setPopupEditorWrapper(wrapper);
+       props.jsChildComp?.afterGuiAttached?.();
+     }
+-    return () => {
++    destroyPopup.current = () => {
+       hideEditorPopup?.();
+       context.destroyBean(wrapper);
+     };
+-  });
++  }, []);
++  useEffectOnce(() => () => destroyPopup.current?.());
+   (0, import_react16.useLayoutEffect)(() => {
+     return () => {
+       if (cellCtrl.isCellFocused() && popupEditorWrapper?.getGui().contains(_getActiveDomElement(beans))) {
+@@ -2716,6 +2721,9 @@
+       if (cellEditor) {
+         const editingCancelledByUserComp = cellEditor.isCancelBeforeStart && cellEditor.isCancelBeforeStart();
+         setTimeout(() => {
++          if (!cellCtrl.isAlive() || cellEditorRef.current !== cellEditor) {
++            return;
++          }
+           if (editingCancelledByUserComp) {
+             cellCtrl.stopEditing(true);
+             cellCtrl.focusCell({ forceBrowserFocus: true });

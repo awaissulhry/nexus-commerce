@@ -66,7 +66,7 @@ export function readMeasureValue(raw: unknown): MeasureValue | null {
  * slot `n` of a list is item `n-1`; a list column shows the array; a measure shows `{ value, unit }`.
  * `base` is the value stored under the column's base key (`slot.of` for a slot).
  */
-export function projectCellValue(col: Pick<SheetColumn, 'shape' | 'slot'>, base: unknown): unknown {
+export function projectCellValue(col: Pick<SheetColumn, 'shape' | 'slot'>, base: unknown, options: { preserveListPositions?: boolean } = {}): unknown {
   if (col.slot) {
     const list = readListValue(base)
     if (!list) return null
@@ -76,6 +76,8 @@ export function projectCellValue(col: Pick<SheetColumn, 'shape' | 'slot'>, base:
   if (col.shape === 'list') {
     const list = readListValue(base)
     if (!list) return null
+    // A sheet will index this list into numbered cells. Publishing and ordinary list cells still omit blanks.
+    if (options.preserveListPositions) return list
     const kept = list.filter((v) => !isBlankValue(v))
     return kept
   }
@@ -202,6 +204,8 @@ export function checkForStorage(facts: ShapeWriteFacts | undefined, raw: unknown
       }
     }
     if (typeof member === 'number') {
+      // JSON numbers cannot distinguish an unsafe integer from a rounded neighbouring integer.
+      if (Number.isInteger(member) && !Number.isSafeInteger(member)) return { ok: false, error: `${named(facts ?? {})} is outside the safe whole-number range (-9007199254740991 to 9007199254740991).` }
       const min = number('minimum') ?? number('min'), max = number('maximum') ?? number('max')
       if (min !== undefined && member < min) flag('format', `must be at least ${min}`)
       if (max !== undefined && member > max) flag('format', `must be at most ${max}`)

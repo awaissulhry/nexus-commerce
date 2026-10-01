@@ -46,6 +46,8 @@ let readCount: number
 let holdReads: boolean
 let heldReads: Array<() => void>
 let formulaOnBrand: boolean
+/** The server answers qualified receipts (`contentVersionReceipts`) for the content rows a save wrote, as the API does. */
+let qualifiedReceipts: boolean
 
 const page = (): StudioSheet => ({
   family: { id: 'proof-product' }, scope: { kind: 'master', label: 'Shared German', marketplace: 'DE', locale: 'de' },
@@ -73,7 +75,7 @@ const settle = async () => {
 beforeEach(async () => {
   hooks.state.slots = []; hooks.state.effects = []; hooks.state.index = 0
   stored = { owner: 10, content: 4, name: 'Name A', description: 'Description A', brand: 'Brand A' }
-  sent = []; readCount = 0; holdReads = false; heldReads = []; formulaOnBrand = false
+  sent = []; readCount = 0; holdReads = false; heldReads = []; formulaOnBrand = false; qualifiedReceipts = false
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     if (!init?.method || init.method === 'GET') {
       expect(String(url)).toContain('/studio/sheet?')
@@ -90,14 +92,18 @@ beforeEach(async () => {
       // Canonical content refusals carry the sentence only. The ordinary fact CAS reports a diagnostic owner.
       if (!accepted) return { key: unit.key, status: 409, body: writesContent ? { error: 'Changed', message: 'Changed' }
         : { code: 'VERSION_CONFLICT', error: 'Changed', expectedVersion: unit.expectedVersion, currentVersion: stored.owner, versionOf: 'product' } }
+      const start = { ownerVersion: stored.owner, contentVersion: stored.content }
       for (const change of unit.changes) stored[change.field as 'name' | 'description' | 'brand'] = change.value
       stored.owner++
       if (writesContent) stored.content++
-      if (formulaOnBrand && unit.changes.some(change => change.field === 'brand')) {
+      const formula = formulaOnBrand && unit.changes.some(change => change.field === 'brand')
+      if (formula) {
         stored.description = stored.brand.toUpperCase(); stored.owner++; stored.content++
       }
+      const receipt = qualifiedReceipts && (writesContent || formula)
+        ? { contentVersionReceipts: [{ productId: 'proof-product', tier: 'language', language: 'de', before: start, after: { ownerVersion: stored.owner, contentVersion: stored.content } }] } : {}
       return { key: unit.key, status: 200, body: { updated: unit.changes.length, currentVersion: stored.owner, versionOf: 'product',
-        ...(writesContent ? { contentVersions: [{ id: 'proof-product', tier: 'language', language: 'de', version: stored.content }] } : {}) } }
+        ...(writesContent ? { contentVersions: [{ id: 'proof-product', tier: 'language', language: 'de', version: stored.content }] } : {}), ...receipt } }
     })
     return new Response(JSON.stringify({ units, saved: units.filter(unit => unit.status === 200).length, failed: units.filter(unit => unit.status !== 200).length }))
   }))
@@ -185,4 +191,60 @@ it.each([false, true])('a proven own fact CAS advances the owner but never inven
   expect(sent[1]).toMatchObject({ expectedVersion: formula ? 12 : 11, changes: [{ contentVersion: 4 }] })
   expect(current.tracker.get('proof-product', 'name')?.state).toBe(formula ? 'refused' : 'saved')
   expect(stored.name).toBe(formula ? 'Name A' : 'Own next name')
+})
+
+it('with a qualified receipt, the next German Name save chains after an own fact fed its formula', async () => {
+  holdReads = true; formulaOnBrand = true; qualifiedReceipts = true
+  await edit('brand', 'Own brand')
+  expect(current.tracker.get('proof-product', 'brand')?.state).toBe('saved')
+  // No read has landed: the receipt alone moved the German cells to the pair the formula left.
+  expect(heldReads.length).toBeGreaterThan(0)
+  expect(current.sheet!.rows[0].values.name.contentVersion).toBe(5)
+  await edit('name', 'Own next name')
+  expect(sent[1]).toMatchObject({ expectedVersion: 12, changes: [{ contentVersion: 5 }] })
+  expect(current.tracker.get('proof-product', 'name')?.state).toBe('saved')
+  expect(stored).toMatchObject({ name: 'Own next name', description: 'OWN BRAND' })
+})
+
+it('a receipt that starts from someone else\'s Name B moves nothing: the next save still refuses', async () => {
+  qualifiedReceipts = true
+  // Another writer's Name B (owner 11, content 5) the sheet never read; the sheet's fact token is still 10.
+  stored = { ...stored, owner: 11, content: 5, name: 'Name B' }
+  await edit('name', 'Unseen overwrite')
+  expect(current.tracker.get('proof-product', 'name')?.state).toBe('refused')
+  expect(stored.name).toBe('Name B')
+})
+
+it('a quiet read dropped while an editor is open is read again after Escape, with no further edit', async () => {
+  formulaOnBrand = true; qualifiedReceipts = true
+  let editing: unknown[] = []
+  current.bindGrid({ isDestroyed: () => false, getEditingCells: () => editing, stopEditing: () => {}, getRowNode: () => undefined, refreshCells: () => {} } as never)
+  holdReads = true
+  await edit('brand', 'Own brand')
+  expect(current.tracker.get('proof-product', 'brand')?.state).toBe('saved')
+  expect(heldReads).toHaveLength(1)
+  // Only the wait for the sheet to be idle again runs on a fake clock; the save above used the real one.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    // The operator opens another cell's editor; the quiet read answers meanwhile and is not applied over it.
+    editing = [{ rowIndex: 0, column: 'name' }]
+    heldReads.shift()!()
+    await settle()
+    expect(current.sheet!.rows[0].values.description.value).toBe('Description A')
+    // While the editor stays open nothing is read over it.
+    holdReads = false
+    const reads = readCount
+    await vi.advanceTimersByTimeAsync(5_000)
+    await settle()
+    expect(readCount).toBe(reads)
+    expect(current.sheet!.rows[0].values.description.value).toBe('Description A')
+    // Escape: the editor closes with no edit and no save. The formula's value must still arrive.
+    editing = []
+    await vi.advanceTimersByTimeAsync(5_000)
+    await settle()
+    expect(readCount).toBe(reads + 1)
+    expect(current.sheet!.rows[0].values.description.value).toBe('OWN BRAND')
+    expect(current.sheet!.rows[0].values.description.contentVersion).toBe(5)
+    expect(current.tracker.get('proof-product', 'brand')?.state).toBe('saved')
+  } finally { vi.useRealTimers() }
 })

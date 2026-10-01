@@ -77,6 +77,10 @@ export interface MasterSheetState {
 }
 
 
+/** An owed quiet read waits for the sheet to be idle, checking this often and this many times (as `FollowUpRead`). */
+const OWED_READ_RETRY_MS = 1500
+const OWED_READ_ATTEMPTS = 40
+
 export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const { productId, market, locale } = opts
   const localesQuery = opts.locales ? `&locales=${encodeURIComponent(opts.locales.join(','))}` : ''
@@ -89,6 +93,11 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const [conflicts, setConflicts] = useState<string[]>([])
   const [nonce, setNonce] = useState(0)
   const quietRead = useRef(false)
+  /* A quiet read an open editor kept from applying is still owed: a formula a save fed may have changed other cells, and
+     a receipt moved their tokens, not their values. Tried again once the sheet is idle — the editor closed (with or
+     without an edit), nothing in flight, nothing unconfirmed — never read over an open editor (as the channel's
+     `FollowUpRead`, saveSettle.ts). */
+  const owedRead = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestRef = useRef(0)
   const apiRef = useRef<GridApi<StudioRow> | null>(null)
   const sheetRef = useRef<StudioSheet | null>(null)
@@ -124,7 +133,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     [locale, market],
   )
 
-  const writer = useMemo(
+  const writer: SheetWriter<StudioRow> = useMemo(
     () =>
       new SheetWriter<StudioRow>({
         mergeRow: preserveContentVersions,
@@ -132,7 +141,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
         commit,
         // A fill, a paste, an undo — every row it changed leaves as ONE request (measured 2026-09-29 on the channel
         // scope: one request per row made 224 of 250 rows fail or go unconfirmed; this scope sent the same shape).
-        commitBatch: (requests) => runBulkOperation(requests, commit),
+        commitBatch: (requests) => runBulkOperation(requests, commit, { retrySignal: writer.retrySignal }),
         // ONE read for every row a lost answer left unknown, for the reason `readBack` below reads quietly.
         readBackBatch: async (requests) => {
           const url = `${getBackendUrl()}/api/products/${productIdRef.current}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
@@ -208,6 +217,8 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     const coordinate = JSON.stringify([productId, market, locale])
     const languageSwitch = !quiet && !!sheetRef.current && lastRead.current?.coordinate === coordinate && lastRead.current.locales !== localesQuery
     lastRead.current = { coordinate, locales: localesQuery }
+    // This read pays any owed one; if an open editor drops it too, it is owed again.
+    if (owedRead.current) { clearTimeout(owedRead.current); owedRead.current = null }
     if (languageSwitch) {
       apiRef.current?.stopEditing(true)
       setSwitching(true)
@@ -250,7 +261,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       .then((next) => {
         if (cancelled || mine !== requestRef.current) return
         const api = apiRef.current
-        if (quiet && api && !api.isDestroyed() && api.getEditingCells().length > 0) return
+        if (quiet && api && !api.isDestroyed() && api.getEditingCells().length > 0) { oweQuietRead(); return }
         if (quiet) {
           for (const row of next.rows) {
             const previous = sheetRef.current?.rows.find(old => old.id === row.id)
@@ -276,6 +287,19 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
 
     return () => { cancelled = true; abort.abort() }
   }, [productId, market, locale, localesQuery, nonce, writer])
+
+  /** Check every OWED_READ_RETRY_MS, without reading, until the sheet is idle; then read quietly once. */
+  function oweQuietRead(attempt = 1): void {
+    if (owedRead.current || attempt > OWED_READ_ATTEMPTS) return
+    owedRead.current = setTimeout(() => {
+      owedRead.current = null
+      const api = apiRef.current
+      const editing = !!api && !api.isDestroyed() && api.getEditingCells().length > 0
+      if (editing || writer.pending > 0 || tracker.hasUnconfirmedChanges) { oweQuietRead(attempt + 1); return }
+      quietRead.current = true; setNonce(n => n + 1)
+    }, OWED_READ_RETRY_MS)
+  }
+  useEffect(() => () => { if (owedRead.current) clearTimeout(owedRead.current); owedRead.current = null }, [])
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
   const refresh = useCallback(() => { quietRead.current = true; setNonce(n => n + 1) }, [])

@@ -402,8 +402,11 @@ it('saves Shopify native and typed definition drafts to exact product/variant ow
   expect(response.statusCode, response.body).toBe(200)
   const saved = response.json()
   expect(saved.ok, response.body).toBe(true)
+  // The common content writer owns the title, so its cell carries no Shopify write. A hand-built cell must still be
+  // refused on this path by name, before any token check (the token here is deliberately not the title's).
+  expect(parent.values[title].shopifyWrite).toBeUndefined()
   const refusedTitle = await request('POST', '/api/products/store-demo/shopify-linked/cells?' + new URLSearchParams(scope),
-    { cells: [{ colId: title, ...parent.values[title].shopifyWrite, value: 'Saved Shopify alias', intent: 'set' }] })
+    { cells: [{ colId: title, ownerId: parent.values[flag].shopifyWrite.ownerId, fieldId: 'title', token: 'not-the-title-token', baseline: null, value: 'Saved Shopify alias', intent: 'set' }] })
   expect(JSON.stringify(refusedTitle.json())).toContain("must be saved through the sheet's content address writer")
   const { getCellHistory } = await import('./cell-history.service.js')
   const history = await getCellHistory({ productId: 'store-demo', fieldKey: title, channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shopify-b', aliasKey: 'shopify-b-1', locale: 'en' })

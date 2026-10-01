@@ -16,9 +16,15 @@ async function fieldCell(page: Page, key: string) {
   await page.keyboard.press('Escape')
   const focused = page.locator('.ag-cell-focus')
   const row = page.locator(`.ag-row[row-id="${fixture!.child}"]`)
-  // Reload removes focus while keeping horizontal scroll; focus a rendered cell before Home.
-  await (await focused.count() ? focused : row.locator('.ag-cell').first()).press('Home')
-  await row.locator('.ag-cell[col-id="ag-Grid-AutoColumn"]').click({ position: { x: 100, y: 3 } })
+  // Reload removes focus while keeping horizontal scroll; focus a rendered cell before Home. A Home pressed while the
+  // reload is still replacing the rows can land on a cell that is about to go; at phone width the Product column is not
+  // pinned and only Home brings it back (2026-10-01: 1 of the 6 phone cases per round under load). Press until it shows.
+  const product = row.locator('.ag-cell[col-id="ag-Grid-AutoColumn"]')
+  await expect(async () => {
+    await (await focused.count() ? focused : row.locator('.ag-cell').first()).press('Home')
+    await expect(product).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
+  await product.click({ position: { x: 100, y: 3 } })
   for (let i = 0; i < 70 && await page.locator('.ag-cell-focus').getAttribute('col-id') !== key; i++) await page.keyboard.press('ArrowRight')
   await expect(page.locator('.ag-cell-focus')).toHaveAttribute('col-id', key)
   return row.locator(`.ag-cell[col-id="${key}"]`)

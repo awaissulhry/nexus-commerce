@@ -27,6 +27,7 @@ const FAMILY = 'e2e_bulk_autosave'
 const ROWS = 500
 const THEME = { id: 'e2e_theme_a', label: 'E2E Theme A' }
 const COLUMN = 'descriptionThemeId'
+const WORKSPACE = process.env.E2E_WORKSPACE_ID ?? 'nexus_legacy_workspace'
 
 const cell = (page: Page, rowIndex: number) => page.locator(`.ag-row[row-index="${rowIndex}"] .ag-cell[col-id="${COLUMN}"]`)
 
@@ -53,12 +54,14 @@ test.describe('product sheet — one operation, one save', () => {
     const bulkSaves: Request[] = []
     const rowPatches: Request[] = []
     page.on('request', (request) => {
-      const path = new URL(request.url()).pathname
+      // With business profiles on, the browser reaches the API through the web's `/backend` proxy.
+      const path = new URL(request.url()).pathname.replace(/^\/backend(?=\/api\/)/, '')
       if (request.method() === 'POST' && path === '/api/products/bulk-save') bulkSaves.push(request)
       if (request.method() === 'PATCH' && path === '/api/products/bulk') rowPatches.push(request)
     })
 
-    await page.goto(`/products/${FAMILY}/edit/studio?scope=EBAY&market=IT`)
+    // Under the business the seed wrote to: a login in two businesses would otherwise land on the profile list.
+    await page.goto(`/w/${WORKSPACE}/products/${FAMILY}/edit/studio?scope=EBAY&market=IT`)
     await expect(page.locator('.ag-row[row-index="1"]')).toBeVisible({ timeout: 60_000 })
 
     // Keyboard to the column: focusing a cell makes the grid scroll the column into view.
@@ -133,7 +136,8 @@ test.describe('product sheet — one operation, one save', () => {
     expect(bulkSaves).toHaveLength(2)
 
     // Every value is STORED: read the sheet back from the API, not from the grid.
-    const read = await page.request.get(`${env.api}/api/products/${FAMILY}/studio/sheet?scope=channel&channel=EBAY&market=IT&locale=it`)
+    const read = await page.request.get(`${env.api}/api/products/${FAMILY}/studio/sheet?scope=channel&channel=EBAY&market=IT&locale=it`,
+      { headers: { 'x-nexus-workspace-id': WORKSPACE } })
     expect(read.ok()).toBe(true)
     const sheet = await read.json() as { rows: Array<{ rowKind: string; sku: string; values: Record<string, { value: unknown }> }> }
     const variants = sheet.rows.filter((row) => row.rowKind === 'variant')

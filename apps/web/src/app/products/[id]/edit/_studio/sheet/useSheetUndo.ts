@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react'
 import type { GridApi, SheetWriter } from '@/design-system/grid'
 
 import { operationFence } from './bulkOperation'
-import { SheetUndoHistory, undoShortcut, type ApplyCellValues, type SheetCellChange } from './sheetUndo'
+import { SheetUndoHistory, undoShortcut, writeHistoryValues, type ApplyCellValues, type SheetCellChange } from './sheetUndo'
 
 /**
  * The sheet's undo, wired: a history that survives the sheet's re-reads (`sheetUndo.ts`), ⌘Z / ⌘⇧Z on a focused cell,
@@ -21,7 +21,7 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
     if (!api || api.isDestroyed()) return
     writer.beginOperation()
     try {
-      for (const { rowId, colId, value } of values) api.getRowNode(rowId)?.setDataValue(colId, value, direction)
+      writeHistoryValues(api, values, direction)
     } finally {
       setTimeout(() => writer.endOperation(), 0)
     }

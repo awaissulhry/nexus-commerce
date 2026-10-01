@@ -1,6 +1,26 @@
+## Closed editors leave no pending attachment work — 2026-09-30
+
+The pinned AG React patch checks that its cell is alive and still owns the same editor before a delayed attachment runs. Closing an editor, removing its row, or destroying the grid cannot attach a stale tooltip or cancel a replacement editor. Both published module formats have direct regression tests. Mirrored in Factory.
+
+## Fast typing keeps the whole value — 2026-09-30
+
+**`FormulaCellEditor`** finishes opening a typed edit inside the first native key event, so later keys reach the input. Shortcuts, composition, locked cells, and editor-owned keys keep their existing handling. The pinned AG React patch creates the popup in layout, retains the same wrapper through StrictMode replay, and keeps its original cleanup lifetime. Mirrored in Factory.
+
 ## Save replies reconcile replacement rows — 2026-09-30
 
+## 2026-09-30 — Cancel pending save retries on discard or exit
+
+SheetWriter exposes a retry-only signal tied to its lifetime. Discard and exit cancel pending retry waits. Re-arming starts a fresh lifetime without reviving old retries or canceling an in-flight save.
+
+## 2026-09-30 — Preserve unsafe whole-number input
+
+Numeric cells and lists keep unsafe whole-number text intact so the API can refuse it by name without storing a rounded value. Safe values and text IDs keep their existing types.
+
 **`SheetWriter`** reconciles the captured request row's confirmed metadata onto the current row before the next edit, through the existing optional `mergeRow` hook. This covers single-row and batch saves. Current cell values stay with the current row. Mirrored in Web.
+
+## Numeric list editors keep the declared value type — 2026-09-30
+
+**`ListPanelEditor`** uses the column parser for chips and pending text, as paste and whole-column edits do. Number lists send JSON numbers. Text IDs, invalid number text, and formula drafts keep their meaning. Mirrored in Factory.
 
 ## Replacement rows keep confirmed write versions — 2026-09-30
 

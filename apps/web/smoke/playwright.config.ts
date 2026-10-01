@@ -16,6 +16,8 @@ export const STORAGE_STATE = process.env.SMOKE_STORAGE_STATE ?? join(tmpdir(), '
 export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
+  // The sheet commit sweep has its own config (sheet.config.ts), seed and job.
+  testIgnore: 'sheet/**',
   grep: /@smoke/,
   fullyParallel: true,
   workers: 2,

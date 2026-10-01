@@ -57,6 +57,7 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
       density={columns.density}
       toolbar={<><SheetToolbar
         {...model.toolbar}
+        saveStatus={model.saveStatus}
         views={columns.gridState}
         presets={columns.presets}
         activePresetId={columns.activePresetId}
@@ -82,9 +83,9 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
       />{model.toolbarExtra}</>}
       footer={!model.loading && !model.unavailable && <>
         {model.footerBefore}
-        <GridSheetStatus {...model.status}>
+        <GridSheetStatus {...model.status} source={model.saveStatus}>
           {model.footerLead}
-          <SheetFooterNote {...model.footerNote} />
+          <SheetFooterNote {...model.footerNote} source={model.saveStatus} />
           {model.footerExtra}
         </GridSheetStatus>
       </>}

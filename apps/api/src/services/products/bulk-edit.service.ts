@@ -1,6 +1,5 @@
 import { ProductBulkError } from '../../lib/product-bulk-error.js'
 import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
-import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { isLocalizableContent, contentField } from '../pim/content-resolver.js'
 import { applyContentBulk, type ContentEdit, type ContentOwnerVersion } from '../pim/content-bulk-write.js'
@@ -25,13 +24,13 @@ import { applyPlatformMutations, channelValueMutation, type ChannelValueMutation
 import { CHANNEL_FIELD_MAP, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '../pim/channel-field-map.js'
 import { checkForStorage, coerceForShape, isBlankValue, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
 import { isEbayListingLevel, loadEbayListingAxes } from '../pim/ebay-listing-level.js'
+import { OTHER_SPECIFIC_PREFIX } from '../pim/channel-specs/ebay-other-specifics.js'
 import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from '../pim/master-field-gate.js'
 import { validationMarketplace } from '../pim/validation-marketplace.js'
-import { auditLogService } from '../audit-log.service.js'
+import { writeBulkEditReceipts } from './bulk-edit-receipts.js'
 import { reevaluateDependents } from '../pim/mapping/cell-formula.service.js'
 import { masterPriceService } from '../master-price.service.js'
 import { applyStockMovement } from '../stock-movement.service.js'
-import { productEventService } from '../product-event.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { isPrimaryChannelConnection, primaryConnectionIds, resolveConnection } from '../connection-resolver.service.js'
 import { normalizeEbayListingValue } from '../pim/ebay-listing-values.js'
@@ -39,6 +38,8 @@ import { numericStorageError } from '../pim/numeric-storage.js'
 import { writeChannelPrices } from '../pim/channel-price-write.service.js'
 import { AMAZON_FULFILMENT_KEY } from '../pim/channel-specs/amazon.js'
 import { setFulfillmentMethod } from '../pim/fulfillment-method.service.js'
+import { UnsupportedPlatformBatch, type PlatformBulkPlan } from './bulk-edit-platform-batch.js'
+import type { EbayFamilyClearOperation, EbayFamilyScope, EbayListingVersion } from './ebay-family-clear.js'
 
 export interface ProductBulkInput {
   changes: Array<{
@@ -215,6 +216,8 @@ export interface ProductBulkContext {
   contentPerRow?: boolean
   /** Internal continuation after content checked this request's precondition; never supplied by HTTP. */
   readContentOwner?: ContentOwnerVersion
+  /** Internal, savepoint-local evidence owned by one bulk-save transaction attempt. */
+  ebayFamilyOperation?: EbayFamilyClearOperation
 }
 
 export { ProductBulkError } from '../../lib/product-bulk-error.js'
@@ -236,7 +239,8 @@ async function channelRowContract(
   const { productCategoryContext } = await import('../pim/product-category-context.js')
   const { columnForCategory, columnApplies } = await import('@nexus/shared/master-sheet')
   const productTypes = [...new Set(owners.map((r) => r.productType).filter((v): v is string => !!v))]
-  const context = await productCategoryContext(ids, ctx.channel, ctx.marketplace, ctx.accountId)
+  // `owners` is each caller's own read of these rows in this transaction, nothing written since: not read again.
+  const context = await productCategoryContext(ids, ctx.channel, ctx.marketplace, ctx.accountId, owners)
   const channelSet = await getSheetColumns({
     locale: ctx.locale,
     accountId: context.connectionId,
@@ -432,10 +436,36 @@ export function setBasedCascadedFields(fieldsByProduct: Map<string, string[]>, m
   return statements
 }
 
+/** A listing compare-and-swap: the version (and, for a snapshot, the `updatedAt`) the write was computed from. */
+interface ListingGuard { id: string; version: number; updatedAt?: Date; at: Date }
+
+/**
+ * Every listing guard of one edit as ONE statement, before any of its writes. Each guard is what one
+ * `channelListing.update({ where: { id, version, updatedAt? }, data: { updatedAt: at } })` did — VERIFY ONLY, the write
+ * that follows bumps the version — and, as there, a guard that matches no row fails the edit with P2025 (the caller's
+ * 409). Measured 2026-10-01: a family clear guarded each of its 21 listings with a statement of its own.
+ */
+async function guardListings(guards: ListingGuard[]): Promise<void> {
+  if (!guards.length) return
+  const rows = JSON.stringify(guards.map(guard => ({ id: guard.id, version: guard.version, updatedAt: guard.updatedAt ?? null, at: guard.at })))
+  const matched = await prisma.$queryRaw<Array<{ id: string }>>`
+    UPDATE "ChannelListing" AS listing
+    SET "updatedAt" = guard.at
+    FROM jsonb_to_recordset(${rows}::jsonb) AS guard(id text, version integer, "updatedAt" timestamp, at timestamp)
+    WHERE listing.id = guard.id AND listing.version = guard.version
+      AND (guard."updatedAt" IS NULL OR listing."updatedAt" = guard."updatedAt")
+    RETURNING listing.id
+  `
+  if (matched.length !== guards.length) {
+    throw Object.assign(new Error('A listing changed after this edit read it.'), { code: 'P2025' })
+  }
+}
+
 /** Validate, preview or atomically apply product edits, including their formula dependencies. */
-export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext) {
+export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext,
+  prepareBatch?: (plan: PlatformBulkPlan) => Promise<{ success: boolean; updated: number }>) {
   // Bind mutation promises before constructing them, including facts and formula cascades.
-  if (!activeDatabaseTransaction()) return inDatabaseTransaction(prisma, () => applyProductBulkEdits(input, context))
+  if (!activeDatabaseTransaction()) return inDatabaseTransaction(prisma, () => applyProductBulkEdits(input, context, prepareBatch))
   const { changes, marketplaceContext, marketplaceContexts } =
     input ?? {}
   // Effective context list: prefer the new array, fall back to the
@@ -544,7 +574,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       received: String(rawBodyExpectedVersion).slice(0, 80),
     })
   }
-  let expectedVersion = headerVersion ?? bodyExpectedVersion
+  const originalExpectedVersion = headerVersion ?? bodyExpectedVersion
+  let expectedVersion = originalExpectedVersion
   if (expectedVersion !== undefined) {
     const ids = new Set(changes.map((c) => c?.id).filter(Boolean))
     if (ids.size !== 1) {
@@ -718,7 +749,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (changeIds.length > 0) {
     try {
       const [ptRows, mkRows] = await Promise.all([
-        prisma.product.findMany({ where: { id: { in: changeIds } }, select: { id: true, parentId: true, isParent: true, productType: true, familyId: true, categoryAttributes: true, parent: { select: { familyId: true } } } }),
+        // The whole row: the no-op check below reads exactly this (`prodRows`), so a transaction that remembers reads
+        // answers it from memory. The parent's family comes from the family read below, not from a relation read.
+        prisma.product.findMany({ where: { id: { in: changeIds } } }),
         capMarket ? Promise.resolve([]) : prisma.channelListing.findMany({
           where: { productId: { in: changeIds } }, select: { marketplace: true }, distinct: ['marketplace'],
         }),
@@ -732,15 +765,21 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // channel spec, so the market only names coordinates; `GLOBAL` with `allowUnknownMarket` names none of a
       // marketplace's own.
       const marketFree = markets.length === 0
-      const familyIds = [...new Set(ptRows.map(r => r.familyId ?? r.parent?.familyId).filter((v): v is string => !!v))]
       // Studio exposes saved fields across the entire parent/variation group. Build that same
       // schema for a child edit, including fields currently stored only on its parent or sibling.
       const rootIds = [...new Set(ptRows.map(r => r.parentId ?? r.id))]
       const schemaFamilyRows = rootIds.length ? await prisma.product.findMany({
         where: { OR: [{ id: { in: rootIds } }, { parentId: { in: rootIds } }], deletedAt: null },
-        select: { id: true, parentId: true, categoryAttributes: true, variantAttributes: true, variationAxes: true },
+        select: { id: true, parentId: true, familyId: true, categoryAttributes: true, variantAttributes: true, variationAxes: true },
       }) : []
-      for (const row of schemaFamilyRows) variationOwners.set(row.id, { ...row, variationAxes: row.variationAxes?.length ? row.variationAxes : schemaFamilyRows.find(parent => parent.id === row.parentId)?.variationAxes ?? [] })
+      // A variation's family is its own, else its parent's. Every live parent is a root of the read above; a deleted one
+      // (which that read leaves out) is read by id, as the parent relation read it.
+      const parentFamily = new Map(schemaFamilyRows.map(row => [row.id, row.familyId]))
+      const unreadParents = [...new Set(ptRows.filter(r => !r.familyId && r.parentId && !parentFamily.has(r.parentId)).map(r => r.parentId!))]
+      if (unreadParents.length) for (const row of await prisma.product.findMany({ where: { id: { in: unreadParents } }, select: { id: true, familyId: true } })) parentFamily.set(row.id, row.familyId)
+      const familyOf = (r: { familyId: string | null; parentId: string | null }) => r.familyId ?? (r.parentId ? parentFamily.get(r.parentId) : undefined)
+      const familyIds = [...new Set(ptRows.map(familyOf).filter((v): v is string => !!v))]
+      for (const { familyId: _familyId, ...row } of schemaFamilyRows) variationOwners.set(row.id, { ...row, variationAxes: row.variationAxes?.length ? row.variationAxes : schemaFamilyRows.find(parent => parent.id === row.parentId)?.variationAxes ?? [] })
       if (ptRows.length > 0) {
         const { getSheetColumns } = await import('../pim/sheet-columns.service.js')
         if (primaryContext) {
@@ -766,7 +805,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           const { canonicalVariantAxis } = await import('../pim/variant-attribute-keys.js')
           for (const product of ptRows) {
             const row = new Map<string, import('../pim/sheet-columns.service.js').SheetColumn>()
-            const shape = { isParent: product.isParent, productType: product.productType, familyId: product.familyId ?? product.parent?.familyId }
+            const shape = { isParent: product.isParent, productType: product.productType, familyId: familyOf(product) }
             // P1 (report 2 I-11) — the family row holds a per-variant column's value for its variations unless it is a
             // variation axis (the studio sheet's own rule, `columnEditableOnRow`); `axis` from this family's axes.
             const axes = new Set((variationOwners.get(product.id)?.variationAxes ?? []).map(axis => canonicalVariantAxis(String(axis))))
@@ -839,6 +878,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       else contentEdits.push({ change, column: col })
     }
   }
+  // A batch preparation is read-only until its explicit callback below. Content keeps its own ordered writer.
+  if (prepareBatch && (contentEdits.length || errors.length || changes.some(change =>
+    storeFor(change.id, change.field.replace(/^attr_/, ''))?.kind !== 'platformAttributes'))) throw new UnsupportedPlatformBatch('This edit needs the row writer.')
   if (contentEdits.length && !primaryContext) {
     // P1 — a master bullet over a listed channel's cap is stored and flagged; that channel's publish blocks it.
     for (const warning of await masterBulletCapWarnings(contentEdits)) warnings.push(warning)
@@ -1084,7 +1126,24 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // An eBay item specific's length is judged as eBay receives it (each value; a joined list as its parts) by the
       // channel check below (`ebayAspectValues`), not by the raw text here.
       const itemSpecific = c.target === 'channel' && (() => { const store = storeFor(c.id, c.field.replace(/^attr_/, '')); return store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' })()
-      const facts = rowColumn ? { ...factsOf(rowColumn), ...(itemSpecific ? { maxLength: undefined } : {}) } : columnFactsByKey.get(c.field.replace(/^attr_/, ''))
+      let facts: ShapeWriteFacts | undefined = rowColumn ? { ...factsOf(rowColumn), ...(itemSpecific ? { maxLength: undefined } : {}) } : columnFactsByKey.get(c.field.replace(/^attr_/, ''))
+      // A cleared custom specific retains its real name, but JSON null carries no former scalar/list shape.
+      // Both string forms were already storable. Let the new value state its shape without inventing history.
+      const blankOtherSpecific = primaryContext?.channel === 'EBAY' && itemSpecific && rowColumn?.key.startsWith(OTHER_SPECIFIC_PREFIX) && (() => {
+        const store = storeFor(c.id, rowColumn.key), owner = familyPlace.get(c.id)
+        if (store?.kind !== 'platformAttributes' || !owner) return false
+        const root = owner.parentId ?? c.id
+        const copies = ebayFamilyListings.filter(row => row.aliasKey === (primaryContext.aliasKey ?? '') && (row.productId === root || row.parentId === root))
+          .map(row => readPath(row.platformAttributes, store.path))
+        return copies.some(value => value === null) && copies.every(isBlankValue)
+      })()
+      if (blankOtherSpecific) {
+        if (value != null && typeof value !== 'string' && !(Array.isArray(value) && value.every(item => typeof item === 'string'))) {
+          errors.push({ id: c.id, field: c.field, error: `${rowColumn!.label} takes text or a list of text values.` })
+          continue
+        }
+        facts = { ...facts, shape: Array.isArray(value) ? 'list' : 'scalar', cardinality: { min: 0, max: Array.isArray(value) ? null : 1 } }
+      }
       // A display name can exceed the ID's cap. Resolve it before validating the stored form.
       const reference = isReferenceField(c.field.slice(5))
       // P1 (`pim/value-verdict.ts`) — only what the field's type cannot hold is refused; every other rule (the list, a
@@ -1608,6 +1667,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   /** Per family (parent id): its listings on this coordinate's alias, with the stored bags this request read. */
   const familyListingsOf = new Map<string, Array<{ productId: string; platformAttributes: unknown }>>()
   const ebayContext = effectiveContexts.find(ctx => ctx.channel === 'EBAY')
+  const familyOperation = ebayContext && effectiveContexts.length === 1 && originalExpectedVersion !== undefined && originalExpectedVersion > 0
+    ? context.ebayFamilyOperation : undefined
+  const familyBefore = new Map<string, EbayListingVersion>()
+  const familyScope = (parentId: string): EbayFamilyScope => ({ parentId, accountId: connFor.get('EBAY') ?? null,
+    marketplace: ebayContext!.marketplace, aliasKey: ebayContext!.aliasKey ?? '', locale: ebayContext!.locale })
   const itemSpecificWrites = ebayContext ? validated.filter(v => {
     if (v.target !== 'channel' || !isCategoryAttrField(v.field) || isFulfilmentChange(v)) return false
     const store = storeFor(v.id, v.field.replace(/^attr_/, ''))
@@ -1642,6 +1706,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
   }
   const noOpKeys = new Set<string>()
+  const acknowledgedFamilyClears = new Set<string>()
+  let familyVersionConflict: number | undefined
+  let familyGuardVersion: number | undefined
+  let contentOwnerRead: { id: string; owner: 'channelListing'; version: number | undefined } | undefined
   // #689(1) — a request that changes nothing still answers with the row's
   // CURRENT version, so a caller holding a stale token learns it is behind
   // WITHOUT a 409 for a write that would have changed nothing. Read from the
@@ -1650,7 +1718,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   let noOpVersionOf: 'product' | 'channelListing' | null = null
   let noOpMasterCount = 0
   let noOpChannelCount = 0
-  if (expectedVersion !== undefined && validated.length > 0) {
+  const batchListings: PlatformBulkPlan['listings'] = new Map()
+  if ((expectedVersion !== undefined || prepareBatch) && validated.length > 0) {
     try {
       const ids = [...new Set(validated.map((v) => v.id))]
       const [prodRows, listingRows] = await Promise.all([
@@ -1672,6 +1741,17 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             })
           : Promise.resolve([]),
       ])
+      if (familyOperation && listingRows.length === 1 && validated.some(isChannelChange)) {
+        const listing = listingRows[0]
+        familyOperation.answerListingId = listing.id
+        familyBefore.set(listing.id, { id: listing.id, version: listing.version })
+        if (context.readContentOwner) contentOwnerRead = { id: validated[0].id, owner: 'channelListing',
+          version: await context.readContentOwner(validated[0].id, 'channelListing') }
+        const own = familyOperation.expectedVersion(listing, originalExpectedVersion!)
+        if (own === 'conflict') familyVersionConflict = listing.version
+        else if (own !== undefined) familyGuardVersion = own
+      }
+      if (prepareBatch) for (const listing of listingRows) if (listing.productId) batchListings.set(listing.productId, listing)
       const prodById = new Map(prodRows.map((p) => [p.id, p as unknown as Record<string, unknown>]))
       const listingFor = (pid: string) =>
         (listingRows.find((r) => r.productId === pid) ?? null) as Record<string, unknown> | null
@@ -1736,11 +1816,16 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
               // row holds no copy of its own (which the write removes) and the parent already holds this value.
               const familyOwner = listingLevelParent.get(`${v.id}\u0000${v.field}`)
               const family = listingLevelFamily.get(`${v.id}\u0000${v.field}`)
+              if (familyOperation && family && v.value === null && familyOperation.cleared(familyScope(family), store.path, familyOwner ?? v.id)) {
+                // This operation already performed the exact SET/inherit footprint. Its owner proof is checked above.
+                current = null
+                acknowledgedFamilyClears.add(`${v.id}:${v.field}`)
+              }
               // P1 review (5) — a clear empties every copy on the listing: unchanged only when NO row of the family holds
               // a value (the parent may hold '' while a variation supplies what eBay gets).
               // No copy anywhere is NOT "unchanged": the shown value may come from a mapping, and a stored clear/reset is what
               // stops it (undefined skips the no-op test below, as for the empty bag of 2026-09-05; review 2026-09-30).
-              if (family && (v.reset || isBlankValue(v.value))) current = (familyListingsOf.get(family) ?? []).some(listing => !isBlankValue(readPath(listing.platformAttributes, store.path))) ? { copies: true } : undefined
+              else if (family && (v.reset || isBlankValue(v.value))) current = (familyListingsOf.get(family) ?? []).some(listing => !isBlankValue(readPath(listing.platformAttributes, store.path))) ? { copies: true } : undefined
               else if (familyOwner) current = val !== undefined ? { ownCopy: val } : readPath((familyListingsOf.get(familyOwner) ?? []).find(listing => listing.productId === familyOwner)?.platformAttributes, store.path)
             } else {
               current = bagFor(v.id)[stripped]
@@ -1774,7 +1859,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // the listing was at 19) that no client can recover with. Mirror the
       // success path's choice rather than assuming 'product'.
       if (noOpKeys.size > 0) {
-        if (noOpMasterCount === 0 && noOpChannelCount > 0) {
+        if (noOpMasterCount === 0 && noOpChannelCount > 0 || acknowledgedFamilyClears.size > 0 && familyGuardVersion !== undefined) {
           // Only claim a listing version when exactly one listing is in
           // play; with several coordinates there is no single right answer,
           // and a wrong number is worse than none.
@@ -1787,17 +1872,26 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           noOpVersionOf = 'product'
         }
       }
-    } catch {
+    } catch (error) {
+      // Once a listing carries operation evidence, its BEFORE check is mandatory, not best-effort equality.
+      if (familyOperation && (familyOperation.hasEffects || context.readContentOwner)) throw error
       // A comparison we cannot make is not a reason to refuse the write: fall
       // through and behave exactly as before. Skipping a real change would be
       // far worse than spending a version on a no-op.
     }
   }
+  if (familyVersionConflict !== undefined) throw new ProductBulkError(409, {
+    code: 'VERSION_CONFLICT', error: 'This row was already different before the family clear. Refresh the scope before saving it.',
+    expectedVersion: originalExpectedVersion, currentVersion: familyVersionConflict, versionOf: 'channelListing',
+  })
   if (noOpKeys.size > 0) {
     for (let i = validated.length - 1; i >= 0; i--) {
       if (noOpKeys.has(`${validated[i].id}:${validated[i].field}`)) validated.splice(i, 1)
     }
   }
+  // A harmless master no-op cannot skip the BEFORE check or change the listing's reply owner.
+  // Only surviving channel writes may use its proved effective token; never a Product mutation.
+  if (familyGuardVersion !== undefined && validated.every(isChannelChange)) expectedVersion = familyGuardVersion
 
   if (primaryContext && ['AMAZON', 'EBAY', 'ETSY'].includes(primaryContext.channel)) {
     const candidates = validated.filter(isChannelChange)
@@ -1822,6 +1916,26 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
   }
 
+  if (prepareBatch) {
+    // Only independent children of one family. A parent, draft, listing-level value, or dependent formula must keep
+    // the ordered row semantics. Validation above is shared with that path, including partial cells and no-ops.
+    const families = new Set(changeIds.map(id => familyPlace.get(id)?.parentId))
+    if (effectiveContexts.length !== 1 || families.size !== 1 || families.has(undefined) || families.has(null) ||
+      listingLevelFamily.size || validated.some(change => isFulfilmentChange(change) || change.slot !== undefined)) throw new UnsupportedPlatformBatch('This edit is not independent.')
+    const formulas = await prisma.cellFormula.findFirst({ where: { OR: [{ productId: { in: changeIds } }, { product: { parentId: { in: changeIds } } }] }, select: { id: true } })
+    if (formulas) throw new UnsupportedPlatformBatch('Dependent formulas use the synchronous row writer.')
+    const mutations: PlatformBulkPlan['mutations'] = new Map()
+    for (const change of validated) {
+      const key = change.field.replace(/^attr_/, '')
+      const store = storeFor(change.id, key)
+      if (store?.kind !== 'platformAttributes') throw new UnsupportedPlatformBatch('This storage needs the row writer.')
+      const mutation = channelValueMutation(store, [key, change.field], change.reset ? 'INHERIT' : 'SET', change.value)
+      mutations.set(change.id, [...(mutations.get(change.id) ?? []), mutation])
+    }
+    return prepareBatch({ changes: validated, errors, warnings, normalizedChanges, noOpKeys, listings: batchListings, mutations,
+      coordinate: effectiveContexts[0], accountId: connFor.get(effectiveContexts[0].channel) ?? null })
+  }
+
   // ── DRY RUN — validation is done; nothing below this point may run ──
   // Placed ABOVE the empty-validation branch deliberately: that branch writes
   // a `BulkOperation` row, and a preview must not leave a job record behind.
@@ -1838,7 +1952,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // Refused/no-op facts no longer choose the owner. Advance a token only if content already checked
   // this same owner inside the transaction; otherwise preserve the caller's original precondition.
   if (expectedVersion !== undefined && validated.length && context.readContentOwner) {
-    expectedVersion = await context.readContentOwner(validated[0].id, validated.every(isChannelChange) ? 'channelListing' : 'product') ?? expectedVersion
+    const owner = validated.every(isChannelChange) ? 'channelListing' : 'product'
+    expectedVersion = (contentOwnerRead?.id === validated[0].id && contentOwnerRead.owner === owner
+      ? contentOwnerRead.version : await context.readContentOwner(validated[0].id, owner)) ?? expectedVersion
   }
 
   // A listing a door already moved in this request → the version it holds now. Every later guard on that listing
@@ -1867,7 +1983,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       channelConnectionId: accountId, aliasKey }, select: { id: true, productId: true, version: true } })
     if (listingToken && expectedVersion === 0 && existing.length) throw new ProductBulkError(409, {
       code: 'VERSION_CONFLICT', error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.',
-      expectedVersion, currentVersion: existing[0].version, listingId: existing[0].id, versionOf: 'channelListing',
+      expectedVersion: originalExpectedVersion, currentVersion: existing[0].version, listingId: existing[0].id, versionOf: 'channelListing',
     })
     const missing = productIds.filter(id => !existing.some(row => row.productId === id))
     if (!missing.length) continue
@@ -1918,7 +2034,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const prices = await writeChannelPrices({ targets, actor: context.userId ?? 'system', source: 'MANUAL_OVERRIDE', reason: 'Product sheet' })
     for (const outcome of prices.results) {
       if (outcome.outcome === 'conflict') throw new ProductBulkError(409, {
-        code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
+        code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion: originalExpectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
       })
       if (outcome.outcome === 'refused') throw new ProductBulkError(400, { error: outcome.reason })
       if (outcome.outcome === 'applied') priceWrittenIds.set(outcome.listingId, outcome.version)
@@ -1959,7 +2075,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const written = await setFulfillmentMethod({ targets, actor: context.userId ?? 'system' })
     for (const outcome of written.results) {
       if (outcome.outcome === 'conflict') throw new ProductBulkError(409, {
-        code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
+        code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion: originalExpectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
       })
       if (outcome.outcome === 'refused') throw new ProductBulkError(400, { error: outcome.reason })
       if (outcome.outcome === 'applied') priceWrittenIds.set(outcome.listingId, outcome.version)
@@ -1981,7 +2097,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // BulkOperation row, which would tell an operator their save failed because
   // the value was already right. `updated: 0` with no `errors[]` is what the
   // client already paints as saved.
-  if (validated.length === 0 && errors.length === 0 && noOpKeys.size > 0) {
+  if (validated.length === 0 && noOpKeys.size > 0 && (errors.length === 0 || acknowledgedFamilyClears.size > 0)) {
     // A door's no-op on a draft this request started still started it (e.g. clearing an empty price).
     const draftProductIds = [...new Set(createdListings.map(row => row.productId))]
     if (draftProductIds.length) await afterDatabaseCommitBatch('product-cache:bulk-edit', draftProductIds, ids => productReadCacheService.refreshMany(ids))
@@ -1989,13 +2105,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       success: true,
       updated: 0,
       unchanged: noOpKeys.size,
+      ...(errors.length ? { errors } : {}),
       ...(warnings.length ? { warnings } : {}),
       ...(await createdListingsReadBack()),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
       cascadeCount: 0,
       affectedChildren: 0,
       elapsedMs: 0,
-      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+      ...(originalExpectedVersion !== undefined ? { expectedVersion: originalExpectedVersion } : {}),
       // Never the echoed token — that would tell a stale client it is current.
       ...(noOpCurrentVersion !== null && noOpVersionOf !== null
         ? { currentVersion: noOpCurrentVersion, versionOf: noOpVersionOf }
@@ -2016,7 +2133,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         // version-guarded: the token is a top-level request field, so
         // `changes` never held it, and a token this route could not parse used
         // to vanish without trace (AIREON, 2026-09-02).
-        expectedVersion: expectedVersion ?? null,
+        expectedVersion: originalExpectedVersion ?? null,
         errors: errors as any,
       },
     })
@@ -2193,7 +2310,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // Build the transaction's update list. One Prisma promise per
     // statement; runs serially in array-form $transaction.
     const updates: any[] = []
-    const listingGuards = new Map<string, any>()
+    /** One compare-and-swap per listing; a later `set` for the same listing replaces the earlier (the strongest wins). */
+    const listingGuards = new Map<string, ListingGuard>()
 
     // Helper for a ChannelListing column write by (productId, channel,
     // marketplace). R.1 — fans out to every effectiveContext whose
@@ -2281,18 +2399,13 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             : undefined
         if (hit) {
           if (expectedVersion !== undefined && !priceWrittenIds.has(hit.id)) {
-            listingGuards.set(hit.id,
-              prisma.channelListing.update({
-                where: { id: hit.id, version: expectedVersion },
-                // ⚠ VERIFY ONLY — do NOT bump. The update below already does
-                // `version: { increment: 1 }`; bumping here too would advance
-                // the row by TWO while the response reported ONE, and the next
-                // write would 409 every time. Prisma still throws P2025 when
-                // the version does not match, which is this statement's whole
-                // job. Same shape as the attr_* CAS.
-                data: { updatedAt: new Date() },
-              }),
-            )
+            // ⚠ VERIFY ONLY — do NOT bump. The update below already does
+            // `version: { increment: 1 }`; bumping here too would advance
+            // the row by TWO while the response reported ONE, and the next
+            // write would 409 every time. A guard that matches no row fails
+            // as P2025 (`guardListings`), which is its whole job. Same shape
+            // as the attr_* CAS.
+            listingGuards.set(hit.id, { id: hit.id, version: expectedVersion, at: new Date() })
           }
           // Recorded whether or not a token was sent: this is what makes the
           // response able to report the LISTING's version for a mapped write.
@@ -2648,11 +2761,16 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       } else if (childIdSet.has(v.id)) {
         // Direct edit on a child Product field — also remove the
         // field from cascadedFields if it's there (override).
+        // 2026-10-01 — the value goes through the model update, as the parent's does: raw SQL sent a JS array to a Json
+        // column as a Postgres array literal (22P02, Impact protectors on a variation never saved).
         updates.push(
+          prisma.product.update({
+            where: { id: v.id },
+            data: { [v.field]: v.value } as any,
+          }),
           prisma.$executeRaw`
             UPDATE "Product"
-            SET ${Prisma.raw(`"${v.field}"`)} = ${v.value as any},
-                "cascadedFields" = array_remove("cascadedFields", ${v.field})
+            SET "cascadedFields" = array_remove("cascadedFields", ${v.field})
             WHERE id = ${v.id}
           `
         )
@@ -2702,20 +2820,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           // `priceWrittenIds`: its version is this transaction's own, not the
           // caller's token, so there is nothing to guard it against.
           if (hit && !priceWrittenIds.has(hit.id)) {
-            listingGuards.set(hit.id,
-              prisma.channelListing.update({
-                where: { id: hit.id, version: expectedVersion },
-                // ⚠ VERIFY ONLY — do NOT bump here. `writeChannelOverrideMerge`
-                // below already does `"version" = "version" + 1`, and bumping in
-                // both made an accepted write advance the version by TWO while
-                // the response reported ONE. Feeding the returned version into
-                // the next write then 409'd every time — i.e. the sheet stops
-                // saving after the first cell and blames the operator.
-                // Prisma still throws P2025 when the version does not match,
-                // which is the whole job of this statement.
-                data: { updatedAt: new Date() },
-              }),
-            )
+            // ⚠ VERIFY ONLY — do NOT bump here. `writeChannelOverrideMerge`
+            // below already does `"version" = "version" + 1`, and bumping in
+            // both made an accepted write advance the version by TWO while
+            // the response reported ONE. Feeding the returned version into
+            // the next write then 409'd every time — i.e. the sheet stops
+            // saving after the first cell and blames the operator.
+            // The guard still fails as P2025 when the version does not
+            // match, which is the whole job of this check.
+            listingGuards.set(hit.id, { id: hit.id, version: expectedVersion, at: new Date() })
           }
         }
         updates.push(writeChannelOverrideMerge(prisma, e, connFor.get(e.channel) ?? null))
@@ -2738,6 +2851,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         },
         select: { id: true, productId: true, channel: true, marketplace: true, aliasKey: true, version: true, updatedAt: true, platformAttributes: true },
       })
+      if (familyOperation) for (const row of rows) if (!familyBefore.has(row.id)) familyBefore.set(row.id, { id: row.id, version: row.version })
       const rowOf = (e: (typeof entries)[number]) => rows.find((l) => l.productId === e.productId && l.channel === e.channel && l.marketplace === e.marketplace && l.aliasKey === e.aliasKey)
       /** The parent listings a variation's listing-level value was to move to and that are missing: its copy stays. */
       const missingTargets = new Set(entries.filter(e => e.familyWrite && !e.optional && !rowOf(e)).map(entryKeyOf))
@@ -2755,10 +2869,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
         // Replacing a JSON bag must guard the snapshot even for callers without a token. The parent listing a variation
         // row's listing-level value lands on is guarded by the snapshot this request read: the token is the row's own.
-        listingGuards.set(row.id, prisma.channelListing.update({
-          where: { id: row.id, version: priceWrittenIds.has(row.id) || e.familyWrite ? row.version : expectedVersion ?? row.version, ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}) },
-          data: { updatedAt: new Date() },
-        }))
+        listingGuards.set(row.id, { id: row.id, version: priceWrittenIds.has(row.id) || e.familyWrite ? row.version : expectedVersion ?? row.version,
+          ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}), at: new Date() })
         const bag = applyPlatformMutations(row.platformAttributes, e.sets)
         updates.push(
           prisma.$executeRaw`
@@ -2853,18 +2965,17 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // A slot rewrites its sibling array. Guard the snapshot it used, including tokenless callers.
     // Apply this after collecting other guards so a later column write cannot weaken it.
     for (const snapshot of slotSnapshots.values()) {
-      listingGuards.set(snapshot.id, prisma.channelListing.update({
-        where: { id: snapshot.id, version: priceWrittenIds.has(snapshot.id) ? snapshot.version : expectedVersion ?? snapshot.version,
-          ...(snapshot.updatedAt ? { updatedAt: snapshot.updatedAt } : {}) },
-        data: { updatedAt: new Date() },
-      }))
+      listingGuards.set(snapshot.id, { id: snapshot.id, version: priceWrittenIds.has(snapshot.id) ? snapshot.version : expectedVersion ?? snapshot.version,
+        ...(snapshot.updatedAt ? { updatedAt: snapshot.updatedAt } : {}), at: new Date() })
       if (!channelListingIdsTouched.includes(snapshot.id)) channelListingIdsTouched.push(snapshot.id)
     }
     try {
       const formulaWrite = currentFormulaWrite(context.formulaWriteToken)
       if (formulaWrite && (validated.length !== 1 || validated[0].id !== formulaWrite.productId || validated[0].field !== formulaWrite.writeField)) throw new Error('Formula transaction does not match its value write.')
       const atomic = formulaWrite?.operations?.() ?? []
-      const results = await prisma.$transaction([...listingGuards.values(), ...updates, ...atomic], {
+      // Every guard is checked before any write, as one statement: a family clear guards every family listing.
+      await guardListings([...listingGuards.values()])
+      const results = await prisma.$transaction([...updates, ...atomic], {
         isolationLevel: 'ReadCommitted',
       })
       if (formulaWrite) formulaWrite.results = atomic.length ? results.slice(-atomic.length) : []
@@ -2890,7 +3001,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           error: channelOnly
             ? 'Another change landed first on this listing — refresh the scope to pick up the latest version.'
             : 'Another change landed first — refresh the product to pick up the latest version.',
-          expectedVersion,
+          expectedVersion: originalExpectedVersion,
           currentVersion: fresh?.version ?? null,
           /** Which row `currentVersion` belongs to, so a client cannot apply it to the wrong one. */
           versionOf: channelOnly ? 'channelListing' : 'product',
@@ -2987,7 +3098,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         productCount: productIds.size,
         changes: validated as any,
         status: overallStatus,
-        expectedVersion: expectedVersion ?? null,
+        expectedVersion: originalExpectedVersion ?? null,
         errors: errors.length ? (errors as any) : undefined,
         cascadeCount: cascadingParents.length,
         affectedChildren: Array.from(allAffectedChildIds),
@@ -3006,68 +3117,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // from a master one). Approved 2026-09-01 as PES.5 §8 decision 2; the
     // endpoint's request/response contract is unchanged.
     const auditActor = context.userId ?? currentFormulaWrite(context.formulaWriteToken)?.userId ?? null
-    const auditRows = validated.map((c: any) => {
-      const prior = priorById.get(c.id)
-      // `attr_x` writes into categoryAttributes; a bare key is a column. This
-      // mirrors how the change itself is applied, so the recorded `before` is
-      // the value the write actually replaced.
-      const previous = c.target === 'channel' || !capturePrevious || !prior
-        ? undefined
-        : typeof c.field === 'string' && c.field.startsWith('attr_')
-          ? (prior.categoryAttributes as Record<string, unknown> | null)?.[c.field.slice(5)]
-          : prior[c.field]
-      return {
-        userId: auditActor,
-        ip: context.ip ?? null,
-        entityType: 'Product',
-        entityId: c.id,
-        action: 'update',
-        // Written ONLY when actually captured. A `before` of `{ value: null }`
-        // means "it was empty"; omitting the key means "we did not record it".
-        // Collapsing those two into one shape is what makes a history panel lie.
-        ...(previous !== undefined ? { before: { field: c.field, value: previous ?? null } } : {}),
-        after: { field: c.field, value: c.value },
-        metadata: {
-          bulkOperationId: bulkOp.id,
-          cascade: !!c.cascade,
-          source: 'bulk-patch',
-          language: effectiveContexts[0]?.locale ?? PRIMARY_CONTENT_LOCALE,
-          // `effectiveContexts`, NOT the raw body field: that one is optional,
-          // and this tsconfig is not strict, so `.length` on an absent array
-          // would compile clean and then crash the autosave at runtime
-          // (reference_api_tsconfig_not_strict).
-          //
-          // PES.5 / #169 — the layer is now the change's OWN target, not
-          // merely "a context was supplied". A master-targeted change sent
-          // alongside channel contexts still lands on the product, and the
-          // history pane must say which it was.
-          layer: c.target === 'channel' ? 'channel' : 'master',
-          channel: c.target === 'channel' ? effectiveContexts[0]?.channel ?? null : null,
-          marketplace: c.target === 'channel' ? effectiveContexts[0]?.marketplace ?? null : null,
-          aliasKey: c.target === 'channel' ? (effectiveContexts[0] as { aliasKey?: string })?.aliasKey ?? '' : null,
-          accountId: c.target === 'channel' && effectiveContexts.length === 1 ? connFor.get(effectiveContexts[0].channel) ?? null : null,
-        },
-      }
+    await writeBulkEditReceipts([{ operationId: bulkOp.id, changes: validated }], {
+      userId: auditActor, ip: context.ip, capturePrevious, priorById, contexts: effectiveContexts, accounts: connFor,
     })
-    await auditLogService.writeMany(auditRows)
-
-    // Activity consumes the same scoped receipts as field history. Mixed shared/channel
-    // requests must never put another destination's fields in a scoped event.
-    const eventGroups = new Map<string, typeof auditRows>()
-    for (const row of auditRows) {
-      const key = JSON.stringify([row.entityId, row.metadata.layer, row.metadata.channel, row.metadata.marketplace, row.metadata.accountId, row.metadata.aliasKey])
-      eventGroups.set(key, [...(eventGroups.get(key) ?? []), row])
-    }
-    const activityEvents = [...eventGroups.values()].map(rows => ({
-      aggregateId: rows[0].entityId,
-      aggregateType: 'Product' as const,
-      eventType: 'BULK_OP_APPLIED' as const,
-      data: { fields: rows.map(row => row.after), bulkOperationId: bulkOp.id },
-      metadata: { ...rows[0].metadata, source: 'OPERATOR' as const, userId: auditActor },
-    }))
-    const activeTx = activeDatabaseTransaction()
-    if (activeTx) await productEventService.emitManyTx(activeTx, activityEvents)
-    else await productEventService.emitMany(activityEvents)
 
     // Phase 1 — refresh ProductReadCache synchronously for every product
     // this PATCH touched, so the /products grid (which reads the cache)
@@ -3208,6 +3260,26 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             .catch(() => null))?.version
         : undefined
 
+    const familyListingVersions = familyWrites.size ? await prisma.channelListing.findMany({ where: { OR: [...familyWrites.values()].map(write => ({ productId: write.productId, channel: write.channel as never,
+      marketplace: write.marketplace, aliasKey: write.aliasKey, channelConnectionId: connFor.get(write.channel) ?? null })) }, select: { id: true, productId: true, version: true } }) : []
+    if (familyOperation) {
+      const acceptedFamily = validated.filter(change => listingLevelFamily.has(`${change.id}\u0000${change.field}`)
+        && !errors.some(error => error.id === change.id && error.field === change.field))
+      const isFamilyClear = (change: Validated) => change.value === null && !change.reset
+        && !changes.some(raw => raw.id === change.id && raw.field === change.field && raw.intent === 'pin')
+      const startsProof = acceptedFamily.some(isFamilyClear)
+      if (familyOperation.hasEffects || startsProof) {
+        familyOperation.rememberOwners(familyBefore.values(), [...familyListingVersions,
+          ...(freshChannelVersion !== undefined && familyOperation.answerListingId ? [{ id: familyOperation.answerListingId, version: freshChannelVersion }] : [])], startsProof)
+        for (const change of acceptedFamily) {
+          const key = change.field.replace(/^attr_/, ''), store = storeFor(change.id, key)
+          if (store?.kind !== 'platformAttributes') continue
+          familyOperation.rememberField(familyScope(listingLevelFamily.get(`${change.id}\u0000${change.field}`)!), store.path,
+            isFamilyClear(change) ? listingLevelParent.get(`${change.id}\u0000${change.field}`) ?? change.id : null)
+        }
+      }
+    }
+
     return {
       success: true,
       // NN.7 — surface the BulkOperation row id so the client can
@@ -3252,9 +3324,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       ...(await createdListingsReadBack()),
       // P1 — the parent listings a variation row's listing-level eBay value was written to, with the version each holds
       // now, so the sheet can adopt the parent row's new token without a reload.
-      ...(familyWrites.size ? { familyListings: await prisma.channelListing.findMany({ where: { OR: [...familyWrites.values()].map(write => ({ productId: write.productId, channel: write.channel as never,
-        marketplace: write.marketplace, aliasKey: write.aliasKey, channelConnectionId: connFor.get(write.channel) ?? null })) }, select: { id: true, productId: true, version: true } })
-        .then(rows => rows.map(row => ({ productId: row.productId, listingId: row.id, version: row.version }))) } : {}),
+      ...(familyWrites.size ? { familyListings: familyListingVersions.map(row => ({ productId: row.productId, listingId: row.id, version: row.version })) } : {}),
       currentVersion: freshChannelVersion ?? freshMasterVersion ?? undefined,
       versionOf: freshChannelVersion !== undefined ? 'channelListing' : expectedVersion !== undefined ? 'product' : undefined,
     }
@@ -3269,7 +3339,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           changes: changes as any,
           status: 'FAILED',
           errors: [{ error: error?.message ?? String(error) }] as any,
-          expectedVersion: expectedVersion ?? null,
+          expectedVersion: originalExpectedVersion ?? null,
         },
       })
       .catch(() => {

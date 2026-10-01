@@ -35,6 +35,7 @@ const channelListingUpsert = vi.fn()
 const channelListingUpdateMany = vi.fn()
 const bulkOperationCreate = vi.fn()
 const executeRaw = vi.fn()
+const queryRaw = vi.fn()
 const $transaction = vi.fn()
 const connections = new Map<string, string | null>()
 const primaryConnections = vi.fn()
@@ -93,6 +94,7 @@ vi.mock('../db.js', () => {
     // Execute the outer interactive transaction; the spy measures its statement batches.
     $transaction: (work: any, ...args: unknown[]): any => typeof work === 'function' ? work(client) : $transaction(work, ...args),
     $executeRaw: (...a: unknown[]) => executeRaw(...a),
+    $queryRaw: (...a: unknown[]) => queryRaw(...a),
   }
   return { default: client }
 })
@@ -309,6 +311,10 @@ beforeEach(() => {
   ensureDrafts.mockReset().mockImplementation(async () => { throw new Error('No listing was expected to be missing in this case') })
   bulkOperationCreate.mockReset()
   executeRaw.mockReset()
+  // Every listing guard of an edit is ONE `UPDATE … FROM jsonb_to_recordset … RETURNING id` (bulk-edit `guardListings`).
+  // By default every guarded listing is still as read; a stale case answers fewer rows, as PostgreSQL would.
+  queryRaw.mockReset().mockImplementation(async (sql: TemplateStringsArray, rows?: string) =>
+    sql.join('').includes('jsonb_to_recordset') ? JSON.parse(rows!).map(({ id }: { id: string }) => ({ id })) : [])
   $transaction.mockReset()
   $transaction.mockResolvedValue([])
   bulkOperationCreate.mockResolvedValue({ id: 'bulk_test' })
@@ -324,9 +330,17 @@ beforeEach(() => {
   channelListingFindMany.mockResolvedValue([])
 })
 
-/** The equality pass is the only full-row read; every other call selects. */
+/**
+ * The full-row reads: the changed rows' schema read (whole row, so a transaction that remembers reads answers the
+ * equality pass from memory — this mock does not remember) and the equality pass; every other call selects.
+ */
 const fullRowReads = () =>
   productFindMany.mock.calls.filter((c) => !(c[0] as { select?: unknown } | undefined)?.select)
+
+/** The listing compare-and-swaps of the requests so far: the rows of each edit's one guard statement. */
+const listingGuards = (): Array<{ id: string; version: number; updatedAt: string | null }> =>
+  queryRaw.mock.calls.filter(([sql]) => (sql as TemplateStringsArray).join('').includes('jsonb_to_recordset'))
+    .flatMap(([, rows]) => JSON.parse(rows as string))
 
 describe('reference writes use authoritative choices', () => {
   const setup = () => {
@@ -405,7 +419,7 @@ describe('attribute edit loss prevention', () => {
   it('accepts a child override for a legacy field saved only on its parent', async () => {
     productFindMany.mockImplementation(async (args: any) => args.where?.OR
       ? [{ id: 'family_root', categoryAttributes: { condition_type: 'new_new' } }]
-      : args.select?.parentId
+      : !args.select || args.select.parentId
       ? [{ id: PRODUCT_ID, parentId: 'family_root', isParent: false, productType: 'OUTERWEAR', categoryAttributes: {} }]
       : args.select?.categoryAttributes ? [{ categoryAttributes: { condition_type: 'new_new' } }] : [])
     const registry = vi.spyOn(fieldRegistry, 'getFieldDefinition').mockResolvedValue(undefined as any)
@@ -560,9 +574,10 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     expect($transaction).not.toHaveBeenCalled()
     expect(bulkOperationCreate).not.toHaveBeenCalled()
     // The positive half of the control below: with a token, the equality
-    // pass DOES take its full-row read. (One read here is one product, not
-    // evidence of batching — a single-row case cannot show that.)
-    expect(fullRowReads()).toHaveLength(1)
+    // pass DOES take its full-row read, after the schema read of the same
+    // rows. (One read each here is one product, not evidence of batching —
+    // a single-row case cannot show that.)
+    expect(fullRowReads()).toHaveLength(2)
   })
 
   it('a real change alongside the same fixture still survives validation', async () => {
@@ -589,10 +604,11 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     // Target the BRANCH, not the mock. `product.findMany` is also called
     // earlier in this handler with `select: { productType }`, so a bare
     // call-count conflates two call sites and fails for the wrong reason
-    // (it did, the first time this was written). The equality read is the
-    // only FULL-ROW read — `findMany({ where: { id: { in: ids } } })` with
-    // no `select` — so that is what must be absent here.
-    expect(fullRowReads()).toHaveLength(0)
+    // (it did, the first time this was written). The equality read is a
+    // FULL-ROW read — `findMany({ where: { id: { in: ids } } })` with no
+    // `select` — and the schema read of the changed rows is the only other
+    // one, so exactly that one is what must remain here (two with a token).
+    expect(fullRowReads()).toHaveLength(1)
   })
 
   it('#689(1) a STALE token on a no-op returns the ROW\'s version, not the echoed token', async () => {
@@ -755,12 +771,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     // The product is not the row this write touches, so it must not be CAS'd.
     expect(productCasBuilt()).toBe(false)
     // And the row it DOES touch must be guarded, keyed on the token.
-    expect(
-      channelListingUpdate.mock.calls.some(
-        (c) => (c[0] as { where?: { id?: string; version?: number } })?.where?.version === 19
-          && (c[0] as { where?: { id?: string } })?.where?.id === 'listing_1',
-      ),
-    ).toBe(true)
+    expect(listingGuards().some((guard) => guard.version === 19 && guard.id === 'listing_1')).toBe(true)
     // And the response names the listing, so the client can advance the token
     // it actually holds — without this the SECOND consecutive edit 409s.
     expect(res.json()).toMatchObject({ versionOf: 'channelListing', currentVersion: 19 })
@@ -808,7 +819,8 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     // token would be guarding a counter the write never touches.
     channelListingFindMany.mockResolvedValue([ebayListing({ version: 82 })])
     channelListingFindUnique.mockResolvedValue({ version: 82 })
-    $transaction.mockRejectedValue(Object.assign(new Error('no rows'), { code: 'P2025' }))
+    // The guard keyed on version 3 matches no row.
+    queryRaw.mockResolvedValue([])
     const res = await patch({
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'master' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
@@ -838,7 +850,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     const advanced = first.json().currentVersion
     expect(advanced).toBe(20)
 
-    channelListingUpdate.mockClear()
+    queryRaw.mockClear()
     channelListingFindMany.mockResolvedValue([ebayListing({ version: 20 })])
     channelListingFindUnique.mockResolvedValue({ version: 21 })
     const second = await patch({
@@ -847,11 +859,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       expectedVersion: advanced,
     })
     expect(second.statusCode).toBe(200)
-    expect(
-      channelListingUpdate.mock.calls.some(
-        (c) => (c[0] as { where?: { version?: number } })?.where?.version === 20,
-      ),
-    ).toBe(true)
+    expect(listingGuards().some((guard) => guard.version === 20)).toBe(true)
   })
 
   it('#703 a mapped write under alias-2 targets the ALIAS listing, never the primary', async () => {
@@ -878,17 +886,8 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     // listing is started by `ensureDraftListings`, which never creates an alias listing.
     expect(channelListingUpsert).not.toHaveBeenCalled()
     // And the CAS guards the alias row, keyed on its own version.
-    expect(
-      channelListingUpdate.mock.calls.some(
-        (c) => (c[0] as { where?: { id?: string; version?: number } })?.where?.id === 'listing_alias2'
-          && (c[0] as { where?: { version?: number } })?.where?.version === 55,
-      ),
-    ).toBe(true)
-    expect(
-      channelListingUpdate.mock.calls.some(
-        (c) => (c[0] as { where?: { id?: string } })?.where?.id === 'listing_primary',
-      ),
-    ).toBe(false)
+    expect(listingGuards().some((guard) => guard.id === 'listing_alias2' && guard.version === 55)).toBe(true)
+    expect(listingGuards().some((guard) => guard.id === 'listing_primary')).toBe(false)
   })
 
   it('#703 CONTROL: the PRIMARY alias ("") is unchanged', async () => {
@@ -907,11 +906,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     )
     expect(updateWhere).toContain('')
     expect(updateWhere).not.toContain('alias-2')
-    expect(
-      channelListingUpdate.mock.calls.some(
-        (c) => (c[0] as { where?: { id?: string } })?.where?.id === 'listing_primary',
-      ),
-    ).toBe(true)
+    expect(listingGuards().some((guard) => guard.id === 'listing_primary')).toBe(true)
   })
 
   it('P10 the audit row records the token the request carried', async () => {
@@ -1004,7 +999,7 @@ describe('channel inheritance reset and account isolation', () => {
       expect(channelListingFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
         OR: expect.arrayContaining([expect.objectContaining({ channel: 'AMAZON', marketplace: 'IT', aliasKey: 'alias-2', channelConnectionId: 'account-a' })]),
       }) }))
-      expect(channelListingUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'listing_1', version: 19 } }))
+      expect(listingGuards()).toContainEqual(expect.objectContaining({ id: 'listing_1', version: 19, updatedAt: null }))
     } finally { restore() }
   })
 
@@ -1098,9 +1093,10 @@ describe('channel inheritance reset and account isolation', () => {
     channelListingFindMany.mockResolvedValue([listingRow({ aliasKey: 'alias-2', updatedAt, platformAttributes: { settings: { exemption: false } } })])
     const restore = installContract({ kind: 'platformAttributes', path: ['settings', 'exemption'] })
     try {
-      $transaction.mockRejectedValueOnce(Object.assign(new Error('snapshot changed'), { code: 'P2025' }))
+      // The snapshot changed: its guard matches no row.
+      queryRaw.mockResolvedValueOnce([])
       const res = await patch({ changes: [{ id: PRODUCT_ID, field: `attr_${key}`, value: true, target: 'channel' }], marketplaceContexts: contexts })
-      expect(channelListingUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'listing_1', version: 19, updatedAt } }))
+      expect(listingGuards()).toContainEqual(expect.objectContaining({ id: 'listing_1', version: 19, updatedAt: updatedAt.toISOString() }))
       expect(res.statusCode, res.body).toBe(409)
       expect(res.json()).toMatchObject({ code: 'VERSION_CONFLICT', versionOf: 'channelListing' })
     } finally { restore() }
@@ -1109,17 +1105,16 @@ describe('channel inheritance reset and account isolation', () => {
   it('verifies a listing once before applying a paste across column and JSON stores', async () => {
     channelListingFindMany.mockResolvedValue([ebayListing()])
     const restore = installContract()
-    const guard = { __stmt: 'guard' }
-    channelListingUpdate.mockReturnValue(guard)
     try {
       const res = await patch({ changes: [
         { id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' },
         { id: PRODUCT_ID, field: `attr_${key}`, value: true, target: 'channel' },
       ], marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }], expectedVersion: 19 })
       expect(res.statusCode, res.body).toBe(200)
+      // One guard for the listing, checked before the edit's writes.
+      expect(listingGuards()).toEqual([expect.objectContaining({ id: 'listing_1', version: 19 })])
+      expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan($transaction.mock.invocationCallOrder[0])
       const statements = $transaction.mock.calls[0][0]
-      expect(statements[0]).toBe(guard)
-      expect(statements.filter((statement: unknown) => statement === guard)).toHaveLength(1)
       expect(statements).toContainEqual({ __stmt: 'listing.updateMany' })
     } finally { restore() }
   })

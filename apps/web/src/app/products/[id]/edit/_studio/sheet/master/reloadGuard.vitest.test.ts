@@ -111,18 +111,19 @@ describe('the save clock is stamped on a landing, never on a keystroke', () => {
     // so the footer said "Saved HH:MM" before the request had left and went on saying it when the
     // write came back refused.
     expect(body).not.toMatch(/setLastSavedAt\s*\(/)
+    expect(body).not.toMatch(/savedAtRef\.current\s*\(/)
   })
 
   it('🔴 the ONLY stamp is gated on `ok` — onSettled fires for refusals too', () => {
-    const calls = [...src.matchAll(/setLastSavedAt\s*\(/g)]
+    const calls = [...src.matchAll(/savedAtRef\.current\s*\(/g)]
     expect(calls).toHaveLength(1)
     const at = src.indexOf('const onSettled =')
     if (at === -1) throw new Error('onSettled is gone — the clock has no honest source')
     const body = src.slice(at, at + 400)
     expect(body).toContain('if (ok)')
-    expect(body).toContain('setLastSavedAt(savedAt)')
+    expect(body).toContain('savedAtRef.current(savedAt)')
     // The server's timestamp, not a fresh one: a clock invented at render time is a different lie.
-    expect(body).not.toMatch(/setLastSavedAt\(new Date\(\)/)
+    expect(body).not.toMatch(/savedAtRef\.current\(new Date\(\)/)
   })
 
   it('the handler is actually passed to the sheet — an unwired callback never fires', () => {

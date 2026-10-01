@@ -23,6 +23,8 @@ export function parseScalarValue(col: ScalarColumnLike, raw: unknown): unknown {
   if (col.kind === 'number') {
     if (!text) return null
     const number = Number(text.replace(',', '.'))
+    // Keep the original digits for the API's named refusal, including list members and paste.
+    if (Number.isInteger(number) && !Number.isSafeInteger(number)) return raw
     return Number.isFinite(number) ? number : raw
   }
   if (col.kind === 'select') return optionCode(col, raw)

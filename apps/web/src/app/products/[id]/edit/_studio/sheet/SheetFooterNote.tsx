@@ -13,13 +13,14 @@
  * thing here an operator must act on; the hint is what they can already do. Height never changes
  * (DS.2 measured STRIP_GREW 0 for all kinds), so the strip does not move under an edit.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useStudioDiscovery } from '../contracts'
 
 import { GridSheetNote, SHEET_SHORTCUT_HINT } from '@/design-system/grid'
 import { Button } from '@/design-system/primitives'
 
 import { readRetired, retiresOnSave, shortcutHintState, writeRetired, type HintRetirement } from './shortcutHint'
+import type { SheetSaveStatusStore } from './sheetSaveStatusStore'
 
 /**
  * The hint's three-state rule (not yet read · retired · asked), one implementation. Retires itself
@@ -28,23 +29,27 @@ import { readRetired, retiresOnSave, shortcutHintState, writeRetired, type HintR
 export function useSheetShortcutHint(lastSavedAt: string | null | undefined) {
   const [retired, setRetired] = useState<HintRetirement>(null)
   const [asked, setAsked] = useState<boolean | null>(null)
+  // Keep the confirmed retirement when this footer is reused for a different scope.
+  const confirmed = useRef(false)
+  if (retiresOnSave(lastSavedAt)) confirmed.current = true
+  const saved = confirmed.current
   useEffect(() => setRetired(readRetired()), [])
   useEffect(() => {
-    if (retiresOnSave(lastSavedAt) && retired === false) {
-      setRetired(true)
+    if (saved && retired === false) {
       writeRetired()
     }
-  }, [lastSavedAt, retired])
-  const state = shortcutHintState(retired, asked)
+  }, [saved, retired])
+  const state = shortcutHintState(saved ? true : retired, asked)
   return { ...state, ask: (show: boolean) => setAsked(show) }
 }
 
 export interface SheetFooterNoteProps {
-  offline: boolean
-  refused: number
+  offline?: boolean
+  refused?: number
   showRefusedOnly: boolean
   onToggleRefused: () => void
-  lastSavedAt: string | null | undefined
+  lastSavedAt?: string | null
+  source?: SheetSaveStatusStore
   layoutRecovery?: { retry: () => Promise<unknown> } | null
   /** Refused cells whose edit can be sent again as it is (`SheetWriter.failedCount`), and the action that sends them. */
   retryable?: number
@@ -68,7 +73,13 @@ function SavedLayoutNote({ retry }: { retry: () => Promise<unknown> }) {
   )
 }
 
-export function SheetFooterNote({ offline, refused, showRefusedOnly, onToggleRefused, lastSavedAt, layoutRecovery, retryable = 0, onRetry }: SheetFooterNoteProps) {
+const NO_LIVE_NOTE = {}
+const noNoteSubscription = () => () => undefined
+const noLiveNote = () => NO_LIVE_NOTE
+
+export function SheetFooterNote({ source, ...props }: SheetFooterNoteProps) {
+  const live = useSyncExternalStore(source?.subscribe ?? noNoteSubscription, source?.getNoteSnapshot ?? noLiveNote, source?.getNoteSnapshot ?? noLiveNote)
+  const { offline = false, refused = 0, showRefusedOnly, onToggleRefused, lastSavedAt, layoutRecovery, retryable = 0, onRetry } = { ...props, ...live }
   const hint = useSheetShortcutHint(lastSavedAt)
   const discovery = useStudioDiscovery()
   if (offline) {

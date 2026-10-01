@@ -7,6 +7,16 @@ export interface ShopifySheetWrite {
   fieldId: string
   token: string
   baseline: string | null
+  /**
+   * The cell's sharing facts, as the server read them: the source product of a primary product metafield's sharing rule
+   * and whether this owner follows it. `null`: no sharing rule applies. Absent: the facts were not reported — never proof
+   * of an own or a following value. Display/ordering facts only; never write authority.
+   */
+  sharing?: ShopifySharingFacts | null
+}
+export interface ShopifySharingFacts {
+  sourceOwnerId: string
+  follows: boolean
 }
 export interface ShopifySheetRow {
   productId: string

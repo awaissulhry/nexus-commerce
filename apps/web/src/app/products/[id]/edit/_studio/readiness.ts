@@ -139,7 +139,7 @@ export function mergeCoordinateReadiness<T extends { byScope: Readonly<Record<st
 
 /** The readiness read. `only: 'coordinate'` asks for the one channel coordinate a save moved (P2, I4-9). */
 export function readinessUrl(productId: string, q: { market: string; locale?: string | null; channel?: string; listingId?: string; accountId?: string; only?: 'coordinate' }): string {
-  const params = new URLSearchParams({ market: q.market })
+  const params = new URLSearchParams({ market: q.market, details: 'compact' })
   if (q.locale) params.set('locale', q.locale)
   if (q.channel) params.set('channel', q.channel)
   if (q.listingId) params.set('listingId', q.listingId)

@@ -14,6 +14,11 @@ const hooks = vi.hoisted(() => {
   return {
     s,
     react: {
+      useRef: (initial: unknown) => {
+        const i = s.i++
+        if (!(i in s.slots)) s.slots[i] = { value: { current: initial } }
+        return s.slots[i].value
+      },
       useState: (init: unknown) => {
         const i = s.i++
         if (!(i in s.slots)) s.slots[i] = { value: typeof init === 'function' ? (init as () => unknown)() : init }
@@ -68,6 +73,23 @@ describe('useReferenceNames', () => {
     render(sheet('B'))
     render(sheet('C'))
     expect(fetch.mock.calls.length).toBe(asked)
+  })
+
+  it('does not ask Amazon for category names on a master sheet whose market is GLOBAL (2026-10-01)', () => {
+    // The final browser round saw the master sheet at GLOBAL ask /categories/reference-labels four times; GLOBAL is not an
+    // Amazon marketplace, so the API answered 400 every time. A real Amazon market still asks.
+    const master = (market: string) => {
+      hooks.s.i = 0; hooks.s.slots = []
+      const out = useReferenceNames({ family: { id: 'fam-1' }, scope: { kind: 'master', locale: 'en' }, columns: [{ key: 'productType', label: 'Product type' }] as never,
+        rows: [{ productType: 'E2E_COAT', values: {} }] } as never, 'MASTER', market)
+      for (const effect of hooks.s.effects.splice(0)) effect()
+      return out
+    }
+    const labelReads = () => fetch.mock.calls.filter(call => String((call as unknown[])[0]).includes('/categories/reference-labels')).length
+    master('GLOBAL')
+    expect(labelReads()).toBe(0)
+    master('IT')
+    expect(labelReads()).toBeGreaterThan(0)
   })
 
   it('asks again when the references themselves change', () => {

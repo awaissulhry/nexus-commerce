@@ -6,6 +6,16 @@
  * Reload before saving it." (the P3 commit sweep, 2026-09-30).
  */
 export interface ContentVersionAnswer { id: string; tier: 'pin' | 'language'; language: string; version: number }
+/**
+ * A qualified receipt (`contentVersionReceipts`, API `pim/content-version-receipts.ts`, 2026-10-01): one content row a
+ * save actually wrote — its own edit, a formula's, the shared-text cascade's — named exactly (product + language, or
+ * product + physical listing + language), with its owner/content pair before the save's first write to it and after
+ * the whole operation. Only a cell whose own confirmed pair IS `before` may take `after`.
+ */
+export interface ContentVersionReceipt {
+  tier: 'pin' | 'language'; productId: string; listingId?: string; language: string
+  before: { ownerVersion: number; contentVersion: number }; after: { ownerVersion: number; contentVersion: number }
+}
 
 const snapshotKey = Symbol('sheet content confirmation')
 type ContentSnapshot = { key: string; ownerVersion: number | undefined; version: number }
@@ -107,6 +117,67 @@ export function preserveContentVersions<T extends TokenRow>(previous: TokenRow |
   return incoming
 }
 
+const counter = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+const pairOf = (value: unknown): value is ContentVersionReceipt['before'] =>
+  !!value && typeof value === 'object' && counter((value as { ownerVersion?: unknown }).ownerVersion) && counter((value as { contentVersion?: unknown }).contentVersion)
+const text = (value: unknown): value is string => typeof value === 'string' && value.length > 0
+
+/**
+ * The answer's receipts, checked whole: `untrusted` when the field is present but any entry is malformed (a save that
+ * wrote content always moves its owner), so nothing of the answer may move a content token. Two different receipts for
+ * one content row are kept out (`conflicting`), and that row is still answered: a legacy entry may not move it instead.
+ */
+export function contentVersionReceiptsOf(body: unknown): { receipts: Map<string, ContentVersionReceipt>; conflicting: Set<string>; untrusted: boolean } {
+  const receipts = new Map<string, ContentVersionReceipt>(), conflicting = new Set<string>()
+  const list = (body as { contentVersionReceipts?: unknown } | null)?.contentVersionReceipts
+  if (list === undefined) return { receipts, conflicting, untrusted: false }
+  if (!Array.isArray(list)) return { receipts, conflicting, untrusted: true }
+  for (const entry of list as Array<Record<string, unknown> | null>) {
+    const valid = !!entry && typeof entry === 'object' && (entry.tier === 'language' || entry.tier === 'pin') && text(entry.productId) && text(entry.language) &&
+      (entry.tier === 'language' ? entry.listingId === undefined : text(entry.listingId)) && pairOf(entry.before) && pairOf(entry.after) &&
+      (entry.after as ContentVersionReceipt['after']).ownerVersion > (entry.before as ContentVersionReceipt['before']).ownerVersion
+    if (!valid) return { receipts: new Map(), conflicting: new Set(), untrusted: true }
+    const receipt = entry as unknown as ContentVersionReceipt
+    const key = receiptKey(receipt), known = receipts.get(key)
+    if (known && JSON.stringify([known.before, known.after]) !== JSON.stringify([receipt.before, receipt.after])) conflicting.add(key)
+    receipts.set(key, receipt)
+  }
+  for (const key of conflicting) receipts.delete(key)
+  return { receipts, conflicting, untrusted: false }
+}
+/** The same key `tokenKey` gives the receipt's cells: a pin by its physical listing, language text by its product. */
+const receiptKey = (receipt: ContentVersionReceipt) => receipt.tier === 'language'
+  ? JSON.stringify(['language', receipt.productId, receipt.language]) : JSON.stringify(['pin', receipt.listingId, receipt.language])
+
+/**
+ * Adopt each receipt on every row of its product (and, for a pin, of its exact listing): a cell whose confirmed pair is
+ * the receipt's `before` takes its `after`; any other cell keeps what it has (it saw another state, or a newer one). The
+ * row's own owner token moves with it only where a cell proved that start.
+ */
+function adoptReceipts(rows: readonly TokenRow[], receipts: Map<string, ContentVersionReceipt>, moved: Set<string>): void {
+  for (const [key, receipt] of receipts) {
+    for (const target of rows) {
+      if (target.id !== receipt.productId || (receipt.tier === 'pin' && target.listing?.id !== receipt.listingId)) continue
+      // Capture every cell's pair first: the owner token below must never re-pair a cell that had none.
+      for (const cell of Object.values(target.values ?? {})) snapshotOf(target, cell)
+      const before = { key, ownerVersion: receipt.before.ownerVersion, version: receipt.before.contentVersion }
+      let proved = false
+      for (const [colId, cell] of Object.entries(target.values ?? {})) {
+        if (!cell || cell.contentVersion === undefined || tokenKey(target, cell) !== key) continue
+        const current = snapshotOf(target, cell)
+        if (!current || !samePair(current, before)) continue
+        proved = true
+        if (cell.contentVersion !== receipt.after.contentVersion) moved.add(colId)
+        cell.contentVersion = receipt.after.contentVersion
+        cell[snapshotKey] = { key, ownerVersion: receipt.after.ownerVersion, version: receipt.after.contentVersion }
+      }
+      if (!proved) continue
+      if (receipt.tier === 'language' && target.version === receipt.before.ownerVersion) target.version = receipt.after.ownerVersion
+      if (receipt.tier === 'pin' && target.listing && target.listing.version === receipt.before.ownerVersion) target.listing.version = receipt.after.ownerVersion
+    }
+  }
+}
+
 export function contentVersionsOf(body: unknown): ContentVersionAnswer[] {
   const list = (body as { contentVersions?: unknown } | null)?.contentVersions
   if (!Array.isArray(list)) return []
@@ -120,6 +191,13 @@ export function adoptContentVersions(row: TokenRow | null | undefined, body: unk
   const moved = new Set<string>()
   const answered = new Set<string>()
   const reply = (body ?? {}) as { currentVersion?: number; versionOf?: string; updated?: number; createdListings?: unknown }
+  // Qualified receipts first. A receipt list that cannot be trusted moves nothing at all — not even the legacy entries or
+  // the owner-only advance below, which both assume the answer says which content moved.
+  const qualified = contentVersionReceiptsOf(body)
+  if (qualified.untrusted) return []
+  adoptReceipts([...new Set([row, ...siblings])], qualified.receipts, moved)
+  // A receipt answers its content row whether or not its before pair matched: nothing weaker may move it instead.
+  for (const key of [...qualified.receipts.keys(), ...qualified.conflicting]) answered.add(key)
   for (const entry of contentVersionsOf(body)) {
     if (entry.id !== row.id) continue
     for (const target of entry.tier === 'language' ? new Set([row, ...siblings]) : [row]) {
@@ -129,6 +207,8 @@ export function adoptContentVersions(row: TokenRow | null | undefined, body: unk
         if (cell.contentAddress?.tier !== entry.tier || cell.contentAddress.language !== entry.language) continue
         const current = snapshotOf(target, cell)
         const key = tokenKey(target, cell) ?? ''
+        // A content row a receipt answered is never moved by the weaker legacy entry, matched or not.
+        if (qualified.receipts.has(key) || qualified.conflicting.has(key)) continue
         answered.add(key)
         const before = proof?.content.get(key)
         const absent = proof?.content.get(absentPinKey(target, cell))

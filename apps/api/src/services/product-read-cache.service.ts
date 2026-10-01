@@ -9,8 +9,9 @@
  */
 
 import prisma from '../db.js'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { deriveFulfillmentMethod } from './fulfillment-derivation.service.js'
+import { retryableConflict } from '../lib/database-context.js'
 
 /**
  * PG.2 + PG.4 — Catalog thumbnail picker.
@@ -135,6 +136,32 @@ const LISTING_SELECT = {
   followMasterBulletPoints: true,
 } as const satisfies Prisma.ChannelListingSelect
 
+type CacheRow = Required<Omit<Prisma.ProductReadCacheCreateManyInput, 'workspaceId'>>
+
+/** Persist the canonical cache projection in sets. Workspace ownership remains the verified database default. */
+async function upsertCacheRows(tx: Prisma.TransactionClient, rows: CacheRow[]): Promise<void> {
+  if (!rows.length) return
+  // Names come from our fixed projection, never a caller's keys. Values stay in one bound JSON parameter.
+  const columns = Object.keys(rows[0])
+  if (columns.some(column => column === 'workspaceId' || !Object.prototype.hasOwnProperty.call(Prisma.ProductReadCacheScalarFieldEnum, column))) throw new Error('Unknown product cache column')
+  const name = (column: string) => Prisma.raw(`"${column}"`)
+  const names = Prisma.join(columns.map(name))
+  const jsonColumns = new Set(Prisma.dmmf.datamodel.models.find(model => model.name === 'ProductReadCache')!.fields
+    .filter(field => field.type === 'Json').map(field => field.name))
+  // The canonical builder's null JSON values are Prisma JSON null, not SQL NULL. Record conversion alone loses that.
+  const values = Prisma.join(columns.map(column => jsonColumns.has(column) ? Prisma.sql`COALESCE(${name(column)}, 'null'::jsonb)` : name(column)))
+  const updates = Prisma.join(columns.filter(column => column !== 'id').map(column => Prisma.sql`${name(column)} = EXCLUDED.${name(column)}`))
+  const ordered = [...rows].sort((a, b) => a.id.localeCompare(b.id))
+  for (let offset = 0; offset < ordered.length; offset += 1000) {
+    await tx.$executeRaw`
+      INSERT INTO "ProductReadCache" (${names})
+      SELECT ${values} FROM jsonb_populate_recordset(NULL::"ProductReadCache", ${JSON.stringify(ordered.slice(offset, offset + 1000))}::jsonb)
+      ORDER BY id
+      ON CONFLICT (id) DO UPDATE SET ${updates}
+    `
+  }
+}
+
 export class ProductReadCacheService {
   async refresh(productId: string): Promise<void> {
     await this.refreshMany([productId])
@@ -144,7 +171,7 @@ export class ProductReadCacheService {
     // Concurrent refreshes must not overwrite a newer projection with an older snapshot.
     for (let attempt = 0; ; attempt++) {
       try {
-        const refreshed = await prisma.$transaction(tx => this.refreshInTransaction(tx, productIds), {
+        const refreshed = await prisma.$transaction(tx => this.refreshInTransaction(tx, productIds, true), {
           isolationLevel: 'Serializable', timeout: 30_000,
         })
         // Preserve the existing search-index fan-out for parents whose thumbnail/coverage changed.
@@ -154,14 +181,14 @@ export class ProductReadCacheService {
         }
         return
       } catch (error) {
-        if (attempt < 2 && (error as { code?: string }).code === 'P2034') continue
+        if (attempt < 2 && retryableConflict(error)) continue
         throw error
       }
     }
   }
 
   /** Batch source reads and refresh both former and current parents, without a queue dependency. */
-  async refreshInTransaction(tx: Prisma.TransactionClient, productIds: readonly string[]): Promise<string[]> {
+  async refreshInTransaction(tx: Prisma.TransactionClient, productIds: readonly string[], batchWrites = false): Promise<string[]> {
     const requested = [...new Set(productIds)]
     if (!requested.length) return []
     const [current, previous] = await Promise.all([
@@ -194,6 +221,7 @@ export class ProductReadCacheService {
     const childrenById = group(children, row => row.parentId)
     const childListingsById = group(childListings, row => row.product.parentId)
     const closureById = group(closure, row => row.descendantId)
+    const cacheRows: CacheRow[] = []
     for (const product of products) {
       const listings = listingsById.get(product.id) ?? []
       const offerRows = offersById.get(product.id) ?? []
@@ -310,13 +338,15 @@ export class ProductReadCacheService {
         cacheRefreshedAt: new Date(),
       }
 
-      await tx.productReadCache.upsert({
+      if (batchWrites) cacheRows.push({ id: product.id, ...data })
+      else await tx.productReadCache.upsert({
         where: { id: product.id },
         create: { id: product.id, ...data },
         update: data,
       })
 
     }
+    if (batchWrites) await upsertCacheRows(tx, cacheRows)
     const found = new Set(products.map(product => product.id))
     await tx.productReadCache.deleteMany({ where: { id: { in: ids.filter(id => !found.has(id)) } } })
     return ids

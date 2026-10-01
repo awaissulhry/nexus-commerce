@@ -27,6 +27,13 @@ describe('store → cell', () => {
     expect(isBlankValue({ value: null, unit: 'kg' })).toBe(true)
     expect(isBlankValue({ value: 0, unit: null })).toBe(false)
   })
+  it('keeps positions only when a list will be indexed into numbered sheet cells', () => {
+    const stored = ['', null, 'Third']
+    expect(projectCellValue({ shape: 'list' }, stored, { preserveListPositions: true })).toEqual(['', null, 'Third'])
+    expect(projectCellValue({ shape: 'list' }, JSON.stringify(stored), { preserveListPositions: true })).toEqual(['', null, 'Third'])
+    expect(projectCellValue({ shape: 'list' }, stored)).toEqual(['Third'])
+    expect(stored).toEqual(['', null, 'Third'])
+  })
 })
 
 describe('cell → store: slots', () => {

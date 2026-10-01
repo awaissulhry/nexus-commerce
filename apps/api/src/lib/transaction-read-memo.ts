@@ -11,10 +11,13 @@ import { Prisma } from '@prisma/client'
  * Why answering those from memory is the same answer: a Serializable (or Repeatable Read) transaction reads ONE
  * snapshot plus its own writes. A read repeated with no write of this transaction in between returns the same rows,
  * and its predicate locks were taken the first time. So:
- *   - every write this transaction makes (a model write, raw SQL that is not a plain SELECT, a savepoint rolled back)
- *     forgets every remembered read — except reads of REFERENCE tables, which a product save never writes, and which
- *     are forgotten too when a write touches one of them, carries a nested relation write, or cannot be read;
- *   - raw SQL is never answered from memory (it may lock or have effects), only watched for writes;
+ *   - every write this transaction makes (a model write, raw SQL that is not a plain SELECT, a savepoint rolled back
+ *     after it wrote) forgets every remembered read — except reads of REFERENCE tables, which a product save never
+ *     writes, and which are forgotten too when a write touches one of them, carries a nested relation write, or
+ *     cannot be read. A savepoint rolled back with no write undid nothing, so it forgets nothing (2026-10-01: a refused
+ *     platform batch read the family, then each row read it all again);
+ *   - raw SQL is never answered from memory (it may lock or have effects), only watched for writes — unless its caller
+ *     names it a plain read (`remember`, `rememberedRead` in database-context.ts);
  *   - every caller gets its own copy, so a caller that edits a result never edits another's;
  *   - a read stays lazy, as Prisma's is: it runs (or is answered) when awaited, so a read created before a write and
  *     awaited after it still sees the write.
@@ -35,6 +38,14 @@ type Thenable = PromiseLike<unknown> & { catch?: unknown; finally?: unknown }
 export interface ReadMemo {
   /** Forget every remembered read (a savepoint rolled back, or anything else that may have changed what was read). */
   clear(): void
+  /**
+   * A plain read the caller issues as raw SQL (raw SQL is otherwise never answered from memory), remembered under `key`
+   * until this transaction's next write, as a model read of a row table is. Only for a read that is a plain SELECT with
+   * no effect, whose answer `key` fully names.
+   */
+  remember<T>(key: string, read: () => PromiseLike<T>): PromiseLike<T>
+  /** Writes this transaction has issued so far: a savepoint that issued none undid nothing a read remembered. */
+  readonly writes: number
   readonly stats: { hits: number; misses: number }
 }
 
@@ -127,7 +138,8 @@ export function memoizeReads<T extends object>(client: T): { client: T; memo: Re
   const stats = { hits: 0, misses: 0 }
   const forgetRows = () => epoch.clear()
   const forgetAll = () => { epoch.clear(); reference.clear() }
-  const memo: ReadMemo = { clear: forgetAll, stats }
+  let writes = 0
+  const memo: ReadMemo = { clear: forgetAll, remember: (key, read) => remember(epoch, `caller:${key}`, read) as never, get writes() { return writes }, stats }
 
   /** The remembered answer to `key`, or the read itself (remembered) the first time; each asker gets its own copy. */
   function remember(store: Map<string, Promise<unknown>>, key: string, read: () => unknown): Thenable {
@@ -147,6 +159,7 @@ export function memoizeReads<T extends object>(client: T): { client: T; memo: Re
 
   /** Forget at the call and again when the write settles: a read in between ran before the write reached the server. */
   function watchWrite(result: unknown, forget: () => void): unknown {
+    writes++
     forget()
     if (!result || typeof (result as Thenable).then !== 'function') return result
     const original = result as Thenable
@@ -208,12 +221,15 @@ export function memoizeReads<T extends object>(client: T): { client: T; memo: Re
         // statements runs in order on this transaction, as `contextualDatabase` runs one inside a transaction.
         if (property === '$transaction') return async (work: unknown, ...rest: unknown[]) => {
           if (Array.isArray(work)) { const results: unknown[] = []; for (const statement of work) results.push(await statement); return results }
+          const writesBefore = writes
           try {
             return await value.call(owner, typeof work === 'function' ? (nested: object) => (work as (client: object) => unknown)(wrap(nested)) : work, ...rest)
           } catch (error) {
             // A nested transaction that failed rolled back to its savepoint: what was read after its writes is gone
-            // too (code review P2 #7).
-            forgetAll()
+            // too (code review P2 #7). One that wrote nothing undid nothing: the snapshot and this transaction's own
+            // writes are what they were, so every remembered read still answers (and its predicate locks stay with
+            // the top-level transaction, which a rolled-back subtransaction never releases).
+            if (writes !== writesBefore) forgetAll()
             throw error
           }
         }

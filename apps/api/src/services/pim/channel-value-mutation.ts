@@ -2,6 +2,7 @@ import type { ChannelStore } from './channel-specs/types.js'
 import { readStoredChannelValue, CHANNEL_OVERRIDE_COLUMNS } from './channel-inheritance.js'
 import { readPath } from './sheet-values.js'
 import { isManagedShopifyAttribute } from '../shopify/linked-state-guard.js'
+import { aspectCanonicalName } from '../ebay-theme-axes.js'
 
 export type ChannelValueAction = 'SET' | 'CLEAR' | 'INHERIT'
 export type ValueRecord = Record<string, unknown>
@@ -82,8 +83,15 @@ export function applyPlatformMutations(value: unknown, mutations: ChannelValueMu
       current = current[part] as ValueRecord
     }
     if (absent) continue
-    if (remove) delete current[path[path.length - 1]]
-    else current[path[path.length - 1]] = value
+    const leaf = path[path.length - 1]
+    // One eBay aspect, one stored spelling. The sheet folds GENERE/Genere (and Brand/Marca) into one column and the
+    // publisher sends every key, so a sibling spelling left beside a set, clear or reset is a hidden value on eBay.
+    if (path.length === 2 && path[0] === 'itemSpecifics') {
+      const identity = aspectCanonicalName(leaf)
+      for (const key of Object.keys(current)) if (key !== leaf && aspectCanonicalName(key) === identity) delete current[key]
+    }
+    if (remove) delete current[leaf]
+    else current[leaf] = value
   }
   return bag
 }

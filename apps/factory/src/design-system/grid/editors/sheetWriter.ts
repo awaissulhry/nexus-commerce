@@ -592,6 +592,7 @@ export class SheetWriter<T> {
   private listeners = new Set<() => void>()
   private destroyed = false
   private generation = 0
+  private retryController = new AbortController()
   /** rowId → cells in the row's CURRENT flight, so `pending` counts cells, not rows. */
   private readonly inFlightCells = new Map<string, number>()
   /** rowId → colId → the edit the server REFUSED, kept so `retryFailed()` can send it again. */
@@ -1178,6 +1179,11 @@ export class SheetWriter<T> {
     return [...this.unreachableRows.values()].reduce((total, cells) => total + Object.keys(cells).length, 0)
   }
 
+  /** Stops only confirmed-rollback retries when the user discards or leaves this writer. */
+  get retrySignal(): AbortSignal {
+    return this.retryController.signal
+  }
+
   get busy(): boolean {
     for (const q of this.queues.values()) if (q.inFlight) return true
     return false
@@ -1230,6 +1236,7 @@ export class SheetWriter<T> {
    * exactly where it was rather than forgetting what it knew.
    */
   arm(): void {
+    if (this.retryController.signal.aborted) this.retryController = new AbortController()
     this.destroyed = false
   }
 
@@ -1244,6 +1251,8 @@ export class SheetWriter<T> {
    * The writer stays usable: the operator is still on the sheet, and the next keystroke queues.
    */
   discard(): void {
+    this.retryController.abort()
+    this.retryController = new AbortController()
     this.generation++
     for (const q of this.queues.values()) if (q.timer) clearTimeout(q.timer)
     if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
@@ -1266,6 +1275,7 @@ export class SheetWriter<T> {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.retryController.abort()
     this.generation++
     if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
     if (this.fenceTimer) { clearTimeout(this.fenceTimer); this.fenceTimer = null }

@@ -214,7 +214,9 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
       })
     }
     if (definition?.shopifyField && !shopifySchema) return { ...column, editable: false }
-    return definition?.shopifyField && shopifySchema ? { ...column, ...shopifyDraftColumn(definition, shopifyEditor.open, shopifyEditor.closed),
+    return definition?.shopifyField && shopifySchema ? { ...column, ...shopifyDraftColumn(definition, shopifyEditor.open, shopifyEditor.closed, shopifyEditor.historyRefused),
+      // Its value setter reads the Shopify draft history's private undo values (`shopify/draftHistory.ts`).
+      context: { ...((column as { context?: object }).context ?? {}), readsHistoryValue: true },
       editable: p => !!p.data?.values[definition.key]?.writable && auth.has('products.edit') && (definition.shopifyField?.id !== 'inventory' || auth.has('inventory.adjust')),
       cellRendererParams: { ...column.cellRendererParams, openEditor: shopifyEditor.open, formattedPreview: true,
         suppressMouseEventHandling: (p: { event: MouseEvent }) => p.event.target instanceof Element && !!p.event.target.closest('[data-nds-cell-action]') },

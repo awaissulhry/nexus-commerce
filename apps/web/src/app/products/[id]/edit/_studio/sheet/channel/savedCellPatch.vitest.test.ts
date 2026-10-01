@@ -81,6 +81,10 @@ describe('a save the browser cannot rebuild is read again', () => {
     ['a started draft', { ...plain.body, createdListings: [{ productId: 'p', listingId: 'l', version: 1 }] }],
     ['a value equal to the stored one', { ...plain.body, updated: 0, unchanged: 1 }],
     ['a normalised reference', { ...plain.body, normalizedChanges: [{ id: 'x', field: 'f', value: 'y' }] }],
+    // A formula the save fed changed other cells: their values are only on the server (qualified receipts, 2026-10-01).
+    ['a recalculated formula', { ...plain.body, recalculated: [{ productId: 'p', fieldKey: 'description', scope: 'channel', value: 'X', error: null, sourceField: 'f' }] }],
+    ['a content row the save moved', { ...plain.body, contentVersionReceipts: [{ productId: 'p', tier: 'language', language: 'de',
+      before: { ownerVersion: 1, contentVersion: 1 }, after: { ownerVersion: 2, contentVersion: 2 } }] }],
   ]
   for (const [what, body] of cases) {
     it(`an answer with ${what}`, async () => {

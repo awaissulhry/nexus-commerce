@@ -10,16 +10,42 @@ import { categoryMappingMarkets } from '../pim/mapping/category-mapping.service.
 type Labels = Record<string, Record<string, string>>
 const shippingCache = new TtlCache<Promise<Record<string, string>>>({ ttlMs: 5 * 60_000, maxEntries: 100 })
 
+type CategoryPath = { marketplace: string; channelCategoryPath: string | null }
+function categoryPathLabels(rows: CategoryPath[], channel: string, marketplace: string, productType: string): Labels {
+  const exact = rows.filter(mapping => mapping.marketplace === marketplace)
+  const names = [...new Set((channel === 'EBAY' || exact.length ? exact : rows).map(mapping => mapping.channelCategoryPath?.trim()).filter((name): name is string => !!name))]
+  // Conflicting saved labels are not a license to pick an arbitrary category name.
+  return names.length === 1 ? { [channel === 'EBAY' ? 'categoryId' : 'productType']: { [productType]: names[0] } } : {}
+}
+
 /** Saved taxonomy paths remain usable when the external taxonomy service is unavailable. */
 export async function cachedCategoryLabels(channel: string, marketplace: string, productType: string): Promise<Labels> {
   const mappings = await prisma.categoryChannelMapping.findMany({
     where: { channel, marketplace: { in: categoryMappingMarkets(channel, marketplace) }, channelCategoryId: productType, channelCategoryPath: { not: null } },
     select: { marketplace: true, channelCategoryPath: true },
   })
-  const exact = mappings.filter(mapping => mapping.marketplace === marketplace)
-  const names = [...new Set((channel === 'EBAY' || exact.length ? exact : mappings).map(mapping => mapping.channelCategoryPath?.trim()).filter((name): name is string => !!name))]
-  // Conflicting saved labels are not a license to pick an arbitrary category name.
-  return names.length === 1 ? { [channel === 'EBAY' ? 'categoryId' : 'productType']: { [productType]: names[0] } } : {}
+  return categoryPathLabels(mappings, channel, marketplace, productType)
+}
+
+/** One bounded read of only the selected IDs, using the single-ID reader's exact label rule. */
+export async function cachedCategoryLabelsMany(channel: string, marketplace: string, productTypes: readonly string[]): Promise<Labels> {
+  const ids = [...new Set(productTypes)]
+  if (ids.length > 1000 || ids.some(id => typeof id !== 'string' || !id || id.length > 100)) throw new Error('Select at most 1000 valid category IDs')
+  if (!ids.length) return {}
+  const mappings = await prisma.categoryChannelMapping.findMany({
+    where: { channel, marketplace: { in: categoryMappingMarkets(channel, marketplace) }, channelCategoryId: { in: ids }, channelCategoryPath: { not: null } },
+    select: { channelCategoryId: true, marketplace: true, channelCategoryPath: true },
+  })
+  const grouped = new Map<string, CategoryPath[]>()
+  for (const mapping of mappings) {
+    const rows = grouped.get(mapping.channelCategoryId) ?? []
+    rows.push(mapping); grouped.set(mapping.channelCategoryId, rows)
+  }
+  const labels: Labels = {}
+  for (const id of ids) for (const [field, names] of Object.entries(categoryPathLabels(grouped.get(id) ?? [], channel, marketplace, id))) {
+    labels[field] = { ...labels[field], ...names }
+  }
+  return labels
 }
 
 /**

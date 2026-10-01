@@ -26,14 +26,16 @@ import styles from './studio.module.css'
 
 export function StudioFrame() {
   const frameRef = useRef<HTMLDivElement>(null)
+  const bandsRef = useRef<HTMLDivElement>(null)
   // 48 → 32 on GRID scroll, armed only when the scroll range can survive the collapse (§4.2).
-  useHeaderCollapse(frameRef, styles.collapsed)
+  // The class lands on the bands, so a fold restyles the header and not the grid below it.
+  useHeaderCollapse(frameRef, bandsRef, styles.collapsed)
   // A <div>, not a <main>: AppShell's `noRail` branch already renders `<main id="main-content">`
   // around this route, and a second main landmark inside it would give the page two. (/products/next
   // does nest one — an existing flaw in the benchmark, not a thing to copy.)
   return (
     <div ref={frameRef} className={styles.shell}>
-      <div className={styles.bands}>
+      <div ref={bandsRef} className={styles.bands}>
         <StudioSubheader frameRef={frameRef} />
       </div>
       <div className={styles.body}>
