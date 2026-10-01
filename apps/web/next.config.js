@@ -113,6 +113,13 @@ const nextConfig = {
       // The rebuilt catalog now owns /products. Next preserves query parameters,
       // and the workspace expansion below preserves the active business profile.
       { source: '/products/next', destination: '/products', permanent: true },
+      // Creating a product is the Products page's "New product" dialog (`?new=1` opens it; 2026-10-01). The old
+      // create pages are gone: /products/new posted to a route that did not exist and its "empty draft" made a
+      // random SKU in the listing wizard; /catalog/add called Next routes hard-coded to localhost:3001; and
+      // /products/upload posted without /api. Files are imported on "Import & export".
+      { source: '/products/new', destination: '/products?new=1', permanent: true },
+      { source: '/catalog/add', destination: '/products?new=1', permanent: true },
+      { source: '/products/upload', destination: '/products/catalog-transfer', permanent: true },
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // `RulesAutomationClient.tsx:99` resolves an unknown OR ROUTED `?tab=` to 'rules'. So the

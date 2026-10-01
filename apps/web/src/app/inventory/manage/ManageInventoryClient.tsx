@@ -110,7 +110,7 @@ export default function ManageInventoryClient({
         </button>
         <span className="text-gray-300">|</span>
         <Link
-          href="/catalog/add"
+          href="/products?new=1"
           className="hover:text-[#0066a1] transition-colors"
         >
           Add product
