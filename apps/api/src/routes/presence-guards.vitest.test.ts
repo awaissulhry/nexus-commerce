@@ -76,7 +76,8 @@ const routes: Array<[HTTPMethods, string, string, number]> = [
   ['POST', '/api/amazon/flat-file/remove', 'products.delete', 200],
   ['POST', '/api/products/bulk-hard-delete', 'products.delete', 400],
   ['POST', '/api/products/operational-impact', 'products.view', 400],
-  ['PUT', '/api/products/product/matrix/channel-listing/listing', 'products.edit', 200],
+  // S1 (F6) — retired (410 Gone) behind the same permission: it wrote price and quantity raw.
+  ['PUT', '/api/products/product/matrix/channel-listing/listing', 'products.edit', 410],
   ['POST', '/api/products/product/recover', 'products.delete', 400],
   ['POST', '/api/products/product/recover/preview', 'products.view', 400],
   ['GET', '/api/products/product/recover/events', 'products.view', 200],
@@ -146,10 +147,11 @@ describe('Presence W0 explicit route guards with NEXUS_RBAC_MODE unset', () => {
     expect(mocks.fetch).not.toHaveBeenCalled()
   })
 
-  it('matrix update scopes a supplied listing id to the route product', async () => {
-    const res = await app.inject({ method: 'PUT', url: '/api/products/product/matrix/channel-listing/listing', payload: { externalListingId: 'identity' }, headers: { 'x-test-user': 'session-user', 'x-test-permission': 'products.edit' } })
-    expect(res.statusCode, res.body).toBe(200)
-    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'listing', productId: 'product' } }))
+  it('S1 (F6) — the legacy matrix listing write is retired: 410, and no listing row is written (it wrote price and quantity raw)', async () => {
+    const res = await app.inject({ method: 'PUT', url: '/api/products/product/matrix/channel-listing/listing', payload: { price: 1, quantity: 999 }, headers: { 'x-test-user': 'session-user', 'x-test-permission': 'products.edit' } })
+    expect(res.statusCode, res.body).toBe(410)
+    expect(res.json()).toMatchObject({ code: 'ROUTE_RETIRED', replacement: '/api/products/:id/studio/matrix' })
+    expect(mocks.update).not.toHaveBeenCalled()
   })
 
   it('operational-impact is a read-only POST with an actual service response', async () => {

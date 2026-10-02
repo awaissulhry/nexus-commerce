@@ -15,49 +15,18 @@ import {
 } from '../services/cloudinary.service.js'
 import { writeSettingsAudit } from '../utils/settings-audit.js'
 import {
-  validatePiva,
-  validateCodiceFiscale,
-  validateSdi,
-  validatePec,
-  validateInvoicingRouting,
-  isVatScheme,
-} from '../lib/italian-fiscal.js'
-
-const BRAND_SNAPSHOT_FIELDS = [
-  'companyName',
-  'addressLines',
-  'taxId',
-  'contactEmail',
-  'contactPhone',
-  'websiteUrl',
-  'logoUrl',
-  'signatureBlockText',
-  'defaultPoNotes',
-  'factoryEmailFrom',
-  'piva',
-  'codiceFiscale',
-  'sdiCode',
-  'pecEmail',
-  'vatScheme',
-] as const
-
-function brandSnapshot(
-  row: Record<string, unknown> | null,
-): Record<string, unknown> | null {
-  if (!row) return null
-  const out: Record<string, unknown> = {}
-  for (const k of BRAND_SNAPSHOT_FIELDS) out[k] = row[k] ?? null
-  return out
-}
+  brandSnapshot,
+  ensureBrandSettings,
+  readPrimaryMarketplace,
+  saveBrandSettings,
+  type BrandSettingsInput,
+} from '../services/settings/brand-settings.service.js'
 
 const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/settings/brand', async (_request, reply) => {
     try {
-      let row = await prisma.brandSettings.findFirst()
-      if (!row) {
-        row = await prisma.brandSettings.create({ data: {} })
-      }
-      return row
+      // MCP full control P3: read (and created when missing) by services/settings/brand-settings.service.ts.
+      return await ensureBrandSettings()
     } catch (error: any) {
       fastify.log.error({ err: error }, '[settings/brand GET] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -158,162 +127,16 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch('/settings/brand', async (request, reply) => {
     try {
-      const body = (request.body ?? {}) as {
-        companyName?: string | null
-        addressLines?: string[]
-        taxId?: string | null
-        contactEmail?: string | null
-        contactPhone?: string | null
-        websiteUrl?: string | null
-        logoUrl?: string | null
-        signatureBlockText?: string | null
-        defaultPoNotes?: string | null
-        factoryEmailFrom?: string | null
-        // Phase D — Italian fiscal fields.
-        piva?: string | null
-        codiceFiscale?: string | null
-        sdiCode?: string | null
-        pecEmail?: string | null
-        vatScheme?: string | null
-        // PO.7 — purchase-order approval ladder.
-        requireApprovalForPo?: boolean
-        poApprovalThresholdCents?: number | null
-        poApprovalApproverEmail?: string | null
-      }
-
-      // Sanitize: trim strings, drop unknown keys, coerce addressLines.
-      const update: Record<string, unknown> = {}
-      const stringKeys = [
-        'companyName',
-        'taxId',
-        'contactEmail',
-        'contactPhone',
-        'websiteUrl',
-        'logoUrl',
-        'signatureBlockText',
-        'defaultPoNotes',
-        'factoryEmailFrom',
-        // Phase D additions — same trim/normalize treatment as other
-        // string columns; specific validation happens below.
-        'piva',
-        'codiceFiscale',
-        'sdiCode',
-        'pecEmail',
-        'vatScheme',
-      ] as const
-      for (const k of stringKeys) {
-        if (k in body) {
-          const v = (body as any)[k]
-          update[k] = v == null || v === '' ? null : String(v).trim()
-        }
-      }
-      if ('addressLines' in body && Array.isArray(body.addressLines)) {
-        update.addressLines = body.addressLines
-          .map((s) => (typeof s === 'string' ? s.trim() : ''))
-          .filter((s) => s.length > 0)
-      }
-
-      // PO.7 — approval ladder fields, written through with the same
-      // null-out-on-empty contract used by the string columns above.
-      if ('requireApprovalForPo' in body) {
-        update.requireApprovalForPo = !!body.requireApprovalForPo
-      }
-      if ('poApprovalThresholdCents' in body) {
-        const v = body.poApprovalThresholdCents
-        update.poApprovalThresholdCents =
-          v == null ? null : Math.max(0, Math.round(Number(v)))
-      }
-      if ('poApprovalApproverEmail' in body) {
-        const v = body.poApprovalApproverEmail
-        update.poApprovalApproverEmail =
-          v == null || v === '' ? null : String(v).trim().toLowerCase()
-      }
-
-      // Phase D — strict fiscal validation. Per the operator's
-      // explicit choice (AskUserQuestion in the rebuild plan), bad
-      // checksums reject the save outright. Per-field errors so the
-      // UI can highlight exactly what's wrong instead of a
-      // generic "save failed" toast.
-      const fieldErrors: Record<string, string> = {}
-      // Tiny helper: discriminated-union narrowing on `r.valid` via
-      // !r.valid was flaky under TS 5's inference here, so we
-      // narrow via `if (r.valid === false)` which always works.
-      const check = (
-        field: string,
-        r: { valid: true } | { valid: false; reason: string },
-      ) => {
-        if (r.valid === false) fieldErrors[field] = r.reason
-      }
-      if (typeof update.piva === 'string' && update.piva) {
-        check('piva', validatePiva(update.piva))
-      }
-      if (typeof update.codiceFiscale === 'string' && update.codiceFiscale) {
-        check('codiceFiscale', validateCodiceFiscale(update.codiceFiscale))
-      }
-      if (typeof update.sdiCode === 'string' && update.sdiCode) {
-        check('sdiCode', validateSdi(update.sdiCode))
-      }
-      if (typeof update.pecEmail === 'string' && update.pecEmail) {
-        check('pecEmail', validatePec(update.pecEmail))
-      }
-      if (update.vatScheme != null && !isVatScheme(update.vatScheme)) {
-        fieldErrors.vatScheme =
-          'VAT scheme must be one of: ORDINARIO, FORFETTARIO, OSS, IOSS, ESENTE.'
-      }
-      // SDI-OR-PEC routing check: only fires when the operator
-      // provides a P.IVA (or when one already exists on the row and
-      // they're updating other fiscal data).
-      const existing = await prisma.brandSettings.findFirst()
-      const effectivePiva =
-        (typeof update.piva === 'string' ? update.piva : existing?.piva) ?? ''
-      const effectiveSdi =
-        (typeof update.sdiCode === 'string' ? update.sdiCode : existing?.sdiCode) ?? ''
-      const effectivePec =
-        (typeof update.pecEmail === 'string' ? update.pecEmail : existing?.pecEmail) ?? ''
-      if (effectivePiva && (typeof update.piva === 'string' || typeof update.sdiCode === 'string' || typeof update.pecEmail === 'string')) {
-        check('routing', validateInvoicingRouting({
-          piva: effectivePiva,
-          sdiCode: effectiveSdi,
-          pecEmail: effectivePec,
-        }))
-      }
-      // Uppercase normalisation for two fields where the spec is
-      // case-insensitive but downstream parsers expect uppercase.
-      if (typeof update.sdiCode === 'string' && update.sdiCode) {
-        update.sdiCode = update.sdiCode.toUpperCase()
-      }
-      if (typeof update.codiceFiscale === 'string' && update.codiceFiscale) {
-        update.codiceFiscale = update.codiceFiscale.toUpperCase()
-      }
-      if (Object.keys(fieldErrors).length > 0) {
+      // MCP full control P10: sanitized, checked and saved by services/settings/brand-settings.service.ts, the same
+      // code Claude's set-business-settings saves through.
+      const saved = await saveBrandSettings((request.body ?? {}) as BrandSettingsInput)
+      if ('fieldErrors' in saved) {
         return reply.code(400).send({
           error: 'Validation failed',
-          fieldErrors,
+          fieldErrors: saved.fieldErrors,
         })
       }
-
-      // Single-row upsert: read-then-update keeps the contract simple.
-      // We already fetched `existing` above for the routing check;
-      // reuse it instead of doing a second read.
-      let row = existing
-      const before = row
-      if (!row) {
-        row = await prisma.brandSettings.create({ data: update })
-      } else {
-        row = await prisma.brandSettings.update({
-          where: { id: row.id },
-          data: update,
-        })
-      }
-      // Phase B — settings change history. Use the canonical helper so
-      // /settings/audit surfaces these alongside web-action saves.
-      await writeSettingsAudit({
-        key: 'company',
-        action: before ? 'update' : 'create',
-        before: brandSnapshot(before as any),
-        after: brandSnapshot(row as any),
-      })
-      return row
+      return saved.row
     } catch (error: any) {
       fastify.log.error({ err: error }, '[settings/brand PATCH] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -327,10 +150,7 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
   // behaviour rather than failing.
   fastify.get('/settings/primary-marketplace', async (_request, reply) => {
     try {
-      const row = await (prisma as any).accountSettings.findFirst({
-        select: { primaryMarketplace: true },
-      })
-      return { primaryMarketplace: row?.primaryMarketplace ?? null }
+      return { primaryMarketplace: await readPrimaryMarketplace() }
     } catch (error: any) {
       fastify.log.error(
         { err: error },

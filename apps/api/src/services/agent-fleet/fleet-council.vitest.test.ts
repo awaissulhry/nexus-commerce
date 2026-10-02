@@ -95,7 +95,8 @@ describe('runFleetCouncilOnce', () => {
     expect(queueTool).toHaveBeenCalledWith(
       'create-negative-keyword',
       ITEM.args,
-      { kind: 'system', label: 'amazon-ads-director', userId: null },
+      // C1 — the fleet's own door, so a change it asks for runs with `via: 'fleet'`.
+      { kind: 'system', label: 'amazon-ads-director', userId: null, via: 'fleet' },
       'run_dir',
       // WF.4b — the gate parameter rides every queue call. An unrevised walk
       // carries no stepGates, so every item resolves `inherit` and forceAsk

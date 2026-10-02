@@ -1,0 +1,2 @@
+201
+{"attribute":{"workspaceId":"nexus_legacy_workspace","id":"<id 1>","code":"golden_fit","label":"Fit","description":"how it sits","groupId":"golden-group-1","type":"select","validation":null,"defaultValue":null,"localizable":false,"scope":"per_variant","sortOrder":3,"semanticKey":null,"placement":"shared","placementChannels":[],"archivedAt":null,"createdAt":"<time>","updatedAt":"<time>"}}

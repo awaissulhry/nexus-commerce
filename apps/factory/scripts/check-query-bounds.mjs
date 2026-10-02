@@ -9,7 +9,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const ROOTS = ["src/app/api", "worker"];
+// P11 — mcp/: Claude's tools read through the same fence.
+const ROOTS = ["src/app/api", "worker", "mcp"];
 const files = [];
 function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

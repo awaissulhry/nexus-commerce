@@ -26,6 +26,20 @@ import {
 } from './ads-api-client.js'
 import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
+import { marketCurrency } from '../pim/market-currency.js'
+
+/**
+ * The currency a new campaign's budget is in: its market's (`Marketplace.currency`) — Amazon reads the number it is
+ * sent in the marketplace's own currency, so a UK budget is pounds. Every create used to leave the schema default (EUR)
+ * on every market. A market with no currency configured keeps that default, as before (nothing else changes for it).
+ */
+async function newCampaignCurrency(marketplace: string): Promise<string | null> {
+  try {
+    return await marketCurrency('AMAZON', marketplace)
+  } catch {
+    return null
+  }
+}
 
 async function resolveCtx(marketplace: string): Promise<{ profileId: string; region: AdsRegion } | null> {
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
@@ -43,11 +57,13 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
  * Callers that only touch local state keep the default; callers that attempt a live push pass what
  * actually happened.
  */
-async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string, payloadBefore: object = {}, status: 'SUCCESS' | 'FAILED' | 'PENDING' = 'SUCCESS', evidence?: AdWriteEvidence | null) {
+async function audit(actionType: string, entityType: string, entityId: string, payloadAfter: object, userId?: string, payloadBefore: object = {}, status: 'SUCCESS' | 'FAILED' | 'PENDING' = 'SUCCESS', evidence?: AdWriteEvidence | null, changeSetId?: string | null) {
   await prisma.advertisingActionLog.create({
     // ADX A2 — `evidence` carries WHY. packEvidence() returns null rather than {} so an
     // empty object never masquerades as captured reasoning.
-    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore, payloadAfter, amazonResponseStatus: status, evidence: (packEvidence(evidence) ?? undefined) as never },
+    // MCP full control A6 — `changeSetId` (optional, AdvertisingActionLog.executionId) joins the row to a change set,
+    // so an approved request's placement write is found by its approval; absent for every other caller.
+    data: { userId: userId ?? null, actionType, entityType, entityId, payloadBefore, payloadAfter, amazonResponseStatus: status, evidence: (packEvidence(evidence) ?? undefined) as never, ...(changeSetId ? { executionId: changeSetId } : {}) },
   }).catch(() => {})
 }
 
@@ -137,9 +153,11 @@ export async function createCampaignLocal(input: NewCampaign): Promise<{ id: str
   }
 
   const adProduct = { SP: 'SPONSORED_PRODUCTS', SB: 'SPONSORED_BRANDS', SD: 'SPONSORED_DISPLAY' }[input.type]
+  const currency = await newCampaignCurrency(input.marketplace)
   const campaign = await prisma.campaign.create({
     data: {
       name: input.name, type: input.type, adProduct,
+      ...(currency ? { dailyBudgetCurrency: currency } : {}),
       status: startEnabled ? 'ENABLED' : 'PAUSED',
       marketplace: input.marketplace,
       externalCampaignId: externalId, dailyBudget: input.dailyBudgetEur, biddingStrategy: (input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES'),
@@ -1010,6 +1028,8 @@ export interface PlacementBiddingInput {
   // recorded as structured evidence so a placement move can be traced back to the
   // intent that caused it rather than only to the schedule that ran.
   targetKey?: string
+  /** MCP full control A6 — tag the audit row with a change set (an approved request's id). Optional; additive. */
+  changeSetId?: string | null
 }
 /**
  * PLC.3 — the refused shape, so a refusal can be RENDERED rather than only logged.
@@ -1097,6 +1117,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       { adjustments: priorAdjustments },
       'FAILED',
       { targetKey: input.targetKey, metric: 'placementBidding', note: `blocked: ${gateDenial}` },
+      input.changeSetId ?? null,
     ).catch(() => { /* an audit row must never fail the write it describes */ })
     // PLC.3 — carry the sentence out. The audit row above, the history rows, the log line and the
     // allowed path below are all unchanged; this return gains two optional fields.
@@ -1166,6 +1187,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       threshold: adjustments[0]?.percentage ?? null,
       note: input.reason ?? undefined,
     },
+    input.changeSetId ?? null,
   )
   logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode, status: auditStatus })
   return { ok: auditStatus !== 'FAILED', adjustments, mode }

@@ -1,10 +1,12 @@
-import { isProtectedStockLocation } from '../services/default-stock-location.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
-import { computeLocationAdjustment, LocationAdjustmentError } from '../services/location-adjustment.js'
-import { summarizeProductStock } from '../services/stock-summary.js'
+import { applyStockMovement, listStockMovements, ProtectedLocationError } from '../services/stock-movement.service.js'
+import { LocationAdjustmentError } from '../services/location-adjustment.js'
+import { listStockLocations, listStockReservations, listStockRows, listStockTransfers, readProductStock } from '../services/stock/stock-read.service.js'
+import { adjustOneLocation, adjustReasonOf, NoLocationError } from '../services/stock/location-adjust.service.js'
+import { placeHold, PooledHoldRefusal, releaseHold } from '../services/stock/stock-hold.service.js'
+import { createStockLocation, deactivateStockLocation, LocationWriteError, updateStockLocation } from '../services/stock/location-write.service.js'
 import {
   resolveRows,
   previewImport,
@@ -31,19 +33,12 @@ import {
 } from '../services/stock-import-progress.js'
 import { buildCsv, buildXlsx, buildJobResultsExport, buildStockExport } from '../services/stock-import-export.js'
 import { detectFileKind, parseCsv, parseJson, parseXlsx, sniffDelimiterSmart } from '../services/import/parsers.js'
-import {
-  reserveStock,
-  releaseReservationFromStockPage,
-  transferStock,
-} from '../services/stock-level.service.js'
+import { transferStock } from '../services/stock-level.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
-import { resolveAtp } from '../services/atp.service.js'
-import { resolveAtpAcrossChannels } from '../services/atp-channel.service.js'
 import { CRON_JOBS, readCronCard, summaryCount } from '../services/runtime-status/cron-status.service.js'
 import * as abcService from '../services/abc-classification.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
-import { loadPagePoolSources, loadPoolSources, pooledStockRisk, summarizePoolSources, unitsForState, type PoolSource } from '../services/stock-pool/pool-sources.js'
-import { lentUsage } from '../services/stock-pool/lent-usage.js'
+import { loadPagePoolSources, loadPoolSources, pooledStockRisk, summarizePoolSources, unitsForState } from '../services/stock-pool/pool-sources.js'
 import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
 import {
   computeYearEndValuation,
@@ -403,128 +398,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   //   page, pageSize
   fastify.get('/stock', async (request, reply) => {
     try {
-      const q = request.query as any
-      const page = Math.max(1, Math.floor(safeNum(q.page, 1) ?? 1))
-      const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
-      const skip = (page - 1) * pageSize
-
-      // Only show leaf products (isParent: false). Parent/intermediate
-      // products that somehow have their own StockLevel rows would appear
-      // as children under the wrong synthetic parent, creating a merged
-      // 3-level mess. isParent: false guarantees the stock table exactly
-      // mirrors the variant-level product structure shown in /products.
-      const where: any = { product: { isParent: false } }
-
-      // locationType — 'AMAZON_FBA' | 'WAREHOUSE' | ... — filters by
-      // location.type. Powers the FBA / Own warehouse tab strip.
-      if (q.locationType) {
-        where.location = { type: q.locationType }
-      }
-
-      if (q.locationCode) {
-        const loc = await prisma.stockLocation.findUnique({
-          where: { workspace_code: workspaceKey({ code: q.locationCode }) },
-          select: { id: true },
-        })
-        if (!loc) {
-          return { items: [], total: 0, page, pageSize, totalPages: 0 }
-        }
-        where.locationId = loc.id
-      }
-
-      if (q.status === 'OUT_OF_STOCK') where.quantity = 0
-      else if (q.status === 'CRITICAL') where.quantity = { gt: 0, lte: 5 }
-      else if (q.status === 'LOW') where.quantity = { gt: 5, lte: 15 }
-      else if (q.status === 'IN_STOCK') where.quantity = { gt: 15 }
-
-      if (q.search?.trim()) {
-        const s = q.search.trim()
-        // Merge with the existing product filter (isParent: false must
-        // survive the search condition — overwriting where.product would
-        // drop the isParent guard and let parent rows leak back in).
-        where.product = {
-          ...where.product,
-          OR: [
-            { sku: { contains: s, mode: 'insensitive' } },
-            { name: { contains: s, mode: 'insensitive' } },
-            { amazonAsin: { contains: s, mode: 'insensitive' } },
-          ],
-        }
-      }
-
-      const [total, rows] = await Promise.all([
-        prisma.stockLevel.count({ where }),
-        prisma.stockLevel.findMany({
-          where,
-          include: {
-            location: { select: { id: true, code: true, name: true, type: true } },
-            product: {
-              select: {
-                id: true, sku: true, name: true, amazonAsin: true,
-                lowStockThreshold: true, costPrice: true, basePrice: true,
-                abcClass: true,
-                isParent: true,
-                parentId: true,
-                parent: {
-                  select: {
-                    id: true, sku: true, name: true,
-                    // Expose the direct parent's own parentId so the UI
-                    // can detect 3-level hierarchies (grandparent exists).
-                    parentId: true,
-                    images: { select: { url: true }, take: 1 },
-                  },
-                },
-                images: { select: { url: true }, take: 1 },
-              },
-            },
-            variation: {
-              select: { id: true, sku: true, variationAttributes: true },
-            },
-          },
-          orderBy: [{ quantity: 'asc' }, { lastUpdatedAt: 'desc' }],
-          skip,
-          take: pageSize,
-        }),
-      ])
-
-      return {
-        items: rows.map((r) => ({
-          id: r.id,
-          quantity: r.quantity,
-          reserved: r.reserved,
-          available: r.available,
-          reorderThreshold: r.reorderThreshold,
-          // T.32 — surface EOQ alongside threshold so at-reorder rows
-          // show "ROP 12 · +50" inline; operator can decide before
-          // opening the drawer.
-          reorderQuantity: r.reorderQuantity,
-          syncStatus: r.syncStatus,
-          lastUpdatedAt: r.lastUpdatedAt,
-          lastSyncedAt: r.lastSyncedAt,
-          location: r.location,
-          product: {
-            ...r.product,
-            costPrice: r.product.costPrice == null ? null : Number(r.product.costPrice),
-            basePrice: r.product.basePrice == null ? null : Number(r.product.basePrice),
-            thumbnailUrl: r.product.images?.[0]?.url ?? null,
-            parentId: r.product.parentId ?? null,
-            parentProduct: r.product.parent ? {
-              id: r.product.parent.id,
-              sku: r.product.parent.sku,
-              name: r.product.parent.name,
-              thumbnailUrl: r.product.parent.images?.[0]?.url ?? null,
-              // grandparentId lets the UI know this parent is itself a child
-              // in a 3-level hierarchy (grandparent → FBA/FBM parent → variant).
-              grandparentId: r.product.parent.parentId ?? null,
-            } : null,
-          },
-          variation: r.variation,
-        })),
-        total,
-        page,
-        pageSize,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
-      }
+      return await listStockRows(request.query as any)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock] list failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -950,37 +824,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // SKU count. Powers the location selector in the rebuilt page.
   fastify.get('/stock/locations', async (_request, reply) => {
     try {
-      const locations = await prisma.stockLocation.findMany({
-        orderBy: [{ type: 'asc' }, { code: 'asc' }],
-        include: {
-          _count: { select: { stockLevels: true } },
-        },
-      })
-
-      // One aggregate per location — cheap (1 query per location).
-      const summaries = await Promise.all(
-        locations.map(async (loc) => {
-          const agg = await prisma.stockLevel.aggregate({
-            where: { locationId: loc.id },
-            _sum: { quantity: true, reserved: true, available: true },
-          })
-          return {
-            id: loc.id,
-            code: loc.code,
-            name: loc.name,
-            type: loc.type,
-            isActive: loc.isActive,
-            servesMarketplaces: loc.servesMarketplaces,
-            warehouseId: loc.warehouseId,
-            skuCount: loc._count.stockLevels,
-            totalQuantity: agg._sum.quantity ?? 0,
-            totalReserved: agg._sum.reserved ?? 0,
-            totalAvailable: agg._sum.available ?? 0,
-          }
-        }),
-      )
-
-      return { locations: summaries }
+      return await listStockLocations()
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/locations] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1001,31 +845,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }>('/stock/locations', async (request, reply) => {
     try {
-      const { name, code, type, servesMarketplaces, isActive = true, address } = request.body ?? {}
-      if (!name?.trim()) return reply.code(400).send({ error: 'name is required' })
-      if (!code?.trim()) return reply.code(400).send({ error: 'code is required' })
-      if (!['WAREHOUSE', 'AMAZON_FBA'].includes(type)) {
-        return reply.code(400).send({ error: 'type must be WAREHOUSE or AMAZON_FBA' })
-      }
-      const normalised = code.toUpperCase().trim()
-      if (!/^[A-Z0-9][A-Z0-9-]{0,29}$/.test(normalised)) {
-        return reply.code(400).send({ error: 'code must be uppercase alphanumeric with hyphens, 1–30 chars' })
-      }
-      const existing = await prisma.stockLocation.findUnique({ where: { workspace_code: workspaceKey({ code: normalised }) } })
-      if (existing) return reply.code(409).send({ error: `Location code ${normalised} already exists` })
-
-      const loc = await prisma.stockLocation.create({
-        data: {
-          name: name.trim(),
-          code: normalised,
-          type,
-          servesMarketplaces,
-          isActive,
-          address: address ?? undefined,
-        },
-      })
+      const loc = await createStockLocation(request.body ?? {})
       return reply.code(201).send({ location: loc })
     } catch (error: any) {
+      if (error instanceof LocationWriteError) return reply.code(error.status).send({ error: error.message })
       fastify.log.error({ err: error }, '[POST /stock/locations] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -1044,25 +867,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/stock/locations/:id', async (request, reply) => {
     try {
       const { id } = request.params
-      const { name, servesMarketplaces, isActive, address } = request.body ?? {}
-      const loc = await prisma.stockLocation.findUnique({ where: { id } })
-      if (!loc) return reply.code(404).send({ error: 'Location not found' })
-
-      if (isActive === false && (await isProtectedStockLocation(loc))) {
-        return reply.code(409).send({ error: 'Choose another default warehouse before deactivating this location.' })
-      }
-
-      const updated = await prisma.stockLocation.update({
-        where: { id },
-        data: {
-          ...(name !== undefined ? { name: name.trim() } : {}),
-          ...(servesMarketplaces !== undefined ? { servesMarketplaces } : {}),
-          ...(isActive !== undefined ? { isActive } : {}),
-          ...(address !== undefined ? { address: address ?? undefined } : {}),
-        },
-      })
+      const updated = await updateStockLocation(id, request.body ?? {})
       return reply.send({ location: updated })
     } catch (error: any) {
+      if (error instanceof LocationWriteError) return reply.code(error.status).send({ error: error.message })
       fastify.log.error({ err: error }, '[PATCH /stock/locations/:id] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -1076,14 +884,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       try {
         const { id } = request.params
-        const loc = await prisma.stockLocation.findUnique({ where: { id } })
-        if (!loc) return reply.code(404).send({ error: 'Location not found' })
-        if (await isProtectedStockLocation(loc)) {
-          return reply.code(409).send({ error: `Built-in location ${loc.code} cannot be deactivated here` })
-        }
-        await prisma.stockLocation.update({ where: { id }, data: { isActive: false } })
+        await deactivateStockLocation(id)
         return reply.send({ ok: true })
       } catch (error: any) {
+        if (error instanceof LocationWriteError) return reply.code(error.status).send({ error: error.message })
         fastify.log.error({ err: error }, '[DELETE /stock/locations/:id] failed')
         return reply.code(500).send({ error: error?.message ?? String(error) })
       }
@@ -1103,297 +907,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { productId } = request.params as { productId: string }
       const q = request.query as any
-      // family=true → fetch children's stock for parent rows so the drawer
-      // shows a Variants breakdown instead of the (empty) parent's own stock.
-      const wantFamily = q.family === 'true'
-
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          amazonAsin: true,
-          totalStock: true,
-          lowStockThreshold: true,
-          basePrice: true,
-          costPrice: true,
-          isParent: true,
-          // S.20 — costing method + rolling WAC for the drawer header
-          costingMethod: true,
-          weightedAvgCostCents: true,
-          images: { select: { url: true }, take: 1 },
-        },
-      })
-      if (!product) return reply.code(404).send({ error: 'Product not found' })
-
-      // S.20 — layer history (top 30 by recency) attached to the
-      // bundle so the drawer renders without a second roundtrip.
-      const costLayers = await listLayers(productId, 30)
-
-      const [stockLevels, channelListings, movements, atpMap] = await Promise.all([
-        prisma.stockLevel.findMany({
-          where: { productId },
-          include: {
-            location: { select: { id: true, code: true, name: true, type: true, isActive: true } },
-            reservations: {
-              where: { releasedAt: null, consumedAt: null },
-              orderBy: { createdAt: 'desc' },
-            },
-          },
-          orderBy: { quantity: 'desc' },
-        }),
-        prisma.channelListing.findMany({
-          where: { productId },
-          select: {
-            id: true, channel: true, marketplace: true, listingStatus: true,
-            syncStatus: true, lastSyncedAt: true, lastSyncStatus: true, lastSyncError: true,
-            quantity: true, stockBuffer: true, externalListingId: true,
-          },
-          orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
-        }),
-        listStockMovements({ productId, limit: 50 }),
-        resolveAtp({ products: [{ id: product.id, sku: product.sku }] }),
-      ])
-
-      // Sales velocity: aggregate DailySalesAggregate for the last 90 days.
-      const ninetyDaysAgo = new Date()
-      ninetyDaysAgo.setUTCDate(ninetyDaysAgo.getUTCDate() - 90)
-      ninetyDaysAgo.setUTCHours(0, 0, 0, 0)
-      const sales = await prisma.dailySalesAggregate.findMany({
-        where: { sku: product.sku, day: { gte: ninetyDaysAgo } },
-        select: { day: true, unitsSold: true, grossRevenue: true, ordersCount: true, channel: true },
-        orderBy: { day: 'asc' },
-      })
-
-      // Roll up by day across channels
-      const dailyMap = new Map<string, { units: number; revenueCents: number; orders: number }>()
-      for (const s of sales) {
-        const key = s.day.toISOString().slice(0, 10)
-        const cur = dailyMap.get(key) ?? { units: 0, revenueCents: 0, orders: 0 }
-        cur.units += s.unitsSold
-        cur.revenueCents += Math.round(Number(s.grossRevenue) * 100)
-        cur.orders += s.ordersCount
-        dailyMap.set(key, cur)
-      }
-      const dailyHistory = Array.from(dailyMap.entries())
-        .sort(([a], [b]) => (a < b ? -1 : 1))
-        .map(([day, v]) => ({
-          day,
-          units: v.units,
-          revenue: v.revenueCents / 100,
-          orders: v.orders,
-        }))
-
-      const last30Cutoff = new Date()
-      last30Cutoff.setUTCDate(last30Cutoff.getUTCDate() - 30)
-      const last30 = sales.filter((s) => s.day >= last30Cutoff)
-      const last30Units = last30.reduce((acc, s) => acc + s.unitsSold, 0)
-      const last30Revenue = last30.reduce((acc, s) => acc + Number(s.grossRevenue), 0)
-      const avgDailyUnits = last30Units / 30
-      const totalAvailable = stockLevels.reduce((acc, sl) => acc + sl.available, 0)
-
-      const atp = atpMap.get(product.id)
-
-      // Family view: fetch all leaf-variant children with their stock levels.
-      // Returned when ?family=true and the product is a master parent.
-      let family: null | {
-        totalStock: number; totalReserved: number; totalAvailable: number
-        locations: Array<{ id: string; code: string; name: string; type: string }>
-        children: Array<{
-          id: string; sku: string; name: string
-          thumbnailUrl: string | null; abcClass: string | null
-          lowStockThreshold: number
-          totalStock: number; totalReserved: number; totalAvailable: number
-          /** Shared stock step 5 — the pool this variation sells from, or null (own stock). */
-          poolSource: PoolSource | null
-          stockLevels: Array<{
-            locationId: string; locationCode: string; locationType: string
-            quantity: number; reserved: number; available: number
-            lastUpdatedAt: string
-            syncStatus: string
-          }>
-        }>
-      } = null
-
-      if (wantFamily && product.isParent) {
-        const [children, activeLocations] = await Promise.all([
-          prisma.product.findMany({
-            where: { parentId: productId, isParent: false },
-            select: {
-              id: true, sku: true, name: true, abcClass: true, lowStockThreshold: true,
-              images: { select: { url: true }, take: 1 },
-              stockLevels: {
-                select: {
-                  quantity: true, reserved: true, available: true,
-                  lastUpdatedAt: true, syncStatus: true,
-                  location: { select: { id: true, code: true, name: true, type: true } },
-                },
-                orderBy: { quantity: 'desc' },
-              },
-            },
-            orderBy: { sku: 'asc' },
-          }),
-          prisma.stockLocation.findMany({
-            where: { isActive: true },
-            select: { id: true, code: true, name: true, type: true },
-            orderBy: [{ type: 'asc' }, { code: 'asc' }],
-          }),
-        ])
-
-        const childPools = await loadPoolSources(prisma, children.map((c) => c.id))
-        family = {
-          totalStock:     children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.quantity, 0), 0),
-          totalReserved:  children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.reserved, 0), 0),
-          totalAvailable: children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.available, 0), 0),
-          locations: activeLocations,
-          children: children.map((c) => ({
-            id: c.id,
-            sku: c.sku,
-            name: c.name,
-            thumbnailUrl: c.images?.[0]?.url ?? null,
-            abcClass: c.abcClass,
-            lowStockThreshold: c.lowStockThreshold,
-            totalStock:     c.stockLevels.reduce((s, sl) => s + sl.quantity, 0),
-            totalReserved:  c.stockLevels.reduce((s, sl) => s + sl.reserved, 0),
-            totalAvailable: c.stockLevels.reduce((s, sl) => s + sl.available, 0),
-            poolSource: childPools.get(c.id) ?? null,
-            stockLevels: c.stockLevels.map((sl) => ({
-              locationId:   sl.location.id,
-              locationCode: sl.location.code,
-              locationType: sl.location.type,
-              quantity:     sl.quantity,
-              reserved:     sl.reserved,
-              available:    sl.available,
-              lastUpdatedAt: sl.lastUpdatedAt.toISOString(),
-              syncStatus:   sl.syncStatus,
-            })),
-          })),
-        }
-      }
-
-      // Shared stock step 5 — the pool this product sells from (a parent: its pooled variations added up),
-      // beside its own numbers; never added to them.
-      const poolSource = product.isParent
-        ? summarizePoolSources((family?.children ?? []).map((c) => c.id),
-            new Map((family?.children ?? []).flatMap((c) => c.poolSource ? [[c.id, c.poolSource] as const] : [])))
-        : ((await loadPoolSources(prisma, [product.id])).get(product.id) ?? null)
-      // Shared stock step 5 — "who sold what": for a LENDER, what each borrowing business holds and sold
-      // from this product (a parent: with its variations). Each movement made for another business names it.
-      const lent = await lentUsage(prisma, [product.id, ...(family?.children ?? []).map((c) => c.id)])
-      // Days of stock: a product that sells from a pool is covered by the pool's free units, not by its own
-      // shelf (empty by design in a borrowing business) — step 7: the drawer said "0 days of stock" in red.
-      const coverUnits = !product.isParent && poolSource ? poolSource.available : totalAvailable
-      const daysOfStock =
-        avgDailyUnits > 0
-          ? Math.floor(coverUnits / avgDailyUnits)
-          : null
-
-      return {
-        poolSource,
-        lentUsage: lent.usage,
-        product: {
-          ...product,
-          basePrice: product.basePrice == null ? null : Number(product.basePrice),
-          costPrice: product.costPrice == null ? null : Number(product.costPrice),
-          thumbnailUrl: product.images?.[0]?.url ?? null,
-        },
-        stockLevels: stockLevels.map((sl) => ({
-          id: sl.id,
-          location: sl.location,
-          quantity: sl.quantity,
-          reserved: sl.reserved,
-          available: sl.available,
-          reorderThreshold: sl.reorderThreshold,
-          lastUpdatedAt: sl.lastUpdatedAt,
-          lastSyncedAt: sl.lastSyncedAt,
-          syncStatus: sl.syncStatus,
-          activeReservations: sl.reservations.length,
-        })),
-        channelListings,
-        movements: movements.map((movement) => ({
-          ...movement,
-          usedBy: movement.consumerWorkspaceId
-            ? { businessName: lent.names.get(movement.consumerWorkspaceId) ?? 'another business', orderRef: movement.consumerOrderRef }
-            : null,
-        })),
-        salesVelocity: {
-          last30Units,
-          last30Revenue,
-          avgDailyUnits: Math.round(avgDailyUnits * 100) / 100,
-          daysOfStock,
-          totalAvailable,
-          dailyHistory,
-        },
-        atp: atp ?? null,
-        // S.26 — per-channel ATP rollup. byLocation comes from the
-        // resolveAtp call above (it computes the per-row breakdown
-        // we feed back here). Empty when the product has no
-        // ChannelListings.
-        atpPerChannel: atp ? await resolveAtpAcrossChannels({
-          productId: product.id,
-          byLocation: atp.byLocation as any,
-          // A parent's poolSource is its variations added up; its own listings are not sent stock from it.
-          pool: product.isParent ? null : poolSource,
-        }) : [],
-        // S.20 — costing surface
-        costing: {
-          method: product.costingMethod,
-          weightedAvgCostCents: product.weightedAvgCostCents,
-          layers: costLayers,
-        },
-        reservations: stockLevels.flatMap((sl) =>
-          sl.reservations.map((r) => ({
-            ...r,
-            quantity: r.quantity,
-            location: { id: sl.location.id, code: sl.location.code },
-            // Shared stock — a hold made for another business's order names it; it cannot be released here.
-            usedBy: r.consumerWorkspaceId
-              ? { businessName: lent.names.get(r.consumerWorkspaceId) ?? 'another business', orderRef: r.consumerOrderRef }
-              : null,
-          })),
-        ),
-        // L.10 — active lots for this product, FEFO-ordered. Includes
-        // any OPEN recall so the drawer can flag recalled batches
-        // even though they're suppressed from FEFO consume. Capped at
-        // 50 — products with more lots than that need the dedicated
-        // /api/stock/lots endpoint with filters.
-        lots: await prisma.lot.findMany({
-          where: { productId, unitsRemaining: { gt: 0 } },
-          orderBy: [{ expiresAt: 'asc' }, { receivedAt: 'asc' }],
-          take: 50,
-          select: {
-            id: true, lotNumber: true, receivedAt: true, expiresAt: true,
-            unitsReceived: true, unitsRemaining: true, supplierLotRef: true,
-            recalls: {
-              where: { status: 'OPEN' },
-              select: { id: true, reason: true, openedAt: true },
-              take: 1,
-            },
-          },
-        }),
-        // SR.4 — serial-tracked units for this product. Surfaced in
-        // the drawer when present; empty for products without serials.
-        // Capped at 50 + summary counts so the drawer doesn't
-        // serialize 1000s of rows for high-volume products.
-        serials: await prisma.serialNumber.findMany({
-          where: { productId },
-          orderBy: [{ status: 'asc' }, { receivedAt: 'desc' }],
-          take: 50,
-          select: {
-            id: true, serialNumber: true, status: true, receivedAt: true,
-            currentOrderId: true, manufacturerRef: true,
-            lot: { select: { id: true, lotNumber: true } },
-          },
-        }),
-        serialCounts: await prisma.serialNumber.groupBy({
-          by: ['status'],
-          where: { productId },
-          _count: { _all: true },
-        }).then((rows: Array<{ status: string; _count: { _all: number } }>) => Object.fromEntries(rows.map((r) => [r.status, r._count._all]))),
-        // F.3 — family view for parent rows. null for leaf/standalone products.
-        family,
-      }
+      const bundle = await readProductStock(productId, { family: q.family === 'true' })
+      if (!bundle) return reply.code(404).send({ error: 'Product not found' })
+      return bundle
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/product/:id] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1409,76 +925,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // transfer renders as a single row with from/to/quantity/timestamps.
   fastify.get('/stock/transfers', async (request, reply) => {
     try {
-      const q = request.query as any
-      const limit = Math.min(200, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
-
-      // Pull TRANSFER_IN rows (the canonical "destination" event); each
-      // referenceId points at its paired OUT. Joining lets us return
-      // both sides in one row to the client. Ordering by createdAt DESC
-      // surfaces the most recent transfers first.
-      const inRows = await prisma.stockMovement.findMany({
-        where: { reason: 'TRANSFER_IN' as any },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        select: {
-          id: true,
-          productId: true,
-          change: true,
-          createdAt: true,
-          actor: true,
-          notes: true,
-          referenceId: true,
-          fromLocationId: true,
-          toLocationId: true,
-          fromLocation: { select: { id: true, code: true, name: true, type: true } },
-          toLocation:   { select: { id: true, code: true, name: true, type: true } },
-        },
-      })
-
-      // Resolve sibling OUT rows + product info in two batched queries.
-      const outIds = inRows.map((r) => r.referenceId).filter((v): v is string => !!v)
-      const productIds = Array.from(new Set(inRows.map((r) => r.productId)))
-      const [outRows, products] = await Promise.all([
-        outIds.length === 0
-          ? Promise.resolve([])
-          : prisma.stockMovement.findMany({
-              where: { id: { in: outIds } },
-              select: { id: true, createdAt: true, actor: true, change: true },
-            }),
-        prisma.product.findMany({
-          where: { id: { in: productIds } },
-          select: { id: true, sku: true, name: true, amazonAsin: true,
-            images: { select: { url: true }, take: 1 } },
-        }),
-      ])
-      const outById = new Map(outRows.map((r) => [r.id, r]))
-      const productById = new Map(products.map((p) => [p.id, p]))
-
-      const transfers = inRows.map((r) => {
-        const sibling = r.referenceId ? outById.get(r.referenceId) : null
-        const p = productById.get(r.productId)
-        return {
-          id: r.id,
-          siblingOutId: r.referenceId ?? null,
-          quantity: r.change,
-          createdAt: r.createdAt,
-          startedAt: sibling?.createdAt ?? r.createdAt,
-          actor: r.actor ?? sibling?.actor ?? null,
-          notes: r.notes,
-          from: r.fromLocation,
-          to: r.toLocation ?? null,
-          product: p ? {
-            id: p.id, sku: p.sku, name: p.name, amazonAsin: p.amazonAsin,
-            thumbnailUrl: p.images?.[0]?.url ?? null,
-          } : null,
-          // Status today is always COMPLETED — transferStock fires both
-          // halves synchronously. A future TransferShipment table would
-          // add IN_TRANSIT state; the API shape is forward-compatible.
-          status: 'COMPLETED' as const,
-        }
-      })
-
-      return { transfers, count: transfers.length }
+      return await listStockTransfers(request.query as any)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/transfers] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1497,92 +944,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // render SKU, location code, and stock context in one query.
   fastify.get('/stock/reservations', async (request, reply) => {
     try {
-      const q = request.query as any
-      const status = (q.status as string | undefined) ?? 'all'
-      const limit = Math.min(200, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
-
-      const where: any = {}
-      if (status === 'active') {
-        where.releasedAt = null
-        where.consumedAt = null
-      } else if (status === 'consumed') {
-        where.consumedAt = { not: null }
-      } else if (status === 'released') {
-        where.releasedAt = { not: null }
-      }
-
-      const [rows, productMap] = await Promise.all([
-        prisma.stockReservation.findMany({
-          where,
-          orderBy: [{ consumedAt: 'desc' }, { releasedAt: 'desc' }, { createdAt: 'desc' }],
-          take: limit,
-          include: {
-            stockLevel: {
-              select: {
-                productId: true,
-                quantity: true,
-                reserved: true,
-                available: true,
-                location: { select: { id: true, code: true, name: true, type: true } },
-              },
-            },
-          },
-        }),
-        // Product join is separate because StockReservation has no
-        // direct relation to Product — it goes via StockLevel. Doing a
-        // batched findMany keeps the per-row work cheap.
-        Promise.resolve(null),
-      ])
-
-      const productIds = Array.from(new Set(rows.map((r) => r.stockLevel.productId)))
-      const products = productIds.length === 0
-        ? []
-        : await prisma.product.findMany({
-            where: { id: { in: productIds } },
-            select: {
-              id: true, sku: true, name: true, amazonAsin: true,
-              images: { select: { url: true }, take: 1 },
-            },
-          })
-      const productById = new Map(products.map((p) => [p.id, p]))
-
-      const now = new Date()
-      const reservations = rows.map((r) => {
-        const p = productById.get(r.stockLevel.productId)
-        const live = r.releasedAt == null && r.consumedAt == null
-        const expired = live && r.expiresAt < now
-        const ttlMs = live ? r.expiresAt.getTime() - now.getTime() : null
-        return {
-          id: r.id,
-          quantity: r.quantity,
-          reason: r.reason,
-          orderId: r.orderId,
-          createdAt: r.createdAt,
-          expiresAt: r.expiresAt,
-          releasedAt: r.releasedAt,
-          consumedAt: r.consumedAt,
-          status: r.consumedAt
-            ? 'consumed' as const
-            : r.releasedAt
-              ? 'released' as const
-              : expired
-                ? 'expired' as const
-                : 'active' as const,
-          ttlMs,
-          location: r.stockLevel.location,
-          stockLevel: {
-            quantity: r.stockLevel.quantity,
-            reserved: r.stockLevel.reserved,
-            available: r.stockLevel.available,
-          },
-          product: p ? {
-            id: p.id, sku: p.sku, name: p.name, amazonAsin: p.amazonAsin,
-            thumbnailUrl: p.images?.[0]?.url ?? null,
-          } : null,
-        }
-      })
-
-      return { reservations, count: reservations.length, status }
+      return await listStockReservations(request.query as any)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/reservations] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -2946,41 +2308,6 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   //
   // The body is ONE function so the batch route below cannot drift from
   // it: `adjustOneLocation` is the single cell, the batch is a loop.
-  const ALLOWED_ADJUST_REASONS = ['MANUAL_ADJUSTMENT', 'INVENTORY_COUNT', 'WRITE_OFF'] as const
-  type AdjustReason = (typeof ALLOWED_ADJUST_REASONS)[number]
-  const adjustReasonOf = (raw: unknown): AdjustReason =>
-    (ALLOWED_ADJUST_REASONS as readonly string[]).includes(String(raw ?? '')) ? (raw as AdjustReason) : 'MANUAL_ADJUSTMENT'
-
-  class NoLocationError extends Error { code = 'NO_LOCATION' as const }
-
-  async function adjustOneLocation(input: { productId: string; locationId: string; value: number; reason: AdjustReason; notes?: string; actor: string }) {
-    const { productId, locationId, value, reason, notes, actor } = input
-    const location = await prisma.stockLocation.findUnique({ where: { id: locationId }, select: { type: true } })
-    if (!location) throw new NoLocationError('Location not found')
-
-    // Fresh server-side read → delta derived here, never from the client.
-    const existing = await prisma.stockLevel.findFirst({
-      where: { locationId, productId, variationId: null },
-      select: { quantity: true, reserved: true },
-    })
-    const currentQuantity = existing?.quantity ?? 0
-    const currentReserved = existing?.reserved ?? 0
-    const adj = computeLocationAdjustment({ locationType: location.type, currentQuantity, currentReserved, value })
-
-    let movement: unknown = null
-    if (!adj.noop) {
-      movement = await applyStockMovement({ productId, locationId, change: adj.change, reason, notes, actor })
-    }
-    // Recompute the product's split so a grid cell can reconcile.
-    const levels = await prisma.stockLevel.findMany({
-      where: { productId },
-      select: { quantity: true, reserved: true, available: true, locationId: true, location: { select: { type: true } } },
-    })
-    const totals = summarizeProductStock(levels.map((l) => ({ locationType: l.location.type, quantity: l.quantity })))
-    const level = levels.find((l) => l.locationId === locationId)
-    return { noop: adj.noop, movement, totals, quantity: level?.quantity ?? 0, reserved: level?.reserved ?? 0, available: level?.available ?? 0 }
-  }
-
   fastify.post('/stock/adjust-location', async (request, reply) => {
     try {
       const body = (request.body ?? {}) as { productId?: string; locationId?: string; value?: number; reason?: string; notes?: string }
@@ -3717,7 +3044,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true, ...result }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/transfer] failed')
-      return reply.code(400).send({ error: error?.message ?? String(error) })
+      return reply.code(400).send({ error: error?.message ?? String(error), ...(error instanceof ProtectedLocationError ? { code: error.code } : {}) })
     }
   })
 
@@ -3741,15 +3068,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'quantity must be > 0' })
       }
       // Shared stock step 4 — a product that sells from a pool: its listings follow the pool, so a
-      // hold on this business's own stock protects nothing a buyer can see. Say so instead.
-      const { pooledNow } = await import('../services/stock-pool/pool-guard.js')
-      if ((await pooledNow(prisma, [body.productId])).has(body.productId)) {
-        return reply.code(409).send({
-          error: 'This product sells from shared stock. Its listings follow that stock, so a hold on your own stock would not hold anything buyers see. Holds for orders are made in the shared stock automatically.',
-          code: 'pooled_product',
-        })
-      }
-      const reservation = await reserveStock({
+      // hold on this business's own stock protects nothing a buyer can see. Say so instead (placeHold).
+      // AS.5 — placeHold also re-advertises the product: a hold changes `available` but runs no movement.
+      const reservation = await placeHold({
         productId: body.productId,
         variationId: body.variationId,
         locationId: body.locationId,
@@ -3759,25 +3080,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         ttlMs: body.ttlMs,
         actor: 'manual-reserve',
       })
-      // AS.5 — a reservation changes StockLevel.available but (unlike
-      // movements) never ran the cascade, so Following FBM listings kept
-      // advertising the reserved units until the next movement or the 30-min
-      // drift heal. Fire-and-forget recascade closes that window.
-      void (async () => {
-        try {
-          const { recascadeProduct } = await import('../services/stock-movement.service.js')
-          await recascadeProduct(body.productId!, {
-            reason: 'MANUAL_ADJUSTMENT',
-            referenceType: 'RESERVATION',
-            referenceId: reservation.id,
-            actor: 'manual-reserve',
-          })
-        } catch (err) {
-          fastify.log.warn({ err }, '[stock/reserve] recascade failed (non-fatal)')
-        }
-      })()
       return { ok: true, reservation }
     } catch (error: any) {
+      if (error instanceof PooledHoldRefusal) return reply.code(409).send({ error: error.message, code: error.code })
       fastify.log.error({ err: error }, '[stock/reserve] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }
@@ -3789,9 +3094,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       const { reservationId } = request.params as { reservationId: string }
       // Own holds; and (re-review 2026-09-26) a hold of this business's stock kept for another business's
       // cancelled or refunded order, lender only — the page confirms first.
-      const updated = await releaseReservationFromStockPage(reservationId, {
-        actor: 'manual-release',
-      })
+      // AS.5 — releaseHold re-advertises the freed units (mirror of /stock/reserve).
+      const updated = await releaseHold(reservationId, { actor: 'manual-release' })
       const lent = updated as { consumerWorkspaceId?: string | null; consumerOrderRef?: string | null; quantity?: number }
       if (lent.consumerWorkspaceId) {
         const { auditLogService } = await import('../services/audit-log.service.js')
@@ -3801,27 +3105,6 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           metadata: { consumerWorkspaceId: lent.consumerWorkspaceId, orderRef: lent.consumerOrderRef, quantity: lent.quantity },
         })
       }
-      // AS.5 — mirror of /stock/reserve: releasing frees `available`, so
-      // re-advertise it promptly instead of waiting for the drift heal.
-      void (async () => {
-        try {
-          const sl = await prisma.stockLevel.findUnique({
-            where: { id: (updated as { stockLevelId: string }).stockLevelId },
-            select: { productId: true },
-          })
-          if (sl?.productId) {
-            const { recascadeProduct } = await import('../services/stock-movement.service.js')
-            await recascadeProduct(sl.productId, {
-              reason: 'MANUAL_ADJUSTMENT',
-              referenceType: 'RESERVATION',
-              referenceId: reservationId,
-              actor: 'manual-release',
-            })
-          }
-        } catch (err) {
-          fastify.log.warn({ err }, '[stock/release] recascade failed (non-fatal)')
-        }
-      })()
       return { ok: true, reservation: updated }
     } catch (error: any) {
       // Shared stock — a hold made here for another business's order: refused with its reason.
@@ -3947,6 +3230,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         return result
       } catch (error: any) {
         const msg = error?.message ?? String(error)
+        // 08 S2 (F7) — a channel's number never changes the FBA mirror; a Shopify location takes only Shopify's.
+        if (error instanceof ProtectedLocationError) return reply.code(400).send({ error: msg, code: error.code })
         const status = msg.includes('not found') ? 404 : msg.includes('no resolved productId') ? 409 : 500
         fastify.log.error({ err: error }, '[stock/channel-events/:id/apply] failed')
         return reply.code(status).send({ error: msg })

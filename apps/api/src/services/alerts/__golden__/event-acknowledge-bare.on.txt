@@ -1,0 +1,2 @@
+200
+{"workspaceId":"nexus_legacy_workspace","id":"golden-event-3","ruleId":"golden-rule-b","value":30,"status":"ACKNOWLEDGED","triggeredAt":"2026-09-15T09:30:00.000Z","acknowledgedAt":"2026-09-15T10:00:00.000Z","acknowledgedBy":null,"resolvedAt":null,"resolvedBy":null,"notes":null,"notifications":null,"createdAt":"2026-09-15T09:30:00.000Z","updatedAt":"2026-09-15T10:00:00.000Z"}

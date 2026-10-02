@@ -31,8 +31,11 @@ import {
 } from '../services/sp-api-pricing.service.js'
 import { pushPriceUpdate } from '../services/pricing-outbound.service.js'
 import { writeChannelPrices } from '../services/pim/channel-price-write.service.js'
-import { endPromotionSales, runPromotionScheduler } from '../services/promotion-scheduler.service.js'
+import { runPromotionScheduler } from '../services/promotion-scheduler.service.js'
 import { Prisma } from '@prisma/client'
+import { readRepricerStatus } from '../services/pricing/pricing-rule.service.js'
+import { createPromotion, endPromotion, listPromotions, PromotionError, type PromotionInput } from '../services/pricing/promotion.service.js'
+import { readPriceHistory } from '../services/pricing/pricing-read.service.js'
 
 const pricingRoutes: FastifyPluginAsync = async (fastify) => {
   // B.1 + F.1.b — KPI strip on /pricing index. Single endpoint serves the
@@ -866,90 +869,9 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
   // immediately via the manual "Run scheduler now" button on the UI).
   fastify.post('/pricing/promotions', async (request, reply) => {
     try {
-      const body = (request.body ?? {}) as {
-        name?: string
-        startDate?: string
-        endDate?: string
-        channel?: string | null
-        marketplace?: string | null
-        productType?: string | null
-        description?: string | null
-        expectedLift?: number
-        action?: {
-          type: 'PERCENT_OFF' | 'FIXED_PRICE'
-          value: number
-        }
-      }
-      if (!body.name?.trim()) {
-        return reply.code(400).send({ error: 'name is required' })
-      }
-      if (!body.startDate || !body.endDate) {
-        return reply.code(400).send({ error: 'startDate and endDate are required (YYYY-MM-DD)' })
-      }
-      const start = new Date(body.startDate)
-      const end = new Date(body.endDate)
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-        return reply.code(400).send({ error: 'invalid date' })
-      }
-      if (end < start) {
-        return reply.code(400).send({ error: 'endDate must be ≥ startDate' })
-      }
-      if (body.action) {
-        if (!['PERCENT_OFF', 'FIXED_PRICE'].includes(body.action.type)) {
-          return reply
-            .code(400)
-            .send({ error: 'action.type must be PERCENT_OFF or FIXED_PRICE' })
-        }
-        if (
-          !Number.isFinite(body.action.value) ||
-          body.action.value <= 0 ||
-          (body.action.type === 'PERCENT_OFF' && body.action.value >= 100)
-        ) {
-          return reply.code(400).send({
-            error:
-              'action.value must be > 0 (and < 100 for PERCENT_OFF)',
-          })
-        }
-      }
-
-      const created = await prisma.$transaction(async (tx) => {
-        const event = await tx.retailEvent.create({
-          data: {
-            name: body.name!,
-            startDate: start,
-            endDate: end,
-            channel: body.channel ?? null,
-            marketplace: body.marketplace ?? null,
-            productType: body.productType ?? null,
-            description: body.description ?? null,
-            expectedLift:
-              body.expectedLift != null
-                ? new Prisma.Decimal(body.expectedLift)
-                : new Prisma.Decimal(1),
-            source: 'CUSTOM',
-            isActive: true,
-          },
-        })
-        if (body.action) {
-          await tx.retailEventPriceAction.create({
-            data: {
-              eventId: event.id,
-              channel: body.channel ?? null,
-              marketplace: body.marketplace ?? null,
-              productType: body.productType ?? null,
-              action: body.action.type,
-              value: new Prisma.Decimal(body.action.value),
-              isActive: true,
-            },
-          })
-        }
-        return tx.retailEvent.findUnique({
-          where: { id: event.id },
-          include: { priceActions: true },
-        })
-      })
-      return created
+      return await createPromotion((request.body ?? {}) as PromotionInput)
     } catch (error: any) {
+      if (error instanceof PromotionError) return reply.code(error.status).send({ error: error.message })
       fastify.log.error({ err: error }, '[pricing/promotions POST] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -962,44 +884,7 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
   // flipping NEXUS_REPRICER_LIVE.
   fastify.get('/pricing/repricer-status', async (_request, reply) => {
     try {
-      const recent = await prisma.auditLog.findMany({
-        where: { entityType: 'RepricerRun' },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          entityId: true,
-          action: true,
-          after: true,
-          createdAt: true,
-        },
-      })
-      // Server can't reliably read the env vars on the client without
-      // exposing them, but it CAN tell the client what state THIS process
-      // sees — and that's what matters for "is the cron firing?".
-      const liveMode = process.env.NEXUS_REPRICER_LIVE === '1'
-      const cronEnabled = process.env.NEXUS_ENABLE_PRICING_CRON === '1'
-      const thresholdPct = Math.max(
-        0,
-        Number(process.env.NEXUS_REPRICER_THRESHOLD_PCT ?? '1'),
-      )
-      return {
-        config: { cronEnabled, liveMode, thresholdPct },
-        ticks: recent.map((r) => {
-          const after = (r.after ?? {}) as any
-          return {
-            runId: r.entityId,
-            action: r.action,
-            occurredAt: r.createdAt,
-            liveMode: after.liveMode ?? false,
-            snapshotsScanned: after.snapshotsScanned ?? 0,
-            enqueued: after.enqueued ?? 0,
-            dryRunWouldEnqueue: after.dryRunWouldEnqueue ?? 0,
-            skippedSubThreshold: after.skippedSubThreshold ?? 0,
-            durationMs: after.durationMs ?? 0,
-          }
-        }),
-      }
+      return await readRepricerStatus()
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing/repricer-status] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1069,33 +954,10 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     '/pricing/promotions/:id',
     async (request, reply) => {
       try {
-        let eventName = ''
-        await prisma.$transaction(async (tx) => {
-          const event = await tx.retailEvent.findUnique({
-            where: { id: request.params.id },
-            select: { id: true, name: true },
-          })
-          if (!event) {
-            throw Object.assign(new Error('not found'), { code: 'P2025' })
-          }
-          await tx.retailEvent.update({
-            where: { id: event.id },
-            data: { isActive: false },
-          })
-          await tx.retailEventPriceAction.updateMany({
-            where: { eventId: event.id },
-            data: { isActive: false },
-          })
-          eventName = event.name
-        })
-        // 2026-10-01 — every sale this promotion set ends through the channel price door (cleared and queued; on Amazon
-        // with `saleRemoved`). It was a raw `updateMany` of `salePrice` to null: nothing queued, the channels kept the sale.
-        const salesEnded = await endPromotionSales(prisma, request.params.id, eventName)
-        return { ok: true, salesEnded }
+        // The event and its actions off; every sale it set ends through the channel price door (endPromotion).
+        return await endPromotion(request.params.id)
       } catch (error: any) {
-        if (error?.code === 'P2025') {
-          return reply.code(404).send({ error: 'event not found' })
-        }
+        if (error instanceof PromotionError) return reply.code(error.status).send({ error: error.message })
         fastify.log.error(
           { err: error },
           '[pricing/promotions DELETE] failed',
@@ -1112,40 +974,7 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
   // (promotion-scheduler.service.ts:35-36): now ± 12h.
   fastify.get('/pricing/promotions', async (_request, reply) => {
     try {
-      const now = new Date()
-      const events = await prisma.retailEvent.findMany({
-        orderBy: [{ startDate: 'asc' }],
-        include: {
-          priceActions: {
-            where: { isActive: true },
-            orderBy: { createdAt: 'asc' },
-          },
-        },
-      })
-      const buckets = {
-        active: [] as typeof events,
-        upcoming: [] as typeof events,
-        ended: [] as typeof events,
-      }
-      for (const e of events) {
-        if (e.startDate <= now && e.endDate >= now) buckets.active.push(e)
-        else if (e.startDate > now) buckets.upcoming.push(e)
-        else buckets.ended.push(e)
-      }
-      return {
-        counts: {
-          active: buckets.active.length,
-          upcoming: buckets.upcoming.length,
-          ended: buckets.ended.length,
-          total: events.length,
-        },
-        active: buckets.active,
-        // Cap upcoming at next 25 — calendar view fits ~3 months ahead
-        // without overwhelming the operator.
-        upcoming: buckets.upcoming.slice(0, 25),
-        // Last 25 ended for "did the lift land" lookback.
-        ended: buckets.ended.slice(-25).reverse(),
-      }
+      return await listPromotions()
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing/promotions] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1359,63 +1188,7 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
       if (!q.productId && !q.sku) {
         return reply.code(400).send({ error: 'productId or sku required' })
       }
-
-      const where: Prisma.PriceChangeEventWhereInput = {}
-      if (q.productId) where.productId = q.productId
-      if (q.sku) where.sku = q.sku
-      if (q.channel) where.channel = q.channel.toUpperCase()
-      if (q.marketplace) where.marketplace = q.marketplace.toUpperCase()
-      if (q.from || q.to) {
-        const changedAt: Prisma.DateTimeFilter = {}
-        if (q.from) changedAt.gte = new Date(q.from)
-        if (q.to) changedAt.lte = new Date(q.to)
-        where.changedAt = changedAt
-      }
-
-      const limit = Math.min(parseInt(q.limit ?? '100', 10) || 100, 500)
-
-      const rows = await prisma.priceChangeEvent.findMany({
-        where,
-        orderBy: { changedAt: 'desc' },
-        take: limit,
-      })
-
-      // Per-coordinate sparkline series, oldest→newest so the chart reads
-      // left-to-right. CLEARs (newPrice null) are skipped as points but
-      // still appear in the events list below.
-      const seriesMap = new Map<
-        string,
-        { channel: string; marketplace: string; points: Array<{ t: Date; price: number }> }
-      >()
-      for (const e of [...rows].reverse()) {
-        if (e.newPrice == null) continue
-        const key = `${e.channel}|${e.marketplace}`
-        let s = seriesMap.get(key)
-        if (!s) {
-          s = { channel: e.channel, marketplace: e.marketplace, points: [] }
-          seriesMap.set(key, s)
-        }
-        s.points.push({ t: e.changedAt, price: Number(e.newPrice) })
-      }
-
-      return {
-        count: rows.length,
-        events: rows.map((e) => ({
-          id: e.id,
-          channel: e.channel,
-          marketplace: e.marketplace,
-          fulfillmentMethod: e.fulfillmentMethod,
-          oldPrice: e.oldPrice == null ? null : Number(e.oldPrice),
-          newPrice: e.newPrice == null ? null : Number(e.newPrice),
-          currency: e.currency,
-          source: e.source,
-          reason: e.reason,
-          ruleId: e.ruleId,
-          actor: e.actor,
-          changedAt: e.changedAt,
-        })),
-        series: [...seriesMap.values()],
-      }
+      return await readPriceHistory(q)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing/price-history] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })

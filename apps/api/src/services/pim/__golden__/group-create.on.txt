@@ -1,0 +1,2 @@
+201
+{"group":{"workspaceId":"nexus_legacy_workspace","id":"<id 1>","code":"golden_new","label":"New group","description":"about","sortOrder":4,"createdAt":"<time>","updatedAt":"<time>"}}

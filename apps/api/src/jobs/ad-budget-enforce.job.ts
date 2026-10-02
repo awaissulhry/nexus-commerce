@@ -15,7 +15,12 @@ let task: ReturnType<typeof cron.schedule> | null = null
 let running = false
 
 export async function runBudgetEnforceOnce(): Promise<string> {
-  const apply = process.env.NEXUS_BUDGET_ENFORCE_APPLY === '1'
+  // R16 — the lower of the env (apply only with exactly '1') and this business's switch: OFF stands down, OBSERVE
+  // computes and never applies.
+  const { engineMode } = await import('../services/automation/engine-switch.service.js')
+  const gate = await engineMode('budget-enforce', process.env.NEXUS_BUDGET_ENFORCE_APPLY === '1' ? 'AUTO' : 'OBSERVE')
+  if (gate.mode === 'OFF') return `skipped: ${gate.note}`
+  const apply = gate.mode === 'AUTO'
   const r = await applyBudgetEnforcement({ dryRun: !apply, actor: 'automation:budget-manager-cron' })
   return `plans=${r.result.totals.plans} budgetChanges=${r.result.totals.budgetChanges} applied=${r.budgetApplied} suppress=${r.suppressed} restore=${r.restored} failed=${r.failed} ${r.dryRun ? '(dry-run)' : '(LIVE)'}`
 }

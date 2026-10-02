@@ -86,6 +86,8 @@ const SETTINGS_NAV_PERMS: Array<[string, string]> = [
   ['/channels/mapping', 'pim.manage'],
   ['/settings/advertising', 'settings.integrations.manage'],
   ['/settings/ai', 'settings.integrations.manage'],
+  // MCP full control C9 — Claude's rules and activity are read with ai.view (the API's own rule).
+  ['/settings/ai/claude', 'ai.view'],
   ['/settings/api-keys', 'settings.apikeys.manage'],
   ['/settings/webhooks', 'settings.webhooks.manage'],
   ['/settings/audit', 'audit.view'],

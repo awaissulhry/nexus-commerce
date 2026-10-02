@@ -54,6 +54,25 @@ describe('HX.4 parseActor — source + origin from the actor string', () => {
     expect(parseActor('awais').source).toBe('operator')
   })
 
+  /**
+   * R2 (MCP full control, part 06 gap 11) — rows written before the actor fix keep their old strings, and the feed
+   * must attribute them exactly as it attributes the same writer's new rows: a doubled `automation:` prefix
+   * (auto-bid, `bid_to_target_acos`, autopilot plans) and the budget-pool cron's `user:cron-budget-pool`, which
+   * read as a PERSON named "cron-budget-pool".
+   */
+  it('R2 — reads a doubled automation: prefix (old rows) as the writer it names', () => {
+    expect(parseActor('automation:automation:auto-bid')).toEqual(parseActor('automation:auto-bid'))
+    expect(parseActor('automation:automation:cmehif9xk0001s6mvabcd1234').origin).toMatchObject({ kind: 'rule', id: 'cmehif9xk0001s6mvabcd1234' })
+    expect(parseActor('automation:automation:rank-defend-clx9f2abc').origin).toMatchObject({ kind: 'schedule', id: 'clx9f2abc' })
+  })
+
+  it('R2 — reads the budget-pool cron\'s old user:cron-budget-pool as that engine, never as a person', () => {
+    const old = parseActor('user:cron-budget-pool')
+    expect(old.source).toBe('automation')
+    expect(old).toEqual(parseActor('automation:budget-pool-rebalance'))
+    expect(old.origin).toMatchObject({ kind: 'job', id: null, name: 'budget pool rebalance' })
+  })
+
   it('treats an absent or system actor as system, never as a person', () => {
     for (const a of [null, undefined, '', 'system']) {
       expect(parseActor(a as string | null).source).toBe('system')

@@ -59,7 +59,7 @@ vi.mock('../../db.js', () => {
   channelListingSnapshot: { findMany: m.snapshots }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => { const out = await fn(db); m.events.push('commit'); return out } }
   return { default: db }
 })
-import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult } from './studio-publication.service.js'
+import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult, reviewStudioPublication, publicationResultFor } from './studio-publication.service.js'
 
 // Existing recovery tests explicitly review a selection before their send/result scenario.
 async function previewStudioPublication(...args: Parameters<typeof previewRaw>) {
@@ -351,4 +351,58 @@ it('an error that names no field still blocks the whole review, photos included'
   expect(await previewRaw('parent', ebayScope, 'user')).toMatchObject({ id: null })
   expect(m.rows.size).toBe(0)
   m.photoFields.on = false
+})
+
+// MCP full control L3 — Claude's review saves nothing, and a publication's result is the business's, not one person's.
+const sameReview = (review: Record<string, unknown>) => ({ ...review, id: null, expiresAt: 'any' })
+
+it('L3: reviews exactly what the studio reviews, and saves nothing — no BulkOperation row', async () => {
+  m.facts.mockResolvedValue(existingFacts())
+  m.drift.mockResolvedValue([contentObservation()])
+  const review = await reviewStudioPublication('parent', scope)
+  expect(review.id).toBeNull()
+  expect(m.rows.size).toBe(0)
+  expect(m.amazon).not.toHaveBeenCalled(); expect(m.ensure).not.toHaveBeenCalled()
+  const stored = await previewRaw('parent', scope, 'user')
+  expect(stored.id).toEqual(expect.any(String))
+  expect(sameReview(review)).toEqual(sameReview(stored))
+})
+
+it('L3: reviews a Shopify family without saving its content document or starting its draft listing', async () => {
+  const shopScope = { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop-b', listingId: 'shop-alias' }
+  m.facts.mockResolvedValue({ ...facts(), scope: shopScope, excluded: 0 })
+  m.shopRead.mockResolvedValue({ initialized: false, draft: { options: ['Size'] }, revision: 'uninitialized' })
+  m.shopPreview.mockResolvedValue({ errors: [], initialized: false, revision: 'uninitialized', remoteRevision: null, draft: { options: ['Size'] }, variants: [{ id: 'child', sku: 'CHILD' }], changes: { newProductStatus: 'DRAFT' }, locations: [{ id: 'shop-location', name: 'Warehouse', isActive: true }] })
+  const review = await reviewStudioPublication('parent', shopScope)
+  expect(review).toMatchObject({ id: null, visibility: 'DRAFT', locations: [{ id: 'shop-location', name: 'Warehouse' }] })
+  expect(m.shopSave).not.toHaveBeenCalled()
+  expect(m.shopPreview).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, true)
+  expect(m.rows.size).toBe(0)
+})
+
+it('L3: names a publication still waiting for its result at this destination, whoever submitted it', async () => {
+  const first = await previewStudioPublication('parent', scope, 'colleague')
+  expect(await submitStudioPublication('parent', first.id!, {}, 'colleague')).toMatchObject({ status: 'SUBMITTED' })
+  const rows = m.rows.size
+  const review = await reviewStudioPublication('parent', scope)
+  expect(review).toMatchObject({ id: null, previousPublicationId: first.id,
+    issues: expect.arrayContaining([expect.objectContaining({ severity: 'error', message: expect.stringContaining(first.id!) })]) })
+  expect(m.rows.size).toBe(rows)
+})
+
+it('L3: reads and settles a publication in the business, whoever submitted it; an unknown id is not found', async () => {
+  const review = await previewStudioPublication('parent', scope, 'colleague')
+  await submitStudioPublication('parent', review.id!, {}, 'colleague')
+  // The studio's own read stays the submitter's.
+  await expect(studioPublicationResult('parent', review.id!, 'approver')).rejects.toThrow('not found')
+  expect(await publicationResultFor(review.id!)).toMatchObject({ id: review.id, status: 'SUBMITTED' })
+  m.amazonStatus.mockResolvedValue({ results: [{ sku: 'SELLER-SKU', failed: false }, { sku: 'SELLER-CHILD', failed: false }] })
+  expect(await publicationResultFor(review.id!)).toMatchObject({ id: review.id, status: 'ACCEPTED' })
+  expect(m.amazonStatus).toHaveBeenCalledWith('feed-42', 'seller-b', ['SELLER-SKU', 'SELLER-CHILD'])
+  expect(m.rows.get(review.id!).status).toBe('ACCEPTED')
+  // Settled once: a second read returns the stored result without asking Amazon again.
+  m.amazonStatus.mockClear()
+  expect(await publicationResultFor(review.id!)).toMatchObject({ status: 'ACCEPTED' })
+  expect(m.amazonStatus).not.toHaveBeenCalled()
+  await expect(publicationResultFor('no-such-publication')).rejects.toThrow('not found')
 })

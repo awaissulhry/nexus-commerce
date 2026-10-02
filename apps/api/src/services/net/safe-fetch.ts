@@ -39,6 +39,8 @@ export interface SafeFetchOptions {
   timeoutMs: number
   /** How many redirects to follow; 0 (the default) refuses every redirect. */
   maxRedirects?: number
+  /** Only https: the first address and every redirect hop (a photo from a link, MCP full control L11). */
+  httpsOnly?: boolean
 }
 
 export interface SafeFetchResult {
@@ -100,6 +102,7 @@ export async function safeFetch(sourceUrl: string, options: SafeFetchOptions): P
   let url = new URL(sourceUrl)
   const maxRedirects = options.maxRedirects ?? 0
   for (let hop = 0; ; hop++) {
+    if (options.httpsOnly && url.protocol !== 'https:') throw new SafeFetchError('Only https:// addresses are fetched', 'refused')
     const address = await checkedAddress(url)
     const result = await getPinned(url, address, options, hop < maxRedirects)
     if (result.kind === 'body') return { buffer: result.buffer, contentType: result.contentType, url }

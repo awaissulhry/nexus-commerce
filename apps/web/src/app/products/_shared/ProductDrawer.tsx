@@ -60,6 +60,7 @@ import { Listbox } from '@/design-system/components/Listbox'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { usePermission } from '@/lib/auth/AuthProvider'
 import { sharedContentAddress } from '@nexus/shared/content-language'
 import { cn } from '@/lib/utils'
 import {
@@ -2694,6 +2695,7 @@ function PricingTab({
   channelListings: NonNullable<ProductDetail['channelListings']>
 }) {
   const { t } = useTranslations()
+  const canManageTiers = usePermission('pricing.tiers.manage')
   const baseNum = basePrice == null ? null : Number(basePrice)
   const sorted = [...channelListings].sort((a, b) => {
     if (a.channel !== b.channel) return a.channel.localeCompare(b.channel)
@@ -2808,7 +2810,8 @@ function PricingTab({
           Sits between the master listings and the repricing rules
           because it's a pure-pricing concern (volume + segment),
           while repricing is a market-reactive concern. */}
-      <TierPricingSection productId={productId} basePrice={baseNum} />
+      {/* S1 (F11) — tier prices are restricted money: the section reads and writes with pricing.tiers.manage. */}
+      {canManageTiers && <TierPricingSection productId={productId} basePrice={baseNum} />}
 
       {/* W4.9 — Repricing rules per (channel, marketplace) for this
           product. Sub-section, not a separate drawer tab, because

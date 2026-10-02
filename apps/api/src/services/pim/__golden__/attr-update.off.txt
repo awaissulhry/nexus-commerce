@@ -1,0 +1,2 @@
+200
+{"attribute":{"workspaceId":"nexus_legacy_workspace","id":"golden-attr-text","code":"golden_material","label":"Fabric","description":null,"groupId":"golden-group-1","type":"text","validation":null,"defaultValue":null,"localizable":true,"scope":"global","sortOrder":2,"semanticKey":null,"placement":"shared","placementChannels":[],"archivedAt":null,"createdAt":"<time>","updatedAt":"<time>"}}

@@ -7,6 +7,16 @@
  * be tested there:
  *   · `stock-concurrency.vitest.test.ts` (AE.1) — simultaneous stock writes lose nothing. A race cannot
  *     happen on one connection, so the test would pass whether or not the code is safe.
+ *   · `stock-transfer-concurrency.vitest.test.ts` (MCP full control 08 S2, 2026-10-01) — a transfer racing sales
+ *     commits both movements together: no reader sees units in flight, and a failed arrival loses nothing.
+ *   · `stock/stock-reconcile-concurrency.vitest.test.ts` (MCP full control 08 S6, 2026-10-01) — Claude's count
+ *     reconcile racing sales: the variance is applied once, every sale counts, nothing goes below zero.
+ *   · `stock/stock-source-tool-postgres.vitest.test.ts` (MCP full control 08 S8, 2026-10-02) — Claude's switch to
+ *     another business's lent stock by SKU: owner only, the listing follows the pool, undo switches back.
+ *   · `supply/receive-concurrency.vitest.test.ts` (MCP full control 08 S10, 2026-10-02) — two identical receives through
+ *     the inbound receive route at once add the stock once: each line is locked while it is read and moved.
+ *   · `supply/po-transition-concurrency.vitest.test.ts` (MCP full control 08 S9, 2026-10-02) — a PO transition is a
+ *     compare-and-set: concurrent sends e-mail the supplier once; a send and a cancel cannot both happen.
  *   · `copy-run.vitest.test.ts` (AE.3, R-AE-16) — a first copy end to end through the real catalog
  *     transfer engine, whose apply holds a transaction while it checkpoints on a second connection.
  *   · `stock-pool-concurrency.vitest.test.ts` (shared stock, plan 2026-09-19) — two businesses selling the
@@ -40,10 +50,27 @@
  *   · `category-tree-concurrency.vitest.test.ts` (2026-09-26) — concurrent category moves, creates, membership
  *     replacements and Categories workspace commands serialize on the business's category-tree lock.
  *   · `fiscal-numbering-postgres.vitest.test.ts` (MCP full control #14, 2026-10-01) — invoice and credit-note numbers:
- *     the counter's ON CONFLICT target must be its real key, and a forced race numbers 1…N with no duplicate or gap.
+ *     the counter's ON CONFLICT target must be its real key, and a forced race numbers 1…N with no duplicate or gap;
+ *     two businesses numbering the same year at the same moment each get their own series (plan O2).
+ *   · `services/identity/identity-foreign-postgres.vitest.test.ts` (MCP full control I5, 2026-10-01) — the SECURITY DEFINER
+ *     function that tells a business which of its own channel ids another business holds: as the runtime login, with
+ *     members and non-members, it must name nothing it may not and answer no id the caller does not hold.
+ *   · `services/identity/identity-merge-postgres.vitest.test.ts` (MCP full control I11, 2026-10-01) — merging a duplicate
+ *     product while a stock writer or an order line reaches it: the merge waits on the product row and then refuses.
+ *   · `refunds/refund-cap-postgres.vitest.test.ts` (MCP full control 07, 2026-10-02) — two refunds of two returns of one
+ *     order at the same moment never exceed what the order paid (forced race on the order's row lock).
+ *   · `services/identity/channel-item-claim-postgres.vitest.test.ts` (MCP full control I12, 2026-10-02) — the trigger that
+ *     claims a seller-owned channel id for one listing, under two businesses writing it at the same moment.
  *   · `routes/mcp-cross-business-postgres.vitest.test.ts` (MCP.8, 2026-09-30) — Claude's connection for one business
  *     never reaches another: the /mcp route, the Approvals and Connected apps routes and every tool, run as the
  *     restricted runtime login, so row-level security holds exactly as it does in production.
+ *   · `services/automation-state-two-business-postgres.vitest.test.ts` (MCP full control R1, 2026-10-01) — the ads
+ *     automation dial and halt, the fleet halt and the review mailer pause are one row PER BUSINESS under row security:
+ *     a halt in one business never stops another, and the legacy business keeps its old row id.
+ *   · `services/agents/change-plan-postgres.vitest.test.ts` (MCP full control C6, 2026-10-01) — a 200-step change plan:
+ *     a stopped worker resumes, two workers at once run every step exactly once, a stale step is skipped.
+ *   · `services/advertising/ads-claude-bulk-postgres.vitest.test.ts` (MCP full control A7, 2026-10-02) — an approved
+ *     bulk bid change and an engine write on one target: when the drain claims both at once, exactly one wins.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -124,6 +151,11 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },
   { name: 'Amazon Finances dry run and order attribution on the base schema (A2, A5; A3/A4 held)', file: 'src/services/amazon-finances-base-postgres.vitest.test.ts', expect: 9 },
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },
+  { name: 'a transfer racing sales is one transaction (08 S2 F8: no units in flight, a failed arrival loses nothing)', file: 'src/services/stock-transfer-concurrency.vitest.test.ts', expect: 4 },
+  { name: 'a stock count reconciled by Claude while sales land (08 S6: the variance once, every sale counted, never below zero)', file: 'src/services/stock/stock-reconcile-concurrency.vitest.test.ts', expect: 3 },
+  { name: 'set-stock-source end to end (08 S8: preview per listing, a non-owner refused, the owner switches to the lent stock and undo switches back, other business not found)', file: 'src/services/stock/stock-source-tool-postgres.vitest.test.ts', expect: 4 },
+  { name: 'a purchase order moves once (08 S9: five sends at once, one e-mail; a send racing a cancel, one wins)', file: 'src/services/supply/po-transition-concurrency.vitest.test.ts', expect: 3 },
+  { name: 'one receive per arrival through the route (08 S10: five identical receives add the stock once; two different ones end at one)', file: 'src/services/supply/receive-concurrency.vitest.test.ts', expect: 3 },
   { name: 'an order line is taken once (re-reads, oversold lines, surplus holds and splits, reconcile, races; Amazon FBM, Shopify, MCF)', file: 'src/services/order-stock-once-postgres.vitest.test.ts', expect: 21 },
   { name: 'one stock model across channels (crash heal, multi-line totals, cancellation after shipment, races)', file: 'src/services/stock-model-postgres.vitest.test.ts', expect: 48 },
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },
@@ -136,11 +168,12 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'eBay mixed own and pool stock (global Product locks, durable cancellation retries)', file: 'src/services/ebay-order-pool-postgres.vitest.test.ts', expect: 12 },
   { name: 'dormant eBay ORDER_CONFIRMATION execution (one read, own account, atomic receipt)', file: 'src/services/cx/ingress/ebay-order-processing-postgres.vitest.test.ts', expect: 13 },
   { name: 'order cancellation gives back what the order took at ingest, never shipped units (eBay, Amazon FBM/FBA, Shopify; markers, races, re-run, owner notice)', file: 'src/services/order-cancellation/order-cancellation-postgres.vitest.test.ts', expect: 17 },
-  { name: 'invoice and credit-note numbers (counter conflict key; sequential, and a forced race gives 1…N with no duplicate or gap)', file: 'src/services/fiscal-numbering-postgres.vitest.test.ts', expect: 4 },
+  { name: 'invoice and credit-note numbers (counter conflict key; sequential, and a forced race gives 1…N with no duplicate or gap; two businesses each number their own series)', file: 'src/services/fiscal-numbering-postgres.vitest.test.ts', expect: 6 },
+  { name: 'refund cap under a forced race (two returns of one order: what was paid is never exceeded)', file: 'src/services/refunds/refund-cap-postgres.vitest.test.ts', expect: 2 },
   { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 16 },
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
   { name: 'Link copy: variations inherit an attribute with no column in the receiving business (AE.3)', file: 'src/services/assortment/copy-inherited-attribute.vitest.test.ts', expect: 3 },
-  { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account, alias and Amazon market checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 20 },
+  { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account, alias and Amazon market checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 22 },
   { name: 'product media pop-up save (Lane C: one save bound by expect; two pop-ups on one set or one list, one wins; a gallery save is announced)', file: 'src/services/images/media-popup-save.vitest.test.ts', expect: 4 },
   { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 13 },
   { name: 'draft listings race (product sheet create path step 2: two concurrent first saves create one set)', file: 'src/services/pim/draft-listing-postgres.vitest.test.ts', expect: 2 },
@@ -157,10 +190,16 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'product cache batch writes (exact values, parents, deletion, full rollback, runtime RLS and retry races)', file: 'src/services/product-read-cache-batch.vitest.test.ts', expect: 7 },
   { name: 'category tree races (moves, creates, memberships and workspace commands serialize on the tree lock)', file: 'src/services/category-tree-concurrency.vitest.test.ts', expect: 5 },
   { name: 'Amazon Ads drift closes on evidence, per profile (structural reconcile under row security)', file: 'src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts', expect: 1 },
+  { name: 'automation brakes per business (ads dial and halt, fleet halt, review mailer pause, the breaker / target ACOS / halt Claude tunes, and the R16 engine switches: one business never stops another; legacy ids kept)', file: 'src/services/automation-state-two-business-postgres.vitest.test.ts', expect: 5 },
   { name: '"New attribute" race (sheet pop-up A3: two creates of one name leave one attribute and one family link)', file: 'src/services/pim/own-axis-attribute-postgres.vitest.test.ts', expect: 1 },
   { name: 'Shopify sheet draft saves racing (Lane B: one winner per cell, nothing lost, a refused save is not in the draft)', file: 'src/services/shopify/channel-sheet-race-postgres.vitest.test.ts', expect: 2 },
   { name: 'Shopify sheet root-creation proof (one action across 1,000-cell requests; business, account, family, alias and actor bounds; recreated roots; current cell state; expiry; refusal, rollback and a forced first-create race; lost answer)', file: 'src/services/shopify/channel-sheet-root-proof-postgres.vitest.test.ts', expect: 18 },
-  { name: 'Claude for one business never reaches another (MCP.8: every tool with the other business\'s ids, header and query, membership, role, revocation, approvals, tool policy, canary scan)', file: 'src/routes/mcp-cross-business-postgres.vitest.test.ts', expect: 17 },
+  { name: 'Claude for one business never reaches another (MCP.8: every tool with the other business\'s ids, header and query, membership, role, revocation, approvals, tool policy, one URL per business and the same SKU in both, trust levels, Pause and activity, shared accounts, canary scan)', file: 'src/routes/mcp-cross-business-postgres.vitest.test.ts', expect: 26 },
+  { name: 'identity: own channel ids another business holds, named only to its members (MCP full control I5: no probe, deleted and ASIN ignored, runtime-only EXECUTE, audit check #2)', file: 'src/services/identity/identity-foreign-postgres.vitest.test.ts', expect: 8 },
+  { name: 'identity: a merge against a concurrent stock write or order (MCP full control I11: the merge waits and refuses, two merges of one duplicate — one wins)', file: 'src/services/identity/identity-merge-postgres.vitest.test.ts', expect: 5 },
+  { name: 'a 200-step change plan (MCP full control C6: one approval, a stopped worker resumed, two workers at once, each step exactly once, a stale step skipped)', file: 'src/services/agents/change-plan-postgres.vitest.test.ts', expect: 2 },
+  { name: 'identity: one channel item, two businesses, the same moment (MCP full control I12: report mode both succeed with one claim; enforce mode one wins)', file: 'src/services/identity/channel-item-claim-postgres.vitest.test.ts', expect: 2 },
+  { name: 'Claude\'s approved bulk bid change and an engine write on one target (MCP full control A7: both queued, one claim wins, the other waits for it)', file: 'src/services/advertising/ads-claude-bulk-postgres.vitest.test.ts', expect: 2 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

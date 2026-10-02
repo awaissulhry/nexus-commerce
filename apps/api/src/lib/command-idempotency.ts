@@ -42,7 +42,19 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/pim/category-workspace/EBAY/site-assignments': 'ebay-site-assign',
   // One sheet operation (fill, paste, undo): a resend after a lost connection replays its stored answer, never re-applies.
   '/api/products/bulk-save': 'products-bulk-save',
+  // MCP full control C5 — Claude's brakes: one Pause or Resume per press (Resume spends a one-time 2FA code).
+  '/api/claude/pause': 'claude-pause',
+  '/api/claude/resume': 'claude-resume',
+  // C8 — one Undo per click on the activity page.
+  '/api/claude/changes/:id/undo': 'claude-undo',
+  // C6 — one smaller plan per press of "Update plan".
+  '/api/agent/fleet/approvals/:id/plan-amend': 'plan-amend',
+  // R16 — one press of an engine's switch in the Control Room, one move (a double press never flips it twice).
+  '/api/advertising/automation/engine-switch/:key': 'engine-switch',
 }
+
+/** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */
+export const COMMAND_SCOPE_ROUTES: readonly string[] = Object.freeze(Object.keys(COMMAND_SCOPES))
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 

@@ -27,6 +27,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
+import { createPricingRule, deactivatePricingRule, listActivePricingRules, listPricingRulesForVariation, PricingRuleError, updatePricingRule } from '../services/pricing/pricing-rule.service.js'
 
 const VALID_TYPES = new Set([
   'MATCH_LOW',
@@ -52,77 +53,9 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/pricing-rules', async (request, reply) => {
     try {
       const body = (request.body ?? {}) as CreateRuleBody
-      if (!body.name || typeof body.name !== 'string') {
-        return reply.code(400).send({ error: 'name is required' })
-      }
-      if (!body.type || !VALID_TYPES.has(body.type)) {
-        return reply.code(400).send({
-          error: `type must be one of ${[...VALID_TYPES].join(', ')}`,
-        })
-      }
-      const priority = Number.isFinite(body.priority) ? Number(body.priority) : 100
-      // D.3 — Wrap rule create + AuditLog write in one transaction so the
-      // audit row never desyncs from the catalog state. Same pattern
-      // MasterPriceService uses for basePrice mutations.
-      const rule = await prisma.$transaction(async (tx) => {
-        const created = await tx.pricingRule.create({
-          data: {
-            name: body.name!,
-            type: body.type!,
-            description: body.description ?? null,
-            priority,
-            minMarginPercent:
-              body.minMarginPercent != null
-                ? new Prisma.Decimal(body.minMarginPercent)
-                : null,
-            maxMarginPercent:
-              body.maxMarginPercent != null
-                ? new Prisma.Decimal(body.maxMarginPercent)
-                : null,
-            parameters: (body.parameters ?? {}) as Prisma.InputJsonValue,
-            isActive: true,
-            products:
-              body.productIds && body.productIds.length > 0
-                ? {
-                    create: body.productIds.map((productId) => ({ productId })),
-                  }
-                : undefined,
-            variations:
-              body.variationIds && body.variationIds.length > 0
-                ? {
-                    create: body.variationIds.map((variationId) => ({
-                      variationId,
-                    })),
-                  }
-                : undefined,
-          },
-        })
-        await tx.auditLog.create({
-          data: {
-            entityType: 'PricingRule',
-            entityId: created.id,
-            action: 'create',
-            before: null,
-            // Slim after — only the operator-meaningful fields, not full
-            // join-row dumps. Schema notes the table balloons otherwise.
-            after: {
-              name: created.name,
-              type: created.type,
-              priority: created.priority,
-              minMarginPercent: created.minMarginPercent?.toString() ?? null,
-              maxMarginPercent: created.maxMarginPercent?.toString() ?? null,
-              parameters: created.parameters,
-            },
-            metadata: {
-              productCount: body.productIds?.length ?? 0,
-              variationCount: body.variationIds?.length ?? 0,
-            },
-          },
-        })
-        return created
-      })
-      return rule
+      return await createPricingRule(body)
     } catch (error: any) {
+      if (error instanceof PricingRuleError) return reply.code(error.status).send({ error: error.message })
       fastify.log.error({ err: error }, '[pricing-rules POST] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -130,11 +63,7 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/pricing-rules', async (_request, reply) => {
     try {
-      const rules = await prisma.pricingRule.findMany({
-        where: { isActive: true },
-        orderBy: { priority: 'asc' },
-      })
-      return rules
+      return await listActivePricingRules()
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing-rules GET] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -145,13 +74,7 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
     '/pricing-rules/variation/:variationId',
     async (request, reply) => {
       try {
-        const links = await prisma.pricingRuleVariation.findMany({
-          where: { variationId: request.params.variationId },
-          include: { rule: true },
-          orderBy: { rule: { priority: 'asc' } },
-        })
-        // Filter out inactive rules (link can outlive deactivation).
-        return links.map((l) => l.rule).filter((r) => r.isActive)
+        return await listPricingRulesForVariation(request.params.variationId)
       } catch (error: any) {
         fastify.log.error(
           { err: error },
@@ -169,82 +92,9 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
         const body = (request.body ?? {}) as CreateRuleBody & {
           isActive?: boolean
         }
-        const data: Prisma.PricingRuleUpdateInput = {}
-        if (body.name !== undefined) data.name = body.name
-        if (body.type !== undefined) {
-          if (!VALID_TYPES.has(body.type)) {
-            return reply.code(400).send({
-              error: `type must be one of ${[...VALID_TYPES].join(', ')}`,
-            })
-          }
-          data.type = body.type
-        }
-        if (body.description !== undefined) data.description = body.description
-        if (body.priority !== undefined && Number.isFinite(body.priority)) {
-          data.priority = Number(body.priority)
-        }
-        if (body.minMarginPercent !== undefined) {
-          data.minMarginPercent =
-            body.minMarginPercent == null
-              ? null
-              : new Prisma.Decimal(body.minMarginPercent)
-        }
-        if (body.maxMarginPercent !== undefined) {
-          data.maxMarginPercent =
-            body.maxMarginPercent == null
-              ? null
-              : new Prisma.Decimal(body.maxMarginPercent)
-        }
-        if (body.parameters !== undefined) {
-          data.parameters = body.parameters as Prisma.InputJsonValue
-        }
-        if (body.isActive !== undefined) data.isActive = body.isActive
-
-        // D.3 — capture before snapshot + write audit row in same tx.
-        const rule = await prisma.$transaction(async (tx) => {
-          const before = await tx.pricingRule.findUnique({
-            where: { id: request.params.id },
-          })
-          if (!before) {
-            // Force the inner update to throw P2025 — caught below as 404.
-            throw Object.assign(new Error('not found'), { code: 'P2025' })
-          }
-          const updated = await tx.pricingRule.update({
-            where: { id: request.params.id },
-            data,
-          })
-          await tx.auditLog.create({
-            data: {
-              entityType: 'PricingRule',
-              entityId: updated.id,
-              action: 'update',
-              before: {
-                name: before.name,
-                type: before.type,
-                priority: before.priority,
-                minMarginPercent: before.minMarginPercent?.toString() ?? null,
-                maxMarginPercent: before.maxMarginPercent?.toString() ?? null,
-                parameters: before.parameters,
-                isActive: before.isActive,
-              },
-              after: {
-                name: updated.name,
-                type: updated.type,
-                priority: updated.priority,
-                minMarginPercent: updated.minMarginPercent?.toString() ?? null,
-                maxMarginPercent: updated.maxMarginPercent?.toString() ?? null,
-                parameters: updated.parameters,
-                isActive: updated.isActive,
-              },
-            },
-          })
-          return updated
-        })
-        return rule
+        return await updatePricingRule(request.params.id, body)
       } catch (error: any) {
-        if (error?.code === 'P2025') {
-          return reply.code(404).send({ error: 'rule not found' })
-        }
+        if (error instanceof PricingRuleError) return reply.code(error.status).send({ error: error.message })
         fastify.log.error({ err: error }, '[pricing-rules PUT] failed')
         return reply.code(500).send({ error: error?.message ?? String(error) })
       }
@@ -258,34 +108,9 @@ const pricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
         // Soft delete: flip isActive=false. Preserves the audit trail (the
         // engine's PRICING_RULE source path filters by isActive=true so a
         // deactivated rule has no functional effect, just an archive entry).
-        const rule = await prisma.$transaction(async (tx) => {
-          const before = await tx.pricingRule.findUnique({
-            where: { id: request.params.id },
-          })
-          if (!before) {
-            throw Object.assign(new Error('not found'), { code: 'P2025' })
-          }
-          const updated = await tx.pricingRule.update({
-            where: { id: request.params.id },
-            data: { isActive: false },
-          })
-          await tx.auditLog.create({
-            data: {
-              entityType: 'PricingRule',
-              entityId: updated.id,
-              action: 'delete',
-              before: { isActive: before.isActive },
-              after: { isActive: false },
-              metadata: { soft: true, ruleName: before.name },
-            },
-          })
-          return updated
-        })
-        return rule
+        return await deactivatePricingRule(request.params.id)
       } catch (error: any) {
-        if (error?.code === 'P2025') {
-          return reply.code(404).send({ error: 'rule not found' })
-        }
+        if (error instanceof PricingRuleError) return reply.code(error.status).send({ error: error.message })
         fastify.log.error({ err: error }, '[pricing-rules DELETE] failed')
         return reply.code(500).send({ error: error?.message ?? String(error) })
       }

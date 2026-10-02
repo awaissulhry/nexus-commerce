@@ -100,6 +100,22 @@ async function applyOne(row: PickedRow): Promise<void> {
   throw new Error(`unsupported kind ${row.kind}`)
 }
 
+/** How long a claimed change may stay APPLYING before its run is taken to have died (one apply takes seconds). */
+export const APPLYING_STUCK_AFTER_MS = 15 * 60 * 1000
+export const OUTCOME_UNKNOWN =
+  'outcome unknown — check: the run stopped while it was applying this change, so it may already have reached the channels. '
+  + 'Check the price, then mark it applied or retry it.'
+
+/** Mark changes stuck in APPLYING past the safe window as UNKNOWN. They are never run again without a person. */
+export async function markStuckApplying(): Promise<number> {
+  const marked = await prisma.scheduledProductChange.updateMany({
+    where: { status: 'APPLYING', updatedAt: { lt: new Date(Date.now() - APPLYING_STUCK_AFTER_MS) } },
+    data: { status: 'UNKNOWN', error: OUTCOME_UNKNOWN },
+  })
+  if (marked.count > 0) logger.warn('scheduled-changes cron: changes whose run died are waiting for a check', { count: marked.count })
+  return marked.count
+}
+
 export async function runScheduledChangesOnce(): Promise<RunSummary> {
   if (process.env.NEXUS_ENABLE_SCHEDULED_CHANGES === '0') {
     const summary: RunSummary = {
@@ -110,6 +126,11 @@ export async function runScheduledChangesOnce(): Promise<RunSummary> {
     }
     return summary
   }
+
+  // 08 S12 — a change claimed (APPLYING) by a run that died before it wrote APPLIED or FAILED: it may already have gone
+  // out. Never run it again by itself: past the safe window it is marked UNKNOWN for a person to check (applied, or
+  // retry: POST /api/products/scheduled-changes/:id/resolve, or an approved schedule-price-change).
+  await markStuckApplying()
 
   // Pick due rows with SKIP LOCKED so a parallel replica can't grab
   // the same set. The transaction here owns the lock until we update
@@ -140,6 +161,11 @@ export async function runScheduledChangesOnce(): Promise<RunSummary> {
     }
 
     for (const row of picked) {
+      // 08 S12 — claim the row before running it (PENDING → APPLYING, compare-and-set). The pick above locks nothing
+      // past its own statement, so a cancel could land between the pick and the run: the change ran and the cancel
+      // had said "cancelled". Now exactly one wins (cancelScheduledChange makes the same one-step check).
+      const claimed = await prisma.scheduledProductChange.updateMany({ where: { id: row.id, status: 'PENDING' }, data: { status: 'APPLYING', updatedAt: new Date() } })
+      if (claimed.count === 0) continue
       try {
         await applyOne(row)
         await prisma.scheduledProductChange.update({

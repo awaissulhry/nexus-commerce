@@ -1,0 +1,2 @@
+409
+{"error":"attribute already inherited from ancestor family golden-fam-root; child cannot redeclare it (Akeneo-strict additive invariant)","conflictFamilyId":"golden-fam-root","isInherited":true}

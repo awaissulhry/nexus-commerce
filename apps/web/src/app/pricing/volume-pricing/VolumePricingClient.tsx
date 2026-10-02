@@ -50,6 +50,7 @@ import { type Tone } from '@/design-system/primitives/tone'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { Divider } from '@/design-system/primitives/Divider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { usePermission } from '@/lib/auth/AuthProvider'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -201,6 +202,9 @@ export default function VolumePricingClient() {
 }
 
 function VolumePricingInner() {
+  // S1 (F11) — a volume promotion is a price: creating, changing, pushing or deleting one needs pricing.edit.
+  const canEditPricing = usePermission('pricing.edit')
+  const noPricingEdit = canEditPricing ? undefined : 'Changing volume promotions needs the pricing permission (pricing.edit)'
   const { toast } = useToast()
   const [promotions, setPromotions] = useState<VolumePromotion[]>([])
   const [loading, setLoading] = useState(true)
@@ -353,14 +357,15 @@ function VolumePricingInner() {
         align: 'right',
         render: (r) => (
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-            <Button size="sm" variant="ghost" onClick={() => openEdit(r)} aria-label={`Edit ${r.name}`}>
+            <Button size="sm" variant="ghost" onClick={() => openEdit(r)} disabled={!canEditPricing} title={noPricingEdit} aria-label={`Edit ${r.name}`}>
               <Pencil size={13} /> Edit
             </Button>
             <Button
               size="sm"
               variant="secondary"
               onClick={() => pushPromotion(r)}
-              disabled={pushingId === r.id}
+              disabled={pushingId === r.id || !canEditPricing}
+              title={noPricingEdit}
               aria-label={`Push ${r.name} to eBay`}
             >
               {pushingId === r.id ? <Spinner size={13} /> : <UploadCloud size={13} />} Push
@@ -369,6 +374,8 @@ function VolumePricingInner() {
               size="sm"
               variant="secondary"
               onClick={() => setConfirmDelete(r)}
+              disabled={!canEditPricing}
+              title={noPricingEdit}
               aria-label={`Delete ${r.name}`}
             >
               <Trash2 size={13} />
@@ -377,7 +384,7 @@ function VolumePricingInner() {
         ),
       },
     ],
-    [pushingId, pushPromotion],
+    [pushingId, pushPromotion, canEditPricing, noPricingEdit],
   )
 
   return (
@@ -391,7 +398,7 @@ function VolumePricingInner() {
             <Button variant="secondary" onClick={() => void load()} disabled={loading}>
               <RefreshCw size={14} /> Refresh
             </Button>
-            <Button variant="primary" onClick={openCreate}>
+            <Button variant="primary" onClick={openCreate} disabled={!canEditPricing} title={noPricingEdit}>
               <Plus size={14} /> New promotion
             </Button>
           </div>
@@ -442,7 +449,7 @@ function VolumePricingInner() {
                 title="No volume promotions yet"
                 description="Create a multi-buy discount ladder (buy-2 / buy-3 / buy-4) and push it to eBay."
                 action={
-                  <Button variant="primary" onClick={openCreate}>
+                  <Button variant="primary" onClick={openCreate} disabled={!canEditPricing} title={noPricingEdit}>
                     <Plus size={14} /> New promotion
                   </Button>
                 }

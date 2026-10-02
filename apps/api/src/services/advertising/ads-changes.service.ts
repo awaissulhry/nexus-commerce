@@ -64,6 +64,9 @@ export interface ChangeRow {
   undoBlockedReason?: string
 }
 
+/** The budget-pool cron's actor before R2; its rows keep it. */
+const LEGACY_BUDGET_POOL_ACTOR = 'user:cron-budget-pool'
+
 /**
  * The actor string is the ONLY reliable signal for who caused a change, and reading it correctly is
  * the fix for a real defect: `ads-events.service.listEvents` derives source from which COLUMN is
@@ -73,6 +76,14 @@ export interface ChangeRow {
  * Pure, and unit-tested, because every row in the feed is classified by it.
  */
 export function parseActor(actor: string | null | undefined): { source: ChangeSource; origin: ChangeOrigin } {
+  /**
+   * R2 (MCP full control, part 06 gap 11) — rows written before the actor fix keep their old strings and must read
+   * as the same writer as its new rows (`ads-actor.ts`):
+   *   · `automation:automation:<x>` — auto-bid, `bid_to_target_acos` and `retail_guard` rules, autopilot plans
+   *   · `user:cron-budget-pool` — the budget-pool cron, which a person-shaped actor made read as an operator
+   */
+  if (actor === LEGACY_BUDGET_POOL_ACTOR) actor = 'automation:budget-pool-rebalance'
+  while (actor?.startsWith('automation:automation:')) actor = actor.slice('automation:'.length)
   if (!actor || actor === 'system') {
     return { source: 'system', origin: { kind: 'unknown', id: null, name: 'System' } }
   }

@@ -15,6 +15,9 @@ export interface TranslationWrite {
   userId?: string | null; ip?: string; label?: string
   /** PSIE — `false`: cascade without queueing a channel update (see master-content). */
   queueOutbound?: boolean
+  /** MCP full control — the writer's provenance stamp (`sourceModel`, else `values.sourceModel`) and the audit `reason`. */
+  sourceModel?: string
+  reason?: string
 }
 const conflict = (label: string) => productWriteRefusal(409, `${label} changed. Reload before saving it.`)
 
@@ -25,6 +28,7 @@ export async function writeTranslation(input: TranslationWrite) {
   if (address.tier !== 'language' || address.language !== language || language === PRIMARY_CONTENT_LOCALE) {
     throw productWriteRefusal(400, `${label} needs the shared ${language} language address.`)
   }
+  const sourceModel = input.sourceModel ?? input.values.sourceModel
   return inDatabaseTransaction(prisma, async () => {
     const product = await prisma.product.findUnique({ where: { id: input.productId }, include: { parent: true } })
     if (!product) throw productWriteRefusal(404, 'Product not found')
@@ -67,7 +71,7 @@ export async function writeTranslation(input: TranslationWrite) {
       const attributesMatch = JSON.stringify(attributes) === JSON.stringify(prior.attributes ?? {})
       const stampsMatch = nextSource === prior.source && nextHash === prior.sourceHash
         && (input.state === 'reviewed') === !!prior.reviewedAt
-        && (input.values.sourceModel ?? prior.sourceModel ?? null) === (prior.sourceModel ?? null)
+        && (sourceModel ?? prior.sourceModel ?? null) === (prior.sourceModel ?? null)
       if (columnsMatch && attributesMatch && stampsMatch) return prior
     }
     const bumped = await prisma.product.updateMany({ where: { id: product.id, version: product.version }, data: { version: { increment: 1 } } })
@@ -77,7 +81,7 @@ export async function writeTranslation(input: TranslationWrite) {
       for (const key of [...Object.keys(CONTENT_COLUMNS), ...Object.keys(attributes)]) changed[key] = null
     } else {
       Object.assign(data, { attributes, source: !Object.keys(changed).length && prior ? prior.source : input.state === 'draft' ? 'ai' : 'manual',
-        sourceModel: input.values.sourceModel ?? prior?.sourceModel ?? null,
+        sourceModel: sourceModel ?? prior?.sourceModel ?? null,
         sourceHash: contentSourceHash(product as any, product.parent as any, Object.keys(attributes)), authoredAt: new Date(),
         reviewedAt: input.state === 'reviewed' ? new Date() : null })
       if (prior) {
@@ -87,10 +91,10 @@ export async function writeTranslation(input: TranslationWrite) {
     }
     if (!Object.keys(changed).length && prior) for (const [key,column] of Object.entries(CONTENT_COLUMNS)) changed[key] = prior[column]
     const { masterContentService } = await import('../master-content.service.js')
-    await masterContentService.update(product.id, changed, { locale: language, address, actor: input.userId, reason: 'language-content-write', reviewed: input.state === 'reviewed', masterAlreadyWritten: true, queueOutbound: input.queueOutbound, tx: prisma as any })
+    await masterContentService.update(product.id, changed, { locale: language, address, actor: input.userId, reason: input.reason ?? 'language-content-write', reviewed: input.state === 'reviewed', masterAlreadyWritten: true, queueOutbound: input.queueOutbound, tx: prisma as any })
     await prisma.auditLog.create({ data: { entityType: 'Product', entityId: product.id, action: 'update', userId: input.userId ?? null, ip: input.ip,
       before: prior as any ?? {}, after: input.remove ? { removed: true } : changed as any,
-      metadata: { source: input.state === 'draft' ? 'ai' : 'manual', layer: 'language', language, intent: input.remove ? 'remove' : 'set' } } })
+      metadata: { source: input.state === 'draft' ? 'ai' : 'manual', layer: 'language', language, intent: input.remove ? 'remove' : 'set', ...(input.reason ? { reason: input.reason } : {}) } } })
     return input.remove ? { count: prior ? 1 : 0 } : await prisma.productTranslation.findUniqueOrThrow({ where })
   })
 }

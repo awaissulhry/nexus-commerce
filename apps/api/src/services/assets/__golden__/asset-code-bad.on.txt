@@ -1,0 +1,2 @@
+400
+{"error":"code (when provided) must be lowercase snake_case"}

@@ -55,3 +55,41 @@ describe('matrix-preview — one function, one answer', () => {
     expect(syncLabel({ kind: 'PAUSED', via: 'POLICY', mode: 'PINNED', intended: null, held: 2, buffer: 0, poolAvailable: 9, routedLocations: [], fbaAtAmazon: null, oversold: false })).toBe('Paused (policy) · Pinned')
   })
 })
+
+/**
+ * MCP full control L8 — eBay ENDS a listing pinned at 0 unless the account's out-of-stock option is ON. The preview asks
+ * the context (the server reads the option from eBay; a page without it previews as before and the server's re-check at
+ * commit refuses): ON allows the pin, OFF or unknown refuses it by name. A pin above 0, and every other channel, are
+ * untouched by the guard.
+ */
+describe('matrix-preview — eBay pin to 0', () => {
+  const ctx = { can: () => true, simulated: false }
+  const ebay = (): MatrixRead => {
+    const r = read()
+    r.coordinates.push({ key: 'EBAY:IT', kind: 'market', channel: 'EBAY', market: 'IT', label: 'eBay · IT', region: null, alias: null, accountId: 'e1', currency: 'EUR', connected: true, listed: 1, draft: 0,
+      cells: ['listing', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price'], absent: [], sharedInventoryWith: null, inventoryOn: null, vocabulary: { fulfilment: null } })
+    r.rows[1].cells['EBAY:IT'] = { listingId: 'l-eb', version: 2, listing: null, fulfilment: null,
+      sync: { kind: 'FOLLOW', via: null, mode: 'FOLLOW', intended: 10, held: 10, buffer: 0, poolAvailable: 10, routedLocations: ['IT-MAIN'], fbaAtAmazon: null, oversold: false },
+      queue: null, price: null, sale: null, writable: { syncMode: true, syncQty: true }, writeBlockedReason: {} }
+    return r
+  }
+  const pin = (value: number, key = 'EBAY:IT') => ({ params: { verb: 'pin-quantity' as const, value }, targets: [{ rowId: 'c1', coordinateKey: key }], commit: false })
+  const withOption = (state: boolean | null) => ({ ...ctx, ebayZeroAllowed: () => state })
+
+  it('refuses a pin to 0 when the option is OFF or unknown, by name', () => {
+    for (const state of [false, null]) {
+      const p = previewVerb(ebay(), pin(0), withOption(state))
+      expect(p.changes).toEqual([])
+      expect(p.refusals).toEqual([expect.objectContaining({ rowId: 'c1', coordinateKey: 'EBAY:IT', kind: 'guard', reason: expect.stringContaining('out-of-stock option') })])
+    }
+  })
+
+  it('allows it when the option is ON; a pin above 0 and other channels are not asked', () => {
+    expect(previewVerb(ebay(), pin(0), withOption(true)).changes).toHaveLength(1)
+    let asked = 0
+    const counting = { ...ctx, ebayZeroAllowed: () => { asked++; return false } }
+    expect(previewVerb(ebay(), pin(3), counting).changes).toHaveLength(1)
+    expect(previewVerb(ebay(), pin(0, 'AMAZON:IT'), counting).changes).toHaveLength(1)
+    expect(asked).toBe(0)
+  })
+})

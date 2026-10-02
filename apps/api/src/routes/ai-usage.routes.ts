@@ -49,6 +49,7 @@ import {
   type PromptTemplateStatus,
 } from '../services/ai/prompt-template.service.js'
 import { listBrandVoices } from '../services/ai/brand-voice.service.js'
+import { aiUsageSummary } from '../services/ai/ai-usage-summary.service.js'
 
 const MAX_DAYS = 90
 
@@ -482,55 +483,9 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const daysRaw = parseInt(request.query?.days ?? '7', 10) || 7
       const days = Math.min(Math.max(daysRaw, 1), MAX_DAYS)
-      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-
-      const [byProviderRows, byFeatureRows] = await Promise.all([
-        prisma.aiUsageLog.groupBy({
-          by: ['provider'],
-          where: { createdAt: { gte: since } },
-          _count: { _all: true },
-          _sum: { inputTokens: true, outputTokens: true, costUSD: true },
-        }),
-        prisma.aiUsageLog.groupBy({
-          by: ['feature'],
-          where: { createdAt: { gte: since } },
-          _count: { _all: true },
-          _sum: { inputTokens: true, outputTokens: true, costUSD: true },
-        }),
-      ])
-
-      const byProvider = byProviderRows.map((r) => ({
-        name: r.provider,
-        calls: r._count._all,
-        inputTokens: r._sum.inputTokens ?? 0,
-        outputTokens: r._sum.outputTokens ?? 0,
-        costUSD: Number(r._sum.costUSD ?? 0),
-      }))
-      const byFeature = byFeatureRows.map((r) => ({
-        name: r.feature ?? '(unknown)',
-        calls: r._count._all,
-        inputTokens: r._sum.inputTokens ?? 0,
-        outputTokens: r._sum.outputTokens ?? 0,
-        costUSD: Number(r._sum.costUSD ?? 0),
-      }))
-      const totals = byProvider.reduce(
-        (acc, p) => {
-          acc.calls += p.calls
-          acc.inputTokens += p.inputTokens
-          acc.outputTokens += p.outputTokens
-          acc.costUSD += p.costUSD
-          return acc
-        },
-        { calls: 0, inputTokens: 0, outputTokens: 0, costUSD: 0 },
-      )
-
+      const summary = await aiUsageSummary(days)
       reply.header('Cache-Control', 'private, max-age=30')
-      return {
-        range: { days, since: since.toISOString() },
-        byProvider,
-        byFeature,
-        totals,
-      }
+      return summary
     },
   )
 

@@ -11,6 +11,9 @@ import prisma from '../db.js'
 import { outboundSyncQueue, adsSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { isHeldPriceRow } from '../services/pim/follower-price.js'
+// MCP full control P3 — the list read and the row shape live in sync-activity.service.ts (retry and cancel answer
+// with the same row shape).
+import { formatOutboundQueueRow as formatRow, listOutboundQueue } from '../services/sync-logs/sync-activity.service.js'
 
 /**
  * Round 6 — a HELD price change (a price kept while its listing is paused or a draft, `pim/follower-price.ts`) is not
@@ -43,105 +46,7 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
       cursor?: string
     }
   }>('/api/outbound-queue', async (request, reply) => {
-    const q = request.query
-    const tab = q.tab ?? 'active'
-    const limit = Math.min(200, parseInt(q.limit ?? '50', 10) || 50)
-
-    // Build where clause per tab
-    const where: any = {}
-
-    if (tab === 'dead') {
-      where.isDead = true
-    } else if (tab === 'success') {
-      where.syncStatus = 'SUCCESS'
-      where.syncedAt = { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) }
-    } else {
-      // active tab: non-dead rows, last 7 days
-      where.isDead = false
-      where.createdAt = { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-      if (q.status) where.syncStatus = q.status
-      if (q.stuckOnly === 'true') {
-        const stuckCutoff = new Date(Date.now() - 15 * 60 * 1000)
-        where.AND = [
-          { syncStatus: 'PENDING' },
-          {
-            OR: [
-              { holdUntil: null, createdAt: { lt: stuckCutoff } },
-              { holdUntil: { lt: stuckCutoff } },
-            ],
-          },
-        ]
-        delete where.syncStatus // already set in AND
-      }
-    }
-
-    if (q.channel) where.targetChannel = q.channel
-    if (q.syncType) where.syncType = q.syncType
-    if (q.cursor) {
-      where.id = { lt: q.cursor } // createdAt desc → id lt works for cuid ordering
-    }
-
-    const [items, statsRaw] = await Promise.all([
-      prisma.outboundSyncQueue.findMany({
-        where,
-        include: { product: { select: { sku: true, name: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: limit + 1,
-      }),
-      // Stats rollup for header cards (always over last 7d + dead)
-      (prisma.outboundSyncQueue as any).groupBy({
-        by: ['syncStatus', 'targetChannel', 'isDead'],
-        _count: { id: true },
-        where: {
-          OR: [
-            { isDead: true },
-            { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-          ],
-        },
-      }) as Promise<Array<{ syncStatus: string; targetChannel: string; isDead: boolean; _count: { id: number } }>>,
-    ])
-    const stats = statsRaw
-
-    const hasMore = items.length > limit
-    if (hasMore) items.pop()
-    const nextCursor = hasMore ? items[items.length - 1]?.id ?? null : null
-
-    // Aggregate stats into card-friendly shape
-    const channels = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
-    const byChannel: Record<string, { pending: number; inProgress: number; failed: number; dead: number }> = {}
-    for (const ch of channels) {
-      byChannel[ch] = { pending: 0, inProgress: 0, failed: 0, dead: 0 }
-    }
-    let totalPending = 0, totalInProgress = 0, totalFailed = 0, totalDead = 0
-    for (const g of stats) {
-      const ch = g.targetChannel as string
-      const count = g._count.id
-      if (g.isDead) {
-        totalDead += count
-        if (byChannel[ch]) byChannel[ch].dead += count
-      } else if (g.syncStatus === 'PENDING') {
-        totalPending += count
-        if (byChannel[ch]) byChannel[ch].pending += count
-      } else if (g.syncStatus === 'IN_PROGRESS') {
-        totalInProgress += count
-        if (byChannel[ch]) byChannel[ch].inProgress += count
-      } else if (g.syncStatus === 'FAILED') {
-        totalFailed += count
-        if (byChannel[ch]) byChannel[ch].failed += count
-      }
-    }
-
-    return reply.send({
-      items: items.map(formatRow),
-      nextCursor,
-      stats: {
-        pending: totalPending,
-        inProgress: totalInProgress,
-        failed: totalFailed,
-        dead: totalDead,
-        byChannel,
-      },
-    })
+    return reply.send(await listOutboundQueue(request.query))
   })
 
   // ── POST /api/outbound-queue/:id/retry ────────────────────────────────────
@@ -301,30 +206,4 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
     logger.info('Bulk cancel by operator', { count, channel })
     return reply.send({ ok: true, count })
   })
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatRow(row: any) {
-  return {
-    id: row.id,
-    productId: row.productId ?? null,
-    sku: row.product?.sku ?? null,
-    productName: row.product?.name ?? null,
-    channelListingId: row.channelListingId ?? null,
-    targetChannel: row.targetChannel,
-    syncType: row.syncType,
-    syncStatus: row.syncStatus,
-    isDead: row.isDead ?? false,
-    diedAt: row.diedAt?.toISOString() ?? null,
-    retryCount: row.retryCount ?? 0,
-    maxRetries: row.maxRetries ?? 3,
-    errorMessage: row.errorMessage ?? null,
-    errorCode: row.errorCode ?? null,
-    payload: row.payload ?? null,
-    createdAt: row.createdAt?.toISOString() ?? null,
-    holdUntil: row.holdUntil?.toISOString() ?? null,
-    syncedAt: row.syncedAt?.toISOString() ?? null,
-    nextRetryAt: row.nextRetryAt?.toISOString() ?? null,
-  }
 }

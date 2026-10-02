@@ -113,6 +113,9 @@ describe('subject derivation', () => {
       'wizard.submitted': { wizardId: 'w1', productId: 'p1', status: 'LIVE' },
       'bulk.progress': { jobId: 'j1', processed: 1, total: 2, succeeded: 1, failed: 0 },
       'bulk.completed': { jobId: 'j1', status: 'DONE' },
+      'agent.change.executed': { changeId: 'c1', approvalId: 'a1', tool: 'set-price', via: 'claude', decisionVia: null },
+      'agent.change.undone': { changeId: 'c1', undoneByApprovalId: 'a2' },
+      'agent.autorun.paused': { autonomyId: 'au1', automatic: false, failures: null, handedBack: 0 },
       'inventory.stock_changed': {
         productId: 'p1', locationId: 'loc1', movementId: 'm1', change: -1,
         quantityBefore: 5, quantityAfter: 4, available: 4, poolTotal: 4, reason: 'ORDER_PLACED',
@@ -147,6 +150,9 @@ describe('subject derivation', () => {
       'order.created': { orderId: 'o1', channel: 'SHOPIFY' },
       'order.updated': { orderId: 'o1', channel: 'SHOPIFY' },
       'order.cancelled': { orderId: 'o1' },
+      'customer.message.sent': { messageId: 'm1', orderId: 'o1', channel: 'SHOPIFY', route: 'EMAIL', outcome: 'DRY_RUN' },
+      'refund.issued': { refundId: 'f1', returnId: 'r1', orderId: 'o1', channel: 'EBAY', outcome: 'OK' },
+      'invoice.issued': { kind: 'INVOICE', documentId: 'i1', number: '00001/2026', orderId: 'o1', refundId: null },
       'return.created': { returnId: 'r1', channel: 'SHOPIFY' },
       'analytics.salesReport.refreshed': { day: '2026-08-31', marketplacesProcessed: 3 },
       'sales.drift.detected': {
@@ -264,5 +270,34 @@ describe('context mapping', () => {
     for (const def of defs) {
       expect(eventsByContext(def.context).length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('MCP full control C8 — what Claude’s changes did, for the bell and the audit', () => {
+  const executed = { changeId: 'chg_1', approvalId: 'apr_1', tool: 'set-price', via: 'claude', decisionVia: 'auto' }
+
+  it('declares the three agent events in the operations context', () => {
+    for (const type of ['agent.change.executed', 'agent.change.undone', 'agent.autorun.paused']) {
+      expect(isEventType(type), type).toBe(true)
+      expect(getEventDefinition(type).context).toBe('operations')
+    }
+  })
+
+  it('carries ids, names and counts only: an argument, a value or a price is refused', () => {
+    expect(parseEventPayload('agent.change.executed', executed)).toEqual(executed)
+    expect(parseEventPayload('agent.change.executed', { ...executed, decisionVia: null }).decisionVia).toBeNull()
+    expect(() => parseEventPayload('agent.change.executed', { ...executed, args: { price: 25 } })).toThrow()
+    expect(() => parseEventPayload('agent.change.executed', { ...executed, after: { price: 25 } })).toThrow()
+    expect(parseEventPayload('agent.change.undone', { changeId: 'chg_1', undoneByApprovalId: 'apr_2' })).toEqual({ changeId: 'chg_1', undoneByApprovalId: 'apr_2' })
+    expect(() => parseEventPayload('agent.change.undone', { changeId: 'chg_1', undoneByApprovalId: 'apr_2', before: 18 })).toThrow()
+    const paused = { autonomyId: 'aut_1', automatic: true, failures: 5, handedBack: 2 }
+    expect(parseEventPayload('agent.autorun.paused', paused)).toEqual(paused)
+    expect(() => parseEventPayload('agent.autorun.paused', { ...paused, reason: 'free text' })).toThrow()
+  })
+
+  it('partitions a change by its id, a pause by its business’s brake row', () => {
+    expect(deriveSubject('agent.change.executed', executed)).toBe('chg_1')
+    expect(deriveSubject('agent.change.undone', { changeId: 'chg_1', undoneByApprovalId: 'apr_2' })).toBe('chg_1')
+    expect(deriveSubject('agent.autorun.paused', { autonomyId: 'aut_1', automatic: false, failures: null, handedBack: 0 })).toBe('aut_1')
   })
 })

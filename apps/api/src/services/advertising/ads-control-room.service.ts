@@ -16,6 +16,8 @@
 import prisma from '../../db.js'
 import { envEnabled } from '../../utils/env-flag.js'
 import { getAutomationState } from './ads-automation-state.service.js'
+import { lowest } from '../automation/automation-levels.js'
+import { ENGINES, engineEnv, readEngineSwitch, type EngineSwitchRow } from '../automation/engine-switch.service.js'
 
 /**
  * Engines are gated by env flags and apply-switches, not by `AutomationRule.autonomyLevel`.
@@ -64,6 +66,20 @@ export interface EngineLever {
    * account said "halted" would be lying in the most expensive possible direction.
    */
   haltBehaviour: HaltBehaviour
+  /**
+   * R16 (decision D-R2) — the two things that decide it, side by side: what the server env lets it do (`env`, before the
+   * account dial) and what this business set with its own switch (`switch`; null = not set, the env alone decides).
+   * `switchable` is false for engines that have no per-business switch.
+   */
+  control: {
+    env: { mode: LeverMode; reason: string }
+    switch: { mode: LeverMode; setBy: string; setAt: string; reason: string | null } | null
+    switchable: boolean
+    /** The levels its switch can be at, lowest first (empty when it has none). */
+    levels: LeverMode[]
+    /** The highest a person may turn the switch up to: what the server env allows (engine-switch.service.ts). */
+    ceiling: LeverMode | null
+  }
 }
 
 /**
@@ -172,6 +188,13 @@ export async function getAccountGuardrails(): Promise<AccountGuardrails> {
   }
 }
 
+/**
+ * Part 06 fix (lead review of R5) — an engine switch read EXACTLY as its job reads it. Budget enforcement applies only
+ * with NEXUS_BUDGET_ENFORCE_APPLY === '1' and rank-defend runs only with NEXUS_ENABLE_RANK_DEFEND === '1'; reading them
+ * with `envEnabled` (which also takes 'true', 'yes', 'on') showed AUTO while the job stayed dry or off.
+ */
+export const jobSwitchOn = (flag: 'NEXUS_BUDGET_ENFORCE_APPLY' | 'NEXUS_ENABLE_RANK_DEFEND'): boolean => process.env[flag] === '1'
+
 export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global: { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean } }> {
   const CRONS = [
     'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'budget-pool-rebalance',
@@ -201,6 +224,10 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
 
   const adsCron = envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')
   const envKill = process.env.NEXUS_ADS_AUTOMATION_KILL === '1'
+  // R16 — each switchable engine's switch in this business (no row = the env alone decides).
+  const switchKeys = ['rank-defend', 'budget-enforce', 'auto-bid', 'tos-defense', 'coverage-engine', 'fleet-analysts'] as const
+  const switches = new Map<string, EngineSwitchRow | null>(await Promise.all(switchKeys.map(async (k) => [k, await readEngineSwitch(k)] as const)))
+  const ceilings = new Map<string, LeverMode>(await Promise.all(switchKeys.map(async (k) => [k, (await engineEnv(k)).ceiling as LeverMode] as const)))
 
   /**
    * The account-wide dial is a CEILING over every lever, not a peer of them. SUGGEST forces
@@ -226,9 +253,20 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
 
   const mk = (
     key: string, name: string, what: string, cron: string | null,
-    schedule: string | null, rawMode: LeverMode, rawReason: string,
+    schedule: string | null, envMode: LeverMode, envReason: string,
     scope: string | null, haltBehaviour: HaltBehaviour,
   ): EngineLever => {
+    // R16 — this business's switch only lowers what the env allows; the env (and the account dial below) still win.
+    const set = switches.get(key) ?? null
+    const rawMode: LeverMode = set ? lowest(envMode, set.mode as LeverMode) : envMode
+    const rawReason = set && rawMode !== envMode ? `Switched to ${set.mode} for this business (${set.setBy})` : envReason
+    const control = {
+      env: { mode: envMode, reason: envReason },
+      switch: set ? { mode: set.mode as LeverMode, setBy: set.setBy, setAt: set.setAt, reason: set.reason } : null,
+      switchable: key in ENGINES,
+      levels: key in ENGINES ? [...ENGINES[key as keyof typeof ENGINES].levels] as LeverMode[] : [],
+      ceiling: ceilings.get(key) ?? null,
+    }
     const f = cron ? facts.lastBy.get(cron) : undefined
     const h = (cron ? facts.health.get(cron) : undefined) ?? { runs: 0, failures: 0 }
     const cap = capReason()
@@ -253,7 +291,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       lastRunAt: f?.startedAt ?? null,
       lastRunStatus: f?.status ?? null,
       lastRunSummary: f?.outputSummary ?? f?.errorMessage ?? null,
-      runs7d: h.runs, failures7d: h.failures, warning, haltBehaviour,
+      runs7d: h.runs, failures7d: h.failures, warning, haltBehaviour, control,
     }
   }
 
@@ -263,8 +301,8 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
   const levers: EngineLever[] = [
     mk('rank-defend', 'Rank & Dayparting', 'Holds a target rank on a schedule by moving placement bids',
       'ad-rank-defend', 'every 15 min',
-      masterOff ? 'OFF' : envEnabled('NEXUS_ENABLE_RANK_DEFEND') ? 'AUTO' : 'OFF',
-      masterOff?.why ?? (envEnabled('NEXUS_ENABLE_RANK_DEFEND') ? 'Armed and writing to Amazon' : 'NEXUS_ENABLE_RANK_DEFEND is off'),
+      masterOff ? 'OFF' : jobSwitchOn('NEXUS_ENABLE_RANK_DEFEND') ? 'AUTO' : 'OFF',
+      masterOff?.why ?? (jobSwitchOn('NEXUS_ENABLE_RANK_DEFEND') ? 'Armed and writing to Amazon' : 'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run'),
       `${enabledSchedules} schedules · ${enabledPlans} product plans`, 'gated'),
 
     mk('dayparting', 'Classic dayparting', 'Enables/pauses and multiplies bids on fixed hour windows',
@@ -275,10 +313,10 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
 
     mk('budget-enforce', 'Budget enforcement', 'Paces a monthly budget and suppresses over-spending campaigns',
       'ad-budget-enforce', 'every 30 min',
-      masterOff ? 'OFF' : envEnabled('NEXUS_BUDGET_ENFORCE_APPLY') ? 'AUTO' : 'OBSERVE',
-      masterOff?.why ?? (envEnabled('NEXUS_BUDGET_ENFORCE_APPLY')
-        ? 'NEXUS_BUDGET_ENFORCE_APPLY is set — this one acts'
-        : 'NEXUS_BUDGET_ENFORCE_APPLY is off — computes, never applies'),
+      masterOff ? 'OFF' : jobSwitchOn('NEXUS_BUDGET_ENFORCE_APPLY') ? 'AUTO' : 'OBSERVE',
+      masterOff?.why ?? (jobSwitchOn('NEXUS_BUDGET_ENFORCE_APPLY')
+        ? 'NEXUS_BUDGET_ENFORCE_APPLY is 1 — this one acts'
+        : 'NEXUS_BUDGET_ENFORCE_APPLY is not 1 — computes, never applies'),
       `${budgetPlans} plans active this month`, 'gated'),
 
     mk('budget-pools', 'Budget pools', 'Moves daily budget between campaigns inside a pool',

@@ -71,6 +71,7 @@ import marketingOsRoutes from "./routes/marketing-os.routes.js";
 import ebayAdsRoutes from "./routes/ebay-ads.routes.js";
 import advertisingRoutes from "./routes/advertising.routes.js";
 import advertisingIntelRoutes from "./routes/advertising-intel.routes.js";
+import automationSwitchRoutes from "./routes/automation-switch.routes.js";
 // KT.6 — the Keyword Tracker's action endpoints. A separate file: see its header.
 import keywordActionsRoutes from "./routes/keyword-actions.routes.js";
 import advertisingAiRoutes from "./routes/advertising-ai.routes.js";
@@ -219,6 +220,7 @@ import authRoutes from "./routes/auth.routes.js";
 import mfaRoutes from "./routes/mfa.routes.js";
 import oauthRoutes from './routes/oauth.routes.js';
 import oauthGrantsRoutes from './routes/oauth-grants.routes.js';
+import claudeControlRoutes from './routes/claude-control.routes.js';
 import mcpRoutes from './routes/mcp.routes.js';
 import teamRoutes from "./routes/team.routes.js";
 // Phase S2 (RBAC engine) — the one global permission gate (shadow/enforce).
@@ -552,6 +554,8 @@ app.register(mfaRoutes);
 app.register(oauthRoutes);
 // MCP.6 — Connected apps: a person's own Claude connections and a business's, and revoking them.
 app.register(oauthGrantsRoutes, { prefix: '/api' });
+// MCP full control C5 — how far Claude may go without a person in a business: levels, limits, Pause, the daily cap.
+app.register(claudeControlRoutes, { prefix: '/api' });
 // MCP.7 — the /mcp endpoint Claude connects to (+ its RFC 9728 document). 404 unless NEXUS_MCP_ENABLED=1.
 app.register(mcpRoutes);
 app.register(workspaceInvitationsRoutes);
@@ -622,6 +626,8 @@ app.register(marketingRoutes, { prefix: '/api' });
 app.register(marketingOsRoutes, { prefix: '/api' });
 app.register(ebayAdsRoutes, { prefix: '/api' }); // E3 eBay ads console (reads)
 app.register(advertisingRoutes, { prefix: '/api' });
+// R16 — a person's per-business engine switch, from the Control Room lever drawer.
+app.register(automationSwitchRoutes, { prefix: '/api' });
 app.register(advertisingIntelRoutes, { prefix: '/api' });
 app.register(keywordActionsRoutes, { prefix: '/api' });
 app.register(advertisingAiRoutes, { prefix: '/api' }); // AIAD — AI Advertising goal wiring

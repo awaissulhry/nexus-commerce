@@ -1,8 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { cancelScheduledChange, createScheduledChange, listScheduledChanges, resolveUnknownChange, ScheduledChangeError } from '../services/pricing/scheduled-price.service.js'
 import { OPERATIONAL_IMPACT_TARGET_CAP, parseOperationalImpact, readHardDeletePreflight, readOperationalImpact } from '../services/products/operational-impact.service.js'
 import { assertRequestPermission, requestUserId } from '../lib/auth/request-permission.js'
 import prisma from '../db.js'
-import { MasterPriceRefusedError, masterPriceService } from '../services/master-price.service.js'
+import { MasterPricePermissionError, MasterPriceRefusedError, masterPriceService } from '../services/master-price.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { masterStatusService } from '../services/master-status.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { enqueueContentSyncForProduct } from '../services/content-auto-publish.service.js'
@@ -15,6 +17,7 @@ import { productReadCacheService } from '../services/product-read-cache.service.
 import { logger } from '../utils/logger.js'
 import { allowApiKeyScope } from '../lib/api-key-hook.js'
 import savedViewPersistenceRoutes from './saved-view-persistence.routes.js'
+import { addProductTags, createTag, listTags, removeProductTag } from '../services/products/tags.service.js'
 
 // ProductReadCache (ES.3) mirrors Product into a flat row used by the
 // /products grid. Every mutation here must refresh the affected rows
@@ -567,20 +570,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════════════════════════
   fastify.get('/tags', async (_request, reply) => {
     try {
-      const tags = await prisma.tag.findMany({
-        orderBy: { name: 'asc' },
-        include: { _count: { select: { products: true } } },
-      })
-      return {
-        items: tags.map((t) => ({
-          id: t.id,
-          name: t.name,
-          color: t.color,
-          icon: t.icon,
-          productCount: t._count.products,
-          updatedAt: t.updatedAt,
-        })),
-      }
+      // MCP full control P3: read by services/products/tags.service.ts.
+      return await listTags()
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
@@ -590,10 +581,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const body = request.body as { name?: string; color?: string; icon?: string | null }
       if (!body.name?.trim()) return reply.code(400).send({ error: 'name required' })
-      const tag = await prisma.tag.create({
-        data: { name: body.name.trim(), color: body.color ?? null, icon: body.icon ?? null },
-      })
-      return tag
+      // MCP full control P7: written by services/products/tags.service.ts.
+      return await createTag({ name: body.name, color: body.color, icon: body.icon })
     } catch (err: any) {
       if (err?.code === 'P2002') return reply.code(409).send({ error: 'Tag name already exists' })
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -637,18 +626,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string }
       const body = request.body as { tagIds?: string[] }
       const tagIds = Array.isArray(body.tagIds) ? body.tagIds : []
-      for (const tagId of tagIds) {
-        await prisma.productTag.upsert({
-          where: { productId_tagId: { productId: id, tagId } },
-          update: {},
-          create: { productId: id, tagId },
-        })
-      }
-      const current = await prisma.productTag.findMany({
-        where: { productId: id },
-        include: { tag: true },
-      })
-      return { tags: current.map((c) => c.tag) }
+      // MCP full control P7: written by services/products/tags.service.ts.
+      return { tags: await addProductTags(id, tagIds) }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
@@ -657,9 +636,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/products/:id/tags/:tagId', async (request, reply) => {
     try {
       const { id, tagId } = request.params as { id: string; tagId: string }
-      await prisma.productTag.delete({
-        where: { productId_tagId: { productId: id, tagId } },
-      })
+      await removeProductTag(id, tagId)
       return { ok: true }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -1205,6 +1182,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
               actor,
               reason,
               tx,
+              can: permissionCheckerFor(request),
             })
           }
           if (stockDelta !== 0) {
@@ -1269,6 +1247,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (err: any) {
         // A master price the product's own rules refuse (not above 0, outside its floor/ceiling): one plain sentence.
         if (err instanceof MasterPriceRefusedError) return reply.code(400).send({ error: err.message, code: err.code })
+        // S1 (F5) — a person without products.price.edit: refused, and the whole edit rolled back with it.
+        if (err instanceof MasterPricePermissionError) return reply.code(403).send({ error: err.message, code: err.code })
         if (err?.code === 'VERSION_CONFLICT') {
           // Read the latest version so the client can refresh + retry.
           const latest = await prisma.product.findUnique({
@@ -2029,84 +2009,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }>('/products/:id/scheduled-changes', async (request, reply) => {
     try {
-      const productId = request.params.id
-      const body = request.body ?? {}
-      const kind = body.kind
-      const payload = body.payload
-      const scheduledForRaw = body.scheduledFor
-
-      if (kind !== 'STATUS' && kind !== 'PRICE') {
-        return reply
-          .code(400)
-          .send({ error: 'kind must be STATUS or PRICE' })
-      }
-      if (!payload || typeof payload !== 'object') {
-        return reply.code(400).send({ error: 'payload (object) required' })
-      }
-      if (!scheduledForRaw) {
-        return reply
-          .code(400)
-          .send({ error: 'scheduledFor (ISO timestamp) required' })
-      }
-      const scheduledFor = new Date(scheduledForRaw)
-      if (Number.isNaN(scheduledFor.getTime())) {
-        return reply
-          .code(400)
-          .send({ error: `scheduledFor not a valid date: ${scheduledForRaw}` })
-      }
-      if (scheduledFor.getTime() <= Date.now()) {
-        return reply.code(400).send({
-          error:
-            'scheduledFor must be in the future (use the live PATCH endpoint to apply now)',
-        })
-      }
-
-      // Validate payload shape per kind so we surface garbage at submit
-      // time instead of cron-time.
-      if (kind === 'STATUS') {
-        const status = (payload as any).status
-        if (!['ACTIVE', 'DRAFT', 'INACTIVE'].includes(status)) {
-          return reply.code(400).send({
-            error: 'STATUS payload.status must be ACTIVE | DRAFT | INACTIVE',
-          })
-        }
-      } else if (kind === 'PRICE') {
-        const { basePrice, adjustPercent } = payload as any
-        const hasAbsolute =
-          typeof basePrice === 'number' &&
-          Number.isFinite(basePrice) &&
-          basePrice >= 0
-        const hasRelative =
-          typeof adjustPercent === 'number' && Number.isFinite(adjustPercent)
-        if (!hasAbsolute && !hasRelative) {
-          return reply.code(400).send({
-            error:
-              'PRICE payload requires basePrice (number >= 0) or adjustPercent (number)',
-          })
-        }
-      }
-
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: { id: true, deletedAt: true },
-      })
-      if (!product || product.deletedAt) {
-        return reply
-          .code(404)
-          .send({ error: 'product not found or soft-deleted' })
-      }
-
-      const created = await prisma.scheduledProductChange.create({
-        data: {
-          productId,
-          kind,
-          payload: payload as any,
-          scheduledFor,
-          createdBy: userIdFor(request),
-        },
-      })
+      const created = await createScheduledChange(request.params.id, request.body ?? {}, userIdFor(request))
       return reply.code(201).send({ ok: true, change: created })
     } catch (err: any) {
+      if (err instanceof ScheduledChangeError) return reply.code(err.status).send({ error: err.message })
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
@@ -2115,13 +2021,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:id/scheduled-changes',
     async (request, reply) => {
       try {
-        const productId = request.params.id
-        const rows = await prisma.scheduledProductChange.findMany({
-          where: { productId },
-          orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'desc' }],
-          take: 100,
-        })
-        return { ok: true, changes: rows }
+        return { ok: true, changes: await listScheduledChanges(request.params.id) }
       } catch (err: any) {
         return reply.code(500).send({ error: err?.message ?? String(err) })
       }
@@ -2132,23 +2032,22 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/scheduled-changes/:id/cancel',
     async (request, reply) => {
       try {
-        const id = request.params.id
-        const row = await prisma.scheduledProductChange.findUnique({
-          where: { id },
-          select: { id: true, status: true },
-        })
-        if (!row) return reply.code(404).send({ error: 'not found' })
-        if (row.status !== 'PENDING') {
-          return reply.code(409).send({
-            error: `cannot cancel — current status is ${row.status}`,
-          })
-        }
-        const updated = await prisma.scheduledProductChange.update({
-          where: { id },
-          data: { status: 'CANCELLED' },
-        })
-        return { ok: true, change: updated }
+        return { ok: true, change: await cancelScheduledChange(request.params.id) }
       } catch (err: any) {
+        if (err instanceof ScheduledChangeError) return reply.code(err.status).send({ error: err.message })
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
+  // 08 S12 — a scheduled change whose run died while applying it (UNKNOWN): the person who checked says applied or retry.
+  fastify.post<{ Params: { id: string }; Body: { outcome?: string } }>(
+    '/products/scheduled-changes/:id/resolve',
+    async (request, reply) => {
+      try {
+        return { ok: true, change: await resolveUnknownChange(request.params.id, String(request.body?.outcome ?? ''), userIdFor(request)) }
+      } catch (err: any) {
+        if (err instanceof ScheduledChangeError) return reply.code(err.status).send({ error: err.message })
         return reply.code(500).send({ error: err?.message ?? String(err) })
       }
     },

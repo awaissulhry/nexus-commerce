@@ -1,0 +1,2 @@
+400
+{"error":"attribute type \"number\" does not accept options (select, multiselect, text or textarea)"}

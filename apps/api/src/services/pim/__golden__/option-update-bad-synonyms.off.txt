@@ -1,0 +1,2 @@
+400
+{"error":"synonyms must be a list of non-empty text"}

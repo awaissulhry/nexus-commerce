@@ -51,6 +51,9 @@ import { FleetPageShell } from '../_shell/FleetPageShell'
 import { HowApprovalsWork } from './HowApprovalsWork'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { ApprovalCard, type FleetLabels } from './ApprovalCard'
+import { PlanCard, type PlanRow } from './PlanCard'
+import { useProfileScope } from '@/app/_shared/ProfileScope'
+import type { Reversibility } from './reversibility'
 import { claudeDoorSentence, outsideHeading, type ClaudeDoor } from './approval-words'
 import {
   ParkedRow,
@@ -63,6 +66,7 @@ import {
   type InboxView,
   type PrecedentRow,
 } from './ApprovalLists'
+import { reversibilityFrom } from './reversibility'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 
 /* ── the gate-state contract (agent-fleet-approvals.routes.ts) ─────────── */
@@ -717,6 +721,8 @@ function exampleApproval() {
     expiresAt: new Date(Date.now() + 18 * 3_600_000).toISOString(),
     reason: null,
     trackRecord: null,
+    /* What the API states for set-target-bid (the tool registry, C1): the example renders as a real row would. */
+    reversibility: 'full' as const,
     }
 }
 
@@ -802,6 +808,15 @@ interface OutsideRow {
   trackRecord: null
   /** Why this viewer may not approve it (the API's words); null when they may. */
   cannotApprove?: string | null
+  /** C5 — who decided a parked one: `auto` = the business's rule for a change Claude asked for. */
+  decisionVia?: string | null
+  /** C6 — a change plan: its summary, hash, steps and kinds of consequence. */
+  plan?: PlanRow['plan']
+  /** C1 — how far it can be put back (the tool registry's). */
+  reversibility?: Reversibility | null
+  /** C9 — the tool's own title, and whether it reaches a marketplace or a buyer (the registry's). */
+  title?: string | null
+  openWorld?: boolean
 }
 
 function OutsideQueue({
@@ -837,6 +852,8 @@ function OutsideQueue({
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
   onSnooze: (id: string, until: Date | null) => void
 }) {
+  // C9 — the business a change is in, named on its card.
+  const business = useProfileScope()?.activeProfile?.name ?? null
   /*
    * S5.4 — empty is the NORMAL state, and it has to earn its line.
    *
@@ -935,7 +952,7 @@ function OutsideQueue({
         <div className="aq-outheadbody">
           {/* MCP.12 — was "N requests can actually change something on Amazon": wrong for an
               eBay price change, and a Nexus-only request reaches no channel at all. */}
-          <h3 id="aq-out-h">{outsideHeading(rows.map((r) => r.toolName))}</h3>
+          <h3 id="aq-out-h">{outsideHeading(rows.map((r) => ({ toolName: r.toolName, openWorld: r.openWorld })))}</h3>
           {/* The contrast sentence, and the reason this section exists, in the
               header rather than in a separate tinted box below it. The box was
               a second red surface inside an already-red card, which spent the
@@ -968,7 +985,22 @@ function OutsideQueue({
                 onUndo={onUndo}
                 onCommit={onCommit}
                 onHold={onHold}
+                byRule={a.decisionVia === 'auto'}
               />
+            ) : a.toolName === 'submit-change-plan' && a.plan ? (
+              /* C9 — a change plan: ONE card for all its steps (one tick per kind of consequence, one counted button). */
+              <div key={a.id} className="aq-outrow">
+                <p className="aq-outorigin">
+                  <strong>{sentenceCase(originOf(a.originKey).name)}</strong> asked for this plan —{' '}
+                  {originOf(a.originKey).what}.
+                </p>
+                <PlanCard
+                  approval={{ id: a.id, preview: a.preview, cannotApprove: a.cannotApprove ?? null, plan: a.plan }}
+                  busy={busy}
+                  onDecide={onDecide}
+                  onChanged={onRetry}
+                />
+              </div>
             ) : (
               /*
                * S8.4 — no checkbox here, and that is a RULE, not an oversight.
@@ -1006,6 +1038,10 @@ function OutsideQueue({
                     reason: a.reason,
                     trackRecord: null,
                     cannotApprove: a.cannotApprove ?? null,
+                    reversibility: a.reversibility ?? null,
+                    title: a.title ?? null,
+                    openWorld: a.openWorld,
+                    business,
                   }}
                   labels={labels}
                   /* One source for the name, so the origin line above the card
@@ -1279,8 +1315,8 @@ export function ApprovalsClient() {
       }
       return 0
     }
-    const irreversible = (a: ApprovalRow) =>
-      a.toolName === 'send-customer-message' || a.toolName === 'publish-listing' ? 1 : 0
+    // C1 — from the row (the tool registry, through the API), never a list of tool names kept here.
+    const irreversible = (a: ApprovalRow) => (reversibilityFrom(a.reversibility) === 'full' ? 0 : 1)
 
     return [...rows].sort(
       (x, y) =>

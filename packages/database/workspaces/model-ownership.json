@@ -32,7 +32,8 @@
     "AssortmentShare",
     "CatalogLink",
     "StockPoolGrant",
-    "AssortmentChange"
+    "AssortmentChange",
+    "ChannelItemClaim"
   ],
   "workspaceModels": [
     "Product",
@@ -296,6 +297,9 @@
     "AgentRun",
     "AgentTool",
     "AgentApproval",
+    "AgentChange",
+    "AgentAutonomy",
+    "AgentPlanStep",
     "AgentMemory",
     "PromptTemplate",
     "Goal",
@@ -399,6 +403,7 @@
     "DevelopmentAttachment",
     "DevelopmentCertification",
     "AdsAutomationState",
+    "AutomationSwitch",
     "AmazonReportRun",
     "SharedListingMembership",
     "SyncChannelPolicy",
@@ -465,6 +470,9 @@
     "ChannelMappingUse",
     "ProductMediaPlan",
     "ShopifyColourProduct",
-    "ShopifyColourSync"
+    "ShopifyColourSync",
+    "BuyerMessage",
+    "ChannelHeldId",
+    "ChannelHeldSweep"
   ]
 }

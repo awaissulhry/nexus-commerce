@@ -226,8 +226,8 @@ const FINDING_PHRASE: Record<string, string> = {
   cron_stale: 'a scheduled job that has gone quiet',
 }
 
-/** What an action would actually do, in plain English. */
-const TOOL_PHRASE: Record<string, string> = {
+/** What an action would actually do, in plain English. Exported for its test: a tool without a phrase reads as its name. */
+export const TOOL_PHRASE: Record<string, string> = {
   'create-negative-keyword': 'stop ads showing for a search term',
   'graduate-keyword': 'promote a search term to its own keyword',
   'set-target-bid': "change a keyword's bid",
@@ -235,6 +235,29 @@ const TOOL_PHRASE: Record<string, string> = {
   'set-price': 'change a price',
   'send-customer-message': 'send a message to a customer',
   'publish-listing': 'publish a listing',
+  // MCP full control, section 03 — text changes, saved in Nexus only.
+  'set-content': "change a product's text in Nexus",
+  'set-listing-content': "change one listing's own text in Nexus",
+  'bulk-content-change': 'change the text of several products in Nexus',
+  'update-order': 'change an order in Nexus',
+  'update-customer': 'change a customer record',
+  'triage-reviews': 'triage reviews',
+  'create-shipments': 'make shipments',
+  'update-shipment': 'change shipments',
+  'buy-shipping-label': 'buy shipping labels',
+  'void-shipping-label': 'void shipping labels',
+  'confirm-shipment': 'confirm shipments to the channel',
+  'cancel-order': 'cancel an order',
+  'create-return': 'open a return',
+  'update-return': 'move returns along',
+  'dispose-return-items': 'restock or scrap returns',
+  'issue-refund': 'refund a buyer',
+  'request-review': 'ask a buyer for a review',
+  'reply-to-review': 'reply to a review',
+  'issue-fiscal-document': 'number invoices or credit notes',
+  'schedule-pickup': 'book a carrier pickup',
+  'sync-orders-now': 'sync orders now',
+  'set-shopify-content': "change a Shopify listing's store fields in its Nexus draft",
 }
 
 /** Why a run happened. */

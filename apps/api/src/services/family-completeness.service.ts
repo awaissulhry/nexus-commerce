@@ -283,6 +283,29 @@ export class FamilyCompletenessService {
     }
     return results
   }
+
+  /**
+   * MCP full control P8 — completeness of these products as if each family declared `effectiveByFamily` (a change not
+   * made yet: Claude's dry run of a family change measures "N products become incomplete" without writing). The same
+   * scoring as `computeMany`; a product whose family is not in the map, or that does not exist, is left out.
+   */
+  async computeManyWith(
+    productIds: readonly string[],
+    effectiveByFamily: ReadonlyMap<string, EffectiveFamilyAttribute[]>,
+  ): Promise<Map<string, CompletenessResult>> {
+    const ids = [...new Set(productIds)]
+    const products = ids.length ? await this.client.product.findMany({ where: { id: { in: ids } }, select: COMPLETENESS_PRODUCT_SELECT }) : []
+    const attributeIds = [...new Set([...effectiveByFamily.values()].flatMap((e) => e.map((a) => a.attributeId)))]
+    const attrs = attributeIds.length
+      ? await this.client.customAttribute.findMany({ where: { id: { in: attributeIds } }, select: { id: true, code: true, localizable: true } })
+      : []
+    const results = new Map<string, CompletenessResult>()
+    for (const product of products) {
+      const effective = product.familyId ? effectiveByFamily.get(product.familyId) : undefined
+      if (effective) results.set(product.id, completenessOf(product as never, effective, attrs))
+    }
+    return results
+  }
 }
 
 export const familyCompletenessService = new FamilyCompletenessService()

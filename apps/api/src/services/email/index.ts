@@ -17,7 +17,8 @@
  */
 
 import { resolveTrackingUrl } from '../carriers.service.js'
-import { sendEmail, __test as transportTest } from './transport.js'
+import { sendEmail, __test as transportTest, type SendResult } from './transport.js'
+import { resolveBusinessIdentity, xaviaIdentity, type BusinessIdentity } from '../business-identity.service.js'
 
 export type EmailKind = 'shipped' | 'delivered' | 'exception'
 
@@ -55,11 +56,19 @@ export class EmailError extends Error {
  * Italian first; English fallback. Plain HTML, inline styles since
  * many email clients still don't load external stylesheets.
  */
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** O3 — rendered as `identity`, the business the order belongs to (Xavia's copy is unchanged). */
 function render(
   kind: EmailKind,
   ctx: ShipmentEmailContext,
+  identity: BusinessIdentity,
 ): { subject: string; html: string; text: string } {
   const it = (ctx.locale ?? 'it') === 'it'
+  const brandName = identity.brandName
+  const brand = escapeHtml(identity.brandName)
+  const support = escapeHtml(identity.supportEmail)
   const trackUrl =
     ctx.brandedTrackingUrl
     ?? ctx.trackingUrl
@@ -69,15 +78,15 @@ function render(
 
   const subject = it
     ? kind === 'shipped'
-      ? `Il tuo ordine Xavia è in viaggio · ${ctx.orderChannelId}`
+      ? `Il tuo ordine ${brandName} è in viaggio · ${ctx.orderChannelId}`
       : kind === 'delivered'
-      ? `Il tuo ordine Xavia è stato consegnato · ${ctx.orderChannelId}`
+      ? `Il tuo ordine ${brandName} è stato consegnato · ${ctx.orderChannelId}`
       : `Aggiornamento sulla consegna del tuo ordine · ${ctx.orderChannelId}`
     : kind === 'shipped'
-    ? `Your Xavia order is on its way · ${ctx.orderChannelId}`
+    ? `Your ${brandName} order is on its way · ${ctx.orderChannelId}`
     : kind === 'delivered'
-    ? `Your Xavia order has been delivered · ${ctx.orderChannelId}`
-    : `Update on your Xavia order delivery · ${ctx.orderChannelId}`
+    ? `Your ${brandName} order has been delivered · ${ctx.orderChannelId}`
+    : `Update on your ${brandName} order delivery · ${ctx.orderChannelId}`
 
   const body = it
     ? kind === 'shipped'
@@ -109,8 +118,8 @@ function render(
     : ''
 
   const unsubFooter = it
-    ? `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Questa email è stata inviata per il tuo ordine ${ctx.orderChannelId}. Per dubbi, scrivi a <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>`
-    : `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">This email was sent for your order ${ctx.orderChannelId}. Questions? Reach us at <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>`
+    ? `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Questa email è stata inviata per il tuo ordine ${ctx.orderChannelId}. Per dubbi, scrivi a <a href="mailto:${support}" style="color:#2563eb;">${support}</a>.</p>`
+    : `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">This email was sent for your order ${ctx.orderChannelId}. Questions? Reach us at <a href="mailto:${support}" style="color:#2563eb;">${support}</a>.</p>`
 
   const html = `<!doctype html>
 <html><body style="margin:0;padding:0;background:#f8fafc;">
@@ -118,7 +127,7 @@ function render(
   <tr><td align="center">
     <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
       <tr><td>
-        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">${brand}</div>
         <p style="font-size:16px;margin:0 0 12px 0;">${greet}</p>
         <p style="font-size:16px;margin:0 0 20px 0;">${body}</p>
         ${eta}
@@ -131,7 +140,7 @@ function render(
 </table>
 </body></html>`
 
-  const text = `${greet}\n\n${body}\n\n${ctx.trackingNumber ? `${ctx.carrier} · ${ctx.trackingNumber}\n` : ''}${trackUrl ? `${trackUrl}\n\n` : ''}— Xavia`
+  const text = `${greet}\n\n${body}\n\n${ctx.trackingNumber ? `${ctx.carrier} · ${ctx.trackingNumber}\n` : ''}${trackUrl ? `${trackUrl}\n\n` : ''}— ${brandName}`
 
   return { subject, html, text }
 }
@@ -144,18 +153,23 @@ function render(
 export async function sendShipmentEmail(
   kind: EmailKind,
   ctx: ShipmentEmailContext,
-) {
-  const { subject, html, text } = render(kind, ctx)
+): Promise<SendResult> {
+  // O3 — sent as the business the order belongs to; refused (nothing sent) when it has no identity for buyers.
+  const found = await resolveBusinessIdentity()
+  if (found.ok === false) return { ok: false, provider: 'mock', dryRun: false, error: found.reason }
+  const { subject, html, text } = render(kind, ctx, found.identity)
   return sendEmail({
     to: ctx.to,
     subject,
     html,
     text,
     tag: `shipment-${kind}`,
+    ...(found.identity.emailFrom ? { from: found.identity.emailFrom } : {}),
   })
 }
 
 export const __test = {
   isReal: transportTest.isReal,
-  render,
+  /** The legacy runner renders as Xavia. */
+  render: (kind: EmailKind, ctx: ShipmentEmailContext) => render(kind, ctx, xaviaIdentity()),
 }

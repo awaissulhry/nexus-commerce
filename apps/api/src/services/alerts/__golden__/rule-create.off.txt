@@ -1,0 +1,2 @@
+201
+{"workspaceId":"nexus_legacy_workspace","id":"<created id>","name":"Gamma latency","description":"Slow calls","metric":"latencyP95","operator":"gte","threshold":900,"windowMinutes":30,"channel":"AMAZON","notificationChannels":["log"],"enabled":false,"lastEvaluatedAt":null,"lastValue":null,"lastFired":false,"createdAt":"2026-09-15T10:00:00.000Z","updatedAt":"2026-09-15T10:00:00.000Z"}

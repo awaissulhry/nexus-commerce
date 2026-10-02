@@ -14,6 +14,14 @@
  *
  * The 2026-07-28 protocol and the 2025 one are both served (the SDK's stateless fallback); GET and
  * DELETE get 405 in the route, because nothing here has a session or a stream to resume.
+ *
+ * MCP full control C3 — the business is named everywhere Claude looks: the server's title ("Nexus — Xavia
+ * Racing"), its instructions, and every change tool's schema, which gains a REQUIRED `business` argument: the
+ * business's name, as a check. The door (mcp-tool-call.ts) refuses a change whose name is not this connection's,
+ * and strips the name before the tool runs: it never selects anything. Every result carries `business`.
+ *
+ * MCP full control C5 — a tool the business turned off for Claude (its trust level `off`) is not offered, and the
+ * door refuses it by name. The list is read fresh for each request, in the token's business.
  */
 
 import {
@@ -27,19 +35,37 @@ import {
 import { logger } from '../../utils/logger.js'
 import { servingBuild } from '../health.service.js'
 import { toolsFor } from '../agents/call-tool.js'
+import { claudeOffTools } from '../agents/claude-trust.service.js'
 import { inputJsonSchema } from '../agents/tool-loop.service.js'
 import type { AgentTool } from '../agents/tool-types.js'
 import type { McpScope } from '../oauth/oauth-config.js'
-import { principalOf, type McpPrincipal } from './mcp-auth.js'
+import { BUSINESS_ARGUMENT, principalOf, type McpBusiness, type McpPrincipal } from './mcp-auth.js'
 import { runToolForClaude } from './mcp-tool-call.js'
 
-const INSTRUCTIONS = [
-  'Nexus is the back office for selling on Amazon, eBay, Shopify and Etsy: catalog, listings, stock, orders and advertising.',
-  'Every tool works inside the one business this connection was approved for.',
-  'Read-only tools answer from Nexus data. A change tool changes nothing from here: it returns a preview and an approvalId,',
-  'and a person must approve it in the Nexus Approvals page (the link is in the result). You cannot approve changes.',
-  'Use approval-status with the approvalId to see what became of one.',
-].join(' ')
+let build: string | null = null
+
+/** C3 — what Claude is told, naming the one business this connection works in. */
+export function mcpInstructions(business: McpBusiness): string {
+  return [
+    'Nexus is the back office for selling on Amazon, eBay, Shopify and Etsy: catalog, listings, stock, orders and advertising.',
+    `This connection works in the business "${business.name}" only: every tool reads and changes that business, and`,
+    'every result says so (business). The same SKU can exist in another business; never reuse an id or a SKU read on',
+    `another connection. Every change tool needs business: "${business.name}" — a check: any other name is refused.`,
+    'Read-only tools answer from Nexus data. A change tool changes nothing from here: it returns a preview and an approvalId,',
+    'and a person must approve it in the Nexus Approvals page (the link is in the result) — unless the business set that',
+    'change to run by its rule (status runs_by_rule): it then runs after a short window in which a person can stop it.',
+    'You cannot approve changes, and you cannot change what may run by rule. A change set to "confirm in Claude" is',
+    'approved by the person who asked: they read the 6-digit code from their authenticator app and you pass it with',
+    'confirm-change — never guess, store or reuse a code.',
+    'Use approval-status with the approvalId to see what became of one; undo-change asks to put a change back.',
+  ].join(' ')
+}
+
+/** C3 — the server's own name and title, naming the business ("Nexus — Xavia Racing"). */
+export function mcpServerInfo(business: McpBusiness): { name: string; title: string; version: string } {
+  return { name: 'nexus', title: `Nexus — ${business.name}`, version: (build ??= servingBuild()) }
+}
+
 
 /** The scope a tool needs: reading, or asking for a change. */
 export function requiredScope(tool: Pick<AgentTool, 'readOnly'>): McpScope {
@@ -57,11 +83,33 @@ export function toolAnnotations(tool: AgentTool): ToolAnnotations {
 }
 
 /**
- * The tool's schema as the SDK needs it: the JSON Schema the assistant also gets, and no second
+ * C3 — the JSON Schema Claude is given: the tool's own (the one the in-app assistant also gets), plus, for a change
+ * tool, the required `business` name. A read is offered exactly as it is.
+ */
+export function mcpInputSchema(tool: AgentTool, business: McpBusiness): Record<string, unknown> {
+  const own = inputJsonSchema(tool)
+  if (tool.readOnly) return own
+  const properties = (own.properties ?? {}) as Record<string, unknown>
+  const required = Array.isArray(own.required) ? (own.required as string[]) : []
+  return {
+    ...own,
+    properties: {
+      ...properties,
+      [BUSINESS_ARGUMENT]: {
+        type: 'string',
+        description: `the name of the business this change is for: "${business.name}". A check only — any other name is refused and nothing is queued`,
+      },
+    },
+    required: [...required, BUSINESS_ARGUMENT],
+  }
+}
+
+/**
+ * The tool's schema as the SDK needs it: the JSON Schema Claude is given, and no second
  * validation. call-tool.ts parses every call with the zod schema and words its own refusals.
  */
-function doorSchema(tool: AgentTool): StandardSchemaWithJSON<Record<string, unknown>> {
-  const schema = inputJsonSchema(tool)
+function doorSchema(tool: AgentTool, business: McpBusiness): StandardSchemaWithJSON<Record<string, unknown>> {
+  const schema = mcpInputSchema(tool, business)
   return {
     '~standard': {
       version: 1,
@@ -80,18 +128,17 @@ function scopeChallenge(scope: McpScope): ScopeChallengeHandler {
       : undefined
 }
 
-let build: string | null = null
 
-/** One request's server: the person's tools, and nothing else. */
-export function buildMcpServer(principal: McpPrincipal): McpServer {
-  const tools = toolsFor(principal)
+/** One request's server: the person's tools, and nothing else. C5: minus the tools the business turned off for Claude. */
+export function buildMcpServer(principal: McpPrincipal, off: ReadonlySet<string> = new Set()): McpServer {
+  const tools = toolsFor(principal).filter((tool) => !off.has(tool.name))
   const server = new McpServer(
-    { name: 'nexus', title: 'Nexus Commerce', version: (build ??= servingBuild()) },
+    mcpServerInfo(principal.business),
     {
       // Nothing is pushed later: the list changes only with the person's permissions. A person
       // with no tool is not told there are tools (the SDK answers tools/list once one exists).
       capabilities: tools.length > 0 ? { tools: { listChanged: false } } : {},
-      instructions: INSTRUCTIONS,
+      instructions: mcpInstructions(principal.business),
     },
   )
   for (const tool of tools) {
@@ -100,7 +147,7 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
       {
         title: tool.title,
         description: tool.description,
-        inputSchema: doorSchema(tool),
+        inputSchema: doorSchema(tool, principal.business),
         annotations: toolAnnotations(tool),
         scopeChallenge: scopeChallenge(requiredScope(tool)),
       },
@@ -113,11 +160,12 @@ export function buildMcpServer(principal: McpPrincipal): McpServer {
 /** The HTTP face of the MCP SDK, created once per API process. */
 export function createNexusMcpHandler(): McpHttpHandler {
   return createMcpHandler(
-    ({ authInfo }) => {
+    async ({ authInfo }) => {
       // The route authenticates before this runs; a request without a principal is a bug.
       const principal = principalOf(authInfo)
       if (!principal) throw new Error('MCP request reached the server without an authenticated caller')
-      return buildMcpServer(principal)
+      // Inside the route's binding to the token's business: that business's levels only.
+      return buildMcpServer(principal, await claudeOffTools())
     },
     {
       onerror: (error) => logger.warn('[mcp] request refused or failed', { error: error.message }),

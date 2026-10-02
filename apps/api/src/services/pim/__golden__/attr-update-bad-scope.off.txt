@@ -1,0 +1,2 @@
+400
+{"error":"scope must be one of global, per_variant"}

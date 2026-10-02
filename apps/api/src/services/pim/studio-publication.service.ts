@@ -231,6 +231,22 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   return { facts, review, prepared, changePlan, revision: publicationDigest([facts.revision, changePlan ?? prepared, baselineRevision, mode, overwrite]) }
 }
 
+/**
+ * The review of one destination and what decides whether it may be stored: the publication key, a publication at this
+ * destination still waiting for its result, and whether only photos may be sent. Reads only (the channel too, through
+ * the studio transports); it writes nothing.
+ */
+async function reviewPlan(productId: string, scope: StudioPublishScope, options: { verify?: boolean } = {}) {
+  const plan = await buildReview(productId, scope, options)
+  const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
+  const unresolved = await prisma.bulkOperation.findFirst({ where: { status: { in: IN_FLIGHT }, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })
+  // P4c — errors that each name a field (an off-list Season value) block that field, not the listing: on a change-only
+  // review the photos can still be sent. Any error that names no field blocks the review as before.
+  const errors = plan.review.issues.filter(i => i.severity === 'error')
+  const photosOnly = errors.length > 0 && errors.every(i => i.field) && !!plan.changePlan && !!plan.review.changes?.some(c => c.selectable && isPhotoChangeId(c.id))
+  return { plan, key, unresolved, errors, photosOnly }
+}
+
 /** A durable review also owns retries, across API processes and browser reconnects. */
 export async function previewStudioPublication(productId: string, scope: StudioPublishScope, userId: string | null): Promise<StudioPublishReview> {
   if (scope.channel === 'SHOPIFY') {
@@ -241,21 +257,29 @@ export async function previewStudioPublication(productId: string, scope: StudioP
     const workspace = await getContentWorkspace(productId, contentScope)
     if (!workspace.initialized) await saveContentWorkspace(productId, contentScope, { draft: workspace.draft, expectedRevision: workspace.revision })
   }
-  const plan = await buildReview(productId, scope, { verify: true })
-  const id = randomUUID()
-  const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
-  const unresolved = await prisma.bulkOperation.findFirst({ where: { status: { in: IN_FLIGHT }, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })
+  const { plan, key, unresolved, errors, photosOnly } = await reviewPlan(productId, scope, { verify: true })
   if (unresolved) return { ...plan.review, ...(unresolved.userId === userId ? { previousPublicationId: unresolved.id } : {}), issues: [...plan.review.issues, { severity: 'error', message: `A previous publication still needs a result (${unresolved.id}). ${unresolved.userId === userId ? 'Check its status before publishing again.' : 'Ask the colleague who submitted it to check its status.'}` }] }
-  // P4c — errors that each name a field (an off-list Season value) block that field, not the listing: on a change-only
-  // review the photos can still be sent. Any error that names no field blocks the review as before.
-  const errors = plan.review.issues.filter(i => i.severity === 'error')
-  const photosOnly = errors.length > 0 && errors.every(i => i.field) && !!plan.changePlan && !!plan.review.changes?.some(c => c.selectable && isPhotoChangeId(c.id))
   if (!plan.prepared || (errors.length && !photosOnly)) return plan.review
+  const id = randomUUID()
   const review = { ...plan.review, id, ...(photosOnly ? { photosOnly: true } : {}) }
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: plan.review.rows.length, changeCount: 0,
     expiresAt: new Date(plan.review.expiresAt), changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision,
       changeVersion: plan.changePlan ? 1 : null, changePlan: plan.changePlan, review }) } })
   return review
+}
+
+/**
+ * MCP full control L3 — the studio's review of one destination, built exactly as `previewStudioPublication` builds it,
+ * WITHOUT saving anything: no BulkOperation row (so no review id: nothing to select or submit from it) and no Shopify
+ * content save (an uninitialised Shopify document is reviewed as its default draft — the draft that save would store —
+ * and no Shopify family draft listing is started). It reads the channel live, as the studio's review does, through the
+ * studio transports (the channel gateway). A publication at this destination still waiting for its result is named,
+ * whoever submitted it: its result belongs to the business (`publicationResultFor`).
+ */
+export async function reviewStudioPublication(productId: string, scope: StudioPublishScope): Promise<StudioPublishReview> {
+  const { plan, unresolved, photosOnly } = await reviewPlan(productId, scope)
+  if (unresolved) return { ...plan.review, previousPublicationId: unresolved.id, issues: [...plan.review.issues, { severity: 'error', message: `A previous publication still needs a result (${unresolved.id}). Check its status before publishing again.` }] }
+  return { ...plan.review, ...(plan.prepared && photosOnly ? { photosOnly: true } : {}) }
 }
 
 /** The exact wire preview is compiled from the saved review. No channel reads or writes occur here. */
@@ -285,6 +309,69 @@ export async function studioPublicationResult(productId: string, id: string, use
   const operation = await prisma.bulkOperation.findFirst({ where: { id, userId } })
   const data = object(operation?.changes)
   if (!operation || data.kind !== KIND || data.productId !== productId) throw new WorkspaceScopeError('Publication not found.', 404)
+  return settlePublication(operation, data, userId, () => studioPublicationResult(productId, id, userId))
+}
+
+/**
+ * MCP full control L3 — a publication's result, read in this BUSINESS (row-level security scopes the row), not only by
+ * the person who submitted it: the approver of a change Claude asked for and the person who asked may differ, and the
+ * settle sweep (`jobs/studio-publication-settle.job.ts`) has no person at all. It settles exactly as
+ * `studioPublicationResult` does — the same step, reading the channel through the gateway — and records in the
+ * submitter's name, as the submitter's own read would.
+ */
+export async function publicationResultFor(id: string): Promise<StudioPublishResult> {
+  const operation = await prisma.bulkOperation.findFirst({ where: { id } })
+  const data = object(operation?.changes)
+  if (!operation || data.kind !== KIND) throw new WorkspaceScopeError('Publication not found.', 404)
+  return settlePublication(operation, data, operation.userId, () => publicationResultFor(id))
+}
+
+/**
+ * MCP full control L4 — the publications of this business the settle sweep may settle (`publicationResultFor`): an Amazon
+ * feed left SUBMITTED, or an eBay Trading item left UNVERIFIED with its item number, sent at least `minAgeMs` ago (a
+ * fresh one is left to the request that sent it) and at most `horizonMs` ago. Oldest first, at most `limit`.
+ */
+export async function unsettledPublicationIds(options: { minAgeMs: number; horizonMs: number; limit: number; now?: number }): Promise<string[]> {
+  const now = options.now ?? Date.now()
+  const latest = now - options.minAgeMs
+  const rows = await prisma.bulkOperation.findMany({
+    where: { AND: [
+      { changes: { path: ['kind'], equals: KIND } },
+      { OR: [{ status: 'SUBMITTED', changes: { path: ['scope', 'channel'], equals: 'AMAZON' } }, { status: 'UNVERIFIED', changes: { path: ['scope', 'channel'], equals: 'EBAY' } }] },
+      { createdAt: { gte: new Date(now - options.horizonMs), lte: new Date(latest) } },
+    ] },
+    select: { id: true, changes: true }, orderBy: { createdAt: 'asc' }, take: options.limit,
+  })
+  return rows.filter(row => {
+    const data = object(row.changes)
+    const startedAt = typeof data.startedAt === 'string' ? Date.parse(data.startedAt) : NaN
+    // Only what the settle step reads: a reference to ask about, and for eBay a Trading item (an Inventory receipt is final).
+    return Number.isFinite(startedAt) && startedAt <= latest && !!object(data.result).results?.[0]?.reference && data.inventory !== true
+  }).map(row => row.id)
+}
+
+/**
+ * MCP full control L3 — a publication as it is stored, read in this business (row-level security), whoever submitted it:
+ * its product, destination, send time, status and the result recorded so far. A PURE read: it never asks the channel and
+ * never settles (`publicationResultFor` and the studio's own read do). Null when there is none.
+ */
+export async function readStoredPublication(id: string): Promise<{ productId: string; scope: StudioPublishScope; startedAt: string | null
+  status: string; result: StudioPublishResult | null } | null> {
+  const operation = await prisma.bulkOperation.findFirst({ where: { id }, select: { status: true, changes: true } })
+  const data = object(operation?.changes)
+  if (!operation || data.kind !== KIND) return null
+  return { productId: String(data.productId), scope: data.scope as StudioPublishScope, startedAt: typeof data.startedAt === 'string' ? data.startedAt : null,
+    status: operation.status, result: data.result ? data.result as StudioPublishResult : null }
+}
+
+/**
+ * The one settle step of a stored publication: a stored result returns as it is, unless an eBay item still needs its
+ * read-back or an Amazon feed its processing report; a send past its receipt deadline becomes UNVERIFIED. `again` re-reads
+ * after another request recorded the result first. `userId` is the submitter (the records and held prices name them).
+ */
+async function settlePublication(operation: { id: string; status: string; createdAt: Date | null }, data: Record<string, any>, userId: string | null,
+  again: () => Promise<StudioPublishResult>): Promise<StudioPublishResult> {
+  const id = operation.id
   if (data.result) {
     const previous = data.result as StudioPublishResult
     if (operation.status === 'UNVERIFIED' && data.scope.channel === 'EBAY' && data.inventory !== true && previous.results[0]?.reference) {
@@ -312,7 +399,7 @@ export async function studioPublicationResult(productId: string, id: string, use
   if (operation.status === 'PUBLISHING' && startedAt && Date.now() - startedAt > RECEIPT_DEADLINE_MS) {
     const result: StudioPublishResult = { id, status: 'UNVERIFIED', message: 'The submission did not record a channel receipt within 30 minutes. It may have reached the channel. Check its submission history before retrying; Nexus will not send a duplicate automatically.', results: [] }
     const updated = await storeResult(id, data, userId, result, ['PUBLISHING'])
-    return updated.count ? result : studioPublicationResult(productId, id, userId)
+    return updated.count ? result : again()
   }
   return { id, status: operation.status === 'PUBLISHING' ? 'PUBLISHING' : 'FAILED', message: operation.status === 'PUBLISHING' ? 'The channel is processing this publication. Check again for its result.' : 'This review has not been submitted.', results: [] }
 }

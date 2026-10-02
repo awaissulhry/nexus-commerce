@@ -1,0 +1,2 @@
+200
+{"workspaceId":"nexus_legacy_workspace","id":"<created id>","name":"Clearance","color":"#0000ff","icon":null,"metadata":null,"createdAt":"<created at>","updatedAt":"2026-09-15T10:00:00.000Z"}

@@ -1,0 +1,2 @@
+200
+{"folders":[{"workspaceId":"nexus_legacy_workspace","id":"golden-folder-a","name":"Lookbook","parentId":null,"order":0,"createdAt":"2026-09-15T05:00:00.000Z","updatedAt":"2026-09-15T05:00:00.000Z","_count":{"assets":0,"children":0}},{"workspaceId":"nexus_legacy_workspace","id":"golden-folder-b","name":"Packshots","parentId":null,"order":0,"createdAt":"2026-09-15T05:10:00.000Z","updatedAt":"2026-09-15T05:10:00.000Z","_count":{"assets":2,"children":0}}]}

@@ -1,212 +1,308 @@
 /**
- * NAF.C — the three preview-only ads tools. Handlers are dry-run previews
- * (read-only); none has an execute, so an approved item cannot reach
- * Amazon by construction until Phase F. Hard denials (protected term,
- * already-negated, pinned) return ok:false so the gate never queues them
- * even if the critic were bypassed.
+ * NAF.C / MCP full control A4 — the fleet's ads tools, shared with Claude, run for real: through the one door
+ * (call-tool.ts) and the approval gate (approval-gate.service.ts), on PGlite with the production schema and the
+ * business-isolation policies. The job queue is a stub (nothing leaves the process); the ads write gate is the real one,
+ * in sandbox mode unless a test switches Amazon Ads writes to live.
+ *
+ * set-target-bid (A4): previews in the campaign's own currency with the bid that lands; refuses, without queuing, what
+ * the gate would refuse (not on the live-write allowlist), a pin, a non-SP campaign and a raise of a suppressed bid;
+ * once approved it writes as the approver with changeSetId = the approval, records the change, and undo-change puts the
+ * old bid back; a moved bid, a changed reach and a request made before the switch are never run.
+ * create-negative-keyword (A5): ad-group negatives only, created as the approver, undone by undo-ad-change retiring
+ * them; createNegative binds the live-write allowlist when it is given the campaign. graduate-keyword (A5): into the
+ * named or the resolved harvest destination, created as the approver, undone by lowering it to the floor (d3).
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FEATURES, FIELDS } from '@nexus/shared/permissions'
+import { formulaDatabase } from '../../../test-support/formula-database.js'
+import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 
-vi.mock('../../../db.js', () => ({
-  default: {
-    campaign: { findFirst: vi.fn() },
-    adTarget: { findMany: vi.fn(), findUnique: vi.fn() },
-    adKeywordProtection: { findMany: vi.fn() },
-    amazonAdsSearchTerm: { aggregate: vi.fn() },
-  },
+let database: Awaited<ReturnType<typeof formulaDatabase>>
+vi.mock('../../../db.js', async () => {
+  const { contextualDatabase } = await import('../../../lib/database-context.js')
+  let wrapped: object | null = null
+  return { default: new Proxy({}, { get: (_t, p) => Reflect.get((wrapped ??= contextualDatabase(database.client as never)), p) }) }
+})
+vi.mock('../../../lib/queue.js', () => {
+  const queue = { add: vi.fn(async () => ({})), addBulk: vi.fn(async () => []), getJob: vi.fn(async () => null), getJobCounts: vi.fn(async () => ({})) }
+  return {
+    addJobSafely: vi.fn(async () => ({ enqueued: false, skipped: true })),
+    outboundSyncQueue: queue, channelSyncQueue: queue, readCacheQueue: queue, searchIndexQueue: queue, bulkJobQueue: queue, adsSyncQueue: queue,
+    queueEvents: { on: vi.fn() }, channelSyncQueueEvents: { on: vi.fn() },
+    getQueueStats: vi.fn(async () => ({})), initializeQueue: vi.fn(async () => true), closeQueue: vi.fn(async () => {}),
+    getRedisRuntimeStatus: () => ({ configured: false, status: 'not-initialized' }), resolveRedisTarget: vi.fn(), resetEnqueueCircuitForTests: vi.fn(),
+    redis: { connection: null },
+  }
+})
+
+// The queue row's destination account: on PGlite's single connection the account lookup cannot run beside the open
+// enqueue transaction, and an ads row names no listing account anyway (the ads worker resolves its Amazon Ads profile).
+vi.mock('../../outbound-destination.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  resolveDestinations: async (_db: unknown, rows: unknown[]) => rows.map(() => ({ connectionId: null, reason: 'NO_ACCOUNT' })),
 }))
 
-import prisma from '../../../db.js'
-import { ADS_PROPOSE_TOOLS } from './ads-propose.tools.js'
+import { callTool, type UserPrincipal } from '../call-tool.js'
+import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
+import { undoRequestFor } from '../change-record.service.js'
+import { expirePreSwitchAdRequests } from '../../agent-fleet/approval-inbox.service.js'
+import { getTool } from '../tool-registry.js'
 
-const db = vi.mocked(prisma, true)
-const byName = new Map(ADS_PROPOSE_TOOLS.map((t) => [t.name, t]))
+const A = LEGACY_WORKSPACE_ID
+const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
+const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  db.campaign.findFirst.mockResolvedValue({
-    id: 'c1',
-    name: 'GALE | IT | Phrase',
-    marketplace: 'IT',
-    pinPlacement: false,
-    pinBids: false,
-    pinBudget: false,
-    pinNote: null,
-  } as never)
-  db.adTarget.findMany.mockResolvedValue([] as never)
-  db.adKeywordProtection.findMany.mockResolvedValue([] as never)
-  db.amazonAdsSearchTerm.aggregate.mockResolvedValue({
-    _sum: { impressions: 900, clicks: 25, costMicros: 42000000n, orders7d: 0 },
-  } as never)
-})
-
-describe('registry shape', () => {
-  it('registers exactly three preview-only advertising tools', () => {
-    expect(ADS_PROPOSE_TOOLS).toHaveLength(3)
-    for (const t of ADS_PROPOSE_TOOLS) {
-      expect(t.category).toBe('advertising')
-      expect(t.riskTier).toBe('high')
-      expect(t.requiresApprovalDefault).toBe(true)
-      expect(t.execute).toBeUndefined() // structural: nothing can reach Amazon
-    }
-    expect([...byName.keys()].sort()).toEqual([
-      'create-negative-keyword',
-      'graduate-keyword',
-      'set-target-bid',
-    ])
-  })
-})
-
-describe('create-negative-keyword', () => {
-  const args = {
-    externalCampaignId: 'ec1',
-    keywordText: 'giacca pelle',
-    matchType: 'NEGATIVE_EXACT',
-    scope: 'AD_GROUP',
-    externalAdGroupId: 'eag1',
-    marketplace: 'IT',
+function person(userId: string, via: 'claude' | 'app' = 'claude'): UserPrincipal {
+  return {
+    kind: 'user', userId, label: `Person ${userId}`, via,
+    permissions: { isOwner: false, permissions: new Set([...Object.values(FEATURES), ...Object.values(FIELDS)]) },
+    workspace: business,
   }
+}
+const claude = person('u-asker')
+const approver = person('u-approver', 'app')
 
-  it('previews a clean negation with metrics and campaign context', async () => {
-    const r = await byName.get('create-negative-keyword')!.handler(args, {})
-    expect(r.ok).toBe(true)
-    const p = r.preview as Record<string, unknown>
-    expect(p.term).toBe('giacca pelle')
-    expect(p.campaign).toMatchObject({ name: 'GALE | IT | Phrase' })
-    expect((p.metrics as Record<string, unknown>).clicks).toBe(25)
-    expect(p.protectedDenial).toBeNull()
-    expect(p.alreadyNegated).toBe(false)
+type Row = Record<string, any>
+const preview = async (tool: string, args: Record<string, unknown>) => (await inside(() => callTool(claude, tool, args))).raw
+
+async function ask(tool: string, args: Record<string, unknown>) {
+  return inside(async () => {
+    const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
+    return runOrQueueTool(tool, args, claude, run.id, { forceAsk: true })
+  })
+}
+const approve = (approvalId: string) => inside(() => decideApproval(approvalId, 'approve', approver))
+const bidOf = (id: string) => inside(async () => (await database.client.adTarget.findUnique({ where: { id }, select: { bidCents: true } }))!.bidCents)
+const sql = <T = Row>(text: string, params: unknown[] = []) => inside(async () => (await database.client.$queryRawUnsafe(text, ...params)) as T[])
+
+beforeAll(async () => {
+  database = await formulaDatabase()
+  await inside(async () => {
+    await seedAdsFixture(database.client)
+    await database.client.campaign.update({ where: { id: 'c-it' }, data: { dynamicBidding: { maxBidChangePct: 50 } } })
+  })
+}, 180_000)
+afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
+beforeEach(() => { vi.unstubAllEnvs() })
+
+describe('A4 — set-target-bid previews what lands, where, in which currency', () => {
+  it('sandbox: the bid it starts from and the bid that lands, in the campaign\'s currency, with the bound automations', async () => {
+    const r = await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 55 })
+    expect(r.ok, r.error).toBe(true)
+    expect(r.preview).toMatchObject({
+      action: 'set-target-bid', currency: 'EUR', currentBidCents: 45, proposedBidCents: 55, deltaCents: 10,
+      reach: { reach: 'sandbox' }, reachNote: expect.stringMatching(/nothing reaches Amazon/), alsoChangedBy: [],
+      effect: 'Moves "race jacket" from EUR 0.45 to EUR 0.55 in Italy exact.',
+    })
+    const uk = await preview('set-target-bid', { targetId: 't-uk', proposedBidCents: 70 })
+    expect(uk.preview).toMatchObject({ currency: 'GBP', effect: expect.stringContaining('GBP 0.60 to GBP 0.70') })
   })
 
-  it('DENIES a whitelisted (protected) term, naming it', async () => {
-    db.adKeywordProtection.findMany.mockResolvedValue([
-      { term: 'Giacca  Pelle', isPrefix: false, matchType: null, reason: 'brand core term' },
-    ] as never)
-    const r = await byName.get('create-negative-keyword')!.handler(args, {})
-    expect(r.ok).toBe(false)
-    expect(r.error).toContain('giacca pelle')
-    expect(r.error).toContain('brand core term')
+  it('shows the campaign\'s max-change guardrail on the bid that lands', async () => {
+    const r = await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 200 })
+    expect(r.preview).toMatchObject({ proposedBidCents: 200, effectiveBidCents: 68, clampedBy: expect.stringContaining('max-change'), deltaCents: 23 })
   })
 
-  it('DENIES when the term is already negated — read via isNegative, never expressionType', async () => {
-    db.adTarget.findMany.mockResolvedValue([
-      { expressionValue: 'GIACCA PELLE', negativeLevel: 'AD_GROUP' },
-    ] as never)
-    const r = await byName.get('create-negative-keyword')!.handler(args, {})
-    expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/already negated/i)
-    const where = db.adTarget.findMany.mock.calls[0]![0]!.where as Record<string, unknown>
-    expect(where.isNegative).toBe(true)
-    expect(JSON.stringify(where)).not.toContain('expressionType')
+  it('live: an allowlisted campaign lands on its Amazon Ads profile; one off the allowlist is refused and not queued', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    const ok = await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 50 })
+    expect(ok.preview).toMatchObject({ reach: { reach: 'live', profileId: 'P-IT-TEST' }, reachNote: expect.stringContaining('P-IT-TEST') })
+    const off = await preview('set-target-bid', { targetId: 't-off', proposedBidCents: 40 })
+    expect(off).toEqual({ ok: false, error: expect.stringMatching(/^Not queued: .*live-write allowlist.*set-campaign-live-writes/) })
+    const before = await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval"')
+    const asked = await ask('set-target-bid', { targetId: 't-off', proposedBidCents: 40 })
+    expect(asked).toMatchObject({ ok: false, mode: 'error', error: expect.stringContaining('allowlist') })
+    expect(await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval"')).toEqual(before)
   })
 
-  it('errors on an unknown campaign', async () => {
-    db.campaign.findFirst.mockResolvedValue(null as never)
-    const r = await byName.get('create-negative-keyword')!.handler(args, {})
-    expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/campaign/i)
-  })
-})
-
-describe('graduate-keyword', () => {
-  const args = {
-    query: 'motorrad jacke herren',
-    sourceExternalCampaignId: 'ec1',
-    sourceExternalAdGroupId: 'eag1',
-  }
-
-  it('previews with a suggested bid derived from real cost/clicks', async () => {
-    const r = await byName.get('graduate-keyword')!.handler(args, {})
-    expect(r.ok).toBe(true)
-    const p = r.preview as Record<string, unknown>
-    // 42000000 micros = 4200 cents / 25 clicks = 168c cpc
-    expect(p.suggestedBidCents).toBe(168)
-    expect(p.alreadyExact).toBe(false)
-  })
-
-  it('DENIES when the destination campaign has a bids pin', async () => {
-    db.campaign.findFirst.mockResolvedValue({
-      id: 'c1',
-      name: 'Pinned',
-      marketplace: 'IT',
-      pinPlacement: false,
-      pinBids: true,
-      pinBudget: false,
-      pinNote: 'operator holds bids here',
-    } as never)
-    const r = await byName.get('graduate-keyword')!.handler(args, {})
-    expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/pin/i)
-  })
-
-  it('DENIES when an exact keyword already exists for the query', async () => {
-    db.adTarget.findMany.mockResolvedValue([
-      { expressionValue: 'Motorrad Jacke Herren', expressionType: 'EXACT' },
-    ] as never)
-    const r = await byName.get('graduate-keyword')!.handler(args, {})
-    expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/already exists/i)
+  it('refuses the floor, a pin, a non-SP campaign, a negative, a raise of a suppressed or floored bid', async () => {
+    expect((await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 4 })).error).toMatch(/below the 5c floor/)
+    expect((await preview('set-target-bid', { targetId: 't-pin', proposedBidCents: 50 })).error).toMatch(/^authority pin: .*held by hand for a test/)
+    expect((await preview('set-target-bid', { targetId: 't-sb', proposedBidCents: 50 })).error).toMatch(/not a Sponsored Products campaign/)
+    expect((await preview('set-target-bid', { targetId: 't-neg', proposedBidCents: 50 })).error).toMatch(/not found \(or is a negative\)/)
+    expect((await preview('set-target-bid', { targetId: 't-sup', proposedBidCents: 30 })).error).toMatch(/is suppressed .*Restoring the campaign lifts it/)
+    expect((await preview('set-target-bid', { targetId: 't-low', proposedBidCents: 30 })).error).toMatch(/sits at 3c/)
+    expect((await preview('set-target-bid', { targetId: 'nope', proposedBidCents: 30 })).error).toMatch(/not found/)
   })
 })
 
-describe('set-target-bid', () => {
-  beforeEach(() => {
-    db.adTarget.findUnique.mockResolvedValue({
-      id: 't1',
-      expressionValue: 'giacca moto',
-      expressionType: 'EXACT',
-      bidCents: 80,
-      isNegative: false,
-      adGroup: {
-        campaign: {
-          id: 'c1',
-          name: 'GALE',
-          pinPlacement: false,
-          pinBids: false,
-          pinBudget: false,
-          pinNote: null,
-        },
-      },
-    } as never)
+describe('A4 — an approved set-target-bid runs as the approver, once, and can be put back', () => {
+  it('writes the bid with changeSetId = the approval, actor user:<approver>, the Claude request reason; records the change', async () => {
+    const asked = await ask('set-target-bid', { targetId: 't-it', proposedBidCents: 52, why: 'converting well at 23% ACoS' })
+    expect(asked).toMatchObject({ ok: true, mode: 'queued', preview: expect.objectContaining({ reach: { reach: 'sandbox' } }) })
+    const id = asked.approvalId!
+    const done = await approve(id)
+    expect(done).toMatchObject({ ok: true, status: 'executed', result: expect.objectContaining({ changed: true, bidCents: 52, changeSetId: id }) })
+    expect(await bidOf('t-it')).toBe(52)
+    const [log] = await sql('SELECT "userId", "executionId", "actionType", "outboundQueueId" FROM "AdvertisingActionLog" WHERE "entityId" = $1 ORDER BY "createdAt" DESC LIMIT 1', ['t-it'])
+    expect(log).toMatchObject({ userId: 'user:u-approver', executionId: id, actionType: 'AD_BID_UPDATE', outboundQueueId: expect.any(String) })
+    const [history] = await sql('SELECT "changedBy", reason, "oldValue", "newValue" FROM "CampaignBidHistory" WHERE "entityId" = $1 ORDER BY "changedAt" DESC LIMIT 1', ['t-it'])
+    expect(history).toEqual({ changedBy: 'user:u-approver', reason: `Claude request ${id}: converting well at 23% ACoS`, oldValue: '45', newValue: '52' })
+    const [queued] = await sql('SELECT "syncType", "syncStatus" FROM "OutboundSyncQueue" WHERE id = $1', [log.outboundQueueId])
+    expect(queued).toEqual({ syncType: 'AD_BID_UPDATE', syncStatus: 'PENDING' })
+    const [change] = await sql('SELECT "toolName", before, after, "undoTool", "undoArgs", outbound FROM "AgentChange" WHERE "approvalId" = $1', [id])
+    expect(change).toEqual({
+      toolName: 'set-target-bid', outbound: true,
+      before: { targetId: 't-it', bidCents: 45, changeSetId: id }, after: { targetId: 't-it', bidCents: 52 },
+      undoTool: 'set-target-bid', undoArgs: { targetId: 't-it', proposedBidCents: 45, why: 'undo of an earlier bid change' },
+    })
+    // Once: a second approve of the same request is refused, and nothing is written twice.
+    expect(await approve(id)).toMatchObject({ ok: false, error: 'already executed' })
+
+    // Undo asks set-target-bid for the old bid — while the bid is still the one it wrote.
+    const undo = await inside(() => undoRequestFor({ approvalId: id }))
+    expect(undo).toMatchObject({ request: { tool: 'set-target-bid', args: { targetId: 't-it', proposedBidCents: 45 } } })
+    await inside(() => database.client.adTarget.update({ where: { id: 't-it' }, data: { bidCents: 47 } }))
+    expect(await inside(() => undoRequestFor({ approvalId: id }))).toEqual({ error: expect.stringMatching(/^Not undone: it has changed since this change ran/) })
+    await inside(() => database.client.adTarget.update({ where: { id: 't-it' }, data: { bidCents: 45 } }))
   })
 
-  it('previews the delta against the current bid', async () => {
-    const r = await byName.get('set-target-bid')!.handler(
-      { targetId: 't1', proposedBidCents: 60 },
-      {},
-    )
-    expect(r.ok).toBe(true)
-    const p = r.preview as Record<string, unknown>
-    expect(p.currentBidCents).toBe(80)
-    expect(p.proposedBidCents).toBe(60)
-    expect(p.deltaCents).toBe(-20)
+  it('a bid that moved after the person approved is not run, and nothing is written', async () => {
+    const asked = await ask('set-target-bid', { targetId: 't-uk', proposedBidCents: 66 })
+    await inside(() => database.client.adTarget.update({ where: { id: 't-uk' }, data: { bidCents: 61 } }))
+    const out = await approve(asked.approvalId!)
+    expect(out).toMatchObject({ ok: false, status: 'pending', error: expect.stringMatching(/^Not run: what you approved has moved since — currentBidCents changed/) })
+    expect(await bidOf('t-uk')).toBe(61)
+    expect(await sql('SELECT id FROM "AdvertisingActionLog" WHERE "executionId" = $1', [asked.approvalId])).toEqual([])
   })
 
-  it('DENIES below the 5c floor', async () => {
-    const r = await byName.get('set-target-bid')!.handler(
-      { targetId: 't1', proposedBidCents: 3 },
-      {},
-    )
-    expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/floor/i)
+  it('approved as sandbox, now live: not run', async () => {
+    const asked = await ask('set-target-bid', { targetId: 't-it', proposedBidCents: 50 })
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    const out = await approve(asked.approvalId!)
+    expect(out).toMatchObject({ ok: false, error: 'Not run: it was approved as sandbox, and it would now be live (profile P-IT-TEST).' })
+    expect(await bidOf('t-it')).toBe(45)
   })
 
-  it('DENIES on a bids pin', async () => {
-    db.adTarget.findUnique.mockResolvedValue({
-      id: 't1',
-      expressionValue: 'giacca moto',
-      expressionType: 'EXACT',
-      bidCents: 80,
-      isNegative: false,
-      adGroup: {
-        campaign: { id: 'c1', name: 'Pinned', pinPlacement: false, pinBids: true, pinBudget: false, pinNote: 'held' },
-      },
-    } as never)
-    const r = await byName.get('set-target-bid')!.handler(
-      { targetId: 't1', proposedBidCents: 60 },
-      {},
-    )
-    expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/pin/i)
+  it('a request made before the switch (no stored reach) is never run, and the sweep expires it', async () => {
+    const id = await inside(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'amazon-ads-director', trigger: 'schedule', status: 'done', mode: 'tick' } })
+      const row = await database.client.agentApproval.create({
+        data: { agentRunId: run.id, toolName: 'set-target-bid', riskTier: 'high', args: { targetId: 't-it', proposedBidCents: 50 }, preview: { action: 'set-target-bid', currentBidCents: 45, proposedBidCents: 50 }, status: 'pending' },
+      })
+      return row.id
+    })
+    expect(await approve(id)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: this request was made before approved ad changes could reach Amazon/) })
+    expect(await bidOf('t-it')).toBe(45)
+    expect(await inside(() => expirePreSwitchAdRequests())).toBe(1)
+    const [row] = await sql('SELECT status, reason FROM "AgentApproval" WHERE id = $1', [id])
+    expect(row).toEqual({ status: 'expired', reason: expect.stringMatching(/^expired: asked before approved ad changes could reach Amazon/) })
+    // A request made after the switch is left alone.
+    const fresh = await ask('set-target-bid', { targetId: 't-it', proposedBidCents: 49 })
+    expect(await inside(() => expirePreSwitchAdRequests())).toBe(0)
+    expect((await sql('SELECT status FROM "AgentApproval" WHERE id = $1', [fresh.approvalId]))[0]).toEqual({ status: 'pending' })
+  })
+
+  it('declares the change contract: open world, reversible, at most confirm, material fields', () => {
+    const tool = getTool('set-target-bid')!
+    expect({ openWorld: tool.openWorld, reversibility: tool.reversibility, trust: tool.maxClaudeTrust, execute: typeof tool.execute, undo: !!tool.undo })
+      .toEqual({ openWorld: true, reversibility: 'full', trust: 'confirm', execute: 'function', undo: true })
+  })
+})
+
+describe('A5 — create-negative-keyword: ad-group negatives only, executed once approved, undone by retiring it', () => {
+  beforeAll(async () => {
+    await inside(async () => {
+      await database.client.amazonAdsSearchTerm.create({
+        data: { profileId: 'P-IT-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(), campaignId: 'EXT-c-it', adGroupId: 'EXT-g-c-it', query: 'giacca pelle', impressions: 900, clicks: 25, costMicros: 42_000_000n, currencyCode: 'EUR', orders7d: 0, sales7dCents: 0 },
+      })
+      await database.client.adKeywordProtection.create({ data: { term: 'xavia', mode: 'WHITELIST', reason: 'brand term' } as never })
+    })
+  })
+  const neg = { externalCampaignId: 'EXT-c-it', keywordText: 'giacca pelle', externalAdGroupId: 'EXT-g-c-it' }
+
+  it('previews the term\'s record, the ad group and where it lands', async () => {
+    const r = await preview('create-negative-keyword', neg)
+    expect(r.ok, r.error).toBe(true)
+    expect(r.preview).toMatchObject({
+      term: 'giacca pelle', scope: 'AD_GROUP', campaign: { id: 'c-it', name: 'Italy exact' }, adGroup: { id: 'g-c-it', externalAdGroupId: 'EXT-g-c-it' },
+      currency: 'EUR', metrics: { clicks: 25, costCents: 4200 }, alreadyNegated: false, reach: { reach: 'sandbox' },
+      effect: expect.stringContaining('was EUR 42.00 with 0 orders'),
+    })
+  })
+
+  it('refuses a campaign-level negative, a missing or foreign ad group, a protected or existing term, an unknown campaign', async () => {
+    expect((await preview('create-negative-keyword', { ...neg, scope: 'CAMPAIGN' })).error).toMatch(/^Campaign-level negatives are not offered/)
+    expect((await preview('create-negative-keyword', { externalCampaignId: 'EXT-c-it', keywordText: 'giacca pelle' })).error).toMatch(/^Name the ad group/)
+    expect((await preview('create-negative-keyword', { ...neg, externalAdGroupId: 'EXT-g-c-uk' })).error).toMatch(/ad group EXT-g-c-uk not found in Italy exact/)
+    expect((await preview('create-negative-keyword', { ...neg, keywordText: 'xavia' })).error).toMatch(/whitelisted against negation \(brand term\)/)
+    expect((await preview('create-negative-keyword', { ...neg, keywordText: 'FREE' })).error).toMatch(/already negated/)
+    expect((await preview('create-negative-keyword', { ...neg, externalCampaignId: 'EXT-nope' })).error).toMatch(/not found/)
+    expect((await preview('create-negative-keyword', { externalCampaignId: 'EXT-c-sb', keywordText: 'x', externalAdGroupId: 'EXT-g-c-sb' })).error).toMatch(/not a Sponsored Products campaign/)
+  })
+
+  it('live: off the allowlist it is refused and not queued; createNegative with the campaign binds the allowlist too', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    expect((await preview('create-negative-keyword', { externalCampaignId: 'EXT-c-off', keywordText: 'cheap', externalAdGroupId: 'EXT-g-c-off' })).error)
+      .toMatch(/^Not queued: .*live-write allowlist/)
+    const { createNegative } = await import('../../advertising/ads-negative-kw.service.js')
+    const denied = await inside(() => createNegative({ profileId: 'P-IT-TEST', externalCampaignId: 'EXT-c-off', externalAdGroupId: 'EXT-g-c-off', keywordText: 'cheap', matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP', marketplace: 'IT', nexusCampaignId: 'c-off' }))
+    expect(denied).toMatchObject({ ok: false, denied: { deniedAt: 'campaign_allowlist' } })
+  })
+
+  it('approved, it creates the negative as the approver; undo-change asks undo-ad-change, which retires it', async () => {
+    const asked = await ask('create-negative-keyword', { ...neg, why: 'spent 42 with no order' })
+    expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+    const done = await approve(asked.approvalId!)
+    expect(done).toMatchObject({ ok: true, status: 'executed', result: { created: true, reachedAmazon: false, note: expect.stringMatching(/^Sandbox/) } })
+    const targetId = (done.result as Row).targetId as string
+    const [row] = await sql('SELECT "isNegative", "negativeLevel", "expressionType", "expressionValue", "adGroupId" FROM "AdTarget" WHERE id = $1', [targetId])
+    expect(row).toEqual({ isNegative: true, negativeLevel: 'AD_GROUP', expressionType: 'NEGATIVE_EXACT', expressionValue: 'giacca pelle', adGroupId: 'g-c-it' })
+    const [change] = await sql('SELECT before, after, "undoTool", "undoArgs" FROM "AgentChange" WHERE "approvalId" = $1', [asked.approvalId])
+    expect(change).toEqual({
+      before: { changeSetId: asked.approvalId, negatives: [] }, after: { negatives: [{ targetId }] },
+      undoTool: 'undo-ad-change', undoArgs: { changeSetId: asked.approvalId, why: 'undo of a negative keyword' },
+    })
+    // Asked again: the term is negated now, so it is refused rather than duplicated.
+    expect((await preview('create-negative-keyword', neg)).error).toMatch(/already negated/)
+
+    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
+    expect(undo).toMatchObject({ request: { tool: 'undo-ad-change', args: { changeSetId: asked.approvalId } } })
+    const p = await preview('undo-ad-change', { changeSetId: asked.approvalId })
+    expect(p.preview).toMatchObject({ rows: [], negatives: [{ targetId, keywordText: 'giacca pelle' }], effect: expect.stringMatching(/^Undo removes the negative keyword it created at Amazon/) })
+    const retire = await ask('undo-ad-change', { changeSetId: asked.approvalId })
+    expect(await approve(retire.approvalId!)).toMatchObject({ ok: true, result: { negatives: { retired: 1, refused: 0, failed: 0 } } })
+    // A negative that never reached Amazon is removed here: nothing was there to archive.
+    expect(await sql('SELECT id FROM "AdTarget" WHERE id = $1', [targetId])).toEqual([])
+    expect((await sql('SELECT "undoneAt" IS NOT NULL AS undone FROM "AgentChange" WHERE "approvalId" = $1', [asked.approvalId]))[0]).toEqual({ undone: true })
+  })
+})
+
+describe('A5 — graduate-keyword: into the named or resolved ad group, executed once approved, undone to the floor', () => {
+  it('previews the suggested bid from real cost and clicks, the ad group, where it lands', async () => {
+    const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
+    expect(r.ok, r.error).toBe(true)
+    expect(r.preview).toMatchObject({ query: 'giacca pelle', suggestedBidCents: 168, destination: { id: 'c-it' }, destinationAdGroup: { id: 'g-c-it', why: 'named in the request' }, currency: 'EUR', reach: { reach: 'sandbox' } })
+  })
+
+  it('without a named ad group it takes the stored harvest destination — another campaign, in its own currency', async () => {
+    await inside(() => database.client.adsHarvestDestination.create({ data: { scopeGrain: 'campaign', scopeId: 'c-it', matchType: 'EXACT', adGroupId: 'g-c-uk', updatedBy: 'test' } }))
+    const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })
+    expect(r.preview).toMatchObject({ destination: { id: 'c-uk' }, destinationAdGroup: { id: 'g-c-uk', externalAdGroupId: 'EXT-g-c-uk', why: 'the harvest destination stored for this scope' }, currency: 'GBP' })
+    // A named destination campaign that is not where the stored destination is: refused, name the ad group.
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it', destExternalCampaignId: 'EXT-c-it' })).error)
+      .toMatch(/harvest destination for this term is in UK exact/)
+    await inside(() => database.client.adsHarvestDestination.deleteMany({}))
+  })
+
+  it('refuses no ad group to go to, a pin, an existing exact keyword, a non-SP destination', async () => {
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it' })).error).toMatch(/^Name the ad group to add the keyword to/)
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', destExternalCampaignId: 'EXT-c-pin', destExternalAdGroupId: 'EXT-g-c-pin' })).error).toMatch(/^authority pin/)
+    expect((await preview('graduate-keyword', { query: 'race jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })).error).toMatch(/already exists/)
+    expect((await preview('graduate-keyword', { query: 'x', sourceExternalCampaignId: 'EXT-c-it', destExternalCampaignId: 'EXT-c-sb', destExternalAdGroupId: 'EXT-g-c-sb' })).error).toMatch(/not a Sponsored Products campaign/)
+  })
+
+  it('approved, it creates the EXACT keyword as the approver; undo lowers it to the floor, never pausing it', async () => {
+    const asked = await ask('graduate-keyword', { query: 'pelle nera', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it', bidCents: 37 })
+    const done = await approve(asked.approvalId!)
+    expect(done).toMatchObject({ ok: true, status: 'executed', result: { bidCents: 37, reachedAmazon: false } })
+    const targetId = (done.result as Row).targetId as string
+    expect((await sql('SELECT "expressionType", "bidCents", "isNegative", status FROM "AdTarget" WHERE id = $1', [targetId]))[0])
+      .toEqual({ expressionType: 'EXACT', bidCents: 37, isNegative: false, status: 'ENABLED' })
+    expect((await sql('SELECT "userId" FROM "AdvertisingActionLog" WHERE "entityId" = $1 AND "actionType" = $2', [targetId, 'create_keyword']))[0]).toEqual({ userId: 'user:u-approver' })
+    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
+    expect(undo).toMatchObject({ request: { tool: 'set-target-bid', args: { targetId, proposedBidCents: 5 } } })
+    expect(getTool('graduate-keyword')!.reversibility).toBe('partial')
   })
 })

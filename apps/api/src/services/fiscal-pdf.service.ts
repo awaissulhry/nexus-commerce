@@ -44,21 +44,11 @@
 import prisma from '../db.js'
 import { assignInvoiceNumber, getInvoiceForOrder } from './fiscal-invoice.service.js'
 import { logger } from '../utils/logger.js'
+import { requireCompanyIdentity, requireInvoiceIdentity } from './business-identity.service.js'
 
-// Issuer (Xavia) details. In a multi-brand future these come from
-// a brand-settings table per issuer; for single-tenant they're
-// hardcoded with env-var override hooks.
-const ISSUER = {
-  name: process.env.NEXUS_ISSUER_NAME ?? 'Xavia S.r.l.',
-  vatNumber: process.env.NEXUS_ISSUER_VAT ?? 'IT00000000000',
-  fiscalCode: process.env.NEXUS_ISSUER_CF ?? '00000000000',
-  address: process.env.NEXUS_ISSUER_ADDRESS ?? 'Via Esempio 1',
-  city: process.env.NEXUS_ISSUER_CITY ?? 'Milano',
-  postalCode: process.env.NEXUS_ISSUER_POSTAL ?? '20100',
-  country: process.env.NEXUS_ISSUER_COUNTRY ?? 'IT',
-  email: process.env.NEXUS_ISSUER_EMAIL ?? 'info@xavia.example',
-  pec: process.env.NEXUS_ISSUER_PEC ?? '',
-}
+// O3 — the issuer is the business the order belongs to: its ONE company identity (business-identity.service:
+// Settings › Company, then NEXUS_ISSUER_* for Xavia). A business whose identity lacks what a document prints is
+// refused, before an invoice number is taken; nothing is ever printed with placeholder details.
 
 function escapeHtml(s: unknown): string {
   if (s == null) return ''
@@ -133,6 +123,8 @@ export async function invoiceHtml(orderId: string): Promise<string> {
     },
   })
   if (!order) throw new Error(`Order ${orderId} not found`)
+  // O3 — the seller's legal identity first: a business without one is refused before a number is taken.
+  const issuer = await requireInvoiceIdentity()
 
   // Fetch-or-assign the invoice number. Only IT-marketplace orders
   // get a fiscal invoice; non-IT orders use a "Pro forma" header.
@@ -209,11 +201,11 @@ export async function invoiceHtml(orderId: string): Promise<string> {
 <div class="meta">
   <div>
     <h2>Emittente</h2>
-    <div><strong>${escapeHtml(ISSUER.name)}</strong></div>
-    <div>${escapeHtml(ISSUER.address)}, ${escapeHtml(ISSUER.postalCode)} ${escapeHtml(ISSUER.city)} (${escapeHtml(ISSUER.country)})</div>
-    <div>P. IVA: ${escapeHtml(ISSUER.vatNumber)} · C.F.: ${escapeHtml(ISSUER.fiscalCode)}</div>
-    ${ISSUER.pec ? `<div>PEC: ${escapeHtml(ISSUER.pec)}</div>` : ''}
-    <div>${escapeHtml(ISSUER.email)}</div>
+    <div><strong>${escapeHtml(issuer.name)}</strong></div>
+    <div>${escapeHtml(issuer.addressLine)}</div>
+    <div>P. IVA: ${escapeHtml(issuer.vatNumber)} · C.F.: ${escapeHtml(issuer.fiscalCode)}</div>
+    ${issuer.pec ? `<div>PEC: ${escapeHtml(issuer.pec)}</div>` : ''}
+    <div>${escapeHtml(issuer.email)}</div>
   </div>
   <div>
     <h2>Cliente</h2>
@@ -312,6 +304,8 @@ export async function packingSlipHtml(orderId: string): Promise<string> {
     include: { items: true },
   })
   if (!order) throw new Error(`Order ${orderId} not found`)
+  // O3 — the sender is the business the order belongs to; refused when it has no identity.
+  const sender = await requireCompanyIdentity(['name', 'address'], 'the packing slip')
 
   const ship = (order.shippingAddress ?? {}) as any
   const shipName = ship.name ?? ship.Name ?? order.customerName
@@ -327,8 +321,8 @@ export async function packingSlipHtml(orderId: string): Promise<string> {
 <div class="meta">
   <div>
     <h2>Mittente · From</h2>
-    <div><strong>${escapeHtml(ISSUER.name)}</strong></div>
-    <div>${escapeHtml(ISSUER.address)}, ${escapeHtml(ISSUER.postalCode)} ${escapeHtml(ISSUER.city)} (${escapeHtml(ISSUER.country)})</div>
+    <div><strong>${escapeHtml(sender.name)}</strong></div>
+    <div>${escapeHtml(sender.addressLine)}</div>
   </div>
   <div>
     <h2>Destinatario · Ship to</h2>

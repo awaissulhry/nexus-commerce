@@ -29,6 +29,22 @@ vi.mock('../db.js', async () => {
     }),
   }
 })
+// L5 — publish-listing publishes through the product studio; the studio service is faked: this file reads who may approve.
+vi.mock('../services/pim/studio-publication.service.js', () => {
+  const review = (productId: string) => ({ id: null, productId, scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account' }, accountLabel: 'viewer-amazon',
+    aliasLabel: 'Primary listing', mode: 'live', action: 'update', rows: [{ productId, sku: 'VIEWER-1', title: 'Viewer jacket', existing: true }], excluded: 0, issues: [],
+    expiresAt: '2030-01-01T00:00:00.000Z',
+    changes: [{ id: JSON.stringify([productId, 'title']), productId, sku: 'VIEWER-1', field: 'title', label: 'Title', current: { state: 'value', value: 'New title' },
+      lastAccepted: { state: 'value', value: 'Viewer jacket' }, channel: { state: 'value', value: 'Viewer jacket' }, status: 'SEND', selectable: true,
+      selectedByDefault: true, localChanged: true, channelChanged: false, reason: 'Nexus changed', operation: 'replace' }] })
+  return {
+    reviewStudioPublication: async (productId: string) => review(productId),
+    previewStudioPublication: async (productId: string, _scope: unknown, userId: string | null) => ({ ...review(productId), id: `review-${userId}` }),
+    previewStudioPublicationSelection: async () => ({ token: 'selection-token' }),
+    submitStudioPublication: async (_productId: string, id: string) => ({ id, status: 'SUBMITTED', message: 'Submitted to Amazon.', results: [] }),
+    readStoredPublication: async () => null,
+  }
+})
 // No Redis here.
 vi.mock('../lib/queue.js', () => ({
   outboundSyncQueue: null, channelSyncQueue: null, bulkJobQueue: null, redis: null,
@@ -69,7 +85,7 @@ async function publisher(label: string): Promise<Person> {
     membershipId: membership.id,
     principal: {
       kind: 'user', userId: user.id, label,
-      permissions: { isOwner: false, permissions: new Set(['ai.run', F.productsView, F.listingsPublish]) },
+      permissions: { isOwner: false, permissions: new Set(['ai.run', F.productsView, F.productsPublish, F.listingsPublish]) },
       workspace: business, via: 'app',
     },
   }
@@ -102,7 +118,7 @@ beforeAll(async () => {
   const role = (name: string, permissions: string[]) =>
     db.role.create({ data: { key: `VIEWER_${name}_${randomUUID().slice(0, 8)}`, name, description: 'test', permissions, isSystem: false } })
   baseRoleId = (await role('BASE', ['ai.run', F.productsView])).id
-  publishRoleId = (await role('PUBLISH', [F.listingsPublish])).id
+  publishRoleId = (await role('PUBLISH', [F.productsPublish, F.listingsPublish])).id
   await inside(async () => {
     const account = await db.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'viewer-amazon', isActive: true, externalAccountId: 'SELLER-TEST-V' } as never })
     productId = (await db.product.create({ data: { sku: 'VIEWER-1', name: 'Viewer jacket', basePrice: '10.00' } })).id
@@ -156,10 +172,10 @@ describe('the Approvals page is told, per request, whether the viewer may approv
     const id = await queuePublish(owner)
     const other = await publisher('Cleo Viewer')
     await takePublishingAway(other)
-    expect((await outsideRow(other, id)).cannotApprove).toBe('publish-listing needs the listings.publish permission.')
+    expect((await outsideRow(other, id)).cannotApprove).toBe('publish-listing needs the products.publish and listings.publish permissions.')
     // …and it is exactly what the approve answers.
     const decided = await inside(() => decideFleetApproval({ id, decision: 'approve', actor: { ...other.principal, permissions: { isOwner: false, permissions: new Set(['ai.run', F.productsView]) } } }))
-    expect(decided).toMatchObject({ ok: false, code: 'forbidden', error: 'publish-listing needs the listings.publish permission.' })
+    expect(decided).toMatchObject({ ok: false, code: 'forbidden', error: 'publish-listing needs the products.publish and listings.publish permissions.' })
   })
 
   it('the approver whose permission was taken away while it waited sees it come back, and that it is no longer theirs', async () => {
@@ -171,8 +187,8 @@ describe('the Approvals page is told, per request, whether the viewer may approv
     expect(await inside(() => commitScheduledApproval(id))).toMatchObject({ ok: false })
 
     const row = await outsideRow(person, id)
-    expect(row.reason).toBe('not run — Omar Viewer no longer holds listings.publish, which publish listing needs')
-    expect(row.cannotApprove).toBe('publish-listing needs the listings.publish permission.')
+    expect(row.reason).toBe('not run — Omar Viewer no longer holds products.publish and listings.publish, which publish listing needs')
+    expect(row.cannotApprove).toBe('publish-listing needs the products.publish and listings.publish permissions.')
   })
 
   it('the fleet queue says it too: a bid change is not for a person without the ads permissions', async () => {

@@ -71,6 +71,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { getBackendUrl } from '@/lib/backend-url'
+import { usePermission } from '@/lib/auth/AuthProvider'
 import { adjustmentPercentProblem } from '@nexus/shared/listing-price'
 import { inlineCellPatchBody, priceDriftView } from './listing-price-view'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -1381,6 +1382,10 @@ function InlineNumberCell({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>(value != null ? String(value) : '')
   const [busy, setBusy] = useState(false)
+  // S1 (F5) — a typed price needs products.price.edit; without it the cell shows the price and does not open.
+  const canEditPrice = usePermission('products.price.edit')
+  const locked = field === 'price' && !canEditPrice
+  const lockedTitle = locked ? PRICE_PERMISSION_TITLE : undefined
 
   // Keep draft in sync with upstream value when not editing — the
   // 30s polling can land a fresh value while the cell sits idle.
@@ -1484,6 +1489,8 @@ function InlineNumberCell({
     return (
       <button
         onClick={() => setEditing(true)}
+        disabled={locked}
+        title={lockedTitle}
         aria-label={`Set ${field}`}
         className="text-tertiary dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer w-full text-right"
       >
@@ -1495,7 +1502,9 @@ function InlineNumberCell({
   return (
     <button
       onClick={() => setEditing(true)}
-      aria-label={`Edit ${field} (currently ${format(value)})`}
+      disabled={locked}
+      title={lockedTitle}
+      aria-label={locked ? `${field} (currently ${format(value)})` : `Edit ${field} (currently ${format(value)})`}
       className={`tabular-nums hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${align === 'right' ? 'text-right block w-full' : ''}`}
     >
       <div className={`text-md ${tone ?? 'text-slate-900 dark:text-slate-100'}`}>{format(value)}</div>
@@ -2494,7 +2503,13 @@ const ACTION_PAST_LABEL: Record<string, string> = {
   'set-pricing-rule': 'Pricing rule applied to',
 }
 
+/** S1 (F5) — the API's own reason, shown on a price control a person without products.price.edit cannot use. */
+const PRICE_PERMISSION_TITLE = 'You do not have permission to change prices (products.price.edit)'
+const priceGate = (can: boolean) => (can ? {} : { disabled: true, title: PRICE_PERMISSION_TITLE })
+
 function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: string[]; onClear: () => void; onComplete: () => void }) {
+  // S1 (F5) — Set price, Follow master and Unfollow master change listing prices: products.price.edit.
+  const canEditPrice = usePermission('products.price.edit')
   const [busy, setBusy] = useState(false)
   const [jobStatus, setJobStatus] = useState<string | null>(null)
   const [setPriceOpen, setSetPriceOpen] = useState(false)
@@ -2645,9 +2660,9 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
 
   const bulkActions: BulkAction[] = [
     { id: 'resync',       label: t('listings.bulk.resync'),        icon: RefreshCw,               onClick: () => runAction('resync') },
-    { id: 'set-price',    label: t('listings.bulk.setPrice'),      icon: Tag,                     onClick: () => setSetPriceOpen(true) },
-    { id: 'follow',       label: t('listings.bulk.followMaster'),  icon: Link2,                   onClick: () => runAction('follow-master') },
-    { id: 'unfollow',     label: t('listings.bulk.unfollowMaster'),                               onClick: () => runAction('unfollow-master') },
+    { id: 'set-price',    label: t('listings.bulk.setPrice'),      icon: Tag,                     onClick: () => setSetPriceOpen(true), ...priceGate(canEditPrice) },
+    { id: 'follow',       label: t('listings.bulk.followMaster'),  icon: Link2,                   onClick: () => runAction('follow-master'), ...priceGate(canEditPrice) },
+    { id: 'unfollow',     label: t('listings.bulk.unfollowMaster'),                               onClick: () => runAction('unfollow-master'), ...priceGate(canEditPrice) },
   ]
 
   return (

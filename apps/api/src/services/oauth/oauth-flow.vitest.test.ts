@@ -21,6 +21,7 @@ vi.mock('../../db.js', () => ({
 import { __stepUpTest } from '../../lib/auth/step-up.js'
 import { generateToken } from '../../lib/auth/tokens.js'
 import { __clientTest, cimdUnreachable, registerClient, resolveClient } from './oauth-clients.js'
+import { mcpResourceFor } from './oauth-config.js'
 import { logger } from '../../utils/logger.js'
 import {
   checkAuthorize,
@@ -351,6 +352,130 @@ describe('MCP.5 — tokens', () => {
       expect(await verifyAccessToken(tokens.access_token)).toBeNull()
     } finally {
       vi.stubEnv('NEXUS_MCP_RESOURCE', '')
+    }
+  })
+})
+
+describe('C5 — nexus.run: a person may let Claude run changes set to auto', () => {
+  async function scopesGranted(asked: string[]) {
+    const pkce = verifier()
+    const { redirectTo } = await consent({
+      userId, params: authorizeParams(pkce, { scope: 'nexus.read nexus.write nexus.run' }), decision: 'approve',
+      workspaceId: LEGACY_WORKSPACE_ID, code: code(), scopes: asked,
+    })
+    __stepUpTest.reset()
+    const tokens = await exchangeCode({
+      grant_type: 'authorization_code', code: new URL(redirectTo).searchParams.get('code')!, code_verifier: pkce,
+      client_id: clientId, redirect_uri: CALLBACK,
+    })
+    return { tokens, access: await verifyAccessToken(tokens.access_token) }
+  }
+
+  it('is offered, and granted only when the person ticks it', async () => {
+    expect((await checkAuthorize(userId, authorizeParams(verifier(), { scope: 'nexus.read nexus.write nexus.run' }))).scopes)
+      .toEqual(['nexus.read', 'nexus.write', 'nexus.run'])
+    expect((await scopesGranted(['nexus.read', 'nexus.write', 'nexus.run'])).access?.scopes).toEqual(['nexus.read', 'nexus.write', 'nexus.run'])
+    expect((await scopesGranted(['nexus.read', 'nexus.write'])).access?.scopes).toEqual(['nexus.read', 'nexus.write'])
+  })
+
+  it('without nexus.write it is not granted: running a change needs asking for one', async () => {
+    const { tokens, access } = await scopesGranted(['nexus.read', 'nexus.run'])
+    expect(tokens.scope).toBe('nexus.read')
+    expect(access?.scopes).toEqual(['nexus.read'])
+  })
+
+  it('an app that asks for the old two scopes is never offered it', async () => {
+    expect((await checkAuthorize(userId, authorizeParams(verifier()))).scopes).toEqual(['nexus.read', 'nexus.write'])
+  })
+})
+
+describe('C4 — one connection per business: its own MCP URL', () => {
+  const OWN = `${RESOURCE}/w/${LEGACY_WORKSPACE_ID}`
+  const OTHER = `${RESOURCE}/w/${OTHER_BUSINESS}`
+
+  /** Approve for a business's own URL and swap the code, as Claude would. */
+  async function connectTo(resource: string, workspaceId?: string) {
+    const pkce = verifier()
+    const { redirectTo } = await consent({
+      userId,
+      params: authorizeParams(pkce, { resource }),
+      decision: 'approve',
+      ...(workspaceId ? { workspaceId } : {}),
+      code: code(),
+    })
+    __stepUpTest.reset()
+    return exchangeCode({
+      grant_type: 'authorization_code',
+      code: new URL(redirectTo).searchParams.get('code') ?? undefined,
+      code_verifier: pkce,
+      client_id: clientId,
+      redirect_uri: CALLBACK,
+      resource,
+    })
+  }
+
+  it('the business’s own URL is a valid target, and it locks the request to that business', async () => {
+    expect(mcpResourceFor(LEGACY_WORKSPACE_ID)).toBe(OWN)
+    expect(await validateAuthorize(authorizeParams(verifier(), { resource: OWN }))).toMatchObject({ resource: OWN, lockedWorkspaceId: LEGACY_WORKSPACE_ID })
+    expect(await validateAuthorize(authorizeParams(verifier()))).toMatchObject({ resource: RESOURCE, lockedWorkspaceId: null })
+    // A trailing slash is the same URL; anything else under /w/ is not a business URL.
+    expect(await validateAuthorize(authorizeParams(verifier(), { resource: `${OWN}/` }))).toMatchObject({ resource: OWN })
+    for (const resource of [`${RESOURCE}/w/`, `${OWN}/more`, `${RESOURCE}/w/bad%20id`, `https://other.example/mcp/w/${LEGACY_WORKSPACE_ID}`]) {
+      await expectOAuthError(validateAuthorize(authorizeParams(verifier(), { resource })), 'invalid_target')
+    }
+  })
+
+  it('the consent page offers only the business the URL names', async () => {
+    const view = await checkAuthorize(userId, authorizeParams(verifier(), { resource: OWN }))
+    expect(view.lockedWorkspaceId).toBe(LEGACY_WORKSPACE_ID)
+    expect(view.businesses).toEqual([{ id: LEGACY_WORKSPACE_ID, name: expect.any(String), canConnect: true }])
+    // A business the person does not belong to: locked to it, and nothing they may connect.
+    const other = await checkAuthorize(userId, authorizeParams(verifier(), { resource: OTHER }))
+    expect(other).toMatchObject({ lockedWorkspaceId: OTHER_BUSINESS, businesses: [] })
+    // The plain URL still lets the person pick.
+    expect((await checkAuthorize(userId, authorizeParams(verifier()))).lockedWorkspaceId).toBeNull()
+  })
+
+  it('consent cannot pick another business than the URL names; without a pick it takes the URL’s', async () => {
+    await expectOAuthError(
+      consent({ userId, params: authorizeParams(verifier(), { resource: OTHER }), decision: 'approve', workspaceId: LEGACY_WORKSPACE_ID, code: code() }),
+      'access_denied',
+    )
+    __stepUpTest.reset()
+    const tokens = await connectTo(OWN)
+    const access = await verifyAccessToken(tokens.access_token, OWN)
+    expect(access?.workspace.workspaceId).toBe(LEGACY_WORKSPACE_ID)
+  })
+
+  it('a token for a business’s URL works there only: not on the plain URL, not on another business’s', async () => {
+    const own = await connectTo(OWN, LEGACY_WORKSPACE_ID)
+    expect(await verifyAccessToken(own.access_token, OWN)).not.toBeNull()
+    expect(await verifyAccessToken(own.access_token)).toBeNull()
+    expect(await verifyAccessToken(own.access_token, OTHER)).toBeNull()
+    // A refreshed token keeps its URL.
+    const next = await refreshTokens({ grant_type: 'refresh_token', refresh_token: own.refresh_token, client_id: clientId })
+    expect(await verifyAccessToken(next.access_token, OWN)).not.toBeNull()
+    expect(await verifyAccessToken(next.access_token)).toBeNull()
+    // The plain URL's token keeps working there, and nowhere else.
+    const { tokens: plain } = await connect()
+    expect(await verifyAccessToken(plain.access_token)).not.toBeNull()
+    expect(await verifyAccessToken(plain.access_token, OWN)).toBeNull()
+    // Still one connection per person, business and app (no OAuth table change): connecting the same app to the same
+    // business at the plain URL replaced the one at the business's URL, and ended its tokens.
+    expect(await verifyAccessToken(next.access_token, OWN)).toBeNull()
+  })
+
+  it('NEXUS_MCP_WORKSPACES stays the outer allow-list for a business’s URL', async () => {
+    vi.stubEnv('NEXUS_MCP_WORKSPACES', OTHER_BUSINESS)
+    try {
+      const view = await checkAuthorize(userId, authorizeParams(verifier(), { resource: OWN }))
+      expect(view).toMatchObject({ lockedWorkspaceId: LEGACY_WORKSPACE_ID, businesses: [] })
+      await expectOAuthError(
+        consent({ userId, params: authorizeParams(verifier(), { resource: OWN }), decision: 'approve', code: code() }),
+        'access_denied',
+      )
+    } finally {
+      vi.stubEnv('NEXUS_MCP_WORKSPACES', '')
     }
   })
 })

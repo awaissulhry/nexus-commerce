@@ -25,6 +25,14 @@
  */
 
 import { createOutboundRows } from '../services/outbound-rows.js'
+import {
+  buildWhere,
+  listErrorGroups,
+  listWebhookEvents,
+  parseWindow,
+  recentApiCalls,
+  type CallsQuery,
+} from '../services/sync-logs/sync-activity.service.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { OutboundSyncStatus, Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -44,56 +52,11 @@ import { completeInbound, deadLetterInbound, InboundDeferred, replayInbound } fr
 import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { ebayInboundProcessingReady } from '../services/cx/ingress/ebay-processing.js'
+// MCP full control P3 — the alert rule and event reads live in the alert rules service.
+import { acknowledgeAlertEvent, createAlertRule, listAlertEvents, listAlertRules, resolveAlertEvent, updateAlertRule } from '../services/alerts/alert-rules.service.js'
 
-const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
-
-interface CallsQuery {
-  since?: string
-  until?: string
-  channel?: string
-  operation?: string
-  success?: string
-  errorType?: string
-  /** P3.3 — the account. Its absence was why no screen could ask about one. */
-  connectionId?: string
-  requestId?: string
-  productId?: string
-  listingId?: string
-  orderId?: string
-  limit?: string
-  cursor?: string
-}
-
-function parseWindow(q: CallsQuery): { since: Date; until: Date } {
-  const until = q.until ? new Date(q.until) : new Date()
-  const since = q.since
-    ? new Date(q.since)
-    : new Date(until.getTime() - DEFAULT_WINDOW_MS)
-  return { since, until }
-}
-
-function buildWhere(
-  q: CallsQuery,
-  range: { since: Date; until: Date },
-): Prisma.OutboundApiCallLogWhereInput {
-  const where: Prisma.OutboundApiCallLogWhereInput = {
-    createdAt: { gte: range.since, lte: range.until },
-  }
-  if (q.channel) where.channel = q.channel
-  if (q.operation) where.operation = q.operation
-  if (q.success === 'true') where.success = true
-  else if (q.success === 'false') where.success = false
-  if (q.errorType) where.errorType = q.errorType
-  // P3.3 — every other identifier on the row was filterable and this one was not, so
-  // the call ledger could be asked about a product, a listing or an order but never
-  // about the account that made the call.
-  if (q.connectionId) where.connectionId = q.connectionId
-  if (q.requestId) where.requestId = q.requestId
-  if (q.productId) where.productId = q.productId
-  if (q.listingId) where.listingId = q.listingId
-  if (q.orderId) where.orderId = q.orderId
-  return where
-}
+// MCP full control P3 — the call-ledger window and filter live in sync-activity.service.ts; the rollup, export and
+// recent-calls reads all use them.
 
 const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -242,9 +205,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
    *           Body: { notes?, resolvedBy? }
    */
   fastify.get('/sync-logs/alerts/rules', async (_request, reply) => {
-    const rules = await prisma.alertRule.findMany({
-      orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
-    })
+    const rules = await listAlertRules()
     return reply.send({ items: rules })
   })
 
@@ -292,19 +253,8 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           error: 'notificationChannels must be a non-empty array',
         })
       }
-      const row = await prisma.alertRule.create({
-        data: {
-          name: b.name,
-          description: b.description,
-          metric: b.metric,
-          operator: b.operator,
-          threshold: b.threshold,
-          windowMinutes: b.windowMinutes ?? 15,
-          channel: b.channel,
-          notificationChannels: b.notificationChannels as never,
-          enabled: b.enabled ?? true,
-        },
-      })
+      // MCP full control P7 — the write lives in the alert rules service (Claude's set-alert-rule uses it too).
+      const row = await createAlertRule(b)
       return reply.code(201).send(row)
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err)
@@ -326,20 +276,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     }>
   }>('/sync-logs/alerts/rules/:id', async (request, reply) => {
     try {
-      const data: Record<string, unknown> = {}
-      const b = request.body
-      if (b.name !== undefined) data.name = b.name
-      if (b.description !== undefined) data.description = b.description
-      if (b.threshold !== undefined) data.threshold = b.threshold
-      if (b.windowMinutes !== undefined) data.windowMinutes = b.windowMinutes
-      if (b.channel !== undefined) data.channel = b.channel
-      if (b.notificationChannels !== undefined)
-        data.notificationChannels = b.notificationChannels
-      if (b.enabled !== undefined) data.enabled = b.enabled
-      const updated = await prisma.alertRule.update({
-        where: { id: request.params.id },
-        data,
-      })
+      const updated = await updateAlertRule(request.params.id, request.body)
       return reply.send(updated)
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err)
@@ -359,16 +296,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { status?: string; limit?: string } }>(
     '/sync-logs/alerts/events',
     async (request, reply) => {
-      const { status, limit } = request.query
-      const take = Math.min(Math.max(Number(limit ?? 50), 1), 200)
-      const where: Prisma.AlertEventWhereInput = {}
-      if (status && status !== 'ALL') where.status = status
-      const items = await prisma.alertEvent.findMany({
-        where,
-        include: { rule: true },
-        orderBy: { triggeredAt: 'desc' },
-        take,
-      })
+      const items = await listAlertEvents(request.query)
       return reply.send({ items })
     },
   )
@@ -377,15 +305,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { id: string }
     Body: { notes?: string; acknowledgedBy?: string }
   }>('/sync-logs/alerts/events/:id/acknowledge', async (request, reply) => {
-    const updated = await prisma.alertEvent.update({
-      where: { id: request.params.id },
-      data: {
-        status: 'ACKNOWLEDGED',
-        acknowledgedAt: new Date(),
-        acknowledgedBy: request.body.acknowledgedBy ?? null,
-        notes: request.body.notes ?? undefined,
-      },
-    })
+    const updated = await acknowledgeAlertEvent(request.params.id, request.body)
     return reply.send(updated)
   })
 
@@ -393,22 +313,8 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { id: string }
     Body: { notes?: string; resolvedBy?: string }
   }>('/sync-logs/alerts/events/:id/resolve', async (request, reply) => {
-    const updated = await prisma.alertEvent.update({
-      where: { id: request.params.id },
-      data: {
-        status: 'RESOLVED',
-        resolvedAt: new Date(),
-        resolvedBy: request.body.resolvedBy ?? null,
-        notes: request.body.notes ?? undefined,
-      },
-    })
-    // Also flip the rule's lastFired so a manual resolve doesn't
-    // immediately re-fire on the next eval tick when the condition
-    // is still true (operator may have ack'd while triaging).
-    await prisma.alertRule.update({
-      where: { id: updated.ruleId },
-      data: { lastFired: false },
-    })
+    // Also flips the rule's lastFired (see resolveAlertEvent).
+    const updated = await resolveAlertEvent(request.params.id, request.body)
     return reply.send(updated)
   })
 
@@ -822,45 +728,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/sync-logs/error-groups', async (request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=15')
-      const q = request.query
-      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 200)
-      const status = q.status ?? 'ACTIVE'
-      const since = q.since
-        ? new Date(q.since)
-        : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-
-      const where: Prisma.SyncLogErrorGroupWhereInput = {
-        lastSeen: { gte: since },
-      }
-      if (status !== 'ALL') where.resolutionStatus = status
-      if (q.channel) where.channel = q.channel
-
-      const [rows, totals] = await Promise.all([
-        prisma.syncLogErrorGroup.findMany({
-          where,
-          orderBy: { lastSeen: 'desc' },
-          take: limit + 1,
-          ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
-        }),
-        // Counts per resolution status for the filter chip badges.
-        prisma.syncLogErrorGroup.groupBy({
-          by: ['resolutionStatus'],
-          where: { lastSeen: { gte: since } },
-          _count: { _all: true },
-        }),
-      ])
-      const hasNext = rows.length > limit
-      const items = hasNext ? rows.slice(0, limit) : rows
-      const nextCursor = hasNext ? items[items.length - 1].id : null
-
-      return reply.send({
-        items,
-        nextCursor,
-        totals: totals.map((t) => ({
-          status: t.resolutionStatus,
-          count: t._count._all,
-        })),
-      })
+      return reply.send(await listErrorGroups(request.query))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       fastify.log.error({ err }, '[sync-logs/error-groups] failed')
@@ -943,103 +811,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/sync-logs/webhooks', async (request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=15')
-      const q = request.query
-      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 200)
-      const since = q.since
-        ? new Date(q.since)
-        : new Date(Date.now() - 24 * 60 * 60 * 1000)
-
-      const where: Prisma.WebhookEventWhereInput = {
-        createdAt: { gte: since },
-      }
-      if (q.channel) where.channel = q.channel
-      if (q.eventType) where.eventType = q.eventType
-      if (q.processed === 'true') where.isProcessed = true
-      else if (q.processed === 'false') where.isProcessed = false
-      // P2.8 — filter on the LIFECYCLE, not just the old boolean.
-      //
-      // `isProcessed` has two values and the lifecycle has four: pending, done, failed
-      // and dlq. Reading the list through the boolean cannot tell a dead letter from an
-      // event that arrived a second ago, which is the single distinction an operator
-      // opens this screen to make.
-      if (q.status) {
-        const wanted = q.status.split(',').map((value) => value.trim()).filter(Boolean)
-        if (wanted.length) where.status = { in: wanted }
-      }
-
-      const [rows, byChannel, byProcessed, byStatus] = await Promise.all([
-        prisma.webhookEvent.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          take: limit + 1,
-          ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
-          select: {
-            id: true,
-            channel: true,
-            eventType: true,
-            externalId: true,
-            isProcessed: true,
-            processedAt: true,
-            error: true,
-            createdAt: true,
-            updatedAt: true,
-            // RT.4 — needed by the latency column on /sync-logs/webhooks.
-            providerTimestamp: true,
-            // P2.8 — the lifecycle the Ingress tab is built on. Every one of these was
-            // added by CX.4a or P2.1 and none of them was ever read by an API: the
-            // screen could show that something went wrong but not what, how often it
-            // had been tried, when it would be tried again, or whether the signature
-            // had been checked at all.
-            status: true,
-            attempts: true,
-            deliveries: true,
-            nextAttemptAt: true,
-            lastError: true,
-            signatureOk: true,
-            verifiedBy: true,
-            archivedAt: true,
-            // Skip the heavy payload + signature fields on the list.
-          },
-        }),
-        prisma.webhookEvent.groupBy({
-          by: ['channel'],
-          where: { createdAt: { gte: since } },
-          _count: { _all: true },
-        }),
-        prisma.webhookEvent.groupBy({
-          by: ['isProcessed'],
-          where: { createdAt: { gte: since } },
-          _count: { _all: true },
-        }),
-        // P2.8 — counted over the WHOLE window, not just the page, and not filtered by
-        // the caller's own status filter. A tally that moves when you click a filter is
-        // describing the page rather than the system, which is the opposite of what the
-        // number is for.
-        prisma.webhookEvent.groupBy({
-          by: ['status'],
-          where: { createdAt: { gte: since } },
-          _count: { _all: true },
-        }),
-      ])
-      const hasNext = rows.length > limit
-      const items = hasNext ? rows.slice(0, limit) : rows
-      const nextCursor = hasNext ? items[items.length - 1].id : null
-
-      return reply.send({
-        items,
-        nextCursor,
-        totals: {
-          byChannel: byChannel.map((g) => ({
-            channel: g.channel,
-            count: g._count._all,
-          })),
-          processed:
-            byProcessed.find((g) => g.isProcessed === true)?._count._all ?? 0,
-          unprocessed:
-            byProcessed.find((g) => g.isProcessed === false)?._count._all ?? 0,
-          byStatus: byStatus.map((g) => ({ status: g.status, count: g._count._all })),
-        },
-      })
+      return reply.send(await listWebhookEvents(request.query))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       fastify.log.error({ err }, '[sync-logs/webhooks] failed')
@@ -1262,30 +1034,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       try {
         reply.header('Cache-Control', 'private, max-age=10')
-        const range = parseWindow(request.query)
-        const where = buildWhere(request.query, range)
-        const limit = Math.min(
-          Math.max(Number(request.query.limit ?? 50), 1),
-          200,
-        )
-
-        const rows = await prisma.outboundApiCallLog.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          take: limit + 1,
-          ...(request.query.cursor
-            ? { cursor: { id: request.query.cursor }, skip: 1 }
-            : {}),
-        })
-        const hasNext = rows.length > limit
-        const items = hasNext ? rows.slice(0, limit) : rows
-        const nextCursor = hasNext ? items[items.length - 1].id : null
-
-        return reply.send({
-          items,
-          nextCursor,
-          window: { since: range.since, until: range.until },
-        })
+        return reply.send(await recentApiCalls(request.query))
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         fastify.log.error({ err }, '[sync-logs/api-calls/recent] failed')

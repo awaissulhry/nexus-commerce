@@ -11,7 +11,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { isAiKillSwitchOn } from '../services/ai/providers/index.js'
-import { isAutonomyLevel, AUTONOMY_LEVELS } from '../services/advertising/ads-autonomy.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import {
   bulkDecide,
@@ -29,7 +28,6 @@ import {
   type InboxView,
 } from '../services/agent-fleet/approval-inbox.service.js'
 import { requestPrincipal } from '../services/agents/call-tool.js'
-import { isAutoPromotionAllowed } from '../services/agent-fleet/promotion.service.js'
 import {
   bustCharterCache,
   FLEET_CHARTERS,
@@ -37,6 +35,8 @@ import {
   seedCharters,
 } from '../services/agent-fleet/charter-registry.js'
 import { FLEET_GRAPH } from '../services/agent-fleet/fleet-graph.js'
+import { patchCharter, pauseCharter, resumeCharter, runCharterNow, type CharterPatch } from '../services/agent-fleet/fleet-steer.service.js'
+import { isRefused } from '../services/automation/service-outcome.js'
 import {
   getFleetState,
   haltFleet,
@@ -256,133 +256,15 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     return seedCharters()
   })
 
-  // NAF.D — the operator's charter policy control (dial #4, cap #5).
-  // The cap is enforced HERE, server-side: a request above the code
-  // charter's autonomyCap is refused, not clamped — the operator should
-  // know the ceiling exists, not silently get less than they asked.
+  // NAF.D — the operator's charter policy control (dial #4, cap #5): the cap and AUTO's gate are enforced server-side.
+  // R15 — moved unchanged into fleet-steer.service.ts (steer-fleet steers through it).
   fastify.patch<{
     Params: { key: string }
-    Body: {
-      enabled?: boolean
-      autonomyLevel?: string
-      // AC.4 — policy the operator may TIGHTEN (the code value is the ceiling)
-      dailyBudgetUSD?: number
-      maxTokensPerRun?: number
-      maxFindingsPerRun?: number
-      modelProvider?: string | null
-      modelName?: string | null
-      // AC.5 / AC.4 — tool policy and scope
-      toolNames?: string[]
-      scopeMarketplaces?: string[]
-    }
+    Body: CharterPatch
   }>('/agent/fleet/charters/:key', async (request, reply) => {
-    const { key } = request.params
-    const def = FLEET_CHARTERS[key]
-    if (!def) return reply.code(404).send({ error: `unknown charter: ${key}` })
-    const before = (await listCharters()).find((c) => c.key === key)
-    const data: Record<string, unknown> = {}
-    if (request.body?.enabled !== undefined) data.enabled = !!request.body.enabled
-    // AC.4 — numbers are stored as given; the registry clamps them DOWN
-    // against the code ceiling on every read, so a too-generous value can
-    // never take effect.
-    const nums: Array<['dailyBudgetUSD' | 'maxTokensPerRun' | 'maxFindingsPerRun', number | undefined]> = [
-      ['dailyBudgetUSD', request.body?.dailyBudgetUSD],
-      ['maxTokensPerRun', request.body?.maxTokensPerRun],
-      ['maxFindingsPerRun', request.body?.maxFindingsPerRun],
-    ]
-    for (const [field, value] of nums) {
-      if (value === undefined) continue
-      if (!Number.isFinite(value) || value <= 0) {
-        return reply.code(400).send({ error: `${field} must be a positive number` })
-      }
-      data[field] = value
-    }
-    if (request.body?.modelProvider !== undefined) {
-      data.modelProviderOverride = request.body.modelProvider || null
-    }
-    if (request.body?.modelName !== undefined) {
-      data.modelNameOverride = request.body.modelName || null
-    }
-    if (request.body?.toolNames !== undefined) {
-      const unknownTools = request.body.toolNames.filter((t) => !def.toolNames.includes(t))
-      if (unknownTools.length > 0) {
-        return reply.code(400).send({
-          error: `these tools are not in this worker's code charter and cannot be granted: ${unknownTools.join(', ')}`,
-        })
-      }
-      data.toolNames = request.body.toolNames
-    }
-    if (request.body?.scopeMarketplaces !== undefined) {
-      // Only a SINGLE-marketplace scope is enforced end-to-end today, and
-      // this series' rule is that an unenforced control is never offered.
-      if (request.body.scopeMarketplaces.length > 1) {
-        return reply.code(400).send({
-          error:
-            'only one marketplace can be scoped today — multi-market scope is not enforced yet, so it is refused rather than ignored',
-        })
-      }
-      data.scopeMarketplaces = request.body.scopeMarketplaces
-    }
-    if (request.body?.autonomyLevel !== undefined) {
-      const level = request.body.autonomyLevel
-      if (!isAutonomyLevel(level)) {
-        return reply.code(400).send({ error: `invalid autonomyLevel "${level}"` })
-      }
-      const capIdx = AUTONOMY_LEVELS.indexOf(def.autonomyCap)
-      if (AUTONOMY_LEVELS.indexOf(level) > capIdx) {
-        return reply.code(400).send({
-          error: `autonomyLevel ${level} exceeds this charter's cap (${def.autonomyCap})`,
-        })
-      }
-      // NAF.E — the promotion gate is server-side (spec acceptance): AUTO
-      // requires an eligible latest scorecard. The PATCH itself is the
-      // operator sign-off; eligibility is the earned half.
-      if (level === 'AUTO' && !(await isAutoPromotionAllowed(key))) {
-        return reply.code(403).send({
-          error:
-            `${key} has not earned AUTO — the latest scorecard is not promotion-eligible ` +
-            `(Part 7: 30 days + acceptance ≥70% + calibration ≤0.15 + zero rollbacks)`,
-        })
-      }
-      data.autonomyLevel = level
-    }
-    if (Object.keys(data).length === 0) {
-      return reply.code(400).send({ error: 'nothing to update' })
-    }
-    const updated = await prisma.agentCharter.updateMany({
-      where: { key, version: def.version },
-      data,
-    })
-    if (updated.count === 0) {
-      return reply.code(404).send({ error: `charter ${key} v${def.version} not seeded — POST /agent/fleet/charters/seed first` })
-    }
-    bustCharterCache()
-    await recordControlChange({
-      charterKey: key,
-      action:
-        request.body?.autonomyLevel !== undefined
-          ? 'dial'
-          : request.body?.enabled !== undefined
-            ? 'enable'
-            : request.body?.toolNames !== undefined
-              ? 'tools'
-              : request.body?.scopeMarketplaces !== undefined
-                ? 'scope'
-                : 'policy',
-      from: before
-        ? {
-            enabled: before.enabled,
-            autonomyLevel: before.autonomyLevel,
-            dailyBudgetUSD: before.dailyBudgetUSD,
-            maxTokensPerRun: before.maxTokensPerRun,
-            maxFindingsPerRun: before.maxFindingsPerRun,
-            toolNames: before.toolNames,
-            scopeMarketplaces: before.scopeMarketplaces,
-          }
-        : null,
-      to: data,
-    })
-    return { ok: true, charters: await listCharters() }
+    const outcome = await patchCharter(request.params.key, request.body)
+    if (isRefused(outcome)) return reply.code(outcome.status).send(outcome.body)
+    return outcome.value
   })
 
   // NAF.D — the fleet approval inbox (control #15).
@@ -671,44 +553,22 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
-  // AC.6 — pause with an expiry; resume clears it.
+  // AC.6 — pause with an expiry; resume clears it. R15 — moved unchanged into fleet-steer.service.ts.
   fastify.post<{
     Params: { key: string }
     Body: { until?: string; reason?: string }
   }>('/agent/fleet/charters/:key/pause', async (request, reply) => {
-    const { key } = request.params
-    if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
-    const untilRaw = request.body?.until
-    const until = untilRaw ? new Date(untilRaw) : null
-    if (!until || Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) {
-      return reply.code(400).send({ error: 'until must be a future date — a pause always expires' })
-    }
-    await prisma.agentCharter.updateMany({
-      where: { key },
-      data: { pausedUntil: until, pausedReason: request.body?.reason?.trim() || null },
-    })
-    bustCharterCache()
-    await recordControlChange({
-      charterKey: key,
-      action: 'pause',
-      to: { until: until.toISOString() },
-      note: request.body?.reason ?? null,
-    })
-    return { ok: true, pausedUntil: until }
+    const outcome = await pauseCharter(request.params.key, request.body?.until, request.body?.reason)
+    if (isRefused(outcome)) return reply.code(outcome.status).send(outcome.body)
+    return outcome.value
   })
 
   fastify.post<{ Params: { key: string } }>(
     '/agent/fleet/charters/:key/resume',
     async (request, reply) => {
-      const { key } = request.params
-      if (!FLEET_CHARTERS[key]) return reply.code(404).send({ error: `unknown charter: ${key}` })
-      await prisma.agentCharter.updateMany({
-        where: { key },
-        data: { pausedUntil: null, pausedReason: null },
-      })
-      bustCharterCache()
-      await recordControlChange({ charterKey: key, action: 'resume' })
-      return { ok: true }
+      const outcome = await resumeCharter(request.params.key)
+      if (isRefused(outcome)) return reply.code(outcome.status).send(outcome.body)
+      return outcome.value
     },
   )
 
@@ -751,27 +611,13 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // R15 — moved unchanged into fleet-steer.service.ts (steer-fleet's run-now runs through it).
   fastify.post<{ Params: { key: string } }>(
     '/agent/fleet/run/:key',
     async (request, reply) => {
-      const { key } = request.params
-      if (isAiKillSwitchOn()) {
-        return reply
-          .code(503)
-          .send({ error: 'AI is temporarily disabled (kill switch).' })
-      }
-      if (!FLEET_CHARTERS[key]) {
-        return reply.code(404).send({ error: `unknown charter: ${key}` })
-      }
-      const result = await executeCharter(key, {
-        trigger: 'manual',
-        mode: 'ask',
-        ignoreEnabled: true,
-      })
-      if (!result.ok && result.error) {
-        return reply.code(500).send(result)
-      }
-      return result
+      const outcome = await runCharterNow(request.params.key)
+      if (isRefused(outcome)) return reply.code(outcome.status).send(outcome.body)
+      return outcome.value
     },
   )
 }

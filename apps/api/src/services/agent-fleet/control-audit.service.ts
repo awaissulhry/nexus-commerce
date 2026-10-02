@@ -42,6 +42,10 @@ export type ControlAction =
   // failure and write no audit at all, so nothing anywhere recorded that a
   // human had authorised the attempt.
   | 'execution_failed'
+  // MCP full control C5 — a change that was to run by the business's rule (auto) handed back to a person at run time,
+  // because the business paused Claude's rule-runs, lowered the tool's level or tightened its limits meanwhile. It
+  // never ran. Not a failure: it does not count towards the automatic pause.
+  | 'rule_refused'
   // NAF.AQ.8 — the operator edited a proposal before approving it. Its own
   // action rather than an approve, because the interesting fact is that the
   // worker's number was WRONG and a human corrected it: that is the highest

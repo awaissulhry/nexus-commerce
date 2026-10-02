@@ -33,6 +33,7 @@ import {
 } from 'react'
 import { Check, Loader2, AlertCircle, RotateCcw } from 'lucide-react'
 import { registerProfileChanges } from '@/lib/workspaces/unsaved-changes'
+import styles from './settings-shell.module.css'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -165,30 +166,30 @@ export function SettingsSaveBarProvider({
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 sm:left-auto z-30 flex justify-center sm:justify-end pointer-events-none"
+          className={`fixed bottom-4 z-30 flex justify-center sm:justify-end pointer-events-none ${styles.saveBarDock}`}
         >
-          <div className="pointer-events-auto inline-flex items-center gap-3 px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-800 text-white shadow-xl border border-slate-700">
+          <div className={`pointer-events-auto inline-flex items-center gap-3 px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-800 text-white shadow-xl border border-slate-700 ${styles.saveBar}`}>
             {status === 'saving' && (
-              <span className="inline-flex items-center gap-2 text-sm">
+              <span className={`inline-flex items-center gap-2 text-sm ${styles.saveBarText}`}>
                 <Loader2 size={14} className="animate-spin" />
                 Saving…
               </span>
             )}
             {status === 'saved' && (
-              <span className="inline-flex items-center gap-2 text-sm text-emerald-300">
+              <span className={`inline-flex items-center gap-2 text-sm text-emerald-300 ${styles.saveBarText}`}>
                 <Check size={14} />
                 Saved
               </span>
             )}
             {status === 'error' && error && (
-              <span className="inline-flex items-center gap-2 text-sm text-rose-300 max-w-xs truncate">
-                <AlertCircle size={14} />
+              <span className={`inline-flex items-center gap-2 text-sm text-rose-300 max-w-xs truncate ${styles.saveBarText}`}>
+                <AlertCircle size={14} className={styles.saveBarIcon} />
                 {error}
               </span>
             )}
             {(status === 'idle' || status === 'error') &&
               registered?.isDirty && (
-                <span className="text-sm text-slate-300">
+                <span className={`text-sm text-slate-300 ${styles.saveBarText}`}>
                   You have unsaved changes
                 </span>
               )}
@@ -198,7 +199,7 @@ export function SettingsSaveBarProvider({
                   type="button"
                   onClick={runDiscard}
                   disabled={status === 'saving'}
-                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50 ${styles.saveBarDiscard}`}
                 >
                   <RotateCcw size={12} />
                   Discard

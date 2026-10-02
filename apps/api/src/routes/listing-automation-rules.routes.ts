@@ -163,7 +163,8 @@ const listingAutomationRulesRoutes: FastifyPluginAsync = async (fastify) => {
       const existing = await prisma.automationRule.findUnique({ where: { id: request.params.id } })
       if (!existing || existing.domain !== DOMAIN) return reply.code(404).send({ success: false, error: 'Rule not found' })
       try {
-        const result = await evaluateRule({ ruleId: request.params.id, context: request.body?.context ?? {}, forceDryRun: true })
+        // R8 — a preview: no run row, no counter, no notification (as the ads rule Test since R3).
+        const result = await evaluateRule({ ruleId: request.params.id, context: request.body?.context ?? {}, forceDryRun: true, noPersist: true })
         return reply.send({ success: true, result })
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)

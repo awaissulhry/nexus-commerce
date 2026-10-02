@@ -37,6 +37,8 @@ function fakePrisma(opts: { rates?: Record<string, number> } = {}) {
     },
     channelListing: {
       findUnique: vi.fn(async () => null),
+      // No account is connected here, so the engine looks a listing up by the same key as a filter (08 price-explain).
+      findFirst: vi.fn(async () => null),
       findMany: vi.fn(async ({ where, select }: any) => {
         const rows = [{ id: 'L-A', productId: 'p-A', channel: 'AMAZON', marketplace: 'UK' }, { id: 'L-B', productId: 'p-B', channel: 'AMAZON', marketplace: 'IT' }]
           .filter((r) => !where?.productId?.in || where.productId.in.includes(r.productId))

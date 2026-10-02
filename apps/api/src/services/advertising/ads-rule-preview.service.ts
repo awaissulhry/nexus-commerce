@@ -975,3 +975,31 @@ export async function previewBidRule(draft: BudgetPreviewDraft): Promise<BidPrev
     rows,
   }
 }
+
+/**
+ * R8 (MCP full control, part 06) — one draft preview, dispatched on the draft's OWN slug (`actions[0].type`, the type a
+ * stored rule carries): placement, bid, share of voice, keyword tracker, else budget. Moved unchanged from
+ * `POST /advertising/automation-rules/preview` (advertising-intel.routes.ts), which now calls it, so Claude's
+ * preview-automation runs the very same dispatch. Every branch runs the real engine in a dry run and writes nothing.
+ *
+ * 🔴 PLC-P2's placement branch was once dropped by a bad hunk-filter (e1e78d6d9), which shipped `previewPlacementRule`
+ * with NO caller — a placement draft fell through to `previewBudgetRule` and came back `not_a_budget_draft`. One
+ * dispatcher, two callers, so that cannot recur in one of them only.
+ */
+export async function previewAdsRuleDraft(body: BudgetPreviewDraft): Promise<{ ok: boolean } & Record<string, unknown>> {
+  const slug = String((Array.isArray(body.actions) ? (body.actions[0] as { type?: unknown })?.type : '') ?? '')
+  if (slug === 'placement') return (await previewPlacementRule(body)) as never
+  // BID-P — the fifth and last consumer: every draft preview on every tab runs the real engine.
+  if (slug === 'bid') return (await previewBidRule(body)) as never
+  if (slug === 'sov') {
+    const { previewSovRule } = await import('./ads-sov-preview.service.js')
+    return (await previewSovRule(body)) as never
+  }
+  /**
+   * KT-P2 — the Keyword Tracker branch, and the only one that must also report the state of its FEED: a rank rule
+   * matching nothing has two causes — "no keyword met your criteria" and "no rank has ever been ingested" — so the
+   * result carries `feed` alongside the census.
+   */
+  if (slug === 'keyword-tracker') return (await previewKeywordTrackerRule(body)) as never
+  return (await previewBudgetRule(body)) as never
+}

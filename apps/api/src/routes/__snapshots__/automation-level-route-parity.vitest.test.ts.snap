@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`R10 — the level route answers as before the move > every outcome 1`] = `
+"400 {"ok":false,"error":"level must be OFF | OBSERVE | PROPOSE | AUTO"}
+400 {"ok":false,"error":"level must be OFF | OBSERVE | PROPOSE | AUTO"}
+404 {"ok":false,"error":"not_found"}
+409 {"ok":false,"error":"above_ceiling","maxLevel":"PROPOSE","message":"Creates or destroys entities. Automation should leave behind a structure a human could still run by hand.","blockedBy":["pause_campaign"]}
+200 {"ok":true,"rule":{"id":"<id1>","name":"PARITY pausing rule","autonomyLevel":"PROPOSE","enabled":true,"dryRun":true}}
+409 {"ok":false,"error":"gate_not_open","maxLevel":"PROPOSE","failures":["RULE_ENABLED","OBSERVATION_WINDOW","HAS_EVALUATIONS","HAS_MATCHES","CONNECTION_PRODUCTION","WRITES_ENABLED","LIVE_MODE_ENV"],"message":"AUTO only after the graduation gate: Rule must be enabled (toggle it on first); 0/14 days — 14 days remaining; 0 evaluations — need at least 10 to prove the rule has run; Zero matches — rule may not be triggering correctly (check conditions); AmazonAdsConnection.mode = none (must be production); Run /advertising/connection/preview-writes + /enable-writes first; Set NEXUS_AMAZON_ADS_MODE=live on Railway and redeploy."}
+200 {"ok":true,"rule":{"id":"<id2>","name":"PARITY bid rule","autonomyLevel":"OBSERVE","enabled":true,"dryRun":true}}
+200 {"ok":true,"rule":{"id":"<id2>","name":"PARITY bid rule","autonomyLevel":"PROPOSE","enabled":true,"dryRun":true}}
+409 {"ok":false,"error":"gate_not_open","maxLevel":"PROPOSE","failures":["OBSERVATION_WINDOW","HAS_EVALUATIONS","HAS_MATCHES","CONNECTION_PRODUCTION","WRITES_ENABLED","LIVE_MODE_ENV"],"message":"AUTO only after the graduation gate: 0/14 days — 14 days remaining; 0 evaluations — need at least 10 to prove the rule has run; Zero matches — rule may not be triggering correctly (check conditions); AmazonAdsConnection.mode = none (must be production); Run /advertising/connection/preview-writes + /enable-writes first; Set NEXUS_AMAZON_ADS_MODE=live on Railway and redeploy."}
+200 {"ok":true,"rule":{"id":"<id2>","name":"PARITY bid rule","autonomyLevel":"OFF","enabled":false,"dryRun":true}}"
+`;

@@ -1390,6 +1390,51 @@
   color: var(--nds-text-2);
 }
 
+/* Section 03 — a content change takes the delta slot: per field the text now, the new text and its English meaning
+   (KeyValue: three columns, one on a phone). Layout and domain content only; the controls are the design system's. */
+.aq-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 4px;
+  min-width: 0;
+}
+.aq-contentrow {
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.aq-contentfield {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--nds-text);
+}
+.aq-contentsku {
+  font-weight: 400;
+  color: var(--nds-text-2);
+}
+.aq-contenttext {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.aq-contentlist {
+  margin: 0;
+  padding-left: 1.1em;
+}
+.aq-contentempty {
+  color: var(--nds-text-2);
+}
+.aq-contentnote {
+  margin: 4px 0 0;
+  color: var(--nds-text-2);
+}
+.aq-contentreach {
+  margin: 0;
+  padding-left: 1.1em;
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
 /* ── S4.c · the example must be READABLE, and `disabled` was preventing it ──
  *
  * `.acr-btn:disabled` is `opacity: 0.55`, and every control in the example is

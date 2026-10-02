@@ -3,6 +3,7 @@ import { marketCurrency } from "../pim/market-currency.js";
 import { readPushControls } from '../listing-push-controls.js'
 import type { EbayListingData } from "../ai/gemini.service.js";
 import { recordApiCall } from "../outbound-api-call-log.service.js";
+import prisma from "../../db.js";
 import { assertEbayWriteAllowed, ebayHostOf } from "../ebay-publish-gate.service.js";
 import { ebayTransport } from "../gateway/ebay.js";
 import { ebayFixedPriceOfferOf } from "../ebay-price-readback.service.js";
@@ -35,6 +36,37 @@ const EBAY_MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID ?? "EBAY_IT";
  */
 const ebayCurrency = () => marketCurrency("EBAY", EBAY_MARKETPLACE_ID);
 const EBAY_MERCHANT_LOCATION_KEY = process.env.EBAY_MERCHANT_LOCATION_KEY ?? "xavia-riccione-warehouse";
+
+/**
+ * The eBay merchant location's address: the business's default warehouse (its own, not a copy of another business's
+ * shared stock). Street, postal code, town and country are all required; eBay is told nothing else.
+ */
+async function merchantLocationAddress(): Promise<Record<string, string>> {
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { isDefault: true, isActive: true, sharedFromLocationId: null },
+    select: { addressLine1: true, addressLine2: true, city: true, postalCode: true, country: true },
+  });
+  const text = (value: string | null | undefined) => (value ?? "").trim();
+  const missing = [
+    !text(warehouse?.addressLine1) && "street",
+    !text(warehouse?.postalCode) && "postal code",
+    !text(warehouse?.city) && "town",
+    !text(warehouse?.country) && "country",
+  ].filter(Boolean);
+  if (!warehouse || missing.length) {
+    throw new Error(
+      `Fill in the address of the default warehouse (${(warehouse ? missing : ["street", "postal code", "town", "country"]).join(", ")}): ` +
+        "eBay needs the place the items ship from. Nothing was sent to eBay.",
+    );
+  }
+  return {
+    addressLine1: text(warehouse.addressLine1),
+    ...(text(warehouse.addressLine2) ? { addressLine2: text(warehouse.addressLine2) } : {}),
+    city: text(warehouse.city),
+    postalCode: text(warehouse.postalCode),
+    country: text(warehouse.country).toUpperCase(),
+  };
+}
 
 interface EbayTokenResponse {
   access_token: string;
@@ -639,18 +671,14 @@ export class EbayService {
     const token = await this.getAccessToken();
     const url = `${EBAY_API_BASE}/sell/inventory/v1/location/${encodeURIComponent(EBAY_MERCHANT_LOCATION_KEY)}`;
 
+    // Where the items ship from: the business's own default warehouse (2026-10-02). No address lives in code or env:
+    // without a whole one the call is refused and nothing is sent.
+    const address = await merchantLocationAddress();
+
     const payload = {
       merchantLocationStatus: "ENABLED",
       locationTypes: ["WAREHOUSE"],
-      location: {
-        address: {
-          country: "IT",
-          city: "Riccione",
-          stateOrProvince: "Emilia-Romagna",
-          postalCode: process.env.EBAY_LOCATION_POSTAL_CODE ?? "47838",
-          addressLine1: process.env.EBAY_LOCATION_ADDRESS ?? "",
-        },
-      },
+      location: { address },
     };
 
     try {

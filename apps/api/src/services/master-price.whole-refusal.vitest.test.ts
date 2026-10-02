@@ -49,7 +49,11 @@ beforeAll(async () => {
   })
   const { default: routes } = await import('../routes/products-catalog.routes.js')
   app = Fastify()
-  app.addHook('preHandler', (request, _reply, done) => { request.authUser = { id: 'operator' } as never; withWorkspace(LEGACY, done) })
+  app.addHook('preHandler', (request, _reply, done) => {
+    request.authUser = { id: 'operator' } as never
+    Object.assign(request, { __rbacResolved: { isOwner: true, permissions: new Set<string>() } }) // the Owner, as the RBAC gate resolves him: price writes check the person's permissions (S1 F5)
+    withWorkspace(LEGACY, done)
+  })
   await app.register(routes, { prefix: '/api' })
   await app.ready()
 }, 120_000)

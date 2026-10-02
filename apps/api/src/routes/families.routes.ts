@@ -25,7 +25,11 @@ import { contentLanguages } from '../services/pim/content-read.js'
  *     create a cycle (walk the candidate's chain looking for self)
  */
 
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyReply } from 'fastify'
+import {
+  FamilyAdminError, createFamilyAttribute, createProductFamily, deleteFamilyAttribute, deleteProductFamily, updateFamilyAttribute,
+  updateProductFamily, type FamilyAttributeCreateInput, type FamilyAttributeUpdateInput, type FamilyCreateInput, type FamilyUpdateInput,
+} from '../services/pim/family-admin.service.js'
 import { invalidateAttributeSchemasAfterWrites } from '../services/pim/attribute-schema-invalidation.js'
 import prisma from '../db.js'
 import { familyHierarchyService } from '../services/family-hierarchy.service.js'
@@ -35,8 +39,14 @@ import { auditLogService } from '../services/audit-log.service.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 import { MISSING_REQUIRED_MAX_TAKE, productsMissingRequired } from '../services/pim/readiness-query.service.js'
 
-const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
-const MAX_DEPTH = 8
+/** MCP full control P8 — a write refused by family-admin.service.ts: its status, sentence and extra fields, as before. */
+async function adminReply<T>(reply: FastifyReply, work: () => Promise<T>) {
+  try { return await work() }
+  catch (error) {
+    if (error instanceof FamilyAdminError) return reply.code(error.status).send({ error: error.message, ...error.extra })
+    throw error
+  }
+}
 
 const familiesRoutes: FastifyPluginAsync = async (fastify) => {
   invalidateAttributeSchemasAfterWrites(fastify)
@@ -109,127 +119,20 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // POST /api/families — create.
+  // POST /api/families — create (family-admin.service.ts checks and writes).
   fastify.post('/families', async (request, reply) => {
-    const body = request.body as {
-      code?: string
-      label?: string
-      description?: string | null
-      parentFamilyId?: string | null
-    }
-    if (!body.code || !CODE_PATTERN.test(body.code)) {
-      return reply.code(400).send({
-        error:
-          'code is required and must be lowercase snake_case (matches /^[a-z][a-z0-9_]{0,63}$/)',
-      })
-    }
-    if (!body.label || !body.label.trim()) {
-      return reply.code(400).send({ error: 'label is required' })
-    }
-    if (body.parentFamilyId) {
-      const parent = await prisma.productFamily.findUnique({
-        where: { id: body.parentFamilyId },
-        select: { id: true },
-      })
-      if (!parent)
-        return reply.code(400).send({ error: 'parentFamilyId does not exist' })
-    }
-    try {
-      const family = await prisma.productFamily.create({
-        data: {
-          code: body.code,
-          label: body.label.trim(),
-          description: body.description?.trim() || null,
-          parentFamilyId: body.parentFamilyId ?? null,
-        },
-      })
+    const body = request.body as FamilyCreateInput
+    return adminReply(reply, async () => {
+      const family = await createProductFamily(body)
       return reply.code(201).send({ family })
-    } catch (err: any) {
-      if (err?.code === 'P2002')
-        return reply.code(409).send({ error: `family code "${body.code}" already exists` })
-      throw err
-    }
+    })
   })
 
-  // PATCH /api/families/:id — update mutable fields. Cycle-detect on
-  // parentFamilyId changes by walking the candidate's chain.
+  // PATCH /api/families/:id — update mutable fields. Cycle-detect on parentFamilyId changes (family-admin.service.ts).
   fastify.patch('/families/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      label?: string
-      description?: string | null
-      parentFamilyId?: string | null
-    }
-
-    const current = await prisma.productFamily.findUnique({
-      where: { id },
-      select: { id: true, parentFamilyId: true },
-    })
-    if (!current) return reply.code(404).send({ error: 'family not found' })
-
-    const data: Record<string, unknown> = {}
-    if (body.label !== undefined) {
-      if (!body.label.trim())
-        return reply.code(400).send({ error: 'label cannot be empty' })
-      data.label = body.label.trim()
-    }
-    if (body.description !== undefined) {
-      data.description = body.description?.trim() || null
-    }
-    if (body.parentFamilyId !== undefined) {
-      // Self-parent guard.
-      if (body.parentFamilyId === id) {
-        return reply
-          .code(400)
-          .send({ error: 'family cannot be its own parent' })
-      }
-      if (body.parentFamilyId !== null) {
-        // Verify candidate exists.
-        const candidate = await prisma.productFamily.findUnique({
-          where: { id: body.parentFamilyId },
-          select: { id: true },
-        })
-        if (!candidate)
-          return reply
-            .code(400)
-            .send({ error: 'parentFamilyId does not exist' })
-
-        // Cycle detection: walk candidate's chain; if we hit `id`, the
-        // proposed reparent would create a loop.
-        let cursor: string | null = body.parentFamilyId
-        let depth = 0
-        while (cursor && depth < MAX_DEPTH) {
-          if (cursor === id) {
-            return reply.code(409).send({
-              error:
-                'reparent rejected: would create a cycle in the family hierarchy',
-            })
-          }
-          const next = await prisma.productFamily.findUnique({
-            where: { id: cursor },
-            select: { parentFamilyId: true },
-          })
-          cursor = next?.parentFamilyId ?? null
-          depth++
-        }
-        if (depth >= MAX_DEPTH && cursor) {
-          return reply.code(409).send({
-            error: `reparent rejected: hierarchy depth would exceed ${MAX_DEPTH}`,
-          })
-        }
-      }
-      data.parentFamilyId = body.parentFamilyId
-    }
-
-    if (Object.keys(data).length === 0) {
-      return reply.code(400).send({ error: 'no mutable fields supplied' })
-    }
-
-    const family = await prisma.productFamily.update({
-      where: { id },
-      data,
-    })
-    return { family }
+    const body = request.body as FamilyUpdateInput
+    return adminReply(reply, async () => ({ family: await updateProductFamily(id, body) }))
   })
 
   // DELETE /api/families/:id — drop the family. FK cascades:
@@ -240,14 +143,7 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
   //   FamilyAttribute → CASCADE (rows deleted alongside the family)
   fastify.delete('/families/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await prisma.productFamily.delete({ where: { id } })
-      return { ok: true, id }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'family not found' })
-      throw err
-    }
+    return adminReply(reply, () => deleteProductFamily(id))
   })
 
   // ── W2.14 — Completeness ──────────────────────────────────────────
@@ -430,65 +326,11 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
   // attempt to override) what a parent has already locked in.
   fastify.post('/families/:id/attributes', async (request, reply) => {
     const { id: familyId } = request.params as { id: string }
-    const body = request.body as {
-      attributeId?: string
-      required?: boolean
-      channels?: string[]
-      sortOrder?: number
-    }
-    if (!body.attributeId)
-      return reply.code(400).send({ error: 'attributeId is required' })
-
-    const attribute = await prisma.customAttribute.findUnique({
-      where: { id: body.attributeId },
-      select: { id: true },
+    const body = request.body as FamilyAttributeCreateInput
+    return adminReply(reply, async () => {
+      const created = await createFamilyAttribute(familyId, body)
+      return reply.code(201).send({ familyAttribute: created })
     })
-    if (!attribute)
-      return reply.code(400).send({ error: 'attributeId does not exist' })
-
-    let chain
-    try {
-      chain = await familyHierarchyService.walkFamilyChain(familyId)
-    } catch (err: any) {
-      const msg = err?.message ?? String(err)
-      if (/cycle|depth exceeded/i.test(msg))
-        return reply.code(409).send({ error: msg })
-      throw err
-    }
-    if (chain.length === 0)
-      return reply.code(404).send({ error: 'family not found' })
-
-    // Akeneo-strict additive: refuse if any ancestor (or self)
-    // already has this attributeId. Walking the entire chain (incl.
-    // self) is correct — the unique constraint at the DB protects
-    // self-duplicates too, but checking up front gives a clearer
-    // error than a P2002 collision.
-    for (const node of chain) {
-      const conflict = node.familyAttributes.find(
-        (fa) => fa.attributeId === body.attributeId,
-      )
-      if (conflict) {
-        const isSelf = node.id === familyId
-        return reply.code(409).send({
-          error: isSelf
-            ? 'attribute already attached to this family'
-            : `attribute already inherited from ancestor family ${node.id}; child cannot redeclare it (Akeneo-strict additive invariant)`,
-          conflictFamilyId: node.id,
-          isInherited: !isSelf,
-        })
-      }
-    }
-
-    const created = await prisma.familyAttribute.create({
-      data: {
-        familyId,
-        attributeId: body.attributeId,
-        required: body.required ?? false,
-        channels: Array.isArray(body.channels) ? body.channels : [],
-        sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
-      },
-    })
-    return reply.code(201).send({ familyAttribute: created })
   })
 
   // PATCH /api/family-attributes/:id — update required/channels/order.
@@ -496,32 +338,8 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
   // ancestor-conflict check that gated the original create).
   fastify.patch('/family-attributes/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      required?: boolean
-      channels?: string[]
-      sortOrder?: number
-    }
-    const data: Record<string, unknown> = {}
-    if (body.required !== undefined) data.required = body.required
-    if (body.channels !== undefined) {
-      if (!Array.isArray(body.channels))
-        return reply.code(400).send({ error: 'channels must be an array' })
-      data.channels = body.channels
-    }
-    if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
-    if (Object.keys(data).length === 0)
-      return reply.code(400).send({ error: 'no mutable fields supplied' })
-    try {
-      const familyAttribute = await prisma.familyAttribute.update({
-        where: { id },
-        data,
-      })
-      return { familyAttribute }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'family-attribute not found' })
-      throw err
-    }
+    const body = request.body as FamilyAttributeUpdateInput
+    return adminReply(reply, async () => ({ familyAttribute: await updateFamilyAttribute(id, body) }))
   })
 
   // DELETE /api/family-attributes/:id — detach attribute from family.
@@ -532,14 +350,7 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
   // separate "purge values" service which doesn't exist yet (W2.x).
   fastify.delete('/family-attributes/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await prisma.familyAttribute.delete({ where: { id } })
-      return { ok: true, id }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'family-attribute not found' })
-      throw err
-    }
+    return adminReply(reply, () => deleteFamilyAttribute(id))
   })
 
   // ── W2.8 — bulk attach/detach family on N products ─────────────

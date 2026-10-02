@@ -6,7 +6,8 @@
  * owed to the state — a category of audit failure that costs more
  * than the refund itself.
  *
- * Per-(fiscalYear, issuer) sequence is gap-free + monotonic.
+ * Per-(fiscalYear, issuer) sequence is gap-free + monotonic; one issuer per
+ * business (O2, business-identity.service), so each business has its own series.
  * Idempotent: re-calling assignCreditNoteNumber for the same refundId
  * returns the existing number instead of burning a new one.
  *
@@ -19,6 +20,8 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { currentInvoiceIssuer } from './business-identity.service.js'
+import { publishEvent } from '../lib/events/publish.js'
 
 export interface CreditNoteAssignment {
   creditNoteNumber: string
@@ -34,8 +37,6 @@ export interface CreditNoteAssignment {
    *  existing CreditNote was returned. */
   newlyAssigned: boolean
 }
-
-const DEFAULT_ISSUER = 'XAVIA'
 
 function fiscalYearOf(d: Date): number {
   return d.getFullYear()
@@ -58,9 +59,10 @@ function formatCreditNoteNumber(seq: number, year: number): string {
  */
 export async function assignCreditNoteNumber(
   refundId: string,
-  opts: { issuer?: string; at?: Date; causale?: string } = {},
+  opts: { at?: Date; causale?: string } = {},
 ): Promise<CreditNoteAssignment> {
-  const issuer = opts.issuer ?? DEFAULT_ISSUER
+  // O2 — the business's own series: Xavia keeps 'XAVIA', every other business its own (business-identity.service).
+  const issuer = currentInvoiceIssuer()
   const issuedAt = opts.at ?? new Date()
   const fiscalYear = fiscalYearOf(issuedAt)
 
@@ -142,6 +144,9 @@ export async function assignCreditNoteNumber(
         issuedAt,
       },
     })
+
+    // 07 O14 — with the number, in the same transaction: ids and the number only.
+    await publishEvent(tx, 'invoice.issued', { kind: 'CREDIT_NOTE', documentId: created.id, number: created.creditNoteNumber, orderId: refund.return?.orderId ?? null, refundId })
 
     logger.info('credit-note: assigned', {
       refundId,

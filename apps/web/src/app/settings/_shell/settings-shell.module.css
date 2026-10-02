@@ -24,3 +24,68 @@
     padding-inline: var(--nds-space-16);
   }
 }
+
+/*
+ * The settings save bar (SettingsSaveBar.tsx), fixed to the bottom of the viewport.
+ *
+ * Its start edge is where the page content starts, at every width: after the app rail — the width AppShell reserves
+ * for it (`--rail-reserve`, set while the rail is pinned; otherwise the collapsed rail, --nds-rail-collapsed) — plus
+ * the page gutter. At 390px it started at the viewport's 16px gutter, under the 66px rail, which hid the start of the
+ * save error. It ends at the gutter on the right. It may wrap, never overflow: when its content fits it is one row,
+ * exactly as before.
+ */
+.saveBarDock {
+  left: calc(var(--rail-reserve, var(--nds-rail-collapsed)) + var(--nds-space-16));
+  right: var(--nds-space-16);
+}
+
+.saveBar {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+ * Below the bar's own breakpoint (Tailwind `sm`, 640px) it fills the space between rail and gutter and wraps: the
+ * status, the reason and "You have unsaved changes" each take a full line (the reason in full, not truncated), the
+ * buttons follow on their own line, right-aligned — and it sits above the Ask AI button instead of under it.
+ */
+@media (max-width: 639px) {
+  :global(:root:has([data-nds-fab])) .saveBarDock {
+    bottom: calc(var(--nds-fab-reserve-block) + var(--nds-space-8));
+  }
+
+  .saveBar {
+    width: 100%;
+  }
+
+  .saveBar .saveBarText {
+    flex: 1 1 100%;
+    align-items: flex-start;
+    min-width: 0;
+    max-width: none;
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .saveBar .saveBarIcon {
+    flex-shrink: 0;
+    margin-top: var(--nds-space-3);
+  }
+
+  .saveBar .saveBarDiscard {
+    margin-inline-start: auto;
+  }
+}
+
+/*
+ * From 640px up the bar sits bottom-right, where the floating Ask AI button also sits: at 1280px the button covered
+ * "Save changes". With that button on the page (`data-nds-fab`), the bar keeps its place and look but ends where the
+ * button's reserved footprint begins (--nds-fab-reserve-inline), so both stay clickable.
+ */
+@media (min-width: 640px) {
+  :global(:root:has([data-nds-fab])) .saveBarDock {
+    right: var(--nds-fab-reserve-inline);
+  }
+}

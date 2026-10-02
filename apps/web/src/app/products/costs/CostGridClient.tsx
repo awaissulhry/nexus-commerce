@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Save, Loader2, RefreshCw, Coins, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { usePermission } from '@/lib/auth/AuthProvider'
+import { Banner } from '@/design-system/components'
 
 interface Row {
   id: string
@@ -41,6 +43,8 @@ function trueMargin(
 
 export default function CostGridClient() {
   const backend = getBackendUrl()
+  // S1 (F4) — saving costs needs pricing.costs.edit (the API refuses it otherwise); without it the grid is read-only.
+  const canEditCosts = usePermission('pricing.costs.edit')
   const [rows, setRows] = useState<Row[]>([])
   const [feePct, setFeePct] = useState<number | null>(null)
   const [edits, setEdits] = useState<Map<string, number | null>>(new Map())
@@ -91,6 +95,7 @@ export default function CostGridClient() {
   // Paste a column of costs → fill down from the focused row.
   const onPaste = useCallback(
     (e: React.ClipboardEvent, startIdx: number) => {
+      if (!canEditCosts) return
       const text = e.clipboardData.getData('text')
       const lines = text.split(/\r?\n/).filter((l, i, a) => l !== '' || i < a.length - 1)
       if (lines.length <= 1) return // single value — let the input handle it
@@ -105,7 +110,7 @@ export default function CostGridClient() {
       })
       setNote(`Pasted ${lines.length} costs`)
     },
-    [filtered],
+    [filtered, canEditCosts],
   )
 
   const save = useCallback(async () => {
@@ -164,7 +169,7 @@ export default function CostGridClient() {
           <button
             type="button"
             onClick={() => void save()}
-            disabled={saving || edits.size === 0}
+            disabled={!canEditCosts || saving || edits.size === 0}
             className="h-9 px-4 text-base rounded bg-emerald-600 text-white inline-flex items-center gap-1.5 hover:bg-emerald-700 disabled:opacity-40"
           >
             {saving ? (
@@ -176,6 +181,12 @@ export default function CostGridClient() {
           </button>
         </div>
       </div>
+
+      {!canEditCosts && (
+        <Banner tone="info" title="Read only">
+          You can see costs here. Changing them needs the cost permission (pricing.costs.edit).
+        </Banner>
+      )}
 
       <div className="flex items-center gap-3 text-sm">
         <div className="relative">
@@ -241,6 +252,8 @@ export default function CostGridClient() {
                         }}
                         inputMode="decimal"
                         value={cost != null ? String(cost) : ''}
+                        readOnly={!canEditCosts}
+                        aria-label={`Cost for ${r.sku}`}
                         onChange={(e) => setCost(r.id, parseCost(e.target.value))}
                         onPaste={(e) => onPaste(e, i)}
                         placeholder="—"

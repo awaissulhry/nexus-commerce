@@ -1,0 +1,2 @@
+200
+{"family":{"workspaceId":"nexus_legacy_workspace","id":"golden-fam-other","code":"golden_other","label":"Others","description":null,"parentFamilyId":null,"workflowId":null,"createdAt":"<time>","updatedAt":"<time>"}}

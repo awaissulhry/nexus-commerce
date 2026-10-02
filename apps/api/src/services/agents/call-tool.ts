@@ -34,7 +34,7 @@ import {
 } from '../../lib/workspace-context.js'
 import { getTool, listTools } from './tool-registry.js'
 import { takeToolCall } from './tool-rate.js'
-import type { AgentTool, ToolResult, ToolSurface } from './tool-types.js'
+import { PLAN_TOOL, type AgentTool, type ToolContext, type ToolDoor, type ToolPermission, type ToolResult, type ToolSurface } from './tool-types.js'
 
 /** Which front door a person came through — recorded, never trusted for access. */
 export type ToolVia = 'app' | 'claude'
@@ -71,6 +71,8 @@ export interface SystemPrincipal {
   kind: 'system'
   label: string
   userId: null
+  /** C1 — which in-process door: a fleet worker, or anything else (crons, autonomous agents, re-checks). */
+  via?: Extract<ToolDoor, 'fleet' | 'system'>
 }
 
 export type ToolPrincipal = UserPrincipal | SystemPrincipal
@@ -104,8 +106,20 @@ export interface ToolCall {
 }
 
 /** For in-process callers only: crons, the fleet, re-checks of a decision a person already took. */
-export function systemPrincipal(label: string): SystemPrincipal {
-  return { kind: 'system', label, userId: null }
+export function systemPrincipal(label: string, via: Extract<ToolDoor, 'fleet' | 'system'> = 'system'): SystemPrincipal {
+  return { kind: 'system', label, userId: null, via }
+}
+
+/** C1 — the front door a principal's calls come through (ToolContext.via). */
+export function doorOf(principal: ToolPrincipal): ToolDoor {
+  return principal.kind === 'user' ? principal.via : (principal.via ?? 'system')
+}
+
+/** C1 — ToolContext.can: the principal's permissions in the business the call runs in. A system caller holds all. */
+export function canFor(principal: ToolPrincipal): (permission: ToolPermission) => boolean {
+  if (principal.kind === 'system' || principal.permissions.isOwner) return () => true
+  const held = principal.permissions.permissions
+  return (permission) => held.has(permission)
 }
 
 /** What a decision is stored under: a display name, then the email, then the id. */
@@ -153,16 +167,22 @@ export function missingPermissions(
   return missing
 }
 
+/** C6/C7 — tools that mean nothing to a person who may not ask for any change. */
+const ONLY_WITH_CHANGES = new Set([PLAN_TOOL, 'confirm-change'])
+
 /**
  * The tools this principal may call — the only ones a model is offered. MCP.7: for a person,
  * only those offered on the surface of their front door.
  */
 export function toolsFor(principal: ToolPrincipal): AgentTool[] {
-  return listTools().filter(
+  const offered = listTools().filter(
     (tool) =>
       missingPermissions(principal, tool).length === 0 &&
       (principal.kind === 'system' || offeredOn(tool, surfaceOf(principal.via))),
   )
+  // C6/C7 — a change plan, and confirming a change, only to a person who may ask for at least one change.
+  const mayChange = offered.some((tool) => !tool.readOnly && !tool.control && !!tool.execute)
+  return mayChange ? offered : offered.filter((tool) => !ONLY_WITH_CHANGES.has(tool.name))
 }
 
 /**
@@ -229,6 +249,18 @@ export interface CallOptions {
    * so a refused call never spends the budget.
    */
   hourlyLimit?: number | null
+  /** C1 — the approval this dry run re-checks (the staleness check before an approved change runs). */
+  approvalId?: string
+}
+
+/** C1 — what `execute` is told about the approval it carries out. */
+export interface ExecuteOptions {
+  /** The approval being carried out. */
+  approvalId?: string
+  /** The preview the person approved, raw, as the approval stores it. */
+  approvedPreview?: unknown
+  /** The door the approved REQUEST came through; the principal's own door when absent. */
+  via?: ToolDoor
 }
 
 async function withinHourlyLimit(name: string, limit: number | null | undefined): Promise<void> {
@@ -254,6 +286,11 @@ function storedOutputFor(principal: ToolPrincipal, toolName: string, value: unkn
   return visibleTo(principal, stored, value)
 }
 
+/** C8 — what this principal may see of output other tools stored (approvals' previews), as one function. */
+export function storedOutputOf(principal: ToolPrincipal): (toolName: string, value: unknown) => unknown | null {
+  return (toolName, value) => storedOutputFor(principal, toolName, value)
+}
+
 /** The dry run: a tool's `handler`. It never changes anything. */
 export async function callTool(
   principal: ToolPrincipal,
@@ -268,12 +305,16 @@ export async function callTool(
   }
   const tool = allowedTool(principal, name)
   const input = parsedArgs(tool, args)
+  const context: ToolContext = {
+    userId: principal.kind === 'user' ? principal.userId : null,
+    storedOutput: (toolName, value) => storedOutputFor(principal, toolName, value),
+    can: canFor(principal),
+    via: doorOf(principal),
+    ...(options.approvalId ? { approvalId: options.approvalId } : {}),
+  }
   const raw = await asPrincipal(principal, async () => {
     await withinHourlyLimit(name, options.hourlyLimit)
-    return tool.handler(input, {
-      userId: principal.kind === 'user' ? principal.userId : null,
-      storedOutput: (toolName, value) => storedOutputFor(principal, toolName, value),
-    })
+    return tool.handler(input, context)
   })
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }
@@ -287,14 +328,21 @@ export async function executeTool(
   principal: ToolPrincipal,
   name: string,
   args: Record<string, unknown>,
+  options: ExecuteOptions = {},
 ): Promise<ToolCall> {
   const tool = allowedTool(principal, name)
   const execute = tool.execute
   if (!execute) throw new ToolAccessError('unknown_tool', `${name} is preview-only and cannot run`, 400)
   // Stored arguments are parsed again: what runs is exactly what the schema allows today.
   const input = parsedArgs(tool, args)
-  const raw = await asPrincipal(principal, () =>
-    execute(input, { userId: principal.kind === 'user' ? principal.userId : principal.label }),
-  )
+  const context: ToolContext = {
+    userId: principal.kind === 'user' ? principal.userId : principal.label,
+    storedOutput: (toolName, value) => storedOutputFor(principal, toolName, value),
+    can: canFor(principal),
+    via: options.via ?? doorOf(principal),
+    ...(options.approvalId ? { approvalId: options.approvalId } : {}),
+    ...(options.approvedPreview !== undefined ? { approvedPreview: options.approvedPreview } : {}),
+  }
+  const raw = await asPrincipal(principal, () => execute(input, context))
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }

@@ -1,0 +1,2 @@
+400
+{"error":"groupId is required"}

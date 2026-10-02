@@ -1,0 +1,2 @@
+409
+{"error":"attribute already attached to this family","conflictFamilyId":"golden-fam-child","isInherited":false}

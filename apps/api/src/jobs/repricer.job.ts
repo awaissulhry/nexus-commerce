@@ -27,7 +27,12 @@ let task: ReturnType<typeof cron.schedule> | null = null
 async function tick(): Promise<void> {
   try {
     await recordCronRun('repricer', async () => {
-      const r = await runRepricerTick(prisma)
+      // R16 — the lower of the env (live only with NEXUS_REPRICER_LIVE=1) and this business's switch: OFF stands down,
+      // OBSERVE records what it would push and pushes nothing.
+      const { engineMode } = await import('../services/automation/engine-switch.service.js')
+      const gate = await engineMode('repricer', process.env.NEXUS_REPRICER_LIVE === '1' ? 'AUTO' : 'OBSERVE')
+      if (gate.mode === 'OFF') return `skipped: ${gate.note}`
+      const r = await runRepricerTick(prisma, { dryRun: gate.mode !== 'AUTO' })
       return `live=${r.liveMode} scanned=${r.snapshotsScanned} enqueued=${r.enqueued} dryRunWould=${r.dryRunWouldEnqueue} subThreshold=${r.skippedSubThreshold}`
     })
   } catch (err) {

@@ -1037,6 +1037,8 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
    *   OK_MANUAL_REQUIRED   → Amazon FBM / FBA hint with deep link
    *   NOT_IMPLEMENTED      → Shopify/Woo stubbed, retry later
    *   FAILED               → channel rejected; retry button visible
+   *   DRY_RUN              → the channel's refund switch is off: no money
+   *                          moved and the return stays unrefunded
    *
    * The "Mark refunded only (skip channel push)" button is a deliberate
    * override for when the operator already issued the refund in the
@@ -1303,7 +1305,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                           className={`text-sm rounded px-2.5 py-1.5 ${
                             refundResult.outcome === 'OK'
                               ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800'
-                              : refundResult.outcome === 'OK_MANUAL_REQUIRED'
+                              : refundResult.outcome === 'OK_MANUAL_REQUIRED' || refundResult.outcome === 'DRY_RUN'
                                 ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800'
                                 : refundResult.outcome === 'NOT_IMPLEMENTED'
                                   ? 'bg-slate-50 dark:bg-slate-800 border border-default dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -1316,6 +1318,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                             {refundResult.outcome === 'NOT_IMPLEMENTED' && 'Channel adapter not yet wired.'}
                             {refundResult.outcome === 'SKIPPED' && 'Marked refunded locally (channel skipped).'}
                             {refundResult.outcome === 'FAILED' && 'Channel push failed.'}
+                            {refundResult.outcome === 'DRY_RUN' && 'Dry run — no money moved. The return is not refunded.'}
                           </div>
                           {refundResult.channelRefundId && (
                             <div className="mt-0.5 font-mono text-xs">
@@ -2133,6 +2136,8 @@ function RefundRetryBanner({
         toast.success('Refund retry posted')
       } else if (j.outcome === 'SKIPPED') {
         toast.error(`Skipped: ${j.reason ?? 'unknown'}`)
+      } else if (j.outcome === 'DRY_RUN') {
+        toast.error(j.channelMessage ?? 'Dry run — no money moved.')
       } else {
         toast.error(j.error ?? 'Retry failed')
       }

@@ -11,15 +11,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { audit } from "@/lib/audit";
-import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { FEATURES, PAGES } from "@/lib/auth/permissions";
 import { quoteTotals } from "@/lib/quotes/compose-line";
-import { nextNumber } from "@/lib/counters";
 import { ruleDays, type FollowUpRule } from "@/lib/quotes/followup";
 import { loadFollowUpSettings } from "@/lib/quotes/followup-settings";
-import { naturaForMode, resolveTaxMode } from "@/lib/quotes/tax";
+import { createDraftQuote } from "@/lib/quotes/create-draft";
 
 export const permission = { GET: PAGES.quotes, POST: FEATURES.quotesCreate };
 
@@ -101,35 +98,9 @@ const Create = z.object({ partyId: z.string().min(1), conversationId: z.string()
 export const POST = guarded(FEATURES.quotesCreate, async (req, { actor, resolved }) => {
   const parsed = Create.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "partyId required" }, { status: 400 });
-  const party = await prisma.party.findUnique({ where: { id: parsed.data.partyId }, select: { id: true, kind: true, taxMode: true, depositDefaultPct: true } });
-  if (!party) return NextResponse.json({ error: "Party not found" }, { status: 404 });
-
-  // estimated lead time (honest v1 — real capable-to-promise from floor load lands in FP6)
-  const leadRow = await prisma.appSetting.findUnique({ where: { key: "production.leadTimeDays" } });
-  const leadDays = ((leadRow?.value as { days?: number })?.days) ?? 21;
-
-  const number = await nextNumber("quote");
-  // EPQ.5 — the quote snapshots its tax mode from the party at create (the
-  // party's stored mode, else its kind default); DRAFT-editable in the rail.
-  const taxMode = resolveTaxMode(party.taxMode, party.kind);
-  const quote = await prisma.quote.create({
-    data: {
-      number,
-      partyId: party.id,
-      conversationId: parsed.data.conversationId ?? null,
-      depositPct: party.depositDefaultPct ?? null,
-      taxMode,
-      naturaCode: naturaForMode(taxMode),
-      validUntilAt: new Date(Date.now() + 30 * 86400000), // 30-day default validity
-      promiseDateAt: new Date(Date.now() + leadDays * 86400000),
-    },
-  });
-  void audit({ actorId: actor!.id, entityType: "quote", entityId: quote.id, action: "created", after: { number } });
-  // EPI1.1 (G11) — creation used to be silent: other viewers' linked-quote
-  // rails stayed stale until an unrelated event happened by.
-  void publishEventDurable("pricing.updated", {
-    quoteId: quote.id,
-    ...(quote.conversationId ? { conversationId: quote.conversationId } : {}),
-  });
+  // P12 — created by src/lib/quotes/create-draft.ts (Claude's factory-draft-quote creates through it too).
+  const created = await createDraftQuote({ partyId: parsed.data.partyId, conversationId: parsed.data.conversationId, actorId: actor!.id });
+  if (!created.ok) return NextResponse.json({ error: created.error }, { status: created.status });
+  const quote = created.quote;
   return jsonStripped({ quote }, resolved, { status: 201 });
 });

@@ -1,0 +1,2 @@
+400
+{"error":"Validation failed","fieldErrors":{"vatScheme":"VAT scheme must be one of: ORDINARIO, FORFETTARIO, OSS, IOSS, ESENTE."}}

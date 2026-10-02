@@ -18,6 +18,7 @@ import prisma from '../../db.js'
 import { activeDatabaseTransaction, inDatabaseTransaction } from '../../lib/database-context.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
 import { writeChannelPrices, type PriceWriteOutcome, type PriceWriteTarget, type PriceWriteUnguardedReason } from '../pim/channel-price-write.service.js'
+import { PRICE_EDIT_PERMISSION, PRICE_EDIT_REFUSAL } from '../master-price.service.js'
 
 /** A refusal with the HTTP status the route answers it with. */
 export class ListingPricingError extends Error {
@@ -124,7 +125,11 @@ export async function patchListing(input: {
   columns: Prisma.ChannelListingUpdateManyMutationInput
   /** Keys shallow-merged into `platformAttributes`. */
   mergePlatformAttributes?: Record<string, unknown> | null
+  /** S1 (F5) — the acting person's permissions: a pricing edit needs `products.price.edit`. */
+  can?: (permission: string) => boolean
 }): Promise<ListingPatchResult> {
+  // S1 (F5) — refused before anything is read or written, the other columns of the edit included.
+  if (input.pricing && input.can) assertPriceEditAllowed(input.can)
   return inDatabaseTransaction(prisma, async () => {
     const db = activeDatabaseTransaction() ?? prisma
     const current = await db.channelListing.findUnique({ where: { id: input.id }, select: { id: true, version: true, platformAttributes: true } })
@@ -159,6 +164,11 @@ export async function patchListing(input: {
     }
     return { id: input.id, version, queueId, ...(notSent ? { notSent } : {}) }
   })
+}
+
+/** S1 (F5) — a person changing a listing's price (a pin, a rule, a percent, a follow flag) needs `products.price.edit`. */
+export function assertPriceEditAllowed(can: (permission: string) => boolean): void {
+  if (!can(PRICE_EDIT_PERMISSION)) throw new ListingPricingError(403, PRICE_EDIT_REFUSAL, { code: 'PRICE_PERMISSION' })
 }
 
 /** The listings bulk bar's pricing actions, one listing at a time. */
@@ -223,7 +233,10 @@ export async function resetListingToMaster(input: {
   listingId: string
   fields: ResettableField[]
   actor: string
+  /** S1 (F5) — handing the price back to the master changes it: `products.price.edit`. */
+  can?: (permission: string) => boolean
 }): Promise<{ notSent?: string; quantityFollowTurnedOn: boolean; quantitySkipped?: string }> {
+  if (input.fields.includes('price') && input.can) assertPriceEditAllowed(input.can)
   return inDatabaseTransaction(prisma, async () => {
     const db = activeDatabaseTransaction() ?? prisma
     const listing = await db.channelListing.findUnique({ where: { id: input.listingId }, select: { productId: true, followMasterQuantity: true } })

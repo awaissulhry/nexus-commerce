@@ -128,44 +128,20 @@ async function getProductMatrix(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /**
- * PUT /api/products/:id/matrix/channel-listing/:listingId
- * Update a channel listing
+ * PUT /api/products/:id/matrix/channel-listing/:listingId — RETIRED (S1, F6).
+ *
+ * It wrote `price` and `quantity` straight onto the listing row: no price door (no bounds, no currency check, no queue
+ * row), no stock door (no FBA check: it could write an Amazon-managed quantity), no audit and no version. Nothing in the
+ * app called it. Price and quantity per listing go through the Matrix (`/api/products/:id/studio/matrix`) and the
+ * listing edit (`PATCH /api/listings/:id`). Kept as 410 Gone, behind the same permission, so a straggler is told where.
  */
-async function updateChannelListing(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    const { id, listingId } = request.params as { id: string; listingId: string }
-    const body = request.body as any
-
-    logger.info('Updating channel listing', { productId: id, listingId })
-
-    const updated = await (prisma as any).channelListing.update({
-      where: { id: listingId, productId: id },
-      data: {
-        title: body.title,
-        description: body.description,
-        price: body.price,
-        quantity: body.quantity,
-        syncFromMaster: body.syncFromMaster,
-        syncLocked: body.syncLocked,
-        externalListingId: body.externalListingId,
-        // ── PHASE 12b: Variation Matrix ────────────────────────────
-        variationTheme: body.variationTheme,
-        variationMapping: body.variationMapping,
-      },
-      include: {
-        offers: true,
-        images: true,
-      },
-    })
-
-    logger.info('Channel listing updated', { listingId, variationTheme: body.variationTheme })
-    return reply.send(updated)
-  } catch (error) {
-    logger.error('Error updating channel listing', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return reply.status(500).send({ error: 'Failed to update channel listing' })
-  }
+async function updateChannelListing(_request: FastifyRequest, reply: FastifyReply) {
+  return reply.status(410).send({
+    error: 'gone',
+    code: 'ROUTE_RETIRED',
+    message: 'This route was retired. Change a listing through the Matrix (/api/products/:id/studio/matrix) or PATCH /api/listings/:id.',
+    replacement: '/api/products/:id/studio/matrix',
+  })
 }
 
 // Presence D24: legacy Offer writers retired; use the studio Matrix write door.

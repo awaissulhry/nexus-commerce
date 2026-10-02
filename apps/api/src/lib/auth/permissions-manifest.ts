@@ -107,8 +107,10 @@ export const ENTRIES: Entry[] = [
   P(PUBLIC, (_m, p) => p.startsWith('/api/oauth/')),
   // MCP.7 — the MCP endpoint and its RFC 9728 document (routes/mcp.routes.ts). Claude sends a
   // Bearer token, never a session: the route verifies it and takes the business from it alone.
+  // C4 — /mcp/w/:workspaceId is one business's own URL: a token issued for it works there only.
   P(PUBLIC, (_m, p) =>
     p === '/mcp' ||
+    p.startsWith('/mcp/w/') ||
     p === '/.well-known/oauth-protected-resource' ||
     p.startsWith('/.well-known/oauth-protected-resource/')),
   // Owner-gated auth admin (also guarded in S1 by requireOwner):
@@ -126,6 +128,13 @@ export const ENTRIES: Entry[] = [
   P(F.auditView, pfx('/api/audit-log')),
   P(F.auditView, (_m, p) => p === '/api/events'),
   P(F.sessionsManage, pfx('/api/team/sessions')),
+  // MCP full control C5 — how far Claude may go without a person in this business (routes/claude-control.routes.ts):
+  // reading needs ai.view. A brake is easy: Pause and lowering a level or the cap need only ai.run (anyone who may use
+  // Claude here). Resume needs settings.security.manage; raising a level, changing limits or raising the cap reach the
+  // service with ai.run and are refused there without settings.security.manage and a fresh 2FA code. Exactly this
+  // prefix: /api/claude-… is not matched.
+  P(F.settingsSecurityManage, (m, p) => m.toUpperCase() === 'POST' && p === '/api/claude/resume'),
+  RW(F.aiView, F.aiRun, (_m, p) => p.startsWith('/api/claude/')),
   // MCP.6 — a business's Claude connections (routes/oauth-grants.routes.ts): whoever manages its sessions.
   P(F.sessionsManage, (_m, p) => p === '/api/connected-apps' || p.startsWith('/api/connected-apps/')),
 
@@ -255,6 +264,11 @@ export const ENTRIES: Entry[] = [
   // ── S2 coverage: email suppressions (GDPR) ─────────────────────
   RW(F.settingsPrivacyManage, F.settingsPrivacyManage, pfx('/api/email/suppressions')),
 
+  // ── Orders: fiscal dispatch (MCP full control 07 O1) ───────────
+  // Sending the day's corrispettivi to the RT is a fiscal act, not an export. It must precede the Orders section's
+  // `/api/corrispettivi` rule (orders.export), which keeps the XML and the preview.
+  P(F.ordersEdit, (m, p) => m.toUpperCase() === 'POST' && p.startsWith('/api/corrispettivi') && has('/dispatch')(m, p)),
+
   // ── S2 coverage: internal service-to-service ───────────────────
   // NOTE: called by the bidding-engine microservice, not humans — it has
   // no session. Before NEXUS_RBAC_MODE=enforce this must move to API-key
@@ -310,6 +324,29 @@ export const ENTRIES: Entry[] = [
   P(F.ordersEdit, (m, p) => m === 'POST' && p === '/etsy/sync/orders'),
   P(F.productsPublish, (m, p) => m === 'POST' && (p === '/etsy/sync/inventory/to-etsy' || /^\/etsy\/orders\/[^/]+\/(?:status|fulfillment)$/.test(p))),
 
+  // ── Stock, supply and pricing on their REAL paths (MCP full control S1, 08 §1.4 F4 and F11) ──
+  // Above the advertising block on purpose: its `has('/automation')` hands EVERY path holding '/automation' to the ad
+  // permission, so the replenishment automation (a purchasing rule, not an ad) resolved to ads.automation.manage.
+  RW(F.replenishmentView, F.replenishmentRun, pfx('/api/fulfillment/replenishment/automation')),
+  // F4 — the cost grid's write is a cost edit. The old rule named `/api/product-costs`, a path no route has, so the
+  // write fell through to the products prefix and needed products.edit only.
+  RW(F.productsView, F.pricingCostsEdit, (_m, p) => p === '/api/products/costs'),
+  // F11 — a product's B2B tier prices are the restricted money `/api/tier-prices` is; the old `/api/tier-pricing` rule
+  // matched nothing, so they read with products.view and wrote with products.edit.
+  RW(F.pricingTiersManage, F.pricingTiersManage, (_m, p) => /^\/api\/products\/[^/]+\/tier-prices$/.test(p)),
+  // F11 — eBay volume pricing lives under /api/ebay (the old `/api/ebay-volume-pricing` rule matched nothing): a volume
+  // promotion is a price, so changing one is a pricing edit, never the channel-sync default.
+  RW(F.listingsView, F.pricingEdit, pfx('/api/ebay/volume-promotions')),
+  RW(F.listingsView, F.pricingEdit, pfx('/api/ebay/volume-tier-templates')),
+  // F11 — FBA inbound v1 is inbound work, like v2 (`/api/fba/inbound`) and `/api/fulfillment/inbound`, never a stock edit.
+  RW(F.inboundManage, F.inboundManage, pfx('/api/fulfillment/fba/')),
+  // F11 — a PO template makes purchase orders.
+  RW(F.poView, F.poCreate, pfx('/api/fulfillment/po-templates')),
+  // Transfers, counts and lots carry their own permissions (every system role that holds inventory.adjust holds all three).
+  RW(F.inventoryView, F.stockTransfer, (_m, p) => p === '/api/stock/transfer' || p === '/api/stock/bulk-transfer' || p === '/api/stock/bins/move'),
+  RW(F.inventoryView, F.stockCount, pfx('/api/fulfillment/cycle-counts')),
+  RW(F.inventoryView, F.lotsManage, (_m, p) => /^\/api\/stock\/(?:lots|recalls|serials)(?:\/|$)/.test(p)),
+
   // ── Advertising ─────────────────────────────────────────────────
   // RPT.5 — saved report definitions. Scoped ABOVE the catch-all on purpose:
   // without this, saving a personal view falls through to the /api/advertising
@@ -346,7 +383,12 @@ export const ENTRIES: Entry[] = [
   P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/shares')),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   P(F.adsAutomationManage, has('/autopilot')),
-  P(F.adsAutomationManage, has('/automation')),
+  // R16 — a person's per-business engine switch (the Control Room lever drawer): ads.automation.manage, named on its own
+  // so no reorder of the broader rules below can hand it a weaker permission.
+  P(F.adsAutomationManage, (_m, p) => /^\/api\/advertising\/automation\/engine-switch\/[^/]+$/.test(p)),
+  // The ads automation routes only (advertising and eBay ads). MCP full control R18: the bare `has('/automation')` it was
+  // also caught the replenishment, review and returns automation routes, which belong to their own prefixes below.
+  P(F.adsAutomationManage, (m, p) => (p.startsWith('/api/advertising') || p.startsWith('/api/ebay-ads')) && has('/automation')(m, p)),
   P(F.adsBudgetsEdit, has('/budget')),
   P(F.adsBidsEdit, (m, p) => has('/bid')(m, p) && p.startsWith('/api/advertising')),
   RW(F.adsView, F.adsCampaignsManage, pfx('/api/advertising')),
@@ -354,9 +396,7 @@ export const ENTRIES: Entry[] = [
   RW(F.adsView, F.adsCampaignsManage, pfx('/api/ebay-ads')),
 
   // ── Pricing / repricing ─────────────────────────────────────────
-  RW(F.pricingTiersManage, F.pricingTiersManage, pfx('/api/tier-pricing')),
-  RW(F.pricingTiersManage, F.pricingTiersManage, pfx('/api/ebay-volume-pricing')),
-  RW(F.pricingCostsEdit, F.pricingCostsEdit, pfx('/api/product-costs')),
+  // (S1 F4/F11: the tier, eBay volume and cost rules that stood here named paths no route has; see the block above.)
   RW(F.repricingView, F.repricingRulesManage, pfx('/api/repricing-rules')),
   RW(F.repricingView, F.repricingRulesManage, pfx('/api/repricing')),
   RW(F.pricingView, F.pricingRulesManage, pfx('/api/pricing-rules')),
@@ -401,7 +441,6 @@ export const ENTRIES: Entry[] = [
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/fulfillment/stock')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/stock')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/inventory')),
-  RW(F.inventoryView, F.inventoryAdjust, pfx('/api/fba-inbound-v2')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/reconciliation')),
   RW(F.inventoryView, F.inventoryAdjust, pfx('/api/fulfillment')),
 
@@ -519,7 +558,9 @@ export const ENTRIES: Entry[] = [
   RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/images-workspace\/amazon(?:\/.*)?$/.test(p)),
   P(F.productsImagesEdit, has('/images')),
   P(F.productsTranslationsEdit, pfx('/api/product-translations')),
-  P(F.productsPriceEdit, (m, p) => p.startsWith('/api/products') && has('/price')(m, p)),
+  // S1 (F5) — `products.price.edit` is not a route rule: no route under /api/products carries a `/price` segment, so the
+  // rule that stood here matched nothing. The services check it on every price write (master price, listing price,
+  // bulk price jobs, the sheet's price cells), with the person's permissions from the request.
   RW(F.pimManage, F.pimManage, pfx('/api/pim')),
   RW(F.pimManage, F.pimManage, pfx('/api/families')),
   RW(F.pimManage, F.pimManage, pfx('/api/attributes')),
@@ -557,6 +598,8 @@ export const ENTRIES: Entry[] = [
   RW(F.aiView, F.aiRun, pfx('/api/products-ai')),
   // Presence: this POST only reads operational dependencies.
   RW(F.productsView, F.productsView, (_m, p) => p === '/api/products/operational-impact'),
+  // 08 S12 — a scheduled price change whose run died: "retry" sets a master price again, so it is a price edit.
+  P(F.productsPriceEdit, (m, p) => m === 'POST' && /^\/api\/products\/scheduled-changes\/[^/]+\/resolve$/.test(p)),
   RW(F.productsView, F.productsEdit, pfx('/api/products')),
 
   // ── AI / agents ─────────────────────────────────────────────────

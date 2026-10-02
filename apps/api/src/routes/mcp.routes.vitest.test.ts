@@ -33,6 +33,7 @@ import { workspaceHook } from '../lib/workspace-hook.js'
 import { registerClient } from '../services/oauth/oauth-clients.js'
 import { consent, exchangeCode, revokeGrant } from '../services/oauth/oauth-server.js'
 import { inputJsonSchema } from '../services/agents/tool-loop.service.js'
+import { mcpInputSchema } from '../services/mcp/mcp-server.js'
 import { listTools } from '../services/agents/tool-registry.js'
 import { __toolRateTest } from '../services/agents/tool-rate.js'
 import { __mcpRateTest } from '../services/mcp/mcp-rate.js'
@@ -53,15 +54,18 @@ let operatorId: string
 let readerId: string
 const clients: Record<string, string> = {}
 const ids = { productA: '', productB: '', approvalB: '' }
+/** C3 — each business's name as Claude is told it (the server title, every result, the `business` check). */
+const names = { A: '', B: 'Bravo business' }
+const stampOf = (workspaceId: string) => ({ id: workspaceId, name: workspaceId === A ? names.A : names.B })
 
 /** Tokens per connection; each is a separate grant (one per person, business and app). */
-const tokens: Record<'full' | 'readOnly' | 'reader' | 'bare' | 'bravo' | 'revoked', { access: string; grantId: string }> = {} as never
+const tokens: Record<'full' | 'readOnly' | 'reader' | 'bare' | 'bravo' | 'revoked' | 'ownA' | 'ownB', { access: string; grantId: string }> = {} as never
 
 const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
 const challengeOf = (value: string) => createHash('sha256').update(value).digest('base64url')
 
-/** Approve in the browser and swap the code, as Claude would. */
-async function connect(userId: string, app: string, scopes: string[], workspaceId = A) {
+/** Approve in the browser and swap the code, as Claude would. C4: `resource` is the MCP URL the token is for. */
+async function connect(userId: string, app: string, scopes: string[], workspaceId = A, resource = `${API}/mcp`) {
   const pkce = generateToken(32)
   const { redirectTo } = await consent({
     userId,
@@ -73,7 +77,7 @@ async function connect(userId: string, app: string, scopes: string[], workspaceI
       code_challenge_method: 'S256',
       state: 's',
       scope: 'nexus.read nexus.write',
-      resource: `${API}/mcp`,
+      resource,
     },
     decision: 'approve',
     workspaceId,
@@ -92,19 +96,19 @@ async function connect(userId: string, app: string, scopes: string[], workspaceI
   return { access: issued.access_token, grantId: grant!.id }
 }
 
-/** Claude's side: the SDK's client. `modern` negotiates the 2026-07-28 protocol, else 2025. */
-async function claude(token: string, options: { modern?: boolean } = {}) {
+/** Claude's side: the SDK's client. `modern` negotiates the 2026-07-28 protocol, else 2025. `at`: another MCP URL (C4). */
+async function claude(token: string, options: { modern?: boolean; at?: string } = {}) {
   const client = new Client(
     { name: 'nexus-endpoint-test', version: '1.0.0' },
     options.modern ? { versionNegotiation: { mode: 'auto' } } : {},
   )
   await client.connect(
-    new StreamableHTTPClientTransport(new URL(url), { authProvider: { token: async () => token }, onInsufficientScope: 'throw' }),
+    new StreamableHTTPClientTransport(new URL(options.at ?? url), { authProvider: { token: async () => token }, onInsufficientScope: 'throw' }),
   )
   return client
 }
 
-async function withClaude<T>(token: string, work: (client: Client) => Promise<T>, options: { modern?: boolean } = {}) {
+async function withClaude<T>(token: string, work: (client: Client) => Promise<T>, options: { modern?: boolean; at?: string } = {}) {
   const client = await claude(token, options)
   try {
     return await work(client)
@@ -118,9 +122,9 @@ const textOf = (result: unknown) => (result as CallResult).content.map((block) =
 const jsonOf = (result: unknown) => JSON.parse(textOf(result))
 const rpcMessage = async (response: Response) => ((await response.json()) as { error: { message: string } }).error.message
 
-/** A raw JSON-RPC POST, for the answers the SDK client turns into exceptions. */
-function post(body: unknown, init: { token?: string; headers?: Record<string, string>; query?: string } = {}) {
-  return fetch(`${url}${init.query ?? ''}`, {
+/** A raw JSON-RPC POST, for the answers the SDK client turns into exceptions. `at`: another MCP URL (C4). */
+function post(body: unknown, init: { token?: string; headers?: Record<string, string>; query?: string; at?: string } = {}) {
+  return fetch(`${init.at ?? url}${init.query ?? ''}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -159,7 +163,8 @@ beforeAll(async () => {
     db.role.create({ data: { key: `MCP_${name}_${randomUUID().slice(0, 8)}`, name, description: 'test', permissions, isSystem: false } })
   const operatorRole = await role('OPS', [
     'ai.run', 'ai.view', 'products.view', 'products.edit', 'products.price.edit', 'orders.view', 'orders.edit',
-    'inventory.view', 'pricing.view', 'listings.view', 'listings.publish', 'analytics.view', 'insights.view',
+    // L5 — publish-listing runs the studio publish: products.publish, as the studio's own Publish needs, and listings.publish.
+    'inventory.view', 'pricing.view', 'listings.view', 'listings.publish', 'products.publish', 'analytics.view', 'insights.view',
   ])
   const readerRole = await role('READ', ['ai.run', 'ai.view', 'products.view'])
   const bareRole = await role('BARE', ['ai.run'])
@@ -173,6 +178,7 @@ beforeAll(async () => {
   operatorId = operator.id
   readerId = reader.id
   await db.workspace.create({ data: { id: B, name: 'Bravo business', createdByUserId: operator.id, creationKey: randomUUID() } })
+  names.A = (await db.workspace.findUniqueOrThrow({ where: { id: A } })).name
   // The operator belongs to BOTH businesses; the token must keep them in A.
   for (const [workspaceId, userId, roleId] of [
     [A, operatorId, operatorRole.id],
@@ -201,7 +207,7 @@ beforeAll(async () => {
     })
   }
 
-  for (const name of ['Claude', 'Claude Code', 'Claude Desktop']) {
+  for (const name of ['Claude', 'Claude Code', 'Claude Desktop', 'Claude per business']) {
     clients[name] = String((await registerClient({ client_name: name, redirect_uris: [CALLBACK] })).client_id)
   }
   tokens.full = await connect(operatorId, 'Claude', ['nexus.read', 'nexus.write'])
@@ -211,6 +217,9 @@ beforeAll(async () => {
   tokens.bravo = await connect(operatorId, 'Claude', ['nexus.read', 'nexus.write'], B)
   tokens.revoked = await connect(operatorId, 'Claude Desktop', ['nexus.read', 'nexus.write'])
   await revokeGrant(tokens.revoked.grantId, 'test')
+  // C4 — the same person, connected to each business at that business's own URL.
+  tokens.ownA = await connect(operatorId, 'Claude per business', ['nexus.read', 'nexus.write'], A, `${API}/mcp/w/${A}`)
+  tokens.ownB = await connect(operatorId, 'Claude per business', ['nexus.read', 'nexus.write'], B, `${API}/mcp/w/${B}`)
 
   // The API's own global plumbing, so the test proves each hook steps aside for /mcp.
   app = Fastify()
@@ -253,7 +262,7 @@ describe('MCP.7 — where Claude signs in', () => {
     const expected = {
       resource: `${API}/mcp`,
       authorization_servers: [WEB],
-      scopes_supported: ['nexus.read', 'nexus.write'],
+      scopes_supported: ['nexus.read', 'nexus.write', 'nexus.run'],
       bearer_methods_supported: ['header'],
     }
     for (const path of ['/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-protected-resource']) {
@@ -302,7 +311,7 @@ describe('MCP.7 — the business comes from the token alone', () => {
       expect(search.products.map((p: { sku: string }) => p.sku)).toEqual(['ALPHA-MCP-SKU'])
       const other = await client.callTool({ name: 'product-snapshot', arguments: { productId: ids.productB } })
       expect(other.isError).toBe(true)
-      expect(textOf(other)).toBe('Product not found')
+      expect(jsonOf(other)).toEqual({ business: stampOf(A), error: 'Product not found' })
     })
   })
 
@@ -343,7 +352,9 @@ describe('MCP.7 — what Claude is offered', () => {
         const own = listTools().find((t) => t.name === tool.name)!
         expect(tool.title, tool.name).toBe(own.title)
         expect(tool.annotations?.title).toBe(own.title)
-        expect(tool.inputSchema).toEqual(inputJsonSchema(own))
+        // C3 — a change tool also takes the business name; a read is offered exactly as the assistant gets it.
+        expect(tool.inputSchema).toEqual(mcpInputSchema(own, stampOf(A)))
+        if (own.readOnly) expect(tool.inputSchema).toEqual(inputJsonSchema(own))
         expect(tool.annotations?.readOnlyHint).toBe(own.readOnly)
         expect(typeof tool.annotations?.destructiveHint).toBe('boolean')
         expect(typeof tool.annotations?.openWorldHint).toBe('boolean')
@@ -357,7 +368,23 @@ describe('MCP.7 — what Claude is offered', () => {
 
   it('a person with fewer permissions is offered fewer tools', async () => {
     const { tools } = await withClaude(tokens.reader.access, (client) => client.listTools())
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['approval-status', 'product-search', 'product-snapshot'])
+    // undo-change needs ai.view (it reads what Claude's changes did); the undo it asks for needs that tool's own permission.
+    // C8 — claude-activity needs ai.view too: what Claude did in the business.
+    // L2 — media-plan reads the product's photos: products.view, like the snapshot.
+    // MCP full control P5 — the catalog reads need products.view only: the structure, mappings, saved views and job history.
+    // R6–R8 — the automation reads need ai.view (each filters by the automation's own area inside).
+    // MCP full control R6–R8: the automation reads need ai.view. R10/R12: the switches and stops need ai.view too, and each
+    // automation's own manage permission when called — a reader is refused there, per automation. R15: steering the
+    // fleet needs ai.run and ai.view, as the Fleet pages do. R18: saving an operations rule too, and each domain's own
+    // permission when called (a reader is refused there).
+    // Integration (C6/C7 + R15): the reader's ai.run (R15) also offers the plan and its confirmation (both ai.run).
+    expect(tools.map((tool) => tool.name).sort()).toEqual([
+      'approval-status', 'automation-activity', 'automation-detail', 'catalog-structure', 'channel-mappings',
+      'claude-activity', 'confirm-change', 'content-guidelines', 'job-history', 'list-automations', 'media-plan', 'preview-automation',
+      'product-content', 'product-search', 'product-snapshot', 'resume-automation', 'save-ops-rule', 'saved-views',
+      'steer-fleet', 'stop-automation', 'submit-change-plan', 'translation-status', 'turn-down-automation', 'turn-up-automation',
+      'undo-change',
+    ])
   })
 
   it('a person whose role allows no tool is told there are none', async () => {
@@ -385,14 +412,14 @@ describe('MCP.7 — scopes are a ceiling', () => {
   })
 
   it('a read-only connection asking for a change gets 403 insufficient_scope (step-up), and nothing is queued', async () => {
-    const response = await post(callRequest('set-price', { productId: ids.productA, price: 25 }), { token: tokens.readOnly.access })
+    const response = await post(callRequest('set-price', { productId: ids.productA, price: 25, business: names.A }), { token: tokens.readOnly.access })
     expect(response.status).toBe(403)
     expect(response.headers.get('www-authenticate')).toBe(
       `Bearer error="insufficient_scope", error_description="This tool needs the nexus.write scope", scope="nexus.write", resource_metadata="${METADATA_URL}"`,
     )
     // Claude's own client reads it as a step-up request.
     await withClaude(tokens.readOnly.access, async (client) => {
-      const error = await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 25 } }).catch((e) => e)
+      const error = await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 25, business: names.A } }).catch((e) => e)
       expect(error).toBeInstanceOf(InsufficientScopeError)
       expect((error as InsufficientScopeError).requiredScope).toBe('nexus.write')
     })
@@ -405,11 +432,12 @@ describe('MCP.7 — scopes are a ceiling', () => {
 describe('MCP.7 — a change is only ever queued for a person', () => {
   it('set-price returns the preview, the approval, its expiry and where to approve; nothing changes', async () => {
     const result = await withClaude(tokens.full.access, (client) =>
-      client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 25 } }),
+      client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 25, business: names.A } }),
     )
     expect(result.isError).toBeFalsy()
     const out = jsonOf(result)
     expect(out).toMatchObject({
+      business: stampOf(A),
       status: 'waiting_for_approval',
       approvalId: expect.any(String),
       preview: { action: 'set-price', sku: 'ALPHA-MCP-SKU', changes: { 'base price': { from: 19.9, to: 25 } } },
@@ -448,9 +476,9 @@ describe('MCP.7 — a change is only ever queued for a person', () => {
 
   it('a refusal comes back as a plain tool error, never a stack', async () => {
     await withClaude(tokens.full.access, async (client) => {
-      const result = await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 'lots' } })
+      const result = await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 'lots', business: names.A } })
       expect(result.isError).toBe(true)
-      expect(textOf(result)).toMatch(/^set-price was called wrongly — price: /)
+      expect(jsonOf(result).error).toMatch(/^set-price was called wrongly — price: /)
       expect(textOf(result)).not.toMatch(/\bat \w+ \(|node_modules|\.ts:\d+/)
     })
   })
@@ -464,7 +492,7 @@ describe('MCP.7 — the AI kill switch', () => {
         withWorkspace(business(A), () => database.client.agentApproval.count({ where: { toolName: 'set-price', status: 'pending' } }))
       const before = await pending()
       await withClaude(tokens.full.access, async (client) => {
-        for (const [name, args] of [['set-price', { productId: ids.productA, price: 30 }], ['product-search', {}]] as const) {
+        for (const [name, args] of [['set-price', { productId: ids.productA, price: 30, business: names.A }], ['product-search', {}]] as const) {
           const result = await client.callTool({ name, arguments: args })
           expect(result.isError).toBe(true)
           expect(textOf(result)).toContain('kill switch')
@@ -481,7 +509,7 @@ describe('MCP.7 — the AI kill switch', () => {
 describe('MCP.7 — approval-status', () => {
   it('follows a queued change in the token’s business, and cannot see the other business', async () => {
     await withClaude(tokens.full.access, async (client) => {
-      const queued = jsonOf(await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 26 } }))
+      const queued = jsonOf(await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 26, business: names.A } }))
       const status = jsonOf(await client.callTool({ name: 'approval-status', arguments: { approvalId: queued.approvalId } }))
       expect(status).toMatchObject({
         approvalId: queued.approvalId,
@@ -492,19 +520,68 @@ describe('MCP.7 — approval-status', () => {
       })
       const other = await client.callTool({ name: 'approval-status', arguments: { approvalId: ids.approvalB } })
       expect(other.isError).toBe(true)
-      expect(textOf(other)).toBe('Approval not found')
+      expect(jsonOf(other).error).toBe('Approval not found')
       expect(textOf(other)).not.toContain('BRAVO')
     })
   })
 
   it('hides the preview from a person who may not use the tool that made it', async () => {
     const queued = await withClaude(tokens.full.access, async (client) =>
-      jsonOf(await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 27 } })),
+      jsonOf(await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 27, business: names.A } })),
     )
     const seen = await withClaude(tokens.reader.access, async (client) =>
       jsonOf(await client.callTool({ name: 'approval-status', arguments: { approvalId: queued.approvalId } })),
     )
     expect(seen).toMatchObject({ status: 'pending', preview: null, previewHidden: expect.stringContaining('set-price') })
+  })
+})
+
+describe('C3 — the business, named: in the server title, on every result, and checked on every change', () => {
+  it('the server is titled after the token’s business, and its instructions name it', async () => {
+    for (const [token, workspaceId] of [[tokens.full.access, A], [tokens.bravo.access, B]] as const) {
+      await withClaude(token, async (client) => {
+        expect(client.getServerVersion()).toMatchObject({ name: 'nexus', title: `Nexus — ${stampOf(workspaceId).name}` })
+        expect(client.getInstructions()).toContain(`"${stampOf(workspaceId).name}"`)
+      })
+    }
+  })
+
+  it('every result carries the token’s business: the same read, from each connection', async () => {
+    const fromA = await withClaude(tokens.full.access, async (client) => jsonOf(await client.callTool({ name: 'product-search', arguments: { query: 'MCP' } })))
+    const fromB = await withClaude(tokens.bravo.access, async (client) => jsonOf(await client.callTool({ name: 'product-search', arguments: { query: 'MCP' } })))
+    expect(fromA.business).toEqual(stampOf(A))
+    expect(fromA.products.map((p: { sku: string }) => p.sku)).toEqual(['ALPHA-MCP-SKU'])
+    expect(fromB.business).toEqual(stampOf(B))
+    expect(fromB.products.map((p: { sku: string }) => p.sku)).toEqual(['BRAVO-MCP-SKU'])
+  })
+
+  it('a change that names the other business is refused, nothing is queued, and the run says why', async () => {
+    const pending = () =>
+      withWorkspace(business(A), () => database.client.agentApproval.count({ where: { toolName: 'set-price', status: 'pending' } }))
+    const before = await pending()
+    await withClaude(tokens.full.access, async (client) => {
+      const wrong = await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 31, business: names.B } })
+      expect(wrong.isError).toBe(true)
+      expect(jsonOf(wrong)).toEqual({
+        business: stampOf(A),
+        error: `This connection works in ${names.A}; you named ${names.B}. Nothing was queued.`,
+      })
+      const none = await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 31 } })
+      expect(none.isError).toBe(true)
+      expect(jsonOf(none).error).toContain(`business: "${names.A}"`)
+    })
+    expect(await pending()).toBe(before)
+    expect((await runsOf(tokens.full.grantId)).at(-1)).toMatchObject({ status: 'failed', ok: false, input: { tool: 'set-price' } })
+    const product = await withWorkspace(business(A), () => database.client.product.findUnique({ where: { id: ids.productA } }))
+    expect(Number(product!.basePrice)).toBe(19.9)
+  })
+
+  it('the name is never a selector: the right name on the other connection works in THAT business only', async () => {
+    const out = await withClaude(tokens.bravo.access, async (client) =>
+      jsonOf(await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 32, business: names.B } })),
+    )
+    // Bravo's connection, Bravo's name: Alpha's product is simply not found there.
+    expect(out).toEqual({ business: stampOf(B), error: 'Product not found' })
   })
 })
 
@@ -559,5 +636,99 @@ describe('MCP.11 — a count per connection and per business', () => {
       expect((await post(listRequest, { token: 'nxm_at_unknown' })).status).toBe(401)
       expect((await post(listRequest, { token: tokens.full.access })).status).toBe(200)
     })
+  })
+})
+
+describe('C4 — one connection per business: /mcp/w/<business>', () => {
+  const at = (workspaceId: string) => url.replace(/\/mcp$/, `/mcp/w/${workspaceId}`)
+  const metadataOf = (workspaceId: string) => `${API}/.well-known/oauth-protected-resource/mcp/w/${workspaceId}`
+
+  it('serves each business’s RFC 9728 document; a malformed id, or a business outside the allow-list, has none', async () => {
+    const response = await fetch(url.replace('/mcp', `/.well-known/oauth-protected-resource/mcp/w/${A}`))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ resource: `${API}/mcp/w/${A}`, authorization_servers: [WEB] })
+    for (const path of ['/.well-known/oauth-protected-resource/mcp/w/', '/.well-known/oauth-protected-resource/mcp/w/a%20b', `/.well-known/oauth-protected-resource/mcp/w/${A}/more`]) {
+      expect((await fetch(url.replace('/mcp', path))).status, path).toBe(404)
+    }
+    vi.stubEnv('NEXUS_MCP_WORKSPACES', B)
+    try {
+      expect((await fetch(url.replace('/mcp', `/.well-known/oauth-protected-resource/mcp/w/${A}`))).status).toBe(404)
+      expect((await post(listRequest, { token: tokens.ownA.access, at: at(A) })).status).toBe(404)
+      expect((await fetch(url.replace('/mcp', `/.well-known/oauth-protected-resource/mcp/w/${B}`))).status).toBe(200)
+    } finally {
+      vi.stubEnv('NEXUS_MCP_WORKSPACES', '')
+    }
+  })
+
+  it('no token: 401 with the challenge that names that business’s document', async () => {
+    const response = await post(listRequest, { at: at(A) })
+    expect(response.status).toBe(401)
+    expect(response.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="${metadataOf(A)}"`)
+  })
+
+  it('a token for A’s URL works there only: not at /mcp, not at B’s URL; the /mcp token not at A’s URL', async () => {
+    expect((await post(listRequest, { token: tokens.ownA.access, at: at(A) })).status).toBe(200)
+    expect((await post(listRequest, { token: tokens.ownA.access })).status).toBe(401)
+    const elsewhere = await post(listRequest, { token: tokens.ownA.access, at: at(B) })
+    expect(elsewhere.status).toBe(401)
+    expect(elsewhere.headers.get('www-authenticate')).toContain(`resource_metadata="${metadataOf(B)}"`)
+    expect((await post(listRequest, { token: tokens.full.access, at: at(A) })).status).toBe(401)
+    // The plain URL keeps working with its own token.
+    expect((await post(listRequest, { token: tokens.full.access })).status).toBe(200)
+  })
+
+  it('each business’s server is titled after it and reads only its rows; naming a business is still refused', async () => {
+    for (const [token, workspaceId, sku] of [[tokens.ownA.access, A, 'ALPHA-MCP-SKU'], [tokens.ownB.access, B, 'BRAVO-MCP-SKU']] as const) {
+      await withClaude(token, async (client) => {
+        expect(client.getServerVersion()).toMatchObject({ title: `Nexus — ${stampOf(workspaceId).name}` })
+        const search = jsonOf(await client.callTool({ name: 'product-search', arguments: { query: 'MCP' } }))
+        expect(search.business).toEqual(stampOf(workspaceId))
+        expect(search.products.map((p: { sku: string }) => p.sku)).toEqual([sku])
+      }, { at: at(workspaceId) })
+    }
+    expect((await post(listRequest, { token: tokens.ownA.access, at: at(A), headers: { 'x-nexus-workspace-id': A } })).status).toBe(400)
+    expect((await post(listRequest, { token: tokens.ownA.access, at: at(A), query: `?workspaceId=${A}` })).status).toBe(400)
+  })
+
+  it('a change at A’s URL is queued in A, and the run names that connection', async () => {
+    const out = await withClaude(tokens.ownA.access, async (client) =>
+      jsonOf(await client.callTool({ name: 'set-price', arguments: { productId: ids.productA, price: 28, business: names.A } })),
+    { at: at(A) })
+    expect(out).toMatchObject({ business: stampOf(A), status: 'waiting_for_approval' })
+    expect((await runsOf(tokens.ownA.grantId)).at(-1)).toMatchObject({ via: 'claude', status: 'awaiting_approval' })
+  })
+
+  it('GET and DELETE answer 405', async () => {
+    for (const method of ['GET', 'DELETE']) {
+      const response = await fetch(at(A), { method, headers: { authorization: `Bearer ${tokens.ownA.access}` } })
+      expect(response.status).toBe(405)
+    }
+  })
+})
+
+describe('C5 — a tool the business turned off for Claude', () => {
+  it('is left out of tools/list and refused by name in that business only; turned back on, it is offered again', async () => {
+    await withWorkspace(business(B), () =>
+      database.client.agentTool.create({ data: { name: 'product-search', riskTier: 'low', claudeTrust: 'off' } }),
+    )
+    try {
+      const runsInB = () => withWorkspace(business(B), () => database.client.agentRun.count({ where: { oauthGrantId: tokens.bravo.grantId } }))
+      const before = await runsInB()
+      expect(before).toBeGreaterThan(0) // control: Bravo's runs are counted where they live
+      await withClaude(tokens.bravo.access, async (client) => {
+        expect((await client.listTools()).tools.map((tool) => tool.name)).not.toContain('product-search')
+        // Not offered on this connection, so not there to call: like a draft tool (the door refuses it too, if reached).
+        const refused = await client.callTool({ name: 'product-search', arguments: {} }).catch((error) => error)
+        expect(String((refused as Error).message)).toContain('product-search')
+      })
+      expect(await runsInB()).toBe(before)
+      // The other business keeps it.
+      const inA = await withClaude(tokens.full.access, (client) => client.listTools())
+      expect(inA.tools.map((tool) => tool.name)).toContain('product-search')
+    } finally {
+      await withWorkspace(business(B), () => database.client.agentTool.deleteMany({ where: { name: 'product-search' } }))
+    }
+    const again = await withClaude(tokens.bravo.access, (client) => client.listTools())
+    expect(again.tools.map((tool) => tool.name)).toContain('product-search')
   })
 })

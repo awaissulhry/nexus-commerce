@@ -40,6 +40,15 @@ export function engineMode(): CoverageEngineMode {
   return raw === 'auto' ? 'auto' : raw === 'off' ? 'off' : 'observe'
 }
 
+const LEVEL_OF = { off: 'OFF', observe: 'OBSERVE', auto: 'AUTO' } as const
+const MODE_OF = { OFF: 'off', OBSERVE: 'observe', PROPOSE: 'observe', AUTO: 'auto' } as const
+
+/** R16 — the lower of the env mode and this business's switch (engine-switch.service.ts). */
+export async function businessEngineMode(): Promise<CoverageEngineMode> {
+  const { engineMode: switched } = await import('../automation/engine-switch.service.js')
+  return MODE_OF[(await switched('coverage-engine', LEVEL_OF[engineMode()])).mode]
+}
+
 /** Ladder tuning — env-tunable, conservative by default. */
 const STEP_UP_PCT = Number(process.env.NEXUS_COVERAGE_STEP_UP_PCT ?? 12)
 const DECAY_PCT = Number(process.env.NEXUS_COVERAGE_DECAY_PCT ?? 6)
@@ -162,7 +171,7 @@ export interface EngineRunSummary {
  * "what would the engine do" preview — and never applies, regardless of mode.
  */
 export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}): Promise<EngineRunSummary> {
-  const mode = engineMode()
+  const mode = await businessEngineMode()
   const summary: EngineRunSummary = {
     mode, setsConsidered: 0, setsEnabled: 0, termsEvaluated: 0, controlsSkipped: 0,
     decisions: [], ups: 0, downs: 0, holds: 0, applied: 0, blocked: 0,

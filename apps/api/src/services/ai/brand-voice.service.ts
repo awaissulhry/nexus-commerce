@@ -40,47 +40,62 @@ export interface BrandVoiceRow {
   createdBy: string | null
 }
 
+/**
+ * The most-specific ACTIVE row for a scope, or null when none is set. A read that fails THROWS: "could not be read"
+ * is not "not set" (MCP full control — content-guidelines says which). Prompt builders use resolveBrandVoice.
+ */
+export async function readBrandVoice(
+  prisma: PrismaClient,
+  scope: BrandVoiceScope = {},
+): Promise<BrandVoiceRow | null> {
+  const brand = scope.brand?.trim() || null
+  const marketplace = scope.marketplace?.toUpperCase() ?? null
+  const language = scope.language?.toLowerCase() ?? null
+  // Pull every ACTIVE row in one query, then pick the most-specific
+  // match. Matches PromptTemplate's pattern — cheaper than seven
+  // sequential queries against an indexed table.
+  const rows = await prisma.brandVoice.findMany({
+    where: { isActive: true },
+    orderBy: [{ updatedAt: 'desc' }],
+  })
+  if (rows.length === 0) return null
+
+  const eq = (a: string | null | undefined, b: string | null | undefined) =>
+    (a ?? null) === (b ?? null)
+  const matchBrandM = (r: { brand: string | null }) =>
+    eq(r.brand?.trim() || null, brand)
+  const matchMarket = (r: { marketplace: string | null }) =>
+    eq(r.marketplace?.toUpperCase() || null, marketplace)
+  const matchLang = (r: { language: string | null }) =>
+    eq(r.language?.toLowerCase() || null, language)
+
+  const tiers: Array<(r: BrandVoiceRow) => boolean> = [
+    // Most specific → least specific.
+    (r) => matchBrandM(r) && matchMarket(r) && matchLang(r),
+    (r) => matchBrandM(r) && matchMarket(r) && r.language == null,
+    (r) => matchBrandM(r) && r.marketplace == null && matchLang(r),
+    (r) => matchBrandM(r) && r.marketplace == null && r.language == null,
+    (r) => r.brand == null && matchMarket(r) && matchLang(r),
+    (r) => r.brand == null && matchMarket(r) && r.language == null,
+    (r) => r.brand == null && r.marketplace == null && r.language == null,
+  ]
+  for (const isMatch of tiers) {
+    const hit = rows.find(isMatch as (r: any) => boolean)
+    if (hit) return hit as BrandVoiceRow
+  }
+  return null
+}
+
+/**
+ * Best effort, for a prompt: the voice, or null when none is set OR the read failed (logged). A prompt without the
+ * voice is still a prompt. A reader that answers a person uses readBrandVoice and says when it could not read.
+ */
 export async function resolveBrandVoice(
   prisma: PrismaClient,
   scope: BrandVoiceScope = {},
 ): Promise<BrandVoiceRow | null> {
   try {
-    const brand = scope.brand?.trim() || null
-    const marketplace = scope.marketplace?.toUpperCase() ?? null
-    const language = scope.language?.toLowerCase() ?? null
-    // Pull every ACTIVE row in one query, then pick the most-specific
-    // match. Matches PromptTemplate's pattern — cheaper than seven
-    // sequential queries against an indexed table.
-    const rows = await prisma.brandVoice.findMany({
-      where: { isActive: true },
-      orderBy: [{ updatedAt: 'desc' }],
-    })
-    if (rows.length === 0) return null
-
-    const eq = (a: string | null | undefined, b: string | null | undefined) =>
-      (a ?? null) === (b ?? null)
-    const matchBrandM = (r: { brand: string | null }) =>
-      eq(r.brand?.trim() || null, brand)
-    const matchMarket = (r: { marketplace: string | null }) =>
-      eq(r.marketplace?.toUpperCase() || null, marketplace)
-    const matchLang = (r: { language: string | null }) =>
-      eq(r.language?.toLowerCase() || null, language)
-
-    const tiers: Array<(r: BrandVoiceRow) => boolean> = [
-      // Most specific → least specific.
-      (r) => matchBrandM(r) && matchMarket(r) && matchLang(r),
-      (r) => matchBrandM(r) && matchMarket(r) && r.language == null,
-      (r) => matchBrandM(r) && r.marketplace == null && matchLang(r),
-      (r) => matchBrandM(r) && r.marketplace == null && r.language == null,
-      (r) => r.brand == null && matchMarket(r) && matchLang(r),
-      (r) => r.brand == null && matchMarket(r) && r.language == null,
-      (r) => r.brand == null && r.marketplace == null && r.language == null,
-    ]
-    for (const isMatch of tiers) {
-      const hit = rows.find(isMatch as (r: any) => boolean)
-      if (hit) return hit as BrandVoiceRow
-    }
-    return null
+    return await readBrandVoice(prisma, scope)
   } catch (err) {
     logger.warn('brand-voice-service: resolve failed (returning null)', {
       err: err instanceof Error ? err.message : String(err),

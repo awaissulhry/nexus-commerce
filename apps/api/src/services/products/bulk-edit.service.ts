@@ -26,10 +26,11 @@ import { checkForStorage, coerceForShape, isBlankValue, parseSlotField, readList
 import { isEbayListingLevel, loadEbayListingAxes } from '../pim/ebay-listing-level.js'
 import { OTHER_SPECIFIC_PREFIX } from '../pim/channel-specs/ebay-other-specifics.js'
 import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from '../pim/master-field-gate.js'
+import { BARCODE_FIELDS, barcodeDuplicateWarning, barcodeDuplicates, barcodeProblem, listingSkuRefusal, skusUsedByListings } from '../identity/identity-write-guards.js'
 import { validationMarketplace } from '../pim/validation-marketplace.js'
 import { writeBulkEditReceipts } from './bulk-edit-receipts.js'
 import { reevaluateDependents } from '../pim/mapping/cell-formula.service.js'
-import { masterPriceService } from '../master-price.service.js'
+import { masterPriceService, PRICE_EDIT_PERMISSION, PRICE_EDIT_REFUSAL } from '../master-price.service.js'
 import { applyStockMovement } from '../stock-movement.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { isPrimaryChannelConnection, primaryConnectionIds, resolveConnection } from '../connection-resolver.service.js'
@@ -214,10 +215,45 @@ export interface ProductBulkContext {
    * all-or-nothing: they answer "failed" on any error and would otherwise hide a partial save.
    */
   contentPerRow?: boolean
+  /**
+   * MCP full control T1 — `false`: a CONTENT write (title, description, bullets, keywords, translatable attributes)
+   * saves Nexus only. A shared write still cascades to the listings that follow it (their follow markers), but no
+   * channel update is queued; the channels change only through Publish. Default: queue, exactly as before. Other
+   * fields in the same request are not affected by it.
+   */
+  queueOutbound?: boolean
+  /**
+   * MCP full control — the provenance of CONTENT writes: `sourceModel` stamped on a translation row ("claude-mcp"),
+   * `reason` in the audit rows ("mcp:set-content"). Never supplied by HTTP.
+   */
+  contentProvenance?: { sourceModel?: string; reason?: string }
   /** Internal continuation after content checked this request's precondition; never supplied by HTTP. */
   readContentOwner?: ContentOwnerVersion
   /** Internal, savepoint-local evidence owned by one bulk-save transaction attempt. */
   ebayFamilyOperation?: EbayFamilyClearOperation
+  /**
+   * S1 (F4, F5) — the acting person's permissions, from the request (`permissionCheckerFor`). Given, a change to a price
+   * needs `products.price.edit` and a change to a cost needs `pricing.costs.edit`, beside the route's products.edit.
+   */
+  can?: (permission: string) => boolean
+}
+
+/** S1 (F5) — the product fields that ARE a price: the master price, its floor and ceiling, and the eBay listing price. */
+const PRICE_FIELDS = new Set(['basePrice', 'minPrice', 'maxPrice', 'ebay_price'])
+/** S1 (F4) — the cost price is the cost permission's (the cost grid's write takes the same). */
+const COST_FIELDS = new Set(['costPrice'])
+
+/**
+ * S1 (F4, F5) — the sentence for a request holding a price or a cost change its person may not make, or null. One
+ * refused change refuses the whole request, before anything is read or written: the sheet shows the sentence.
+ */
+export function bulkEditPermissionRefusal(changes: ReadonlyArray<{ field?: unknown }>, can: (permission: string) => boolean): { code: string; error: string } | null {
+  const fields = new Set(changes.map((change) => String(change?.field ?? '')))
+  if ([...fields].some((field) => PRICE_FIELDS.has(field)) && !can(PRICE_EDIT_PERMISSION)) return { code: 'PRICE_PERMISSION', error: PRICE_EDIT_REFUSAL }
+  if ([...fields].some((field) => COST_FIELDS.has(field)) && !can('pricing.costs.edit')) {
+    return { code: 'COST_PERMISSION', error: 'You do not have permission to change costs (pricing.costs.edit)' }
+  }
+  return null
 }
 
 export { ProductBulkError } from '../../lib/product-bulk-error.js'
@@ -522,6 +558,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (changes.length > 1000) {
     throw new ProductBulkError(400, { error: 'Max 1000 changes per request' })
   }
+  const permissionRefusal = context.can ? bulkEditPermissionRefusal(changes, context.can) : null
+  if (permissionRefusal) throw new ProductBulkError(403, permissionRefusal)
 
   // W1.2 — pick up the optimistic-concurrency hint. If-Match takes
   // precedence over the body field; both must parse as a positive
@@ -1506,6 +1544,32 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         validated.splice(idx, 1)
       }
     }
+  }
+
+  // I4 / G4 — a product SKU may not be the SKU an extra listing already uses as its own (ProductListingAlias.sku, once
+  // that column exists): imports and channels would name both by it.
+  const skuRenames = validated.filter((v) => v.field === 'sku' && typeof v.value === 'string')
+  if (skuRenames.length > 0) {
+    for (const use of await skusUsedByListings(skuRenames.map((v) => String(v.value)))) {
+      const idx = validated.findIndex((v) => v.field === 'sku' && v.value === use.sku)
+      if (idx !== -1) {
+        errors.push({ id: validated[idx].id, field: 'sku', error: listingSkuRefusal(use) })
+        validated.splice(idx, 1)
+      }
+    }
+  }
+
+  // I4 / G5 — a barcode is checked with validateGtin, and another product of this business carrying the same code is
+  // named. Stored and flagged (P1), never refused here; set-gtin refuses an invalid code before it asks.
+  const barcodeChanges = validated.filter((v) => v.target !== 'channel' && BARCODE_FIELDS.has(v.field)
+    && typeof v.value === 'string' && v.value.trim() !== '')
+  if (barcodeChanges.length > 0) {
+    for (const v of barcodeChanges) {
+      const problem = barcodeProblem(String(v.value))
+      if (problem) warnings.push({ id: v.id, field: v.field, warning: problem })
+    }
+    const duplicates = await barcodeDuplicates(barcodeChanges.map((v) => ({ id: v.id, field: v.field, code: String(v.value) })))
+    for (const duplicate of duplicates) warnings.push({ id: duplicate.id, field: duplicate.field, warning: barcodeDuplicateWarning(duplicate) })
   }
 
   // Phase 1 — SKU rename safety guard. Product.sku doubles as the

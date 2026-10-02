@@ -1,0 +1,2 @@
+200
+{"total":6,"limit":2,"offset":1,"items":[{"id":"golden-settings-2","key":"account","action":"update","before":{"field":"old golden-settings-2"},"after":{"field":"new golden-settings-2"},"metadata":null,"createdAt":"2026-09-15T09:45:00.000Z","userId":"golden-user-a"},{"id":"golden-settings-3","key":"company","action":"update","before":{"field":"old golden-settings-3"},"after":{"field":"new golden-settings-3"},"metadata":null,"createdAt":"2026-09-15T09:35:00.000Z","userId":"golden-user-a"}]}

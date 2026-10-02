@@ -195,6 +195,8 @@ export async function defendTopOfSearch(opts: {
   windowDays?: number
   allowlistedOnly?: boolean
   dryRun?: boolean
+  /** Who writes: the cron's own actor by default; a rule passes its own (automation:<ruleId>) so its write cap counts. */
+  actor?: string
 } = {}): Promise<DefendTosResult> {
   const { rows } = await analyzeTopOfSearch({ targetAcos: opts.targetAcos, targetIS: opts.targetIS, marketplace: opts.marketplace, windowDays: opts.windowDays })
   // RC2.T4 — respect dayparting: never RAISE top-of-search on a campaign that is
@@ -218,7 +220,7 @@ export async function defendTopOfSearch(opts: {
   let skippedNotAllowlisted = 0
   for (const r of actionable) {
     if (allowed && !allowed.has(r.campaignId)) { skippedNotAllowlisted += 1; continue }
-    await applyTopOfSearch(r.campaignId, r.recommendedPct, { actor: 'automation:tos-optimizer', reason: r.reason })
+    await applyTopOfSearch(r.campaignId, r.recommendedPct, { actor: opts.actor ?? 'automation:tos-optimizer', reason: r.reason })
     applied += 1
   }
   return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, skippedPaused, dryRun: false, sample }
@@ -233,6 +235,8 @@ ACTION_HANDLERS.defend_top_of_search = async (action, _context, meta): Promise<A
     windowDays: typeof action.windowDays === 'number' ? (action.windowDays as number) : undefined,
     allowlistedOnly: true,
     dryRun: meta.dryRun,
+    // Part 06 fix — the rule's own actor, so its maxWritesPerDay counts these writes (it wrote as the cron before).
+    actor: `automation:${meta.ruleId}`,
   })
   return { type: action.type, ok: true, output: r }
 }

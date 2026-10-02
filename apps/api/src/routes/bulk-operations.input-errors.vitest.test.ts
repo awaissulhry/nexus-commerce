@@ -29,7 +29,10 @@ const BUSINESS = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membersh
 let app: FastifyInstance
 beforeAll(async () => {
   app = Fastify()
-  app.addHook('preHandler', (_request, _reply, done) => withWorkspace(BUSINESS, done))
+  app.addHook('preHandler', (request, _reply, done) => {
+    Object.assign(request, { __rbacResolved: { isOwner: true, permissions: new Set<string>() } }) // the Owner, as the RBAC gate resolves him: price writes check the person's permissions (S1 F5)
+    withWorkspace(BUSINESS, done)
+  })
   await app.register(bulkOperationsRoutes, { prefix: '/api' })
   await app.register(bulkActionTemplateRoutes, { prefix: '/api' })
   await app.ready()

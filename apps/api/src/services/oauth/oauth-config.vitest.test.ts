@@ -58,7 +58,7 @@ describe('MCP.5 — metadata and switches', () => {
       token_endpoint_auth_methods_supported: ['none'],
       client_id_metadata_document_supported: true,
       authorization_response_iss_parameter_supported: true,
-      scopes_supported: ['nexus.read', 'nexus.write'],
+      scopes_supported: ['nexus.read', 'nexus.write', 'nexus.run'],
     })
     expect(mcpResource()).toBe('https://api.example.test/mcp')
   })
@@ -69,7 +69,9 @@ describe('MCP.5 — metadata and switches', () => {
   })
 
   it('scopes: known ones only; none asked = all', () => {
-    expect(parseScopes(undefined)).toEqual(['nexus.read', 'nexus.write'])
+    // C5 — nexus.run is offered too; the consent page starts it unticked, and the person decides.
+    expect(parseScopes(undefined)).toEqual(['nexus.read', 'nexus.write', 'nexus.run'])
+    expect(parseScopes('nexus.run nexus.read')).toEqual(['nexus.read', 'nexus.run'])
     expect(parseScopes('nexus.read offline_access')).toEqual(['nexus.read'])
     expect(parseScopes('admin')).toEqual([])
   })

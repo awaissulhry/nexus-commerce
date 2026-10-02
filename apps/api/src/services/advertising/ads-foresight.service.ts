@@ -27,6 +27,7 @@
 import prisma from '../../db.js'
 import { envEnabled } from '../../utils/env-flag.js'
 import { getAutomationState } from './ads-automation-state.service.js'
+import { jobSwitchOn } from './ads-control-room.service.js'
 import { buildNext24, type Next24Target } from './next24.js'
 import { firesIn, describeCron } from './cron-window.js'
 
@@ -102,8 +103,8 @@ const TZ_OK = new Set([
  * default, so an override moves the forecast rather than leaving it confidently wrong.
  */
 const ENGINE_CRONS: { key: string; name: string; env: string; fallback: string; flag?: string; flagOffReason?: string }[] = [
-  { key: 'rank-defend', name: 'Rank & Dayparting', env: 'NEXUS_RANK_DEFEND_SCHEDULE', fallback: '*/15 * * * *', flag: 'NEXUS_ENABLE_RANK_DEFEND', flagOffReason: 'NEXUS_ENABLE_RANK_DEFEND is off' },
-  { key: 'budget-enforce', name: 'Budget enforcement', env: 'NEXUS_BUDGET_ENFORCE_SCHEDULE', fallback: '*/30 * * * *', flag: 'NEXUS_BUDGET_ENFORCE_APPLY', flagOffReason: 'NEXUS_BUDGET_ENFORCE_APPLY is off — it computes but never applies' },
+  { key: 'rank-defend', name: 'Rank & Dayparting', env: 'NEXUS_RANK_DEFEND_SCHEDULE', fallback: '*/15 * * * *', flag: 'NEXUS_ENABLE_RANK_DEFEND', flagOffReason: 'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run' },
+  { key: 'budget-enforce', name: 'Budget enforcement', env: 'NEXUS_BUDGET_ENFORCE_SCHEDULE', fallback: '*/30 * * * *', flag: 'NEXUS_BUDGET_ENFORCE_APPLY', flagOffReason: 'NEXUS_BUDGET_ENFORCE_APPLY is not 1 — it computes but never applies' },
   { key: 'auto-bid', name: 'Bid optimiser', env: 'NEXUS_ADS_AUTO_BID_SCHEDULE', fallback: '20 */6 * * *' },
   { key: 'anomaly-guard', name: 'Anomaly breaker', env: 'NEXUS_ADS_ANOMALY_GUARD_SCHEDULE', fallback: '*/10 * * * *' },
   { key: 'structural-reconcile', name: 'Account reconcile', env: 'NEXUS_ADS_STRUCTURAL_RECONCILE_SCHEDULE', fallback: '35 */6 * * *' },
@@ -200,10 +201,20 @@ export async function getForesight(): Promise<Foresight> {
     ? (state.haltReason ?? (state.autonomy === 'OFF' ? 'Account autonomy is OFF' : 'Automation is stopped'))
     : null
 
+  // R16 — an engine this business switched below writing (OFF, or OBSERVE) cannot write here, whatever the env says.
+  const { ENGINES, readEngineSwitch } = await import('../automation/engine-switch.service.js')
+  const switchedOff = new Map<string, string>()
+  for (const e of ENGINE_CRONS) {
+    if (!(e.key in ENGINES)) continue
+    const set = await readEngineSwitch(e.key as keyof typeof ENGINES)
+    if (set && (set.mode === 'OFF' || set.mode === 'OBSERVE')) switchedOff.set(e.key, `Switched to ${set.mode} for this business (${set.setBy})`)
+  }
+
   const engines: ForesightEngine[] = ENGINE_CRONS.map((e) => {
     const expr = process.env[e.env] ?? e.fallback
     const r = firesIn(expr, now, 24)
-    const flagOff = e.flag ? !envEnabled(e.flag) : false
+    // Part 06 fix — the engine switch as its job reads it (=== '1'), never envEnabled (see jobSwitchOn).
+    const flagOff = e.flag ? !jobSwitchOn(e.flag as 'NEXUS_BUDGET_ENFORCE_APPLY' | 'NEXUS_ENABLE_RANK_DEFEND') : false
     const masterOff = !envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')
     const blockedReason = masterOff
       ? 'NEXUS_ENABLE_AMAZON_ADS_CRON is off — the whole ads fleet is dormant'
@@ -211,7 +222,7 @@ export async function getForesight(): Promise<Foresight> {
         ? accountStoppedReason
         : flagOff
           ? (e.flagOffReason ?? `${e.flag} is off`)
-          : null
+          : switchedOff.get(e.key) ?? null
     return {
       key: e.key,
       name: e.name,

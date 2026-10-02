@@ -1,12 +1,23 @@
 {
   "name": "nexus",
   "displayName": "Nexus Commerce",
-  "version": "0.1.2",
-  "description": "Connects Claude to Nexus Commerce (catalog, listings, stock, orders, prices) for one business, and adds three skills: a weekly channel health check, fixing listing issues, and a bulk reprice. Claude reads and can ask for changes; every change waits for a person's approval in Nexus.",
+  "version": "0.2.0",
+  "description": "Connects Claude to Nexus Commerce (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads, automations) for one business per connection, and adds 18 skills, from a weekly channel health check to change plans and undo. Claude reads and asks for changes; each change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code.",
   "author": {
     "name": "Nexus Commerce"
   },
   "homepage": "https://github.com/awaissulhry/nexus-commerce/tree/main/integrations/claude",
   "repository": "https://github.com/awaissulhry/nexus-commerce",
-  "keywords": ["nexus", "ecommerce", "amazon", "ebay", "shopify", "etsy", "listings", "mcp"]
+  "keywords": [
+    "nexus",
+    "ecommerce",
+    "amazon",
+    "ebay",
+    "shopify",
+    "etsy",
+    "listings",
+    "orders",
+    "advertising",
+    "mcp"
+  ]
 }

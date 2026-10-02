@@ -2767,6 +2767,29 @@ CREATE TABLE "CreditNote" (
 );
 
 -- CreateTable
+CREATE TABLE "BuyerMessage" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "orderId" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "route" TEXT NOT NULL,
+    "template" TEXT,
+    "language" TEXT NOT NULL,
+    "subject" TEXT,
+    "body" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "providerRef" TEXT,
+    "error" TEXT,
+    "sentByUserId" TEXT,
+    "via" TEXT NOT NULL,
+    "approvalId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sentAt" TIMESTAMP(3),
+
+    CONSTRAINT "BuyerMessage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "OrderNote" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -6067,6 +6090,8 @@ CREATE TABLE "AgentTool" (
     "requiresApproval" BOOLEAN NOT NULL DEFAULT false,
     "rateLimitPerHour" INTEGER,
     "dailyBudgetUSD" DECIMAL(12,6),
+    "claudeTrust" TEXT NOT NULL DEFAULT 'ask',
+    "claudeLimits" JSONB,
     "updatedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -6093,8 +6118,69 @@ CREATE TABLE "AgentApproval" (
     "expiresAt" TIMESTAMP(3),
     "executeAfter" TIMESTAMP(3),
     "snoozedUntil" TIMESTAMP(3),
+    "decisionVia" TEXT,
+    "summary" TEXT,
+    "planHash" TEXT,
 
     CONSTRAINT "AgentApproval_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AgentPlanStep" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "approvalId" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "toolName" TEXT NOT NULL,
+    "args" JSONB NOT NULL,
+    "preview" JSONB,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "reason" TEXT,
+    "changeId" TEXT,
+    "undoesChangeId" TEXT,
+    "startedAt" TIMESTAMP(3),
+    "endedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AgentPlanStep_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AgentAutonomy" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "autoPausedAt" TIMESTAMP(3),
+    "autoPausedBy" TEXT,
+    "pauseReason" TEXT,
+    "dailyAutoCap" INTEGER NOT NULL DEFAULT 200,
+    "updatedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AgentAutonomy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AgentChange" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "approvalId" TEXT NOT NULL,
+    "planStepId" TEXT,
+    "toolName" TEXT NOT NULL,
+    "via" TEXT NOT NULL,
+    "oauthGrantId" TEXT,
+    "executedByUserId" TEXT,
+    "executedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reversibility" TEXT NOT NULL,
+    "before" JSONB,
+    "after" JSONB,
+    "undoTool" TEXT,
+    "undoArgs" JSONB,
+    "undoneAt" TIMESTAMP(3),
+    "undoneByApprovalId" TEXT,
+    "outbound" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "AgentChange_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -8147,6 +8233,19 @@ CREATE TABLE "DevelopmentCertification" (
 );
 
 -- CreateTable
+CREATE TABLE "AutomationSwitch" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "reason" TEXT,
+    "setBy" TEXT NOT NULL,
+    "setAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AutomationSwitch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsAutomationState" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL DEFAULT 'singleton',
@@ -9723,6 +9822,60 @@ CREATE TABLE "ShopifyColourSync" (
     CONSTRAINT "ShopifyColourSync_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "ChannelHeldId" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "channelConnectionId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "externalId" TEXT NOT NULL,
+    "parentExternalId" TEXT,
+    "sellerSku" TEXT NOT NULL DEFAULT '',
+    "title" TEXT,
+    "remoteStatus" TEXT,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+    "listingId" TEXT,
+    "matchState" TEXT NOT NULL DEFAULT 'UNLINKED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ChannelHeldId_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ChannelHeldSweep" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "channelConnectionId" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL,
+    "finishedAt" TIMESTAMP(3),
+    "complete" BOOLEAN NOT NULL DEFAULT false,
+    "itemsSeen" INTEGER NOT NULL DEFAULT 0,
+    "reason" TEXT,
+    "lastCompleteAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ChannelHeldSweep_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ChannelItemClaim" (
+    "channel" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "externalId" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "rootProductId" TEXT NOT NULL,
+    "aliasKey" TEXT NOT NULL DEFAULT '',
+    "connectionId" TEXT,
+    "claimedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ChannelItemClaim_pkey" PRIMARY KEY ("channel","marketplace","externalId")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -11150,6 +11303,15 @@ CREATE INDEX "CreditNote_workspaceId_idx" ON "CreditNote"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CreditNote_issuer_fiscalYear_sequenceNumber_key" ON "CreditNote"("workspaceId", "issuer", "fiscalYear", "sequenceNumber");
+
+-- CreateIndex
+CREATE INDEX "BuyerMessage_orderId_idx" ON "BuyerMessage"("orderId");
+
+-- CreateIndex
+CREATE INDEX "BuyerMessage_workspaceId_createdAt_idx" ON "BuyerMessage"("workspaceId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "BuyerMessage_workspaceId_idx" ON "BuyerMessage"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "OrderNote_orderId_idx" ON "OrderNote"("orderId");
@@ -13021,6 +13183,27 @@ CREATE INDEX "AgentApproval_status_expiresAt_idx" ON "AgentApproval"("status", "
 CREATE INDEX "AgentApproval_workspaceId_idx" ON "AgentApproval"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "AgentPlanStep_approvalId_status_idx" ON "AgentPlanStep"("approvalId", "status");
+
+-- CreateIndex
+CREATE INDEX "AgentPlanStep_workspaceId_idx" ON "AgentPlanStep"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AgentPlanStep_approvalId_position_key" ON "AgentPlanStep"("approvalId", "position");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AgentAutonomy_workspaceId_key" ON "AgentAutonomy"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AgentChange_workspaceId_executedAt_idx" ON "AgentChange"("workspaceId", "executedAt");
+
+-- CreateIndex
+CREATE INDEX "AgentChange_approvalId_idx" ON "AgentChange"("approvalId");
+
+-- CreateIndex
+CREATE INDEX "AgentChange_undoneByApprovalId_idx" ON "AgentChange"("undoneByApprovalId");
+
+-- CreateIndex
 CREATE INDEX "AgentMemory_scope_entityType_entityId_idx" ON "AgentMemory"("scope", "entityType", "entityId");
 
 -- CreateIndex
@@ -14065,6 +14248,12 @@ CREATE INDEX "DevelopmentCertification_projectId_idx" ON "DevelopmentCertificati
 CREATE INDEX "DevelopmentCertification_workspaceId_idx" ON "DevelopmentCertification"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "AutomationSwitch_workspaceId_idx" ON "AutomationSwitch"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AutomationSwitch_workspace_key_key" ON "AutomationSwitch"("workspaceId", "key");
+
+-- CreateIndex
 CREATE INDEX "AdsAutomationState_workspaceId_idx" ON "AdsAutomationState"("workspaceId");
 
 -- CreateIndex
@@ -14781,6 +14970,27 @@ CREATE INDEX "ShopifyColourSync_workspaceId_dueAt_idx" ON "ShopifyColourSync"("w
 -- CreateIndex
 CREATE UNIQUE INDEX "ShopifyColourSync_workspaceId_familyId_channelConnectionId__key" ON "ShopifyColourSync"("workspaceId", "familyId", "channelConnectionId", "marketplace", "aliasKey");
 
+-- CreateIndex
+CREATE INDEX "ChannelHeldId_workspaceId_idx" ON "ChannelHeldId"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ChannelHeldId_channelConnectionId_endedAt_idx" ON "ChannelHeldId"("channelConnectionId", "endedAt");
+
+-- CreateIndex
+CREATE INDEX "ChannelHeldId_listingId_idx" ON "ChannelHeldId"("listingId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelHeldId_workspaceId_channelConnectionId_marketplace_e_key" ON "ChannelHeldId"("workspaceId", "channelConnectionId", "marketplace", "externalId", "sellerSku");
+
+-- CreateIndex
+CREATE INDEX "ChannelHeldSweep_workspaceId_idx" ON "ChannelHeldSweep"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelHeldSweep_workspaceId_channelConnectionId_channel_key" ON "ChannelHeldSweep"("workspaceId", "channelConnectionId", "channel");
+
+-- CreateIndex
+CREATE INDEX "ChannelItemClaim_workspaceId_idx" ON "ChannelItemClaim"("workspaceId");
+
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -15086,6 +15296,9 @@ ALTER TABLE "CreditNote" ADD CONSTRAINT "CreditNote_refundId_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "CreditNote" ADD CONSTRAINT "CreditNote_originalInvoiceId_fkey" FOREIGN KEY ("originalInvoiceId") REFERENCES "FiscalInvoice"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BuyerMessage" ADD CONSTRAINT "BuyerMessage_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderNote" ADD CONSTRAINT "OrderNote_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -15487,6 +15700,12 @@ ALTER TABLE "AgentRun" ADD CONSTRAINT "AgentRun_agentId_fkey" FOREIGN KEY ("agen
 ALTER TABLE "AgentApproval" ADD CONSTRAINT "AgentApproval_agentRunId_fkey" FOREIGN KEY ("agentRunId") REFERENCES "AgentRun"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "AgentPlanStep" ADD CONSTRAINT "AgentPlanStep_approvalId_fkey" FOREIGN KEY ("approvalId") REFERENCES "AgentApproval"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AgentChange" ADD CONSTRAINT "AgentChange_approvalId_fkey" FOREIGN KEY ("approvalId") REFERENCES "AgentApproval"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "SavedViewAlert" ADD CONSTRAINT "SavedViewAlert_savedViewId_fkey" FOREIGN KEY ("savedViewId") REFERENCES "SavedView"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -15833,4 +16052,16 @@ ALTER TABLE "ShopifyColourSync" ADD CONSTRAINT "ShopifyColourSync_familyId_fkey"
 
 -- AddForeignKey
 ALTER TABLE "ShopifyColourSync" ADD CONSTRAINT "ShopifyColourSync_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelHeldId" ADD CONSTRAINT "ChannelHeldId_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelHeldId" ADD CONSTRAINT "ChannelHeldId_listingId_fkey" FOREIGN KEY ("listingId") REFERENCES "ChannelListing"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelHeldSweep" ADD CONSTRAINT "ChannelHeldSweep_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelItemClaim" ADD CONSTRAINT "ChannelItemClaim_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 

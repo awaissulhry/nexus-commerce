@@ -186,7 +186,7 @@ describe('MCP.1 — the business comes from the principal', () => {
 
   it('passes the person’s id to the tool, never a label', async () => {
     await callTool(person(['ai.run', 'insights.view']), 'read-sales', {})
-    expect(handler).toHaveBeenCalledWith({}, { userId: 'u1', storedOutput: expect.any(Function) })
+    expect(handler).toHaveBeenCalledWith({}, expect.objectContaining({ userId: 'u1', storedOutput: expect.any(Function) }))
   })
 })
 
@@ -252,7 +252,7 @@ describe('MCP.3 — every call is parsed with the tool’s own schema', () => {
 
   it('hands the tool only what its schema defines, with numbers as numbers', async () => {
     await callTool(pricer(), 'strict-args', { productId: 'p1', price: '19.90', smuggled: 'x' })
-    expect(handler).toHaveBeenCalledWith({ productId: 'p1', price: 19.9 }, { userId: 'u1', storedOutput: expect.any(Function) })
+    expect(handler).toHaveBeenCalledWith({ productId: 'p1', price: 19.9 }, expect.objectContaining({ userId: 'u1', storedOutput: expect.any(Function) }))
   })
 
   it('parses stored arguments again before execute', async () => {
@@ -261,7 +261,7 @@ describe('MCP.3 — every call is parsed with the tool’s own schema', () => {
     })
     expect(execute).not.toHaveBeenCalled()
     await executeTool(pricer(), 'strict-args', { productId: 'p1', price: '5' })
-    expect(execute).toHaveBeenCalledWith({ productId: 'p1', price: 5 }, { userId: 'u1' })
+    expect(execute).toHaveBeenCalledWith({ productId: 'p1', price: 5 }, expect.objectContaining({ userId: 'u1' }))
   })
 
   it('checks permission before arguments: a stranger learns nothing about the schema', async () => {
@@ -272,13 +272,13 @@ describe('MCP.3 — every call is parsed with the tool’s own schema', () => {
 describe('MCP.1 — execute', () => {
   it('runs execute as the person, filtered for them', async () => {
     const out = await executeTool(person(['ai.run', 'products.price.edit']), 'change-price', { price: 1 })
-    expect(execute).toHaveBeenCalledWith({ price: 1 }, { userId: 'u1' })
+    expect(execute).toHaveBeenCalledWith({ price: 1 }, expect.objectContaining({ userId: 'u1' }))
     expect(out.visible.data).toEqual({ changed: true })
   })
 
   it('a system principal carries the decider’s name into the write', async () => {
     await executeTool(systemPrincipal('Awais'), 'change-price', { price: 1 })
-    expect(execute).toHaveBeenCalledWith({ price: 1 }, { userId: 'Awais' })
+    expect(execute).toHaveBeenCalledWith({ price: 1 }, expect.objectContaining({ userId: 'Awais' }))
   })
 
   it('refuses a preview-only tool', async () => {
@@ -341,5 +341,50 @@ describe('MCP.7 — another tool’s stored output, as the caller may see it', (
     handler.mockImplementation(async (_args, ctx) => ({ ok: true, data: { seen: ctx.storedOutput('gone', { a: 1 }) } }))
     expect((await callTool(person(['ai.run', 'insights.view']), 'read-sales', {})).visible.data).toEqual({ seen: null })
     expect((await callTool(systemPrincipal('cron'), 'read-sales', {})).visible.data).toEqual({ seen: { a: 1 } })
+  })
+})
+
+describe('C1 — what a tool is told about its caller', () => {
+  const ctxOf = (fn: ReturnType<typeof vi.fn>) => fn.mock.calls.at(-1)![1] as import('./tool-types.js').ToolContext
+
+  it('a dry run gets can(): the caller’s permissions in their business, and their door', async () => {
+    await callTool(person(['ai.run', 'insights.view']), 'read-sales', {})
+    const ctx = ctxOf(handler)
+    expect(ctx.via).toBe('app')
+    expect(ctx.can('insights.view')).toBe(true)
+    expect(ctx.can('products.price.edit')).toBe(false)
+    expect(ctx.approvalId).toBeUndefined()
+    expect(ctx.approvedPreview).toBeUndefined()
+  })
+
+  it('an owner and a system caller hold every permission; Claude and the fleet are named as such', async () => {
+    const owner: UserPrincipal = { ...person([]), permissions: { isOwner: true, permissions: new Set() }, via: 'claude' }
+    await callTool(owner, 'read-sales', {})
+    expect(ctxOf(handler).can('products.price.edit')).toBe(true)
+    expect(ctxOf(handler).via).toBe('claude')
+    await callTool(systemPrincipal('amazon-ads-director', 'fleet'), 'read-sales', {})
+    expect(ctxOf(handler).can('settings.security.manage')).toBe(true)
+    expect(ctxOf(handler).via).toBe('fleet')
+    await callTool(systemPrincipal('approval-recheck'), 'read-sales', {}, { approvalId: 'ap-9' })
+    expect(ctxOf(handler)).toMatchObject({ via: 'system', approvalId: 'ap-9' })
+  })
+
+  it('execute is told the approval it carries out, the preview a person approved, and the door the request came through', async () => {
+    const approved = { price: { from: 10, to: 12 } }
+    await executeTool(person(['ai.run', 'products.price.edit']), 'change-price', { price: 12 }, {
+      approvalId: 'ap-1',
+      approvedPreview: approved,
+      via: 'claude',
+    })
+    const ctx = ctxOf(execute)
+    expect(ctx).toMatchObject({ userId: 'u1', approvalId: 'ap-1', approvedPreview: approved, via: 'claude' })
+    expect(ctx.can('products.price.edit')).toBe(true)
+    expect(ctx.can('orders.refund')).toBe(false)
+  })
+
+  it('without options, execute names the principal’s own door', async () => {
+    await executeTool(systemPrincipal('Awais'), 'change-price', { price: 1 })
+    expect(ctxOf(execute)).toMatchObject({ via: 'system', userId: 'Awais' })
+    expect(ctxOf(execute).approvalId).toBeUndefined()
   })
 })

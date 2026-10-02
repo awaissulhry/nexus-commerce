@@ -13,6 +13,7 @@
  */
 
 import { sendEmail } from '../email/transport.js'
+import { resolveBusinessIdentity, type BusinessIdentity } from '../business-identity.service.js'
 
 export interface ReviewEmailContext {
   to: string
@@ -79,8 +80,18 @@ function productAngle(productType: string | null): {
 
 // ── HTML template ─────────────────────────────────────────────────────────
 
-function renderHtml(ctx: ReviewEmailContext): { subject: string; html: string; text: string } {
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** O3 — rendered as `identity`, the business the order belongs to; Xavia's copy (taglines, Italian contact) is unchanged. */
+function renderHtml(ctx: ReviewEmailContext, identity: BusinessIdentity): { subject: string; html: string; text: string } {
   const it = (ctx.locale ?? 'it') === 'it'
+  const brandName = identity.brandName
+  const brand = escapeHtml(identity.brandName)
+  const mark = escapeHtml(identity.brandMark)
+  const support = escapeHtml(identity.supportEmail)
+  const supportIt = identity.xavia ? 'assistenza@xavia.it' : support
+  const tagline = (line: string) => (identity.xavia ? `<span style="color:#9b8ea8;font-size:12px;display:block;margin-top:4px">${line}</span>` : '')
   const { itAngle, enAngle } = productAngle(ctx.productType)
   const angle = it ? itAngle : enAngle
   const firstName = ctx.customerName?.split(' ')[0]?.trim() || (it ? 'motociclista' : 'rider')
@@ -99,8 +110,8 @@ function renderHtml(ctx: ReviewEmailContext): { subject: string; html: string; t
 <tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden">
   <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center">
-    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">XAVIA</span>
-    <span style="color:#9b8ea8;font-size:12px;display:block;margin-top:4px">Abbigliamento da moto</span>
+    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">${mark}</span>
+    ${tagline('Abbigliamento da moto')}
   </td></tr>
   <tr><td style="padding:32px">
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Ciao ${firstName},</p>
@@ -119,11 +130,11 @@ function renderHtml(ctx: ReviewEmailContext): { subject: string; html: string; t
     </td></tr>
     </table>
     <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
-      Bastano 2 minuti. La tua opinione conta molto per noi e per la community Xavia.
+      Bastano 2 minuti. La tua opinione conta molto per noi e per la community ${brand}.
     </p>
     <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
-      Hai ricevuto questa email perché hai acquistato da Xavia${ctx.channelOrderId ? ` (ordine ${ctx.channelOrderId})` : ''}.
-      Se hai dubbi o problemi con il prodotto, <a href="mailto:assistenza@xavia.it" style="color:#e63946">contattaci</a> — non lasciare
+      Hai ricevuto questa email perché hai acquistato da ${brand}${ctx.channelOrderId ? ` (ordine ${ctx.channelOrderId})` : ''}.
+      Se hai dubbi o problemi con il prodotto, <a href="mailto:${supportIt}" style="color:#e63946">contattaci</a> — non lasciare
       una recensione negativa prima di darci la possibilità di aiutarti.
     </p>
   </td></tr>
@@ -141,7 +152,7 @@ Lascia la tua recensione: ${reviewHref}
 
 Bastano 2 minuti. Grazie!
 
-— Il team Xavia`
+— Il team ${brandName}`
     return { subject, html, text }
   }
 
@@ -157,8 +168,8 @@ Bastano 2 minuti. Grazie!
 <tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden">
   <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center">
-    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">XAVIA</span>
-    <span style="color:#9b8ea8;font-size:12px;display:block;margin-top:4px">Motorcycle Gear</span>
+    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">${mark}</span>
+    ${tagline('Motorcycle Gear')}
   </td></tr>
   <tr><td style="padding:32px">
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
@@ -177,11 +188,11 @@ Bastano 2 minuti. Grazie!
     </td></tr>
     </table>
     <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
-      It only takes 2 minutes. Your feedback means a lot to us and the Xavia community.
+      It only takes 2 minutes. Your feedback means a lot to us and the ${brand} community.
     </p>
     <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
-      You received this email because you purchased from Xavia${ctx.channelOrderId ? ` (order ${ctx.channelOrderId})` : ''}.
-      If you have any issues with the product, <a href="mailto:support@xavia.it" style="color:#e63946">contact us first</a> —
+      You received this email because you purchased from ${brand}${ctx.channelOrderId ? ` (order ${ctx.channelOrderId})` : ''}.
+      If you have any issues with the product, <a href="mailto:${support}" style="color:#e63946">contact us first</a> —
       we'd love to make it right before you leave a review.
     </p>
   </td></tr>
@@ -199,7 +210,7 @@ Leave your review: ${reviewHref}
 
 It only takes 2 minutes. Thank you!
 
-— The Xavia Team`
+— The ${brandName} Team`
   return { subject, html, text }
 }
 
@@ -215,17 +226,22 @@ export async function sendReviewRequestEmail(ctx: ReviewEmailContext): Promise<{
   if (sup.suppressed) {
     return { ok: false, dryRun: false, suppressed: true, error: `suppressed (${sup.source})` }
   }
+  // O3 — sent as the business the order belongs to; refused (nothing sent) when it has no identity for buyers.
+  const found = await resolveBusinessIdentity()
+  if (found.ok === false) return { ok: false, dryRun: false, error: found.reason }
+  const identity = found.identity
   const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
   const unsubUrl = `${webBase}/api/email/unsubscribe?token=${unsubscribeTokenFor(ctx.to)}&channel=review-request`
-  const rendered = renderHtml(ctx)
+  const rendered = renderHtml(ctx, identity)
   const result = await sendEmail({
     to: ctx.to,
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
     tag: 'review-request',
+    ...(identity.emailFrom ? { from: identity.emailFrom } : {}),
     headers: {
-      'List-Unsubscribe': `<${unsubUrl}>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>`,
+      'List-Unsubscribe': `<${unsubUrl}>, <mailto:${identity.unsubscribeEmail}?subject=unsubscribe>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
   })

@@ -6,43 +6,83 @@
  * gate (approval-gate.service.ts) — `alwaysAsk` is a hard floor the
  * policy layer can never downgrade.
  *
- * Phase 3b wires execute() for all three high-stakes tools, and each one
- * routes through the SAME governed service the rest of the app uses, so
- * it INHERITS that service's safety gate rather than bypassing it:
+ * Each execute routes through the SAME governed service the rest of the app
+ * uses, so it INHERITS that service's safety gate rather than bypassing it:
  *   set-price            → masterPriceService.update() (reversible; the
  *                          channel push is enqueued + gated downstream)
- *   publish-listing      → enqueue LISTING_SYNC on OutboundSyncQueue →
- *                          the existing gated worker (default non-live:
- *                          getAmazonPublishMode() is 'gated'/'dry-run'
- *                          unless explicitly enabled)
- *   send-customer-message→ sendEmail() (dry-run unless
+ *   send-customer-message→ the buyer-message door, comms/buyer-message.service (dry-run unless
  *                          NEXUS_ENABLE_OUTBOUND_EMAILS=true) + GDPR
  *                          suppression check
+ * publish-listing moved to publish.tools.ts (MCP full control L5): it publishes through the product studio.
  */
 
-import { createOutboundRow } from '../../outbound-rows.js'
-import { Prisma } from '@nexus/database'
 import prisma from '../../../db.js'
-import { outboundSyncQueue, addJobSafely } from '../../../lib/queue.js'
 import { MasterPriceRefusedError, masterPriceService } from '../../master-price.service.js'
-import { getAmazonPublishMode } from '../../amazon-publish-gate.service.js'
-import { isEmailSuppressed } from '../../reviews/email-suppression.service.js'
-import { sendEmail } from '../../email/transport.js'
+import {
+  MESSAGE_LANGUAGES,
+  MESSAGE_TEMPLATE_IDS,
+  MESSAGE_TEMPLATES,
+  prepareBuyerMessage,
+  publicPlan,
+  sendBuyerMessage,
+  type MessageRequest,
+} from '../../comms/buyer-message.service.js'
+import { staleRefusal } from './stale-preview.js'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
-import type { AgentTool } from '../tool-types.js'
-import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
+import type { AgentTool, ToolUndo } from '../tool-types.js'
+import { liveProduct } from './live-product.js'
 import { priceBoundsOf, storedPriceReason } from '../../price-bounds.service.js'
 import { roundCents } from '@nexus/shared/listing-price'
+import {
+  applyProductBulkEdits,
+  ProductBulkError,
+  type ProductBulkChangeError,
+  type ProductBulkChangeWarning,
+  type ProductBulkContext,
+} from '../../products/bulk-edit.service.js'
+import { logger } from '../../../utils/logger.js'
 
-const SUPPRESSION_CHANNEL = 'agent-customer-message'
 
-/** Best-effort resolved publish mode for the operator to see before
- *  approving. Amazon is resolved precisely; the others default non-live
- *  per the same publish-gate pattern. */
-function publishModeFor(channel: string): string {
-  if (channel === 'AMAZON') return getAmazonPublishMode()
-  return 'gated/dry-run by default (live only if the channel is explicitly enabled)'
+/** C1 — how far a master price may move without a person, when a business lets Claude run set-price itself (C5). */
+export const SET_PRICE_LIMITS = z.object({
+  maxChangePercent: z
+    .number()
+    .positive()
+    .max(100)
+    .default(10)
+    .describe('the most the master price may move, up or down, in percent of the current price'),
+})
+
+/** C1 — is a set-price preview inside the limits? The price bounds of the product are already checked by the preview. */
+export function setPriceWithinLimits(preview: unknown, limits: Record<string, unknown>): string | null {
+  const deltaPct = (preview as { deltaPct?: unknown } | null)?.deltaPct
+  const max = Number(limits.maxChangePercent)
+  if (typeof deltaPct !== 'number') return 'the product has no master price yet to compare the new one with'
+  if (!(Math.abs(deltaPct) <= max)) {
+    return `the master price moves ${Math.abs(deltaPct)} %, more than the ${max} % allowed without a person`
+  }
+  return null
+}
+
+/**
+ * C2 — undo of set-price: set the master price it replaced, through set-price itself (the same gate, preview and
+ * approval). Refused while the master price is no longer the one it wrote, and when there was none before.
+ */
+export const SET_PRICE_UNDO: ToolUndo = {
+  async current(change) {
+    const productId = String((change.after as { productId?: unknown } | null)?.productId ?? '')
+    const p = await prisma.product.findFirst({ where: liveProduct(productId), select: { basePrice: true } })
+    return { productId, price: p?.basePrice != null ? Number(p.basePrice) : null }
+  },
+  request(change) {
+    const before = (change.before ?? {}) as { productId?: string; sku?: string; price?: number | null }
+    if (!before.productId) return { refusal: 'This change does not name its product.' }
+    if (before.price == null || !(before.price > 0)) {
+      return { refusal: `${before.sku ?? 'The product'} had no master price before this change, and a master price cannot be taken away.` }
+    }
+    return { tool: 'set-price', args: { productId: before.productId, price: before.price } }
+  },
 }
 
 const setPrice: AgentTool = {
@@ -59,6 +99,12 @@ const setPrice: AgentTool = {
   readOnly: false,
   alwaysAsk: true,
   openWorld: true,
+  // C1 — the previous master price is recorded (AgentChange) and undo sets it again, through the same gate.
+  reversibility: 'full',
+  maxClaudeTrust: 'auto',
+  limits: SET_PRICE_LIMITS,
+  withinLimits: setPriceWithinLimits,
+  undo: SET_PRICE_UNDO,
   description:
     'Change a product master price (cascades to channels per their pricing rules; channel push is gated). Requires approval.',
   async handler(args) {
@@ -128,145 +174,11 @@ const setPrice: AgentTool = {
         queuedSyncIds: res.queuedSyncIds,
         undo: { price: oldBasePrice },
       },
-    }
-  },
-}
-
-/**
- * The one listing a publish-listing request names: the product's listing on that channel, in the market given.
- * Refused, never guessed, when that is not exactly one listing (a product usually sells in several markets on one
- * channel, and `findFirst` without the market re-sent whichever row came back first), and when the listing is a
- * draft or has publishing switched off (`isPublished: false`), which the outbound worker skips.
- */
-async function listingToPublish(productId: string, channel: string, market: unknown, nothing: string) {
-  const marketplace = typeof market === 'string' && market.trim() ? market.trim().toUpperCase() : null
-  const rows = await prisma.channelListing.findMany({
-    where: {
-      productId,
-      channel,
-      ...(marketplace ? { marketplace: { equals: marketplace, mode: 'insensitive' as const } } : {}),
-    },
-    select: { id: true, title: true, region: true, marketplace: true, externalListingId: true, isPublished: true },
-    orderBy: [{ marketplace: 'asc' }, { id: 'asc' }],
-    take: 50,
-  })
-  const where = `${channel}${marketplace ? ` ${marketplace}` : ''}`
-  if (rows.length === 0) return { error: `This product has no ${where} listing. ${nothing}` }
-  if (rows.length > 1) {
-    const markets = [...new Set(rows.map((row) => row.marketplace))]
-    return {
-      error: markets.length > 1
-        ? `This product has ${channel} listings in ${markets.join(', ')}. Name the market (marketplace) to publish. ${nothing}`
-        : `This product has ${rows.length} ${where} listings (more than one account). Publish it from the product in Nexus. ${nothing}`,
-    }
-  }
-  const listing = rows[0]
-  if (!listing.isPublished) {
-    return {
-      error: `The ${channel} ${listing.marketplace} listing is a draft or has publishing switched off in Nexus, so the publish worker would skip it and send nothing. Publish it from the product in Nexus. ${nothing}`,
-    }
-  }
-  return { listing }
-}
-
-const publishListing: AgentTool = {
-  name: 'publish-listing',
-  title: 'Publish a listing',
-  input: z.object({
-    productId: z.string().min(1).describe('Nexus product id'),
-    channel: z.string().min(1).describe('AMAZON, EBAY, SHOPIFY or ETSY'),
-    marketplace: z
-      .string()
-      .trim()
-      .min(1)
-      .optional()
-      .describe('the market of the listing, e.g. DE or IT (GLOBAL for Shopify and Etsy); required when the product has listings in more than one market on this channel'),
-  }),
-  requires: [F.listingsPublish],
-  category: 'listings',
-  riskTier: 'high',
-  readOnly: false,
-  alwaysAsk: true,
-  openWorld: true,
-  description:
-    'Re-send one channel listing (a product on a channel, in one market) through the gated publish pipeline (default non-live). '
-    + 'Name the market when the product sells on that channel in more than one. A listing that is still a draft in Nexus, '
-    + 'or has publishing switched off, is refused: the publish worker skips it. Requires approval.',
-  async handler(args) {
-    const id = String(args.productId ?? '')
-    const channel = String(args.channel ?? '').toUpperCase()
-    if (!id || !channel)
-      return { ok: false, error: 'productId and channel are required' }
-    // MCP.8 — a product this business does not have is refused here, as the other change tools do, so
-    // nothing is queued for a person to approve.
-    const product = await prisma.product.findFirst({ where: liveProduct(id), select: { id: true } })
-    if (!product) return { ok: false, error: 'Product not found' }
-    const found = await listingToPublish(id, channel, args.marketplace, 'Nothing was queued.')
-    if ('error' in found) return { ok: false, error: found.error }
-    const cl = found.listing
-    return {
-      ok: true,
-      preview: {
-        action: 'publish-listing',
-        channel,
-        marketplace: cl.marketplace,
-        currentlyPublished: !!cl.externalListingId,
-        title: cl.title ?? null,
-        publishMode: publishModeFor(channel),
-        note: 'Queues a publish through the existing gated worker; the per-channel mode is live only if explicitly enabled (default non-live).',
-      },
-    }
-  },
-  // ACP.3b — does NOT push to the marketplace directly. It enqueues a
-  // LISTING_SYNC on OutboundSyncQueue so the publish flows through the
-  // SAME gated worker (publish-mode gate + circuit breaker + rate limit +
-  // audit) every other publish uses. Safe by default: the gate resolves
-  // to 'gated'/'dry-run' unless the channel is explicitly enabled live.
-  async execute(args, ctx) {
-    const id = String(args.productId ?? '')
-    const channel = String(args.channel ?? '').toUpperCase()
-    if (!id || !channel)
-      return { ok: false, error: 'productId and channel are required' }
-    // MCP.12 — deleted after the request was queued: nothing is published for it.
-    if (!(await isLiveProduct(id))) return { ok: false, error: PRODUCT_NOT_FOUND }
-    // The same one listing the preview named, found the same way; refused if that is no longer one listing.
-    const found = await listingToPublish(id, channel, args.marketplace, 'Nothing changed.')
-    if ('error' in found) return { ok: false, error: found.error }
-    const cl = found.listing
-    const row = await createOutboundRow(prisma, {
-      data: {
-        productId: id,
-        channelListingId: cl.id,
-        targetChannel: channel as any,
-        targetRegion: cl.region ?? cl.marketplace,
-        syncStatus: 'PENDING' as any,
-        syncType: 'LISTING_SYNC',
-        externalListingId: cl.externalListingId,
-        payload: {
-          source: 'AGENT_PUBLISH',
-          productId: id,
-          channel,
-          marketplace: cl.marketplace,
-          requestedBy: ctx.userId ?? null,
-        } as Prisma.InputJsonValue,
-      },
-      select: { id: true },
-    })
-    // Bounded + circuit-broken: unreachable Redis can't hang the tool call;
-    // the DB row stays PENDING for the drain cron.
-    await addJobSafely(
-      outboundSyncQueue,
-      'sync-job',
-      { queueId: row.id, productId: id, syncType: 'LISTING_SYNC', source: 'AGENT_PUBLISH' },
-      { jobId: row.id },
-    )
-    return {
-      ok: true,
-      data: {
-        channel,
-        queueId: row.id,
-        publishMode: publishModeFor(channel),
-        note: 'Queued through the gated publish pipeline; the worker resolves the per-channel mode (live only if explicitly enabled).',
+      // C1 — the master price it replaced and wrote. `after` is exactly what undo compares with what is stored then;
+      // `before` adds the SKU for a person.
+      change: {
+        before: { productId: id, sku: before.sku, price: res.oldBasePrice },
+        after: { productId: id, price: res.newBasePrice },
       },
     }
   },
@@ -277,7 +189,10 @@ const sendCustomerMessage: AgentTool = {
   title: 'Email a customer',
   input: z.object({
     orderId: z.string().min(1).describe('Nexus order id'),
-    message: z.string().trim().min(1).describe('the message to send to the buyer'),
+    template: z.enum(MESSAGE_TEMPLATE_IDS).optional()
+      .describe(`a ready-made message: ${MESSAGE_TEMPLATE_IDS.map((id) => `${id} (${MESSAGE_TEMPLATES[id].label})`).join(', ')}`),
+    message: z.string().trim().min(1).max(2000).optional().describe('the message to the buyer (with a template: added below it)'),
+    language: z.enum(MESSAGE_LANGUAGES).optional().describe("it or en; default: the language of the order's market"),
   }),
   requires: [F.ordersEdit],
   category: 'comms',
@@ -285,201 +200,245 @@ const sendCustomerMessage: AgentTool = {
   readOnly: false,
   alwaysAsk: true,
   openWorld: true,
+  // C1 — a sent message cannot be recalled: never more than a person's own yes in Nexus.
+  reversibility: 'none',
+  maxClaudeTrust: 'ask',
   description:
-    'Email a customer about their order (dry-run unless outbound email is enabled; GDPR-suppression honored). Requires approval.',
+    'Write to the buyer of an order of this business, as the business, in the language of its market: a ready-made '
+    + 'template and/or a free message. Shopify, Etsy, WooCommerce and own-shop buyers get an e-mail; Amazon and eBay '
+    + 'buyers are written to only through their marketplace\'s own messaging (Amazon: only with a template, which picks '
+    + 'one of Amazon\'s message kinds; no links or incentives on either). An opted-out buyer is refused an e-mail. The '
+    + 'preview shows the message, its copy checks and whether the route is live or a dry run. Requires approval; a sent '
+    + 'message cannot be recalled.',
+  // 07 O11 — the one buyer-message door (services/comms/buyer-message.service.ts).
   async handler(args) {
-    const orderId = String(args.orderId ?? '')
-    const message = String(args.message ?? '').trim()
-    if (!orderId || !message)
-      return { ok: false, error: 'orderId and message are required' }
-    const o = await prisma.order.findUnique({
-      where: { id: orderId },
-      select: { customerName: true, customerEmail: true, marketplace: true, channel: true },
-    })
-    if (!o) return { ok: false, error: 'Order not found' }
-    const suppressed = o.customerEmail
-      ? (await isEmailSuppressed(o.customerEmail, SUPPRESSION_CHANNEL)).suppressed
-      : false
-    return {
-      ok: true,
-      preview: {
-        action: 'send-customer-message',
-        to: o.customerName,
-        emailOnFile: !!o.customerEmail,
-        marketplace: o.marketplace,
-        message,
-        suppressed,
-        marketplaceWarning: marketplaceCommsWarning(o.channel),
-        note: emailIsLive()
-          ? 'Outbound email is ENABLED — approving will send a real email (irreversible).'
-          : 'Outbound email is in dry-run — approving records the send without delivering. Suppressed recipients are never emailed.',
-      },
-    }
+    const prepared = await prepareBuyerMessage(args as unknown as MessageRequest)
+    if (prepared.ok === false) return { ok: false, error: prepared.error }
+    return { ok: true, preview: { action: 'send-customer-message', ...publicPlan(prepared.plan), note: 'Sends one e-mail to the buyer as this business; it cannot be recalled.' } }
   },
-  // ACP.3b — routes through the shared sendEmail() transport, which is
-  // dry-run unless NEXUS_ENABLE_OUTBOUND_EMAILS=true. GDPR suppression is
-  // enforced here (we never email a suppressed address, even when live).
-  // Irreversible when live — that is exactly why it is alwaysAsk.
-  async execute(args) {
-    const orderId = String(args.orderId ?? '')
-    const message = String(args.message ?? '').trim()
-    if (!orderId || !message)
-      return { ok: false, error: 'orderId and message are required' }
-    const o = await prisma.order.findUnique({
-      where: { id: orderId },
-      select: { customerName: true, customerEmail: true, marketplace: true, channel: true },
-    })
-    if (!o) return { ok: false, error: 'Order not found' }
-    if (!o.customerEmail)
-      return { ok: false, error: 'order has no customer email on file' }
-    const sup = await isEmailSuppressed(o.customerEmail, SUPPRESSION_CHANNEL)
-    if (sup.suppressed)
-      return {
-        ok: false,
-        error: `recipient is suppressed (${sup.source ?? 'opt-out'}) — not sending`,
-      }
-    const name = o.customerName || 'cliente'
-    const subject = 'Un messaggio sul tuo ordine Xavia'
-    const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f8fafc;">
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;"><tr><td align="center">
-<table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;"><tr><td>
-<div style="font-size:22px;font-weight:700;margin-bottom:24px;">Xavia</div>
-<p style="font-size:16px;margin:0 0 12px 0;">Ciao ${name},</p>
-<p style="font-size:16px;margin:0 0 20px 0;white-space:pre-wrap;">${escapeHtml(message)}</p>
-<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Per dubbi, scrivi a <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
-</td></tr></table></td></tr></table></body></html>`
-    const text = `Ciao ${name},\n\n${message}\n\n— Xavia`
-    const res = await sendEmail({
-      to: o.customerEmail,
-      subject,
-      html,
-      text,
-      tag: SUPPRESSION_CHANNEL,
-    })
-    if (!res.ok) return { ok: false, error: res.error ?? 'email send failed' }
+  async execute(args, ctx) {
+    const prepared = await prepareBuyerMessage(args as unknown as MessageRequest)
+    if (prepared.ok === false) return { ok: false, error: prepared.error }
+    const fresh = { action: 'send-customer-message', ...publicPlan(prepared.plan) }
+    const stale = staleRefusal(ctx.approvedPreview, fresh, ['to', 'route', 'mode', 'sendsAs', 'subject', 'body'], 'the message')
+    if (stale) return { ok: false, error: stale }
+    const sent = await sendBuyerMessage(prepared.plan, { sentByUserId: ctx.userId ?? null, via: ctx.via, approvalId: ctx.approvalId ?? null })
+    if (sent.outcome === 'FAILED' || sent.outcome === 'SUPPRESSED') return { ok: false, error: sent.error ?? sent.outcome }
     return {
       ok: true,
       data: {
-        to: o.customerEmail,
-        delivered: !res.dryRun,
-        dryRun: res.dryRun,
-        provider: res.provider,
-        messageId: res.messageId ?? null,
-        marketplaceWarning: marketplaceCommsWarning(o.channel),
+        messageId: sent.messageId,
+        to: prepared.plan.to,
+        delivered: sent.outcome === 'SENT',
+        dryRun: sent.outcome === 'DRY_RUN',
+        providerRef: sent.providerRef,
       },
     }
   },
 }
 
-function emailIsLive(): boolean {
-  return process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true'
+/** C1 — the most bullet points apply-content takes in one call (every list a tool takes is bounded). */
+export const APPLY_CONTENT_MAX_BULLETS = 10
+/** The most search keywords apply-content takes in one call. */
+export const APPLY_CONTENT_MAX_KEYWORDS = 50
+const LIMIT_FIELDS = ['title', 'bulletPoints', 'description', 'keywords'] as const
+
+/** C1 — which master content fields Claude may change without a person, when a business allows it (C5). */
+export const APPLY_CONTENT_LIMITS = z.object({
+  fields: z
+    .array(z.enum(LIMIT_FIELDS))
+    .max(LIMIT_FIELDS.length)
+    .default([...LIMIT_FIELDS])
+    .describe('the content fields that may change without a person: title, bulletPoints, description, keywords'),
+})
+
+export function applyContentWithinLimits(preview: unknown, limits: Record<string, unknown>): string | null {
+  const changes = (preview as { changes?: unknown } | null)?.changes
+  if (!changes || typeof changes !== 'object') return 'the preview names no content change'
+  const allowed = new Set(Array.isArray(limits.fields) ? (limits.fields as string[]) : [])
+  const outside = Object.keys(changes).filter((field) => !allowed.has(field))
+  return outside.length ? `${outside.join(' and ')} may not change without a person` : null
 }
 
-/** Amazon/eBay require buyer contact through their own messaging systems;
- *  direct email can breach marketplace policy. Surfaced (not blocked) so
- *  the approver decides. Read from the order's CHANNEL: `Order.marketplace`
- *  holds the market code (IT, DE, UK), so testing it never warned. */
-function marketplaceCommsWarning(channel: string | null): string | null {
-  const m = (channel ?? '').toLowerCase()
-  if (m.includes('amazon'))
-    return 'Amazon orders: contact buyers via Amazon Buyer-Seller Messaging, not direct email (policy).'
-  if (m.includes('ebay'))
-    return 'eBay orders: contact buyers via eBay Messages, not direct email (policy).'
-  return null
+/**
+ * C2 — undo of apply-content: write the content it replaced back, through apply-content itself. Refused while the
+ * product's content is no longer what it wrote. Nexus may hold no description at all; apply-content cannot store
+ * "none", so undo stores an empty description then.
+ */
+export const APPLY_CONTENT_UNDO: ToolUndo = {
+  async current(change) {
+    const after = (change.after ?? {}) as Record<string, unknown>
+    const productId = String(after.productId ?? '')
+    const p = await prisma.product.findFirst({ where: liveProduct(productId), select: { name: true, bulletPoints: true, description: true, keywords: true } })
+    const now: Record<string, unknown> = { productId }
+    if ('title' in after) now.title = p ? p.name : null
+    if ('bulletPoints' in after) now.bulletPoints = p ? p.bulletPoints : null
+    if ('description' in after) now.description = p ? p.description : null
+    if ('keywords' in after) now.keywords = p ? p.keywords : null
+    return now
+  },
+  request(change) {
+    const before = (change.before ?? {}) as Record<string, unknown>
+    if (typeof before.productId !== 'string') return { refusal: 'This change does not name its product.' }
+    const args: Record<string, unknown> = { productId: before.productId }
+    if ('title' in before) args.title = String(before.title ?? '')
+    if ('bulletPoints' in before) args.bulletPoints = Array.isArray(before.bulletPoints) ? before.bulletPoints : []
+    if ('description' in before) args.description = before.description == null ? '' : String(before.description)
+    if ('keywords' in before) args.keywords = Array.isArray(before.keywords) ? before.keywords : []
+    return Object.keys(args).length > 1 ? { tool: 'apply-content', args } : { refusal: 'This change named no content field.' }
+  },
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+// apply-content — the reversible "copilot fixes the listing" action: a drafted title / bullets / description /
+// keywords on the MASTER product (the primary language). Medium tier, routed through the approval gate
+// (requiresApprovalDefault). MCP full control T2: it saves through the product sheet's own writer
+// (`applyProductBulkEdits` → `writeContent`, source tier), so the product's version moves, an audit row is written
+// and the listings that follow the text get their follow markers, exactly as a sheet edit. Nexus only (the Owner's
+// d7): no channel update is queued; the channels change when the listing is published from Nexus.
+const CONTENT_FIELDS = [
+  // [argument, the writer's field (the product column)]
+  ['title', 'name'],
+  ['bulletPoints', 'bulletPoints'],
+  ['description', 'description'],
+  ['keywords', 'keywords'],
+] as const
+type ContentRow = { name: string; bulletPoints: string[]; description: string | null; keywords: string[] }
+const CONTENT_SELECT = { name: true, bulletPoints: true, description: true, keywords: true, version: true } as const
+
+/** What the arguments change, read against the product as stored now: the writer's changes, the preview, the undo. */
+function contentPlan(productId: string, args: Record<string, unknown>, p: ContentRow) {
+  const writes: Array<{ id: string; field: string; value: unknown; contentAddress: { tier: 'source' } }> = []
+  const changes: Record<string, { from: unknown; to: unknown }> = {}
+  const undo: Record<string, unknown> = {}
+  for (const [arg, column] of CONTENT_FIELDS) {
+    const raw = args[arg]
+    const value = arg === 'bulletPoints' || arg === 'keywords'
+      ? (Array.isArray(raw) ? (raw as unknown[]).map(String) : undefined)
+      : (raw != null ? String(raw) : undefined)
+    if (value === undefined) continue
+    changes[arg] = { from: p[column], to: value }
+    undo[column] = p[column]
+    writes.push({ id: productId, field: column, value, contentAddress: { tier: 'source' } })
+  }
+  return { writes, changes, undo }
 }
 
-// apply-content — the reversible "copilot fixes the listing" action:
-// writes drafted title / bullets / description to the MASTER product (not
-// live to any channel). Medium tier but routed through the approval gate
-// (requiresApprovalDefault) so the loop is proven on a safe action.
+/** The writer's context. It logs as pino does (details, message); Nexus's logger takes (message, details). */
+function contentWriterContext(userId: string | null | undefined): ProductBulkContext {
+  const log = (level: 'warn' | 'error') => (details: unknown, message?: string) =>
+    logger[level](message ?? '[agents/apply-content] product writer', { details })
+  return {
+    formulaCascade: false,
+    userId: userId ?? null,
+    // Nexus only: shared text cascades to the listings that follow it, but no channel update is queued.
+    queueOutbound: false,
+    logger: { warn: log('warn'), error: log('error') } as unknown as ProductBulkContext['logger'],
+  }
+}
+
+type WriterOutcome = { errors?: ProductBulkChangeError[]; warnings?: ProductBulkChangeWarning[]; currentVersion?: number }
+const writerLines = (rows: Array<{ field: string; error?: string; warning?: string }>) =>
+  rows.map((row) => `${row.field}: ${row.error ?? row.warning}`)
+
+/** The writer, as a refusal sentence or its outcome. A throw rolls its transaction back: nothing was written then. */
+async function runContentWriter(
+  input: { changes: ReturnType<typeof contentPlan>['writes']; expectedVersion?: number; dryRun?: boolean },
+  userId: string | null | undefined,
+): Promise<{ refusal: string } | { outcome: WriterOutcome }> {
+  try {
+    const outcome = (await applyProductBulkEdits(input, contentWriterContext(userId))) as WriterOutcome
+    if (outcome.errors?.length) return { refusal: `The product writer refused it: ${writerLines(outcome.errors).join('; ')}` }
+    return { outcome }
+  } catch (error) {
+    if (!(error instanceof ProductBulkError)) throw error
+    const errors = error.details.errors
+    return { refusal: Array.isArray(errors) && errors.length ? `The product writer refused it: ${writerLines(errors as ProductBulkChangeError[]).join('; ')}` : error.message }
+  }
+}
+
 const applyContent: AgentTool = {
   name: 'apply-content',
   title: 'Apply product content',
   input: z.object({
     productId: z.string().min(1).describe('Nexus product id'),
     title: z.string().optional().describe('new title'),
-    bulletPoints: z.array(z.string()).optional().describe('new bullet points'),
+    bulletPoints: z.array(z.string()).max(APPLY_CONTENT_MAX_BULLETS).optional().describe(`new bullet points, at most ${APPLY_CONTENT_MAX_BULLETS}`),
     description: z.string().optional().describe('new description'),
+    keywords: z.array(z.string()).max(APPLY_CONTENT_MAX_KEYWORDS).optional().describe(`new search keywords, at most ${APPLY_CONTENT_MAX_KEYWORDS}`),
   }),
   requires: [F.productsEdit],
   category: 'products',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
+  // C1 — Nexus only: it writes the master product; no marketplace changes until someone publishes.
+  openWorld: false,
+  reversibility: 'full',
+  maxClaudeTrust: 'auto',
+  limits: APPLY_CONTENT_LIMITS,
+  withinLimits: applyContentWithinLimits,
+  undo: APPLY_CONTENT_UNDO,
   description:
-    'Apply a drafted title / bullet points / description to the master product (reversible; requires approval).',
-  async handler(args) {
+    'Apply a drafted title / bullet points / description / keywords to the master product, in its primary language '
+    + '(reversible; requires approval). Saved in Nexus only: listings that follow the master text take it, and the '
+    + 'channels change when the listing is published from Nexus.',
+  async handler(args, ctx) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findFirst({
-      where: liveProduct(id),
-      select: { name: true, bulletPoints: true, description: true },
-    })
+    const p = await prisma.product.findFirst({ where: liveProduct(id), select: CONTENT_SELECT })
     if (!p) return { ok: false, error: 'Product not found' }
-    const changes: Record<string, { from: unknown; to: unknown }> = {}
-    if (args.title != null) changes.title = { from: p.name, to: String(args.title) }
-    if (Array.isArray(args.bulletPoints))
-      changes.bulletPoints = {
-        from: p.bulletPoints,
-        to: (args.bulletPoints as unknown[]).map(String),
-      }
-    if (args.description != null)
-      changes.description = { from: p.description, to: String(args.description) }
-    if (Object.keys(changes).length === 0)
+    const plan = contentPlan(id, args, p)
+    if (plan.writes.length === 0)
       return {
         ok: false,
-        error: 'nothing to apply (title / bulletPoints / description)',
+        error: 'nothing to apply (title / bulletPoints / description / keywords)',
       }
+    // The writer's own dry run (writes nothing): its refusal, or the warnings it would store the values with.
+    const checked = await runContentWriter({ changes: plan.writes, dryRun: true }, ctx?.userId)
+    if ('refusal' in checked) return { ok: false, error: checked.refusal }
+    const warnings = writerLines(checked.outcome.warnings ?? [])
     return {
       ok: true,
       preview: {
         action: 'apply-content',
         productId: id,
-        changes,
-        note: 'Reversible master-content edit; requires approval to apply.',
+        changes: plan.changes,
+        ...(warnings.length ? { warnings } : {}),
+        note: 'Reversible master-content edit, saved in Nexus only (no channel update is queued); requires approval to apply.',
       },
     }
   },
-  async execute(args) {
+  async execute(args, ctx) {
     const id = String(args.productId ?? '')
     if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findFirst({
-      where: liveProduct(id),
-      select: { name: true, bulletPoints: true, description: true },
-    })
+    const p = await prisma.product.findFirst({ where: liveProduct(id), select: CONTENT_SELECT })
     if (!p) return { ok: false, error: 'Product not found' }
-    const data: Record<string, unknown> = {}
-    const undo: Record<string, unknown> = {}
-    if (args.title != null) {
-      undo.name = p.name
-      data.name = String(args.title)
-    }
-    if (Array.isArray(args.bulletPoints)) {
-      undo.bulletPoints = p.bulletPoints
-      data.bulletPoints = (args.bulletPoints as unknown[]).map(String)
-    }
-    if (args.description != null) {
-      undo.description = p.description
-      data.description = String(args.description)
-    }
-    if (Object.keys(data).length === 0)
+    const plan = contentPlan(id, args, p)
+    if (plan.writes.length === 0)
       return { ok: false, error: 'nothing to apply' }
-    await prisma.product.update({ where: { id }, data })
-    return { ok: true, data: { applied: Object.keys(data), undo } }
+    // Guarded by the version just read: the undo below is exactly what this write replaces.
+    const written = await runContentWriter({ changes: plan.writes, expectedVersion: p.version }, ctx.userId)
+    if ('refusal' in written) return { ok: false, error: written.refusal }
+    const warnings = writerLines(written.outcome.warnings ?? [])
+    // C1 — the fields it wrote, under the names the tool takes, before and after (`undo.current` reads them back).
+    const before: Record<string, unknown> = { productId: id }
+    const after: Record<string, unknown> = { productId: id }
+    for (const [arg, change] of Object.entries(plan.changes)) [before[arg], after[arg]] = [change.from, change.to]
+    return {
+      ok: true,
+      data: {
+        applied: plan.writes.map((w) => w.field),
+        undo: plan.undo,
+        ...(written.outcome.currentVersion !== undefined ? { version: written.outcome.currentVersion } : {}),
+        ...(warnings.length ? { warnings } : {}),
+      },
+      change: { before, after },
+    }
   },
 }
 
 export const MUTATE_TOOLS: AgentTool[] = [
   applyContent,
   setPrice,
-  publishListing,
   sendCustomerMessage,
 ]

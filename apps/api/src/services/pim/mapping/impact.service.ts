@@ -17,8 +17,8 @@ const CHUNK = 100
 const LEASE = 120_000
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 export interface MappingChange { fieldKey: string; rule: FieldMappingRule | null }
-interface Counts { scanned: number; matchedProducts: number; affectedListings: number; matchedListings?: number; missing?: number; conflicts?: number; changed: number; preservedOverrides: number; invalid: number; introducedInvalid: number; excluded: number }
-interface ImpactPayload {
+export interface Counts { scanned: number; matchedProducts: number; affectedListings: number; matchedListings?: number; missing?: number; conflicts?: number; changed: number; preservedOverrides: number; invalid: number; introducedInvalid: number; excluded: number }
+export interface ImpactPayload {
   kind: typeof KIND; channel: string; market: string; category: string | null; changes: MappingChange[]
   before: MarketplaceSchemaMapping; after: MarketplaceSchemaMapping; token: string; cursor: string | null
   cutoff: string; attempts?: number; counts: Counts
@@ -42,13 +42,29 @@ interface ImpactPayload {
 const payloadOf = (value: unknown) => (value as ImpactPayload)?.kind === KIND ? value as ImpactPayload : null
 const running = new Set<string>()
 
-export async function createMappingImpact(input: { channel: string; market: string; category?: string | null; changes?: MappingChange[]; expectedToken: string; userId: string | null;
+export interface MappingImpactInput { channel: string; market: string; category?: string | null; changes?: MappingChange[]; expectedToken: string; userId: string | null;
   expression?: ExpressionChange; categoryChange?: CategoryChange; restoreRevisionId?: string;
   presentationChange?: { id: string; rule: PresentationRule | null };
   clone?: { channel: string; market: string; token: string; addTranslate?: boolean }
   /** VT.1b — one variation rule for one category (or channel-wide when `categoryId` is null). */
   variationChange?: { categoryId: string | null; rule: StoredVariationRule | null }
-}) {
+}
+
+export async function createMappingImpact(input: MappingImpactInput) {
+  const { payload, total } = await draftMappingImpact(input)
+  const job = await prisma.bulkOperation.create({ data: { userId: input.userId, productCount: total, changeCount: payload.changes.length,
+    status: 'MAPPING_SCANNING', changes: json(payload), total, processed: 0, expiresAt: new Date(Date.now() + LEASE) } })
+  void runMappingImpact(job.id).catch(() => {})
+  return { jobId: job.id, state: job.status, total, processed: 0 }
+}
+
+/**
+ * MCP full control P8 — the review a mapping change would get, drafted WITHOUT writing anything: the checks, the
+ * mapping before and after, its token and the input token, and how many products the scan covers. createMappingImpact
+ * stores exactly this as the review row; Claude's `save-channel-mapping` dry run scans it in memory instead
+ * (previewMappingImpact), so a preview never leaves a row behind.
+ */
+export async function draftMappingImpact(input: MappingImpactInput): Promise<{ payload: ImpactPayload; total: number }> {
   if ([input.expression, input.categoryChange, input.clone, input.changes, input.presentationChange, input.restoreRevisionId, input.variationChange].filter(v => v !== undefined).length !== 1) throw new InvalidMappingError(['Choose one kind of change per review'])
   const specialized = !!(input.expression || input.categoryChange || input.clone || input.presentationChange || input.restoreRevisionId || input.variationChange)
   input.changes ??= []
@@ -203,10 +219,7 @@ export async function createMappingImpact(input: { channel: string; market: stri
   const payload: ImpactPayload = { kind: KIND, channel: input.channel, market: input.market, category, changes: input.changes, before, after, token, shopifySchemaRevisions, taxonomySnapshotId, taxonomySchemaId,
     cursor: null, cutoff, inputToken, inputModels, restoreRevision, expression: input.expression, categoryChange: input.categoryChange,
     ...(input.variationChange ? { variationChange: { ...input.variationChange, ...variationRadius! } } : {}), categoryBefore, categoryAfter, cloneSource, presentationChange: input.presentationChange, allFields: specialized && !input.presentationChange, counts: { scanned: 0, matchedProducts: 0, affectedListings: 0, changed: 0, preservedOverrides: 0, invalid: 0, introducedInvalid: 0, excluded: 0 } }
-  const job = await prisma.bulkOperation.create({ data: { userId: input.userId, productCount: total, changeCount: input.changes.length,
-    status: 'MAPPING_SCANNING', changes: json(payload), total, processed: 0, expiresAt: new Date(Date.now() + LEASE) } })
-  void runMappingImpact(job.id).catch(() => {})
-  return { jobId: job.id, state: job.status, total, processed: 0 }
+  return { payload, total }
 }
 
 export async function runMappingImpact(jobId: string) {
@@ -230,87 +243,7 @@ export async function runMappingImpact(jobId: string) {
           data: { status: 'MAPPING_REVIEW', completedAt: new Date(), expiresAt: new Date(Date.now() + 30 * 60_000) } }); return
       }
       const ids = products.map(p => p.id)
-      const listings: Array<{ id: string; productId: string; channelConnectionId: string | null; aliasKey: string }> = []
-      let listingCursor: string | undefined
-      while (true) {
-        const page = await prisma.channelListing.findMany({ where: { productId: { in: ids }, channel: payload.channel, marketplace: payload.market, ...(listingCursor ? { id: { gt: listingCursor } } : {}) },
-          orderBy: { id: 'asc' }, take: 250, select: { id: true, productId: true, channelConnectionId: true, aliasKey: true } })
-        listings.push(...page)
-        if (page.length < 250) break
-        listingCursor = page[page.length - 1].id
-      }
-      const destinations = new Map<string, { account?: string | null; alias: string; ids: Set<string>; listingIds: Map<string, string> }>()
-      for (const listing of listings) {
-        const key = JSON.stringify([listing.channelConnectionId, listing.aliasKey])
-        const group = destinations.get(key) ?? { account: listing.channelConnectionId, alias: listing.aliasKey, ids: new Set(), listingIds: new Map() }
-        group.ids.add(listing.productId); group.listingIds.set(listing.productId, listing.id); destinations.set(key, group)
-      }
-      const unlisted = ids.filter(id => !listings.some(l => l.productId === id))
-      if (unlisted.length) destinations.set('unlisted', { account: null, alias: '', ids: new Set(unlisted), listingIds: new Map() })
-      const rows: unknown[] = []
-      const matched = new Set<string>()
-      const counts = { ...payload.counts, matchedListings: payload.counts.matchedListings ?? 0, missing: payload.counts.missing ?? 0, conflicts: payload.counts.conflicts ?? 0, scanned: payload.counts.scanned + products.length }
-      for (const destination of destinations.values()) {
-        const args = { channel: payload.channel, marketplace: payload.market, productIds: [...destination.ids],
-          categoryFilter: payload.category,
-          channelConnectionId: destination.account, aliasKey: destination.alias, fieldKeys: payload.allFields ? undefined : payload.changes.map(c => c.fieldKey), includeCatalogue: false, includePresentation: !!payload.presentationChange }
-        // Both answers run the existing resolver, schema validation, category rules and override logic.
-        const before = await resolveBatch({ ...args, mappingSnapshot: payload.before, categoryMappingSnapshot: payload.categoryBefore })
-        const after = await resolveBatch({ ...args, mappingSnapshot: payload.after, categoryMappingSnapshot: payload.categoryAfter })
-        const byId = new Map(after.products.map(p => [p.productId, p]))
-        for (const product of before.products) {
-          if (payload.category && product.category.channelCategoryId !== payload.category) continue
-          const next = byId.get(product.productId)
-          let matchesDraft: boolean | undefined
-          if (payload.presentationChange) {
-            const oldScope = payload.before.presentationRules?.find(r => r.id === payload.presentationChange?.id)?.scope
-            const newScope = payload.presentationChange.rule?.scope
-            const matchedBefore = oldScope && product.presentationContext && matchesPresentationScope(oldScope, product.presentationContext)
-            const matchedAfter = newScope && next?.presentationContext && matchesPresentationScope(newScope, next.presentationContext)
-            matchesDraft = !!matchedAfter
-            if (!matchedBefore && !matchedAfter) continue
-          }
-          matched.add(product.productId)
-          if (destination.listingIds.has(product.productId)) counts.matchedListings++
-          let listingChanged = false
-          const fields = payload.allFields ? [...new Set([...Object.keys(product.cells), ...Object.keys(next?.cells ?? {})])] : payload.changes.map(c => c.fieldKey)
-          if (payload.categoryChange) {
-            fields.push('__category')
-            product.cells.__category = { value: product.category.channelCategoryId, provenance: product.category.source === 'listing' ? 'override' : 'mapped', errors: product.category.conflicts ?? (product.category.channelCategoryId ? [] : ['No effective marketplace category']) } as never
-            if (next) next.cells.__category = { value: next.category.channelCategoryId, provenance: next.category.source === 'listing' ? 'override' : 'mapped', errors: next.category.conflicts ?? (next.category.channelCategoryId ? [] : ['No effective marketplace category']) } as never
-          }
-          if (payload.presentationChange?.rule?.order || payload.before.presentationRules?.some(r => r.id === payload.presentationChange?.id && r.order)) {
-            fields.push('__variationOrder')
-            product.cells.__variationOrder = { value: product.presentationOrder?.value ?? null, provenance: product.presentationOrder?.explicitAxes || product.presentationOrder?.explicitValues.length ? 'override' : 'mapped', errors: product.presentationOrder?.conflicts ?? [] } as never
-            if (next) next.cells.__variationOrder = { value: next.presentationOrder?.value ?? null, provenance: 'mapped', errors: next.presentationOrder?.conflicts ?? [] } as never
-          }
-          for (const fieldKey of fields) {
-            const change = { fieldKey }
-            const a = product.cells[change.fieldKey]; const b = next?.cells[change.fieldKey]
-            if (!a && !b) continue
-            const preserved = a?.provenance === 'override' || a?.provenance === 'locked'
-            const changed = JSON.stringify(a?.value ?? null) !== JSON.stringify(b?.value ?? null)
-            const errors = b?.errors ?? []
-            if (preserved) counts.preservedOverrides++
-            if (changed) { counts.changed++; listingChanged = true }
-            if (errors.length) counts.invalid++
-            if (!isPresent(b?.value)) counts.missing++
-            if (errors.some(error => /conflict/i.test(error))) counts.conflicts++
-            // A category change reaches a channel only through a listing. For a product with no listing on this
-            // coordinate it sends nothing, and the new category's required fields (eBay item specifics) only exist once
-            // the category does — so their empty values are work to do, still shown and counted as invalid, but they
-            // do not block the assignment. Listed products still do.
-            const canBlock = !payload.categoryChange || destination.listingIds.has(product.productId)
-            if (canBlock && errors.length && JSON.stringify(errors) !== JSON.stringify(a?.errors ?? [])) counts.introducedInvalid++
-            rows.push({ productId: product.productId, sku: product.sku, listingId: destination.listingIds.get(product.productId) ?? null,
-              accountId: destination.account ?? null, aliasKey: destination.alias, category: product.category.channelCategoryId,
-              market: payload.market, language: before.locale ?? await languageForMarketplace(payload.market, payload.channel), field: change.fieldKey, before: a?.value ?? null, after: b?.value ?? null, source: b?.provenance ?? 'missing',
-              changed, preserved, errors, matchesDraft, supplyingRule: b?.supplyingRule ?? null })
-          }
-          if (listingChanged && destination.listingIds.has(product.productId)) counts.affectedListings++
-        }
-      }
-      counts.matchedProducts += matched.size; counts.excluded += products.length - matched.size
+      const { rows, counts } = await scanMappingImpactChunk(payload, ids)
       const chunkStart = Math.max(Date.now(), payload.chunkTimestamp ?? 0)
       const chunks = []
       for (let offset = 0; offset < rows.length; offset += 100) chunks.push({
@@ -340,6 +273,134 @@ export async function runMappingImpact(jobId: string) {
       } })
     }
   } finally { running.delete(jobId) }
+}
+
+/**
+ * MCP full control P8 — one chunk of the impact scan, read only: for these products, the resolved value of every
+ * changed field before and after the draft, per listing destination, and the counts so far (`payload.counts` plus
+ * this chunk). runMappingImpact stores the rows and the counts as its checkpoint; previewMappingImpact keeps them in
+ * memory. Both therefore count exactly the same way.
+ */
+export async function scanMappingImpactChunk(payload: ImpactPayload, ids: string[]): Promise<{ rows: Array<Record<string, unknown>>; counts: Counts }> {
+  const listings: Array<{ id: string; productId: string; channelConnectionId: string | null; aliasKey: string }> = []
+  let listingCursor: string | undefined
+  while (true) {
+    const page = await prisma.channelListing.findMany({ where: { productId: { in: ids }, channel: payload.channel, marketplace: payload.market, ...(listingCursor ? { id: { gt: listingCursor } } : {}) },
+      orderBy: { id: 'asc' }, take: 250, select: { id: true, productId: true, channelConnectionId: true, aliasKey: true } })
+    listings.push(...page)
+    if (page.length < 250) break
+    listingCursor = page[page.length - 1].id
+  }
+  const destinations = new Map<string, { account?: string | null; alias: string; ids: Set<string>; listingIds: Map<string, string> }>()
+  for (const listing of listings) {
+    const key = JSON.stringify([listing.channelConnectionId, listing.aliasKey])
+    const group = destinations.get(key) ?? { account: listing.channelConnectionId, alias: listing.aliasKey, ids: new Set(), listingIds: new Map() }
+    group.ids.add(listing.productId); group.listingIds.set(listing.productId, listing.id); destinations.set(key, group)
+  }
+  const unlisted = ids.filter(id => !listings.some(l => l.productId === id))
+  if (unlisted.length) destinations.set('unlisted', { account: null, alias: '', ids: new Set(unlisted), listingIds: new Map() })
+  const rows: Array<Record<string, unknown>> = []
+  const matched = new Set<string>()
+  const counts = { ...payload.counts, matchedListings: payload.counts.matchedListings ?? 0, missing: payload.counts.missing ?? 0, conflicts: payload.counts.conflicts ?? 0, scanned: payload.counts.scanned + ids.length }
+  for (const destination of destinations.values()) {
+    const args = { channel: payload.channel, marketplace: payload.market, productIds: [...destination.ids],
+      categoryFilter: payload.category,
+      channelConnectionId: destination.account, aliasKey: destination.alias, fieldKeys: payload.allFields ? undefined : payload.changes.map(c => c.fieldKey), includeCatalogue: false, includePresentation: !!payload.presentationChange }
+    // Both answers run the existing resolver, schema validation, category rules and override logic.
+    const before = await resolveBatch({ ...args, mappingSnapshot: payload.before, categoryMappingSnapshot: payload.categoryBefore })
+    const after = await resolveBatch({ ...args, mappingSnapshot: payload.after, categoryMappingSnapshot: payload.categoryAfter })
+    const byId = new Map(after.products.map(p => [p.productId, p]))
+    for (const product of before.products) {
+      if (payload.category && product.category.channelCategoryId !== payload.category) continue
+      const next = byId.get(product.productId)
+      let matchesDraft: boolean | undefined
+      if (payload.presentationChange) {
+        const oldScope = payload.before.presentationRules?.find(r => r.id === payload.presentationChange?.id)?.scope
+        const newScope = payload.presentationChange.rule?.scope
+        const matchedBefore = oldScope && product.presentationContext && matchesPresentationScope(oldScope, product.presentationContext)
+        const matchedAfter = newScope && next?.presentationContext && matchesPresentationScope(newScope, next.presentationContext)
+        matchesDraft = !!matchedAfter
+        if (!matchedBefore && !matchedAfter) continue
+      }
+      matched.add(product.productId)
+      if (destination.listingIds.has(product.productId)) counts.matchedListings++
+      let listingChanged = false
+      const fields = payload.allFields ? [...new Set([...Object.keys(product.cells), ...Object.keys(next?.cells ?? {})])] : payload.changes.map(c => c.fieldKey)
+      if (payload.categoryChange) {
+        fields.push('__category')
+        product.cells.__category = { value: product.category.channelCategoryId, provenance: product.category.source === 'listing' ? 'override' : 'mapped', errors: product.category.conflicts ?? (product.category.channelCategoryId ? [] : ['No effective marketplace category']) } as never
+        if (next) next.cells.__category = { value: next.category.channelCategoryId, provenance: next.category.source === 'listing' ? 'override' : 'mapped', errors: next.category.conflicts ?? (next.category.channelCategoryId ? [] : ['No effective marketplace category']) } as never
+      }
+      if (payload.presentationChange?.rule?.order || payload.before.presentationRules?.some(r => r.id === payload.presentationChange?.id && r.order)) {
+        fields.push('__variationOrder')
+        product.cells.__variationOrder = { value: product.presentationOrder?.value ?? null, provenance: product.presentationOrder?.explicitAxes || product.presentationOrder?.explicitValues.length ? 'override' : 'mapped', errors: product.presentationOrder?.conflicts ?? [] } as never
+        if (next) next.cells.__variationOrder = { value: next.presentationOrder?.value ?? null, provenance: 'mapped', errors: next.presentationOrder?.conflicts ?? [] } as never
+      }
+      for (const fieldKey of fields) {
+        const change = { fieldKey }
+        const a = product.cells[change.fieldKey]; const b = next?.cells[change.fieldKey]
+        if (!a && !b) continue
+        const preserved = a?.provenance === 'override' || a?.provenance === 'locked'
+        const changed = JSON.stringify(a?.value ?? null) !== JSON.stringify(b?.value ?? null)
+        const errors = b?.errors ?? []
+        if (preserved) counts.preservedOverrides++
+        if (changed) { counts.changed++; listingChanged = true }
+        if (errors.length) counts.invalid++
+        if (!isPresent(b?.value)) counts.missing++
+        if (errors.some(error => /conflict/i.test(error))) counts.conflicts++
+        // A category change reaches a channel only through a listing. For a product with no listing on this
+        // coordinate it sends nothing, and the new category's required fields (eBay item specifics) only exist once
+        // the category does — so their empty values are work to do, still shown and counted as invalid, but they
+        // do not block the assignment. Listed products still do.
+        const canBlock = !payload.categoryChange || destination.listingIds.has(product.productId)
+        if (canBlock && errors.length && JSON.stringify(errors) !== JSON.stringify(a?.errors ?? [])) counts.introducedInvalid++
+        rows.push({ productId: product.productId, sku: product.sku, listingId: destination.listingIds.get(product.productId) ?? null,
+          accountId: destination.account ?? null, aliasKey: destination.alias, category: product.category.channelCategoryId,
+          market: payload.market, language: before.locale ?? await languageForMarketplace(payload.market, payload.channel), field: change.fieldKey, before: a?.value ?? null, after: b?.value ?? null, source: b?.provenance ?? 'missing',
+          changed, preserved, errors, matchesDraft, supplyingRule: b?.supplyingRule ?? null })
+      }
+      if (listingChanged && destination.listingIds.has(product.productId)) counts.affectedListings++
+    }
+  }
+  counts.matchedProducts += matched.size; counts.excluded += ids.length - matched.size
+  return { rows, counts }
+}
+
+/** MCP full control P8 — the most listings and products a review computed in memory (Claude's dry run) may cover. */
+export const PREVIEW_MAX_LISTINGS = 2000
+export const PREVIEW_MAX_PRODUCTS = 10_000
+
+export type MappingImpactPreview =
+  | { ok: true; payload: ImpactPayload; counts: Counts; listingsInScope: number; examples: Array<Record<string, unknown>> }
+  | { ok: false; tooLarge: { listings: number; products: number } }
+
+/**
+ * MCP full control P8 — the review of a mapping change, computed in memory and never stored: the same draft
+ * (draftMappingImpact) and the same scan (scanMappingImpactChunk) the stored review runs, over the same products, so
+ * its counts are the numbers the stored review will show. A dry run must not write, so this is the review Claude's
+ * `save-channel-mapping` preview gives; a person's approval then runs the stored review and activates it.
+ *
+ * Bounded: a market with more than PREVIEW_MAX_LISTINGS listings, or a business with more than PREVIEW_MAX_PRODUCTS
+ * products, is answered `tooLarge` without scanning — such a change belongs in Nexus's mapping review, which scans in
+ * the background. `examples` are the first changed values (at most `maxExamples`).
+ */
+export async function previewMappingImpact(input: MappingImpactInput, maxExamples = 10): Promise<MappingImpactPreview> {
+  const { payload, total } = await draftMappingImpact(input)
+  const listingsInScope = await prisma.channelListing.count({ where: { channel: payload.channel, marketplace: payload.market, product: { deletedAt: null } } })
+  if (listingsInScope > PREVIEW_MAX_LISTINGS || total > PREVIEW_MAX_PRODUCTS) return { ok: false, tooLarge: { listings: listingsInScope, products: total } }
+  let counts = payload.counts
+  let cursor: string | null = null
+  const examples: Array<Record<string, unknown>> = []
+  for (;;) {
+    const products: Array<{ id: string }> = await prisma.product.findMany({ where: { deletedAt: null, createdAt: { lte: new Date(payload.cutoff) }, ...(cursor ? { id: { gt: cursor } } : {}) },
+      orderBy: { id: 'asc' }, take: CHUNK, select: { id: true } })
+    if (!products.length) break
+    const scanned = await scanMappingImpactChunk({ ...payload, counts }, products.map(p => p.id))
+    counts = scanned.counts
+    for (const row of scanned.rows) if (row.changed && examples.length < maxExamples) examples.push(row)
+    cursor = products[products.length - 1].id
+  }
+  return { ok: true, payload: { ...payload, counts }, counts, listingsInScope, examples }
 }
 
 export async function readMappingImpact(jobId: string, userId: string | null, page = 0) {

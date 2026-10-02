@@ -14,6 +14,7 @@
 
 import prisma from '../../db.js'
 import { suppressCampaignBids } from './ads-bid-suppression.service.js'
+import { adsActorOf } from './ads-actor.js'
 import { logger } from '../../utils/logger.js'
 import { sellableAvailable } from '../stock-pool/sync-ledgers.js'
 
@@ -120,7 +121,7 @@ export async function applyRetailGuard(args: { campaignIds?: string[]; actor?: s
   let skipped = 0
   for (const id of ids) {
     // NP — never pause: floor the campaign's bids to ~2¢ (restorable) instead.
-    try { await suppressCampaignBids(id, { actor: `automation:${args.actor ?? 'retail-guard'}`, reason: 'Retail-readiness guard: products unsellable → bids floored (no-pause)' }); paused.push(id) } catch { skipped++ }
+    try { await suppressCampaignBids(id, { actor: adsActorOf(args.actor, 'retail-guard'), reason: 'Retail-readiness guard: products unsellable → bids floored (no-pause)' }); paused.push(id) } catch { skipped++ }
   }
   logger.info('[AX3.1] applyRetailGuard', { paused: paused.length, skipped })
   return { paused, skipped }

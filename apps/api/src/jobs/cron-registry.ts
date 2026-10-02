@@ -18,6 +18,7 @@
  */
 
 import { runOrdersPoll as runAmazonOrdersPoll } from './amazon-orders-sync.job.js'
+import { runIdentityChannelSweepOnce } from './identity-channel-sweep.job.js'
 import { runZeroTotalsBackfill as runAmazonZeroTotalsBackfill } from './amazon-zero-totals-backfill.job.js'
 import { runSalesDriftDetector } from './sales-drift-detector.job.js'
 import { runAmazonOrderItemsRetry } from './amazon-order-items-retry.job.js'
@@ -163,6 +164,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // E2 eBay Ads (raw service fns — the trigger endpoint adds the CronRun wrap)
   'ebay-ads-entity-sync': () => syncEbayAdsEntities(),
   'ebay-listing-discovery': () => discoverEbayListings(),
+  // MCP full control I6 — what each channel account holds; does nothing unless NEXUS_IDENTITY_SWEEP=1.
+  'identity-channel-sweep': () => runIdentityChannelSweepOnce(),
   'ebay-ads-report-schedule': () => scheduleEbayReportTasks(),
   'ebay-ads-report-poll': () => pollAndIngestEbayReports(),
   'ebay-ads-economics-rebuild': () => rebuildEbayListingEconomics(),

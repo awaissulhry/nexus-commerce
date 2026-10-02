@@ -1,0 +1,2 @@
+400
+{"error":"Validation failed","fieldErrors":{"piva":"P.IVA checksum failed — last digit does not match the others.","sdiCode":"SDI code must be exactly 7 uppercase letters or digits.","pecEmail":"PEC must be a valid email address."}}

@@ -177,6 +177,18 @@ export async function upsertSizeScale(input: {
   return row
 }
 
+/**
+ * MCP full control P8 — remove one size conversion: the undo of a conversion Claude added through
+ * `save-channel-mapping` (the Settings page has no delete for size scales). Business-scoped by the row policy;
+ * removing one that is already gone is a no-op.
+ */
+export async function removeSizeScale(input: { scale: string; fromSystem: string; toSystem: string; fromValue: string }): Promise<void> {
+  await prisma.sizeScaleMap.deleteMany({
+    where: { scale: input.scale.toUpperCase(), fromSystem: input.fromSystem.toUpperCase(), toSystem: input.toSystem.toUpperCase(), fromValue: input.fromValue },
+  })
+  clearValueMapCaches()
+}
+
 // ── AI seeder ───────────────────────────────────────────────────────
 
 /**

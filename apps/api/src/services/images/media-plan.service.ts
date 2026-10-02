@@ -388,7 +388,12 @@ export async function updateMediaLibrary(productId: string, input: {
   return { rootId, groups: plans.map(p => ({ versionGroupId: p.groupId, ids: p.ids })) }
 }
 
-export async function applyMediaPlanOps(productId: string, input: { address: MediaLayerAddress; ops: MediaOp[] }, actorId: string | null) {
+/**
+ * `dryRun` (MCP full control L10): the same reads and the same edit, nothing written and no event — the plan and the undo
+ * it would give. `expectRevision`: the layer must still be at this revision (0 = no row yet), else the edit is refused
+ * instead of re-applied to a layer that moved. Neither comes from HTTP (the route's body schema is strict).
+ */
+export async function applyMediaPlanOps(productId: string, input: { address: MediaLayerAddress; ops: MediaOp[]; dryRun?: boolean; expectRevision?: number }, actorId: string | null) {
   const rootId = await familyRoot(productId)
   const address = await checkedAddress(rootId, input.address)
   // Safety images reach Amazon by its API or the Safety ZIP, both the account's: a market cannot have its own.
@@ -422,6 +427,10 @@ export async function applyMediaPlanOps(productId: string, input: { address: Med
       // Undo: the ops that put this layer back, each bound to what the layer holds after this edit.
       const before = address.layer === 'SHARED' ? stack.shared : address.layer === 'CHANNEL' ? stack.channel : own
       const undo = inverseMediaOps(edited, before ?? null, empty ? null : next)
+      if (input.expectRevision !== undefined && (target?.revision ?? 0) !== input.expectRevision) {
+        throw new WorkspaceScopeError('These photos changed since this edit was reviewed. Nothing was changed; review it again.', 409)
+      }
+      if (input.dryRun) return { plan: empty ? null : next, revision: target?.revision ?? 0, undo, dryRun: true as const }
       if (target) {
         if (empty) { const gone = await tx.productMediaPlan.deleteMany({ where: { id: target.id, revision: target.revision } }); return gone.count ? { plan: null, revision: 0, undo } : null }
         const saved = await tx.productMediaPlan.updateMany({ where: { id: target.id, revision: target.revision }, data: { plan: next, revision: { increment: 1 }, updatedById: actorId } })
@@ -436,7 +445,7 @@ export async function applyMediaPlanOps(productId: string, input: { address: Med
       throw error
     })
     if (result) {
-      publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: key, ts: Date.now() })
+      if (!input.dryRun) publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: key, ts: Date.now() })
       return { rootId, key, ...result }
     }
   }

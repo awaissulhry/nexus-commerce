@@ -1,0 +1,2 @@
+400
+{"error":"Validation failed","fieldErrors":{"routing":"Italian B2B invoicing requires either an SDI code or a PEC email (one of the two is mandatory)."}}

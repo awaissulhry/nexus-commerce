@@ -13,6 +13,7 @@ import { preservedTransferOverrides } from './catalog-transfer-preserved.js'
 import { createReferenceResolver } from './reference-values.service.js'
 import { assertProductTransferRows, checkProductTransferBoundary } from './catalog-product-transfer.js'
 import { enrichTransferEffects } from './catalog-transfer-effects.js'
+import { transferBeforeRecord } from './catalog-transfer-before.js'
 import { STRUCTURE_ROOTS, OUT_OF_SCOPE_ROOTS as AMAZON_OUT_OF_SCOPE_ROOTS } from '../channel-drift/amazon-content-compare.js'
 import { withWorkspace, workspaceContext } from '../../lib/workspace-context.js'
 
@@ -380,7 +381,9 @@ export async function applyTransferRecord(input: {
   const sharedSku = target?.identity.entity === 'Products' ? target.identity.sku : record.rows[0]?.entity === 'Products' ? record.rows[0].sku : null
   const after = sharedSku ? await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: sharedSku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } }) : null
   if (!target && record.sharedBefore !== undefined && fingerprint(safeSnapshot(after)) !== fingerprint(record.sharedBefore)) throw new TransferConflict('Excluded shared data changed since preview; review its dependent updates again')
-  await tx.importJobRow.update({ where: { id: item.id }, data: { status: target ? 'SUCCESS' : 'EXCLUDED', completedAt: new Date(), ...(after ? { afterState: json(safeSnapshot(after)) } : {}) } })
+  // MCP full control P9 — what this record replaced, kept with it so the whole import can be undone (catalog-transfer-before.ts).
+  const before = target ? transferBeforeRecord(target) : null
+  await tx.importJobRow.update({ where: { id: item.id }, data: { status: target ? 'SUCCESS' : 'EXCLUDED', completedAt: new Date(), ...(after ? { afterState: json(safeSnapshot(after)) } : {}), ...(before ? { beforeState: json(before) } : {}) } })
 }
 
 /** R-AE-17 — every shared product this job declares, whatever its outcome (see `buildTransferPlan`). */

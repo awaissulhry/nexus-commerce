@@ -1,0 +1,13 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`R13 — the protected-term routes answer as before the move > every outcome 1`] = `
+"POST 400 {"ok":false,"error":"term required"}
+POST 400 {"ok":false,"error":"matchType must be one of EXACT/PREFIX/CONTAINS","code":"match_type_invalid"}
+POST 200 {"ok":true,"item":{"workspaceId":"nexus_legacy_workspace","id":"<id1>","mode":"WHITELIST","term":"gale jacket","isPrefix":false,"matchType":null,"marketplace":null,"campaignId":null,"reason":"parity","createdBy":"user:parity-person","createdAt":"<time>","updatedAt":"<time>"}}
+POST 409 {"ok":false,"id":"<id1>","error":"“gale jacket” is already protected with EXACT matching","code":"already_protected","existingMatchType":"EXACT"}
+POST 409 {"ok":false,"id":"<id1>","error":"“gale jacket” is already protected with EXACT matching. A protection cannot be changed in place — delete it and re-add it as CONTAINS.","code":"already_protected","existingMatchType":"EXACT"}
+POST 200 {"ok":true,"item":{"workspaceId":"nexus_legacy_workspace","id":"<id2>","mode":"WHITELIST","term":"gale","isPrefix":true,"matchType":null,"marketplace":"IT","campaignId":"<id3>","reason":null,"createdBy":"user:parity-person","createdAt":"<time>","updatedAt":"<time>"}}
+POST 200 {"ok":true,"item":{"workspaceId":"nexus_legacy_workspace","id":"<id4>","mode":"BLACKLIST","term":"cheap","isPrefix":false,"matchType":"CONTAINS","marketplace":null,"campaignId":null,"reason":null,"createdBy":"user:parity-person","createdAt":"<time>","updatedAt":"<time>"}}
+DELETE 404 {"ok":false,"error":"not_found"}
+DELETE 200 {"ok":true}"
+`;

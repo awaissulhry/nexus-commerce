@@ -291,3 +291,28 @@ describe('library languages and versions (P4b upload)', () => {
     expect(state.events).toEqual([])
   })
 })
+
+/**
+ * MCP full control L10 — Claude's arrange-photos needs the edit without writing (its dry run) and the edit bound to the
+ * layer the person approved (its run): `dryRun` computes the plan and the undo and writes nothing, no event; `expectRevision`
+ * refuses a layer that moved since, instead of re-applying the ops to it.
+ */
+describe('media plan edit — dry run and expected revision', () => {
+  it('a dry run returns the plan and the undo, writes nothing and tells no one', async () => {
+    const address = { layer: 'CHANNEL' as const, channel: 'EBAY' }
+    const before = await scoped(() => prisma.productMediaPlan.findMany({ where: { productId: ids.root }, orderBy: { id: 'asc' } }))
+    const dry = await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'replace', set: 'common', assetIds: [img.cover, img.n1] }], dryRun: true }, null))
+    expect(dry).toMatchObject({ dryRun: true, plan: expect.any(Object), undo: expect.any(Array) })
+    expect(await scoped(() => prisma.productMediaPlan.findMany({ where: { productId: ids.root }, orderBy: { id: 'asc' } }))).toEqual(before)
+    expect(state.events).toEqual([])
+  })
+
+  it('with an expected revision, a layer that moved since is refused and nothing changes', async () => {
+    const address = { layer: 'CHANNEL' as const, channel: 'EBAY' }
+    const dry = await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'replace', set: 'common', assetIds: [img.g1] }], dryRun: true }, null))
+    await expect(scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'replace', set: 'common', assetIds: [img.g1] }], expectRevision: dry.revision + 5 }, null)))
+      .rejects.toThrow('changed since')
+    const applied = await scoped(() => applyMediaPlanOps(ids.root, { address, ops: [{ op: 'replace', set: 'common', assetIds: [img.g1] }], expectRevision: dry.revision }, null))
+    expect(applied.revision).toBe(dry.revision + 1)
+  })
+})

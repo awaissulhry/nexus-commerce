@@ -22,7 +22,7 @@ import type {
 import { logger } from '../utils/logger.js';
 import { publishListingEvent } from './listing-events.service.js';
 import { isFbaListing } from './outbound-sync.service.js';
-import { MasterPriceRefusedError, MasterPriceService } from './master-price.service.js';
+import { MasterPriceRefusedError, MasterPriceService, PRICE_EDIT_PERMISSION, PRICE_EDIT_REFUSAL } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
 import { listActiveConnections, tryResolveConnection } from './connection-resolver.service.js';
@@ -240,6 +240,47 @@ export interface CreateJobInput {
   filters?: Record<string, any>;
   actionPayload: Record<string, any>;
   createdBy?: string;
+  /**
+   * S1 (F5) — the acting person's permissions, from the request (`permissionCheckerFor`). Given, a job that changes
+   * prices needs `products.price.edit`; automation and the system's own jobs pass none.
+   */
+  can?: (permission: string) => boolean;
+}
+
+/** S1 (F5) — a person without `products.price.edit` asked for a bulk job that changes prices. No job was created. */
+export class BulkActionPermissionError extends Error {
+  readonly statusCode = 403;
+  readonly code = 'PRICE_PERMISSION';
+  constructor() {
+    super(PRICE_EDIT_REFUSAL);
+    this.name = 'BulkActionPermissionError';
+  }
+}
+
+/**
+ * S1 (F5) — does this bulk job change prices? A PRICING_UPDATE always does; a marketplace override when it carries a
+ * price or a pricing rule (the price door's pin, hand-back or follower mode). A payload the override reader refuses is
+ * refused by `createJob` itself, so it is not a price change here.
+ */
+export function bulkJobChangesPrices(actionType: string, actionPayload: Record<string, any> | null | undefined): boolean {
+  if (actionType === 'PRICING_UPDATE') return true;
+  if (actionType !== 'MARKETPLACE_OVERRIDE_UPDATE') return false;
+  try {
+    const plan = marketplaceOverridePlan(actionPayload ?? {});
+    return plan.price !== undefined || plan.rule !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/** S1 (F5) — refuse a price-changing bulk job for a person without `products.price.edit`. */
+export function assertBulkJobPricePermission(
+  input: { actionType: string; actionPayload?: Record<string, any> | null },
+  can: (permission: string) => boolean,
+): void {
+  if (bulkJobChangesPrices(input.actionType, input.actionPayload) && !can(PRICE_EDIT_PERMISSION)) {
+    throw new BulkActionPermissionError();
+  }
 }
 
 export interface UpdateProgressInput {
@@ -494,6 +535,7 @@ export class BulkActionService {
    */
   async createJob(input: CreateJobInput): Promise<BulkActionJob> {
     if (input.actionType === 'AI_TRANSLATE_PRODUCT') requireTranslationGeneration()
+    if (input.can) assertBulkJobPricePermission(input, input.can)
     try {
       // Audit-fix #3 — MARKETPLACE_OVERRIDE_UPDATE writes to ChannelListing
       // rows; without `channel` the filter spans every channel (could blast

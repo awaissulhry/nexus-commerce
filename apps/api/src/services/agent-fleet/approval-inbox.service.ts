@@ -24,10 +24,20 @@
  *
  * AP.5 (one clock): `expiresAt` is now the expiry, swept on its own schedule
  * for every tool — see `runApprovalMaintenance`.
+ *
+ * MCP full control C5: a decision says who took it (`decisionVia`): a person in Nexus, or the business's rule for a
+ * change Claude asked for (auto: scheduled as the person who asked, through the same window and commit). At commit, a
+ * rule-run goes back to a person if the business paused Claude's rule-runs or lowered the tool's level meanwhile; a
+ * rule-run that is stale or fails counts towards the automatic pause (claude-trust.service.ts).
+ *
+ * MCP full control C6: a change plan (toolName submit-change-plan) is approved once by a person who holds the
+ * permissions of every step; after the window the commit hands it to the plan worker (change-plan.service.ts), which
+ * re-checks each step; the sweep re-enqueues, or runs, a plan nobody runs.
  */
 import prisma from '../../db.js'
 import { decideApproval, EXPIRY_HOURS } from '../agents/approval-gate.service.js'
 import { getTool } from '../agents/tool-registry.js'
+import type { Reversibility } from '../agents/tool-types.js'
 import {
   actorLabel,
   approvableToolNames,
@@ -47,6 +57,9 @@ import { logger } from '../../utils/logger.js'
 import { resolvePermissions, type ResolvedPermissions } from '../../lib/auth/rbac.js'
 import { WorkspaceError, type WorkspaceContext } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
+import { autoCommitRefusal, autoPlanCommitRefusal, noteAutoFailure } from '../agents/claude-trust.service.js'
+import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
+import { PLAN_TOOL } from '../agents/tool-types.js'
 
 /** The tools the fleet's own workers may propose. */
 export const FLEET_TOOLS = ['create-negative-keyword', 'graduate-keyword', 'set-target-bid']
@@ -176,6 +189,8 @@ export async function listInbox(view: InboxView, limit = 100) {
      * hiding them — see the header note.
      */
     isFleet: FLEET_TOOLS.includes(a.toolName),
+    /** C1 — how far it can be put back, from the tool registry (the only place that states it). */
+    reversibility: reversibilityOf(a.toolName),
     /**
      * AP.8 — how this worker's proposals of this kind have fared with you
      * before. Null when there is no history, which is itself worth saying.
@@ -305,6 +320,11 @@ export async function scheduleApproval(input: {
   /** S9.5 — the operator's own words. Previously not passed at all, so an
       approve note reached the audit trail and never the row. */
   note?: string
+  /**
+   * C5 — who decides: a person in Nexus (the default), the business's rule (auto) as the person who asked, or (C7) the
+   * person who asked, confirming in Claude with their authenticator code.
+   */
+  via?: 'nexus' | 'auto' | 'claude-confirm'
 }): Promise<{
   ok: boolean
   status?: string
@@ -314,6 +334,9 @@ export async function scheduleApproval(input: {
 }> {
   const now = new Date()
   const executeAfter = new Date(now.getTime() + UNDO_WINDOW_MS)
+  // C6 — a plan is approved by a person who could have asked for every step of it.
+  const planRefusal = await planApprovalRefusal(input.id, input.actor)
+  if (planRefusal) return { ok: false, code: 'forbidden', error: planRefusal }
   // MCP.1 — a person may approve only the tools their permissions cover. The
   // check is part of the claim itself, so it costs no extra query.
   const approvable = approvableToolNames(input.actor)
@@ -334,6 +357,7 @@ export async function scheduleApproval(input: {
       decidedByUserId: input.actor.kind === 'user' ? input.actor.userId : null,
       decidedAt: new Date(),
       executeAfter,
+      decisionVia: input.via ?? 'nexus',
       /* Into `operatorNote`, never `reason`: the gate overwrites `reason` with
          its own sentence for a preview-only tool, which would destroy the
          operator's words a few seconds later. */
@@ -365,6 +389,20 @@ export async function scheduleApproval(input: {
   return { ok: true, status: 'scheduled', executeAfter: executeAfter.toISOString() }
 }
 
+/** C6 — why this person may not approve this plan (a step's tool they lack the permissions of), or null. */
+export async function planApprovalRefusal(id: string, actor: ToolPrincipal): Promise<string | null> {
+  if (actor.kind !== 'user') return null
+  const head = await prisma.agentApproval.findUnique({ where: { id }, select: { toolName: true } })
+  if (head?.toolName !== PLAN_TOOL) return null
+  const tools = await prisma.agentPlanStep.findMany({ where: { approvalId: id }, distinct: ['toolName'], select: { toolName: true } })
+  for (const { toolName } of tools) {
+    const tool = getTool(toolName)
+    const missing = tool ? missingPermissions(actor, tool) : []
+    if (missing.length) return `Approving this plan needs what each of its steps needs: ${permissionMessage(toolName, missing)}`
+  }
+  return null
+}
+
 /**
  * Take it back. Only possible while the action is still parked — once it has
  * run, it has run, and saying otherwise would be the dishonest kind of undo.
@@ -375,7 +413,7 @@ export async function undoScheduledApproval(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   const undone = await prisma.agentApproval.updateMany({
     where: { id: input.id, status: 'scheduled' },
-    data: { status: 'pending', decidedBy: null, decidedByUserId: null, decidedAt: null, executeAfter: null },
+    data: { status: 'pending', decidedBy: null, decidedByUserId: null, decidedAt: null, executeAfter: null, decisionVia: null },
   })
   if (undone.count === 0) {
     const cur = await prisma.agentApproval.findUnique({
@@ -432,7 +470,7 @@ async function deciderNow(userId: string, workspaceId: string): Promise<{ permis
  * An approval that does not say which person approved it is not run (fail closed): a person's decision never runs
  * as the system.
  */
-async function deciderPrincipal(ap: { toolName: string; decidedBy: string | null; decidedByUserId: string | null; workspaceId: string }): Promise<{ principal: UserPrincipal } | { refusal: string }> {
+export async function deciderPrincipal(ap: { toolName: string; decidedBy: string | null; decidedByUserId: string | null; workspaceId: string }): Promise<{ principal: UserPrincipal } | { refusal: string }> {
   const who = ap.decidedBy ?? 'the person who approved it'
   if (!ap.decidedByUserId) return { refusal: 'it could not be re-checked — it does not say which person approved it. Approve it again.' }
   const now = await deciderNow(ap.decidedByUserId, ap.workspaceId)
@@ -451,12 +489,16 @@ async function deciderPrincipal(ap: { toolName: string; decidedBy: string | null
   return { principal }
 }
 
-/** Back to pending with the reason on the row, never run: the operator's decision is handed back, not thrown away. */
+/**
+ * Back to pending with the reason on the row, never run: the operator's decision is handed back, not thrown away.
+ * C5 — a rule-run (decisionVia auto) handed back as stale or refused counts towards the automatic pause.
+ */
 async function handBack(
   id: string,
   decidedBy: string | null,
   why: string,
-  action: Extract<ControlAction, 'stale_refused' | 'permission_refused'>,
+  action: Extract<ControlAction, 'stale_refused' | 'permission_refused' | 'rule_refused'>,
+  decisionVia: string | null = null,
 ): Promise<{ ok: false; error: string }> {
   await prisma.agentApproval.updateMany({
     where: { id, status: 'scheduled' },
@@ -466,6 +508,7 @@ async function handBack(
       decidedByUserId: null,
       decidedAt: null,
       executeAfter: null,
+      decisionVia: null,
       reason: `not run — ${why}`,
       /*
        * S9.4 — the clock restarts, because the REQUEST is being asked again.
@@ -487,10 +530,11 @@ async function handBack(
   await recordControlChange({
     charterKey: await charterKeyOf(id),
     action,
-    to: { approvalId: id },
+    to: { approvalId: id, ...(decisionVia ? { decisionVia } : {}) },
     note: why,
     actor: decidedBy ?? 'unattributed',
   }).catch(() => undefined)
+  if (decisionVia === 'auto' && action !== 'rule_refused') await noteAutoFailure()
   return { ok: false, error: `not run — ${why}` }
 }
 
@@ -503,7 +547,7 @@ export async function commitScheduledApproval(
 ): Promise<{ ok: boolean; status?: string; error?: string }> {
   const ap = await prisma.agentApproval.findUnique({
     where: { id },
-    select: { status: true, executeAfter: true, decidedBy: true, decidedByUserId: true, toolName: true, workspaceId: true },
+    select: { status: true, executeAfter: true, decidedBy: true, decidedByUserId: true, toolName: true, workspaceId: true, decisionVia: true, preview: true },
   })
   if (!ap) return { ok: false, error: 'approval not found' }
   if (ap.status !== 'scheduled') return { ok: false, error: `not scheduled (${ap.status})` }
@@ -511,16 +555,26 @@ export async function commitScheduledApproval(
     return { ok: false, error: 'still inside the undo window' }
   }
 
+  // C5 — a change the business's rule scheduled runs by that rule only while the rule still allows it: a Pause, a
+  // lowered level or tightened limits inside the window hand it to a person instead.
+  if (ap.decisionVia === 'auto') {
+    const ruleNow = ap.toolName === PLAN_TOOL ? await autoPlanCommitRefusal(id) : await autoCommitRefusal(ap.toolName, ap.preview)
+    if (ruleNow) return handBack(id, ap.decidedBy, ruleNow, 'rule_refused', ap.decisionVia)
+  }
+
   // The person who approved must still be allowed to do this NOW, in this business: the window, or the sweep that
   // commits after it, can end after their role changed or their access was removed. Checked before anything runs.
   const decider = await deciderPrincipal(ap)
-  if ('refusal' in decider) return handBack(id, ap.decidedBy, decider.refusal, 'permission_refused')
+  if ('refusal' in decider) return handBack(id, ap.decidedBy, decider.refusal, 'permission_refused', ap.decisionVia)
+
+  // C6 — a plan: each step is re-checked and run by the plan worker; the commit hands it over.
+  if (ap.toolName === PLAN_TOOL) return handPlanToWorker(id, ap.decidedBy ?? 'unattributed')
 
   // AP.6 — the world may have moved while this sat parked. Re-validate
   // BEFORE releasing it: an approval describes a state of the world, and if
   // that state changed the approval no longer describes anything real.
   const staleness = await checkStaleness(id)
-  if (staleness.stale) return handBack(id, ap.decidedBy, staleness.why ?? 'it is no longer a valid action', 'stale_refused')
+  if (staleness.stale) return handBack(id, ap.decidedBy, staleness.why ?? 'it is no longer a valid action', 'stale_refused', ap.decisionVia)
 
   // Hand back to the gate, which owns execution. It expects `pending`, so
   // release the park atomically — if that loses a race, someone else has it.
@@ -556,7 +610,7 @@ export async function commitScheduledApproval(
     await recordControlChange({
       charterKey: await charterKeyOf(id),
       action: 'execution_failed',
-      to: { approvalId: id, status: out.status ?? 'pending' },
+      to: { approvalId: id, status: out.status ?? 'pending', ...(ap.decisionVia ? { decisionVia: ap.decisionVia } : {}) },
       note: out.error ?? 'execution failed',
       actor: decidedBy,
     }).catch((err) => logger.error('[naf-ap] failure audit failed', { id, error: String(err) }))
@@ -567,9 +621,12 @@ export async function commitScheduledApproval(
         decidedBy: null,
         decidedByUserId: null,
         decidedAt: null,
+        decisionVia: null,
         expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
       },
     })
+    // C5 — a rule-run that failed counts towards the automatic pause.
+    if (ap.decisionVia === 'auto') await noteAutoFailure()
     return out
   }
 
@@ -599,6 +656,23 @@ export async function commitScheduledApproval(
   return out
 }
 
+/**
+ * C6 — the commit of an approved plan: claimed (scheduled → executing), audited, and queued for the plan worker. With
+ * no worker it is not run here (a browser's commit must answer at once): the approval sweep runs it.
+ */
+async function handPlanToWorker(id: string, decidedBy: string): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const claimed = await prisma.agentApproval.updateMany({ where: { id, status: 'scheduled' }, data: { status: 'executing', executeAfter: null } })
+  if (claimed.count === 0) return { ok: false, error: 'already taken' }
+  await recordControlChange({
+    charterKey: await charterKeyOf(id),
+    action: 'approve_action',
+    to: { approvalId: id, status: 'executing' },
+    actor: decidedBy,
+  }).catch((err) => logger.error('[naf-ap] control audit failed', { id, error: String(err) }))
+  await enqueuePlan(id).catch((err) => logger.warn('[naf-ap] plan not queued; the sweep runs it', { id, error: String(err) }))
+  return { ok: true, status: 'executing' }
+}
+
 /* ── AP.6: an approval that no longer applies must not run ─────────────── */
 
 /**
@@ -608,11 +682,33 @@ export async function commitScheduledApproval(
  * to €0.25" is a different decision if the bid is €0.60 by the time it runs.
  */
 export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
-  /* The fleet's three propose-tools. All preview-only: they cannot execute,
-     so a stale one costs nothing. */
-  'set-target-bid': ['currentBidCents'],
-  'create-negative-keyword': ['matchType', 'scope', 'alreadyNegated'],
-  'graduate-keyword': ['suggestedBidCents'],
+  /* The fleet's three ads tools, shared with Claude (MCP full control d1 = A). A4: set-target-bid executes —
+     the bid it starts from, the bid that lands (after the CPC ceiling and max-change clamps) and where it lands
+     (live on which Amazon Ads profile, or sandbox) are what the person approved. */
+  'set-target-bid': ['currentBidCents', 'effectiveBidCents', 'reach'],
+  // A6 — the budget or the adjustments it starts from, and where it lands.
+  'set-campaign-budget': ['currentBudgetCents', 'reach'],
+  'set-placement-multipliers': ['current', 'reach'],
+  // A7 — how many change and why the rest do not, a fingerprint of every target's starting and new bid, where it lands.
+  'bulk-ad-bid-change': ['totals', 'basis', 'reach'],
+  // A8 — what a suppression floors; whose suppression a restore lifts and every bid it puts back.
+  'suppress-campaign': ['moves', 'reach'],
+  'restore-campaign': ['suppressedBy', 'basis', 'reach'],
+  // A12 — the allowlist setting it starts from.
+  'set-campaign-live-writes': ['liveWrites'],
+  // A11 — the whole plan (products, targeting, budget and currency), the market's spend ceiling, where it lands.
+  'create-ad-campaign': ['plan', 'ceiling', 'reach'],
+  // A14/A15 — eBay: each rate, listing, budget or keyword it starts from and sets, and where it lands (live or sandbox).
+  'set-ebay-ad-rates': ['changes', 'reach'],
+  'promote-ebay-listings': ['adds', 'adGroup', 'reach'],
+  'set-ebay-campaign-budget': ['currentBudgetCents', 'reach'],
+  'ebay-keywords-change': ['bidChanges', 'adds', 'negatives', 'adGroup', 'reach'],
+  'create-ebay-campaign': ['plan', 'account', 'ceiling', 'reach'],
+  // A10 — what the undo restores (each write and the value it puts back), the negatives it retires, where it lands.
+  'undo-ad-change': ['source', 'rows', 'negatives', 'reach'],
+  // A5 — executable too: the ad group it goes to, the destination and starting bid, where it lands.
+  'create-negative-keyword': ['matchType', 'scope', 'alreadyNegated', 'adGroup', 'reach'],
+  'graduate-keyword': ['suggestedBidCents', 'destination', 'destinationAdGroup', 'alreadyExact', 'reach'],
 
   /* NAF.AQ.2 — the four tools that CAN execute, and which had no material
      fields at all. The protection was inverted exactly as `TOOL_CARDS` was
@@ -634,26 +730,198 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // approved describes content that no longer exists.
   'apply-content': ['changes'],
 
-  // `currentlyPublished` — publishing something already published is a
-  // different act. `publishMode` is the important one: if the channel flipped
-  // to live between the approval and the run, the operator approved a gated
-  // queue-up and would get a real publish.
-  // `marketplace` — the one listing it re-sends (MCP review 2026-10-01: it used to be whichever came first).
-  'publish-listing': ['marketplace', 'currentlyPublished', 'publishMode'],
+  // MCP full control L5 — publish-listing runs the studio publish. `destination` is the channel, market, account and
+  // alias; `publish` a first publish or a re-publish; `publishMode` whether the channel is live; `fingerprint` hashes
+  // every field it sends with the channel value it replaces, so any move in Nexus or on the channel is a different
+  // decision. Its execute compares the same fingerprint again against the approved preview (ctx.approvedPreview).
+  'publish-listing': ['destination', 'publish', 'publishMode', 'fingerprint'],
 
   // `suppressed` is the one that matters most anywhere in this map: if the
   // customer opted out after the operator said yes, the message must not go.
   // `note` is prose, and included deliberately — it is the field that encodes
   // whether outbound email is live or dry-run, and that flip turns a recorded
   // no-op into an irreversible real send.
-  'send-customer-message': ['suppressed', 'emailOnFile', 'note'],
+  // 07 O11 — the door's preview: the buyer it goes to (masked), its route, the live/dry-run mode, who it is sent as,
+  // and the words. (An opted-out buyer or a missing e-mail is refused by the dry run itself.)
+  'send-customer-message': ['to', 'route', 'mode', 'sendsAs', 'subject', 'body'],
 
   // MCP.10 — the bulk changes (tools/bulk.tools.ts). `changes` names the from → to the operator read, but
   // only for the first 20 of up to 250 products; `basis` fingerprints every product's starting value and
   // every listing that follows the price, so a move on product 21 is caught too. `totals` says how many; the
   // price tool's `change` carries the operation and the currency it is in.
   'bulk-price-change': ['change', 'changes', 'totals', 'basis'],
+  // C2 — each product to its own price (the undo of a bulk price change): the same preview, the same fingerprint.
+  'set-master-prices': ['change', 'changes', 'totals', 'basis'],
   'bulk-attribute-change': ['changes', 'totals', 'basis'],
+  // MCP full control (section 03) — content changes. `changes` is from → to per field with the English meaning the
+  // person read; `reach` names the listings that follow the shared text and those with their own pin (a pin added
+  // in between changes who the text reaches); `basis` fingerprints what each field stores now and the language
+  // row's version, so a sheet edit between preview and approval is caught even when the shown text did not move.
+  'set-content': ['changes', 'reach', 'basis'],
+  // `reach` names the one listing and its status: a draft published in between is a different decision.
+  'set-listing-content': ['changes', 'reach', 'basis'],
+  // `changes` keeps the first 20 lines; `totals` says how many; `basis` fingerprints every product's stored text, every
+  // change and every listing reached, so a move on product 21 makes the approval stale too.
+  'bulk-content-change': ['changes', 'totals', 'reach', 'basis'],
+  // I10 — identity fixes: `changes.*.from` is the value read at preview time; a different one means a different decision.
+  'set-product-sku': ['changes'],
+  'set-gtin': ['changes'],
+  'set-brand': ['changes', 'totals'],
+  'set-listing-sku': ['changes'],
+  // I11 — the parent read at preview time; for a merge, the whole plan (what moves where, what was safe).
+  'fix-parent': ['changes'],
+  'merge-duplicate-products': ['changes', 'plan'],
+  // MCP full control L6 — the drafts it would start (and the account they land on); the untouched drafts it removes, each
+  // at the version read; a listing change's fingerprint (what it holds now and what it gets; a projection's version).
+  'create-draft-listings': ['destination', 'create'],
+  'remove-draft-listings': ['remove'],
+  'set-listing-fields': ['destination', 'fingerprint'],
+
+  // MCP full control P7 — organizing changes (tools/organize-catalog.tools.ts, organize-platform.tools.ts).
+  // `changes` is the from → to read when the person approved: the product's tags, its stage, the view as it was.
+  // A tag added, a stage moved or a view edited since makes the request a different decision.
+  'set-product-tags': ['changes'],
+  'move-workflow-stage': ['changes'],
+  'save-view': ['mode', 'changes'],
+  // `changes` holds the from → to of each field and the state each alert or notification is in now; the image library
+  // also carries `basis`, each asset's folder, label and tags as read: a rule edited, an alert triaged or an asset
+  // organized by someone since makes the request a different decision.
+  'set-alert-rule': ['mode', 'changes'],
+  'acknowledge-alerts': ['mode', 'changes'],
+  'organize-image-library': ['changes', 'basis'],
+  // MCP full control P8 — structure changes (tools/structure-change.tools.ts, mapping-change.tools.ts).
+  // From → to of each field and how many products (families, translations, categories) it touches: a structure change
+  // whose impact grew, or whose starting value moved, is a different decision (structure-change.tools.ts).
+  'save-attribute': ['action', 'changes', 'impact'],
+  'save-product-family': ['action', 'changes', 'impact'],
+  'save-category': ['action', 'changes', 'impact'],
+  // `changes` the rules / translations / template fields from → to, `impact` the review's counts, `basis` the mapping
+  // and input tokens (or the template's version): a mapping or an input that moved since is a different review.
+  'save-channel-mapping': ['changes', 'impact', 'basis'],
+  'save-listing-template': ['changes', 'impact', 'basis'],
+  // MCP full control P10 — the business's settings (tools/business-settings.tools.ts).
+  // Every field from → to (the values read when the person approved) and the legal identity documents will show.
+  'set-business-settings': ['changes', 'legal'],
+
+  // MCP full control R9 — a rule save: what changes, the level it lands at, and `basis`, the rule's updatedAt the
+  // preview was made from — someone else's edit in between makes the approved change a different one.
+  'save-ad-rule': ['changes', 'level', 'basis'],
+  // R10 — a level move: from where to where, the row's updatedAt it was planned from, and whether it is a brake.
+  'turn-up-automation': ['from', 'to', 'basis'],
+  'turn-down-automation': ['from', 'to', 'basis', 'brake'],
+  // R11 — each suggestion's status, its proposed change and the bid / budget there now: decided by someone else, or
+  // the bid moved, and the approved batch is a different one.
+  'decide-automation-suggestions': ['items'],
+  // R12 — what the stop or resume changes (the halt, or which rules), and the state row it was planned from.
+  'stop-automation': ['changes', 'ruleIds', 'basis'],
+  'resume-automation': ['changes', 'ruleIds', 'basis'],
+  // R13 — what the guardrail changes, whether that tightens or loosens, and the row it was planned from.
+  'set-ad-guardrail': ['changes', 'direction', 'basis'],
+  'tune-ad-engine': ['changes', 'raises', 'basis'],
+  'steer-fleet': ['steer', 'changes', 'basis'],
+  'save-price-rule': ['changes', 'bounds', 'basis'],
+  'save-ops-rule': ['changes', 'level', 'basis'],
+
+  // MCP full control 07 O7 — the order desk's changes. `changes` (update-order, update-customer) holds each part with
+  // its starting value (the tags it had, the delivery state, the review state, the note it deletes); `reviews` each
+  // review's triage before and after. A move in any of them is a different decision.
+  'update-order': ['changes'],
+  'update-customer': ['changes'],
+  'triage-reviews': ['reviews'],
+  // 07 O8 — shipments and labels: the orders/shipments and each one's starting state; for labels also each
+  // estimated price and the carriers' live/dry-run modes (a flip to live turns a dry run into money spent).
+  'create-shipments': ['create'],
+  'update-shipment': ['shipments'],
+  'buy-shipping-label': ['labels', 'returnLabels', 'modes'],
+  'void-shipping-label': ['labels', 'modes'],
+  // 07 O9 — each shipment's state, tracking number and how its tracking reaches the channel (live or dry run).
+  'confirm-shipment': ['shipments'],
+  // 07 O10 — the order's status and total, what the cancel undoes in Nexus, and the channel's live/dry-run mode.
+  'cancel-order': ['order', 'inNexus', 'channelCancel'],
+  // 07 O12 — returns: the order and its lines (create); each return's starting state and step (update); what each
+  // restock puts back where (dispose); the refund, what is still refundable and the channel's mode (refund).
+  'create-return': ['order', 'items', 'returnType'],
+  'update-return': ['returns'],
+  'dispose-return-items': ['returns', 'unitsBackInStock'],
+  'issue-refund': ['return', 'order', 'refund', 'refundable', 'channelRefund'],
+  // 07 O13 — the order, any earlier request and Amazon's live/dry-run mode; the review, the reply and eBay's mode.
+  'request-review': ['order', 'earlier', 'mode'],
+  'reply-to-review': ['review', 'reply', 'mode'],
+  // 07 O14 — the series and, per document, whether a new number is taken.
+  'issue-fiscal-document': ['series', 'invoices', 'creditNotes'],
+  // 07 O17 — the pickup (carrier, day, warehouse) and Sendcloud's live/dry-run mode; the channel and its accounts.
+  'schedule-pickup': ['pickup', 'mode'],
+  'sync-orders-now': ['channel', 'accounts', 'account'],
+
+  // MCP full control 08 S6 — stock moves with every sale, so each stock change compares the numbers it showed: a
+  // count's from, a transfer's available units, a reconcile's stock now (`basis` fingerprints every row, past the 20
+  // shown). A hold compares what it holds; its units are checked again when it runs (reserveStock refuses a short hold).
+  'set-stock': ['changes', 'totals', 'basis'],
+  'transfer-stock': ['changes', 'totals', 'basis'],
+  'stock-count': ['action', 'count', 'changes', 'totals'],
+  'reconcile-stock-count': ['variances', 'totals', 'basis'],
+  'reserve-stock': ['action', 'hold'],
+  'set-stock-location': ['action', 'location', 'changes'],
+  // 08 S8 — every listing's number now and after: a sale or a pin moved since changes what the switch does.
+  'set-stock-source': ['to', 'products', 'totals'],
+  // 08 S7 — Sync Control: every row's stock mode as it was (`basis` fingerprints all of them, past the 20 shown) and what
+  // the action makes of it; a policy's or a location's feeds before and after.
+  'bulk-listing-stock': ['verb', 'cells', 'totals', 'basis'],
+  'set-stock-policy': ['policy', 'location', 'changes'],
+
+  // MCP full control 08 S12 — a pricing rule's fields and products as they were; a promotion's scope (how many listings
+  // go on sale, how many sales end); a scheduled change's master price now (the percent it moves is worked out from it).
+  'set-pricing-rule': ['action', 'rule', 'changes', 'products'],
+  'set-promotion': ['action', 'promotion', 'scope'],
+  'schedule-price-change': ['action', 'change', 'bounds'],
+  // 08 S11 — every product's floor and ceiling and every listing's price as they were (`basis` fingerprints all of them,
+  // with each listing's version), and what is sent again.
+  'set-price-bounds': ['changes', 'totals', 'basis'],
+  'bulk-listing-price-change': ['changes', 'totals', 'basis'],
+  'resend-prices': ['send', 'totals', 'basis'],
+  // 08 S9 — suppliers and purchase orders: the PO card shows supplier, e-mail, total and currency (decided S-1).
+  'upsert-supplier': ['action', 'supplier', 'changes', 'products', 'totals'],
+  'draft-purchase-order': ['action', 'purchaseOrder', 'lines', 'totals'],
+  'advance-purchase-order': ['action', 'purchaseOrder', 'supplier', 'totalCents', 'currencyCode', 'email'],
+  'cancel-purchase-order': ['action', 'purchaseOrder', 'totalCents', 'reason'],
+  // 08 S9 — an e-mail to a supplier: who it goes to and from (the business's identity), about which PO, and the words.
+  'email-supplier': ['supplier', 'purchaseOrder', 'email', 'message'],
+  // 08 S10 — receiving (the counts and stock it saw), inbound shipments, costs, replenishment.
+  'receive-stock': ['action', 'shipment', 'lines', 'totals', 'basis'],
+  'update-inbound-shipment': ['action', 'shipment', 'status', 'changes', 'lineCosts', 'lines'],
+  'set-product-costs': ['action', 'costs', 'landed', 'totals'],
+  'replenishment-action': ['action', 'suggestions', 'preferred', 'substitutions', 'cashOnHandCents', 'totals'],
+  // 08 S13 — an eBay promotion (live or dry run, the prices it sets), tier prices, an FBA plan's lines.
+  'set-ebay-price-promotion': ['kind', 'live', 'dates', 'discount', 'listings', 'products', 'tiers', 'marketplace'],
+  'set-tier-prices': ['product', 'tiers'],
+  'plan-fba-shipment': ['marketplace', 'lines', 'totals', 'shipment'],
+  // `basis` fingerprints the Shopify sheet's own cell tokens and baselines: a draft edit or a store change in between.
+  'set-shopify-content': ['changes', 'reach', 'basis'],
+  // I9 — the id read at preview time (and for unlink, the quantity it was advertising); for link, the channel's proof.
+  'unlink-channel-id': ['changes', 'liveQuantity'],
+  'link-channel-id': ['changes', 'verdict'],
+  // L7 — the product and its variations as asked (a SKU taken meanwhile refuses the re-check); the generator's own
+  // plan token and the family version it was made from; the products binned or restored.
+  'create-product': ['product', 'variations'],
+  'create-variations': ['previewToken', 'familyVersion', 'counts'],
+  'discard-new-products': ['restore', 'products'],
+  // L8 — the Matrix door's own preview: the verb and every change it would make (from → to per cell; a sale's cell
+  // version too). The run carries these changes and the door re-verifies each one again.
+  'set-listing-stock': ['verb', 'changes'],
+  'set-listing-price': ['verb', 'changes'],
+  'revert-listing-change': ['operationId', 'status', 'cells'],
+  // L9 — each listing and how its channel closes or reopens it (and the eBay quantity a reopen pins).
+  'close-listing': ['listings', 'how'],
+  'reopen-listing': ['listings', 'how', 'quantity'],
+  // L10 — the photo layer, the revision it was read at and the plan the edit leaves it with.
+  'arrange-photos': ['layer', 'revision', 'after'],
+  'add-photo-from-url': ['family', 'place', 'host', 'contentHash', 'bytes'],
+  'remove-unused-photo': ['family', 'photo'],
+  // MCP full control P9 — imports and their undo (tools/data-transfer.tools.ts). `counts` what changes, `basis` the
+  // file, the mapping and a fingerprint of every write (or the job and what its undo writes): any of them moved since
+  // the person approved is a different import.
+  'import-catalog': ['counts', 'basis'],
+  'rollback-bulk-operation': ['counts', 'basis'],
 }
 
 export interface StalenessVerdict {
@@ -700,7 +968,22 @@ export async function checkStaleness(approvalId: string): Promise<StalenessVerdi
     select: { toolName: true, args: true, preview: true },
   })
   if (!ap) return { stale: true, why: 'the request no longer exists' }
+  // C6 — a plan is re-checked step by step, when each step runs (change-plan.service.ts).
+  if (ap.toolName === PLAN_TOOL) return { stale: false, why: null }
+  return previewStaleness(ap.toolName, (ap.args ?? {}) as Record<string, unknown>, ap.preview, approvalId)
+}
 
+/**
+ * C6 — the staleness check of one change (an approval, or a step of a plan): its tool's own dry run now, compared with
+ * the preview the person approved on the tool's MATERIAL_PREVIEW_FIELDS.
+ */
+export async function previewStaleness(
+  toolName: string,
+  args: Record<string, unknown>,
+  preview: unknown,
+  approvalId: string,
+): Promise<StalenessVerdict> {
+  const ap = { toolName, args, preview }
   const tool = getTool(ap.toolName)
   const canExecute = typeof tool?.execute === 'function'
 
@@ -740,6 +1023,7 @@ export async function checkStaleness(approvalId: string): Promise<StalenessVerdi
         systemPrincipal('approval-recheck'),
         ap.toolName,
         (ap.args ?? {}) as Record<string, unknown>,
+        { approvalId }, // C1 — the tool may know which approval it is re-checking
       )
     ).raw
   } catch (err) {
@@ -858,17 +1142,47 @@ export async function trackRecords(): Promise<Record<string, TrackRecord>> {
  * Now: `expiresAt` is the clock, every tool is covered, and this runs on its
  * own schedule instead of riding an agent job.
  */
+/**
+ * MCP full control d1 = A — the fleet's ads tools now execute once approved. A request of one of them made BEFORE
+ * that switch was approved-as-a-record, never as a write: it carries no stored live reach (`preview.reach`). It must
+ * not start running because the tool changed under it, so it expires here, and the tool's own `execute` refuses it
+ * too (ads-change-kit.ts PRE_SWITCH_REFUSAL) should a person approve it before this sweep runs.
+ */
+export async function expirePreSwitchAdRequests(): Promise<number> {
+  const executable = FLEET_TOOLS.filter((name) => typeof getTool(name)?.execute === 'function')
+  if (!executable.length) return 0
+  const stale = await prisma.agentApproval.findMany({
+    where: { status: 'pending', toolName: { in: executable } },
+    select: { id: true, preview: true },
+  })
+  const ids = stale
+    .filter((row) => !((row.preview ?? null) as { reach?: unknown } | null)?.reach)
+    .map((row) => row.id)
+  if (!ids.length) return 0
+  const expired = await prisma.agentApproval.updateMany({
+    where: { id: { in: ids }, status: 'pending' },
+    data: {
+      status: 'expired',
+      reason: 'expired: asked before approved ad changes could reach Amazon. Ask again to see where it would land.',
+    },
+  })
+  return expired.count
+}
+
 export async function runApprovalMaintenance(): Promise<{
   expired: number
   committed: number
   failed: number
+  /** C6 — plans handed to the worker again, or run here when there is none. */
+  plans: number
 }> {
   const now = new Date()
 
-  const expired = await prisma.agentApproval.updateMany({
+  const expiredByClock = await prisma.agentApproval.updateMany({
     where: { status: 'pending', expiresAt: { not: null, lt: now } },
     data: { status: 'expired' },
   })
+  const expired = { count: expiredByClock.count + (await expirePreSwitchAdRequests()) }
 
   const due = await prisma.agentApproval.findMany({
     where: { status: 'scheduled', executeAfter: { not: null, lte: now } },
@@ -886,14 +1200,21 @@ export async function runApprovalMaintenance(): Promise<{
     else failed++
   }
 
-  if (expired.count || committed || failed) {
+  // C6 — a plan handed over and not finished: queued again, or (no workers) run here.
+  const plans = await drainPlans().catch((err) => {
+    logger.error('[naf-ap] plan drain failed', { error: String(err) })
+    return 0
+  })
+
+  if (expired.count || committed || failed || plans) {
     logger.info('[naf-ap] approval maintenance', {
       expired: expired.count,
       committed,
       failed,
+      plans,
     })
   }
-  return { expired: expired.count, committed, failed }
+  return { expired: expired.count, committed, failed, plans }
 }
 
 /* ── AP.4: bulk, with the blast radius stated ──────────────────────────── */
@@ -930,19 +1251,16 @@ export interface BulkPreview {
 }
 
 /*
- * S8.1 — the server's half of the reversibility vocabulary.
+ * S8.1 / MCP full control C1 — reversibility comes from ONE place: the tool registry (`AgentTool.reversibility`).
  *
- * `publish-listing` was missing: the card calls it `partial` and this file
- * called it fully reversible, so the two disagreed about the same tool. Kept
- * as two explicit lists rather than a boolean so the sentence can say "partly"
- * instead of rounding it to "not at all", which would over-warn.
- *
- * These duplicate DecisionCard.tsx's `undoable` field because web and api do
- * not share a module. The durable fix is a reversibility field on the tool
- * registry; until then, changing one list means changing the other.
+ * It used to be two lists here and a third copy in the web card (DecisionCard.tsx `undoable`), and they drifted
+ * (`publish-listing` was `partial` on the card and fully reversible here). Now the API states it on every approval
+ * row (`reversibility`, below) and the web reads that; nothing else states it. A tool the registry does not know —
+ * or one that states nothing — is treated as irreversible, the safe direction to be wrong in.
  */
-const IRREVERSIBLE_TOOLS = ['send-customer-message']
-const PARTLY_REVERSIBLE_TOOLS = ['publish-listing']
+export function reversibilityOf(toolName: string): Reversibility {
+  return getTool(toolName)?.reversibility ?? 'none'
+}
 
 /**
  * What a bulk decision is about to do, in a sentence. Built server-side from
@@ -963,15 +1281,37 @@ function euroExposure(
   let bidCount = 0
   let priceDeltaCents = 0
   let priceCount = 0
+  // MCP full control A6 — a daily budget change, euros only (each campaign keeps its own currency).
+  let budgetDeltaCents = 0
+  let budgetCount = 0
 
   for (const r of rows) {
     const p = (r.preview ?? {}) as Record<string, any>
     if (r.toolName === 'set-target-bid') {
+      // MCP full control A4 — the bid that lands (after the clamps), and only in euros: a bid in pounds or kronor
+      // added to one in euros is not a figure (each campaign keeps its own currency; nothing is converted).
+      if (p.currency != null && p.currency !== 'EUR') return null
       const from = typeof p.currentBidCents === 'number' ? p.currentBidCents : null
-      const to = typeof p.proposedBidCents === 'number' ? p.proposedBidCents : null
+      const to = typeof p.effectiveBidCents === 'number' ? p.effectiveBidCents : typeof p.proposedBidCents === 'number' ? p.proposedBidCents : null
       if (from != null && to != null) {
         bidDeltaCents += to - from
         bidCount++
+      }
+    }
+    if (r.toolName === 'bulk-ad-bid-change') {
+      // A7 — the per-click total of a bulk bid change, euros only.
+      const byCurrency = (p.byCurrency ?? {}) as Record<string, { targets?: number; deltaCents?: number }>
+      if (Object.keys(byCurrency).some((cur) => cur !== 'EUR')) return null
+      if (byCurrency.EUR && typeof byCurrency.EUR.deltaCents === 'number') {
+        bidDeltaCents += byCurrency.EUR.deltaCents
+        bidCount += byCurrency.EUR.targets ?? 0
+      }
+    }
+    if (r.toolName === 'set-campaign-budget') {
+      if (p.currency != null && p.currency !== 'EUR') return null
+      if (typeof p.currentBudgetCents === 'number' && typeof p.proposedBudgetCents === 'number') {
+        budgetDeltaCents += p.proposedBudgetCents - p.currentBudgetCents
+        budgetCount++
       }
     }
     if (r.toolName === 'set-price') {
@@ -983,7 +1323,15 @@ function euroExposure(
     }
   }
 
-  if (bidCount > 0 && priceCount === 0) {
+  if (budgetCount > 0 && bidCount === 0 && priceCount === 0) {
+    const dir = budgetDeltaCents >= 0 ? 'raises' : 'lowers'
+    return {
+      amount: budgetDeltaCents,
+      // A daily ceiling, not spend: what is spent depends on the auctions.
+      label: `${dir} daily budgets by €${Math.abs(budgetDeltaCents / 100).toFixed(2)} in total across ${budgetCount} campaign${budgetCount === 1 ? '' : 's'}`,
+    }
+  }
+  if (bidCount > 0 && priceCount === 0 && budgetCount === 0) {
     const dir = bidDeltaCents >= 0 ? 'raises' : 'lowers'
     return {
       amount: bidDeltaCents,
@@ -992,7 +1340,7 @@ function euroExposure(
       label: `${dir} what you pay per click by €${Math.abs(bidDeltaCents / 100).toFixed(2)} in total across ${bidCount} keyword${bidCount === 1 ? '' : 's'}`,
     }
   }
-  if (priceCount > 0 && bidCount === 0) {
+  if (priceCount > 0 && bidCount === 0 && budgetCount === 0) {
     const dir = priceDeltaCents >= 0 ? 'raises' : 'lowers'
     return {
       amount: priceDeltaCents,
@@ -1079,8 +1427,8 @@ export async function previewBulk(
   const byTool: Record<string, number> = {}
   for (const r of rows) byTool[r.toolName] = (byTool[r.toolName] ?? 0) + 1
   const highRisk = rows.filter((r) => r.riskTier === 'high').length
-  const irreversible = rows.filter((r) => IRREVERSIBLE_TOOLS.includes(r.toolName)).length
-  const partlyReversible = rows.filter((r) => PARTLY_REVERSIBLE_TOOLS.includes(r.toolName)).length
+  const irreversible = rows.filter((r) => reversibilityOf(r.toolName) === 'none').length
+  const partlyReversible = rows.filter((r) => reversibilityOf(r.toolName) === 'partial').length
   const euro = euroExposure(rows)
 
   // Homogeneity: one action kind AND one worker. Either alone is insufficient

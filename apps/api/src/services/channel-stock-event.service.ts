@@ -40,11 +40,61 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { applyStockMovement } from './stock-movement.service.js'
+import { applyStockMovement, ProtectedLocationError } from './stock-movement.service.js'
 import { logger } from '../utils/logger.js'
 import { loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 
 const DEFAULT_AUTO_APPLY_THRESHOLD = 1
+
+/**
+ * MCP full control 08 S2 (F7) — may a channel's reported number change this location? Never the FBA mirror (only
+ * the FBA inventory sync writes it); a Shopify location only from Shopify's own events (the webhook keeps that
+ * mirror). An Amazon event never changes any location (S2b). Other locations, and another channel's event with no
+ * location, are not refused here.
+ */
+async function channelEventLocationRefusal(locationId: string | null | undefined, channel: string): Promise<ProtectedLocationError | null> {
+  // 08 S2b — Amazon reports FBA stock only: its number never changes any location, an own warehouse least of all.
+  if (channel === 'AMAZON') {
+    return new ProtectedLocationError(locationId ?? '', 'AMAZON_FBA', 'an Amazon stock event',
+      'An Amazon stock event reports FBA stock: it never changes an own warehouse, and only the FBA inventory sync writes FBA stock. Ignore it; the next FBA sync updates the FBA number.')
+  }
+  if (!locationId) return null
+  const location = await prisma.stockLocation.findUnique({ where: { id: locationId }, select: { type: true } })
+  if (location?.type === 'AMAZON_FBA') return new ProtectedLocationError(locationId, location.type, 'a channel stock event')
+  if (location?.type === 'SHOPIFY_LOCATION' && channel !== 'SHOPIFY') {
+    return new ProtectedLocationError(locationId, location.type, `a ${channel} stock event`)
+  }
+  return null
+}
+
+/** The FBA mirror location the FBA inventory sync writes (`amazon-inventory.service.ts`). */
+const FBA_MIRROR_CODE = 'AMAZON-EU-FBA'
+
+/**
+ * MCP full control 08 S2b — the location an event is compared with and recorded at. Amazon's one stock notification
+ * (FBA_INVENTORY_AVAILABILITY_CHANGES, `amazon-sqs-poll.job.ts`) is FBA fulfillable stock and names no location, so an
+ * Amazon event without one is about the FBA mirror. Before, it was compared with the product's stock in every location
+ * and a drift of 1 landed on the default own warehouse. With no mirror the event keeps no location (and still never
+ * applies: `channelEventLocationRefusal`).
+ */
+async function observedLocationId(input: Pick<RecordChannelStockEventInput, 'channel' | 'locationId'>): Promise<string | null> {
+  if (input.locationId || input.channel !== 'AMAZON') return input.locationId ?? null
+  const mirror = await prisma.stockLocation.findUnique({ where: { workspace_code: workspaceKey({ code: FBA_MIRROR_CODE }) }, select: { id: true } })
+  return mirror?.id ?? null
+}
+
+/** 08 S2b — why an FBA observation is settled the moment it is recorded. */
+export const FBA_IGNORED_REASON = 'Amazon owns the FBA number'
+
+/**
+ * An Amazon event about the FBA number: at the FBA mirror, or with no location at all (no mirror to pin it to). An
+ * Amazon event pinned to an own warehouse by hand is not one: it waits for review (and Apply still refuses it).
+ */
+async function isFbaObservation(channel: string, locationId: string | null): Promise<boolean> {
+  if (channel !== 'AMAZON') return false
+  if (!locationId) return true
+  return (await prisma.stockLocation.findUnique({ where: { id: locationId }, select: { type: true } }))?.type === 'AMAZON_FBA'
+}
 
 function autoApplyThreshold(channel: string): number {
   const envKey = `NEXUS_CS_AUTO_APPLY_${channel.toUpperCase()}`
@@ -151,6 +201,7 @@ export async function recordChannelStockEvent(
   // when the event isn't pinned to a specific location/variant,
   // otherwise scope the read.
   let localQty = 0
+  const locationId = await observedLocationId(input)
   // Shared stock — a product that sells from another business's pool: the channel shows the pool's
   // number, so that is what it is compared with, and a channel's number is never written into this
   // business's own ledger (the lender counts its own stock).
@@ -166,7 +217,7 @@ export async function recordChannelStockEvent(
       // inventory items). When omitted entirely, sum across all
       // variants for the product (master + every variation).
       ...(input.variationId !== undefined ? { variationId: input.variationId } : {}),
-      ...(input.locationId ? { locationId: input.locationId } : {}),
+      ...(locationId ? { locationId } : {}),
     }
     const agg = await prisma.stockLevel.aggregate({
       where,
@@ -177,10 +228,14 @@ export async function recordChannelStockEvent(
 
   const drift = input.channelReportedQty - localQty
   const threshold = autoApplyThreshold(input.channel)
-  let initialStatus: 'PENDING' | 'AUTO_APPLIED' | 'REVIEW_NEEDED' | 'APPLIED'
+  let initialStatus: 'PENDING' | 'AUTO_APPLIED' | 'REVIEW_NEEDED' | 'APPLIED' | 'IGNORED'
   if (drift === 0) {
     initialStatus = 'APPLIED' // no-op observation, audit only
-  } else if (Math.abs(drift) <= threshold && !pooled) {
+  } else if (await isFbaObservation(input.channel, locationId)) {
+    // 08 S2b (lead decision 2026-10-01) — Amazon's FBA number is Amazon's: nothing in Nexus can apply it, so it is
+    // kept on record and settled at once rather than left waiting for a review nobody can act on.
+    initialStatus = 'IGNORED'
+  } else if (Math.abs(drift) <= threshold && !pooled && !(await channelEventLocationRefusal(locationId, input.channel))) {
     initialStatus = 'AUTO_APPLIED'
   } else {
     initialStatus = 'REVIEW_NEEDED'
@@ -197,12 +252,13 @@ export async function recordChannelStockEvent(
         productId: product?.id ?? null,
         variationId: input.variationId ?? null,
         sku,
-        locationId: input.locationId ?? null,
+        locationId,
         channelReportedQty: input.channelReportedQty,
         localQtyAtObservation: localQty,
         drift,
         status: initialStatus,
         rawPayload: input.rawPayload as Prisma.InputJsonValue,
+        ...(initialStatus === 'IGNORED' ? { resolution: FBA_IGNORED_REASON, resolvedAt: new Date(), resolvedByUserId: 'auto' } : {}),
       },
     })
 
@@ -212,7 +268,7 @@ export async function recordChannelStockEvent(
       const mv = await applyStockMovement({
         productId: product.id,
         variationId: input.variationId ?? undefined,
-        locationId: input.locationId ?? undefined,
+        locationId: locationId ?? undefined,
         change: drift,
         reason: 'CHANNEL_STOCK_RECONCILIATION',
         referenceType: 'ChannelStockEvent',
@@ -287,6 +343,12 @@ export async function applyChannelStockEvent(
   }
   if (event.drift !== 0 && (await loadSyncLedgers(prisma, [event.productId])).get(event.productId)?.source.kind === 'pool') {
     throw new Error('This product sells from shared stock owned by another business profile. Count it there; a channel number cannot change it from here.')
+  }
+
+  // 08 S2 (F7) — never the FBA mirror; a Shopify location only from Shopify's own events.
+  if (event.drift !== 0) {
+    const refusal = await channelEventLocationRefusal(event.locationId, event.channel)
+    if (refusal) throw refusal
   }
 
   // No-drift events are weirdly possible (operator clicks Apply on

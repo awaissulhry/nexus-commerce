@@ -1,0 +1,2 @@
+400
+{"error":"assetIds array is required (1+ ids)"}

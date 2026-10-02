@@ -33,6 +33,7 @@ import { ActivityTab } from './ActivityTab'
 import { TodayTab } from './TodayTab'
 import { ForesightTab } from './ForesightTab'
 import { LeverDrawer } from './LeverDrawer'
+import type { LeverControl } from './lever-control'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -52,6 +53,8 @@ interface Engine {
   lastRunAt: string | null; lastRunStatus: string | null; lastRunSummary: string | null
   runs7d: number; failures7d: number
   warning: string | null; haltBehaviour: HaltBehaviour
+  /** R16 — the env and this business's own switch (absent from an older API). */
+  control?: LeverControl
 }
 interface Global { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean }
 
@@ -92,6 +95,10 @@ export function ControlRoomClient() {
     } catch (e) { setErr((e as Error).message); setEngines([]) }
   }, [])
   useEffect(() => { void load() }, [load])
+  // R16 — an open drawer follows its engine's fresh row (a switch moved inside it reloads the list).
+  useEffect(() => {
+    setOpen((prev) => (prev && engines ? engines.find((e) => e.key === prev.key) ?? prev : prev))
+  }, [engines])
 
   // The kill switch. Both endpoints already existed and had no UI anywhere in this console —
   // the halt was reachable only by the anomaly guard tripping it.
@@ -282,7 +289,7 @@ export function ControlRoomClient() {
           "Last run" fact behind the drawer cannot disagree with what the drawer just did. */}
       {open && (
         <LeverDrawer
-          engine={{ key: open.key, name: open.name, what: open.what, cron: open.cron, mode: open.mode }}
+          engine={{ key: open.key, name: open.name, what: open.what, cron: open.cron, mode: open.mode, control: open.control }}
           onClose={() => setOpen(null)}
           onRan={() => void load()}
         />

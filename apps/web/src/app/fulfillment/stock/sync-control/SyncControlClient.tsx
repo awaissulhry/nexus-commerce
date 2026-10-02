@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
-import { DataGrid, Pagination, type Column } from '@/design-system/components'
+import { Banner, DataGrid, Pagination, type Column } from '@/design-system/components'
 import { GridToolbar, FilterBar, type FilterDimension } from '@/design-system/patterns'
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -29,6 +29,7 @@ import '@/design-system/styles/patterns.css'
 import styles from './styles.module.css'
 import SyncProductsGrid from './SyncProductsGrid'
 import {
+  ebayZeroRefusal,
   listingTarget,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   QUANTITY_CHANNELS, policyMarketOptions, policyMarketFor, marketFilterOptions,
@@ -117,6 +118,8 @@ export default function SyncControlClient() {
   const [bufferVal, setBufferVal] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // A pin to 0 on eBay the API refused (the account's out-of-stock option is off): shown as a refusal, not a failure.
+  const [refusal, setRefusal] = useState<string | null>(null)
   const [editingLoc, setEditingLoc] = useState<string | null>(null)
   const [locDraft, setLocDraft] = useState('')
   const [polChannel, setPolChannel] = useState('AMAZON')
@@ -268,6 +271,7 @@ export default function SyncControlClient() {
     }
 
     setNotice(null)
+    setRefusal(null)
     try {
       const res = await fetch(`${API}/api/stock/sync-control/actions`, {
         method: 'POST',
@@ -282,6 +286,8 @@ export default function SyncControlClient() {
         }),
       })
       let data = await res.json()
+      const refused = ebayZeroRefusal(res.status, data)
+      if (refused) { setRefusal(refused); return }
       if (res.status === 409 && data?.euExpandRequired) {
         const d = data
         // SCT.5b — Amazon shares ONE EU quantity per SKU; the server answered
@@ -308,6 +314,8 @@ export default function SyncControlClient() {
           }),
         })
         data = await res2.json()
+        const refusedEu = ebayZeroRefusal(res2.status, data)
+        if (refusedEu) { setRefusal(refusedEu); return }
         if (!res2.ok) throw new Error(data?.error ?? data?.message ?? `HTTP ${res2.status}`)
       } else if (!res.ok) {
         throw new Error(data?.error ?? data?.message ?? `HTTP ${res.status}`)
@@ -535,6 +543,7 @@ export default function SyncControlClient() {
         </div>
       )}
 
+      {refusal && <Banner tone="danger" title="Not changed — eBay would end these listings" onDismiss={() => setRefusal(null)}>{refusal}</Banner>}
       {notice && (
         <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">
           {notice}
@@ -569,6 +578,7 @@ export default function SyncControlClient() {
           onDensity={setDensity}
           onChanged={loadOverview}
           notify={setNotice}
+          refuse={setRefusal}
           search={qLive}
           onSearch={setQLive}
         />

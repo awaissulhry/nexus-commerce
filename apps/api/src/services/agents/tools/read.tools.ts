@@ -9,36 +9,12 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
 import { likeEscaped } from '../../../lib/like-pattern.js'
 import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
+import type { Prisma } from '@prisma/client'
+import { buildProductWhereFromSavedView } from '../../saved-views/build-where.service.js'
+import { visibleSavedView } from './platform-library.tools.js'
 
 // MCP.12 — the caller's text is matched as typed: `_` and `%` in a SKU, a name or an email are characters, not wildcards.
 const ci = (q: string) => ({ contains: likeEscaped(q), mode: 'insensitive' as const })
-
-function orderStatus(o: {
-  cancelledAt: Date | null
-  deliveredAt: Date | null
-  shippedAt: Date | null
-  paidAt: Date | null
-}): string {
-  if (o.cancelledAt) return 'cancelled'
-  if (o.deliveredAt) return 'delivered'
-  if (o.shippedAt) return 'shipped'
-  if (o.paidAt) return 'paid'
-  return 'pending'
-}
-
-const ORDER_STATUSES = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'] as const
-
-/**
- * `orderStatus` as a query, so the status is filtered BEFORE the limit. Filtering the newest `limit` rows
- * afterwards answered "0 shipped" while older shipped orders existed.
- */
-function orderStatusWhere(status: (typeof ORDER_STATUSES)[number]): Record<string, unknown> {
-  if (status === 'cancelled') return { cancelledAt: { not: null } }
-  if (status === 'delivered') return { cancelledAt: null, deliveredAt: { not: null } }
-  if (status === 'shipped') return { cancelledAt: null, deliveredAt: null, shippedAt: { not: null } }
-  if (status === 'paid') return { cancelledAt: null, deliveredAt: null, shippedAt: null, paidAt: { not: null } }
-  return { cancelledAt: null, deliveredAt: null, shippedAt: null, paidAt: null }
-}
 
 /** MCP.12 — listings a snapshot names; the rest are counted. */
 const SNAPSHOT_LISTINGS = 20
@@ -71,7 +47,8 @@ const productSnapshot: AgentTool = {
         bulletPoints: true,
         keywords: true,
         status: true,
-        _count: { select: { images: true, variations: true } },
+        // I1 — a variation is a child Product (parentId); the old ProductVariation table is empty and unwritten.
+        _count: { select: { images: true, children: { where: { deletedAt: null } } } },
       },
     })
     if (!p) return { ok: false, error: 'Product not found' }
@@ -115,7 +92,7 @@ const productSnapshot: AgentTool = {
         ...(listings.length > SNAPSHOT_LISTINGS ? { moreListings: listings.length - SNAPSHOT_LISTINGS } : {}),
         listingCounts: { total: listings.length, drafts, linked: listings.filter((l) => !!l.externalListingId).length },
         imageCount: p._count.images,
-        variationCount: p._count.variations,
+        variationCount: p._count.children,
         bulletCount: p.bulletPoints?.length ?? 0,
         keywordCount: p.keywords?.length ?? 0,
         descriptionChars: p.description?.length ?? 0,
@@ -131,19 +108,35 @@ const productSearch: AgentTool = {
   input: z.object({
     query: z.string().optional().describe('name, SKU or brand fragment'),
     limit: z.coerce.number().int().min(1).max(50).optional().describe('max products (default 10)'),
+    savedViewId: z.string().trim().min(1).max(64).optional()
+      .describe('apply the filters of this saved products view (its id from saved-views): yours or one shared with the business'),
   }),
   requires: [F.productsView],
   category: 'products',
   riskTier: 'low',
   readOnly: true,
-  description: 'Search the catalog by name / SKU / brand. The text is matched as typed: _ and % are characters, not wildcards.',
-  async handler(args) {
+  description: 'Search the catalog by name / SKU / brand. The text is matched as typed: _ and % are characters, not wildcards. '
+    + 'With savedViewId, only the products a saved products view shows (its filters, parent products as its grid lists them).',
+  async handler(args, ctx) {
     const q = String(args.query ?? '').trim()
     const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 50)
     // MCP.12 — deleted products (soft delete) are never results, as in every other catalogue read.
-    const where = q
+    const search = q
       ? { deletedAt: null, OR: [{ name: ci(q) }, { sku: ci(q) }, { brand: ci(q) }] }
       : { deletedAt: null }
+    // MCP full control P5 — a saved view's filters, built by the same code its alerts count with. Only a view the
+    // caller may see (their own, a shared template, or one shared with the business), in this business.
+    let viewName: string | undefined
+    let where: Prisma.ProductWhereInput = search
+    if (args.savedViewId) {
+      const view = await visibleSavedView(String(args.savedViewId), ctx.userId)
+      if (!view) return { ok: false, error: 'Saved view not found' }
+      if (view.surface !== 'products') {
+        return { ok: false, error: `Saved view "${view.name}" is a ${view.surface} view, not a products filter: it cannot narrow a product search.` }
+      }
+      viewName = view.name
+      where = { AND: [search, await buildProductWhereFromSavedView(prisma as never, view.filters as never)] }
+    }
     const rows = await prisma.product.findMany({
       where,
       take: limit,
@@ -159,173 +152,7 @@ const productSearch: AgentTool = {
         totalStock: true,
       },
     })
-    return { ok: true, data: { count: rows.length, products: rows } }
-  },
-}
-
-const orderSearch: AgentTool = {
-  name: 'order-search',
-  title: 'Search orders',
-  input: z.object({
-    marketplace: z.string().optional().describe('marketplace code, e.g. IT'),
-    buyer: z.string().optional().describe('buyer name or email fragment'),
-    status: z
-      .preprocess((value) => (typeof value === 'string' ? value.trim().toLowerCase() : value), z.enum(ORDER_STATUSES))
-      .optional()
-      .describe('order status: pending, paid, shipped, delivered or cancelled'),
-    limit: z.coerce.number().int().min(1).max(100).optional().describe('max orders (default 20)'),
-  }),
-  requires: [F.ordersView],
-  category: 'orders',
-  riskTier: 'low',
-  readOnly: true,
-  description:
-    'Find recent orders, optionally filtered by marketplace / buyer / status. The buyer text is matched as typed: _ and % are characters, not wildcards.',
-  async handler(args) {
-    const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100)
-    const where: Record<string, unknown> = {}
-    if (args.marketplace) where.marketplace = String(args.marketplace)
-    if (args.buyer)
-      where.OR = [
-        { customerName: ci(String(args.buyer)) },
-        { customerEmail: ci(String(args.buyer)) },
-      ]
-    if (args.status) Object.assign(where, orderStatusWhere(args.status as (typeof ORDER_STATUSES)[number]))
-    const rows = await prisma.order.findMany({
-      where,
-      take: limit,
-      orderBy: { purchaseDate: 'desc' },
-      select: {
-        id: true,
-        marketplace: true,
-        channelOrderId: true,
-        totalPrice: true,
-        currencyCode: true,
-        customerName: true,
-        purchaseDate: true,
-        paidAt: true,
-        shippedAt: true,
-        deliveredAt: true,
-        cancelledAt: true,
-      },
-    })
-    const out = rows.map((o) => ({ ...o, status: orderStatus(o) }))
-    return { ok: true, data: { count: out.length, orders: out } }
-  },
-}
-
-const orderDetail: AgentTool = {
-  name: 'order-detail',
-  title: 'Order details',
-  input: z.object({ orderId: z.string().min(1).describe('Nexus order id') }),
-  requires: [F.ordersView],
-  category: 'orders',
-  riskTier: 'low',
-  readOnly: true,
-  description: 'Read one order (header + line-item count + fiscal kind).',
-  async handler(args) {
-    const id = String(args.orderId ?? '')
-    if (!id) return { ok: false, error: 'orderId is required' }
-    const o = await prisma.order.findUnique({
-      where: { id },
-      select: {
-        marketplace: true,
-        channelOrderId: true,
-        totalPrice: true,
-        currencyCode: true,
-        customerName: true,
-        customerEmail: true,
-        fiscalKind: true,
-        purchaseDate: true,
-        paidAt: true,
-        shippedAt: true,
-        deliveredAt: true,
-        cancelledAt: true,
-        _count: { select: { items: true } },
-      },
-    })
-    if (!o) return { ok: false, error: 'Order not found' }
-    return {
-      ok: true,
-      data: { ...o, status: orderStatus(o), itemCount: o._count.items },
-    }
-  },
-}
-
-const stockLevels: AgentTool = {
-  name: 'stock-levels',
-  title: 'Stock levels',
-  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
-  requires: [F.inventoryView],
-  category: 'fulfillment',
-  riskTier: 'low',
-  readOnly: true,
-  description: 'Current stock + per-channel listed quantity for a product.',
-  async handler(args) {
-    const id = String(args.productId ?? '')
-    if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findFirst({
-      where: liveProduct(id),
-      select: {
-        sku: true,
-        name: true,
-        totalStock: true,
-        lowStockThreshold: true,
-        channelListings: {
-          select: { channel: true, marketplace: true, quantity: true },
-        },
-      },
-    })
-    if (!p) return { ok: false, error: 'Product not found' }
-    return {
-      ok: true,
-      data: {
-        sku: p.sku,
-        totalStock: p.totalStock,
-        lowStockThreshold: p.lowStockThreshold,
-        lowStock: p.totalStock <= p.lowStockThreshold,
-        channels: p.channelListings,
-      },
-    }
-  },
-}
-
-const priceStatus: AgentTool = {
-  name: 'price-status',
-  title: 'Price status',
-  input: z.object({ productId: z.string().min(1).describe('Nexus product id') }),
-  requires: [F.pricingView],
-  category: 'pricing',
-  riskTier: 'low',
-  readOnly: true,
-  description: 'Master price + per-channel listed price for a product.',
-  async handler(args) {
-    const id = String(args.productId ?? '')
-    if (!id) return { ok: false, error: 'productId is required' }
-    const p = await prisma.product.findFirst({
-      where: liveProduct(id),
-      select: {
-        sku: true,
-        basePrice: true,
-        channelListings: {
-          select: {
-            channel: true,
-            marketplace: true,
-            price: true,
-            salePrice: true,
-          },
-        },
-      },
-    })
-    if (!p) return { ok: false, error: 'Product not found' }
-    return {
-      ok: true,
-      data: {
-        sku: p.sku,
-        masterPrice: p.basePrice,
-        channels: p.channelListings,
-      },
-    }
+    return { ok: true, data: { ...(viewName ? { savedView: viewName } : {}), count: rows.length, products: rows } }
   },
 }
 
@@ -380,9 +207,7 @@ const listingHealth: AgentTool = {
 export const READ_TOOLS: AgentTool[] = [
   productSnapshot,
   productSearch,
-  orderSearch,
-  orderDetail,
-  stockLevels,
-  priceStatus,
+  // 07 O4 — order-search and order-detail live in order-read.tools.ts (v2: every status, cursor, masked buyer).
+  // 08 S3/S5 — stock-levels and price-status live in stock-read.tools.ts and pricing-read.tools.ts.
   listingHealth,
 ]

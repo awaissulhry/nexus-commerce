@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "nexus-factory": {
+      "type": "stdio",
+      "command": "${user_config.repo_dir}/node_modules/.bin/tsx",
+      "args": [
+        "--tsconfig",
+        "${user_config.repo_dir}/apps/factory/tsconfig.json",
+        "${user_config.repo_dir}/apps/factory/mcp/server.ts"
+      ],
+      "env": {
+        "FACTORY_MCP_TOKEN": "${user_config.factory_token}",
+        "FACTORY_RBAC_MODE": "enforce"
+      }
+    }
+  }
+}

@@ -30,7 +30,7 @@ import { logger } from '../utils/logger.js'
 import { CRON_COMPLETED_STATUSES } from '../utils/cron-observability.js'
 import { sendEmail } from './email/transport.js'
 
-type Operator = 'gt' | 'gte' | 'lt' | 'lte'
+type Operator = (typeof ALERT_OPERATORS)[number]
 
 const COMPARE: Record<Operator, (a: number, b: number) => boolean> = {
   gt: (a, b) => a > b,
@@ -176,6 +176,13 @@ const METRIC_FNS: Record<string, (ctx: MetricContext) => Promise<number>> = {
   reviewOverdueUndelivered: metricReviewOverdueUndelivered,
   overdueCrons: metricOverdueCrons,
 }
+
+/**
+ * MCP full control P7 — the metrics a rule may watch and the comparisons it may make: exactly what this evaluator
+ * computes and compares (Claude's set-alert-rule offers these and nothing else).
+ */
+export const ALERT_METRICS = Object.keys(METRIC_FNS) as [string, ...string[]]
+export const ALERT_OPERATORS = ['gt', 'gte', 'lt', 'lte'] as const
 
 interface DispatchResult {
   channel: string

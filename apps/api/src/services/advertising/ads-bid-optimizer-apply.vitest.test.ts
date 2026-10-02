@@ -55,6 +55,26 @@ describe('applyBidOptimization', () => {
     expect(bulk.mock.calls[0]![0]!.actor).toBe('user:u42')
   })
 
+  /**
+   * R2 (MCP full control, part 06 gap 11) — callers that already pass a namespaced engine or rule actor were
+   * prefixed AGAIN: auto-bid wrote `automation:automation:auto-bid`, `bid_to_target_acos` wrote
+   * `automation:automation:<ruleId>` and an autopilot plan `automation:automation:autopilot-<planId>`. So the
+   * Control Room's auto-bid evidence (it looks for `automation:auto-bid`), a rule's daily write cap and its
+   * "wrote" column (they count `automation:<ruleId>`) and the change feed's rule attribution never saw them.
+   */
+  it('never prefixes an automation: actor twice (auto-bid, a rule, an autopilot plan)', async () => {
+    for (const actor of ['automation:auto-bid', 'automation:cmehif9xk0001s6mvabcd1234', 'automation:autopilot-plan1']) {
+      bulk.mockClear()
+      await applyBidOptimization({ changes: [{ targetId: 't1', proposedBidCents: 30 }], actor })
+      expect(bulk.mock.calls[0]![0]!.actor).toBe(actor)
+    }
+  })
+
+  it('namespaces a bare engine name once', async () => {
+    await applyBidOptimization({ changes: [{ targetId: 't1', proposedBidCents: 30 }], actor: 'autopilot' })
+    expect(bulk.mock.calls[0]![0]!.actor).toBe('automation:autopilot')
+  })
+
   it('dry-run writes nothing', async () => {
     const out = await applyBidOptimization({
       changes: [{ targetId: 't1', proposedBidCents: 30 }],

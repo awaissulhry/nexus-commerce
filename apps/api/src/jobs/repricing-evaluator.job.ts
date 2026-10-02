@@ -37,7 +37,7 @@ import cron from '../lib/cron/clustered.js'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { repricingEngineService } from '../services/repricing-engine.service.js'
+import { repricingEngineService, type MarketContext } from '../services/repricing-engine.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 
 interface RunSummary {
@@ -55,6 +55,117 @@ const PER_RUN_CAP = 500 // safety against pathological catalog sizes
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
 let lastSummary: RunSummary | null = null
+
+/**
+ * R8 (MCP full control, part 06) — the market a repricing rule is priced against: its listing's price, the latest
+ * buy-box observation (within RECENT_OBSERVATION_HOURS) and, for maximize_margin_win_box, the highest price that won
+ * the box. Read-only. The cron prices with it, and Claude's preview-automation runs the rule's own pickPrice on it
+ * (no decision row, never applied). Null when the rule has no listing.
+ */
+export async function repricingMarketFor(
+  rule: { productId: string; channel: string; marketplace: string | null; strategy: string },
+  { observationCutoff, winBoxLookback }: { observationCutoff: Date; winBoxLookback: Date },
+): Promise<{ listingId: string; observed: boolean; market: MarketContext } | null> {
+  const listing = await prisma.channelListing.findFirst({
+    where: {
+      productId: rule.productId,
+      channel: rule.channel,
+      ...(rule.marketplace ? { marketplace: rule.marketplace } : {}),
+    },
+    select: {
+      id: true,
+      price: true,
+      marketplace: true,
+      product: { select: { sku: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+  })
+  if (!listing) return null
+
+  // Find latest BuyBoxHistory for the same key.
+  const obs = await prisma.buyBoxHistory.findFirst({
+    where: {
+      productId: rule.productId,
+      channel: rule.channel,
+      ...(rule.marketplace
+        ? { marketplace: rule.marketplace }
+        : { marketplace: listing.marketplace }),
+      observedAt: { gte: observationCutoff },
+    },
+    orderBy: { observedAt: 'desc' },
+  })
+
+  // No recent observation: still evaluate (manual + match_buy_box-
+  // with-no-data strategies hold gracefully via the service's
+  // own no-data branches); the caller counts it (`observed`).
+
+  // CE.3 — MAXIMIZE_MARGIN_WIN_BOX: compute the highest price at
+  // which we won ≥70% of buy-box observations in the last 14 days.
+  let maxMarginWinPrice: number | null = null
+  if (rule.strategy === 'maximize_margin_win_box') {
+    const observations = await prisma.buyBoxHistory.findMany({
+      where: {
+        productId: rule.productId,
+        channel: rule.channel,
+        marketplace: rule.marketplace ?? listing.marketplace,
+        observedAt: { gte: winBoxLookback },
+        buyBoxPrice: { not: null },
+      },
+      select: { buyBoxPrice: true, isOurOffer: true },
+      orderBy: { observedAt: 'desc' },
+      take: 200,
+    })
+
+    if (observations.length >= 5) {
+      // Group by price (rounded to nearest €0.50 to avoid noise)
+      const priceBuckets = new Map<number, { wins: number; total: number }>()
+      for (const o of observations) {
+        const price = Math.round(Number(o.buyBoxPrice as unknown as Prisma.Decimal) * 2) / 2
+        const bucket = priceBuckets.get(price) ?? { wins: 0, total: 0 }
+        bucket.total++
+        if (o.isOurOffer) bucket.wins++
+        priceBuckets.set(price, bucket)
+      }
+      // Find the highest price where win rate ≥ 70%
+      const eligible = [...priceBuckets.entries()]
+        .filter(([, b]) => b.total >= 3 && b.wins / b.total >= 0.7)
+        .map(([price]) => price)
+      if (eligible.length > 0) {
+        maxMarginWinPrice = Math.max(...eligible)
+      }
+    }
+  }
+
+  return {
+    listingId: listing.id,
+    observed: obs != null,
+    market: {
+      currentPrice: Number(
+        listing.price as unknown as Prisma.Decimal,
+      ),
+      buyBoxPrice:
+        obs?.buyBoxPrice == null
+          ? null
+          : Number(obs.buyBoxPrice as unknown as Prisma.Decimal),
+      lowestCompPrice:
+        obs?.lowestCompetitorPrice == null
+          ? null
+          : Number(
+              obs.lowestCompetitorPrice as unknown as Prisma.Decimal,
+            ),
+      competitorCount: null,
+      maxMarginWinPrice,
+    },
+  }
+}
+
+/** The windows the cron reads a market over, as of now. */
+export function repricingWindows(now = Date.now()): { observationCutoff: Date; winBoxLookback: Date } {
+  return {
+    observationCutoff: new Date(now - RECENT_OBSERVATION_HOURS * 3600 * 1000),
+    winBoxLookback: new Date(now - 14 * 24 * 3600 * 1000),
+  }
+}
 
 export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
   const summary: RunSummary = {
@@ -92,99 +203,17 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
   for (const rule of rules) {
     try {
       // Find matching ChannelListing for currentPrice.
-      const listing = await prisma.channelListing.findFirst({
-        where: {
-          productId: rule.productId,
-          channel: rule.channel,
-          ...(rule.marketplace ? { marketplace: rule.marketplace } : {}),
-        },
-        select: {
-          id: true,
-          price: true,
-          marketplace: true,
-          product: { select: { sku: true } },
-        },
-        orderBy: { updatedAt: 'desc' },
-      })
-      if (!listing) {
+      const found = await repricingMarketFor(rule, { observationCutoff, winBoxLookback })
+      if (!found) {
         summary.skippedNoListing++
         continue
       }
-
-      // Find latest BuyBoxHistory for the same key.
-      const obs = await prisma.buyBoxHistory.findFirst({
-        where: {
-          productId: rule.productId,
-          channel: rule.channel,
-          ...(rule.marketplace
-            ? { marketplace: rule.marketplace }
-            : { marketplace: listing.marketplace }),
-          observedAt: { gte: observationCutoff },
-        },
-        orderBy: { observedAt: 'desc' },
-      })
-
-      // No recent observation: still evaluate (manual + match_buy_box-
-      // with-no-data strategies hold gracefully via the service's
-      // own no-data branches), but record so summary reflects it.
-      if (!obs) summary.skippedStaleObservation++
-
-      // CE.3 — MAXIMIZE_MARGIN_WIN_BOX: compute the highest price at
-      // which we won ≥70% of buy-box observations in the last 14 days.
-      let maxMarginWinPrice: number | null = null
-      if (rule.strategy === 'maximize_margin_win_box') {
-        const observations = await prisma.buyBoxHistory.findMany({
-          where: {
-            productId: rule.productId,
-            channel: rule.channel,
-            marketplace: rule.marketplace ?? listing.marketplace,
-            observedAt: { gte: winBoxLookback },
-            buyBoxPrice: { not: null },
-          },
-          select: { buyBoxPrice: true, isOurOffer: true },
-          orderBy: { observedAt: 'desc' },
-          take: 200,
-        })
-
-        if (observations.length >= 5) {
-          // Group by price (rounded to nearest €0.50 to avoid noise)
-          const priceBuckets = new Map<number, { wins: number; total: number }>()
-          for (const o of observations) {
-            const price = Math.round(Number(o.buyBoxPrice as unknown as Prisma.Decimal) * 2) / 2
-            const bucket = priceBuckets.get(price) ?? { wins: 0, total: 0 }
-            bucket.total++
-            if (o.isOurOffer) bucket.wins++
-            priceBuckets.set(price, bucket)
-          }
-          // Find the highest price where win rate ≥ 70%
-          const eligible = [...priceBuckets.entries()]
-            .filter(([, b]) => b.total >= 3 && b.wins / b.total >= 0.7)
-            .map(([price]) => price)
-          if (eligible.length > 0) {
-            maxMarginWinPrice = Math.max(...eligible)
-          }
-        }
-      }
+      if (!found.observed) summary.skippedStaleObservation++
+      const listing = { id: found.listingId }
 
       const result = await repricingEngineService.evaluate(
         rule.id,
-        {
-          currentPrice: Number(
-            listing.price as unknown as Prisma.Decimal,
-          ),
-          buyBoxPrice:
-            obs?.buyBoxPrice == null
-              ? null
-              : Number(obs.buyBoxPrice as unknown as Prisma.Decimal),
-          lowestCompPrice:
-            obs?.lowestCompetitorPrice == null
-              ? null
-              : Number(
-                  obs.lowestCompetitorPrice as unknown as Prisma.Decimal,
-                ),
-          competitorCount: null,
-          maxMarginWinPrice,
-        },
+        found.market,
         // CE.3: applyToProduct=true when NEXUS_REPRICER_LIVE=1.
         // Decisions are logged regardless; applied=true marks live writes.
         { applyToProduct: repricerLive },

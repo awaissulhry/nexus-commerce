@@ -41,8 +41,8 @@ vi.mock('./tool-policy.service.js', () => ({
       : null,
   ),
 }))
-vi.mock('../../db.js', () => ({
-  default: {
+vi.mock('../../db.js', () => {
+  const db: Record<string, unknown> = {
     agentApproval: {
       findUnique: vi.fn(),
       updateMany: vi.fn(),
@@ -50,12 +50,18 @@ vi.mock('../../db.js', () => ({
       create: vi.fn(),
     },
     agentRun: { create: vi.fn() },
-  },
-}))
+    agentChange: { create: vi.fn(), updateMany: vi.fn(), findMany: vi.fn(async () => []) },
+    // C8 — the change record and its events are written in one transaction.
+    eventOutbox: { create: vi.fn(), createMany: vi.fn() },
+  }
+  db.$transaction = vi.fn(async (work: (tx: unknown) => unknown) => work(db))
+  return { default: db }
+})
 
 import prisma from '../../db.js'
 import { decideApproval, requestApproval, runOrQueueTool } from './approval-gate.service.js'
 import { systemPrincipal, type UserPrincipal } from './call-tool.js'
+import { withWorkspace } from '../../lib/workspace-context.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { __toolRateTest } from './tool-rate.js'
 
@@ -110,7 +116,7 @@ describe('MCP.1 — who may approve', () => {
       status: 'executing',
       decidedBy: 'Awais',
     })
-    expect(execute).toHaveBeenCalledWith({ price: 12 }, { userId: 'u1' })
+    expect(execute).toHaveBeenCalledWith({ price: 12 }, expect.objectContaining({ userId: 'u1' }))
   })
 
   it('hands the approver a result without money they may not see', async () => {
@@ -127,7 +133,7 @@ describe('MCP.1 — who may approve', () => {
   it('the sweep runs a decision already taken, under the decider’s name', async () => {
     const out = await decideApproval('a1', 'approve', systemPrincipal('Awais'))
     expect(out.ok).toBe(true)
-    expect(execute).toHaveBeenCalledWith({ price: 12 }, { userId: 'Awais' })
+    expect(execute).toHaveBeenCalledWith({ price: 12 }, expect.objectContaining({ userId: 'Awais' }))
   })
 })
 
@@ -191,5 +197,80 @@ describe('MCP.1 — queueing', () => {
     expect(out).toMatchObject({ ok: false, mode: 'error' })
     expect(handler).not.toHaveBeenCalled()
     expect(db.agentApproval.create).not.toHaveBeenCalled()
+  })
+})
+
+describe('C1 — execute knows the approval it carries out', () => {
+  it('passes the approval id, the stored preview and the door of the request', async () => {
+    db.agentApproval.findUnique.mockResolvedValue({
+      id: 'a1', status: 'pending', toolName: 'change-price', args: { price: 12 },
+      preview: { price: { from: 10, to: 12 }, costPrice: 7 },
+      agentRun: { via: 'claude', mode: null },
+    } as never)
+    await decideApproval('a1', 'approve', PRICE_PERSON)
+    expect(execute.mock.calls[0]![1]).toMatchObject({
+      userId: 'u1',
+      approvalId: 'a1',
+      approvedPreview: { price: { from: 10, to: 12 }, costPrice: 7 },
+      via: 'claude',
+    })
+  })
+
+  it('a fleet request runs as the fleet; one from in-process code as the system', async () => {
+    db.agentApproval.findUnique.mockResolvedValue({
+      id: 'a1', status: 'pending', toolName: 'change-price', args: { price: 12 }, preview: null, agentRun: { via: null, mode: 'council' },
+    } as never)
+    await decideApproval('a1', 'approve', PRICE_PERSON)
+    expect(execute.mock.calls[0]![1]).toMatchObject({ via: 'fleet' })
+    db.agentApproval.findUnique.mockResolvedValue({
+      id: 'a1', status: 'pending', toolName: 'change-price', args: { price: 12 }, preview: null, agentRun: { via: null, mode: null },
+    } as never)
+    await decideApproval('a1', 'approve', PRICE_PERSON)
+    expect(execute.mock.calls[1]![1]).toMatchObject({ via: 'system' })
+  })
+})
+
+describe('C2 — an executed approval keeps what it changed', () => {
+  it('records before → after, the door, the connection and who ran it, after the approval is marked executed', async () => {
+    db.agentApproval.findUnique.mockResolvedValue({
+      id: 'a1', status: 'pending', toolName: 'change-price', args: { price: 12 }, preview: null, decisionVia: 'auto',
+      agentRun: { via: 'claude', mode: null, oauthGrantId: 'grant-1' },
+    } as never)
+    execute.mockResolvedValue({ ok: true, data: { changed: true }, change: { before: { price: 10 }, after: { price: 12 } } })
+    db.agentChange.create.mockResolvedValue({ id: 'c1' } as never)
+    db.agentChange.findMany.mockResolvedValue([{ id: 'c0' }] as never)
+    db.agentChange.updateMany.mockResolvedValue({ count: 1 } as never)
+    // Bound to the business, as the Approvals routes and the sweep are: the events carry it.
+    const out = await withWorkspace(BUSINESS, () => decideApproval('a1', 'approve', PRICE_PERSON))
+    expect(out).toMatchObject({ ok: true, status: 'executed' })
+    expect(db.agentChange.create.mock.calls[0]![0]!.data).toMatchObject({
+      approvalId: 'a1', toolName: 'change-price', via: 'claude', oauthGrantId: 'grant-1', executedByUserId: 'u1',
+      reversibility: 'none', before: { price: 10 }, after: { price: 12 }, outbound: false,
+    })
+    // The status first: recording comes after the change ran, so it can never make it run twice.
+    expect(db.agentApproval.update.mock.invocationCallOrder[0]).toBeLessThan(db.agentChange.create.mock.invocationCallOrder[0])
+    // This approval may have been an undo: the change it put back is marked undone.
+    expect(db.agentChange.findMany.mock.calls[0]![0]).toMatchObject({ where: { undoneByApprovalId: 'a1', undoneAt: null } })
+    expect(db.agentChange.updateMany.mock.calls[0]![0]).toMatchObject({ where: { id: { in: ['c0'] }, undoneAt: null } })
+    // C8 — with its events, in the same transaction: ids and names only.
+    const events = (db.eventOutbox.create.mock.calls as Array<[{ data: { type: string; payload: unknown } }]>).map(([arg]) => [arg.data.type, arg.data.payload])
+    expect(events).toEqual([
+      ['agent.change.executed', { changeId: 'c1', approvalId: 'a1', tool: 'change-price', via: 'claude', decisionVia: 'auto' }],
+      ['agent.change.undone', { changeId: 'c0', undoneByApprovalId: 'a1' }],
+    ])
+  })
+
+  it('a failure to record is logged, and the executed change stays executed', async () => {
+    db.agentChange.create.mockRejectedValue(new Error('database away'))
+    const out = await decideApproval('a1', 'approve', PRICE_PERSON)
+    expect(out).toMatchObject({ ok: true, status: 'executed' })
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(db.agentApproval.update.mock.calls.map((c) => (c[0] as { data: { status: string } }).data.status)).toEqual(['executed'])
+  })
+
+  it('a failed run records nothing', async () => {
+    execute.mockResolvedValue({ ok: false, error: 'refused' })
+    await decideApproval('a1', 'approve', PRICE_PERSON)
+    expect(db.agentChange.create).not.toHaveBeenCalled()
   })
 })

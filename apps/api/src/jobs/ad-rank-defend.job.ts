@@ -738,6 +738,10 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 export async function runRankDefendCron(): Promise<void> {
   try {
     await recordCronRun('ad-rank-defend', async () => {
+      // R16 — this business's own switch (the env armed the cron; a business may still switch it off).
+      const { engineMode } = await import('../services/automation/engine-switch.service.js')
+      const gate = await engineMode('rank-defend', 'AUTO')
+      if (gate.mode === 'OFF') return `skipped: ${gate.note}`
       const r = await runRankDefendOnce()
       // AR — after holding the slot, re-push any bid/placement whose LAST live write
       // to Amazon failed (dead-lettered queue rows + failed inline placement), so

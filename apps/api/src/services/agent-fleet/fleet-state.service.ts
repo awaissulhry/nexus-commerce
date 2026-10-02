@@ -18,6 +18,11 @@ import { logger } from '../../utils/logger.js'
  *  degraded state never renders a zero ceiling ("spent out") for "unknown". */
 const DEFAULT_DAILY_CEILING_USD = 2.0
 
+/**
+ * PER BUSINESS. The workspace client (`packages/database/workspace-client.ts`, `singleton()`) stores and reads this
+ * id as `<workspaceId>:singleton` for every business except the legacy one, which keeps `singleton`. So each business
+ * has its own row, and a halt in one never stops another (`automation-state-two-business-postgres.vitest.test.ts`).
+ */
 const SINGLETON = 'singleton'
 
 export interface FleetStateView {

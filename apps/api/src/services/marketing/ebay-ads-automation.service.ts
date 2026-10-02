@@ -480,7 +480,9 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
         }
         const candMode = cand.forcePropose ? 'propose' : mode // ER1 posture SUGGEST downgrade
         if (candMode === 'apply' && cand.kind !== 'alert') {
-          const outcome = await cand.apply()
+          // A write the gate (or the kill switch) refuses throws before anything is written: recorded as refused,
+          // and the run goes on with the next candidate.
+          const outcome = await cand.apply().catch((e: Error) => ({ ok: false, detail: `refused: ${e.message}` }))
           await prisma.ebayAdsProposal.upsert({
             where: { workspace_proposedKey: workspaceKey({ proposedKey: proposedKey }) },
             create: { ...data, proposedKey, status: outcome.ok ? 'APPLIED' : 'REJECTED', decidedBy: AUTOMATION_ACTOR, decidedAt: new Date(), appliedResult: { detail: outcome.detail } as object },

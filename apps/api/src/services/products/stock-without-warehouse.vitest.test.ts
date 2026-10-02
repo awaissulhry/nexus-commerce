@@ -29,7 +29,10 @@ let id = ''
 
 beforeAll(() => scoped(async () => {
   id = (await prisma.product.create({ data: { sku: 'stock-no-warehouse', name: 'no warehouse', basePrice: 10 } })).id
-  app.addHook('preHandler', (_request, _reply, done) => withWorkspace(workspace, done))
+  app.addHook('preHandler', (request, _reply, done) => {
+    Object.assign(request, { __rbacResolved: { isOwner: true, permissions: new Set<string>() } }) // the Owner, as the RBAC gate resolves him: price writes check the person's permissions (S1 F5)
+    withWorkspace(workspace, done)
+  })
   await app.register(productsBulkSaveRoutes)
   await app.ready()
 }), 60_000)

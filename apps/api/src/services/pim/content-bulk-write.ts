@@ -163,7 +163,10 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
         if (own !== undefined) guardVersion = own
       }
       const written = await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
-        expectedVersion: guardVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined })
+        expectedVersion: guardVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined,
+        ...(context.queueOutbound === false ? { queueOutbound: false } : {}),
+        ...(context.contentProvenance?.sourceModel ? { sourceModel: context.contentProvenance.sourceModel } : {}),
+        ...(context.contentProvenance?.reason ? { reason: context.contentProvenance.reason } : {}) })
       // Qualified receipts (`content-version-receipts.ts`): the content row this group actually wrote (a byte-identical
       // language write writes nothing) and the pair it held just before — its owner as this group's CAS saw it, its
       // content as read above. A draft's row did not exist for any reader. The caller's own token, when it guarded this

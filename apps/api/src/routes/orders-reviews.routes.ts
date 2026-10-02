@@ -1,4 +1,5 @@
 import { workspaceKey } from '@nexus/database/workspace-context'
+import { lintBuyerCopy } from '../services/comms/message-lint.js'
 /**
  * D.7 — Review request engine + Amazon Solicitations bridge.
  *
@@ -33,6 +34,7 @@ import {
   isBenignFailure,
   benignSuppressedReason,
 } from '../services/reviews/amazon-solicitations.service.js'
+import { requestReviewForOrder } from '../services/reviews/review-request.service.js'
 
 type RuleScope =
   | 'AMAZON_PER_MARKETPLACE'
@@ -343,17 +345,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/review-rules/lint', async (request, reply) => {
     const text = String((request.body as { text?: string })?.text ?? '')
     if (!text.trim()) return { ok: true, issues: [] }
-    const issues: { severity: 'error' | 'warn'; message: string; match?: string }[] = []
-    const rules: { re: RegExp; severity: 'error' | 'warn'; message: string }[] = [
-      { re: /\b(discount|coupon|voucher|refund|free|gift|reward|incentive|cashback|rebate|sconto|buono|omaggio|gratis)\b/i, severity: 'error', message: 'Possible incentive — offering anything in exchange for a review violates marketplace policy.' },
-      { re: /\b(positive|5[- ]?star|five[- ]?star|good review|great review|recensione positiva|cinque stelle)\b/i, severity: 'error', message: 'Do not ask specifically for positive / 5-star reviews — requests must be neutral.' },
-      { re: /(https?:\/\/|www\.)[^\s]+/i, severity: 'warn', message: 'External link — Amazon prohibits links to non-Amazon sites in buyer messages.' },
-      { re: /\b(remove|change|update|edit)\b[^.]*\breview\b/i, severity: 'warn', message: 'Asking a customer to remove/change a review is against policy.' },
-    ]
-    for (const r of rules) {
-      const m = text.match(r.re)
-      if (m) issues.push({ severity: r.severity, message: r.message, match: m[0] })
-    }
+    // 07 O11 — the rules live in services/comms/message-lint.ts (the buyer-message door lints with them too).
+    const issues = lintBuyerCopy(text)
     reply.header('Cache-Control', 'no-store')
     return { ok: true, issues, clean: issues.length === 0 }
   })
@@ -580,77 +573,9 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.post('/orders/:id/request-review', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const order = await prisma.order.findUnique({
-        where: { id },
-        include: {
-          returns: { select: { status: true } },
-          financialTransactions: { where: { transactionType: 'Refund' }, select: { id: true } },
-        },
-      })
-      if (!order) return reply.status(404).send({ error: 'Order not found' })
-      // Eligibility checks
-      if (!order.deliveredAt) return reply.status(400).send({ error: 'Order not yet delivered' })
-      const days = (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
-      if (days < 4) return reply.status(400).send({ error: 'Too soon — Amazon requires ≥4 days post-delivery' })
-      if (days > 30) return reply.status(400).send({ error: 'Too late — Amazon blocks requests after 30 days' })
-      if (order.returns.some((r) => ACTIVE_RETURN_STATUSES.includes(r.status as any))) {
-        return reply.status(400).send({ error: 'Order has an active return — solicitation suppressed' })
-      }
-      if (order.financialTransactions.length > 0) {
-        return reply.status(400).send({ error: 'Order has a refund — solicitation suppressed' })
-      }
-      // Dedup
-      const existing = await prisma.reviewRequest.findUnique({
-        where: { orderId_channel: workspaceKey({ orderId: order.id, channel: order.channel }) },
-      })
-      if (existing && (existing.status === 'SENT' || existing.status === 'SCHEDULED')) {
-        return reply.status(409).send({ error: `Already ${existing.status}` })
-      }
-
-      // For Amazon: try the SP-API call now. For others: enqueue/skip.
-      if (order.channel === 'AMAZON') {
-        const amazonOrderId = extractAmazonOrderId(order)
-        if (!amazonOrderId || !amazonMarketplaceIdFor(order.marketplace)) {
-          return reply.status(400).send({ error: 'Missing amazonOrderId or unknown marketplace' })
-        }
-        const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceCode: order.marketplace ?? '' })
-        const benign = isBenignFailure(result.errorCode)
-        const newStatus = result.ok ? 'SENT' as const : benign ? 'SKIPPED' as const : 'FAILED' as const
-        const data = {
-          orderId: order.id,
-          channel: order.channel,
-          marketplace: order.marketplace,
-          status: newStatus,
-          sentAt: result.ok ? new Date() : null,
-          providerRequestId: result.providerRequestId ?? null,
-          providerResponseCode: result.errorCode ?? null,
-          errorMessage: benign ? null : result.errorMessage ?? null,
-          suppressedReason: benignSuppressedReason(result.errorCode),
-        }
-        const upserted = existing
-          ? await prisma.reviewRequest.update({ where: { id: existing.id }, data })
-          : await prisma.reviewRequest.create({ data })
-        return upserted
-      }
-
-      // Non-Amazon: track-only skeleton
-      const data = {
-        orderId: order.id,
-        channel: order.channel,
-        marketplace: order.marketplace,
-        status: 'SKIPPED' as const,
-        suppressedReason: 'Channel does not support native solicitation API — wire third-party app first',
-      }
-      const upserted = existing
-        ? await prisma.reviewRequest.update({ where: { id: existing.id }, data })
-        : await prisma.reviewRequest.create({ data })
-      return upserted
-    } catch (err: any) {
-      logger.error('[REVIEW ENGINE] manual request failed', { message: err.message })
-      return reply.status(500).send({ error: err.message })
-    }
+    const { id } = request.params as { id: string }
+    const answer = await requestReviewForOrder(id, logger)
+    return reply.status(answer.status).send(answer.body)
   })
 
   fastify.post('/orders/bulk-request-reviews', async (request, reply) => {

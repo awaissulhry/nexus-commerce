@@ -89,7 +89,13 @@ export async function runFleetSweepOnce(): Promise<string> {
 }
 
 export async function runFleetSweepCron(): Promise<void> {
-  await recordCronRun('fleet-sweep', async () => runFleetSweepOnce()).catch(
+  await recordCronRun('fleet-sweep', async () => {
+    // R16 — this business's own switch, under the env that armed the cron. The sweep writes findings only (OBSERVE).
+    const { engineMode } = await import('../services/automation/engine-switch.service.js')
+    const gate = await engineMode('fleet-analysts', 'OBSERVE')
+    if (gate.mode === 'OFF') return `skipped: ${gate.note}`
+    return runFleetSweepOnce()
+  }).catch(
     (err) => logger.error('[fleet-sweep] cron failed', { error: String(err) }),
   )
 }

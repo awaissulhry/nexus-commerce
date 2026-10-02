@@ -15,6 +15,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { bulkUpdateAdTargetBids, type AdsActor } from './ads-mutation.service.js'
+import { adsActorOf } from './ads-actor.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { computeAdGroupTargetAcos, type AcosMode } from './ads-target-acos.service.js'
 import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
@@ -267,9 +268,8 @@ export async function applyBidOptimization(args: {
   // engine's Off dial is why nobody hit it.
   const entries = args.changes.map((c) => ({ adTargetId: c.targetId, bidCents: c.proposedBidCents }))
   if (entries.length === 0) return { applied: 0, dryRun: false }
-  const actor: AdsActor = args.actor?.startsWith('user:')
-    ? (args.actor as AdsActor)
-    : `automation:${args.actor ?? 'bid-optimizer'}`
+  // R2 — never `automation:automation:<x>`: auto-bid, a rule and an autopilot plan pass a namespaced actor.
+  const actor: AdsActor = adsActorOf(args.actor, 'bid-optimizer')
   const out = await bulkUpdateAdTargetBids({ entries, actor, reason: 'AX.8 target-ACOS optimization', changeSetId: args.changeSetId ?? null })
   logger.info('[AX.8] bid optimization applied', { count: out.applied, skipped: out.skipped, failed: out.failed })
   return {

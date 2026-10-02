@@ -44,7 +44,13 @@ export async function runTosDefenseOnce(): Promise<string> {
 
 export async function runTosDefenseCron(): Promise<void> {
   try {
-    await recordCronRun('top-of-search-defense', runTosDefenseOnce)
+    await recordCronRun('top-of-search-defense', async () => {
+      // R16 — this business's own switch, under the env that armed the cron.
+      const { engineMode } = await import('../services/automation/engine-switch.service.js')
+      const gate = await engineMode('tos-defense', 'AUTO')
+      if (gate.mode === 'OFF') return `skipped: ${gate.note}`
+      return runTosDefenseOnce()
+    })
   } catch (err) {
     logger.error('top-of-search-defense cron: failure', { error: err instanceof Error ? err.message : String(err) })
   }

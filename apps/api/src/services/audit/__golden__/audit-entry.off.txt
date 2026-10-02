@@ -1,0 +1,2 @@
+200
+{"success":true,"entry":{"workspaceId":"nexus_legacy_workspace","id":"golden-audit-05","userId":"golden-user-a","ip":"192.0.2.10","entityType":"ChannelListing","entityId":"golden-listing-1","action":"update","before":{"name":"before golden-audit-05","costPrice":4.2},"after":{"name":"after golden-audit-05","costPrice":4.5},"metadata":{"source":"golden"},"createdAt":"2026-09-15T09:10:00.000Z"}}

@@ -27,6 +27,15 @@ export interface Row {
   aliasKey?: string
 }
 
+/**
+ * The API's refusal of a pin to 0 on eBay while the account's out-of-stock option is OFF or unreadable (eBay would END
+ * the listing): 409 with code EBAY_ZERO_REFUSED. Its sentence, or null for any other answer (the Amazon EU 409 too).
+ */
+export function ebayZeroRefusal(status: number, body: unknown): string | null {
+  const b = body && typeof body === 'object' ? (body as { code?: unknown; error?: unknown }) : null
+  return status === 409 && b?.code === 'EBAY_ZERO_REFUSED' && typeof b.error === 'string' ? b.error : null
+}
+
 /** The address an action names for a listing row: product, channel, market, account and alias. */
 export function listingTarget(r: Pick<Row, 'productId' | 'channel' | 'marketplace' | 'channelConnectionId' | 'aliasKey'>) {
   return { productId: r.productId, channel: r.channel, marketplace: r.marketplace, channelConnectionId: r.channelConnectionId ?? null, aliasKey: r.aliasKey ?? '' }

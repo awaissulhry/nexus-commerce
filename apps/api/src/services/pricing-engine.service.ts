@@ -28,7 +28,7 @@ import type { PrismaClient } from '@prisma/client'
 import { FxRateMissingError, masterCurrency, storedFxRate } from './fx-rate.service.js'
 import { followerListingPrice, pricingRuleLabel, roundCents } from '@nexus/shared/listing-price'
 import { marketCurrency } from './pim/market-currency.js'
-import { primaryConnectionIds } from './connection-resolver.service.js'
+import { AmbiguousConnectionError, listActiveConnections, primaryConnectionIds } from './connection-resolver.service.js'
 
 export type PriceSource =
   | 'SCHEDULED_SALE'
@@ -60,6 +60,11 @@ export interface PriceResolutionInput {
   channel: string
   marketplace: string
   fulfillmentMethod?: 'FBA' | 'FBM' | null
+  /**
+   * The account whose listing is meant (an active connection of this business). Absent: the business's one account
+   * for the channel (or its primary), else the account of the product's one listing there — several, a refusal.
+   */
+  channelConnectionId?: string | null
   /** For promotion-aware queries; defaults to now. */
   asOf?: Date
 }
@@ -156,7 +161,43 @@ async function getLatestLandedCost(
 /** CX — the engine's configuration refusals (no FX rate, no market currency): a batch refuses that one cell. */
 export function isPriceRefusal(err: unknown): boolean {
   const code = (err as { code?: unknown } | null)?.code
-  return code === 'fx_rate_missing' || code === 'market_currency_unconfigured'
+  return code === 'fx_rate_missing' || code === 'market_currency_unconfigured' || code === 'account_ambiguous'
+}
+
+/**
+ * MCP full control 08 (integration) — which account's listing a price is for, when the caller did not say. A business
+ * with two eBay accounts and no primary made the primary lookup throw, and /pricing/explain answered 500. Now: the
+ * account of the product's one listing in that market; listed on several accounts, a refusal (400) naming them.
+ */
+export class AccountAmbiguousError extends Error {
+  readonly code = 'account_ambiguous'
+  readonly statusCode = 400
+  constructor(channel: string, marketplace: string, accounts: Array<{ id: string; label: string | null }>, listed: boolean) {
+    super(
+      `${listed ? `This product is listed on ${accounts.length} ${channel} accounts in ${marketplace}` : `${accounts.length} ${channel} accounts are active and none is primary`}: `
+      + `name one (accountId) — ${accounts.map((a) => `${a.id}${a.label ? ` (${a.label})` : ''}`).join(', ')}.`,
+    )
+    this.name = 'AccountAmbiguousError'
+  }
+}
+
+async function pricingAccount(prisma: PrismaClient, productId: string, input: PriceResolutionInput): Promise<string | null> {
+  if (input.channelConnectionId !== undefined) return input.channelConnectionId
+  try {
+    return (await primaryConnectionIds([input.channel])).get(input.channel) ?? null
+  } catch (error) {
+    if (!(error instanceof AmbiguousConnectionError)) throw error
+    const listings = await prisma.channelListing.findMany({
+      where: { productId, channel: input.channel, marketplace: input.marketplace, aliasKey: '' },
+      select: { channelConnectionId: true, channelConnection: { select: { id: true, accountLabel: true, displayName: true } } },
+    })
+    const listed = [...new Map(listings.map((l) => [l.channelConnectionId, l.channelConnection])).entries()]
+    if (listed.length === 1) return listed[0][0]
+    const accounts = listed.length
+      ? listed.map(([id, c]) => ({ id: id ?? 'none', label: c?.accountLabel ?? c?.displayName ?? null }))
+      : (await listActiveConnections(input.channel, prisma)).map((c) => ({ id: c.id, label: c.accountLabel ?? c.displayName ?? null }))
+    throw new AccountAmbiguousError(input.channel, input.marketplace, accounts, listed.length > 0)
+  }
 }
 
 /**
@@ -262,22 +303,27 @@ export async function resolvePrice(
 
   // ── Resolve ChannelListing (per-marketplace overrides + fees) ───
   // MAP.2b — a price read must name the account whose listing it means.
-  const pricingConn = productId
-    ? (await primaryConnectionIds([input.channel])).get(input.channel) ?? null
-    : null
+  const pricingConn = productId ? await pricingAccount(prisma, productId, input) : null
+  // MCP full control 08 (price-explain) — with no active account for the channel `pricingConn` is null, and a compound
+  // unique cannot target a null: the lookup threw and /pricing/explain answered 500. The same key as a filter finds the
+  // listing that names no account (the one a business without a connection holds), and is the unique row otherwise.
   const channelListing = productId
-    ? await prisma.channelListing.findUnique({
-        where: {
-          productId_channel_marketplace: workspaceKey({
-            productId,
-            channel: input.channel,
-            marketplace: input.marketplace,
-            channelConnectionId: pricingConn,
-            // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
-            aliasKey: '',
-          }),
-        },
-      })
+    ? pricingConn
+      ? await prisma.channelListing.findUnique({
+          where: {
+            productId_channel_marketplace: workspaceKey({
+              productId,
+              channel: input.channel,
+              marketplace: input.marketplace,
+              channelConnectionId: pricingConn,
+              // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+              aliasKey: '',
+            }),
+          },
+        })
+      : await prisma.channelListing.findFirst({
+          where: { productId, channel: input.channel, marketplace: input.marketplace, channelConnectionId: null, aliasKey: '' },
+        })
     : null
 
   const fbaFee = channelListing?.estimatedFbaFee

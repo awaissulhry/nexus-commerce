@@ -359,6 +359,39 @@ export class InsufficientStockError extends Error {
   }
 }
 
+/**
+ * MCP full control 08 S2 (F7) — a location another system owns. AMAZON_FBA mirrors Amazon: only the FBA inventory
+ * sync (SYNC_RECONCILIATION) writes it, because FBA quantity is untouchable. SHOPIFY_LOCATION holds Shopify's own
+ * number. A person's change (adjust, count, write-off, transfer) never lands on either, and no channel stock event
+ * changes the FBA mirror. Raised before anything is written.
+ */
+export class ProtectedLocationError extends Error {
+  readonly code = 'PROTECTED_LOCATION'
+  constructor(readonly locationId: string, readonly locationType: string, what: string, message?: string) {
+    super(message ?? (locationType === 'AMAZON_FBA'
+      ? `FBA stock cannot be changed by ${what}: Amazon is the source of truth, and only the FBA inventory sync writes it.`
+      : `Shopify location stock cannot be changed by ${what}: it is Shopify's own number.`))
+    this.name = 'ProtectedLocationError'
+  }
+}
+
+/** The reasons a person chooses (adjust, count, write-off, transfer). */
+export const MANUAL_STOCK_REASONS: ReadonlySet<string> = new Set(['MANUAL_ADJUSTMENT', 'INVENTORY_COUNT', 'WRITE_OFF', 'TRANSFER_OUT', 'TRANSFER_IN'])
+const MANUAL_REASON_WORDS: Record<string, string> = {
+  MANUAL_ADJUSTMENT: 'an adjustment', INVENTORY_COUNT: 'a stock count', WRITE_OFF: 'a write-off', TRANSFER_OUT: 'a transfer', TRANSFER_IN: 'a transfer',
+}
+
+/** F7 — the refusal for a movement of `reason` at a location of `locationType`, or null when it may be written. */
+export function protectedLocationRefusal(reason: string, locationId: string, locationType: string | null | undefined): ProtectedLocationError | null {
+  if (MANUAL_STOCK_REASONS.has(reason) && (locationType === 'AMAZON_FBA' || locationType === 'SHOPIFY_LOCATION')) {
+    return new ProtectedLocationError(locationId, locationType, MANUAL_REASON_WORDS[reason] ?? 'a manual change')
+  }
+  if (reason === 'CHANNEL_STOCK_RECONCILIATION' && locationType === 'AMAZON_FBA') {
+    return new ProtectedLocationError(locationId, locationType, 'a channel stock event')
+  }
+  return null
+}
+
 export interface StockMovementTxResult {
   movement: any
   cascade: CascadeResult
@@ -407,6 +440,13 @@ export async function applyStockMovementInTx(
     locationId,
     warehouseId,
   })
+
+  // 08 S2 (F7) — a person's change never lands on the FBA mirror or a Shopify location; no channel event changes FBA.
+  if (MANUAL_STOCK_REASONS.has(reason) || reason === 'CHANNEL_STOCK_RECONCILIATION') {
+    const target = await tx.stockLocation.findUnique({ where: { id: resolvedLocationId }, select: { type: true } })
+    const refusal = protectedLocationRefusal(reason, resolvedLocationId, target?.type)
+    if (refusal) throw refusal
+  }
 
   // Shared stock step 4 — a sale of a product that sells from a pool is taken from the pool
   // (stock-pool/order-routing.ts). One that reaches this business's own warehouse anyway came through

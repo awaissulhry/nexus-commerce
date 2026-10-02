@@ -29,7 +29,7 @@ import { AmbiguousConnectionError, tryResolveConnection } from '../services/conn
 import { DraftListingError, ensureDraftListingsInTransaction } from '../services/pim/draft-listing.service.js'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
-import { applyListingBulkPricing, ListingPricingError, parseListingPricingEdit, patchListing, PRICE_ABOVE_ZERO, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
+import { applyListingBulkPricing, assertPriceEditAllowed, ListingPricingError, parseListingPricingEdit, patchListing, PRICE_ABOVE_ZERO, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
 import { listingVersionOf, setListingQuantityFollow, writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
@@ -1318,6 +1318,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             ...(pricing ? { pricing } : {}),
             columns: data,
             mergePlatformAttributes: mergePlatformAttrs,
+            can: permissionCheckerFor(request),
           })
         }
         if (quantityFollow !== undefined) {
@@ -3376,6 +3377,13 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const validActions = ['resync', 'set-price', 'follow-master', 'unfollow-master', 'set-pricing-rule']
       if (!validActions.includes(action)) {
         return reply.code(400).send({ error: `Invalid action. Allowed: ${validActions.join(', ')}` })
+      }
+      // S1 (F5) — every action but a resync changes listing prices: refused before the job exists.
+      if (action !== 'resync') {
+        try { assertPriceEditAllowed(permissionCheckerFor(request)) } catch (err) {
+          if (err instanceof ListingPricingError) return reply.code(err.statusCode).send({ error: err.message, ...err.details })
+          throw err
+        }
       }
 
       // Validate action-specific payload BEFORE creating the job row so

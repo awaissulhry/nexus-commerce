@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { TOOL_CARDS, toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { ApprovalCard, ChannelEffectDetail, type CardApproval } from './ApprovalCard'
 import { ParkedRow } from './ApprovalLists'
-import { approveLabelFor, channelEffectOf, claudeDoorSentence, moreThanShown, outsideHeading } from './approval-words'
+import { approveLabelFor, channelEffectOf, claudeDoorSentence, moreThanShown, outsideHeading, productEntityOf } from './approval-words'
 
 const bulkPrice = {
   action: 'bulk-price-change',
@@ -52,11 +52,22 @@ const setPrice = {
   deltaPct: 2.5,
 }
 
-function card(toolName: string, preview: Record<string, unknown>, reason?: string): string {
+/** C1 — what the API states on each row, from the tool registry (apps/api tool-contract.vitest.test.ts holds it there). */
+const REGISTRY_REVERSIBILITY: Record<string, CardApproval['reversibility']> = {
+  'set-price': 'full', 'bulk-price-change': 'full', 'bulk-attribute-change': 'full', 'apply-content': 'full', 'set-master-prices': 'full',
+  'publish-listing': 'partial', 'send-customer-message': 'none',
+}
+
+function card(
+  toolName: string,
+  preview: Record<string, unknown>,
+  reason?: string,
+  reversibility: CardApproval['reversibility'] = REGISTRY_REVERSIBILITY[toolName],
+): string {
   const approval: CardApproval = {
     id: 'ap-1', toolName, charterKey: null, riskTier: 'high', status: 'pending', args: {}, preview,
     requestedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
-    reason,
+    reason, reversibility,
   }
   return renderToStaticMarkup(createElement(ApprovalCard, {
     approval, labels: { campaigns: {}, targets: {} }, workerName: 'Someone using Claude', busy: false, canExecute: true,
@@ -109,7 +120,7 @@ describe('MCP.12 — the bulk tools have their own card, and it is honest', () =
   it('neither falls through to "not recorded"', () => {
     for (const tool of ['bulk-price-change', 'bulk-attribute-change']) {
       expect(TOOL_CARDS[tool]).toBeDefined()
-      expect(toolCardFor(tool).undoable).not.toBe('unknown')
+      expect(toolCardFor(tool).reversible).not.toContain('Not recorded')
       const html = card(tool, tool === 'bulk-price-change' ? bulkPrice : bulkAttribute)
       expect(html).not.toContain('proposes to run')
       expect(html).not.toContain('Not recorded for this action')
@@ -123,7 +134,10 @@ describe('MCP.12 — the bulk tools have their own card, and it is honest', () =
     const html = card('bulk-price-change', bulkPrice)
     expect(html).toContain('wants to change master prices')
     expect(html).toContain('every listing that follows the master price sells at the wrong price on its marketplace')
-    expect(html).toContain('This cannot be undone, only compensated for.')
+    // C1/C2 — undo now puts every previous master price back in one step (as set-price's does), so the registry
+    // states `full`; orders placed at the new price still stand, and the card says so in its cost line.
+    expect(html).toContain('We can put this back the way it was')
+    expect(html).toContain('orders placed in the meantime stand at that price')
     expect(toolCardFor('bulk-price-change').nexusOnly).toBeFalsy()
   })
 
@@ -173,6 +187,27 @@ describe('MCP.12 — no one channel is named, and Nexus-only is not counted as r
     for (const names of [['set-price'], ['bulk-attribute-change'], ['bulk-price-change', 'bulk-attribute-change']]) {
       expect(outsideHeading(names)).not.toContain('Amazon')
     }
+  })
+
+  // Found in the local end-to-end run (2026-10-02): a set-product-tags request (Nexus only, no card of its own) sat
+  // under "1 request can change something on your sales channels". The registry's openWorld says where it lands.
+  it('a tool with no card of its own lands where its openWorld says; a card that says Nexus only keeps saying it', () => {
+    expect(outsideHeading([{ toolName: 'set-product-tags', openWorld: false }])).toBe('1 request can change Nexus — it does not reach a sales channel')
+    expect(outsideHeading([{ toolName: 'set-product-tags', openWorld: false }, { toolName: 'set-price', openWorld: true }]))
+      .toBe('2 requests can change something — 1 on your sales channels, 1 in Nexus only')
+    // Not stated: treated as reaching a channel, the safe direction to be wrong in.
+    expect(outsideHeading([{ toolName: 'some-new-tool' }])).toBe('1 request can change something on your sales channels')
+    // Its card says the write is Nexus only (it reads the store live): the card's word stands.
+    expect(outsideHeading([{ toolName: 'set-shopify-content', openWorld: true }])).toBe('1 request can change Nexus — it does not reach a sales channel')
+  })
+
+  it('the product a request is on, from its preview: its name and SKU', () => {
+    expect(productEntityOf({ sku: 'TEST-SKU-1', product: 'Test jacket' })).toBe('Test jacket (SKU TEST-SKU-1)')
+    expect(productEntityOf({ sku: 'TEST-SKU-1', productName: 'Test jacket' })).toBe('Test jacket (SKU TEST-SKU-1)')
+    expect(productEntityOf({ sku: 'TEST-SKU-1' })).toBe('SKU TEST-SKU-1')
+    expect(productEntityOf({ product: 'Test jacket' })).toBe('Test jacket')
+    expect(productEntityOf({ product: { id: 'x' } })).toBeNull()
+    expect(productEntityOf(null)).toBeNull()
   })
 
   it('the parked row', () => {
@@ -253,5 +288,111 @@ describe('MCP.12 — a request handed back reads as one DS Banner, icon beside t
     const rules = [...css.matchAll(/([^{}]*aq-cameback[^{}]*)\{([^}]*)\}/g)].map((m) => m[2])
     expect(rules.length).toBeGreaterThan(0)
     for (const body of rules) expect(body).not.toMatch(/\b(background|border|color)\s*:/)
+  })
+})
+
+describe('C1 — how far a change can be undone comes from the API row, not from a copy on the page', () => {
+  const NEVER = 'This cannot be taken back once it runs, by any means.'
+  const RESTORE = 'We can put this back the way it was — the previous value is recorded.'
+  const COMPENSATE = 'This cannot be undone, only compensated for.'
+
+  it('the same tool reads as the row says', () => {
+    expect(card('set-price', setPrice, undefined, 'full')).toContain(RESTORE)
+    expect(card('set-price', setPrice, undefined, 'partial')).toContain(COMPENSATE)
+    const none = card('set-price', setPrice, undefined, 'none')
+    expect(none).toContain(NEVER)
+    expect(none).toContain('and that it cannot be undone')
+  })
+
+  it('a row that says nothing (an older API, an unknown tool) is treated as irreversible', () => {
+    expect(card('set-price', setPrice, undefined, null)).toContain(NEVER)
+    expect(card('some-new-tool', { note: 'x' }, undefined, undefined)).toContain(NEVER)
+  })
+
+  it('no tool card on the page states reversibility any more', () => {
+    for (const vocab of Object.values(TOOL_CARDS)) expect(vocab).not.toHaveProperty('undoable')
+    const source = readFileSync(join(import.meta.dirname, 'ApprovalsClient.tsx'), 'utf8')
+    expect(source).not.toMatch(/toolName === 'send-customer-message' \|\| a\.toolName === 'publish-listing'/)
+  })
+})
+
+describe('C2 — the undo of a bulk price change reads as one, not as an unknown action', () => {
+  const undoPrices = {
+    ...bulkPrice,
+    action: 'set-master-prices',
+    effect: 'Master price set product by product (EUR) on 3 products. 3 listings that follow the master price are sent to their marketplace after a hold of 30 seconds.',
+    change: { operation: 'each', value: null, currency: 'EUR' },
+  }
+
+  it('has its own card, says what each marketplace gets, and names the whole request', () => {
+    const html = card('set-master-prices', undoPrices)
+    expect(html).toContain('wants to set master prices, each to its own value')
+    expect(html).not.toContain('Not recorded for this action')
+    expect(applyButton(html)).toBe('Apply — base price set one by one on 3 products')
+    expect(channelEffectOf('set-master-prices', undoPrices)?.lines).toEqual(bulkPrice.listings)
+    expect(moreThanShown('set-master-prices', { ...undoPrices, moreProducts: 4 })).toBe('and 4 more products')
+  })
+})
+
+describe('MCP full control A11 — a new Amazon campaign reads as its plan', () => {
+  const plan = {
+    action: 'create-ad-campaign',
+    plan: {
+      market: 'UK', name: 'UK jackets', currency: 'GBP', dailyBudgetCents: 1500, adGroup: { name: 'UK jackets Ad Group', defaultBidCents: 60 },
+      products: [{ sku: 'TEST-JACKET-1' }, { sku: 'TEST-JACKET-2' }],
+      keywords: [{ text: 'race jacket', matchType: 'EXACT', bidCents: 90 }], productTargets: [], negativeKeywords: [{ text: 'cheap', matchType: 'PHRASE' }],
+    },
+    ceiling: { label: 'the UK market', dailyCapCents: 3000 },
+    reachNote: 'sandbox: after approval it is recorded in Nexus only. Amazon ads writes are not live, so nothing reaches Amazon.',
+  }
+
+  it('names the campaign, its budget, bids, products and keywords in its own currency, and what it costs if it is wrong', () => {
+    const html = card('create-ad-campaign', plan, undefined, 'none')
+    for (const words of [
+      'wants to create a new Amazon campaign', 'new campaign “UK jackets”', 'GBP 15.00', 'the 2-cent floor; restore-campaign puts the planned bids back (default GBP 0.60)',
+      '2 products: TEST-JACKET-1, TEST-JACKET-2', '1: “race jacket” EXACT GBP 0.90', 'it serves at the 2-cent floor, next to no spend',
+    ]) expect(html).toContain(words)
+    expect(html).not.toContain('Not recorded for this action')
+    expect(html).not.toContain('€')
+    expect(applyButton(html)).toBe('Create “UK jackets” — GBP 15.00 a day, bids at the floor')
+  })
+})
+
+describe('MCP full control A6–A12 — every Amazon ad change has its own words, never "not recorded"', () => {
+  it('each states what it wants, how it is put back and what it costs if wrong', () => {
+    for (const tool of ['set-campaign-budget', 'set-placement-multipliers', 'bulk-ad-bid-change', 'suppress-campaign', 'restore-campaign', 'set-campaign-live-writes', 'undo-ad-change', 'create-ad-campaign']) {
+      expect(TOOL_CARDS[tool]).toBeDefined()
+      expect(toolCardFor(tool).wrongCost).not.toContain('Not recorded')
+      expect(card(tool, { campaign: { name: 'Italy exact', marketplace: 'IT' } }, undefined, tool === 'undo-ad-change' || tool === 'create-ad-campaign' ? 'none' : 'full')).not.toContain('Not recorded for this action')
+    }
+    // The allowlist switch changes Nexus only: nothing is sent to Amazon by it.
+    expect(TOOL_CARDS['set-campaign-live-writes'].nexusOnly).toBe(true)
+  })
+})
+
+describe('MCP full control A14/A15 — the eBay ad changes read as what they do, sandbox included', () => {
+  const SANDBOX = 'SANDBOX: eBay ad writes are off (NEXUS_MARKETING_WRITES_EBAY), so after approval it is recorded in Nexus only — nothing reaches eBay.'
+  const campaign = { id: 'e1', name: 'Gloves IT', marketplace: 'EBAY_IT' }
+
+  it('rates, promotions, a budget and keywords each show their values; none falls back to "not recorded"', () => {
+    const rates = card('set-ebay-ad-rates', { campaign, changes: [{ itemId: '110000000001', fromPct: 6, toPct: 8 }], left: { aboveBreakEven: [{ itemId: '2' }] }, reachNote: SANDBOX }, undefined, 'full')
+    expect(rates).toContain('6%')
+    expect(rates).toContain('8%')
+    const promote = card('promote-ebay-listings', { campaign, adds: [{ itemId: '110000000003', sku: 'TEST-EBAY-3', ratePct: 3 }], left: {}, reachNote: SANDBOX }, undefined, 'partial')
+    expect(promote).toContain('promoted at 3%')
+    const budget = card('set-ebay-campaign-budget', { campaign, currency: 'GBP', currentBudgetCents: 800, proposedBudgetCents: 900, reachNote: SANDBOX }, undefined, 'full')
+    expect(budget).toContain('GBP 8.00')
+    expect(budget).toContain('GBP 9.00')
+    const keywords = card('ebay-keywords-change', { campaign, currency: 'EUR', bidChanges: [{ text: 'leather gloves', matchType: 'EXACT', fromCents: 40, toCents: 55 }], adds: [], negatives: [], reachNote: SANDBOX }, undefined, 'partial')
+    expect(keywords).toContain('€0.40')
+    expect(keywords).toContain('€0.55')
+    for (const html of [rates, promote, budget, keywords]) expect(html).not.toContain('Not recorded for this action')
+  })
+
+  it('a new eBay campaign names how it starts on its button', () => {
+    const html = card('create-ebay-campaign', { plan: { market: 'EBAY_IT', name: 'Gloves launch', fundingModel: 'COST_PER_SALE', ratePct: 2, currency: 'EUR' }, account: { name: 'Test eBay account' }, reachNote: SANDBOX }, undefined, 'none')
+    expect(html).toContain('wants to create a new eBay campaign')
+    expect(html).toContain('minimum), no listings yet')
+    expect(applyButton(html)).toBe('Create “Gloves launch” — at 2%, no listings')
   })
 })

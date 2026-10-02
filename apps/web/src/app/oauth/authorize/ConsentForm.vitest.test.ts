@@ -19,14 +19,15 @@ const view: ConsentView = {
     { id: 'w1', name: 'Xavia', canConnect: true },
     { id: 'w2', name: 'Other shop', canConnect: false },
   ],
+  lockedWorkspaceId: null,
 }
 
 const noop = () => undefined
 function render(overrides: Partial<ConsentFormProps> = {}, viewOverrides: Partial<ConsentView> = {}) {
   return renderToStaticMarkup(createElement(ConsentForm, {
     view: { ...view, ...viewOverrides },
-    workspaceId: 'w1', allowWrite: true, code: '', busy: false, error: null,
-    onWorkspace: noop, onAllowWrite: noop, onCode: noop, onApprove: noop, onDeny: noop,
+    workspaceId: 'w1', allowWrite: true, allowRun: false, code: '', busy: false, error: null,
+    onWorkspace: noop, onAllowWrite: noop, onAllowRun: noop, onCode: noop, onApprove: noop, onDeny: noop,
     ...overrides,
   }))
 }
@@ -72,6 +73,48 @@ describe('MCP.5 — consent form', () => {
     const html = render({ workspaceId: '' }, { businesses: [{ id: 'w2', name: 'Other shop', canConnect: false }] })
     expect(html).toContain('needs the permission to use the assistant')
     expect(html).not.toContain('one-time-code')
+  })
+})
+
+describe('C5 — nexus.run: letting Claude run the changes set to run by rule', () => {
+  const RUN = 'Run the changes your business set to run by rule'
+  const runBox = (html: string) => new RegExp(`<input[^>]*>[^<]*(?:<[^>]+>)*[^<]*${RUN}`).exec(html)?.[0] ?? ''
+
+  it('is offered only when the app asked for it, and starts unticked', () => {
+    const html = render({}, { scopes: ['nexus.read', 'nexus.write', 'nexus.run'] })
+    expect(html).toContain(RUN)
+    expect(runBox(html)).not.toContain('checked=""')
+    expect(render()).not.toContain(RUN)
+  })
+
+  it('can be ticked only while Claude may ask for changes', () => {
+    const asked = { scopes: ['nexus.read', 'nexus.write', 'nexus.run'] as ConsentView['scopes'] }
+    expect(runBox(render({ allowRun: true }, asked))).toContain('checked=""')
+    expect(runBox(render({ allowWrite: false, allowRun: true }, asked))).toContain('disabled=""')
+    expect(runBox(render({ allowWrite: false, allowRun: true }, asked))).not.toContain('checked=""')
+  })
+})
+
+describe('C4 — a business’s own Claude URL locks the consent to that business', () => {
+  const locked: Partial<ConsentView> = { lockedWorkspaceId: 'w1', businesses: [{ id: 'w1', name: 'Xavia', canConnect: true }] }
+
+  it('names the one business, with no choice of another', () => {
+    const html = render({}, locked)
+    expect(html).not.toContain('<select')
+    expect(html).toMatch(/<dt>Business<\/dt><dd>Xavia/)
+    expect(html).toContain('This connection is for Xavia only')
+    expect(connectDisabled(render({ code: '123456' }, locked))).toBe(false)
+  })
+
+  it('a business the person cannot connect: it says so and offers only Cancel', () => {
+    const html = render({ workspaceId: '' }, { lockedWorkspaceId: 'w9', businesses: [] })
+    expect(html).toContain('cannot connect Claude to the business this connection is for')
+    expect(html).not.toContain('one-time-code')
+    expect(html).not.toContain('<select')
+  })
+
+  it('the plain URL still offers the choice', () => {
+    expect(render({}, { lockedWorkspaceId: null })).toContain('<select')
   })
 })
 

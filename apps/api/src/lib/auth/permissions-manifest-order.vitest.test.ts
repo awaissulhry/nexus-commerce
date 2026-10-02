@@ -61,6 +61,30 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('POST', '/api/products/bulk')).toBe('products.edit')
   })
 
+  // MCP full control R18 (part 06 gap 13) — `has('/automation')` was a broad ads matcher listed before the
+  // replenishment, review and returns prefixes, so their automation routes asked for ads.automation.manage: a
+  // replenishment planner could not see their own rules, and an ads manager could edit them. Written from purpose.
+  it.each([
+    ['GET', '/api/fulfillment/replenishment/automation/rules', 'replenishment.view'],
+    ['POST', '/api/fulfillment/replenishment/automation/rules', 'replenishment.run'],
+    ['PATCH', '/api/fulfillment/replenishment/automation/rules/:id', 'replenishment.run'],
+    ['POST', '/api/fulfillment/replenishment/automation/rules/:id/test', 'replenishment.run'],
+    ['POST', '/api/fulfillment/replenishment/automation/emergency-disable-all', 'replenishment.run'],
+    ['GET', '/api/reviews/automation-rules', 'reviews.view'],
+    ['POST', '/api/reviews/automation-rules/seed-templates', 'reviews.manage'],
+    ['POST', '/api/fulfillment/returns/automation/apply', 'returns.process'],
+    // The ads automation routes keep theirs (control).
+    ['POST', '/api/advertising/automation/halt', 'ads.automation.manage'],
+    // R16 — a person's engine switch in the Control Room.
+    ['POST', '/api/advertising/automation/engine-switch/:key', 'ads.automation.manage'],
+    ['POST', '/api/advertising/automation/engine-switch/rank-defend', 'ads.automation.manage'],
+    ['POST', '/api/advertising/automation-rules', 'ads.automation.manage'],
+    ['GET', '/api/advertising/automation-rules', 'ads.view'],
+    ['PUT', '/api/ebay-ads/campaigns/:id/automation-policy', 'ads.automation.manage'],
+  ])('R18: %s %s requires %s', (method, path, permission) => {
+    expect(permissionForRoute(method, path)).toBe(permission)
+  })
+
   it('separates catalogue language reads and estimates from translation edits and model spend', () => {
     for (const path of ['languages', 'translate/runs']) expect(permissionForRoute('GET', `/api/catalog-transfer/${path}`)).toBe('products.view')
     expect(permissionForRoute('POST', '/api/products/grid')).toBe('products.view')
@@ -186,6 +210,22 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('POST', '/api/products/:id/studio/sheet')).toBe('products.edit')
   })
 
+  it('a refund from a return needs orders.refund, not only returns.process (MCP full control #15)', () => {
+    // Written from purpose: issuing or retrying a refund sends money back to the buyer through the channel, the same
+    // act `orders.refund` guards on /api/orders. The returns rule matched these first, so anyone who could process a
+    // return could also refund it.
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/refund')).toBe('orders.refund')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/refund/retry')).toBe('orders.refund')
+    // The neighbours: refund READS stay with returns.view, the other return writes with returns.process.
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/:id/refunds')).toBe('returns.view')
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/:id/refund/retry-status')).toBe('returns.view')
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/refund-deadline-summary')).toBe('returns.view')
+    expect(permissionForRoute('GET', '/api/fulfillment/returns/refund-channel-status')).toBe('returns.view')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/receive')).toBe('returns.process')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/restock')).toBe('returns.process')
+    expect(permissionForRoute('POST', '/api/fulfillment/returns/bulk/approve')).toBe('returns.process')
+  })
+
   it('receiving a PO needs po.receive and the legacy straight-to-SUBMITTED route needs po.approve (MCP full control #21, F1)', () => {
     // Written from purpose: receiving books goods into stock (po.receive); `…/:id/submit` moves any PO to SUBMITTED
     // past the approval step, so it is an approval (po.approve). The PO rule matched every PO path first, so both
@@ -202,20 +242,43 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('GET', '/api/fulfillment/purchase-orders/:id/match')).toBe('po.view')
   })
 
-  it('a refund from a return needs orders.refund, not only returns.process (MCP full control #15)', () => {
-    // Written from purpose: issuing or retrying a refund sends money back to the buyer through the channel, the same
-    // act `orders.refund` guards on /api/orders. The returns rule matched these first, so anyone who could process a
-    // return could also refund it.
-    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/refund')).toBe('orders.refund')
-    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/refund/retry')).toBe('orders.refund')
-    // The neighbours: refund READS stay with returns.view, the other return writes with returns.process.
-    expect(permissionForRoute('GET', '/api/fulfillment/returns/:id/refunds')).toBe('returns.view')
-    expect(permissionForRoute('GET', '/api/fulfillment/returns/:id/refund/retry-status')).toBe('returns.view')
-    expect(permissionForRoute('GET', '/api/fulfillment/returns/refund-deadline-summary')).toBe('returns.view')
-    expect(permissionForRoute('GET', '/api/fulfillment/returns/refund-channel-status')).toBe('returns.view')
-    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/receive')).toBe('returns.process')
-    expect(permissionForRoute('POST', '/api/fulfillment/returns/:id/restock')).toBe('returns.process')
-    expect(permissionForRoute('POST', '/api/fulfillment/returns/bulk/approve')).toBe('returns.process')
+  it('S1 (08 §1.4 F4, F11) — stock, supply and pricing routes resolve on their REAL paths, from their purpose', () => {
+    // F4 — the cost grid's write is a cost edit (the rule named /api/product-costs, which no route has).
+    expect(permissionForRoute('PATCH', '/api/products/costs')).toBe('pricing.costs.edit')
+    expect(permissionForRoute('GET', '/api/products/costs')).toBe('products.view')
+    // F11 — a product's B2B tier prices are restricted money, read and write (they were products.view / products.edit).
+    expect(permissionForRoute('GET', '/api/products/:id/tier-prices')).toBe('pricing.tiers.manage')
+    expect(permissionForRoute('POST', '/api/products/:id/tier-prices')).toBe('pricing.tiers.manage')
+    // F11 — an eBay volume promotion is a price: changing one is a pricing edit (it was the channel-sync default).
+    expect(permissionForRoute('POST', '/api/ebay/volume-promotions/:id/push')).toBe('pricing.edit')
+    expect(permissionForRoute('PATCH', '/api/ebay/volume-tier-templates/:id')).toBe('pricing.edit')
+    expect(permissionForRoute('GET', '/api/ebay/volume-promotions')).toBe('listings.view')
+    // F11 — the replenishment automation is purchasing, not advertising (has('/automation') handed it ads.automation.manage).
+    expect(permissionForRoute('POST', '/api/fulfillment/replenishment/automation/rules')).toBe('replenishment.run')
+    expect(permissionForRoute('GET', '/api/fulfillment/replenishment/automation/rules')).toBe('replenishment.view')
+    // F11 — FBA inbound v1 is inbound work (it was inventory.adjust / inventory.view).
+    expect(permissionForRoute('POST', '/api/fulfillment/fba/plan-shipment')).toBe('inbound.manage')
+    expect(permissionForRoute('GET', '/api/fulfillment/fba/shipments')).toBe('inbound.manage')
+    // F11 — PO templates make purchase orders (they fell to inventory.adjust).
+    expect(permissionForRoute('POST', '/api/fulfillment/po-templates/:id/instantiate')).toBe('po.create')
+    expect(permissionForRoute('GET', '/api/fulfillment/po-templates')).toBe('po.view')
+    // Transfers, counts and lots carry their own permissions; their reads stay stock reads.
+    expect(permissionForRoute('POST', '/api/stock/transfer')).toBe('stock.transfer')
+    expect(permissionForRoute('POST', '/api/stock/bulk-transfer')).toBe('stock.transfer')
+    expect(permissionForRoute('POST', '/api/stock/bins/move')).toBe('stock.transfer')
+    expect(permissionForRoute('GET', '/api/stock/transfers')).toBe('inventory.view')
+    expect(permissionForRoute('POST', '/api/fulfillment/cycle-counts/:id/items/:itemId/reconcile')).toBe('stock.count')
+    expect(permissionForRoute('GET', '/api/fulfillment/cycle-counts')).toBe('inventory.view')
+    expect(permissionForRoute('POST', '/api/stock/recalls/:id/close')).toBe('lots.manage')
+    expect(permissionForRoute('GET', '/api/stock/lots')).toBe('inventory.view')
+    // The neighbours do not move: a stock adjustment, the ad automation, the other replenishment routes.
+    expect(permissionForRoute('POST', '/api/stock/adjust-location')).toBe('inventory.adjust')
+    expect(permissionForRoute('POST', '/api/stock/bins')).toBe('inventory.adjust')
+    expect(permissionForRoute('POST', '/api/advertising/automation-rules')).toBe('ads.automation.manage')
+    expect(permissionForRoute('POST', '/api/ebay-ads/automation/rules')).toBe('ads.automation.manage')
+    expect(permissionForRoute('POST', '/api/fulfillment/replenishment/bulk-draft-po')).toBe('replenishment.run')
+    expect(permissionForRoute('POST', '/api/fulfillment/inbound/:id/receive')).toBe('inbound.manage')
+    expect(permissionForRoute('PATCH', '/api/products/:id')).toBe('products.edit')
   })
 
   it('PES.5 studio routes inherit the products prefix rule', () => {

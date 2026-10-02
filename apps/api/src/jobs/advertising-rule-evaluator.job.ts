@@ -1787,19 +1787,23 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
  * what the rule would have done. Nothing in the UI called it, which is the only reason this was
  * a latent hazard rather than an incident.
  *
- * Three things make this safe, and all three are required:
+ * Four things make this safe, and all four are required:
  *   · `ruleIds: [ruleId]` — no other rule is evaluated, so no other rule can act
  *   · `forceDryRun: true` — this rule cannot write either, whatever its autonomy says
  *   · `isTestRun: true`   — and it cannot leave a proposal in the Suggestions queue
+ *   · `noPersist: true`   — and it leaves no run row and raises no counter (R3, below)
  *
  * `ignoreEnabled` lets a DISABLED rule be simulated without arming it, which is the main case:
  * 29 of the 51 rules are off, and "what would this do" is the question you ask before turning one
  * on. The old `/test` route answered it by writing `enabled: true` and hoping to write it back.
  *
- * NOT free of side effects, and the caller must say so: `evaluateRule` records an
- * `AutomationRuleExecution` row per context, exactly as a dry-run tick does. That is the audit
- * trail working as intended — but "writes nothing" means nothing reaches AMAZON, not that the
- * database is untouched. Same distinction the fleet's preview surfaces had to learn.
+ * R3 (MCP full control, part 06 gap 6) — and it writes no `AutomationRuleExecution` row and raises no
+ * `evaluationCount` / `matchCount` / `executionCount`. It used to record one row per context, exactly as a dry-run
+ * tick does, and the graduation gate counts those numbers ("10 evaluations", "1 match"), so a few simulations could
+ * open the road to Auto for a rule that never ran on a tick; the rows also spent the rule's own daily cap.
+ *
+ * R8 — and it notifies nobody: `notify` and `alert_operator` see `meta.preview` and report whom they would reach (a
+ * tick's dry run still notifies, by design). Nothing reaches Amazon.
  */
 export async function simulateOneRule(ruleId: string): Promise<{
   ok: boolean
@@ -1951,7 +1955,7 @@ export async function simulateOneRule(ruleId: string): Promise<{
   const { evaluateRule } = await import('../services/automation-rule.service.js')
   const results: Array<{ matched: boolean; status: string; errorMessage?: string; actions: Array<{ type?: string; ok?: boolean; error?: string; output?: unknown }> }> = []
   for (const ctx of inScope) {
-    const r = await evaluateRule({ ruleId: rule.id, context: ctx, forceDryRun: true, isTestRun: true, ignoreEnabled: true })
+    const r = await evaluateRule({ ruleId: rule.id, context: ctx, forceDryRun: true, isTestRun: true, ignoreEnabled: true, noPersist: true })
     results.push({
       matched: r.matched,
       status: r.status,

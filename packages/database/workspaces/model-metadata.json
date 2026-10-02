@@ -1000,6 +1000,12 @@
           "relationFromFields": []
         },
         {
+          "name": "heldIds",
+          "kind": "object",
+          "type": "ChannelHeldId",
+          "relationFromFields": []
+        },
+        {
           "name": "channelDrifts",
           "kind": "object",
           "type": "ChannelDrift",
@@ -2340,6 +2346,12 @@
           "relationFromFields": []
         },
         {
+          "name": "buyerMessages",
+          "kind": "object",
+          "type": "BuyerMessage",
+          "relationFromFields": []
+        },
+        {
           "name": "routingDecisions",
           "kind": "object",
           "type": "RoutingDecision",
@@ -2459,6 +2471,20 @@
             "originalInvoiceId"
           ],
           "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "BuyerMessage",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
         }
       ]
     },
@@ -2688,6 +2714,18 @@
           "name": "shopifyColourSyncs",
           "kind": "object",
           "type": "ShopifyColourSync",
+          "relationFromFields": []
+        },
+        {
+          "name": "heldIds",
+          "kind": "object",
+          "type": "ChannelHeldId",
+          "relationFromFields": []
+        },
+        {
+          "name": "heldIdSweeps",
+          "kind": "object",
+          "type": "ChannelHeldSweep",
           "relationFromFields": []
         },
         {
@@ -5055,6 +5093,50 @@
             "agentRunId"
           ],
           "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "changes",
+          "kind": "object",
+          "type": "AgentChange",
+          "relationFromFields": []
+        },
+        {
+          "name": "planSteps",
+          "kind": "object",
+          "type": "AgentPlanStep",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AgentPlanStep",
+      "fields": [
+        {
+          "name": "approval",
+          "kind": "object",
+          "type": "AgentApproval",
+          "relationFromFields": [
+            "approvalId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AgentAutonomy",
+      "fields": []
+    },
+    {
+      "name": "AgentChange",
+      "fields": [
+        {
+          "name": "approval",
+          "kind": "object",
+          "type": "AgentApproval",
+          "relationFromFields": [
+            "approvalId"
+          ],
+          "relationOnDelete": "Cascade"
         }
       ]
     },
@@ -6294,6 +6376,10 @@
       ]
     },
     {
+      "name": "AutomationSwitch",
+      "fields": []
+    },
+    {
       "name": "AdsAutomationState",
       "fields": [
         {
@@ -6673,6 +6759,12 @@
           "name": "listingClaims",
           "kind": "object",
           "type": "ChannelListingClaim",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelItemClaims",
+          "kind": "object",
+          "type": "ChannelItemClaim",
           "relationFromFields": []
         },
         {
@@ -7417,6 +7509,57 @@
             "channelConnectionId"
           ],
           "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelHeldId",
+      "fields": [
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "listing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "listingId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "ChannelHeldSweep",
+      "fields": [
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelItemClaim",
+      "fields": [
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
         }
       ]
     }

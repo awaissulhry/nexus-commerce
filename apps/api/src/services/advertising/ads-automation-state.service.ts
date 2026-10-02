@@ -48,6 +48,11 @@ export interface AdsAutomationStateView {
   degraded: boolean
 }
 
+/**
+ * PER BUSINESS. The workspace client (`packages/database/workspace-client.ts`, `singleton()`) stores and reads this
+ * id as `<workspaceId>:singleton` for every business except the legacy one, which keeps `singleton`. So each business
+ * has its own row, and a halt in one never stops another (`automation-state-two-business-postgres.vitest.test.ts`).
+ */
 const SINGLETON = 'singleton'
 
 /**
@@ -169,4 +174,10 @@ export async function setGuardThresholds(opts: { maxHourlySpendCentsEur?: number
 
 export async function markGuardChecked(): Promise<void> {
   await prisma.adsAutomationState.upsert({ where: { id: SINGLETON }, create: { id: SINGLETON, lastCheckedAt: new Date() }, update: { lastCheckedAt: new Date() } }).catch(() => {})
+}
+
+/** R12 — the halt as stop-automation reads it, without creating the row (a read never writes). */
+export async function readHaltState(): Promise<{ halted: boolean; haltReason: string | null; basis: string | null }> {
+  const row = await prisma.adsAutomationState.findUnique({ where: { id: SINGLETON } })
+  return { halted: row?.halted ?? false, haltReason: row?.haltReason ?? null, basis: row?.updatedAt.toISOString() ?? null }
 }

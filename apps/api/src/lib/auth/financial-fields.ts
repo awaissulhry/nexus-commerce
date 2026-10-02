@@ -105,7 +105,7 @@ export const FINANCIAL_ONLY_ROUTE_PREFIXES: string[] = [
   '/api/settlements',
   '/api/amazon/settlements',
   '/api/fba/reimbursements',
-  '/api/product-costs',
+  '/api/products/costs', // S1 (F4) — the cost grid's real path (`/api/product-costs` has no route)
   '/api/tier-prices',
   '/api/customer-groups',
 ]

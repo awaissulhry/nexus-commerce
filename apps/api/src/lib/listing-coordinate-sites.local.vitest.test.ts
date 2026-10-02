@@ -32,7 +32,8 @@ vi.mock('@nexus/database', async importOriginal => ({ ...await importOriginal<an
 vi.mock('./amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'synthetic-seller' }))
 vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { getListingsItem: state.get, patchPurchasableOffer: state.patch, deleteListingsItem: state.deleteItem } }))
 vi.mock('../services/amazon/flat-file.service.js', () => ({ MARKETPLACE_ID_MAP: { IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9' } }))
-vi.mock('../services/channel-delist.service.js', () => ({ dispatchChannelDelist: state.delist }))
+// The eBay account's out-of-stock option is ON here: a Sync Control pin to 0 on eBay needs it (else eBay ends the item).
+vi.mock('../services/channel-delist.service.js', () => ({ dispatchChannelDelist: state.delist, readEbayOutOfStockPreference: async () => 'ON' }))
 vi.mock('./queue.js', () => ({ outboundSyncQueue: {}, addJobSafely: vi.fn(async () => {}) }))
 vi.mock('../services/sync-coalesce.js', () => ({ coalescePendingQuantityRows: vi.fn(async () => {}) }))
 vi.mock('../services/outbound-sync.service.js', async () => ({ isFbaListing: (await import('./amazon-fulfillment.js')).isFbaCoordinate }))

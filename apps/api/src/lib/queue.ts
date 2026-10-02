@@ -211,6 +211,20 @@ export const bulkJobQueue: Queue = new Queue('bulk-job', {
 // because Campaign/AdGroup/AdTarget rows aren't tied to a Product
 // or ChannelListing FK; the worker reads OutboundSyncQueue row by id
 // (carried in job.data.queueId) and dispatches by syncType.
+// MCP full control C6 — change plans: one job per approved plan (jobId "agent-plan-<approvalId>"; BullMQ refuses a
+// custom id with a single ":", see lib/bullmq-job-ids.vitest.test.ts). The plan's pending
+// steps are the durable record, and the approval sweep queues a plan nobody runs again (or runs it, with no workers):
+// a lost job costs latency only. Removed when done or failed, so the sweep may queue it again under the same id.
+export const agentPlanQueue: Queue = new Queue('agent-plan', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 10_000 },
+    removeOnComplete: true,
+    removeOnFail: true,
+  },
+})
+
 export const adsSyncQueue: Queue = new Queue('ads-sync', {
   connection: redis.connection,
   defaultJobOptions,

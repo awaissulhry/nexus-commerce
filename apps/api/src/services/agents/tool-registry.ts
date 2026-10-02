@@ -10,9 +10,58 @@ import { ANALYTICS_TOOLS } from './tools/analytics.tools.js'
 import { DRAFT_TOOLS } from './tools/draft.tools.js'
 import { MUTATE_TOOLS } from './tools/mutate.tools.js'
 import { ADS_PROPOSE_TOOLS } from './tools/ads-propose.tools.js'
+import { ADS_READ_TOOLS } from './tools/ads-read.tools.js'
+import { ADS_CHANGE_TOOLS } from './tools/ads-change.tools.js'
+import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
+import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
+import { CONTROL_TOOLS } from './tools/control.tools.js'
+import { ACTIVITY_TOOLS } from './tools/activity.tools.js'
+import { AUTOMATION_READ_TOOLS } from './tools/automation-read.tools.js'
+import { ORDER_READ_TOOLS } from './tools/order-read.tools.js'
+import { FULFILMENT_TOOLS } from './tools/fulfilment.tools.js'
+import { ORDER_CARE_TOOLS } from './tools/order-care.tools.js'
+import { STOCK_READ_TOOLS } from './tools/stock-read.tools.js'
+import { SUPPLY_READ_TOOLS } from './tools/supply-read.tools.js'
+import { PRICING_READ_TOOLS } from './tools/pricing-read.tools.js'
+import { CONTENT_TOOLS } from './tools/content.tools.js'
+import { CONTENT_CHANGE_TOOLS } from './tools/content-change.tools.js'
+import { IDENTITY_TOOLS } from './tools/identity.tools.js'
+import { IDENTITY_FIX_TOOLS } from './tools/identity-fix.tools.js'
+import { IDENTITY_MERGE_TOOLS } from './tools/identity-merge.tools.js'
+import { LISTING_READ_TOOLS } from './tools/listing-read.tools.js'
+import { PUBLISH_TOOLS } from './tools/publish.tools.js'
+import { LISTING_CREATE_TOOLS } from './tools/listing-create.tools.js'
+import { PLATFORM_BUSINESS_TOOLS } from './tools/platform-business.tools.js'
+import { CATALOG_STRUCTURE_TOOLS } from './tools/catalog-structure.tools.js'
+import { PLATFORM_LIBRARY_TOOLS } from './tools/platform-library.tools.js'
+import { REPORT_TOOLS } from './tools/reports.tools.js'
+import { PLATFORM_ACTIVITY_TOOLS } from './tools/platform-activity.tools.js'
+import { ORGANIZE_CATALOG_TOOLS } from './tools/organize-catalog.tools.js'
+import { ORGANIZE_PLATFORM_TOOLS } from './tools/organize-platform.tools.js'
+import { STRUCTURE_CHANGE_TOOLS } from './tools/structure-change.tools.js'
+import { MAPPING_CHANGE_TOOLS } from './tools/mapping-change.tools.js'
+import { BUSINESS_SETTINGS_TOOLS } from './tools/business-settings.tools.js'
+import { AUTOMATION_CHANGE_TOOLS } from './tools/automation-change.tools.js'
+import { ORDER_DESK_TOOLS } from './tools/order-desk.tools.js'
+import { SHIPPING_TOOLS } from './tools/shipping.tools.js'
+import { ORDER_ACTION_TOOLS } from './tools/order-actions.tools.js'
+import { RETURN_TOOLS } from './tools/return.tools.js'
+import { REVIEW_ACTION_TOOLS } from './tools/review-actions.tools.js'
+import { FISCAL_TOOLS } from './tools/fiscal.tools.js'
+import { STOCK_CHANGE_TOOLS } from './tools/stock.tools.js'
+import { STOCK_SYNC_TOOLS } from './tools/stock-sync.tools.js'
+import { PRICING_CHANGE_TOOLS } from './tools/pricing.tools.js'
+import { PRICE_CHANGE_TOOLS } from './tools/price-change.tools.js'
+import { SUPPLY_CHANGE_TOOLS } from './tools/supply.tools.js'
+import { FBA_INBOUND_TOOLS } from './tools/fba-inbound.tools.js'
+import { CHANNEL_CONTENT_TOOLS } from './tools/channel-content.tools.js'
+import { LISTING_STOCK_TOOLS } from './tools/listing-stock.tools.js'
+import { LISTING_CLOSE_TOOLS } from './tools/listing-close.tools.js'
+import { PHOTO_TOOLS } from './tools/photos.tools.js'
+import { DATA_TRANSFER_TOOLS } from './tools/data-transfer.tools.js'
 
 export type {
   RiskTier,
@@ -23,17 +72,102 @@ export type {
 
 const ALL: AgentTool[] = [
   ...READ_TOOLS,
+  // MCP full control 07 — order, fulfilment, return, customer and review reads (buyer data masked).
+  ...ORDER_READ_TOOLS,
+  ...FULFILMENT_TOOLS,
+  ...ORDER_CARE_TOOLS,
+  // MCP full control 07 O7+ — the order desk's changes.
+  ...ORDER_DESK_TOOLS,
+  ...SHIPPING_TOOLS,
+  ...ORDER_ACTION_TOOLS,
+  ...RETURN_TOOLS,
+  ...REVIEW_ACTION_TOOLS,
+  ...FISCAL_TOOLS,
   ...ANALYTICS_TOOLS,
   ...DRAFT_TOOLS,
   ...MUTATE_TOOLS,
   // NAF.C — preview-only ads propose tools (no execute until Phase F).
   ...ADS_PROPOSE_TOOLS,
+  // MCP full control A2 — advertising reads: overview, campaigns, targets, search terms, change log, recommendations.
+  ...ADS_READ_TOOLS,
+  // MCP full control A6–A12 — Claude's further Amazon ad changes (undo first), each approved by a person.
+  ...ADS_CHANGE_TOOLS,
+  ...ADS_CREATE_TOOLS,
+  ...EBAY_AD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
+  // MCP full control C8 — what Claude did in the business (read only).
+  ...ACTIVITY_TOOLS,
   // MCP.9 — cross-channel reads: listing issues, channel price and stock, out-of-sync listings.
   ...CHANNEL_TOOLS,
   // MCP.10 — bulk master price and master attribute changes, always approved by a person.
   ...BULK_TOOLS,
+  // MCP full control C2 — control tools: they run in the door and ask for changes through the same gate.
+  ...CONTROL_TOOLS,
+  // MCP full control R6 — every automation, read-only: the 39 of plan part 06 and their rules, plans and schedules.
+  ...AUTOMATION_READ_TOOLS,
+  // MCP full control 08 S3 — stock reads: per location, ledger, locations and policies, reservations, counts, shared stock, FBA.
+  ...STOCK_READ_TOOLS,
+  // MCP full control 08 S4 — supply reads: suppliers, purchase orders, inbound shipments, product costs.
+  ...SUPPLY_READ_TOOLS,
+  // MCP full control 08 S5 — pricing reads: prices with currency, bounds and held rows; rules; promotions; scheduled changes.
+  ...PRICING_READ_TOOLS,
+  // MCP full control (section 03) — content reads: a family's text and attributes, translation status.
+  ...CONTENT_TOOLS,
+  // Section 03 — content changes: shared text in any language, always approved by a person, Nexus only.
+  ...CONTENT_CHANGE_TOOLS,
+  // MCP full control I2/I3 — product identity: where ids disagree, and what an id is (read-only).
+  ...IDENTITY_TOOLS,
+  // I10 — identity fixes (SKU, barcode, brand, extra listing SKU), Nexus only, always approved by a person.
+  ...IDENTITY_FIX_TOOLS,
+  // I11 — broken families and duplicate products (safe merges and shell adoption only), always approved by a person.
+  ...IDENTITY_MERGE_TOOLS,
+  // MCP full control L2 — where each listing lives, its stock and price per market, and its photo plan.
+  ...LISTING_READ_TOOLS,
+  // MCP full control L3 — the studio's review of a publish (saves nothing) and a publication's result in the business.
+  ...PUBLISH_TOOLS,
+  // MCP full control L6 — draft listings and a listing's own fields, in Nexus only.
+  ...LISTING_CREATE_TOOLS,
+  // MCP full control P4 — the business, its channel accounts, their health and its team, read.
+  ...PLATFORM_BUSINESS_TOOLS,
+  // MCP full control P5 — catalog structure, channel mappings, the image library, saved views and job history, read.
+  ...CATALOG_STRUCTURE_TOOLS,
+  ...PLATFORM_LIBRARY_TOOLS,
+  // MCP full control P6 — reports, the alerts inbox, the audit trail, sync activity and AI usage, read.
+  ...REPORT_TOOLS,
+  ...PLATFORM_ACTIVITY_TOOLS,
+  // MCP full control P7 — organizing changes: tags, workflow stage, saved views, alert rules, acknowledging alerts, the image library.
+  ...ORGANIZE_CATALOG_TOOLS,
+  ...ORGANIZE_PLATFORM_TOOLS,
+  // MCP full control P8 — structure changes: attributes, families, categories, channel mappings, listing templates.
+  ...STRUCTURE_CHANGE_TOOLS,
+  ...MAPPING_CHANGE_TOOLS,
+  // MCP full control P10 — the business's own settings and brand.
+  ...BUSINESS_SETTINGS_TOOLS,
+  // MCP full control R9–R15 — automation changes, each a request a person approves.
+  ...AUTOMATION_CHANGE_TOOLS,
+  // MCP full control 08 S6 — stock changes in Nexus: counts, transfers, stock counts, holds, own warehouses.
+  ...STOCK_CHANGE_TOOLS,
+  // MCP full control 08 S7 — Sync Control: many listings' stock mode at once; stock policies and location feeds.
+  ...STOCK_SYNC_TOOLS,
+  // MCP full control 08 S12 — pricing records: pricing rules, promotions, scheduled price changes.
+  ...PRICING_CHANGE_TOOLS,
+  // MCP full control 08 S11 — prices across many listings: floor and ceiling, bulk listing prices, send prices again.
+  ...PRICE_CHANGE_TOOLS,
+  // MCP full control 08 S9 — suppliers and purchase orders: keep a supplier, draft, move on and cancel a PO.
+  ...SUPPLY_CHANGE_TOOLS,
+  // MCP full control 08 S13 — FBA inbound: create the plan at Amazon, read its options (a person confirms them).
+  ...FBA_INBOUND_TOOLS,
+  // Section 03 phase 2 — content read from the channel itself (Shopify's store fields, a listing's live content).
+  ...CHANNEL_CONTENT_TOOLS,
+  // MCP full control L8 — stock and price per listing and market, through the Matrix door.
+  ...LISTING_STOCK_TOOLS,
+  // MCP full control L9 — reversible close and reopen of live listings.
+  ...LISTING_CLOSE_TOOLS,
+  // MCP full control L10/L11 — a family's photo plan.
+  ...PHOTO_TOOLS,
+  // MCP full control (09 §4, P-3) — catalog rows into the conversation, money filtered. The import half (P9) is on hold.
+  ...DATA_TRANSFER_TOOLS,
 ]
 const REGISTRY = new Map<string, AgentTool>(ALL.map((t) => [t.name, t]))
 

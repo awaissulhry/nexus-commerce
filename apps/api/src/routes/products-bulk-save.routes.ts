@@ -22,6 +22,7 @@ import type { FastifyPluginAsync } from 'fastify'
 
 import { transactionMustRestart } from '../lib/database-context.js'
 import { applyProductBulkSave, BulkSaveError, parseBulkSaveInput } from '../services/products/bulk-save.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 
 const productsBulkSaveRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/products/bulk-save', {
@@ -43,6 +44,7 @@ const productsBulkSaveRoutes: FastifyPluginAsync = async (fastify) => {
         userId: (request as { authUser?: { id?: string } }).authUser?.id,
         ip: request.ip,
         logger: request.log,
+        can: permissionCheckerFor(request), // S1 (F4, F5) — a price or a cost needs its own permission
       })
     } catch (error) {
       // Nothing of the operation is stored. Say whether sending it again can work: a lost race or a busy pool can.

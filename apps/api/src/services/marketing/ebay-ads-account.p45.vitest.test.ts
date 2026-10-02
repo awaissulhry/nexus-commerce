@@ -36,6 +36,9 @@ import { join } from 'node:path'
 const HERE = import.meta.dirname
 const writeSrc = readFileSync(join(HERE, 'ebay-ads-write.service.ts'), 'utf8')
 const syncSrc = readFileSync(join(HERE, 'ebay-ads-entity-sync.service.ts'), 'utf8')
+// MCP full control A13 — the eBay reads Claude's ad tools share with the console, and those tools.
+const readSrc = readFileSync(join(HERE, 'ebay-ads-read.service.ts'), 'utf8')
+const toolsSrc = readFileSync(join(HERE, '..', 'agents', 'tools', 'ads-read.tools.ts'), 'utf8')
 
 /**
  * Lines of real code — comment lines dropped.
@@ -178,5 +181,30 @@ describe('census (P4.5a — no ads write resolves "the primary")', () => {
     const fn = syncSrc.slice(syncSrc.indexOf('async function syncOneAccount'))
     expect(fn).toMatch(/report\.errors\.push\(`campaigns \(\$\{auth\.connectionId\}\)/)
     expect(syncSrc).toMatch(/for \(const auth of accounts\) await syncOneAccount\(auth, report\)/)
+  })
+})
+
+// ── 4. Claude's eBay reads (MCP full control A13) ──────────────────────────
+describe('census (A13 — a read names the campaign\'s own account and calls no account)', () => {
+  it('the read service resolves no token and makes no eBay call: it reads stored rows only', () => {
+    const code = codeLines(readSrc)
+    // Positive control: this IS the file with the eBay reads in it.
+    expect(code.some((l) => l.includes('export async function ebayAdsCampaigns('))).toBe(true)
+    for (const call of ['getActiveEbayAdsAuth(', 'getEbayAdsAuthFor(', 'listEbayAdsAccounts(', 'fetch(', 'gateway']) {
+      expect(code.filter((l) => l.includes(call)), `the read service must not call ${call}`).toEqual([])
+    }
+  })
+
+  it('each campaign\'s account is read from the campaign itself (channelConnectionId), never resolved as "the primary"', () => {
+    const fn = readSrc.slice(readSrc.indexOf('export async function ebayCampaignAccounts'))
+    expect(fn).toMatch(/connectionId: c\.channelConnectionId/)
+    expect(codeLines(readSrc).filter((l) => /isPrimary/.test(l))).toEqual([])
+  })
+
+  it("Claude's eBay campaign rows carry that account, and the tools resolve no account either", () => {
+    const code = codeLines(toolsSrc)
+    expect(code.filter((l) => l.includes('ebayCampaignAccounts(')).length).toBeGreaterThanOrEqual(2)
+    expect(code.filter((l) => /account: accountOut\(accounts\.get\(c\.id\)\)/.test(l)).length).toBeGreaterThanOrEqual(2)
+    expect(code.filter((l) => /getActiveEbayAdsAuth\(|getEbayAdsAuthFor\(|listEbayAdsAccounts\(/.test(l))).toEqual([])
   })
 })

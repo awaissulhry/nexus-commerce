@@ -30,3 +30,22 @@ export async function listInbox(userId: string, opts: { unreadOnly: boolean; lim
     : []
   return { rows: [...unread, ...read], unreadCount }
 }
+
+/**
+ * MCP full control P7 — mark notifications read: the bell's "mark read" (POST /api/notifications/:id/read) and
+ * Claude's acknowledge-alerts. Only unread ones are touched, and with `userId` only that person's: a person marks
+ * their own notices, never someone else's. Returns how many changed.
+ */
+export async function markNotificationsRead(ids: readonly string[], userId?: string, at: Date = new Date()): Promise<number> {
+  const result = await prisma.notification.updateMany({
+    where: { id: { in: [...ids] }, ...(userId ? { userId } : {}), readAt: null },
+    data: { readAt: at },
+  })
+  return result.count
+}
+
+/** MCP full control P7 — the undo of marking read: these notifications are unread again. Returns how many changed. */
+export async function markNotificationsUnread(ids: readonly string[]): Promise<number> {
+  const result = await prisma.notification.updateMany({ where: { id: { in: [...ids] }, readAt: { not: null } }, data: { readAt: null } })
+  return result.count
+}

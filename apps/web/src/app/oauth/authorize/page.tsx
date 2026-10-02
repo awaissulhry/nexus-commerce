@@ -4,8 +4,8 @@
  * authorization endpoint; the API is the authorization server, apps/api/src/routes/oauth.routes.ts).
  *
  * It reads Claude's request from the query, asks the API to check it, and shows the ConsentForm. The
- * person picks one business and approves with a fresh 2FA code; the API answers with Claude's
- * redirect URI, and the browser goes there. A signed-out visitor signs in first and comes back with
+ * person picks one business (C4: or the one business the connection's address names) and approves with a fresh 2FA
+ * code; the API answers with Claude's redirect URI, and the browser goes there. A signed-out visitor signs in first and comes back with
  * the whole query (this path is public for exactly that; see lib/auth/public-paths.ts).
  */
 import { useEffect, useMemo, useState } from 'react'
@@ -42,6 +42,8 @@ export default function AuthorizePage() {
   const [stage, setStage] = useState<Stage>({ kind: 'checking' })
   const [workspaceId, setWorkspaceId] = useState('')
   const [allowWrite, setAllowWrite] = useState(true)
+  // C5 — nexus.run starts unticked: the person chooses to let Claude run what their business set to run by rule.
+  const [allowRun, setAllowRun] = useState(false)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +64,9 @@ export default function AuthorizePage() {
         if (!alive) return
         if (response.ok) {
           const view = data as ConsentView
-          setWorkspaceId(view.businesses.find((business) => business.canConnect)?.id ?? '')
+          // C4 — a business's own address names its business; otherwise the first one the person may connect.
+          const first = view.businesses.find((business) => business.canConnect)?.id ?? ''
+          setWorkspaceId(view.lockedWorkspaceId ? (first === view.lockedWorkspaceId ? first : '') : first)
           setAllowWrite(view.scopes.includes('nexus.write'))
           setStage({ kind: 'ready', view })
           return
@@ -85,7 +89,7 @@ export default function AuthorizePage() {
     try {
       const csrf = await fetch(`${getBackendUrl()}/api/auth/csrf`).then((response) => response.json())
       setCsrfToken(csrf.csrfToken)
-      const scopes = allowWrite ? ['nexus.read', 'nexus.write'] : ['nexus.read']
+      const scopes = allowWrite ? ['nexus.read', 'nexus.write', ...(allowRun ? ['nexus.run'] : [])] : ['nexus.read']
       const response = await fetch(`${getBackendUrl()}/api/oauth/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -139,11 +143,13 @@ export default function AuthorizePage() {
             view={stage.view}
             workspaceId={workspaceId}
             allowWrite={allowWrite}
+            allowRun={allowRun}
             code={code}
             busy={busy}
             error={error}
             onWorkspace={setWorkspaceId}
             onAllowWrite={setAllowWrite}
+            onAllowRun={setAllowRun}
             onCode={setCode}
             onApprove={() => void answer('approve')}
             onDeny={() => void answer('deny')}

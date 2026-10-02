@@ -1,0 +1,4976 @@
+[
+ {
+  "step": "inspect",
+  "status": 201,
+  "type": "application/json",
+  "body": {
+   "sourceId": "fixture-1",
+   "filename": "golden-source.csv",
+   "headers": [
+    "SKU",
+    "Name",
+    "Amazon A",
+    "Notes"
+   ],
+   "total": 5,
+   "hash": "d278ca6404745468626e2c3130a58ad75d46ea4a77b8804aba4b65bcdacd031d",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "sample": [
+    {
+     "SKU": "000000",
+     "Name": "Golden shared",
+     "Amazon A": "Golden title",
+     "Notes": "n1"
+    },
+    {
+     "SKU": "000001",
+     "Name": "",
+     "Amazon A": "Golden variant title",
+     "Notes": "n2"
+    },
+    {
+     "SKU": "",
+     "Name": "No SKU",
+     "Amazon A": "",
+     "Notes": ""
+    },
+    {
+     "SKU": "999999",
+     "Name": "Unknown",
+     "Amazon A": "",
+     "Notes": ""
+    },
+    {
+     "SKU": "000002",
+     "Name": "Original 2",
+     "Amazon A": "",
+     "Notes": ""
+    }
+   ]
+  }
+ },
+ {
+  "step": "preview: a mapping with no policy",
+  "status": 400,
+  "type": "application/json",
+  "body": {
+   "error": "Declare the source policy for shared facts and existing overrides"
+  }
+ },
+ {
+  "step": "preview: a mapping naming a missing column",
+  "status": 400,
+  "type": "application/json",
+  "body": {
+   "error": "The file is missing SKU column \"Code\""
+  }
+ },
+ {
+  "step": "preview: a changed source hash",
+  "status": 409,
+  "type": "application/json",
+  "body": {
+   "error": "Source upload changed or expired; upload it again"
+  }
+ },
+ {
+  "step": "preview: another person",
+  "status": 409,
+  "type": "application/json",
+  "body": {
+   "error": "Source upload is unavailable; upload it again"
+  }
+ },
+ {
+  "step": "preview",
+  "status": 201,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "PREVIEWING",
+   "processed": 0,
+   "total": 9,
+   "mode": "update",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 0,
+    "unchanged": 0,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 0,
+    "listingsAffected": 0,
+    "newOverrides": 0,
+    "preservedOverrides": 0,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [],
+   "unmappedColumns": [
+    "Notes"
+   ],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-source.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "review",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "INVALID",
+   "processed": 0,
+   "total": 9,
+   "mode": "update",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 3,
+    "unchanged": 1,
+    "refused": 2,
+    "excluded": 3,
+    "productsAffected": 1,
+    "listingsAffected": 2,
+    "newOverrides": 2,
+    "preservedOverrides": 4,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [
+    "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
+   ],
+   "unmappedColumns": [
+    "Notes"
+   ],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "reviewToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-source.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "outcomes",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 9,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-4",
+     "index": 1,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 2,
+      "entity": "Products",
+      "sku": "000000",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden shared",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000000",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden shared",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "before": "Original 0",
+       "after": "Golden shared",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      },
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-b",
+       "marketplace": "FR",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-5",
+     "index": 2,
+     "status": "INVALID",
+     "identity": {
+      "row": 5,
+      "entity": "Products",
+      "sku": "999999",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Unknown",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [
+      {
+       "row": 5,
+       "entity": "Products",
+       "sku": "999999",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Unknown",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "message": "This record does not exist; Update never creates an unknown SKU or listing"
+      }
+     ],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-6",
+     "index": 3,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 6,
+      "entity": "Products",
+      "sku": "000002",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Original 2",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 6,
+       "entity": "Products",
+       "sku": "000002",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Original 2",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "before": "Original 2",
+       "after": "Original 2",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-7",
+     "index": 4,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 2,
+      "entity": "Overrides",
+      "sku": "000000",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "field": "item_name",
+      "action": "SET",
+      "value": "Golden title",
+      "source": {
+       "column": "C",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "locale": "",
+       "field": "item_name",
+       "action": "SET",
+       "value": "Golden title",
+       "source": {
+        "column": "C",
+        "file": "golden-source.csv"
+       },
+       "before": null,
+       "after": "Golden title",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-8",
+     "index": 5,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 3,
+      "entity": "Overrides",
+      "sku": "000001",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "field": "item_name",
+      "action": "SET",
+      "value": "Golden variant title",
+      "source": {
+       "column": "C",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 3,
+       "entity": "Overrides",
+       "sku": "000001",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "locale": "",
+       "field": "item_name",
+       "action": "SET",
+       "value": "Golden variant title",
+       "source": {
+        "column": "C",
+        "file": "golden-source.csv"
+       },
+       "before": null,
+       "after": "Golden variant title",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-9",
+     "index": 6,
+     "status": "INVALID",
+     "cells": [],
+     "preserved": [],
+     "issues": [
+      {
+       "row": 4,
+       "sku": "",
+       "field": "sku",
+       "message": "A stable SKU is required; no row-number or name matching is used",
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-10",
+     "index": 7,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Products",
+      "sku": "000001",
+      "field": "name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "row": 3
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 3,
+       "sku": "000001",
+       "field": "name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Products",
+        "sku": "000001",
+        "field": "name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "row": 3
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    },
+    {
+     "id": "fixture-11",
+     "index": 8,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Overrides",
+      "sku": "999999",
+      "field": "item_name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "row": 5
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 5,
+       "sku": "999999",
+       "field": "item_name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Overrides",
+        "sku": "999999",
+        "field": "item_name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "row": 5
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    },
+    {
+     "id": "fixture-12",
+     "index": 9,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Overrides",
+      "sku": "000002",
+      "field": "item_name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "row": 6
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 6,
+       "sku": "000002",
+       "field": "item_name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Overrides",
+        "sku": "000002",
+        "field": "item_name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "row": 6
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "outcomes?status=INVALID",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 2,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-5",
+     "index": 2,
+     "status": "INVALID",
+     "identity": {
+      "row": 5,
+      "entity": "Products",
+      "sku": "999999",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Unknown",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [
+      {
+       "row": 5,
+       "entity": "Products",
+       "sku": "999999",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Unknown",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "message": "This record does not exist; Update never creates an unknown SKU or listing"
+      }
+     ],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-9",
+     "index": 6,
+     "status": "INVALID",
+     "cells": [],
+     "preserved": [],
+     "issues": [
+      {
+       "row": 4,
+       "sku": "",
+       "field": "sku",
+       "message": "A stable SKU is required; no row-number or name matching is used",
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "exclusions": [],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "outcomes?status=EXCLUDED",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 3,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-10",
+     "index": 7,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Products",
+      "sku": "000001",
+      "field": "name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "row": 3
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 3,
+       "sku": "000001",
+       "field": "name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Products",
+        "sku": "000001",
+        "field": "name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "row": 3
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    },
+    {
+     "id": "fixture-11",
+     "index": 8,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Overrides",
+      "sku": "999999",
+      "field": "item_name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "row": 5
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 5,
+       "sku": "999999",
+       "field": "item_name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Overrides",
+        "sku": "999999",
+        "field": "item_name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "row": 5
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    },
+    {
+     "id": "fixture-12",
+     "index": 9,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Overrides",
+      "sku": "000002",
+      "field": "item_name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "row": 6
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 6,
+       "sku": "000002",
+       "field": "item_name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Overrides",
+        "sku": "000002",
+        "field": "item_name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "row": 6
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "outcomes?status=CHANGED",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 3,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-4",
+     "index": 1,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 2,
+      "entity": "Products",
+      "sku": "000000",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden shared",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000000",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden shared",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "before": "Original 0",
+       "after": "Golden shared",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      },
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-b",
+       "marketplace": "FR",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-7",
+     "index": 4,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 2,
+      "entity": "Overrides",
+      "sku": "000000",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "field": "item_name",
+      "action": "SET",
+      "value": "Golden title",
+      "source": {
+       "column": "C",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "locale": "",
+       "field": "item_name",
+       "action": "SET",
+       "value": "Golden title",
+       "source": {
+        "column": "C",
+        "file": "golden-source.csv"
+       },
+       "before": null,
+       "after": "Golden title",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-8",
+     "index": 5,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 3,
+      "entity": "Overrides",
+      "sku": "000001",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "field": "item_name",
+      "action": "SET",
+      "value": "Golden variant title",
+      "source": {
+       "column": "C",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 3,
+       "entity": "Overrides",
+       "sku": "000001",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "locale": "",
+       "field": "item_name",
+       "action": "SET",
+       "value": "Golden variant title",
+       "source": {
+        "column": "C",
+        "file": "golden-source.csv"
+       },
+       "before": null,
+       "after": "Golden variant title",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "outcomes?status=UNCHANGED",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 1,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-6",
+     "index": 3,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 6,
+      "entity": "Products",
+      "sku": "000002",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Original 2",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 6,
+       "entity": "Products",
+       "sku": "000002",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Original 2",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "before": "Original 2",
+       "after": "Original 2",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "outcomes?sku=000000",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 2,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-4",
+     "index": 1,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 2,
+      "entity": "Products",
+      "sku": "000000",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden shared",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000000",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden shared",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "before": "Original 0",
+       "after": "Golden shared",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      },
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-b",
+       "marketplace": "FR",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-7",
+     "index": 4,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 2,
+      "entity": "Overrides",
+      "sku": "000000",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "field": "item_name",
+      "action": "SET",
+      "value": "Golden title",
+      "source": {
+       "column": "C",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "locale": "",
+       "field": "item_name",
+       "action": "SET",
+       "value": "Golden title",
+       "source": {
+        "column": "C",
+        "file": "golden-source.csv"
+       },
+       "before": null,
+       "after": "Golden title",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "outcomes?status=NOPE",
+  "status": 400,
+  "type": "application/json",
+  "body": {
+   "error": "Unknown outcome filter"
+  }
+ },
+ {
+  "step": "errors csv",
+  "status": 200,
+  "type": "text/csv",
+  "body": "\"row\",\"sku\",\"field\",\"message\",\"file\",\"sheet\",\"column\"\r\n\"5\",\"999999\",\"name\",\"This record does not exist; Update never creates an unknown SKU or listing\",\"golden-source.csv\",\"\",\"B\"\r\n\"4\",\"\",\"sku\",\"A stable SKU is required; no row-number or name matching is used\",\"golden-source.csv\",\"\",\"\""
+ },
+ {
+  "step": "apply: an invalid review",
+  "status": 409,
+  "type": "application/json",
+  "body": {
+   "error": "This review is invalid or expired; preview the source again"
+  }
+ },
+ {
+  "step": "apply: a changed token",
+  "status": 409,
+  "type": "application/json",
+  "body": {
+   "error": "Supply the token from the completed review"
+  }
+ },
+ {
+  "step": "apply: another person",
+  "status": 404,
+  "type": "application/json",
+  "body": {
+   "error": "Import job not found"
+  }
+ },
+ {
+  "step": "apply: the ready records",
+  "status": 202,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "RUNNING",
+   "processed": 0,
+   "total": 9,
+   "mode": "update",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 3,
+    "unchanged": 1,
+    "refused": 2,
+    "excluded": 3,
+    "productsAffected": 1,
+    "listingsAffected": 2,
+    "newOverrides": 2,
+    "preservedOverrides": 4,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [
+    "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
+   ],
+   "unmappedColumns": [
+    "Notes"
+   ],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "reviewToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-source.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "after apply",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "PARTIAL",
+   "processed": 9,
+   "total": 9,
+   "mode": "update",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 3,
+    "unchanged": 1,
+    "refused": 2,
+    "excluded": 3,
+    "productsAffected": 1,
+    "listingsAffected": 2,
+    "newOverrides": 2,
+    "preservedOverrides": 4,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "receipt": {
+    "saved": 2,
+    "unchanged": 1,
+    "failed": 1,
+    "excluded": 3,
+    "unprocessed": 0,
+    "skipped": 2
+   },
+   "hasChangeFilter": true,
+   "warnings": [
+    "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
+   ],
+   "unmappedColumns": [
+    "Notes"
+   ],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "reviewToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-source.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": true,
+   "completedAt": "2026-09-15T10:00:00.000Z"
+  }
+ },
+ {
+  "step": "outcomes after apply",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 9,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-4",
+     "index": 1,
+     "status": "SUCCESS",
+     "identity": {
+      "row": 2,
+      "entity": "Products",
+      "sku": "000000",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden shared",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000000",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden shared",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "before": "Original 0",
+       "after": "Golden shared",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      },
+      {
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-b",
+       "marketplace": "FR",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-5",
+     "index": 2,
+     "status": "INVALID",
+     "identity": {
+      "row": 5,
+      "entity": "Products",
+      "sku": "999999",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Unknown",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [
+      {
+       "row": 5,
+       "entity": "Products",
+       "sku": "999999",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Unknown",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "message": "This record does not exist; Update never creates an unknown SKU or listing"
+      }
+     ],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-6",
+     "index": 3,
+     "status": "SUCCESS",
+     "identity": {
+      "row": 6,
+      "entity": "Products",
+      "sku": "000002",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Original 2",
+      "source": {
+       "column": "B",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 6,
+       "entity": "Products",
+       "sku": "000002",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Original 2",
+       "source": {
+        "column": "B",
+        "file": "golden-source.csv"
+       },
+       "before": "Original 2",
+       "after": "Original 2",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-7",
+     "index": 4,
+     "status": "SUCCESS",
+     "identity": {
+      "row": 2,
+      "entity": "Overrides",
+      "sku": "000000",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "field": "item_name",
+      "action": "SET",
+      "value": "Golden title",
+      "source": {
+       "column": "C",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Overrides",
+       "sku": "000000",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "locale": "",
+       "field": "item_name",
+       "action": "SET",
+       "value": "Golden title",
+       "source": {
+        "column": "C",
+        "file": "golden-source.csv"
+       },
+       "before": null,
+       "after": "Golden title",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-8",
+     "index": 5,
+     "status": "FAILED",
+     "identity": {
+      "row": 3,
+      "entity": "Overrides",
+      "sku": "000001",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "field": "item_name",
+      "action": "SET",
+      "value": "Golden variant title",
+      "source": {
+       "column": "C",
+       "file": "golden-source.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 3,
+       "entity": "Overrides",
+       "sku": "000001",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "locale": "",
+       "field": "item_name",
+       "action": "SET",
+       "value": "Golden variant title",
+       "source": {
+        "column": "C",
+        "file": "golden-source.csv"
+       },
+       "before": null,
+       "after": "Golden variant title",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": "Shared or parent data changed since preview"
+    },
+    {
+     "id": "fixture-9",
+     "index": 6,
+     "status": "INVALID",
+     "cells": [],
+     "preserved": [],
+     "issues": [
+      {
+       "row": 4,
+       "sku": "",
+       "field": "sku",
+       "message": "A stable SKU is required; no row-number or name matching is used",
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-10",
+     "index": 7,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Products",
+      "sku": "000001",
+      "field": "name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "row": 3
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 3,
+       "sku": "000001",
+       "field": "name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Products",
+        "sku": "000001",
+        "field": "name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "row": 3
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    },
+    {
+     "id": "fixture-11",
+     "index": 8,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Overrides",
+      "sku": "999999",
+      "field": "item_name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "row": 5
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 5,
+       "sku": "999999",
+       "field": "item_name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Overrides",
+        "sku": "999999",
+        "field": "item_name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "row": 5
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    },
+    {
+     "id": "fixture-12",
+     "index": 9,
+     "status": "EXCLUDED",
+     "identity": {
+      "entity": "Overrides",
+      "sku": "000002",
+      "field": "item_name",
+      "value": "",
+      "format": "text",
+      "action": "SET",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": "",
+      "locale": "",
+      "row": 6
+     },
+     "cells": [],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [
+      {
+       "row": 6,
+       "sku": "000002",
+       "field": "item_name",
+       "message": "Blank source cell; existing value preserved",
+       "identity": {
+        "entity": "Overrides",
+        "sku": "000002",
+        "field": "item_name",
+        "value": "",
+        "format": "text",
+        "action": "SET",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "row": 6
+       },
+       "source": {
+        "file": "golden-source.csv"
+       }
+      }
+     ],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "errors csv after apply",
+  "status": 200,
+  "type": "text/csv",
+  "body": "\"row\",\"sku\",\"field\",\"message\",\"file\",\"sheet\",\"column\"\r\n\"5\",\"999999\",\"name\",\"This record does not exist; Update never creates an unknown SKU or listing\",\"golden-source.csv\",\"\",\"B\"\r\n\"3\",\"000001\",\"item_name\",\"Shared or parent data changed since preview\",\"golden-source.csv\",\"\",\"C\"\r\n\"4\",\"\",\"sku\",\"A stable SKU is required; no row-number or name matching is used\",\"golden-source.csv\",\"\",\"\""
+ },
+ {
+  "step": "apply again",
+  "status": 202,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "PARTIAL",
+   "processed": 9,
+   "total": 9,
+   "mode": "update",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 3,
+    "unchanged": 1,
+    "refused": 2,
+    "excluded": 3,
+    "productsAffected": 1,
+    "listingsAffected": 2,
+    "newOverrides": 2,
+    "preservedOverrides": 4,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "receipt": {
+    "saved": 2,
+    "unchanged": 1,
+    "failed": 1,
+    "excluded": 3,
+    "unprocessed": 0,
+    "skipped": 2
+   },
+   "hasChangeFilter": true,
+   "warnings": [
+    "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
+   ],
+   "unmappedColumns": [
+    "Notes"
+   ],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "reviewToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-source.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": true,
+   "completedAt": "2026-09-15T10:00:00.000Z"
+  }
+ },
+ {
+  "step": "legacy: list",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "success": true,
+   "jobs": [
+    {
+     "successRows": 3,
+     "failedRows": 1,
+     "skippedRows": 5,
+     "id": "fixture-3",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.003Z",
+     "jobName": "golden-source.csv",
+     "source": "upload",
+     "filename": "golden-source.csv",
+     "fileKind": "csv",
+     "targetEntity": "catalog-transfer-v2",
+     "columnMapping": {
+      "kind": "catalog-source-v1",
+      "market": "IT",
+      "mode": "update",
+      "skuColumn": "SKU",
+      "policy": {
+       "shared": "replace",
+       "overrides": "replace"
+      },
+      "bindings": [
+       {
+        "source": "Name",
+        "entity": "Products",
+        "field": "name",
+        "format": "text"
+       },
+       {
+        "source": "Amazon A",
+        "entity": "Overrides",
+        "field": "item_name",
+        "format": "text",
+        "channel": {
+         "value": "AMAZON"
+        },
+        "accountId": {
+         "value": "account-a"
+        },
+        "marketplace": {
+         "value": "IT"
+        }
+       }
+      ]
+     },
+     "status": "PARTIAL",
+     "totalRows": 9,
+     "createdBy": "owner",
+     "planToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+     "planComputedAt": "2026-09-15T10:00:00.000Z",
+     "planSummary": {
+      "productsCreated": 0,
+      "listingsCreated": 0,
+      "changed": 3,
+      "unchanged": 1,
+      "refused": 2,
+      "excluded": 3,
+      "productsAffected": 1,
+      "listingsAffected": 2,
+      "newOverrides": 2,
+      "preservedOverrides": 4,
+      "alreadyEmpty": 0,
+      "clearUnchecked": 0,
+      "cleared": 0,
+      "ended": 0,
+      "pricesRecorded": 0
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    }
+   ]
+  }
+ },
+ {
+  "step": "legacy: job",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "success": true,
+   "job": {
+    "successRows": 3,
+    "failedRows": 1,
+    "skippedRows": 5,
+    "id": "fixture-3",
+    "createdAt": "2026-09-15T10:00:00.000Z",
+    "updatedAt": "2026-09-15T10:00:00.003Z",
+    "jobName": "golden-source.csv",
+    "source": "upload",
+    "filename": "golden-source.csv",
+    "fileKind": "csv",
+    "targetEntity": "catalog-transfer-v2",
+    "columnMapping": {
+     "kind": "catalog-source-v1",
+     "market": "IT",
+     "mode": "update",
+     "skuColumn": "SKU",
+     "policy": {
+      "shared": "replace",
+      "overrides": "replace"
+     },
+     "bindings": [
+      {
+       "source": "Name",
+       "entity": "Products",
+       "field": "name",
+       "format": "text"
+      },
+      {
+       "source": "Amazon A",
+       "entity": "Overrides",
+       "field": "item_name",
+       "format": "text",
+       "channel": {
+        "value": "AMAZON"
+       },
+       "accountId": {
+        "value": "account-a"
+       },
+       "marketplace": {
+        "value": "IT"
+       }
+      }
+     ]
+    },
+    "status": "PARTIAL",
+    "totalRows": 9,
+    "createdBy": "owner",
+    "planToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+    "planComputedAt": "2026-09-15T10:00:00.000Z",
+    "planSummary": {
+     "productsCreated": 0,
+     "listingsCreated": 0,
+     "changed": 3,
+     "unchanged": 1,
+     "refused": 2,
+     "excluded": 3,
+     "productsAffected": 1,
+     "listingsAffected": 2,
+     "newOverrides": 2,
+     "preservedOverrides": 4,
+     "alreadyEmpty": 0,
+     "clearUnchecked": 0,
+     "cleared": 0,
+     "ended": 0,
+     "pricesRecorded": 0
+    },
+    "completedAt": "2026-09-15T10:00:00.000Z"
+   }
+  }
+ },
+ {
+  "step": "legacy: rows (every column but beforeState)",
+  "body": {
+   "status": 200,
+   "rows": [
+    {
+     "status": "SUCCESS",
+     "errorMessage": null,
+     "id": "fixture-4",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 1,
+     "targetId": "[\"Products\",\"000000\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 2,
+        "entity": "Products",
+        "sku": "000000",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden shared",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Products\",\"000000\"]",
+       "identity": {
+        "row": 2,
+        "entity": "Products",
+        "sku": "000000",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden shared",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p0",
+        "sku": "000000",
+        "name": "Original 0",
+        "description": null,
+        "familyId": "f1",
+        "parentId": null,
+        "isParent": true,
+        "version": 3,
+        "basePrice": 25,
+        "totalStock": 17,
+        "categories": [],
+        "categoryAttributes": {},
+        "localizedContent": {},
+        "deletedAt": null,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "translations": [],
+        "parent": null
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000000",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden shared",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000000",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden shared",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         },
+         "before": "Original 0",
+         "after": "Golden shared",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "b429397db832397c58ba7f83d17b7f05760de0abb0dc175a4a451301c3ae6fda",
+       "create": false,
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "source"
+         },
+         "values": {
+          "title": "Golden shared"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [],
+      "preserved": [
+       {
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       },
+       {
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-b",
+        "marketplace": "FR",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       }
+      ]
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z",
+     "afterState": {
+      "id": "p0",
+      "sku": "000000",
+      "name": "Golden shared",
+      "description": null,
+      "familyId": "f1",
+      "parentId": null,
+      "isParent": true,
+      "version": 4,
+      "basePrice": 25,
+      "totalStock": 17,
+      "categories": [],
+      "categoryAttributes": {},
+      "localizedContent": {},
+      "deletedAt": null,
+      "updatedAt": "2026-09-15T10:00:00.000Z",
+      "translations": [],
+      "parent": null
+     }
+    },
+    {
+     "status": "INVALID",
+     "errorMessage": null,
+     "id": "fixture-5",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 2,
+     "targetId": "[\"Products\",\"999999\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 5,
+        "entity": "Products",
+        "sku": "999999",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Unknown",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": false,
+      "issues": [
+       {
+        "row": 5,
+        "entity": "Products",
+        "sku": "999999",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Unknown",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        },
+        "message": "This record does not exist; Update never creates an unknown SKU or listing"
+       }
+      ],
+      "exclusions": [],
+      "dependencies": [],
+      "preserved": [],
+      "sharedBefore": null
+     }
+    },
+    {
+     "status": "SUCCESS",
+     "errorMessage": null,
+     "id": "fixture-6",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 3,
+     "targetId": "[\"Products\",\"000002\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 6,
+        "entity": "Products",
+        "sku": "000002",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Original 2",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": false,
+      "target": {
+       "key": "[\"Products\",\"000002\"]",
+       "identity": {
+        "row": 6,
+        "entity": "Products",
+        "sku": "000002",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Original 2",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p2",
+        "sku": "000002",
+        "name": "Original 2",
+        "description": null,
+        "familyId": "f1",
+        "parentId": "p0",
+        "isParent": false,
+        "version": 3,
+        "basePrice": 25,
+        "totalStock": 17,
+        "categories": [],
+        "categoryAttributes": {},
+        "localizedContent": {},
+        "deletedAt": null,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "translations": [],
+        "parent": {
+         "id": "p0",
+         "sku": "000000",
+         "name": "Original 0",
+         "description": null,
+         "familyId": "f1",
+         "parentId": null,
+         "isParent": true,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 6,
+         "entity": "Products",
+         "sku": "000002",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Original 2",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 6,
+         "entity": "Products",
+         "sku": "000002",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Original 2",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         },
+         "before": "Original 2",
+         "after": "Original 2",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "unchanged"
+        }
+       ],
+       "contractHash": "b429397db832397c58ba7f83d17b7f05760de0abb0dc175a4a451301c3ae6fda",
+       "create": false
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000000",
+        "key": "[\"Products\",\"000000\"]"
+       }
+      ],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z",
+     "afterState": {
+      "id": "p2",
+      "sku": "000002",
+      "name": "Original 2",
+      "description": null,
+      "familyId": "f1",
+      "parentId": "p0",
+      "isParent": false,
+      "version": 3,
+      "basePrice": 25,
+      "totalStock": 17,
+      "categories": [],
+      "categoryAttributes": {},
+      "localizedContent": {},
+      "deletedAt": null,
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "translations": [],
+      "parent": {
+       "id": "p0",
+       "sku": "000000",
+       "name": "Golden shared",
+       "description": null,
+       "familyId": "f1",
+       "parentId": null,
+       "isParent": true,
+       "version": 4,
+       "basePrice": 25,
+       "totalStock": 17,
+       "categories": [],
+       "categoryAttributes": {},
+       "localizedContent": {},
+       "deletedAt": null,
+       "updatedAt": "2026-09-15T10:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "SUCCESS",
+     "errorMessage": null,
+     "id": "fixture-7",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 4,
+     "targetId": "[\"Listings\",\"000000\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 2,
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Listings\",\"000000\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+       "identity": {
+        "row": 2,
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p0-account-a",
+        "productId": "p0",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "version": 8,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "platformAttributes": {
+         "productType": "COAT"
+        },
+        "followMasterTitle": true,
+        "title": "Sync snapshot",
+        "titleOverride": null,
+        "overrideData": {
+         "material": "Protected cotton"
+        },
+        "translations": []
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 2,
+         "entity": "Overrides",
+         "sku": "000000",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 2,
+         "entity": "Overrides",
+         "sku": "000000",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         },
+         "before": null,
+         "after": "Golden title",
+         "beforeState": "inherited",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "922545d31d6e5763c80e4618c62b1a53b61941504bb5ff44e725ae017d2c53d3",
+       "create": false,
+       "contentFields": {
+        "item_name": "title"
+       },
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "pin",
+          "language": "it",
+          "coordinate": {
+           "channel": "AMAZON",
+           "market": "IT",
+           "accountId": "account-a"
+          }
+         },
+         "values": {
+          "title": "Golden title"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000000",
+        "key": "[\"Products\",\"000000\"]"
+       }
+      ],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "FAILED",
+     "errorMessage": "Shared or parent data changed since preview",
+     "id": "fixture-8",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 5,
+     "targetId": "[\"Listings\",\"000001\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 3,
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden variant title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Listings\",\"000001\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+       "identity": {
+        "row": 3,
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden variant title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p1-account-a",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "version": 8,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "platformAttributes": {
+         "productType": "COAT"
+        },
+        "followMasterTitle": true,
+        "title": "Sync snapshot",
+        "titleOverride": null,
+        "overrideData": {
+         "material": "Protected cotton"
+        },
+        "translations": []
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 3,
+         "entity": "Overrides",
+         "sku": "000001",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden variant title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 3,
+         "entity": "Overrides",
+         "sku": "000001",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden variant title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         },
+         "before": null,
+         "after": "Golden variant title",
+         "beforeState": "inherited",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "922545d31d6e5763c80e4618c62b1a53b61941504bb5ff44e725ae017d2c53d3",
+       "create": false,
+       "contentFields": {
+        "item_name": "title"
+       },
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "pin",
+          "language": "it",
+          "coordinate": {
+           "channel": "AMAZON",
+           "market": "IT",
+           "accountId": "account-a"
+          }
+         },
+         "values": {
+          "title": "Golden variant title"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000001",
+        "before": {
+         "id": "p1",
+         "sku": "000001",
+         "name": "Original 1",
+         "description": null,
+         "familyId": "f1",
+         "parentId": "p0",
+         "isParent": false,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z",
+         "translations": [],
+         "parent": {
+          "id": "p0",
+          "sku": "000000",
+          "name": "Original 0",
+          "description": null,
+          "familyId": "f1",
+          "parentId": null,
+          "isParent": true,
+          "version": 3,
+          "basePrice": 25,
+          "totalStock": 17,
+          "categories": [],
+          "categoryAttributes": {},
+          "localizedContent": {},
+          "deletedAt": null,
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+         }
+        }
+       },
+       {
+        "sku": "000000",
+        "key": "[\"Products\",\"000000\"]"
+       }
+      ],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "INVALID",
+     "errorMessage": null,
+     "id": "fixture-9",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 6,
+     "targetId": "issue:5",
+     "parsedValues": {
+      "rows": [],
+      "issues": [
+       {
+        "row": 4,
+        "sku": "",
+        "field": "sku",
+        "message": "A stable SKU is required; no row-number or name matching is used",
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "exclusions": [],
+      "dependencies": [],
+      "preserved": []
+     }
+    },
+    {
+     "status": "EXCLUDED",
+     "errorMessage": null,
+     "id": "fixture-10",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 7,
+     "targetId": "excluded:6",
+     "parsedValues": {
+      "rows": [],
+      "exclusions": [
+       {
+        "row": 3,
+        "sku": "000001",
+        "field": "name",
+        "message": "Blank source cell; existing value preserved",
+        "identity": {
+         "entity": "Products",
+         "sku": "000001",
+         "field": "name",
+         "value": "",
+         "format": "text",
+         "action": "SET",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "row": 3
+        },
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "issues": [],
+      "dependencies": [],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "EXCLUDED",
+     "errorMessage": null,
+     "id": "fixture-11",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 8,
+     "targetId": "excluded:7",
+     "parsedValues": {
+      "rows": [],
+      "exclusions": [
+       {
+        "row": 5,
+        "sku": "999999",
+        "field": "item_name",
+        "message": "Blank source cell; existing value preserved",
+        "identity": {
+         "entity": "Overrides",
+         "sku": "999999",
+         "field": "item_name",
+         "value": "",
+         "format": "text",
+         "action": "SET",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "row": 5
+        },
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "issues": [],
+      "dependencies": [],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "EXCLUDED",
+     "errorMessage": null,
+     "id": "fixture-12",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 9,
+     "targetId": "excluded:8",
+     "parsedValues": {
+      "rows": [],
+      "exclusions": [
+       {
+        "row": 6,
+        "sku": "000002",
+        "field": "item_name",
+        "message": "Blank source cell; existing value preserved",
+        "identity": {
+         "entity": "Overrides",
+         "sku": "000002",
+         "field": "item_name",
+         "value": "",
+         "format": "text",
+         "action": "SET",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "row": 6
+        },
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "issues": [],
+      "dependencies": [],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    }
+   ]
+  }
+ },
+ {
+  "step": "legacy: rollback",
+  "status": 409,
+  "type": "application/json",
+  "body": {
+   "success": false,
+   "error": "Unversioned rollback is unavailable. Export current catalog values and review explicit corrections in Catalog import."
+  }
+ },
+ {
+  "step": "legacy: apply",
+  "status": 202,
+  "type": "application/json",
+  "body": {
+   "success": true,
+   "jobId": "fixture-3",
+   "status": "PARTIAL",
+   "totalRows": 9,
+   "successRows": 3,
+   "failedRows": 1,
+   "skippedRows": 5
+  }
+ },
+ {
+  "step": "legacy: preview without a mapping",
+  "status": 409,
+  "type": "application/json",
+  "body": {
+   "success": false,
+   "error": "Upload and map the file at /products/catalog-transfer. Legacy automatic field inference has no reviewed ownership policy."
+  }
+ },
+ {
+  "step": "legacy: retry the refused rows",
+  "status": 201,
+  "type": "application/json",
+  "body": {
+   "success": true,
+   "job": {
+    "successRows": 0,
+    "failedRows": 0,
+    "skippedRows": 0,
+    "id": "fixture-25",
+    "createdAt": "2026-09-15T10:00:00.000Z",
+    "updatedAt": "2026-09-15T10:00:00.001Z",
+    "jobName": "golden-source.csv",
+    "source": "upload",
+    "filename": "golden-source.csv",
+    "fileKind": "csv",
+    "targetEntity": "catalog-transfer-v2",
+    "columnMapping": {
+     "kind": "catalog-source-v1",
+     "market": "IT",
+     "mode": "update",
+     "skuColumn": "SKU",
+     "policy": {
+      "shared": "replace",
+      "overrides": "replace"
+     },
+     "bindings": [
+      {
+       "source": "Name",
+       "entity": "Products",
+       "field": "name",
+       "format": "text"
+      },
+      {
+       "source": "Amazon A",
+       "entity": "Overrides",
+       "field": "item_name",
+       "format": "text",
+       "channel": {
+        "value": "AMAZON"
+       },
+       "accountId": {
+        "value": "account-a"
+       },
+       "marketplace": {
+        "value": "IT"
+       }
+      }
+     ]
+    },
+    "status": "PREVIEWING",
+    "totalRows": 1,
+    "createdBy": "owner",
+    "parentJobId": "fixture-3"
+   }
+  }
+ },
+ {
+  "step": "legacy: the retry's review",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-25",
+   "state": "QUEUED",
+   "processed": 0,
+   "total": 1,
+   "mode": "upsert",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 1,
+    "unchanged": 0,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 0,
+    "listingsAffected": 1,
+    "newOverrides": 1,
+    "preservedOverrides": 0,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [
+    "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
+   ],
+   "unmappedColumns": [],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {
+    "autoApply": false
+   },
+   "reviewToken": "43534aba52bc0e81b46a4bbdc079eaa6c77a7b01b1b1474c2726922bfa9f6101",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-source.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "stored",
+  "body": {
+   "products": [
+    {
+     "id": "p0",
+     "sku": "000000",
+     "name": "Golden shared",
+     "description": null,
+     "version": 4,
+     "parentId": null,
+     "isParent": true,
+     "basePrice": 25,
+     "totalStock": 17,
+     "status": null,
+     "updatedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "id": "p1",
+     "sku": "000001",
+     "name": "Original 1",
+     "description": null,
+     "version": 3,
+     "parentId": "p0",
+     "isParent": false,
+     "basePrice": 25,
+     "totalStock": 17,
+     "status": null,
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p2",
+     "sku": "000002",
+     "name": "Original 2",
+     "description": null,
+     "version": 3,
+     "parentId": "p0",
+     "isParent": false,
+     "basePrice": 25,
+     "totalStock": 17,
+     "status": null,
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+   ],
+   "listings": [
+    {
+     "id": "p0-account-a",
+     "productId": "p0",
+     "channel": "AMAZON",
+     "marketplace": "IT",
+     "account": "account-a",
+     "version": 10,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-09-15T10:00:00.001Z"
+    },
+    {
+     "id": "p0-account-b",
+     "productId": "p0",
+     "channel": "AMAZON",
+     "marketplace": "FR",
+     "account": "account-b",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p1-account-a",
+     "productId": "p1",
+     "channel": "AMAZON",
+     "marketplace": "IT",
+     "account": "account-a",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p1-account-b",
+     "productId": "p1",
+     "channel": "AMAZON",
+     "marketplace": "FR",
+     "account": "account-b",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p2-account-a",
+     "productId": "p2",
+     "channel": "AMAZON",
+     "marketplace": "IT",
+     "account": "account-a",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p2-account-b",
+     "productId": "p2",
+     "channel": "AMAZON",
+     "marketplace": "FR",
+     "account": "account-b",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+   ],
+   "listingTranslations": [
+    {
+     "id": "fixture-13",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "channelListingId": "p0-account-a",
+     "language": "it",
+     "follows": [],
+     "version": 2,
+     "name": "Golden title",
+     "attributes": {},
+     "source": "manual",
+     "reviewedAt": "2026-09-15T10:00:00.000Z"
+    }
+   ],
+   "productTranslations": [],
+   "audit": [
+    {
+     "id": "fixture-15",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "entityType": "Product",
+     "entityId": "p0",
+     "action": "update",
+     "userId": "owner",
+     "before": {
+      "title": "Original 0"
+     },
+     "after": {
+      "title": "Golden shared"
+     },
+     "metadata": {
+      "fields": [
+       "title"
+      ],
+      "language": "it",
+      "contentTier": "source",
+      "layer": "master",
+      "reason": null,
+      "cascadedListingIds": [
+       "p0-account-a"
+      ],
+      "queuedSyncIds": [
+       "fixture-14"
+      ]
+     }
+    },
+    {
+     "id": "fixture-16",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "userId": "owner",
+     "entityType": "Product",
+     "entityId": "p0",
+     "action": "update",
+     "before": [
+      {
+       "field": "name",
+       "locale": "",
+       "value": "Original 0",
+       "state": "stored"
+      }
+     ],
+     "after": [
+      {
+       "field": "name",
+       "locale": "",
+       "value": "Golden shared",
+       "state": "stored"
+      }
+     ],
+     "metadata": {
+      "source": "catalog-transfer",
+      "jobId": "fixture-3",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": ""
+     }
+    },
+    {
+     "id": "fixture-23",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "entityType": "ChannelListing",
+     "entityId": "p0-account-a",
+     "action": "update",
+     "userId": "owner",
+     "before": {
+      "id": "fixture-13",
+      "createdAt": "2026-09-15T10:00:00.000Z",
+      "updatedAt": "2026-09-15T10:00:00.000Z",
+      "channelListingId": "p0-account-a",
+      "language": "it",
+      "follows": [
+       "title"
+      ],
+      "version": 1
+     },
+     "after": {
+      "values": {
+       "title": "Golden title"
+      },
+      "reset": []
+     },
+     "metadata": {
+      "layer": "pin",
+      "language": "it",
+      "coordinate": {
+       "channel": "AMAZON",
+       "market": "IT",
+       "accountId": "account-a"
+      }
+     }
+    },
+    {
+     "id": "fixture-24",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "userId": "owner",
+     "entityType": "ChannelListing",
+     "entityId": "p0-account-a",
+     "action": "update",
+     "before": [
+      {
+       "field": "item_name",
+       "locale": "",
+       "value": null,
+       "state": "inherited"
+      }
+     ],
+     "after": [
+      {
+       "field": "item_name",
+       "locale": "",
+       "value": "Golden title",
+       "state": "stored"
+      }
+     ],
+     "metadata": {
+      "source": "catalog-transfer",
+      "jobId": "fixture-3",
+      "channel": "AMAZON",
+      "accountId": "account-a",
+      "marketplace": "IT",
+      "aliasKey": ""
+     }
+    }
+   ],
+   "bulkOperations": [
+    {
+     "id": "fixture-3",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "userId": "owner",
+     "productCount": 4,
+     "changeCount": 0,
+     "status": "PARTIAL",
+     "changes": {
+      "kind": "catalog-transfer-v2",
+      "outcomeVersion": 1,
+      "mode": "update",
+      "market": "IT",
+      "mapping": {
+       "kind": "catalog-source-v1",
+       "market": "IT",
+       "mode": "update",
+       "skuColumn": "SKU",
+       "policy": {
+        "shared": "replace",
+        "overrides": "replace"
+       },
+       "bindings": [
+        {
+         "source": "Name",
+         "entity": "Products",
+         "field": "name",
+         "format": "text"
+        },
+        {
+         "source": "Amazon A",
+         "entity": "Overrides",
+         "field": "item_name",
+         "format": "text",
+         "channel": {
+          "value": "AMAZON"
+         },
+         "accountId": {
+          "value": "account-a"
+         },
+         "marketplace": {
+          "value": "IT"
+         }
+        }
+       ]
+      },
+      "source": {},
+      "inputHash": "866efb25f624acb45824eb0dae996cdb330a344cffd73a27678c4e381701e642",
+      "previewExpiresAt": "2026-09-16T10:00:00.000Z",
+      "counts": {
+       "productsCreated": 0,
+       "listingsCreated": 0,
+       "changed": 3,
+       "unchanged": 1,
+       "refused": 2,
+       "excluded": 3,
+       "productsAffected": 1,
+       "listingsAffected": 2,
+       "newOverrides": 2,
+       "preservedOverrides": 4,
+       "alreadyEmpty": 0,
+       "clearUnchecked": 0,
+       "cleared": 0,
+       "ended": 0,
+       "pricesRecorded": 0
+      },
+      "warnings": [
+       "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
+      ],
+      "unmappedColumns": [
+       "Notes"
+      ],
+      "reviewToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+      "readyOnly": true,
+      "receipt": {
+       "saved": 2,
+       "unchanged": 1,
+       "failed": 1,
+       "excluded": 3,
+       "unprocessed": 0,
+       "skipped": 2
+      }
+     },
+     "processed": 9,
+     "total": 9,
+     "uploadFilename": "golden-source.csv",
+     "expiresAt": null,
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "id": "fixture-25",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "userId": "owner",
+     "productCount": 1,
+     "changeCount": 0,
+     "status": "QUEUED",
+     "changes": {
+      "kind": "catalog-transfer-v2",
+      "outcomeVersion": 1,
+      "mode": "upsert",
+      "market": "IT",
+      "mapping": {
+       "kind": "catalog-source-v1",
+       "market": "IT",
+       "mode": "update",
+       "skuColumn": "SKU",
+       "policy": {
+        "shared": "replace",
+        "overrides": "replace"
+       },
+       "bindings": [
+        {
+         "source": "Name",
+         "entity": "Products",
+         "field": "name",
+         "format": "text"
+        },
+        {
+         "source": "Amazon A",
+         "entity": "Overrides",
+         "field": "item_name",
+         "format": "text",
+         "channel": {
+          "value": "AMAZON"
+         },
+         "accountId": {
+          "value": "account-a"
+         },
+         "marketplace": {
+          "value": "IT"
+         }
+        }
+       ]
+      },
+      "source": {
+       "autoApply": false
+      },
+      "inputHash": "91b1d02605912303f515a08e073e69cb24b749031448c72c919f8929a7ecde03",
+      "previewExpiresAt": "2026-09-16T10:00:00.000Z",
+      "counts": {
+       "productsCreated": 0,
+       "listingsCreated": 0,
+       "changed": 1,
+       "unchanged": 0,
+       "refused": 0,
+       "excluded": 0,
+       "productsAffected": 0,
+       "listingsAffected": 1,
+       "newOverrides": 1,
+       "preservedOverrides": 0,
+       "alreadyEmpty": 0,
+       "clearUnchecked": 0,
+       "cleared": 0,
+       "ended": 0,
+       "pricesRecorded": 0
+      },
+      "warnings": [
+       "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
+      ],
+      "unmappedColumns": [],
+      "reviewToken": "43534aba52bc0e81b46a4bbdc079eaa6c77a7b01b1b1474c2726922bfa9f6101"
+     },
+     "processed": 0,
+     "total": 1,
+     "uploadFilename": "golden-source.csv",
+     "expiresAt": "2026-09-16T10:00:00.000Z"
+    }
+   ],
+   "importJobs": [
+    {
+     "successRows": 0,
+     "failedRows": 0,
+     "skippedRows": 0,
+     "id": "fixture-1",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.001Z",
+     "jobName": "golden-source.csv",
+     "filename": "golden-source.csv",
+     "fileKind": "csv",
+     "source": "upload",
+     "targetEntity": "catalog-source-input-v1",
+     "status": "SOURCE_READY",
+     "totalRows": 5,
+     "createdBy": "owner",
+     "planToken": "d278ca6404745468626e2c3130a58ad75d46ea4a77b8804aba4b65bcdacd031d",
+     "planSummary": {
+      "headers": [
+       "SKU",
+       "Name",
+       "Amazon A",
+       "Notes"
+      ],
+      "total": 5,
+      "hash": "d278ca6404745468626e2c3130a58ad75d46ea4a77b8804aba4b65bcdacd031d",
+      "expiresAt": "2026-09-16T10:00:00.000Z"
+     }
+    },
+    {
+     "successRows": 3,
+     "failedRows": 1,
+     "skippedRows": 5,
+     "id": "fixture-3",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.003Z",
+     "jobName": "golden-source.csv",
+     "source": "upload",
+     "filename": "golden-source.csv",
+     "fileKind": "csv",
+     "targetEntity": "catalog-transfer-v2",
+     "columnMapping": {
+      "kind": "catalog-source-v1",
+      "market": "IT",
+      "mode": "update",
+      "skuColumn": "SKU",
+      "policy": {
+       "shared": "replace",
+       "overrides": "replace"
+      },
+      "bindings": [
+       {
+        "source": "Name",
+        "entity": "Products",
+        "field": "name",
+        "format": "text"
+       },
+       {
+        "source": "Amazon A",
+        "entity": "Overrides",
+        "field": "item_name",
+        "format": "text",
+        "channel": {
+         "value": "AMAZON"
+        },
+        "accountId": {
+         "value": "account-a"
+        },
+        "marketplace": {
+         "value": "IT"
+        }
+       }
+      ]
+     },
+     "status": "PARTIAL",
+     "totalRows": 9,
+     "createdBy": "owner",
+     "planToken": "81ee4cc80e9ab0a875f4235ebf0853237a3322566405757ef21cc5f789298900",
+     "planComputedAt": "2026-09-15T10:00:00.000Z",
+     "planSummary": {
+      "productsCreated": 0,
+      "listingsCreated": 0,
+      "changed": 3,
+      "unchanged": 1,
+      "refused": 2,
+      "excluded": 3,
+      "productsAffected": 1,
+      "listingsAffected": 2,
+      "newOverrides": 2,
+      "preservedOverrides": 4,
+      "alreadyEmpty": 0,
+      "clearUnchecked": 0,
+      "cleared": 0,
+      "ended": 0,
+      "pricesRecorded": 0
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "successRows": 0,
+     "failedRows": 0,
+     "skippedRows": 0,
+     "id": "fixture-25",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.002Z",
+     "jobName": "golden-source.csv",
+     "source": "upload",
+     "filename": "golden-source.csv",
+     "fileKind": "csv",
+     "targetEntity": "catalog-transfer-v2",
+     "columnMapping": {
+      "kind": "catalog-source-v1",
+      "market": "IT",
+      "mode": "update",
+      "skuColumn": "SKU",
+      "policy": {
+       "shared": "replace",
+       "overrides": "replace"
+      },
+      "bindings": [
+       {
+        "source": "Name",
+        "entity": "Products",
+        "field": "name",
+        "format": "text"
+       },
+       {
+        "source": "Amazon A",
+        "entity": "Overrides",
+        "field": "item_name",
+        "format": "text",
+        "channel": {
+         "value": "AMAZON"
+        },
+        "accountId": {
+         "value": "account-a"
+        },
+        "marketplace": {
+         "value": "IT"
+        }
+       }
+      ]
+     },
+     "status": "QUEUED",
+     "totalRows": 1,
+     "createdBy": "owner",
+     "parentJobId": "fixture-3",
+     "planToken": "43534aba52bc0e81b46a4bbdc079eaa6c77a7b01b1b1474c2726922bfa9f6101",
+     "planComputedAt": "2026-09-15T10:00:00.000Z",
+     "planSummary": {
+      "productsCreated": 0,
+      "listingsCreated": 0,
+      "changed": 1,
+      "unchanged": 0,
+      "refused": 0,
+      "excluded": 0,
+      "productsAffected": 0,
+      "listingsAffected": 1,
+      "newOverrides": 1,
+      "preservedOverrides": 0,
+      "alreadyEmpty": 0,
+      "clearUnchecked": 0,
+      "cleared": 0,
+      "ended": 0,
+      "pricesRecorded": 0
+     }
+    }
+   ],
+   "importRows": [
+    {
+     "status": "PENDING",
+     "errorMessage": null,
+     "id": "fixture-2",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-1",
+     "rowIndex": 1,
+     "parsedValues": [
+      {
+       "SKU": "000000",
+       "Name": "Golden shared",
+       "Amazon A": "Golden title",
+       "Notes": "n1"
+      },
+      {
+       "SKU": "000001",
+       "Name": "",
+       "Amazon A": "Golden variant title",
+       "Notes": "n2"
+      },
+      {
+       "SKU": "",
+       "Name": "No SKU",
+       "Amazon A": "",
+       "Notes": ""
+      },
+      {
+       "SKU": "999999",
+       "Name": "Unknown",
+       "Amazon A": "",
+       "Notes": ""
+      },
+      {
+       "SKU": "000002",
+       "Name": "Original 2",
+       "Amazon A": "",
+       "Notes": ""
+      }
+     ]
+    },
+    {
+     "status": "SUCCESS",
+     "errorMessage": null,
+     "id": "fixture-4",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 1,
+     "targetId": "[\"Products\",\"000000\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 2,
+        "entity": "Products",
+        "sku": "000000",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden shared",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Products\",\"000000\"]",
+       "identity": {
+        "row": 2,
+        "entity": "Products",
+        "sku": "000000",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden shared",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p0",
+        "sku": "000000",
+        "name": "Original 0",
+        "description": null,
+        "familyId": "f1",
+        "parentId": null,
+        "isParent": true,
+        "version": 3,
+        "basePrice": 25,
+        "totalStock": 17,
+        "categories": [],
+        "categoryAttributes": {},
+        "localizedContent": {},
+        "deletedAt": null,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "translations": [],
+        "parent": null
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000000",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden shared",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000000",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden shared",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         },
+         "before": "Original 0",
+         "after": "Golden shared",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "b429397db832397c58ba7f83d17b7f05760de0abb0dc175a4a451301c3ae6fda",
+       "create": false,
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "source"
+         },
+         "values": {
+          "title": "Golden shared"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [],
+      "preserved": [
+       {
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       },
+       {
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-b",
+        "marketplace": "FR",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       }
+      ]
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z",
+     "afterState": {
+      "id": "p0",
+      "sku": "000000",
+      "name": "Golden shared",
+      "description": null,
+      "familyId": "f1",
+      "parentId": null,
+      "isParent": true,
+      "version": 4,
+      "basePrice": 25,
+      "totalStock": 17,
+      "categories": [],
+      "categoryAttributes": {},
+      "localizedContent": {},
+      "deletedAt": null,
+      "updatedAt": "2026-09-15T10:00:00.000Z",
+      "translations": [],
+      "parent": null
+     }
+    },
+    {
+     "status": "INVALID",
+     "errorMessage": null,
+     "id": "fixture-5",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 2,
+     "targetId": "[\"Products\",\"999999\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 5,
+        "entity": "Products",
+        "sku": "999999",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Unknown",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": false,
+      "issues": [
+       {
+        "row": 5,
+        "entity": "Products",
+        "sku": "999999",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Unknown",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        },
+        "message": "This record does not exist; Update never creates an unknown SKU or listing"
+       }
+      ],
+      "exclusions": [],
+      "dependencies": [],
+      "preserved": [],
+      "sharedBefore": null
+     }
+    },
+    {
+     "status": "SUCCESS",
+     "errorMessage": null,
+     "id": "fixture-6",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 3,
+     "targetId": "[\"Products\",\"000002\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 6,
+        "entity": "Products",
+        "sku": "000002",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Original 2",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": false,
+      "target": {
+       "key": "[\"Products\",\"000002\"]",
+       "identity": {
+        "row": 6,
+        "entity": "Products",
+        "sku": "000002",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Original 2",
+        "source": {
+         "column": "B",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p2",
+        "sku": "000002",
+        "name": "Original 2",
+        "description": null,
+        "familyId": "f1",
+        "parentId": "p0",
+        "isParent": false,
+        "version": 3,
+        "basePrice": 25,
+        "totalStock": 17,
+        "categories": [],
+        "categoryAttributes": {},
+        "localizedContent": {},
+        "deletedAt": null,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "translations": [],
+        "parent": {
+         "id": "p0",
+         "sku": "000000",
+         "name": "Original 0",
+         "description": null,
+         "familyId": "f1",
+         "parentId": null,
+         "isParent": true,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 6,
+         "entity": "Products",
+         "sku": "000002",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Original 2",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 6,
+         "entity": "Products",
+         "sku": "000002",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Original 2",
+         "source": {
+          "column": "B",
+          "file": "golden-source.csv"
+         },
+         "before": "Original 2",
+         "after": "Original 2",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "unchanged"
+        }
+       ],
+       "contractHash": "b429397db832397c58ba7f83d17b7f05760de0abb0dc175a4a451301c3ae6fda",
+       "create": false
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000000",
+        "key": "[\"Products\",\"000000\"]"
+       }
+      ],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z",
+     "afterState": {
+      "id": "p2",
+      "sku": "000002",
+      "name": "Original 2",
+      "description": null,
+      "familyId": "f1",
+      "parentId": "p0",
+      "isParent": false,
+      "version": 3,
+      "basePrice": 25,
+      "totalStock": 17,
+      "categories": [],
+      "categoryAttributes": {},
+      "localizedContent": {},
+      "deletedAt": null,
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "translations": [],
+      "parent": {
+       "id": "p0",
+       "sku": "000000",
+       "name": "Golden shared",
+       "description": null,
+       "familyId": "f1",
+       "parentId": null,
+       "isParent": true,
+       "version": 4,
+       "basePrice": 25,
+       "totalStock": 17,
+       "categories": [],
+       "categoryAttributes": {},
+       "localizedContent": {},
+       "deletedAt": null,
+       "updatedAt": "2026-09-15T10:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "SUCCESS",
+     "errorMessage": null,
+     "id": "fixture-7",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 4,
+     "targetId": "[\"Listings\",\"000000\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 2,
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Listings\",\"000000\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+       "identity": {
+        "row": 2,
+        "entity": "Overrides",
+        "sku": "000000",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p0-account-a",
+        "productId": "p0",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "version": 8,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "platformAttributes": {
+         "productType": "COAT"
+        },
+        "followMasterTitle": true,
+        "title": "Sync snapshot",
+        "titleOverride": null,
+        "overrideData": {
+         "material": "Protected cotton"
+        },
+        "translations": []
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 2,
+         "entity": "Overrides",
+         "sku": "000000",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 2,
+         "entity": "Overrides",
+         "sku": "000000",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         },
+         "before": null,
+         "after": "Golden title",
+         "beforeState": "inherited",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "922545d31d6e5763c80e4618c62b1a53b61941504bb5ff44e725ae017d2c53d3",
+       "create": false,
+       "contentFields": {
+        "item_name": "title"
+       },
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "pin",
+          "language": "it",
+          "coordinate": {
+           "channel": "AMAZON",
+           "market": "IT",
+           "accountId": "account-a"
+          }
+         },
+         "values": {
+          "title": "Golden title"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000000",
+        "key": "[\"Products\",\"000000\"]"
+       }
+      ],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "FAILED",
+     "errorMessage": "Shared or parent data changed since preview",
+     "id": "fixture-8",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 5,
+     "targetId": "[\"Listings\",\"000001\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 3,
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden variant title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Listings\",\"000001\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+       "identity": {
+        "row": 3,
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden variant title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p1-account-a",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "version": 8,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "platformAttributes": {
+         "productType": "COAT"
+        },
+        "followMasterTitle": true,
+        "title": "Sync snapshot",
+        "titleOverride": null,
+        "overrideData": {
+         "material": "Protected cotton"
+        },
+        "translations": []
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 3,
+         "entity": "Overrides",
+         "sku": "000001",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden variant title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 3,
+         "entity": "Overrides",
+         "sku": "000001",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden variant title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         },
+         "before": null,
+         "after": "Golden variant title",
+         "beforeState": "inherited",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "922545d31d6e5763c80e4618c62b1a53b61941504bb5ff44e725ae017d2c53d3",
+       "create": false,
+       "contentFields": {
+        "item_name": "title"
+       },
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "pin",
+          "language": "it",
+          "coordinate": {
+           "channel": "AMAZON",
+           "market": "IT",
+           "accountId": "account-a"
+          }
+         },
+         "values": {
+          "title": "Golden variant title"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000001",
+        "before": {
+         "id": "p1",
+         "sku": "000001",
+         "name": "Original 1",
+         "description": null,
+         "familyId": "f1",
+         "parentId": "p0",
+         "isParent": false,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z",
+         "translations": [],
+         "parent": {
+          "id": "p0",
+          "sku": "000000",
+          "name": "Original 0",
+          "description": null,
+          "familyId": "f1",
+          "parentId": null,
+          "isParent": true,
+          "version": 3,
+          "basePrice": 25,
+          "totalStock": 17,
+          "categories": [],
+          "categoryAttributes": {},
+          "localizedContent": {},
+          "deletedAt": null,
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+         }
+        }
+       },
+       {
+        "sku": "000000",
+        "key": "[\"Products\",\"000000\"]"
+       }
+      ],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "INVALID",
+     "errorMessage": null,
+     "id": "fixture-9",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 6,
+     "targetId": "issue:5",
+     "parsedValues": {
+      "rows": [],
+      "issues": [
+       {
+        "row": 4,
+        "sku": "",
+        "field": "sku",
+        "message": "A stable SKU is required; no row-number or name matching is used",
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "exclusions": [],
+      "dependencies": [],
+      "preserved": []
+     }
+    },
+    {
+     "status": "EXCLUDED",
+     "errorMessage": null,
+     "id": "fixture-10",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 7,
+     "targetId": "excluded:6",
+     "parsedValues": {
+      "rows": [],
+      "exclusions": [
+       {
+        "row": 3,
+        "sku": "000001",
+        "field": "name",
+        "message": "Blank source cell; existing value preserved",
+        "identity": {
+         "entity": "Products",
+         "sku": "000001",
+         "field": "name",
+         "value": "",
+         "format": "text",
+         "action": "SET",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "row": 3
+        },
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "issues": [],
+      "dependencies": [],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "EXCLUDED",
+     "errorMessage": null,
+     "id": "fixture-11",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 8,
+     "targetId": "excluded:7",
+     "parsedValues": {
+      "rows": [],
+      "exclusions": [
+       {
+        "row": 5,
+        "sku": "999999",
+        "field": "item_name",
+        "message": "Blank source cell; existing value preserved",
+        "identity": {
+         "entity": "Overrides",
+         "sku": "999999",
+         "field": "item_name",
+         "value": "",
+         "format": "text",
+         "action": "SET",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "row": 5
+        },
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "issues": [],
+      "dependencies": [],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "EXCLUDED",
+     "errorMessage": null,
+     "id": "fixture-12",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 9,
+     "targetId": "excluded:8",
+     "parsedValues": {
+      "rows": [],
+      "exclusions": [
+       {
+        "row": 6,
+        "sku": "000002",
+        "field": "item_name",
+        "message": "Blank source cell; existing value preserved",
+        "identity": {
+         "entity": "Overrides",
+         "sku": "000002",
+         "field": "item_name",
+         "value": "",
+         "format": "text",
+         "action": "SET",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "row": 6
+        },
+        "source": {
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "changed": false,
+      "issues": [],
+      "dependencies": [],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "REVIEWED",
+     "errorMessage": null,
+     "id": "fixture-26",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-25",
+     "rowIndex": 1,
+     "targetId": "[\"Listings\",\"000001\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 3,
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden variant title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Listings\",\"000001\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
+       "identity": {
+        "row": 3,
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "locale": "",
+        "field": "item_name",
+        "action": "SET",
+        "value": "Golden variant title",
+        "source": {
+         "column": "C",
+         "file": "golden-source.csv"
+        }
+       },
+       "before": {
+        "id": "p1-account-a",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "version": 8,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "platformAttributes": {
+         "productType": "COAT"
+        },
+        "followMasterTitle": true,
+        "title": "Sync snapshot",
+        "titleOverride": null,
+        "overrideData": {
+         "material": "Protected cotton"
+        },
+        "translations": []
+       },
+       "patch": {},
+       "rows": [
+        {
+         "row": 3,
+         "entity": "Overrides",
+         "sku": "000001",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden variant title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 3,
+         "entity": "Overrides",
+         "sku": "000001",
+         "channel": "AMAZON",
+         "accountId": "account-a",
+         "marketplace": "IT",
+         "aliasKey": "",
+         "locale": "",
+         "field": "item_name",
+         "action": "SET",
+         "value": "Golden variant title",
+         "source": {
+          "column": "C",
+          "file": "golden-source.csv"
+         },
+         "before": null,
+         "after": "Golden variant title",
+         "beforeState": "inherited",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "922545d31d6e5763c80e4618c62b1a53b61941504bb5ff44e725ae017d2c53d3",
+       "create": false,
+       "contentFields": {
+        "item_name": "title"
+       },
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "pin",
+          "language": "it",
+          "coordinate": {
+           "channel": "AMAZON",
+           "market": "IT",
+           "accountId": "account-a"
+          }
+         },
+         "values": {
+          "title": "Golden variant title"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000001",
+        "before": {
+         "id": "p1",
+         "sku": "000001",
+         "name": "Original 1",
+         "description": null,
+         "familyId": "f1",
+         "parentId": "p0",
+         "isParent": false,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z",
+         "translations": [],
+         "parent": {
+          "id": "p0",
+          "sku": "000000",
+          "name": "Golden shared",
+          "description": null,
+          "familyId": "f1",
+          "parentId": null,
+          "isParent": true,
+          "version": 4,
+          "basePrice": 25,
+          "totalStock": 17,
+          "categories": [],
+          "categoryAttributes": {},
+          "localizedContent": {},
+          "deletedAt": null,
+          "updatedAt": "2026-09-15T10:00:00.000Z"
+         }
+        }
+       },
+       {
+        "sku": "000000",
+        "before": {
+         "id": "p0",
+         "sku": "000000",
+         "name": "Golden shared",
+         "description": null,
+         "familyId": "f1",
+         "parentId": null,
+         "isParent": true,
+         "version": 4,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-09-15T10:00:00.000Z",
+         "translations": [],
+         "parent": null
+        }
+       }
+      ],
+      "preserved": []
+     }
+    }
+   ],
+   "outbound": [
+    {
+     "id": "fixture-14",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "productId": "p0",
+     "channelListingId": "p0-account-a",
+     "channelConnectionId": "account-a",
+     "targetChannel": "AMAZON",
+     "syncStatus": "PENDING",
+     "syncType": "CONTENT_UPDATE",
+     "holdUntil": "2026-09-15T10:00:30.000Z",
+     "payload": {
+      "source": "MASTER_CONTENT_CHANGE",
+      "productId": "p0",
+      "productSku": "000000",
+      "channel": "AMAZON",
+      "marketplace": "IT",
+      "channelConnectionId": "account-a",
+      "aliasKey": "",
+      "locale": "it",
+      "language": "it",
+      "title": "Golden shared"
+     },
+     "traceId": null
+    }
+   ]
+  }
+ }
+]

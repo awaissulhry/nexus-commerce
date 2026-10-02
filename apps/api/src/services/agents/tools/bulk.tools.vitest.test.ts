@@ -74,7 +74,13 @@ const BULK_NO_EDIT = person(['ai.run', F.productsBulkRun, F.productsPriceEdit])
 const FOLLOWER = person(['ai.run', 'ai.view', F.productsPriceEdit, F.productsEdit, F.productsBulkRun])
 const statusOf = async (approvalId: string) => ((await callTool(FOLLOWER, 'approval-status', { approvalId })).visible as any).data
 
-const claude: McpPrincipal = { ...person(['ai.run', F.productsPriceEdit, F.productsEdit, F.productsBulkRun]), via: 'claude', workspace: business(A), oauthGrantId: 'grant-mcp10' }
+const claude: McpPrincipal = {
+  ...person(['ai.run', F.productsPriceEdit, F.productsEdit, F.productsBulkRun]),
+  via: 'claude',
+  workspace: business(A),
+  oauthGrantId: 'grant-mcp10',
+  business: { id: A, name: 'Alpha bulk business' },
+}
 
 const ids = { p1: '', p2: '', p3: '', p4: '', p5: '', b1: '' }
 const listing = { amazonIt: '', ebayIt: '', amazonDe: '', ebayUk: '', amazonFr: '', p2AmazonIt: '' }
@@ -572,9 +578,8 @@ describe('MCP.12 — what approval-status says an executed change did, per tool'
     )
     expect(executedMeaning('set-price', { ...none, queued: 2, waiting: 2 })).toContain('2 price updates were queued for this product since it was approved')
     expect(executedMeaning('bulk-price-change', none)).toContain('for these products:')
-    expect(executedMeaning('publish-listing', { ...none, queued: 1, waiting: 1 })).toBe(
-      'Approved: the publish was queued in Nexus. The channels update next: 1 publish was queued for this product since it was approved — 1 waiting to be sent.',
-    )
+    // L5 — publish-listing queues nothing: its publication says what it did (publishedMeaning, publish-listing.tools test).
+    expect(executedMeaning('publish-listing', null)).toBe('Approved, and it ran.')
     expect(executedMeaning('bulk-price-change', { ...none, queued: 2, notSent: 2 })).toContain('— 2 not sent (skipped or cancelled).')
     expect(executedMeaning('send-customer-message', null)).toBe('Approved, and it ran.')
     for (const tool of ['set-price', 'bulk-price-change', 'bulk-attribute-change', 'publish-listing', 'apply-content']) {
@@ -654,7 +659,8 @@ describe('MCP.10 — over MCP, a bulk change is only ever queued', { timeout: DB
     ['bulk-attribute-change', () => ({ products: [ids.p2], attributes: { fit: 'slim' } })],
   ])('%s from Claude waits for a person; nothing changes', async (name, args) => {
     const before = await measure()
-    const result = await runToolForClaude(claude, getTool(name)!, args())
+    // C3 — a change from Claude names its business (a check; the token's business is the one used).
+    const result = await runToolForClaude(claude, getTool(name)!, { ...args(), business: 'Alpha bulk business' })
     expect(result.isError).toBeFalsy()
     const out = JSON.parse((result.content[0] as { text: string }).text)
     expect(out).toMatchObject({ status: 'waiting_for_approval', approvalId: expect.any(String) })

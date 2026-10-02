@@ -17,7 +17,7 @@ vi.mock('../../db.js', () => ({
 }))
 
 import prisma from '../../db.js'
-import { getFleetTimeline } from './fleet-timeline.service.js'
+import { getFleetTimeline, TOOL_PHRASE } from './fleet-timeline.service.js'
 
 const db = vi.mocked(prisma, true)
 
@@ -175,6 +175,12 @@ describe('getFleetTimeline — one event per source', () => {
     expect(decided.actorKind).toBe('human')
     expect(decided.title).toBe('Someone said no to the request to stop ads showing for a search term')
     expect(decided.detail).toBe('Reason given: too broad')
+  })
+
+  it('names the content changes Claude asks for in words, never as tool names (section 03)', () => {
+    expect(TOOL_PHRASE['set-content']).toBe("change a product's text in Nexus")
+    expect(TOOL_PHRASE['set-listing-content']).toBe("change one listing's own text in Nexus")
+    expect(TOOL_PHRASE['bulk-content-change']).toBe('change the text of several products in Nexus')
   })
 
   it('admits when nobody recorded who decided, rather than inventing one', async () => {

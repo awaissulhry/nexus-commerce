@@ -8,7 +8,7 @@
  *                           not approvable.
  *   set-price               0, "" and null are refused; so is a price outside the product's own floor or ceiling.
  *   bulk-price-change       the same floor and ceiling; a listing whose rule takes it outside them is named.
- *   publish-listing         names one market; refuses to guess between markets, and refuses a draft.
+ *   publish-listing         names one market; refuses to guess between markets (L5: it publishes through the studio).
  *   send-customer-message   the Amazon/eBay messaging warning reads the order's channel.
  *   order-search            the status is filtered before the limit.
  *   product-analytics       revenue per currency; a parent counts its variations.
@@ -129,7 +129,8 @@ beforeAll(async () => {
     })
     // 22 recent unpaid orders, and one older shipped order: the newest 20 hold no shipped order.
     for (let n = 0; n < 22; n++) await order(`NEW-${n}`, { purchaseDate: new Date(Date.now() - n * 60_000) })
-    await order('SHIPPED-OLD', { purchaseDate: new Date(Date.now() - 3 * 86_400_000), paidAt: new Date(), shippedAt: new Date() })
+    // 07 O4 — order-search v2 filters the order's own status (every OrderStatus), so the shipped order says SHIPPED.
+    await order('SHIPPED-OLD', { status: 'SHIPPED', purchaseDate: new Date(Date.now() - 3 * 86_400_000), paidAt: new Date(), shippedAt: new Date() })
     // The variation sold 2 × 10 EUR on Amazon IT and 1 × 100 SEK on Amazon SE.
     const eur = await order('SALE-EUR', { totalPrice: '20.00', purchaseDate: new Date(Date.now() - 86_400_000) })
     await db.orderItem.create({ data: { orderId: eur.id, productId: ids.child, sku: 'REV-PARENT-M', quantity: 2, price: '10.00' } as never })
@@ -303,38 +304,26 @@ describe('bulk-price-change and the product’s own floor and ceiling', { timeou
   })
 })
 
-describe('publish-listing re-sends exactly one listing', { timeout: DB_TEST_TIMEOUT }, () => {
+// L5 — publish-listing publishes through the studio now (its review, selection and submit are proven in
+// publish-listing.tools.vitest.test.ts, with the channel transports faked). What stays here needs no channel: the destination.
+describe('publish-listing names exactly one destination', { timeout: DB_TEST_TIMEOUT }, () => {
   it('without a market, refuses to guess between the markets the product sells in', async () => {
     const out = await dryRun('publish-listing', { productId: ids.multi, channel: 'AMAZON' })
-    expect(out).toMatchObject({ ok: false, error: 'This product has AMAZON listings in DE, IT, UK. Name the market (marketplace) to publish. Nothing was queued.' })
+    expect(out).toMatchObject({ ok: false, error: 'REV-MULTI has Amazon listings in DE, IT, UK: name the market (marketplace).' })
   })
 
-  it('with a market, previews that listing and queues that listing', async () => {
-    const out = await dryRun('publish-listing', { productId: ids.multi, channel: 'amazon', marketplace: 'de' })
-    expect(out).toMatchObject({ ok: true, preview: { channel: 'AMAZON', marketplace: 'DE', title: 'Multi DE', currentlyPublished: true } })
-    const ran = (await inside(() => executeTool(ALL, 'publish-listing', { productId: ids.multi, channel: 'AMAZON', marketplace: 'DE' }))).raw
-    expect(ran.ok, ran.error).toBe(true)
-    const row = await inside(() => database.client.outboundSyncQueue.findUniqueOrThrow({ where: { id: (ran.data as Data).queueId } }))
-    expect(row).toMatchObject({ channelListingId: ids.multiDe, syncType: 'LISTING_SYNC', payload: { marketplace: 'DE' } })
-  })
-
-  it('refuses a draft, which the publish worker would skip', async () => {
-    const out = await dryRun('publish-listing', { productId: ids.multi, channel: 'EBAY', marketplace: 'IT' })
-    expect(out).toMatchObject({ ok: false, error: 'The EBAY IT listing is a draft or has publishing switched off in Nexus, so the publish worker would skip it and send nothing. Publish it from the product in Nexus. Nothing was queued.' })
-  })
-
-  it('a market the product does not sell in is named', async () => {
-    const out = await dryRun('publish-listing', { productId: ids.multi, channel: 'AMAZON', marketplace: 'FR' })
-    expect(out).toMatchObject({ ok: false, error: 'This product has no AMAZON FR listing. Nothing was queued.' })
+  it('Etsy has no publisher: refused before anything is read', async () => {
+    const out = await dryRun('publish-listing', { productId: ids.multi, channel: 'ETSY', marketplace: 'GLOBAL' })
+    expect(out).toMatchObject({ ok: false, error: 'REV-MULTI: publishing to Etsy from Nexus is not available yet; nothing can be sent there.' })
   })
 })
 
 describe('reads', { timeout: DB_TEST_TIMEOUT }, () => {
-  it('send-customer-message warns about Amazon messaging for an Amazon order (its market is IT)', async () => {
+  it('send-customer-message: an Amazon buyer only through Amazon messaging, in one of its kinds — a free message alone is refused (07 O11/O15, O-2)', async () => {
     const order = await inside(() => database.client.order.findFirstOrThrow({ where: { channelOrderId: 'REV-ORDER-NEW-0' } }))
     const out = await dryRun('send-customer-message', { orderId: order.id, message: 'Your parcel ships today.' })
-    expect(out.ok, out.error).toBe(true)
-    expect(out.preview).toMatchObject({ marketplace: 'IT', marketplaceWarning: 'Amazon orders: contact buyers via Amazon Buyer-Seller Messaging, not direct email (policy).' })
+    expect(out.ok).toBe(false)
+    expect(out.error).toMatch(/is an Amazon order: Amazon allows only its own message kinds, so name a template/)
   })
 
   it('order-search filters the status before the limit', async () => {

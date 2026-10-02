@@ -17,19 +17,13 @@ import { ingestMockOrders, shipOrder } from '../services/order-ingestion.service
 import prisma from '../db.js'
 import { resolveConnection } from '../services/connection-resolver.service.js'
 import { csvDocument } from '../lib/csv.js'
+import { csvParam, listOrders, orderDetail, orderFinancials, orderTimeline, safeNum } from '../services/orders/order-read.service.js'
+import { addOrderNote, deleteOrderNote, markOrderDelivered, updateOrderNote } from '../services/orders/order-update.service.js'
+import { enqueueTrackingUpload } from '../services/fulfillment/tracking-upload.service.js'
+import { cancelOrder } from '../services/order-cancellation/cancel-order.service.js'
 
 const ALL_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'MANUAL'] as const
 
-function safeNum(v: unknown, fallback?: number): number | undefined {
-  if (v == null) return fallback
-  const n = Number(v)
-  return Number.isFinite(n) ? n : fallback
-}
-
-function csvParam(v: unknown): string[] | undefined {
-  if (typeof v !== 'string' || !v || v === 'ALL') return undefined
-  return v.split(',').map((s) => s.trim()).filter(Boolean)
-}
 
 // Single-tenant: derive a stable userId from the request. When auth lands
 // this becomes req.user.id. Mirrors products-catalog.routes' userIdFor.
@@ -184,334 +178,8 @@ export async function ordersRoutes(app: FastifyInstance) {
   // ── GET /api/orders — paginated, filterable, per-row enriched ─────
   app.get('/api/orders', async (request, reply) => {
     try {
-      const q = request.query as any
-
-      const page = Math.max(1, Math.floor(safeNum(q.page, 1) ?? 1))
-      const pageSize = Math.min(500, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
-      const search = (q.search ?? '').trim()
-
-      const channels = csvParam(q.channel)
-      const marketplaces = csvParam(q.marketplace)
-      // OX.16 — "ALL" is the sentinel the StatusTabs uses to mark
-      // "user explicitly chose All" (distinct from no status param,
-      // which triggers the default-to-Unshipped redirect). Filter it
-      // out here so it doesn't reach the WHERE clause.
-      const statuses = csvParam(q.status)?.filter((s: string) => s !== 'ALL')
-      const fulfillment = csvParam(q.fulfillment)
-      const tagIds = csvParam(q.tags)
-      const reviewStatus = csvParam(q.reviewStatus)
-      const customerEmail = (q.customerEmail ?? '').trim() || null
-      const dateFrom = q.dateFrom ? new Date(q.dateFrom) : null
-      const dateTo = q.dateTo ? new Date(q.dateTo) : null
-      const hasReturn = q.hasReturn === 'true' ? true : q.hasReturn === 'false' ? false : null
-      const hasRefund = q.hasRefund === 'true' ? true : q.hasRefund === 'false' ? false : null
-      const reviewEligible = q.reviewEligible === 'true'
-      // OX.2: Italian "No Invoice Uploaded" tab — orders that should
-      // have a FiscalInvoice (paid + non-terminal) but don't.
-      const noInvoice = q.noInvoice === 'true'
-      // PV-RT.3 — drill-through from the reconciliation banner's
-      // "+N awaiting price" chip. Filters to Amazon EUR orders where
-      // Order.totalPrice = 0 AND at least one OrderItem has quantity > 0
-      // (matches the count query in dashboard.routes /sales-reconciliation).
-      const awaitingPrice = q.awaitingPrice === 'true'
-      // PV-RT.5 — abandoned-awaiting mode. After N days (default 60,
-      // NEXUS_AWAITING_PRICE_ABANDONMENT_DAYS overrides) Amazon
-      // realistically won't release OrderTotal. The default awaitingPrice
-      // mode hides these so the chip count stays operationally useful;
-      // operator can explicitly list them via this param to triage with
-      // POST /admin/orders/:id/manual-total.
-      const abandonedAwaitingPrice = q.abandonedAwaitingPrice === 'true'
-      // OX.3 — order-type filter. Values map to:
-      //   PRIME      → Order.isPrime = true
-      //   BUSINESS   → amazonMetadata.IsBusinessOrder = true
-      //   STANDARD   → not Prime AND not Business
-      // Multi-select OR within the dimension.
-      const orderTypes = csvParam(q.orderType)
-      // OX.3 — date-range preset. The API also accepts explicit
-      // dateFrom/dateTo; this is a shortcut: ?dateRange=24h|7d|30d|90d
-      // resolves to the equivalent dateFrom (dateTo defaults to now).
-      const dateRangePreset = (q.dateRange ?? '').toString().trim() as
-        | ''
-        | '24h'
-        | '7d'
-        | '30d'
-        | '90d'
-      let presetFrom: Date | null = null
-      switch (dateRangePreset) {
-        case '24h': presetFrom = new Date(Date.now() - 24 * 60 * 60 * 1000); break
-        case '7d': presetFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); break
-        case '30d': presetFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); break
-        case '90d': presetFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); break
-      }
-
-      const sortBy = (q.sortBy ?? 'purchaseDate') as string
-      const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
-
-      // RB.1 — recycle-bin scope. Default = live-only (deletedAt IS NULL).
-      // ?deleted=true flips to bin-only (deletedAt IS NOT NULL).
-      const showDeleted = q.deleted === 'true'
-
-      const where: any = {}
-      where.deletedAt = showDeleted ? { not: null } : null
-      if (channels && channels.length) where.channel = { in: channels }
-      if (marketplaces && marketplaces.length) where.marketplace = { in: marketplaces }
-      if (statuses && statuses.length) {
-        where.status = { in: statuses }
-      } else {
-        // OX.17 — when no explicit status filter is set (e.g. user
-        // clicks the All tab → status=ALL → stripped above), hide
-        // cancelled/refunded/returned rows so the list matches the
-        // "All" headline count. To see them, the operator clicks the
-        // Cancelled tab which sets an explicit status filter.
-        where.status = { notIn: ['CANCELLED', 'REFUNDED', 'RETURNED'] }
-      }
-      if (fulfillment && fulfillment.length) where.fulfillmentMethod = { in: fulfillment }
-      if (customerEmail) where.customerEmail = { contains: customerEmail, mode: 'insensitive' }
-      // OX.3 — explicit dateFrom/dateTo wins, otherwise apply the preset.
-      const effectiveFrom = dateFrom ?? presetFrom
-      if (effectiveFrom || dateTo) {
-        where.purchaseDate = {}
-        if (effectiveFrom) where.purchaseDate.gte = effectiveFrom
-        if (dateTo) where.purchaseDate.lte = dateTo
-      }
-      // OX.3 — order-type filter. Multi-select OR within the dimension,
-      // ANDed with the rest of the WHERE clause. Standard = NOT Prime
-      // AND NOT Business (client-derived, no new index needed).
-      if (orderTypes && orderTypes.length) {
-        const typeClauses: any[] = []
-        for (const t of orderTypes) {
-          if (t === 'PRIME') typeClauses.push({ isPrime: true })
-          else if (t === 'BUSINESS') typeClauses.push({ amazonMetadata: { path: ['IsBusinessOrder'], equals: true } })
-          else if (t === 'STANDARD') {
-            typeClauses.push({
-              AND: [
-                { OR: [{ isPrime: false }, { isPrime: null }] },
-                { NOT: { amazonMetadata: { path: ['IsBusinessOrder'], equals: true } } },
-              ],
-            })
-          }
-        }
-        if (typeClauses.length > 0) {
-          where.AND = (where.AND ?? []).concat({ OR: typeClauses })
-        }
-      }
-      if (search) {
-        where.OR = [
-          { channelOrderId: { contains: search, mode: 'insensitive' } },
-          { customerName: { contains: search, mode: 'insensitive' } },
-          { customerEmail: { contains: search, mode: 'insensitive' } },
-          { items: { some: { sku: { contains: search, mode: 'insensitive' } } } },
-        ]
-      }
-      // PV-RT.3 / PV-RT.5 — awaiting-price drill-through.
-      //
-      // awaitingPrice=true (default): orders where Amazon hasn't released
-      //   OrderTotal AND the order is recent enough to still be
-      //   automated-recoverable (purchaseDate >= now - abandonmentDays).
-      //   These are the orders the banner counts + the operator should
-      //   wait on or back-fill.
-      //
-      // abandonedAwaitingPrice=true: orders that fell off the automated
-      //   recovery curve. Operator triages via POST /admin/orders/:id/
-      //   manual-total or accepts the €0.
-      if (awaitingPrice || abandonedAwaitingPrice) {
-        where.channel = 'AMAZON'
-        // Awaiting-price is currency-agnostic: an order missing its OrderTotal
-        // is "awaiting price" on UK/SE/PL just as on the EUR markets. The old
-        // currencyCode='EUR' filter was a single-market leftover that silently
-        // hid genuine awaiting-price orders on non-EUR marketplaces (MS-series
-        // expanded Xavia to 11 EU markets). No currency is summed here — this
-        // only counts/lists orders — so removing the filter is safe.
-        where.totalPrice = 0
-        where.items = { some: { quantity: { gt: 0 } } }
-        const abandonmentDaysRaw = Number(process.env.NEXUS_AWAITING_PRICE_ABANDONMENT_DAYS ?? 60)
-        const abandonmentDays =
-          Number.isFinite(abandonmentDaysRaw) && abandonmentDaysRaw > 0
-            ? Math.trunc(abandonmentDaysRaw)
-            : 60
-        const cutoff = new Date(Date.now() - abandonmentDays * 86_400_000)
-        if (awaitingPrice) {
-          // Recent enough to still be automated-recoverable.
-          where.purchaseDate = { ...(where.purchaseDate ?? {}), gte: cutoff }
-        } else {
-          // abandonedAwaitingPrice — older than the cutoff.
-          where.purchaseDate = { ...(where.purchaseDate ?? {}), lt: cutoff }
-        }
-      }
-      if (tagIds && tagIds.length) {
-        where.tags = { some: { tagId: { in: tagIds } } }
-      }
-      if (reviewStatus && reviewStatus.length) {
-        where.reviewRequests = { some: { status: { in: reviewStatus } } }
-      }
-      if (reviewEligible) {
-        where.deliveredAt = { not: null }
-        // OX.3: concat instead of assign so other AND-clauses (orderType,
-        // noInvoice) can coexist.
-        where.AND = (where.AND ?? []).concat([
-          { reviewRequests: { none: {} } },
-          { returns: { none: { status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } } } },
-        ])
-      }
-      if (noInvoice) {
-        // OX.2 — Italian compliance: paid + non-terminal orders that
-        // never got a FiscalInvoice row issued. Mirrors the
-        // /api/orders/stats `noInvoice` aggregate.
-        where.marketplace = 'IT'
-        where.status = { in: ['PROCESSING', 'SHIPPED', 'PARTIALLY_SHIPPED', 'DELIVERED'] }
-        where.fiscalInvoice = null
-      }
-
-      // Order-by translation
-      let orderBy: any
-      switch (sortBy) {
-        case 'createdAt': orderBy = { createdAt: sortDir }; break
-        case 'updatedAt': orderBy = { updatedAt: sortDir }; break
-        case 'totalPrice': orderBy = { totalPrice: sortDir }; break
-        case 'customer': orderBy = { customerEmail: sortDir }; break
-        case 'channel': orderBy = [{ channel: sortDir }, { marketplace: 'asc' }]; break
-        case 'status': orderBy = { status: sortDir }; break
-        case 'purchaseDate':
-        default: orderBy = { purchaseDate: sortDir }
-      }
-
-      const [total, rawOrders] = await Promise.all([
-        prisma.order.count({ where }),
-        prisma.order.findMany({
-          where,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-          include: {
-            // OX.4 — row needs first item's product name + ASIN +
-            // thumbnail. Include enough product fields to render the
-            // Amazon-style product cell without an N+1.
-            items: {
-              select: {
-                id: true,
-                sku: true,
-                quantity: true,
-                price: true,
-                productId: true,
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    amazonAsin: true,
-                    images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
-                  },
-                },
-              },
-            },
-            tags: { include: { tag: { select: { id: true, name: true, color: true } } } },
-            reviewRequests: { select: { id: true, channel: true, status: true, sentAt: true, scheduledFor: true } },
-            _count: { select: { items: true, shipments: true, returns: true, financialTransactions: true } },
-          },
-        }),
-      ])
-
-      // Optional flags computed in JS — has-return / has-refund / repeat-customer
-      const orderIds = rawOrders.map((o) => o.id)
-      const emails = Array.from(new Set(rawOrders.map((o) => o.customerEmail).filter(Boolean)))
-
-      const [activeReturnsByOrder, refundsByOrder, customerOrderCounts] = await Promise.all([
-        prisma.return.groupBy({
-          by: ['orderId'],
-          where: { orderId: { in: orderIds }, status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } },
-          _count: true,
-        }),
-        prisma.financialTransaction.groupBy({
-          by: ['orderId'],
-          where: { orderId: { in: orderIds }, transactionType: 'Refund' },
-          _count: true,
-        }),
-        emails.length === 0 ? Promise.resolve([] as Array<{ customerEmail: string; _count: number }>) : prisma.order.groupBy({
-          by: ['customerEmail'],
-          where: { customerEmail: { in: emails } },
-          _count: true,
-        }),
-      ])
-      const activeReturns = new Set(activeReturnsByOrder.map((r) => r.orderId))
-      const hasRefundSet = new Set(refundsByOrder.map((r) => r.orderId))
-      const customerOrderCountMap = new Map(customerOrderCounts.map((c: any) => [c.customerEmail, c._count]))
-
-      const orders = rawOrders
-        .filter((o) => {
-          if (hasReturn === true && !activeReturns.has(o.id)) return false
-          if (hasReturn === false && activeReturns.has(o.id)) return false
-          if (hasRefund === true && !hasRefundSet.has(o.id)) return false
-          if (hasRefund === false && hasRefundSet.has(o.id)) return false
-          return true
-        })
-        .map((o) => {
-          // OX.4 — surface the first item's product on the row so the
-          // Amazon-style cell can render thumbnail + name + ASIN +
-          // line subtotal without an N+1 fetch.
-          const firstItem = o.items[0]
-          const firstProduct = firstItem?.product ?? null
-          const isBusinessOrder = !!(o.amazonMetadata as any)?.IsBusinessOrder
-          return {
-            id: o.id,
-            channel: o.channel,
-            marketplace: o.marketplace,
-            channelOrderId: o.channelOrderId,
-            status: o.status,
-            fulfillmentMethod: o.fulfillmentMethod,
-            totalPrice: Number(o.totalPrice),
-            currencyCode: o.currencyCode,
-            customerName: o.customerName,
-            customerEmail: o.customerEmail,
-            shippingAddress: o.shippingAddress,
-            purchaseDate: o.purchaseDate,
-            paidAt: o.paidAt,
-            shippedAt: o.shippedAt,
-            deliveredAt: o.deliveredAt,
-            cancelledAt: o.cancelledAt,
-            // OX.4 — Amazon ship-by + deliver-by promises (already in
-            // schema; was missing from the list payload).
-            shipByDate: o.shipByDate,
-            latestDeliveryDate: o.latestDeliveryDate,
-            isPrime: o.isPrime,
-            isBusinessOrder,
-            createdAt: o.createdAt,
-            updatedAt: o.updatedAt,
-            itemCount: o._count.items,
-            shipmentCount: o._count.shipments,
-            returnCount: o._count.returns,
-            financialTxCount: o._count.financialTransactions,
-            hasActiveReturn: activeReturns.has(o.id),
-            hasRefund: hasRefundSet.has(o.id),
-            customerOrderCount: customerOrderCountMap.get(o.customerEmail) ?? 1,
-            tags: o.tags.map((t: any) => t.tag),
-            reviewRequests: o.reviewRequests,
-            items: o.items.map((it) => ({
-              id: it.id,
-              sku: it.sku,
-              quantity: it.quantity,
-              price: Number(it.price),
-              productId: it.productId,
-            })),
-            firstItem: firstItem
-              ? {
-                  sku: firstItem.sku,
-                  quantity: firstItem.quantity,
-                  price: Number(firstItem.price),
-                  subtotal: Number(firstItem.price) * firstItem.quantity,
-                  productName: firstProduct?.name ?? null,
-                  amazonAsin: firstProduct?.amazonAsin ?? null,
-                  thumbnailUrl: firstProduct?.images?.[0]?.url ?? null,
-                }
-              : null,
-          }
-        })
-
-      return {
-        orders,
-        page,
-        pageSize,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
-      }
+      // 07 O4 — the list lives in services/orders/order-read.service.ts (one read for the page and Claude).
+      return await listOrders(request.query as any)
     } catch (error: any) {
       logger.error('[ORDERS API] list failed', { message: error.message })
       return reply.status(500).send({ error: error.message })
@@ -583,66 +251,9 @@ export async function ordersRoutes(app: FastifyInstance) {
   app.get('/api/orders/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const order = await prisma.order.findUnique({
-        where: { id },
-        include: {
-          items: {
-            include: {
-              product: { select: { id: true, sku: true, name: true, basePrice: true, images: { select: { url: true }, take: 1 } } },
-            },
-          },
-          financialTransactions: { orderBy: { transactionDate: 'desc' } },
-          shipments: { include: { items: true, warehouse: { select: { code: true, name: true } } }, orderBy: { createdAt: 'desc' } },
-          returns: { include: { items: true }, orderBy: { createdAt: 'desc' } },
-          reviewRequests: { include: { rule: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
-          tags: { include: { tag: true } },
-          // OX.14 — surface CE.4 routing audit so operators can see
-          // why a particular warehouse was picked for fulfilment.
-          routingDecisions: { orderBy: { createdAt: 'desc' } },
-          // OX.14 — Italian fiscal block needs the FiscalInvoice link
-          // (status + invoice number + SDI status) when one exists.
-          fiscalInvoice: true,
-        },
-      })
-      if (!order) return reply.status(404).send({ error: 'Order not found' })
-
-      // Customer history sidebar — last 10 orders from this email.
-      // OX.0: include currencyCode so the widget renders in the order's
-      // actual currency (not a hardcoded €) and so PENDING Amazon
-      // orders with totalPrice=0 can render as "Awaiting payment"
-      // rather than "€0.00".
-      const history = await prisma.order.findMany({
-        where: { customerEmail: order.customerEmail, id: { not: order.id } },
-        select: { id: true, channelOrderId: true, channel: true, totalPrice: true, currencyCode: true, status: true, purchaseDate: true, createdAt: true },
-        orderBy: { purchaseDate: 'desc' },
-        take: 10,
-      })
-
-      return {
-        ...order,
-        totalPrice: Number(order.totalPrice),
-        items: order.items.map((it) => ({
-          ...it,
-          price: Number(it.price),
-          product: it.product
-            ? { ...it.product, basePrice: Number(it.product.basePrice), thumbnailUrl: it.product.images?.[0]?.url ?? null }
-            : null,
-        })),
-        financialTransactions: order.financialTransactions.map((tx) => ({
-          ...tx,
-          amount: Number(tx.amount),
-          amazonFee: Number(tx.amazonFee),
-          fbaFee: Number(tx.fbaFee),
-          paymentServicesFee: Number(tx.paymentServicesFee),
-          ebayFee: Number(tx.ebayFee),
-          paypalFee: Number(tx.paypalFee),
-          otherFees: Number(tx.otherFees),
-          grossRevenue: Number(tx.grossRevenue),
-          netRevenue: Number(tx.netRevenue),
-        })),
-        tags: order.tags.map((t: any) => t.tag),
-        customerHistory: history.map((h) => ({ ...h, totalPrice: Number(h.totalPrice) })),
-      }
+      const detail = await orderDetail(id)
+      if (!detail) return reply.status(404).send({ error: 'Order not found' })
+      return detail
     } catch (error: any) {
       logger.error('[ORDERS API] detail failed', { message: error.message })
       return reply.status(500).send({ error: error.message })
@@ -653,38 +264,9 @@ export async function ordersRoutes(app: FastifyInstance) {
   app.get('/api/orders/:id/timeline', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const order = await prisma.order.findUnique({
-        where: { id },
-        include: {
-          shipments: { select: { id: true, status: true, carrierCode: true, trackingNumber: true, shippedAt: true, deliveredAt: true, createdAt: true } },
-          returns: { select: { id: true, rmaNumber: true, status: true, receivedAt: true, refundedAt: true, restockedAt: true, createdAt: true } },
-          reviewRequests: { select: { id: true, channel: true, status: true, scheduledFor: true, sentAt: true, errorMessage: true } },
-        },
-      })
-      if (!order) return reply.status(404).send({ error: 'Order not found' })
-
-      type Event = { at: Date; kind: string; label: string; meta?: any }
-      const events: Event[] = []
-      if (order.purchaseDate) events.push({ at: order.purchaseDate, kind: 'placed', label: 'Order placed' })
-      if (order.paidAt) events.push({ at: order.paidAt, kind: 'paid', label: 'Payment received' })
-      if (order.shippedAt) events.push({ at: order.shippedAt, kind: 'shipped', label: 'Shipped' })
-      if (order.deliveredAt) events.push({ at: order.deliveredAt, kind: 'delivered', label: 'Delivered' })
-      if (order.cancelledAt) events.push({ at: order.cancelledAt, kind: 'cancelled', label: 'Cancelled' })
-      for (const s of order.shipments) {
-        if (s.shippedAt) events.push({ at: s.shippedAt, kind: 'shipment-shipped', label: `Shipment ${s.trackingNumber ?? ''} shipped`, meta: { shipmentId: s.id, carrier: s.carrierCode } })
-        if (s.deliveredAt) events.push({ at: s.deliveredAt, kind: 'shipment-delivered', label: `Shipment ${s.trackingNumber ?? ''} delivered`, meta: { shipmentId: s.id } })
-      }
-      for (const r of order.returns) {
-        if (r.receivedAt) events.push({ at: r.receivedAt, kind: 'return-received', label: `Return ${r.rmaNumber ?? ''} received`, meta: { returnId: r.id } })
-        if (r.refundedAt) events.push({ at: r.refundedAt, kind: 'return-refunded', label: `Return ${r.rmaNumber ?? ''} refunded`, meta: { returnId: r.id } })
-        if (r.restockedAt) events.push({ at: r.restockedAt, kind: 'return-restocked', label: `Return ${r.rmaNumber ?? ''} restocked`, meta: { returnId: r.id } })
-      }
-      for (const rr of order.reviewRequests) {
-        if (rr.sentAt) events.push({ at: rr.sentAt, kind: 'review-sent', label: `Review request sent on ${rr.channel}`, meta: { reviewRequestId: rr.id, status: rr.status } })
-        if (rr.scheduledFor && !rr.sentAt) events.push({ at: rr.scheduledFor, kind: 'review-scheduled', label: `Review request scheduled (${rr.channel})`, meta: { reviewRequestId: rr.id } })
-      }
-      events.sort((a, b) => a.at.getTime() - b.at.getTime())
-      return { events }
+      const timeline = await orderTimeline(id)
+      if (!timeline) return reply.status(404).send({ error: 'Order not found' })
+      return timeline
     } catch (error: any) {
       return reply.status(500).send({ error: error.message })
     }
@@ -694,31 +276,7 @@ export async function ordersRoutes(app: FastifyInstance) {
   app.get('/api/orders/:id/financials', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const txs = await prisma.financialTransaction.findMany({
-        where: { orderId: id },
-        orderBy: { transactionDate: 'desc' },
-      })
-      let gross = 0, fees = 0, net = 0
-      for (const tx of txs) {
-        gross += Number(tx.grossRevenue)
-        fees += Number(tx.amazonFee) + Number(tx.fbaFee) + Number(tx.paymentServicesFee) + Number(tx.ebayFee) + Number(tx.paypalFee) + Number(tx.otherFees)
-        net += Number(tx.netRevenue)
-      }
-      return {
-        rollup: { gross, fees, net },
-        transactions: txs.map((tx) => ({
-          ...tx,
-          amount: Number(tx.amount),
-          amazonFee: Number(tx.amazonFee),
-          fbaFee: Number(tx.fbaFee),
-          paymentServicesFee: Number(tx.paymentServicesFee),
-          ebayFee: Number(tx.ebayFee),
-          paypalFee: Number(tx.paypalFee),
-          otherFees: Number(tx.otherFees),
-          grossRevenue: Number(tx.grossRevenue),
-          netRevenue: Number(tx.netRevenue),
-        })),
-      }
+      return await orderFinancials(id)
     } catch (error: any) {
       return reply.status(500).send({ error: error.message })
     }
@@ -876,18 +434,11 @@ export async function ordersRoutes(app: FastifyInstance) {
       } else {
         deliveredAt = new Date()
       }
-      const order = await prisma.order.update({
-        where: { id },
-        data: {
-          deliveredAt,
-          deliveredAtSource: 'MANUAL',
-          status: 'DELIVERED',
-        },
-        select: { id: true, channelOrderId: true, deliveredAt: true, deliveredAtSource: true, status: true },
-      })
+      // 07 O7 — the write lives in services/orders/order-update.service.ts (the page and Claude write one way).
+      const order = await markOrderDelivered(id, deliveredAt)
+      if (!order) return reply.status(404).send({ error: 'Order not found' })
       return { ok: true, order }
     } catch (error: any) {
-      if (error.code === 'P2025') return reply.status(404).send({ error: 'Order not found' })
       return reply.status(500).send({ error: error.message })
     }
   })
@@ -909,10 +460,21 @@ export async function ordersRoutes(app: FastifyInstance) {
       const body = (request.body ?? {}) as { orderIds?: string[] }
       const ids = Array.isArray(body.orderIds) ? body.orderIds : []
       if (ids.length === 0) return reply.status(400).send({ error: 'orderIds[] required' })
+      const shippedAt = new Date()
+      const pending = await prisma.order.findMany({ where: { id: { in: ids }, status: { in: ['PENDING'] } }, select: { id: true } })
       const result = await prisma.order.updateMany({
         where: { id: { in: ids }, status: { in: ['PENDING'] } },
-        data: { status: 'SHIPPED', shippedAt: new Date() },
+        data: { status: 'SHIPPED', shippedAt },
       })
+      // 07 O9 — the tracking of these orders' MANUAL-carrier shipments reaches the channel (a Sendcloud parcel's comes
+      // with the carrier's first scan). An order with no shipment has no tracking to send.
+      const manual = await prisma.shipment.findMany({
+        where: { orderId: { in: pending.map((o) => o.id) }, carrierCode: 'MANUAL', status: { not: 'CANCELLED' }, trackingNumber: { not: null } },
+        select: { id: true, trackingNumber: true, trackingUrl: true },
+      })
+      for (const shipment of manual) {
+        await enqueueTrackingUpload(shipment.id, { shippedAt, trackingNumber: shipment.trackingNumber, trackingUrl: shipment.trackingUrl, carrierCode: 'MANUAL' }, { explicit: true })
+      }
       return { ok: true, updated: result.count }
     } catch (error: any) {
       return reply.status(500).send({ error: error.message })
@@ -931,149 +493,9 @@ export async function ordersRoutes(app: FastifyInstance) {
     '/api/orders/:id/cancel',
     async (request, reply) => {
       try {
-        const { id } = request.params
-        const reason = request.body?.reason?.trim() || 'Cancelled by operator'
-
-        const existing = await prisma.order.findUnique({
-          where: { id },
-          select: { id: true, status: true, channel: true, channelOrderId: true },
-        })
-        if (!existing) return reply.status(404).send({ error: 'Order not found' })
-        if (existing.status === 'CANCELLED') {
-          return reply.status(400).send({
-            error: 'Order is already cancelled.',
-            code: 'ALREADY_CANCELLED',
-          })
-        }
-        if (['SHIPPED', 'DELIVERED'].includes(existing.status as string)) {
-          return reply.status(400).send({
-            error: `Cannot cancel a ${existing.status} order. File a return instead.`,
-            code: 'ORDER_TOO_FAR',
-          })
-        }
-
-        const updated = await prisma.order.update({
-          where: { id },
-          data: { status: 'CANCELLED', cancelledAt: new Date() },
-        })
-
-        // Cascade: void shipments + restore stock + audit + SSE.
-        const { handleOrderCancelled } = await import(
-          '../services/order-cancellation/index.js'
-        )
-        const cleanup = await handleOrderCancelled(id)
-
-        // O.50: channel-side pushback — tell the marketplace we
-        // cancelled. dryRun-default per channel; real path gated by
-        // NEXUS_ENABLE_*_ORDER_CANCEL flags. Best-effort: a channel
-        // failure doesn't roll back the local cancellation (operator
-        // already chose to cancel; we just couldn't notify upstream
-        // automatically).
-        let channelAck: import('../services/order-cancellation/channel-cancel.js').ChannelCancelResult | null = null
-        if (existing.channel !== 'MANUAL' && existing.channelOrderId) {
-          const channelCancel = await import(
-            '../services/order-cancellation/channel-cancel.js'
-          )
-          try {
-            if (existing.channel === 'AMAZON') {
-              // Resolve marketplaceId from Order.marketplace
-              const fullOrder = await prisma.order.findUnique({
-                where: { id },
-                select: { marketplace: true },
-              })
-              const map: Record<string, string> = {
-                IT: 'APJ6JRA9NG5V4', DE: 'A1PA6795UKMFR9', FR: 'A13V1IB3VIYZZH',
-                ES: 'A1RKKUPIHCS9HS', UK: 'A1F83G8C2ARO7P', US: 'ATVPDKIKX0DER',
-              }
-              const mpId = map[fullOrder?.marketplace ?? 'IT'] ?? map.IT
-              channelAck = await channelCancel.cancelOnAmazon(
-                existing.channelOrderId,
-                reason,
-                [mpId],
-              )
-            } else if (existing.channel === 'EBAY') {
-              // 🔴 This read was BROKEN from 2026-05-07 to 2026-08-19. It filtered
-              // on `channel`, which is not a column on ChannelConnection — the
-              // column is `channelType` — and the `(prisma as any)` cast hid it
-              // from the type checker. Prisma rejects an unknown argument rather
-              // than ignoring it, so every eBay cancellation threw
-              // PrismaClientValidationError here. Proven against the production
-              // database, 2026-08-19; see docs/2026-08-19-map-multi-account-profiles.md §7.3.
-              //
-              // MAP.3 — resolved from the ORDER, which is the account that actually
-              // owns it, so this is correct for two accounts as well as one.
-              let conn: { id: string } | null = null
-              try {
-                conn = await resolveConnection({ orderId: id })
-              } catch (err) {
-                request.log.warn(
-                  { err, orderId: id },
-                  'eBay cancel: could not resolve the order\'s account',
-                )
-              }
-              if (conn?.id) {
-                channelAck = await channelCancel.cancelOnEbay(
-                  existing.channelOrderId,
-                  reason,
-                  conn.id,
-                  id,
-                )
-              } else {
-                channelAck = {
-                  ok: false,
-                  channel: 'EBAY',
-                  channelOrderId: existing.channelOrderId,
-                  ackRef: null,
-                  dryRun: false,
-                  error: 'No active eBay connection',
-                }
-              }
-            } else if (existing.channel === 'SHOPIFY') {
-              channelAck = await channelCancel.cancelOnShopify(
-                existing.channelOrderId,
-                reason,
-                id,
-              )
-            }
-          } catch (err: any) {
-            logger.warn('orders/:id/cancel channel pushback failed', {
-              orderId: id,
-              channel: existing.channel,
-              error: err?.message,
-            })
-          }
-        }
-
-        // Operator-initiated audit row distinct from the auto-cancel
-        // path (auto-cancel-from-order). Lets the audit-log surface
-        // distinguish operator vs channel-driven cancellations.
-        const { auditLogService } = await import('../services/audit-log.service.js')
-        void auditLogService.write({
-          entityType: 'Order',
-          entityId: id,
-          action: 'manual-cancel',
-          before: { status: existing.status },
-          after: { status: 'CANCELLED' },
-          metadata: { reason, channel: existing.channel, ...cleanup, channelAck },
-        })
-
-        return {
-          order: updated,
-          cleanup,
-          // O.50: channelPushbackPending is now true only when the
-          // channel call failed OR the channel is MANUAL OR the
-          // channel push was dryRun (operator hasn't enabled real
-          // mode yet). Honest: operator only sees the "cancel on
-          // marketplace too" reminder when there's actually
-          // marketplace work left.
-          channelPushbackPending:
-            channelAck === null
-            || channelAck.dryRun
-            || !channelAck.ok,
-          channelAck,
-          channel: existing.channel,
-          channelOrderId: existing.channelOrderId,
-        }
+        // 07 O10 — the cancel lives in services/order-cancellation/cancel-order.service.ts (the page and Claude cancel one way).
+        const answer = await cancelOrder(request.params.id, request.body?.reason, request.log)
+        return reply.status(answer.status).send(answer.body)
       } catch (error: any) {
         logger.error('orders/:id/cancel failed', { error: error?.message })
         return reply.status(500).send({ error: error?.message ?? 'cancel failed' })
@@ -1099,20 +521,10 @@ export async function ordersRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string }
       const body = request.body as { body?: string; pinned?: boolean; authorEmail?: string }
-      if (!body.body || body.body.trim() === '') {
-        return reply.code(400).send({ error: 'body required' })
-      }
-      const order = await prisma.order.findUnique({ where: { id }, select: { id: true } })
-      if (!order) return reply.code(404).send({ error: 'Order not found' })
-      const note = await prisma.orderNote.create({
-        data: {
-          orderId: id,
-          body: body.body.trim(),
-          pinned: body.pinned ?? false,
-          authorEmail: body.authorEmail ?? null,
-        },
-      })
-      return note
+      const added = await addOrderNote(id, body)
+      if (added.status === 'invalid') return reply.code(400).send({ error: 'body required' })
+      if (added.status === 'not_found') return reply.code(404).send({ error: 'Order not found' })
+      return added.note
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? 'failed' })
     }
@@ -1122,17 +534,8 @@ export async function ordersRoutes(app: FastifyInstance) {
     try {
       const { id, noteId } = request.params as { id: string; noteId: string }
       const body = request.body as { body?: string; pinned?: boolean }
-      const existing = await prisma.orderNote.findFirst({
-        where: { id: noteId, orderId: id },
-      })
-      if (!existing) return reply.code(404).send({ error: 'Note not found' })
-      const updated = await prisma.orderNote.update({
-        where: { id: noteId },
-        data: {
-          body: body.body !== undefined ? body.body.trim() : undefined,
-          pinned: body.pinned !== undefined ? body.pinned : undefined,
-        },
-      })
+      const updated = await updateOrderNote(id, noteId, body)
+      if (!updated) return reply.code(404).send({ error: 'Note not found' })
       return updated
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? 'failed' })
@@ -1142,11 +545,7 @@ export async function ordersRoutes(app: FastifyInstance) {
   app.delete('/api/orders/:id/notes/:noteId', async (request, reply) => {
     try {
       const { id, noteId } = request.params as { id: string; noteId: string }
-      const existing = await prisma.orderNote.findFirst({
-        where: { id: noteId, orderId: id },
-      })
-      if (!existing) return reply.code(404).send({ error: 'Note not found' })
-      await prisma.orderNote.delete({ where: { id: noteId } })
+      if (!(await deleteOrderNote(id, noteId))) return reply.code(404).send({ error: 'Note not found' })
       return { ok: true }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? 'failed' })
@@ -1423,6 +822,15 @@ export async function ordersRoutes(app: FastifyInstance) {
       const body = (request.body ?? {}) as { orderIds?: string[] }
       const ids = (body.orderIds ?? []).slice(0, 200)
       if (ids.length === 0) return reply.status(400).send({ error: 'orderIds required' })
+      // An invoice number is taken only for a business whose invoice can be printed: its name, full address and P.IVA
+      // (Settings › Company). Without them no number is taken (2026-10-02; a business without them gets no invoices).
+      const { MissingBusinessIdentityError, requireInvoiceIdentity } = await import('../services/business-identity.service.js')
+      try {
+        await requireInvoiceIdentity('the invoice')
+      } catch (identityError) {
+        if (identityError instanceof MissingBusinessIdentityError) return reply.status(400).send({ error: identityError.message })
+        throw identityError
+      }
       const { assignInvoiceNumber } = await import('../services/fiscal-invoice.service.js')
       const results = {
         scanned: ids.length,
