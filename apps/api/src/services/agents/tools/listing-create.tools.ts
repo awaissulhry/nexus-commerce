@@ -32,6 +32,7 @@ import prisma from '../../../db.js'
 import { connectionLabel } from '../../connection-label.js'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
+import { isListingContentKey } from './listing-content-keys.js'
 
 const DRAFT_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const
 const upper = (value: unknown) => (typeof value === 'string' ? value.trim().toUpperCase() : value)
@@ -321,7 +322,6 @@ const FIELD_CAP = 40
 const fieldValue = z.union([z.string().max(2000), z.number(), z.boolean(), z.array(z.string().max(500)).max(30)])
 /** Stock, price and fulfilment have their own tools; titles, descriptions, bullets and keywords their content door. */
 const NOT_HERE = /quantity|price|fulfil|stock/i
-const CONTENT = /(^|_)(title|description|item_name|bullets?|bullet_point|generic_keyword|keywords?|search_terms|tags)(_|$)/i
 const isAttributeKey = (key: string) => /^attr_[A-Za-z0-9_.:\- ]{1,120}$/.test(key)
 
 const setFieldsInput = z.object({
@@ -395,7 +395,7 @@ async function currentValues(c: Coordinate, keys: string[]): Promise<{ values: R
     values[key] = { value: cell.value ?? null, own: cell.provenance === 'override' }
     labels[key] = cell.label ?? key
   }
-  const known = Object.keys(cells).filter((k) => !NOT_HERE.test(k) && !CONTENT.test(k)).sort().map((k) => `attr_${k}`)
+  const known = Object.keys(cells).filter((k) => !NOT_HERE.test(k) && !isListingContentKey(k)).sort().map((k) => `attr_${k}`)
   return { values, labels, unknown, known }
 }
 
@@ -424,7 +424,7 @@ async function planValues(c: Coordinate, args: Record<string, unknown>, userId: 
   if (Object.keys(values).length !== Object.keys((args.values ?? {}) as object).length) return { error: 'An attribute is named twice (with and without attr_).' }
   const keys = [...new Set([...Object.keys(values), ...reset])]
   if (keys.length > FIELD_CAP) return { error: `At most ${FIELD_CAP} attributes at a time.` }
-  const wrong = keys.filter((key) => !isAttributeKey(key) || NOT_HERE.test(key) || CONTENT.test(key))
+  const wrong = keys.filter((key) => !isAttributeKey(key) || NOT_HERE.test(key) || isListingContentKey(key))
   if (wrong.length) {
     return { error: `${wrong.join(', ')}: only listing attributes (attr_<attribute>) are set here. Stock and price go through set-listing-stock `
       + 'and set-listing-price, and a listing\'s title, description, bullets and keywords through the content tools.' }

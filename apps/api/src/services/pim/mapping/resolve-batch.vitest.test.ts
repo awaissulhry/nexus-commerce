@@ -348,6 +348,38 @@ describe('a stored item specific is never hidden by language content', () => {
   })
 })
 
+// 2026-10-02 (GALE on Amazon SE) — the same defect for attributes kept in the listing's overrideData bag (no channel
+// store): `closure`, `department`, `style` saved on the listing showed [] / null and publish sent nothing, because a
+// localizable attribute (or a key in a translation row) counted as language content. Text content still wins.
+describe('an overrideData attribute is never hidden by language content', () => {
+  it('shows a localizable list attribute the listing stores', async () => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, masterLocalizableKeys: ['closure'], fields: [field('closure', { shape: 'list', rule: null as never })] })
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { closure: ['Dragkedja'] } }])
+    expect((await resolveBatch(input)).products[0].cells.closure).toMatchObject({ value: ['Dragkedja'], provenance: 'override' })
+  })
+
+  it('shows a localizable scalar attribute over its mapping rule', async () => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, masterLocalizableKeys: ['department'], fields: [field('department', { priority: 'required', rule: { source: 'department' } })] })
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { department: 'herr' } }])
+    const cell = (await resolveBatch(input)).products[0].cells.department
+    expect(cell).toMatchObject({ value: 'herr', provenance: 'override' })
+    expect(cell.errors ?? []).toEqual([])
+  })
+
+  it('shows an attribute whose key only appears in a translation row', async () => {
+    db.products.mockResolvedValue([{ id: 'p', sku: 'SKU', name: 'T', translations: [{ language: 'de', attributes: { style: 'Militärmantel' } }], categoryAttributes: {}, variantAttributes: {}, parentId: null }])
+    db.catalogue.mockResolvedValue({ schema: { present: true }, masterLocalizableKeys: [], fields: [field('style', { rule: null as never })] })
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { style: 'Militärkappa' } }])
+    expect((await resolveBatch(input)).products[0].cells.style).toMatchObject({ value: 'Militärkappa', provenance: 'override' })
+  })
+
+  it('control: a stale overrideData title does not beat the content title', async () => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('title', { priority: 'required' })] })
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { title: 'Stale listing title' } }])
+    expect((await resolveBatch(input)).products[0].cells.title.value).toBe('Titolo condiviso')
+  })
+})
+
 // P1 review (7) — a check that could not run (a mapping expression that failed, requirements unavailable, conflicting
 // categories) is `unchecked`: stored, and BLOCKING at publish with its sentence.
 describe('findings that mean the check could not run', () => {

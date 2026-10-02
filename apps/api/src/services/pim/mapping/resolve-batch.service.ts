@@ -361,7 +361,11 @@ export async function resolveBatch(input: {
       // P1 (report 3 I-3.3) — a value the LISTING stores in its own channel bag (an eBay item specific, "Stile") is never
       // hidden by language content that only follows the shared text: it is the listing's value, it is what the sheet
       // edits (and resets), and it is what publish sends. A content PIN on this listing still wins.
-      if (contentHit && contentHit.tier !== 'pin' && store?.kind === 'platformAttributes') {
+      // The same holds for an attribute kept in the listing's overrideData bag (no channel store, e.g. Amazon `closure`,
+      // `department`, `style`): a localizable attribute is not text content, so its own listing value is never hidden
+      // (2026-10-02, GALE on Amazon SE). Title, description, bullets and keywords stay with the content resolver.
+      if (contentHit && contentHit.tier !== 'pin' && (store?.kind === 'platformAttributes'
+        || (!store && !Object.prototype.hasOwnProperty.call(CONTENT_COLUMNS, contentField(field.sheetKey ?? field.fieldKey))))) {
         const own = storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
         if (own.state === 'stored' && !isBlankValue(own.value)) contentHit = undefined
       }
