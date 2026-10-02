@@ -389,3 +389,37 @@ describe('findings that mean the check could not run', () => {
     expect(cell.findings?.filter(f => /measure\(\) needs a unit/.test(f.message)).map(f => f.rule)).toEqual(['unchecked'])
   })
 })
+
+// 2026-10-02 (GALE on Amazon SE) — a draft child has no variation theme of its own, so the review blocked every child
+// ("Variation Theme Name required") although the publisher sends the family's theme on every row. The child now reads
+// the parent listing's theme on the same coordinate; its own theme still wins.
+describe('an Amazon child takes the family variation theme from its parent listing', () => {
+  const amazon = { channel: 'AMAZON', marketplace: 'IT', productIds: ['p'] }
+  const theme = () => db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('variation_theme', { priority: 'required', rule: null as never,
+    channelStore: { kind: 'listingColumn', column: 'variationTheme' } })] })
+  const child = () => db.products.mockResolvedValue([{ id: 'p', sku: 'SKU-S', name: 'T', translations: [], categoryAttributes: {}, variantAttributes: {}, parentId: 'fam' }])
+
+  it('a child with no theme shows the parent listing\'s theme', async () => {
+    theme(); child()
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'AMAZON', marketplace: 'IT', variationTheme: null },
+      { productId: 'fam', channel: 'AMAZON', marketplace: 'IT', variationTheme: 'SIZE/COLOR' }])
+    const cell = (await resolveBatch(amazon)).products[0].cells.variation_theme
+    expect(cell.value).toBe('SIZE/COLOR')
+    expect(cell.errors ?? []).toEqual([])
+  })
+
+  it('a child\'s own theme wins', async () => {
+    theme(); child()
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'AMAZON', marketplace: 'IT', variationTheme: 'SIZE' },
+      { productId: 'fam', channel: 'AMAZON', marketplace: 'IT', variationTheme: 'SIZE/COLOR' }])
+    expect((await resolveBatch(amazon)).products[0].cells.variation_theme.value).toBe('SIZE')
+  })
+
+  it('with no family theme the child still needs one', async () => {
+    theme(); child()
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'AMAZON', marketplace: 'IT', variationTheme: null },
+      { productId: 'fam', channel: 'AMAZON', marketplace: 'IT', variationTheme: null }])
+    const cell = (await resolveBatch(amazon)).products[0].cells.variation_theme
+    expect(cell.value ?? null).toBeNull()
+  })
+})
