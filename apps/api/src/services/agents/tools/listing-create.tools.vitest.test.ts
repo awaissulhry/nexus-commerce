@@ -29,7 +29,10 @@ vi.mock('../../pim/readiness-index.service.js', async () => (await import('../..
 /** A controlled Amazon product type: two attributes (color, brand) and the fulfilment selector. */
 const AMAZON_DEFINITION = vi.hoisted(() => {
   const attribute = () => ({ type: 'array', minUniqueItems: 1, maxUniqueItems: 1, items: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'] } })
-  return { type: 'object', properties: { item_name: attribute(), brand: attribute(), color: attribute(),
+  // A measure (2026-10-02, GALE on Amazon SE): { value, unit } with the units Amazon takes.
+  const measure = () => ({ type: 'array', minUniqueItems: 1, maxUniqueItems: 1, items: { type: 'object', required: ['value', 'unit'],
+    properties: { value: { type: 'number' }, unit: { type: 'string', enum: ['kilograms', 'grams'] } } } })
+  return { type: 'object', properties: { item_name: attribute(), brand: attribute(), color: attribute(), item_package_weight: measure(),
     fulfillment_availability: { type: 'array', selectors: ['fulfillment_channel_code'], minUniqueItems: 1, maxUniqueItems: 1, items: { type: 'object', required: ['fulfillment_channel_code'],
       properties: { fulfillment_channel_code: { type: 'string', enum: ['AMAZON_EU', 'DEFAULT'] }, quantity: { type: 'integer', minimum: 0 } } } } } }
 })
@@ -156,6 +159,17 @@ describe('set-listing-fields', () => {
     expect(reset.ran.ok, reset.ran.error).toBe(true)
     expect(reset.ran.change.after).toMatchObject({ values: { attr_color: { own: false } } })
     expect(tool.undo!.request(reset.ran.change)).toMatchObject({ args: { values: { attr_color: 'Nero' } } })
+  })
+
+  it('sets a measure as { value, unit }; a bare number is refused', async () => {
+    const base = { productId: ids.FIELDSM, ...amazonSE }
+    const set = await approveAndRun('set-listing-fields', { ...base, values: { item_package_weight: { value: 2, unit: 'kilograms' } } })
+    expect(set.ran.ok, set.ran.error).toBe(true)
+    expect(set.ran.change.after).toMatchObject({ kind: 'values', values: { attr_item_package_weight: { value: { value: 2, unit: 'kilograms' }, own: true } } })
+    expect(await dryRun('set-listing-fields', { ...base, values: { item_package_weight: 2 } }))
+      .toMatchObject({ ok: false, error: expect.stringContaining('send { value, unit }') })
+    // P1 (value-verdict): a unit off the list is stored with a finding, and the publish review blocks it.
+    expect(await dryRun('set-listing-fields', { ...base, values: { item_package_weight: { value: 2, unit: 'stones' } } })).toMatchObject({ ok: true })
   })
 
   it('refuses stock, price, content and unknown keys, and two kinds of change at once', async () => {

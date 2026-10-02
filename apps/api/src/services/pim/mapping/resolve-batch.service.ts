@@ -259,7 +259,7 @@ export async function resolveBatch(input: {
       ? prisma.product.findMany({ where: { id: { in: parentIds } }, include: { translations: true } })
       : Promise.resolve([]),
     prisma.channelListing.findMany({ include: { translations: true },
-      where: { productId: { in: channel === 'EBAY' ? [...new Set([...found, ...parentIds])] : [...found] }, channel, marketplace, aliasKey: input.aliasKey ?? '', channelConnectionId: connectionId },
+      where: { productId: { in: channel === 'EBAY' || channel === 'AMAZON' ? [...new Set([...found, ...parentIds])] : [...found] }, channel, marketplace, aliasKey: input.aliasKey ?? '', channelConnectionId: connectionId },
       orderBy: { id: 'asc' },
     }),
     resolveCategoriesForProducts({ productIds: [...found], channel, marketplace, mappingSnapshot: input.categoryMappingSnapshot, channelConnectionId: connectionId }),
@@ -397,9 +397,14 @@ export async function resolveBatch(input: {
           ? parentById.get(full.parentId)?.sku
           : channel === 'AMAZON' && field.fieldKey === 'child_parent_sku_relationship__child_relationship_type' && (full.isParent || full.parentId)
             ? 'variation' : undefined
+      // An Amazon child keeps no variation theme of its own (a draft never gets one): the family's theme on this
+      // coordinate, held by the parent listing, is the child's theme — what the publisher sends on every row
+      // (studio-publication-amazon.ts). Without it the review blocked every child: "Variation Theme Name required".
+      const familyTheme = channel === 'AMAZON' && field.fieldKey === 'variation_theme' && full.parentId && isBlankValue(stored)
+        ? listingByProduct.get(full.parentId)?.variationTheme ?? undefined : undefined
       // The mapped category fills the channel's own category field (one map for every channel).
-      const effectiveStored = isBlankValue(stored) && field.fieldKey === channelCategoryField(channel)
-        ? categoryFieldValue(field.kind, categories[p.id]?.channelCategoryId) : stored === undefined ? systemValue : stored
+      const effectiveStored = familyTheme ?? (isBlankValue(stored) && field.fieldKey === channelCategoryField(channel)
+        ? categoryFieldValue(field.kind, categories[p.id]?.channelCategoryId) : stored === undefined ? systemValue : stored)
       // A deliberately cleared override is still an override; it must not revive Master.
       const hasStored = effectiveStored !== undefined
       const directRaw = channel === 'EBAY' ? normalizeEbayListingValue(field.sheetKey ?? field.fieldKey, effectiveStored) : effectiveStored
