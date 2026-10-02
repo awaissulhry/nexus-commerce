@@ -48,7 +48,9 @@ export function applyResolvedMappingToAmazonFeed(feedBody: string, result: Resol
   const problems = fields.flatMap(field => {
     const cell = product.cells[field.fieldKey]
     if (!cell) return [`${field.label}: resolution is missing`]
-    if (cell.needsTranslation) return [`${field.label}: translation is pending`]
+    // A pending translation blocks only a value that would be SENT in another language. An empty optional field sends
+    // nothing, so it must not block (2026-10-02, GALE on Amazon SE: 53 empty fields blocked the first publish).
+    if (cell.needsTranslation && isPresent(cell.value)) return [`${field.label}: translation is pending`]
     return fullUpdate || isPresent(cell.value) ? cell.errors.map(e => `${field.label}: ${e}`) : []
   })
   if (problems.length) throw new Error(`Mapping validation failed: ${problems.join('; ')}`)

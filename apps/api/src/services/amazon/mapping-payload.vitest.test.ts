@@ -38,6 +38,13 @@ describe('actual Amazon feed envelope uses canonical mapping values', () => {
     expect(() => applyResolvedMappingToAmazonFeed(JSON.stringify(original), result, spec)).toThrow('translation is pending')
     expect(() => applyResolvedMappingToAmazonFeed(JSON.stringify(original), resolution(), { ...spec, absent: true })).toThrow('schema')
   })
+  it('an empty field waiting for a translation sends nothing and does not block', () => {
+    const result = resolution({ bullet_point: [] }); result.products[0].cells.bullet_point.needsTranslation = true
+    result.products[0].cells.bullet_point.provenance = 'catalogRule'
+    const output = JSON.parse(applyResolvedMappingToAmazonFeed(JSON.stringify(original), result, spec))
+    expect(output.messages[0].attributes.bullet_point).toBeUndefined()
+    expect(output.messages[0].attributes.item_name).toEqual([{ value: 'Mapped title', marketplace_id: 'IT' }])
+  })
   it('refuses a clear whose selector cannot be determined from the category schema', () => {
     const ambiguous = structuredClone(spec)
     ;(ambiguous.validationSchema as any).properties.item_name.items.properties.marketplace_id = { enum: ['IT', 'DE'] }
