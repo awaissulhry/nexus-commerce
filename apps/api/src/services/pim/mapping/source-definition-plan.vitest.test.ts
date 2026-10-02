@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { ChannelFieldSpec } from '../channel-specs/types.js'
+import { amazonSpecFromDefinition } from '../channel-specs/amazon.js'
 import { adaptSourceShape, planProductSource, sourceOwner } from './source-definition-plan.js'
 import { evaluateExpr } from './expr.js'
 
@@ -28,6 +30,18 @@ describe('complete product source planning', () => {
     expect(packaged.definitions.map(d => d.code)).toEqual(['packageWeightValue', 'packageWeightUnit'])
     expect(planProductSource(field('item_weight', { shape: 'measure', kind: 'number' }), 'AMAZON', 'it')?.rule.source).toBe('weightValue')
     expect(planProductSource(field('quantita'), 'EBAY', 'it')?.rule.source).toBe('item_specific_quantity')
+  })
+  it('owns every compliance_media leaf, its selector columns included, as one listing setting', () => {
+    // The 2026-09-27 walk adds `content_type` / `content_language` as `compliance_media__*` columns; checked by key alone they
+    // became mapped facts beside the listing-owned `source_location`, and every Amazon publish refused the mixed root.
+    const definition = JSON.parse(readFileSync(new URL('../__fixtures__/amazon-it-outerwear-family.json', import.meta.url), 'utf8'))
+    const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'OUTERWEAR', schemaDefinition: definition })
+    const leaves = spec.fields.filter(f => f.attribute === 'compliance_media')
+    expect(leaves.map(f => f.key).sort()).toEqual(['compliance_media', 'compliance_media__content_language', 'compliance_media__content_type'])
+    for (const leaf of leaves) {
+      expect(sourceOwner(leaf), leaf.key).toMatchObject({ kind: 'listing', label: 'Listing settings' })
+      expect(planProductSource(leaf, 'AMAZON', 'it'), leaf.key).toBeNull()
+    }
   })
   it('preserves complete lists when a text destination only accepts one value', () => {
     expect(adaptSourceShape({ source: 'special_feature' }, field('features'), new Set(['special_feature'])).transforms)
