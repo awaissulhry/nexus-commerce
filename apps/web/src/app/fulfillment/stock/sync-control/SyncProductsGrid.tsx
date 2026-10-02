@@ -29,6 +29,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { Tip } from './SyncTip'
 import SyncExcelBar from './SyncExcelBar'
 import {
+  ebayZeroRefusal,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES, mapDensity,
   type Density, type Mode, type Row, type ProductMaster,
 } from './sync-control-shared'
@@ -56,6 +57,8 @@ interface Props {
   onDensity: (d: Density) => void
   onChanged: () => void
   notify: (msg: string) => void
+  /** A pin to 0 on eBay the API refused (the account's out-of-stock option is off): the page shows it in a Banner. */
+  refuse?: (sentence: string) => void
   /** Live search-box value (parent debounces it into filters.q). */
   search: string
   onSearch: (v: string) => void
@@ -78,7 +81,7 @@ function allFba(m: ProductMaster): boolean {
   return m.rollup.listings > 0 && (m.rollup.modeCounts.FBA ?? 0) === m.rollup.listings
 }
 
-export default function SyncProductsGrid({ filters, density, onDensity, onChanged, notify, search, onSearch }: Props) {
+export default function SyncProductsGrid({ filters, density, onDensity, onChanged, notify, refuse, search, onSearch }: Props) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -255,6 +258,8 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         }),
       })
       let d = await res.json()
+      const refused = ebayZeroRefusal(res.status, d)
+      if (refused) { (refuse ?? notify)(refused); return }
       if (res.status === 409 && d?.euExpandRequired) {
         // SCT.5b — Amazon shares ONE EU quantity per SKU; one honest confirm
         // with the true scope, then it executes. No refusals.
@@ -277,6 +282,8 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
           }),
         })
         d = await res2.json()
+        const refusedEu = ebayZeroRefusal(res2.status, d)
+        if (refusedEu) { (refuse ?? notify)(refusedEu); return }
         if (!res2.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res2.status}`)
       } else if (!res.ok) {
         throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)

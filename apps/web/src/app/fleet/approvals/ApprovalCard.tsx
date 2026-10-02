@@ -40,16 +40,27 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react'
-import { Banner } from '@/design-system/components'
-import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
+import { Banner, KeyValue } from '@/design-system/components'
+import { TOOL_CARDS, toolCardFor, type ToolCard } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import {
   approveLabelFor,
   channelEffectOf,
+  CONTENT_PREVIEWS,
+  contentDiffOf,
   moreThanShown,
+  NOT_SET,
+  plainValue,
+  previewSummary,
+  previewTotals,
+  previewWarnings,
+  productEntityOf,
   type ChannelEffect,
+  type ContentDiff,
+  type ContentValue,
   type Delta,
 } from './approval-words'
+import { reversibilityFrom, type Reversibility } from './reversibility'
 
 export interface FleetLabels {
   campaigns: Record<string, { name: string; marketplace: string | null }>
@@ -76,6 +87,35 @@ export interface CardApproval {
    * null/absent when they may. Apply is then disabled and the reason shown, never a click that can only fail.
    */
   cannotApprove?: string | null
+  /** C1 — how far it can be put back, as the API states it from the tool registry (reversibility.ts). */
+  reversibility?: Reversibility | null
+  /** C9 — the tool's own title (the registry's), for a tool with no card of its own. */
+  title?: string | null
+  /** C9 — it reaches a marketplace or a buyer (the registry's openWorld). Absent = not stated. */
+  openWorld?: boolean
+  /** C9 — the business the change is in, as the page names it. */
+  business?: string | null
+}
+
+/**
+ * C9 — the words for a tool with no card of its own (TOOL_CARDS): its own title, never its id, and where its change
+ * lands; whether it can be put back is the reversibility sentence beside it.
+ */
+function genericCardFor(approval: Pick<CardApproval, 'toolName' | 'title' | 'openWorld'>): ToolCard {
+  const title = approval.title?.trim()
+  if (!title) return toolCardFor(approval.toolName)
+  return {
+    wants: `asks for: ${title}`,
+    shortAsk: title,
+    approveLabel: `Approve: ${title}`,
+    reversible: '',
+    wrongCost:
+      approval.openWorld === true
+        ? 'It reaches a marketplace or a buyer.'
+        : approval.openWorld === false
+          ? 'It changes Nexus only.'
+          : 'Where it lands is not recorded — read the details before approving.',
+  }
 }
 
 /* ── reversibility, as ONE class ───────────────────────────────────────── */
@@ -84,7 +124,7 @@ export interface CardApproval {
  * Three classes, and the wording is deliberate. "Reversible" on its own is
  * how an operator ends up believing a spend can be un-spent.
  */
-type Reversibility = 'restore' | 'compensate' | 'never'
+type ReversibilityClass = 'restore' | 'compensate' | 'never'
 
 /*
  * S6.c — the `chip` field is gone. S6.a promoted the reversibility SENTENCE
@@ -93,7 +133,7 @@ type Reversibility = 'restore' | 'compensate' | 'never'
  * what this map was created to prevent, so the shorter one went rather than
  * being restyled.
  */
-const REVERSIBILITY: Record<Reversibility, { sentence: string }> = {
+const REVERSIBILITY: Record<ReversibilityClass, { sentence: string }> = {
   restore: {
     sentence: 'We can put this back the way it was — the previous value is recorded.',
   },
@@ -106,13 +146,15 @@ const REVERSIBILITY: Record<Reversibility, { sentence: string }> = {
   },
 }
 
-/** Derived from the one vocabulary, so a chip and a sentence cannot disagree. */
-function reversibilityOf(toolName: string): Reversibility {
-  const undoable = toolCardFor(toolName).undoable
-  if (undoable === 'yes') return 'restore'
-  if (undoable === 'partial') return 'compensate'
-  // `no` and `unknown` both land here: an unrecorded consequence is treated
-  // as irreversible, which is the safe direction to be wrong in.
+/**
+ * C1 — from the row the API sent (the tool registry's `reversibility`), never from a copy kept here. `none`, and
+ * anything the page cannot read, land on `never`: an unrecorded consequence is treated as irreversible, which is
+ * the safe direction to be wrong in.
+ */
+function reversibilityOf(approval: Pick<CardApproval, 'reversibility'>): ReversibilityClass {
+  const stated = reversibilityFrom(approval.reversibility)
+  if (stated === 'full') return 'restore'
+  if (stated === 'partial') return 'compensate'
   return 'never'
 }
 
@@ -177,6 +219,31 @@ const REJECT_CODES: Record<string, string[]> = {
     'Not now — bad timing',
     'The suggestion itself is wrong',
   ],
+  // Section 03 — the text, its English meaning, or where it goes can be what is wrong.
+  'set-content': [
+    'The text is wrong',
+    'The English meaning does not match the text',
+    'It should not reach every listing that follows it',
+    'The suggestion itself is wrong',
+  ],
+  'set-listing-content': [
+    'The text is wrong',
+    'The English meaning does not match the text',
+    'This listing should follow the shared text',
+    'The suggestion itself is wrong',
+  ],
+  'set-shopify-content': [
+    'A value is wrong',
+    'The English meaning does not match the text',
+    'Leave the store\'s own value',
+    'The suggestion itself is wrong',
+  ],
+  'bulk-content-change': [
+    'Some of the texts are wrong',
+    'The English meaning does not match the text',
+    'Too many products in one change',
+    'The suggestion itself is wrong',
+  ],
   'send-customer-message': [
     'Do not contact this customer',
     'Wrong message',
@@ -185,7 +252,7 @@ const REJECT_CODES: Record<string, string[]> = {
   ],
 }
 
-const rejectCodesFor = (toolName: string) => REJECT_CODES[toolName] ?? DEFAULT_REJECT_CODES
+export const rejectCodesFor = (toolName: string) => REJECT_CODES[toolName] ?? DEFAULT_REJECT_CODES
 
 /* ── AQ.8 · what the operator may edit ─────────────────────────────────── */
 
@@ -254,14 +321,25 @@ export const EMPTY_VALUE = '(empty)'
 const euro = (cents: unknown) =>
   typeof cents === 'number' ? `€${(cents / 100).toFixed(2)}` : null
 
-const plain = (v: unknown): string => {
-  if (v == null) return '—'
-  if (typeof v === 'string') return v
-  if (typeof v === 'number') return String(v)
-  if (typeof v === 'boolean') return v ? 'yes' : 'no'
-  if (Array.isArray(v)) return v.length === 0 ? '—' : `${v.length} items`
-  return JSON.stringify(v)
+/**
+ * MCP full control A4 — an ad amount in its campaign's OWN currency (the preview names it), never converted. A row
+ * written before ad previews carried a currency is in euros, as everything was then.
+ */
+const adMoney = (cents: unknown, currency: unknown) =>
+  typeof cents !== 'number' ? null : typeof currency === 'string' && currency !== 'EUR' ? `${currency} ${(cents / 100).toFixed(2)}` : euro(cents)
+
+/**
+ * MCP full control A4 — what every executable ad change states before it is approved: where it lands (live at
+ * Amazon on which profile, or sandbox), any clamp the campaign applies, and the automations that may change it again.
+ */
+function adEvidence(p: Record<string, any>, out: Described) {
+  if (typeof p.reachNote === 'string') out.evidence.push({ label: 'where it lands', value: p.reachNote })
+  if (typeof p.clampedBy === 'string') out.evidence.push({ label: 'clamped by', value: p.clampedBy })
+  if (typeof p.alsoChangedByNote === 'string') out.evidence.push({ label: 'may change it again', value: p.alsoChangedByNote })
 }
+
+/** C9 — a value in words, never raw JSON (approval-words.ts plainValue). */
+const plain = (v: unknown): string => plainValue(v)
 
 /**
  * Pull the human facts out of a preview. Per-tool because the previews are
@@ -272,9 +350,14 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
   const p = (a.preview ?? {}) as Record<string, any>
   const out: Described = { entity: null, marketplace: null, deltas: [], evidence: [] }
 
-  // A `{field: {from, to}}` map — set-price and apply-content both use it.
+  // A `{field: {from, to}}` map — set-price and apply-content both use it. A content change has its own table
+  // (ContentDiffView): a whole description does not fit a delta line, and its English meaning belongs beside it.
   const changes = p.changes as Record<string, { from: unknown; to: unknown }> | undefined
-  if (changes && typeof changes === 'object' && !Array.isArray(changes)) {
+  if (CONTENT_PREVIEWS.has(a.toolName)) {
+    out.entity = typeof p.listing === 'string' ? p.listing
+      : typeof p.sku === 'string' ? `SKU ${p.sku}`
+      : typeof p.totals?.products === 'number' ? `${p.totals.products} product${p.totals.products === 1 ? '' : 's'}` : null
+  } else if (changes && typeof changes === 'object' && !Array.isArray(changes)) {
     for (const [field, ch] of Object.entries(changes)) {
       if (ch && typeof ch === 'object' && ('from' in ch || 'to' in ch)) {
         /* A money field arrives as a BARE NUMBER — mutate.tools.ts writes
@@ -306,14 +389,16 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
         : t.expression
           ? `“${t.expression}” (${t.matchType ?? '—'}) in ${p.campaign?.name ?? 'an unnamed campaign'}`
           : null
-      out.marketplace = resolved?.marketplace ?? null
+      out.marketplace = resolved?.marketplace ?? p.campaign?.marketplace ?? null
       if (typeof p.currentBidCents === 'number' && typeof p.proposedBidCents === 'number') {
         out.deltas.push({
           field: 'bid',
-          from: euro(p.currentBidCents),
-          to: euro(p.proposedBidCents) ?? '—',
+          from: adMoney(p.currentBidCents, p.currency),
+          // A4 — the bid that lands, after the campaign's CPC ceiling and max-change guardrail.
+          to: adMoney(typeof p.effectiveBidCents === 'number' ? p.effectiveBidCents : p.proposedBidCents, p.currency) ?? '—',
         })
       }
+      adEvidence(p, out)
       break
     }
     case 'create-negative-keyword': {
@@ -321,7 +406,8 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
         (typeof a.args.externalCampaignId === 'string'
           ? labels.campaigns[a.args.externalCampaignId]
           : null) ?? null
-      out.entity = `${camp?.name ?? p.campaign?.name ?? 'an unnamed campaign'}`
+      // A5 — the ad group it goes into, when the preview names one.
+      out.entity = `${camp?.name ?? p.campaign?.name ?? 'an unnamed campaign'}${p.adGroup?.name ? ` › ${p.adGroup.name}` : ''}`
       out.marketplace = camp?.marketplace ?? p.campaign?.marketplace ?? null
       out.deltas.push({
         field: `negative keyword (${plain(p.matchType)}, ${plain(p.scope)})`,
@@ -331,24 +417,202 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
       if (p.metrics) {
         out.evidence.push({
           label: `spend on this term, last ${plain(p.metrics.windowDays)} days`,
-          value: `${euro(p.metrics.costCents) ?? '—'} for ${plain(p.metrics.orders)} orders`,
+          value: `${adMoney(p.metrics.costCents, p.currency) ?? '—'} for ${plain(p.metrics.orders)} orders`,
         })
       }
+      adEvidence(p, out)
       break
     }
     case 'graduate-keyword': {
-      out.entity = plain(p.destination?.name) || null
+      out.entity = p.destination?.name ? `${plain(p.destination.name)}${p.destinationAdGroup?.name ? ` › ${p.destinationAdGroup.name}` : ''}` : null
       out.deltas.push({
         field: 'new exact keyword',
         from: null,
-        to: `“${plain(p.query)}” at ${euro(p.suggestedBidCents) ?? '—'}`,
+        to: `“${plain(p.query)}” at ${adMoney(p.suggestedBidCents, p.currency) ?? '—'}`,
       })
       if (p.metrics) {
         out.evidence.push({
           label: `the term's own record, last ${plain(p.metrics.windowDays)} days`,
-          value: `${plain(p.metrics.clicks)} clicks, ${plain(p.metrics.orders)} orders, ${euro(p.metrics.costCents) ?? '—'} spent`,
+          value: `${plain(p.metrics.clicks)} clicks, ${plain(p.metrics.orders)} orders, ${adMoney(p.metrics.costCents, p.currency) ?? '—'} spent`,
         })
       }
+      if (typeof p.destinationAdGroup?.why === 'string') out.evidence.push({ label: 'why this ad group', value: p.destinationAdGroup.why })
+      adEvidence(p, out)
+      break
+    }
+    case 'set-campaign-budget': {
+      // A6 — a daily budget in the campaign's own currency.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      if (typeof p.currentBudgetCents === 'number' && typeof p.proposedBudgetCents === 'number') {
+        out.deltas.push({ field: 'daily budget', from: adMoney(p.currentBudgetCents, p.currency), to: adMoney(p.proposedBudgetCents, p.currency) ?? '—' })
+      }
+      adEvidence(p, out)
+      break
+    }
+    case 'set-placement-multipliers': {
+      // A6 — each placement adjustment it changes, in percent.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      const names: Record<string, string> = { topOfSearchPct: 'top of search', productPagesPct: 'product pages', restOfSearchPct: 'rest of search' }
+      for (const [key, label] of Object.entries(names)) {
+        const from = p.current?.[key] ?? 0
+        const to = p.proposed?.[key] ?? 0
+        if (from !== to) out.deltas.push({ field: `${label} adjustment`, from: `${from}%`, to: `${to}%` })
+      }
+      adEvidence(p, out)
+      break
+    }
+    case 'bulk-ad-bid-change': {
+      // A7 — the first changes, what is left alone and why, the per-click total per currency.
+      const changes = Array.isArray(p.changes) ? (p.changes as Array<Record<string, any>>) : []
+      out.entity = `${plain(p.totals?.changing)} bid${p.totals?.changing === 1 ? '' : 's'}${typeof p.percent === 'number' ? ` (${p.percent > 0 ? '+' : ''}${p.percent}%)` : ''}`
+      for (const c of changes.slice(0, 5)) {
+        out.deltas.push({ field: `“${plain(c.text)}” · ${plain(c.campaignName)}`, from: adMoney(c.fromCents, c.currency), to: adMoney(c.toCents, c.currency) ?? '—' })
+      }
+      const more = changes.length - 5 + (typeof p.moreChanges === 'number' ? p.moreChanges : 0)
+      if (more > 0) out.evidence.push({ label: 'and', value: `${more} more bid changes` })
+      for (const [cur, v] of Object.entries((p.byCurrency ?? {}) as Record<string, { targets: number; deltaCents: number }>)) {
+        out.evidence.push({ label: `per click in ${cur}`, value: `${v.deltaCents >= 0 ? '+' : '−'}${adMoney(Math.abs(v.deltaCents), cur)} in total on ${v.targets}` })
+      }
+      const left = Object.values((p.totals?.excluded ?? {}) as Record<string, number>).reduce((a, n) => a + n, 0)
+      if (left > 0) out.evidence.push({ label: 'left as they are', value: `${left} (see the request for why)` })
+      adEvidence(p, out)
+      break
+    }
+    case 'suppress-campaign': {
+      // A8 — the no-pause stop: what goes to the floor.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      out.deltas.push({ field: 'bids', from: `${plain(p.moves?.targets)} targets, ${plain(p.moves?.adGroups)} ad group defaults`, to: 'the 2-cent floor (remembered; never paused)' })
+      adEvidence(p, out)
+      break
+    }
+    case 'restore-campaign': {
+      // A8 — the remembered bids it puts back, and whose suppression it lifts.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      for (const b of (Array.isArray(p.bids) ? (p.bids as Array<Record<string, any>>) : []).slice(0, 5)) {
+        out.deltas.push({ field: `“${plain(b.text)}”`, from: adMoney(b.fromCents, p.currency), to: adMoney(b.toCents, p.currency) ?? '—' })
+      }
+      out.evidence.push({ label: 'restores', value: `${plain(p.restores?.targets)} targets and ${plain(p.restores?.adGroups)} ad group defaults` })
+      if (typeof p.suppressedBy === 'string') out.evidence.push({ label: 'suppressed by', value: p.suppressedBy })
+      adEvidence(p, out)
+      break
+    }
+    case 'set-campaign-live-writes': {
+      // A12 — the allowlist switch: what it lets through, and whether the connection would today.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      const word = (on: unknown) => (on ? 'on the live-write allowlist' : 'off the allowlist')
+      out.deltas.push({ field: 'live writes', from: word(p.liveWrites?.from), to: word(p.liveWrites?.to) })
+      if (p.connection) out.evidence.push({ label: 'Amazon Ads connection', value: `${plain(p.connection.mode)}, writes ${p.connection.writesEnabled ? 'enabled' : 'not enabled'}` })
+      adEvidence(p, out)
+      break
+    }
+    case 'create-ad-campaign': {
+      // A11 — the plan, from nothing: budget, bids (born at the floor), what it advertises and how it targets; then the
+      // negatives, the market's spend ceiling, the allowlist and where it lands.
+      const plan = (p.plan ?? {}) as Record<string, any>
+      const list = (v: unknown) => (Array.isArray(v) ? (v as Array<Record<string, any>>) : [])
+      const some = (items: string[]) => `${items.slice(0, 5).join(', ')}${items.length > 5 ? ', …' : ''}`
+      out.entity = typeof plan.name === 'string' ? `new campaign “${plan.name}”` : null
+      out.marketplace = plan.market ?? null
+      out.deltas.push({ field: 'daily budget', from: EMPTY_VALUE, to: adMoney(plan.dailyBudgetCents, plan.currency) ?? '—' })
+      out.deltas.push({ field: 'bids', from: EMPTY_VALUE, to: `the 2-cent floor; restore-campaign puts the planned bids back (default ${adMoney(plan.adGroup?.defaultBidCents, plan.currency) ?? '—'})` })
+      const products = list(plan.products)
+      out.deltas.push({ field: 'advertises', from: EMPTY_VALUE, to: `${products.length} product${products.length === 1 ? '' : 's'}: ${some(products.map((x) => plain(x.sku)))}` })
+      const keywords = list(plan.keywords)
+      const targets = list(plan.productTargets)
+      out.deltas.push(keywords.length
+        ? { field: 'keywords', from: EMPTY_VALUE, to: `${keywords.length}: ${some(keywords.map((k) => `“${plain(k.text)}” ${plain(k.matchType)} ${adMoney(k.bidCents, plan.currency) ?? ''}`.trim()))}` }
+        : { field: 'product targets', from: EMPTY_VALUE, to: `${targets.length}: ${some(targets.map((t) => plain(t.asin)))}` })
+      const negatives = list(plan.negativeKeywords)
+      if (negatives.length) out.evidence.push({ label: 'never shows on', value: some(negatives.map((n) => `“${plain(n.text)}”`)) })
+      if (p.ceiling) out.evidence.push({ label: 'spend ceiling', value: `${plain(p.ceiling.label)}: ${adMoney(p.ceiling.dailyCapCents, plan.currency) ?? '—'} a day` })
+      out.evidence.push({ label: 'live writes', value: 'off the allowlist until a person approves set-campaign-live-writes' })
+      adEvidence(p, out)
+      break
+    }
+    case 'set-ebay-ad-rates': {
+      // A14 — each rate now and after (a percent of the sale, no currency), what is left alone, where it lands.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      const changes = Array.isArray(p.changes) ? (p.changes as Array<Record<string, any>>) : []
+      for (const c of changes.slice(0, 5)) out.deltas.push({ field: `ad rate · item ${plain(c.itemId)}`, from: c.fromPct == null ? EMPTY_VALUE : `${c.fromPct}%`, to: `${c.toPct}%` })
+      if (changes.length > 5) out.evidence.push({ label: 'and', value: `${changes.length - 5} more rate changes` })
+      const above = Array.isArray(p.left?.aboveBreakEven) ? p.left.aboveBreakEven.length : 0
+      if (above) out.evidence.push({ label: 'not set (above break-even)', value: String(above) })
+      adEvidence(p, out)
+      break
+    }
+    case 'promote-ebay-listings': {
+      // A14 — the listings it promotes and at what rate; what it leaves out and why.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      const adds = Array.isArray(p.adds) ? (p.adds as Array<Record<string, any>>) : []
+      for (const a of adds.slice(0, 5)) out.deltas.push({ field: `item ${plain(a.itemId)}${a.sku ? ` (${a.sku})` : ''}`, from: EMPTY_VALUE, to: a.ratePct == null ? 'promoted' : `promoted at ${a.ratePct}%` })
+      if (adds.length > 5) out.evidence.push({ label: 'and', value: `${adds.length - 5} more listings` })
+      const leftOut = Object.values((p.left ?? {}) as Record<string, unknown[]>).reduce((n, v) => n + (Array.isArray(v) ? v.length : 0), 0)
+      if (leftOut) out.evidence.push({ label: 'left out', value: `${leftOut} (see the request for why)` })
+      adEvidence(p, out)
+      break
+    }
+    case 'set-ebay-campaign-budget': {
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      out.deltas.push({ field: 'daily budget', from: adMoney(p.currentBudgetCents, p.currency), to: adMoney(p.proposedBudgetCents, p.currency) ?? '—' })
+      if (typeof p.budgetChangesToday === 'number') out.evidence.push({ label: 'budget changes today', value: `${p.budgetChangesToday} of 15 (eBay's limit)` })
+      adEvidence(p, out)
+      break
+    }
+    case 'ebay-keywords-change': {
+      // A14 — bids (never a status), new keywords, new negatives.
+      out.entity = p.campaign?.name ?? null
+      out.marketplace = p.campaign?.marketplace ?? null
+      const bids = Array.isArray(p.bidChanges) ? (p.bidChanges as Array<Record<string, any>>) : []
+      const adds = Array.isArray(p.adds) ? (p.adds as Array<Record<string, any>>) : []
+      for (const b of bids.slice(0, 5)) out.deltas.push({ field: `“${plain(b.text)}” ${plain(b.matchType)}`, from: adMoney(b.fromCents, p.currency), to: adMoney(b.toCents, p.currency) ?? '—' })
+      for (const a of adds.slice(0, 5)) out.deltas.push({ field: `new “${plain(a.text)}” ${plain(a.matchType)}`, from: EMPTY_VALUE, to: adMoney(a.bidCents, p.currency) ?? '—' })
+      const negatives = Array.isArray(p.negatives) ? (p.negatives as Array<Record<string, any>>) : []
+      if (negatives.length) out.evidence.push({ label: 'never shows on', value: negatives.slice(0, 5).map((n) => `“${plain(n.text)}”`).join(', ') })
+      if (bids.length + adds.length > 10) out.evidence.push({ label: 'and', value: `${bids.length + adds.length - 10} more keyword changes` })
+      adEvidence(p, out)
+      break
+    }
+    case 'create-ebay-campaign': {
+      // A15 — as low as eBay allows: a General campaign at 2% with no listings, or a Priority one inside a spend ceiling.
+      const plan = (p.plan ?? {}) as Record<string, any>
+      out.entity = typeof plan.name === 'string' ? `new eBay campaign “${plan.name}”` : null
+      out.marketplace = plan.market ?? null
+      if (plan.fundingModel === 'COST_PER_CLICK') out.deltas.push({ field: 'daily budget', from: EMPTY_VALUE, to: adMoney(plan.dailyBudgetCents, plan.currency) ?? '—' })
+      else out.deltas.push({ field: 'ad rate', from: EMPTY_VALUE, to: `${plain(plan.ratePct)}% (eBay's minimum), no listings yet` })
+      if (p.account) out.evidence.push({ label: 'eBay account', value: plain(p.account.name ?? p.account.connectionId) })
+      if (p.ceiling) out.evidence.push({ label: 'eBay spend ceiling', value: `${adMoney(p.ceiling.monthlyCapCents, p.ceiling.currency) ?? '—'} a month` })
+      adEvidence(p, out)
+      break
+    }
+    case 'undo-ad-change': {
+      // A10 — what it puts back: each write and the value it restores, and the negatives it retires.
+      const rows = Array.isArray(p.rows) ? (p.rows as Array<Record<string, any>>) : []
+      out.entity = p.source?.changeSetId ? `the ad changes of request ${p.source.changeSetId}` : p.source?.actionLogId ? 'one recorded ad change' : null
+      for (const r of rows.slice(0, 5)) {
+        const field = r.entityType === 'CAMPAIGN' && r.restores?.dailyBudget != null ? 'daily budget' : r.actionType === 'update_placement_bidding' ? 'placements' : 'bid'
+        const shown = (v: Record<string, any> | undefined) =>
+          field === 'daily budget' ? plain(v?.dailyBudget) : field === 'placements' ? `${Array.isArray(v?.adjustments) ? v!.adjustments.length : 0} placements` : adMoney(v?.bidCents, null) ?? '—'
+        out.deltas.push({ field: `${field} (${plain(r.entityId)})`, from: shown(r.wrote), to: shown(r.restores) })
+      }
+      if (rows.length > 5 || typeof p.moreRows === 'number') {
+        out.evidence.push({ label: 'also restores', value: `${rows.length - 5 + (p.moreRows ?? 0)} more` })
+      }
+      if (Array.isArray(p.negatives) && p.negatives.length) {
+        // Owner decision (2026-10-02): said as what it does at Amazon — the block is removed, no ad is stopped.
+        out.evidence.push({
+          label: p.negatives.length === 1 ? 'removes the negative keyword at Amazon' : 'removes these negative keywords at Amazon',
+          value: p.negatives.map((n: Record<string, any>) => `“${plain(n.keywordText)}”`).join(', '),
+        })
+      }
+      adEvidence(p, out)
       break
     }
     case 'set-price': {
@@ -378,6 +642,8 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
       break
     }
     default:
+      // C9 — a tool with no case of its own names the product from its preview (sku, product name), when it gives one.
+      out.entity = productEntityOf(p)
       break
   }
   return out
@@ -479,6 +745,82 @@ const sentenceOf = (clauses: string[]) => {
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`
 }
 
+/* ── Section 03 · a content change, field by field ─────────────────────── */
+
+function ContentText({ value }: { value: ContentValue }) {
+  if (Array.isArray(value)) {
+    return (
+      <ul className="aq-contentlist">
+        {value.map((item, i) => (
+          <li key={i} className="aq-contenttext">{item}</li>
+        ))}
+      </ul>
+    )
+  }
+  return <span className={value === NOT_SET ? 'aq-contentempty' : 'aq-contenttext'}>{value}</span>
+}
+
+/**
+ * The text a content change writes, per field: what it says now, the new text, and what the new text says in English
+ * (the approver reads English; the approval is the text's review, d8). Then where it shows — the listings that follow
+ * it and those that keep their own — and the glossary's and the writer's warnings. KeyValue's three columns become one
+ * on a phone, so a long description stays readable.
+ */
+export function ContentDiffView({ diff, more }: { diff: ContentDiff; more: string | null }) {
+  const newLabel = diff.language ? `New (${diff.language})` : 'New'
+  return (
+    <div className="aq-content">
+      {diff.rows.map((row) => (
+        <section key={row.key} className="aq-contentrow" aria-label={`${row.product ? `${row.product} ` : ''}${row.field}`}>
+          <p className="aq-contentfield">
+            {row.product ? <span className="aq-contentsku">{row.product} · </span> : null}
+            {row.field}
+          </p>
+          <KeyValue
+            columns={3}
+            dense
+            items={[
+              { label: 'Now', value: <ContentText value={row.now} /> },
+              { label: newLabel, value: <ContentText value={row.next} /> },
+              {
+                label: 'English meaning',
+                value: row.english ?? (diff.language === 'English' ? 'The text is in English.' : 'No new text to translate.'),
+              },
+            ]}
+          />
+          {row.note ? <p className="aq-contentnote">{row.note}</p> : null}
+        </section>
+      ))}
+      {more ? <p className="aq-contentnote">{more}</p> : null}
+      {diff.reach.length ? (
+        <ul className="aq-contentreach" aria-label="Where the new text shows">
+          {diff.reach.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : null}
+      {diff.glossary.length ? (
+        <Banner tone="warning" title="The glossary says otherwise" className="aq-contentbanner">
+          <ul className="aq-contentlist">
+            {diff.glossary.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </Banner>
+      ) : null}
+      {diff.warnings.length ? (
+        <Banner tone="warning" title="Saved with a warning" className="aq-contentbanner">
+          <ul className="aq-contentlist">
+            {diff.warnings.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </Banner>
+      ) : null}
+    </div>
+  )
+}
+
 /* ── the card ──────────────────────────────────────────────────────────── */
 
 export function ApprovalCard({
@@ -505,8 +847,13 @@ export function ApprovalCard({
   /** NAF.AQ — "not now". Null `until` brings it straight back. */
   onSnooze: (id: string, until: Date | null) => void
 }) {
-  const vocab = toolCardFor(approval.toolName)
-  const rev = reversibilityOf(approval.toolName)
+  // C9 — a tool with no card of its own is named by its own title, never its id (genericCardFor).
+  const generic = !TOOL_CARDS[approval.toolName]
+  const vocab = generic ? genericCardFor(approval) : toolCardFor(approval.toolName)
+  const summary = previewSummary(approval.preview)
+  const totals = previewTotals(approval.preview)
+  const warnings = previewWarnings(approval.preview)
+  const rev = reversibilityOf(approval)
   const d = describe(approval, labels)
   const left = timeLeft(approval.expiresAt)
   const comeback = classifyComeback(approval.reason)
@@ -585,6 +932,7 @@ export function ApprovalCard({
   const approveLabel = approveLabelFor(approval.toolName, d.deltas, approval.preview, vocab.approveLabel)
   const more = moreThanShown(approval.toolName, approval.preview)
   const channels = channelEffectOf(approval.toolName, approval.preview)
+  const content = contentDiffOf(approval.toolName, approval.preview)
 
   return (
     /*
@@ -631,6 +979,7 @@ export function ApprovalCard({
       <div className="aq-cardhead">
         <span className="aq-who">
           <strong>{workerName}</strong> {vocab.wants}
+          {approval.business ? <> in <strong>{approval.business}</strong></> : null}
         </span>
         <span className="aq-meta">
           <Term k="risk-tier">{approval.riskTier} risk</Term>
@@ -729,7 +1078,12 @@ export function ApprovalCard({
             </button>
           </div>
         </div>
+      ) : content && content.rows.length > 0 ? (
+        <ContentDiffView diff={content} more={more} />
       ) : d.deltas.length > 0 ? (
+        <>
+        {/* C9 — the one plain line of what it does, above its before → after table. */}
+        {summary ? <p className="aq-entity">{summary}</p> : null}
         <ul className="aq-deltas">
           {d.deltas.map((x, i) => (
             <li key={i}>
@@ -748,16 +1102,23 @@ export function ApprovalCard({
           {/* MCP.12 — a bulk preview keeps 20 lines; the rest are counted, and the card says so. */}
           {more ? <li className="aq-dmore">{more}</li> : null}
         </ul>
+        </>
       ) : (
         /* (h) the honest fallback — it takes the DELTA slot, at delta size,
            because an action that cannot describe itself is the most important
            fact on the card, not a footnote to it. */
         <p className="aq-nodelta">
-          {typeof approval.preview?.effect === 'string'
-            ? (approval.preview.effect as string)
-            : 'This action did not describe itself.'}
+          {summary ?? 'This action did not describe itself.'}
         </p>
       )}
+
+      {/* C9 — its counts and its warnings, in words (the preview convention: totals, warning / warnings). */}
+      {totals.length > 0 ? <KeyValue dense columns={2} items={totals.map((t) => ({ label: t.label, value: t.value }))} /> : null}
+      {warnings.length > 0 ? (
+        <Banner tone="warning" title={warnings.length === 1 ? 'Read this before approving' : `${warnings.length} things to read before approving`}>
+          {warnings.length === 1 ? warnings[0] : <ul className="aq-evidence">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
+        </Banner>
+      ) : null}
 
       {/* 2 — what it acts on, beneath the number rather than above it */}
       {d.entity ? (

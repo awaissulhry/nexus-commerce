@@ -269,6 +269,10 @@ describe('the Amazon fulfilment method writes through its one door (2026-09-27)'
 
 beforeAll(async () => {
   app = Fastify()
+  app.addHook('onRequest', (request, _reply, done) => {
+    Object.assign(request, { __rbacResolved: { isOwner: true, permissions: new Set<string>() } }) // the Owner, as the RBAC gate resolves him: price writes check the person's permissions (S1 F5)
+    done()
+  })
   await app.register(productsRoutes)
   await app.ready()
 })

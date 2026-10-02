@@ -55,7 +55,10 @@ beforeAll(async () => {
   const { listingsSyndicationRoutes } = await import('./listings-syndication.routes.js')
   app = Fastify()
   // The request runs in the business, as the workspace hook puts it there (business profiles ON or OFF).
-  app.addHook('onRequest', (_request, _reply, done) => { withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, done) })
+  app.addHook('onRequest', (request, _reply, done) => {
+    Object.assign(request, { __rbacResolved: { isOwner: true, permissions: new Set<string>() } }) // the Owner, as the RBAC gate resolves him: price writes check the person's permissions (S1 F5)
+    withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, done)
+  })
   await app.register(listingsSyndicationRoutes, { prefix: '/api' })
 }, 180_000)
 afterAll(async () => { await app?.close(); await state.db?.close() }, 60_000)

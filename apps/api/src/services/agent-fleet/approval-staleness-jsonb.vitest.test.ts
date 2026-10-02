@@ -57,7 +57,13 @@ const PERMISSIONS = ['ai.run', F.productsPriceEdit, F.productsEdit, F.productsBu
  */
 let PERSON: UserPrincipal
 /** MCP.10 — the same person asking through Claude (built once the person exists). */
-const claude = (): McpPrincipal => ({ ...PERSON, via: 'claude', workspace: business, oauthGrantId: 'grant-jsonb' })
+const claude = (): McpPrincipal => ({
+  ...PERSON,
+  via: 'claude',
+  workspace: business,
+  oauthGrantId: 'grant-jsonb',
+  business: { id: business.workspaceId, name: 'JSONB business' },
+})
 
 const ids: Record<string, string> = {}
 const product = (sku: string) => inside(() => database.client.product.findUniqueOrThrow({ where: { id: ids[sku] } }))
@@ -192,7 +198,7 @@ describe('AP.6 — an unchanged approval from the Approvals page runs after the 
   })
 
   it('MCP.10 — a price change Claude asked for, approved on the page, runs', async () => {
-    const result = await runToolForClaude(claude(), getTool('set-price')!, { productId: ids['J-CLAUDE'], price: 14 })
+    const result = await runToolForClaude(claude(), getTool('set-price')!, { productId: ids['J-CLAUDE'], price: 14, business: 'JSONB business' })
     const { approvalId } = JSON.parse((result.content[0] as { text: string }).text)
     await parkOnThePage(approvalId)
     expect(await commitAfterTheWindow(approvalId)).toMatchObject({ ok: true })

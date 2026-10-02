@@ -1,0 +1,255 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`07 O7 — order, customer and review writes: the routes answer exactly as before the move > customer notes, tags and manual review 1`] = `
+[
+  {
+    "body": "{
+  "workspaceId": "<made>",
+  "id": "<made>",
+  "customerId": "test-customer-1",
+  "body": "VIP buyer",
+  "authorUserId": null,
+  "authorEmail": "ops@example.test",
+  "pinned": false,
+  "createdAt": "<made>",
+  "updatedAt": "<made>"
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "body required"
+}",
+    "status": 400,
+  },
+  {
+    "body": "{
+  "error": "Customer not found"
+}",
+    "status": 404,
+  },
+  {
+    "body": "{
+  "ok": true
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "Note not found"
+}",
+    "status": 404,
+  },
+  {
+    "body": "{
+  "id": "<made>",
+  "tags": [
+    "vip",
+    "wholesale"
+  ]
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "tags array required"
+}",
+    "status": 400,
+  },
+  {
+    "body": "{
+  "id": "<made>",
+  "manualReviewState": "APPROVED"
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "state must be one of PENDING, APPROVED, REJECTED"
+}",
+    "status": 400,
+  },
+]
+`;
+
+exports[`07 O7 — order, customer and review writes: the routes answer exactly as before the move > mark delivered: a date, a bad date, a future date, an unknown order 1`] = `
+[
+  {
+    "body": "{
+  "ok": true,
+  "order": {
+    "id": "<made>",
+    "channelOrderId": "TEST-ORDER-1",
+    "deliveredAt": "2026-04-05T10:00:00.000Z",
+    "deliveredAtSource": "MANUAL",
+    "status": "DELIVERED"
+  }
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "invalid deliveredAt"
+}",
+    "status": 400,
+  },
+  {
+    "body": "{
+  "error": "deliveredAt cannot be in the future"
+}",
+    "status": 400,
+  },
+  {
+    "body": "{
+  "error": "Order not found"
+}",
+    "status": 404,
+  },
+]
+`;
+
+exports[`07 O7 — order, customer and review writes: the routes answer exactly as before the move > order notes: add, refuse empty and unknown order, edit, delete, refuse unknown note 1`] = `
+[
+  {
+    "body": "{
+  "workspaceId": "<made>",
+  "id": "<made>",
+  "orderId": "test-order-1",
+  "body": "Ring before delivery",
+  "authorUserId": null,
+  "authorEmail": "ops@example.test",
+  "pinned": true,
+  "createdAt": "<made>",
+  "updatedAt": "<made>"
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "body required"
+}",
+    "status": 400,
+  },
+  {
+    "body": "{
+  "error": "Order not found"
+}",
+    "status": 404,
+  },
+  {
+    "body": "{
+  "workspaceId": "<made>",
+  "id": "<made>",
+  "orderId": "test-order-1",
+  "body": "Edited",
+  "authorUserId": null,
+  "authorEmail": "ops@example.test",
+  "pinned": false,
+  "createdAt": "<made>",
+  "updatedAt": "<made>"
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "ok": true
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "Note not found"
+}",
+    "status": 404,
+  },
+]
+`;
+
+exports[`07 O7 — order, customer and review writes: the routes answer exactly as before the move > review triage: status, assignee, tags and note; a bad status; an unknown review 1`] = `
+[
+  {
+    "body": "{
+  "review": {
+    "workspaceId": "<made>",
+    "id": "<made>",
+    "channel": "EBAY",
+    "marketplace": null,
+    "externalReviewId": "TEST-REV-1",
+    "productId": null,
+    "asin": null,
+    "sku": null,
+    "rating": 2,
+    "title": null,
+    "body": "Too small",
+    "authorName": null,
+    "authorId": null,
+    "verifiedPurchase": false,
+    "helpfulVotes": 0,
+    "postedAt": "2026-04-01T10:00:00.000Z",
+    "ingestedAt": "<made>",
+    "rawPayload": null,
+    "ingestSource": null,
+    "triageStatus": "IN_PROGRESS",
+    "assignee": "Ops",
+    "triageTags": [
+      "sizing"
+    ],
+    "triageNote": "Check the size chart",
+    "triageUpdatedAt": "<made>",
+    "attributedRequestId": null,
+    "attributedRuleId": null,
+    "attributedAt": null
+  }
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "review": {
+    "workspaceId": "<made>",
+    "id": "<made>",
+    "channel": "EBAY",
+    "marketplace": null,
+    "externalReviewId": "TEST-REV-1",
+    "productId": null,
+    "asin": null,
+    "sku": null,
+    "rating": 2,
+    "title": null,
+    "body": "Too small",
+    "authorName": null,
+    "authorId": null,
+    "verifiedPurchase": false,
+    "helpfulVotes": 0,
+    "postedAt": "2026-04-01T10:00:00.000Z",
+    "ingestedAt": "<made>",
+    "rawPayload": null,
+    "ingestSource": null,
+    "triageStatus": "IN_PROGRESS",
+    "assignee": null,
+    "triageTags": [
+      "sizing"
+    ],
+    "triageNote": "Check the size chart",
+    "triageUpdatedAt": "<made>",
+    "attributedRequestId": null,
+    "attributedRuleId": null,
+    "attributedAt": null
+  }
+}",
+    "status": 200,
+  },
+  {
+    "body": "{
+  "error": "invalid_status"
+}",
+    "status": 400,
+  },
+  {
+    "body": "{
+  "error": "not_found"
+}",
+    "status": 404,
+  },
+]
+`;

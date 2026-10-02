@@ -30,6 +30,7 @@ import {
   MCP_SCOPES,
   REFRESH_TOKEN_SECONDS,
   mcpResource,
+  mcpResourceTarget,
   mcpWorkspaceAllowList,
   oauthIssuer,
   parseScopes,
@@ -71,6 +72,8 @@ export interface ValidAuthorize {
   codeChallenge: string
   scopes: McpScope[]
   resource: string
+  /** C4 — the business the request's MCP URL names (its own URL): the consent may connect that one only. */
+  lockedWorkspaceId: string | null
 }
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '')
@@ -99,11 +102,12 @@ export async function validateAuthorize(params: AuthorizeParams): Promise<ValidA
   if (text(params.code_challenge_method) !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(codeChallenge)) {
     throw fail('invalid_request', 'PKCE with code_challenge_method S256 is required')
   }
-  const resource = text(params.resource).replace(/\/+$/, '')
-  if (resource !== mcpResource()) throw fail('invalid_target', `resource must be ${mcpResource()}`)
+  // C4 — the plain MCP URL, or one business's own URL (which locks the consent to that business).
+  const target = mcpResourceTarget(text(params.resource))
+  if (!target) throw fail('invalid_target', `resource must be ${mcpResource()} or ${mcpResource()}/w/<business id>`)
   const scopes = parseScopes(params.scope)
   if (scopes.length === 0) throw fail('invalid_scope', `scope must be ${MCP_SCOPES.join(' and/or ')}`)
-  return { client, redirectUri, state, codeChallenge, scopes, resource }
+  return { client, redirectUri, state, codeChallenge, scopes, resource: target.resource, lockedWorkspaceId: target.workspaceId }
 }
 
 /** The redirect URI with the answer on it, and `iss` for mix-up protection (RFC 9207). */
@@ -126,17 +130,23 @@ export interface AuthorizeView {
   scopes: McpScope[]
   mfaEnrolled: boolean
   businesses: Array<{ id: string; name: string; canConnect: boolean }>
+  /** C4 — set when the MCP URL is one business's own: `businesses` then holds that one at most. */
+  lockedWorkspaceId: string | null
 }
 
-/** What the consent page shows: the app, where it returns, and the person's businesses. */
+/**
+ * What the consent page shows: the app, where it returns, and the person's businesses — or, for a business's own MCP
+ * URL (C4), that business alone (none when the person is not in it or it is outside the allow-list).
+ */
 export async function checkAuthorize(userId: string, params: AuthorizeParams): Promise<AuthorizeView> {
   const valid = await validateAuthorize(params)
   const user = await prisma.userProfile.findUnique({ where: { id: userId }, select: { twoFactorEnabledAt: true } })
   const allow = mcpWorkspaceAllowList()
   const listed = (await workspaces.list(userId, 50)) as Array<{ id: string; name: string }>
+  const locked = valid.lockedWorkspaceId
   const businesses = await Promise.all(
     listed
-      .filter((business) => !allow || allow.has(business.id))
+      .filter((business) => (!allow || allow.has(business.id)) && (!locked || business.id === locked))
       .map(async (business) => {
         const access = await workspaces.membership(userId, business.id).catch(() => null)
         return { id: business.id, name: business.name, canConnect: !!access && canConnect(access) }
@@ -150,6 +160,7 @@ export async function checkAuthorize(userId: string, params: AuthorizeParams): P
     scopes: valid.scopes,
     mfaEnrolled: !!user?.twoFactorEnabledAt,
     businesses,
+    lockedWorkspaceId: locked,
   }
 }
 
@@ -181,7 +192,12 @@ export async function consent(input: ConsentInput): Promise<{ redirectTo: string
   if (verdict === 'reused') throw new OAuthError('mfa_invalid', 'That code was already used. Wait for the next one.', 400)
   if (verdict !== 'ok') throw new OAuthError('mfa_invalid', 'That code is not right. Check your authenticator app.', 400)
 
-  const workspaceId = text(input.workspaceId)
+  // C4 — a business's own MCP URL decides the business; the page cannot pick another one.
+  const picked = text(input.workspaceId)
+  if (valid.lockedWorkspaceId && picked && picked !== valid.lockedWorkspaceId) {
+    throw new OAuthError('access_denied', 'This connection is for another business. Add Claude again with that business’s own address.', 403)
+  }
+  const workspaceId = valid.lockedWorkspaceId ?? picked
   const allow = mcpWorkspaceAllowList()
   if (!workspaceId || (allow && !allow.has(workspaceId))) {
     throw new OAuthError('access_denied', 'Claude cannot be connected to this business yet.', 403)
@@ -190,10 +206,12 @@ export async function consent(input: ConsentInput): Promise<{ redirectTo: string
   if (!access) throw new OAuthError('access_denied', 'You are not an active member of this business.', 403)
   if (!canConnect(access)) throw new OAuthError('access_denied', 'Connecting Claude needs the ai.run permission in this business.', 403)
 
-  // The person may narrow what the app asked for; write implies read.
+  // The person may narrow what the app asked for; write implies read. C5 — run needs write: a change Claude may not
+  // ask for cannot run by rule, so run without write is dropped (narrowed), never widened into write.
   const chosen = Array.isArray(input.scopes) ? new Set(input.scopes.filter((s): s is string => typeof s === 'string')) : new Set(valid.scopes)
-  const scopes = valid.scopes.filter((scope) => chosen.has(scope))
+  let scopes = valid.scopes.filter((scope) => chosen.has(scope))
   if (scopes.includes('nexus.write') && !scopes.includes('nexus.read')) scopes.unshift('nexus.read')
+  if (scopes.includes('nexus.run') && !scopes.includes('nexus.write')) scopes = scopes.filter((scope) => scope !== 'nexus.run')
   if (scopes.length === 0) throw new OAuthError('invalid_scope', 'Choose what Claude may do.', 400)
 
   const rawCode = generateToken(32)
@@ -400,6 +418,8 @@ export interface VerifiedAccess {
   userId: string
   label: string
   workspace: WorkspaceContext
+  /** C3 — the business's name as it is now: Claude is told which business every result is from. */
+  workspaceName: string
   permissions: ResolvedPermissions
   scopes: McpScope[]
   clientName: string
@@ -409,8 +429,11 @@ export interface VerifiedAccess {
  * The person behind a Bearer token on /mcp, or null. Checked in full on every call: the token,
  * its audience, the connection, the app, the account, and the membership with its permissions
  * as they are now.
+ *
+ * C4 — `resource` is the MCP URL the call came to: the plain one, or one business's own. A token works only at the
+ * URL it was issued for, and a business's URL only for that business.
  */
-export async function verifyAccessToken(raw: string | undefined): Promise<VerifiedAccess | null> {
+export async function verifyAccessToken(raw: string | undefined, resource: string = mcpResource()): Promise<VerifiedAccess | null> {
   if (!raw || !raw.startsWith('nxm_at_')) return null
   const row = await prisma.oAuthToken.findUnique({
     where: { tokenHash: hashToken(raw) },
@@ -425,8 +448,10 @@ export async function verifyAccessToken(raw: string | undefined): Promise<Verifi
   })
   if (!row || row.kind !== 'access' || row.revokedAt) return null
   if (row.expiresAt.getTime() <= Date.now()) return null
-  if (row.resource !== mcpResource()) return null
+  if (row.resource !== resource) return null
   const { grant } = row
+  const target = mcpResourceTarget(resource)
+  if (!target || (target.workspaceId && target.workspaceId !== grant.workspaceId)) return null
   if (grant.revokedAt || grant.client.disabledAt || grant.user.status !== 'active') return null
   const allow = mcpWorkspaceAllowList()
   if (allow && !allow.has(grant.workspaceId)) return null
@@ -440,6 +465,7 @@ export async function verifyAccessToken(raw: string | undefined): Promise<Verifi
     userId: grant.userId,
     label: actorLabel({ id: grant.user.id, email: grant.user.email, displayName: grant.user.displayName ?? undefined }),
     workspace: access.context,
+    workspaceName: access.workspace.name,
     permissions: { isOwner: access.isOwner, permissions: access.permissions },
     scopes: row.scopes.filter((scope): scope is McpScope => (MCP_SCOPES as readonly string[]).includes(scope)),
     clientName: grant.client.clientName,

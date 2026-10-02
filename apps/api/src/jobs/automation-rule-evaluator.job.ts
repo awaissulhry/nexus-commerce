@@ -125,6 +125,47 @@ function buildRecContext(args: {
 }
 
 /**
+ * R8 (MCP full control, part 06) — the contexts a replenishment rule's trigger would hand it now, built as the tick
+ * builds them (read-only), for Claude's preview-automation: open recommendations for recommendation_generated and
+ * stockout_imminent, active products for cron_tick. Other triggers come from events: none to build.
+ */
+export async function replenishmentContextsFor(trigger: string, limit = 20): Promise<unknown[]> {
+  const REC_SELECT = { id: true, productId: true, sku: true, urgency: true, needsReorder: true, daysOfStockLeft: true, reorderQuantity: true, unitCostCents: true, landedCostPerUnitCents: true } as const
+  if (trigger === 'recommendation_generated' || trigger === 'stockout_imminent') {
+    const recs = await prisma.replenishmentRecommendation.findMany({
+      where: { status: 'ACTIVE', ...(trigger === 'stockout_imminent' ? { urgency: 'CRITICAL', daysOfStockLeft: { lt: 3 } } : {}) },
+      select: REC_SELECT,
+      orderBy: { generatedAt: 'desc' },
+      take: limit,
+    })
+    const productIds = [...new Set(recs.map((r) => r.productId))]
+    const [products, links] = await Promise.all([
+      prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, sku: true, abcClass: true } }),
+      prisma.supplierProduct.findMany({ where: { productId: { in: productIds }, isPrimary: true }, select: { productId: true, supplier: { select: { id: true, name: true, autoTriggerEnabled: true } } } }),
+    ])
+    const productById = new Map(products.map((p) => [p.id, p]))
+    const supplierByProduct = new Map(links.map((l) => [l.productId, l.supplier]))
+    return recs.flatMap((rec) => {
+      const product = productById.get(rec.productId)
+      return product ? [buildRecContext({ rec, product, supplier: supplierByProduct.get(rec.productId) ?? null })] : []
+    })
+  }
+  if (trigger === 'cron_tick') {
+    const products = await prisma.product.findMany({ where: { isParent: false, status: 'ACTIVE' }, select: { id: true, sku: true, abcClass: true }, take: limit })
+    const recs = await prisma.replenishmentRecommendation.findMany({ where: { status: 'ACTIVE', productId: { in: products.map((p) => p.id) } }, select: REC_SELECT })
+    const recByProduct = new Map(recs.map((r) => [r.productId, r]))
+    return products.map((product): ProductCronTickContext => {
+      const rec = recByProduct.get(product.id)
+      return {
+        product: { id: product.id, sku: product.sku, abcClass: product.abcClass, daysOfStockLeft: rec?.daysOfStockLeft ?? null, daysSinceLastMovement: null },
+        recommendation: rec ? buildRecContext({ rec, product, supplier: null }).recommendation : null,
+      }
+    })
+  }
+  return []
+}
+
+/**
  * Run one tick: evaluate every enabled rule across the appropriate
  * trigger payloads. Returns a summary string for the CronRun row.
  */

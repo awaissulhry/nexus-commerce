@@ -1,9 +1,15 @@
 import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { Prisma } from '@prisma/client'
+import { draftLineCosts } from '../services/supply/draft-line-costs.service.js'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
+import { amazonFulfilledRefusal } from '../services/fulfillment/amazon-fulfilled-order.js'
+import { pendingOrdersQueue, shipmentById, shipmentRates } from '../services/fulfillment/shipment-read.service.js'
+import { bulkCreateShipments, createShipmentForOrder, holdShipment, markShipmentShipped, printShipmentLabel, releaseShipment, setManualTrackingNumber, setShipmentService, voidShipmentLabel } from '../services/fulfillment/shipment.service.js'
+import { cancelPickup, schedulePickup, type PickupBody } from '../services/fulfillment/pickup.service.js'
+import { enqueueTrackingUpload } from '../services/fulfillment/tracking-upload.service.js'
 import {
   resolveWarehouseForOrder,
   previewRouting,
@@ -17,12 +23,19 @@ import {
   completeCycleCount,
   cancelCycleCount,
 } from '../services/cycle-count.service.js'
+import { listCycleCounts, readCycleCount } from '../services/stock/stock-read.service.js'
+import { listSuppliers, readSupplier } from '../services/supply/supplier.service.js'
+import { listPurchaseOrders, readPurchaseOrder, readPurchaseOrderMatch } from '../services/supply/purchase-order.service.js'
+import { createPoReceipt, listInboundShipments, readInboundShipment, setInboundCosts, type InboundCostsInput } from '../services/supply/inbound-shipment.service.js'
+import { withoutPoSecrets } from '../services/supply/po-secrets.js'
+import { sanitizeSupplierProductInput, supplierFields, wirePrimarySupplier } from '../services/supply/supplier.service.js'
+import { createPurchaseOrder, generatePoNumber, type CreatePurchaseOrderInput } from '../services/supply/purchase-order.service.js'
 import {
   scheduleAutoCount,
   findDueForCount,
   getCadenceConfig,
 } from '../services/cycle-count-scheduler.service.js'
-import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
+import { applyStockMovement, listStockMovements, ProtectedLocationError } from '../services/stock-movement.service.js'
 import { refreshSalesAggregates } from '../services/sales-aggregate.service.js'
 import { resolveAtp, DEFAULT_LEAD_TIME_DAYS } from '../services/atp.service.js'
 import { resolveStockForChannel, type ChannelLocationSource } from '../services/atp-channel.service.js'
@@ -347,12 +360,6 @@ async function maybeTransitionPoStatus(poId: string): Promise<void> {
   })
 }
 
-function generatePoNumber(): string {
-  const d = new Date()
-  const yymmdd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
-  return `PO-${yymmdd}-${rand}`
-}
 
 /**
  * Approving a PO needs po.approve (MCP full control #21). The two transition routes carry the transition in the body,
@@ -368,6 +375,9 @@ async function poApprovalGate(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
+  // A PO's acknowledgement link tokens are secrets: no fulfillment answer carries them (services/supply/po-secrets.ts).
+  fastify.addHook('preSerialization', async (_request, _reply, payload) => withoutPoSecrets(payload))
+
   // ═══════════════════════════════════════════════════════════════════
   // OVERVIEW — dashboard tiles for /fulfillment index page
   // ═══════════════════════════════════════════════════════════════════
@@ -587,6 +597,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       return { ok: true, movement }
     } catch (error: any) {
+      // 08 S2 (F7) — the FBA mirror and Shopify locations are not adjusted by hand.
+      if (error instanceof ProtectedLocationError) return reply.code(400).send({ error: error.message, code: error.code })
       fastify.log.error({ err: error }, '[fulfillment/stock/:id/adjust] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -620,29 +632,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/cycle-counts', async (request, reply) => {
     try {
       const q = request.query as { status?: string; limit?: string }
-      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 200)
-      const where: Prisma.CycleCountWhereInput = {}
-      if (q.status && q.status !== 'all') where.status = q.status
-      const counts = await prisma.cycleCount.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        include: {
-          location: { select: { id: true, code: true, name: true } },
-          items: { select: { status: true } },
-        },
-      })
-      const items = counts.map((c) => {
-        const counts = { PENDING: 0, COUNTED: 0, RECONCILED: 0, IGNORED: 0 } as Record<string, number>
-        for (const i of c.items) counts[i.status] = (counts[i.status] ?? 0) + 1
-        return {
-          ...c,
-          itemTotals: counts,
-          totalItems: c.items.length,
-          items: undefined, // strip the array; counts are enough for the list
-        }
-      })
-      return reply.send({ success: true, counts: items })
+      return reply.send({ success: true, counts: await listCycleCounts(q) })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       fastify.log.error({ err }, '[cycle-counts GET] failed')
@@ -723,82 +713,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     '/fulfillment/cycle-counts/:id',
     async (request, reply) => {
       try {
-        const { id } = request.params
-        const count = await prisma.cycleCount.findUnique({
-          where: { id },
-          include: {
-            location: { select: { id: true, code: true, name: true } },
-            items: { orderBy: { sku: 'asc' } },
-          },
-        })
+        const count = await readCycleCount(request.params.id)
         if (!count) {
           return reply.code(404).send({ error: 'Cycle count not found' })
         }
-        // Join product names for the items.
-        const productIds = Array.from(new Set(count.items.map((i) => i.productId)))
-        const products = productIds.length > 0
-          ? await prisma.product.findMany({
-              where: { id: { in: productIds } },
-              select: { id: true, name: true },
-            })
-          : []
-        const nameById = new Map(products.map((p) => [p.id, p.name] as const))
-
-        // L.14 — fetch active lots for every counted product so the
-        // session UI can show lot-level context inline. Variance
-        // reconciliation stays at StockLevel grain (a count is
-        // product-level, not lot-level), but the operator sees which
-        // lots make up the expected qty so a discrepancy can be
-        // attributed to a specific batch in the post-count audit.
-        const lotsByProductId = new Map<string, Array<{
-          id: string
-          lotNumber: string
-          unitsRemaining: number
-          unitsReceived: number
-          expiresAt: Date | null
-          recalled: boolean
-        }>>()
-        if (productIds.length > 0) {
-          const lots = await prisma.lot.findMany({
-            where: { productId: { in: productIds }, unitsRemaining: { gt: 0 } },
-            orderBy: [{ expiresAt: 'asc' }, { receivedAt: 'asc' }],
-            select: {
-              id: true, productId: true, lotNumber: true,
-              unitsRemaining: true, unitsReceived: true, expiresAt: true,
-              recalls: { where: { status: 'OPEN' }, select: { id: true }, take: 1 },
-            },
-          })
-          for (const lot of lots) {
-            const arr = lotsByProductId.get(lot.productId) ?? []
-            arr.push({
-              id: lot.id,
-              lotNumber: lot.lotNumber,
-              unitsRemaining: lot.unitsRemaining,
-              unitsReceived: lot.unitsReceived,
-              expiresAt: lot.expiresAt,
-              recalled: lot.recalls.length > 0,
-            })
-            lotsByProductId.set(lot.productId, arr)
-          }
-        }
-
-        return reply.send({
-          success: true,
-          count: {
-            ...count,
-            items: count.items.map((it) => ({
-              ...it,
-              productName: nameById.get(it.productId) ?? null,
-              variance:
-                it.countedQuantity != null
-                  ? it.countedQuantity - it.expectedQuantity
-                  : null,
-              // L.14 — empty array for non-lot-tracked products
-              // (operator UI hides the section when length === 0).
-              lots: lotsByProductId.get(it.productId) ?? [],
-            })),
-          },
-        })
+        return reply.send({ success: true, count })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         fastify.log.error({ err }, '[cycle-counts/:id GET] failed')
@@ -863,6 +782,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true, item: updated })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      // 08 S2 (F7) — a count never changes the FBA mirror or a Shopify location.
+      if (err instanceof ProtectedLocationError) return reply.code(400).send({ error: msg, code: err.code })
       if (msg.includes('not found')) return reply.code(404).send({ error: msg })
       if (msg.includes('Can only reconcile') || msg.includes('no counted') || msg.includes('not IN_PROGRESS')) {
         return reply.code(409).send({ error: msg })
@@ -1042,10 +963,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/fulfillment/shipments/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const shipment = await prisma.shipment.findUnique({
-      where: { id },
-      include: { items: true, warehouse: true },
-    })
+    const shipment = await shipmentById(id)
     if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
     return shipment
   })
@@ -1053,39 +971,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments', async (request, reply) => {
     try {
       const body = request.body as { orderId: string; warehouseId?: string; carrierCode?: string }
-      if (!body.orderId) return reply.code(400).send({ error: 'orderId is required' })
-
-      const order = await prisma.order.findUnique({
-        where: { id: body.orderId },
-        include: { items: true },
-      })
-      if (!order) return reply.code(404).send({ error: 'Order not found' })
-
-      // Shared stock step 4 — an order whose units came from a pool ships from this business's copy of
-      // the lender's warehouse address (unless the operator chose a warehouse).
-      const { sharedWarehouseForOrder } = await import('../services/stock-pool/shared-warehouses.js')
-      const warehouseId = body.warehouseId
-        ?? (await sharedWarehouseForOrder(order.id))
-        ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
-
-      const shipment = await prisma.shipment.create({
-        data: {
-          orderId: order.id,
-          warehouseId,
-          carrierCode: (body.carrierCode as any) ?? 'SENDCLOUD',
-          status: 'DRAFT',
-          items: {
-            create: order.items.map((it) => ({
-              orderItemId: it.id,
-              productId: it.productId,
-              sku: it.sku,
-              quantity: it.quantity,
-            })),
-          },
-        },
-        include: { items: true },
-      })
-      return shipment
+      const answer = await createShipmentForOrder(body, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[POST /fulfillment/shipments] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1095,409 +982,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments/:id/print-label', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const shipment = await prisma.shipment.findUnique({
-        where: { id },
-        include: {
-          warehouse: true,
-          order: {
-            include: {
-              items: {
-                include: {
-                  product: {
-                    select: {
-                      sku: true,
-                      hsCode: true,
-                      countryOfOrigin: true,
-                      weightValue: true,
-                      weightUnit: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      })
-      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
-      if (!shipment.order) {
-        return reply.code(400).send({ error: 'Shipment has no order; cannot print label.' })
-      }
-
-      const order = shipment.order
-
-      // CR.4: shared inputs that every carrier branch needs. Pulled
-      // out of the Sendcloud-specific path so AMAZON_BUY_SHIPPING +
-      // MANUAL can reuse the address normalization + weight resolver
-      // + customs item map without duplication.
-
-      // O.17: address preflight. Errors block (any carrier rejects on
-      // bad address); warnings logged but don't block.
-      {
-        const { validateAddress, extractAddressFromOrder } = await import('../services/address-validation/index.js')
-        const validation = validateAddress(extractAddressFromOrder(order))
-        const errors = validation.issues.filter((i) => i.severity === 'error')
-        if (errors.length > 0) {
-          return reply.code(400).send({
-            error: 'Address validation failed',
-            code: 'ADDRESS_INVALID',
-            issues: validation.issues,
-          })
-        }
-        const warnings = validation.issues.filter((i) => i.severity === 'warning')
-        if (warnings.length > 0) {
-          fastify.log.warn({ shipmentId: id, warnings }, '[print-label] address warnings')
-        }
-      }
-
-      const ship = order.shippingAddress as any
-      // The address blob arrives in two shapes — Amazon-PascalCase
-      // (AddressLine1, City, ...) and generic camelCase (addressLine1,
-      // city, ...). Normalize once for all carriers.
-      const addr = {
-        name: order.customerName || 'Customer',
-        address: ship?.AddressLine1 ?? ship?.addressLine1 ?? ship?.street ?? '',
-        address_2: ship?.AddressLine2 ?? ship?.addressLine2 ?? undefined,
-        city: ship?.City ?? ship?.city ?? '',
-        postal_code: ship?.PostalCode ?? ship?.postalCode ?? '',
-        country: ship?.CountryCode ?? ship?.countryCode ?? ship?.country ?? 'IT',
-        country_state: ship?.StateOrRegion ?? ship?.stateOrProvince ?? ship?.state ?? undefined,
-        telephone: ship?.Phone ?? ship?.phone ?? undefined,
-        email: order.customerEmail || undefined,
-      }
-
-      // Weight: prefer operator-entered shipment.weightGrams (from the
-      // pack station — O.13), else aggregate from product weights, else
-      // default 1.5 kg as a reasonable motorcycle-gear baseline.
-      let weightKg: number
-      if (shipment.weightGrams && shipment.weightGrams > 0) {
-        weightKg = shipment.weightGrams / 1000
-      } else {
-        const summed = order.items.reduce((acc, it) => {
-          const w = it.product?.weightValue ? Number(it.product.weightValue) : 0
-          const factor = it.product?.weightUnit === 'g' ? 0.001 : 1 // assume kg otherwise
-          return acc + w * factor * it.quantity
-        }, 0)
-        weightKg = summed > 0 ? summed : 1.5
-      }
-
-      // CR.4 — branch on carrierCode. Default fall-through is SENDCLOUD
-      // for backward compat with the O.8 contract.
-      const carrierCode = shipment.carrierCode ?? 'SENDCLOUD'
-
-      // ── MANUAL ──────────────────────────────────────────────────
-      // No live carrier integration; operator pastes a tracking number
-      // separately. Mark LABEL_PRINTED so the rest of the pipeline
-      // (pack/ship transitions, channel pushback once a tracking
-      // number is set manually) treats this shipment as ready to ship.
-      // No Sendcloud / Amazon round-trip; no labelUrl set.
-      if (carrierCode === 'MANUAL') {
-        const updated = await prisma.shipment.update({
-          where: { id },
-          data: {
-            status: 'LABEL_PRINTED',
-            labelPrintedAt: new Date(),
-            version: { increment: 1 },
-          },
-        })
-        await prisma.trackingEvent.create({
-          data: {
-            shipmentId: id,
-            occurredAt: new Date(),
-            code: 'ANNOUNCED',
-            description: 'Manual carrier — operator will paste tracking number',
-            source: 'MANUAL',
-          },
-        })
-        return {
-          ...updated,
-          _hint: 'No label generated. Open the shipment drawer and paste the carrier-issued tracking number to push it to the channel.',
-        }
-      }
-
-      // ── AMAZON_BUY_SHIPPING ────────────────────────────────────
-      // Only valid for AMAZON-channel orders. Pulls the operator's
-      // ship-from address from the bound Warehouse (was hardcoded
-      // Riccione before CR.4 — broken for any other warehouse).
-      // amazonOrderId from order.channelOrderId; itemList from the
-      // order items, mapping our internal id → Amazon's OrderItemId
-      // which lives in amazonMetadata.OrderItemId.
-      if (carrierCode === 'AMAZON_BUY_SHIPPING') {
-        if (order.channel !== 'AMAZON') {
-          return reply.code(400).send({
-            error: 'Amazon Buy Shipping is only valid for Amazon-channel orders.',
-            code: 'BUY_SHIPPING_WRONG_CHANNEL',
-          })
-        }
-        const wh = shipment.warehouse
-        if (!wh || !wh.addressLine1 || !wh.city || !wh.postalCode || !wh.country) {
-          return reply.code(400).send({
-            error: 'Bound warehouse has no address. Set ship-from in /fulfillment/stock.',
-            code: 'WAREHOUSE_ADDRESS_MISSING',
-          })
-        }
-
-        const itemList = order.items.map((it) => {
-          const meta = it.amazonMetadata as any
-          // Prefer Amazon's OrderItemId from the metadata; fall back to
-          // our internal id only if missing (rare — pre-O.x rows).
-          return {
-            orderItemId: meta?.OrderItemId ?? meta?.orderItemId ?? it.id,
-            quantity: it.quantity,
-          }
-        })
-
-        const buyShipping = await import('../services/amazon-pushback/buy-shipping.js')
-        let purchased
-        try {
-          // For Buy Shipping we go straight to createShipment with the
-          // cheapest-eligible service. Caller-driven service selection
-          // (rate-compare → bind via PATCH /service → print-label) is
-          // wired in CR.13; today the rules engine sets carrierCode +
-          // serviceCode upfront, and we honor serviceCode if present.
-          const eligibility = await buyShipping.getEligibleShippingServices({
-            amazonOrderId: order.channelOrderId,
-            itemList,
-            shipFromAddress: {
-              name: wh.name,
-              addressLine1: wh.addressLine1,
-              addressLine2: wh.addressLine2 ?? undefined,
-              city: wh.city,
-              postalCode: wh.postalCode,
-              countryCode: wh.country,
-            },
-            weightGrams: Math.round(weightKg * 1000),
-          })
-          if (eligibility.length === 0) {
-            return reply.code(400).send({
-              error: 'No eligible Amazon Buy Shipping services for this order.',
-              code: 'NO_ELIGIBLE_SERVICES',
-            })
-          }
-          // Honor pre-bound serviceCode if present, else cheapest.
-          const chosen = shipment.serviceCode
-            ? eligibility.find((s) => s.shippingServiceOfferId === shipment.serviceCode) ?? eligibility[0]
-            : eligibility.reduce((a, b) => (a.rate.amount <= b.rate.amount ? a : b))
-          purchased = await buyShipping.createShipment(
-            {
-              amazonOrderId: order.channelOrderId,
-              itemList,
-              shipFromAddress: {
-                name: wh.name,
-                addressLine1: wh.addressLine1,
-                addressLine2: wh.addressLine2 ?? undefined,
-                city: wh.city,
-                postalCode: wh.postalCode,
-                countryCode: wh.country,
-              },
-              weightGrams: Math.round(weightKg * 1000),
-            },
-            chosen.shippingServiceOfferId,
-          )
-        } catch (e: any) {
-          fastify.log.warn({ err: e, shipmentId: id }, '[print-label] Buy Shipping rejected')
-          return reply.code(502).send({
-            error: `Amazon Buy Shipping: ${e?.message ?? String(e)}`,
-            code: 'BUY_SHIPPING_FAILED',
-          })
-        }
-
-        const updated = await prisma.shipment.update({
-          where: { id },
-          data: {
-            status: 'LABEL_PRINTED',
-            trackingNumber: purchased.trackingId,
-            // Amazon doesn't expose a public tracking URL for Buy
-            // Shipping pre-pickup; the tracking page on Seller Central
-            // requires auth. Leave trackingUrl null until carrier
-            // status returns a public deeplink.
-            trackingUrl: null,
-            // Buy Shipping returns base64 PDF, not a hosted URL. We
-            // store a data: URL so the existing print flow can stream
-            // it; CR.16 will move this to S3 with a presigned URL.
-            labelUrl: purchased.labelData
-              ? `data:application/pdf;base64,${purchased.labelData}`
-              : null,
-            serviceCode: purchased.shippingServiceId,
-            serviceName: purchased.carrierName,
-            costCents: Math.round(purchased.rate.amount * 100),
-            currencyCode: purchased.rate.currencyCode,
-            labelPrintedAt: new Date(),
-            version: { increment: 1 },
-          },
-        })
-
-        await prisma.trackingEvent.create({
-          data: {
-            shipmentId: id,
-            occurredAt: new Date(),
-            code: 'ANNOUNCED',
-            description: `Buy Shipping label purchased (${purchased.carrierName})`,
-            source: 'AMAZON_BUY_SHIPPING',
-          },
-        })
-
-        const { auditLogService } = await import('../services/audit-log.service.js')
-        void auditLogService.write({
-          entityType: 'Shipment',
-          entityId: id,
-          action: 'print-label',
-          before: { status: shipment.status },
-          after: {
-            status: 'LABEL_PRINTED',
-            trackingNumber: purchased.trackingId,
-            carrierCode: 'AMAZON_BUY_SHIPPING',
-          },
-          metadata: {
-            dryRun: purchased.dryRun ?? false,
-            carrier: purchased.carrierName,
-            costCents: Math.round(purchased.rate.amount * 100),
-            weightKg,
-            country: addr.country,
-          },
-        })
-
-        return updated
-      }
-
-      // ── SENDCLOUD (default) ─────────────────────────────────────
-      // O.8: real Sendcloud call (replaces the B.4 stub). The
-      // sendcloud module returns mock data when
-      // NEXUS_ENABLE_SENDCLOUD_REAL=false (the default), so this path
-      // works end-to-end in dryRun mode without ever touching
-      // Sendcloud. resolveCredentials() throws SendcloudError with a
-      // clean 400 message if the carrier isn't connected.
-      // CR.10: pass the shipment's warehouseId so the resolver picks
-      // up the warehouse-bound CarrierAccount when set; null/undefined
-      // falls through to the primary Carrier credentials.
-      const sendcloud = await import('../services/sendcloud/index.js')
-      let creds
-      try {
-        creds = await sendcloud.resolveCredentials(shipment.warehouseId)
-      } catch (e: any) {
-        if (e instanceof sendcloud.SendcloudError) {
-          return reply.code(e.status).send({ error: e.message, code: e.code })
-        }
-        throw e
-      }
-
-      // Parcel items for customs declaration. Sendcloud uses these for
-      // international shipments + ignores for domestic. HS code +
-      // country-of-origin live on Product (per schema comment 1746).
-      const parcelItems = order.items.map((it) => ({
-        description: it.product?.sku ?? it.sku,
-        quantity: it.quantity,
-        weight: '0.100', // per-line weight rarely matters for our use
-        value: Number(it.price).toFixed(2),
-        hs_code: it.product?.hsCode ?? undefined,
-        origin_country: it.product?.countryOfOrigin ?? undefined,
-        sku: it.sku,
-      }))
-
-      // Service map lookup: which Sendcloud shipping_method to use for
-      // this (channel, marketplace). Returns null when no rule maps —
-      // Sendcloud auto-picks based on dimensions + destination.
-      // CR.22: pass destinationCountry so resolveServiceMap can
-      // auto-fallback to a tier-matched service (DOMESTIC/EU →
-      // STANDARD, INTL → EXPRESS) when no exact mapping exists.
-      const serviceId = await sendcloud.resolveServiceMap(
-        order.channel,
-        order.marketplace,
-        shipment.warehouseId,
-        addr.country,
-      )
-
-      // CR.11: sender_address from the bound Warehouse. Sendcloud
-      // uses the integration default when omitted; passing an explicit
-      // ID lets multi-warehouse operators ship from the right origin.
-      const senderId = shipment.warehouse?.sendcloudSenderId ?? undefined
-
-      const input = {
-        ...addr,
-        weight: weightKg.toFixed(3),
-        order_number: order.channelOrderId,
-        total_order_value: Number(order.totalPrice).toFixed(2),
-        total_order_value_currency: order.currencyCode ?? 'EUR',
-        shipment: serviceId ? { id: serviceId } : undefined,
-        sender_address: senderId,
-        parcel_items: parcelItems.length > 0 ? parcelItems : undefined,
-        external_reference: shipment.id,
-        request_label: true,
-      }
-
-      let parcel
-      try {
-        parcel = await sendcloud.createParcel(creds, input)
-      } catch (e: any) {
-        if (e instanceof sendcloud.SendcloudError) {
-          fastify.log.warn({ err: e, shipmentId: id }, '[print-label] Sendcloud rejected')
-          return reply.code(502).send({
-            error: `Sendcloud: ${e.message}`,
-            code: e.code,
-          })
-        }
-        throw e
-      }
-
-      const labelUrl = parcel.label?.normal_printer?.[0] ?? null
-
-      const updated = await prisma.shipment.update({
-        where: { id },
-        data: {
-          status: 'LABEL_PRINTED',
-          sendcloudParcelId: String(parcel.id),
-          trackingNumber: parcel.tracking_number,
-          trackingUrl: parcel.tracking_url,
-          labelUrl,
-          serviceCode: parcel.shipment?.name ?? null,
-          serviceName: parcel.shipment?.name ?? null,
-          labelPrintedAt: new Date(),
-          version: { increment: 1 },
-        },
-      })
-
-      // CR.3: bump Carrier.lastUsedAt so the marketplace UI's "active"
-      // sort surfaces recently-used carriers first. Fire-and-forget;
-      // a counter blip shouldn't fail label-print.
-      void prisma.carrier
-        .updateMany({
-          where: { code: 'SENDCLOUD' },
-          data: { lastUsedAt: new Date() },
-        })
-        .catch(() => { /* */ })
-
-      // Seed the timeline with the initial ANNOUNCED event so the
-      // drawer / branded tracking page have something to render before
-      // the first carrier scan webhook arrives.
-      await prisma.trackingEvent.create({
-        data: {
-          shipmentId: id,
-          occurredAt: new Date(),
-          code: 'ANNOUNCED',
-          description: 'Label generated, awaiting carrier pickup',
-          source: 'SENDCLOUD',
-          carrierRawCode: String(parcel.status?.id ?? ''),
-        },
-      })
-
-      // O.39: audit. Includes mode (real vs dryRun) so post-incident
-      // forensics can distinguish "we sent this to Sendcloud" from
-      // "we mocked this in dryRun".
-      const { auditLogService } = await import('../services/audit-log.service.js')
-      const mode = sendcloud.getSendcloudMode()
-      void auditLogService.write({
-        entityType: 'Shipment',
-        entityId: id,
-        action: 'print-label',
-        before: { status: shipment.status },
-        after: {
-          status: 'LABEL_PRINTED',
-          sendcloudParcelId: String(parcel.id),
-          trackingNumber: parcel.tracking_number,
-        },
-        metadata: { dryRun: mode.dryRun, env: mode.env, weightKg, country: addr.country, carrierCode: 'SENDCLOUD' },
-      })
-
-      return updated
+      const answer = await printShipmentLabel(id, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[print-label] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1717,32 +1203,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments/:id/release', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const shipment = await prisma.shipment.findUnique({ where: { id } })
-      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
-      if (shipment.status !== ('ON_HOLD' as any)) {
-        return reply.code(400).send({ error: `Shipment is not on hold (status: ${shipment.status})` })
-      }
-      const updated = await prisma.shipment.update({
-        where: { id },
-        data: {
-          status: 'DRAFT',
-          heldAt: null,
-          heldReason: null,
-          version: { increment: 1 },
-        },
-      })
-      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
-      publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: 'DRAFT', ts: Date.now() })
-      // O.39: audit log — fail-open per the service contract.
-      const { auditLogService } = await import('../services/audit-log.service.js')
-      void auditLogService.write({
-        entityType: 'Shipment',
-        entityId: id,
-        action: 'release',
-        before: { status: 'ON_HOLD', heldReason: shipment.heldReason },
-        after: { status: 'DRAFT' },
-      })
-      return updated
+      const answer = await releaseShipment(id, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[shipments/:id/release] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1756,34 +1218,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { id } = request.params as { id: string }
       const body = request.body as { reason?: string }
-      const shipment = await prisma.shipment.findUnique({ where: { id } })
-      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
-      if (['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(shipment.status)) {
-        return reply.code(400).send({
-          error: `Cannot hold a shipment in status ${shipment.status}. Void the label first if needed.`,
-        })
-      }
-      const heldReason = body.reason?.trim() || 'Manually held by operator'
-      const updated = await prisma.shipment.update({
-        where: { id },
-        data: {
-          status: 'ON_HOLD' as any,
-          heldAt: new Date(),
-          heldReason,
-          version: { increment: 1 },
-        },
-      })
-      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
-      publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: 'ON_HOLD', ts: Date.now() })
-      const { auditLogService } = await import('../services/audit-log.service.js')
-      void auditLogService.write({
-        entityType: 'Shipment',
-        entityId: id,
-        action: 'hold',
-        before: { status: shipment.status },
-        after: { status: 'ON_HOLD', heldReason },
-      })
-      return updated
+      const answer = await holdShipment(id, body, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[shipments/:id/hold] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1905,6 +1341,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           metadata: { bulk: true },
         })),
       )
+      // 07 O9 — a MANUAL-carrier shipment gets no carrier webhook: its tracking upload is queued here.
+      for (const manual of await prisma.shipment.findMany({ where: { id: { in: eligibleIds }, carrierCode: 'MANUAL' }, select: { id: true, trackingNumber: true, trackingUrl: true } })) {
+        await enqueueTrackingUpload(manual.id, { shippedAt, trackingNumber: manual.trackingNumber, trackingUrl: manual.trackingUrl, carrierCode: 'MANUAL' }, { explicit: true })
+      }
 
       return { shipped: result.count, skipped: ids.length - eligibleIds.length }
     } catch (error: any) {
@@ -2785,122 +2225,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/shipments/:id/rates', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const shipment = await prisma.shipment.findUnique({
-        where: { id },
-        include: {
-          warehouse: true,
-          order: {
-            select: {
-              shippingAddress: true,
-              channel: true,
-              channelOrderId: true,
-              items: { select: { id: true, quantity: true, amazonMetadata: true } },
-            },
-          },
-        },
-      })
-      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
-      if (!shipment.order) return reply.code(400).send({ error: 'Shipment has no order' })
-
-      const ship = shipment.order.shippingAddress as any
-      const country = (ship?.CountryCode ?? ship?.countryCode ?? ship?.country ?? 'IT')
-        .toString()
-        .toUpperCase()
-      const weightKg = (shipment.weightGrams ?? 1500) / 1000
-
-      const sendcloud = await import('../services/sendcloud/index.js')
-      const rates: Array<{
-        source: 'SENDCLOUD' | 'AMAZON_BUY_SHIPPING'
-        carrier: string
-        serviceName: string
-        serviceCode: string
-        priceEur: number
-        estimatedDays?: number
-      }> = []
-
-      // CR.13 — pull each carrier's preferences once so we can skip
-      // those opted-out of rate-shop. Single read; carriers are <10
-      // rows for a single-account install. Default = include.
-      const carrierPrefs = await prisma.carrier.findMany({
-        select: { code: true, preferences: true },
-      })
-      const includeSendcloud = (() => {
-        const p = carrierPrefs.find((c) => c.code === 'SENDCLOUD')?.preferences as any
-        return p?.includeInRateShop !== false // default true when unset
-      })()
-      const includeBuyShipping = (() => {
-        const p = carrierPrefs.find((c) => c.code === 'AMAZON_BUY_SHIPPING')?.preferences as any
-        return p?.includeInRateShop !== false
-      })()
-
-      if (includeSendcloud) {
-        try {
-          const creds = await sendcloud.resolveCredentials()
-          const methods = await sendcloud.listShippingMethods(creds, { weightKg, toCountry: country })
-          for (const m of methods) {
-            rates.push({
-              source: 'SENDCLOUD',
-              carrier: m.carrier,
-              serviceName: m.name,
-              serviceCode: String(m.id),
-              priceEur: m.price,
-            })
-          }
-        } catch {
-          // Sendcloud unconnected or unavailable — skip but keep going so
-          // Buy Shipping rates still surface for Amazon orders.
-        }
-      }
-
-      // CR.4: Buy Shipping is only relevant for Amazon orders. Pre-CR.4
-      // this passed empty amazonOrderId + empty itemList + hardcoded
-      // Riccione ship-from, which Amazon's MFN API rejects in real
-      // mode. Now: real channelOrderId + real itemList (Amazon
-      // OrderItemId from amazonMetadata) + warehouse-derived
-      // shipFromAddress. Skip silently if the warehouse is not bound
-      // or has no address — UI shows Sendcloud rates only.
-      if (includeBuyShipping && shipment.order.channel === 'AMAZON' && process.env.NEXUS_ENABLE_AMAZON_BUY_SHIPPING) {
-        const wh = shipment.warehouse
-        if (wh && wh.addressLine1 && wh.city && wh.postalCode && wh.country) {
-          try {
-            const buyShipping = await import('../services/amazon-pushback/buy-shipping.js')
-            const itemList = shipment.order.items.map((it) => {
-              const meta = it.amazonMetadata as any
-              return {
-                orderItemId: meta?.OrderItemId ?? meta?.orderItemId ?? it.id,
-                quantity: it.quantity,
-              }
-            })
-            const services = await buyShipping.getEligibleShippingServices({
-              amazonOrderId: shipment.order.channelOrderId,
-              itemList,
-              shipFromAddress: {
-                name: wh.name,
-                addressLine1: wh.addressLine1,
-                addressLine2: wh.addressLine2 ?? undefined,
-                city: wh.city,
-                postalCode: wh.postalCode,
-                countryCode: wh.country,
-              },
-              weightGrams: shipment.weightGrams ?? Math.round(weightKg * 1000),
-            })
-            for (const s of services) {
-              rates.push({
-                source: 'AMAZON_BUY_SHIPPING',
-                carrier: s.carrierName,
-                serviceName: s.shippingServiceName,
-                serviceCode: s.shippingServiceOfferId,
-                priceEur: s.rate.amount,
-              })
-            }
-          } catch (err: any) {
-            fastify.log.warn({ err, shipmentId: id }, '[shipments/:id/rates] Buy Shipping rate fetch failed')
-          }
-        }
-      }
-
-      rates.sort((a, b) => a.priceEur - b.priceEur)
-      return { rates, weightKg, destinationCountry: country }
+      // 07 O5 — the rate shop lives in services/fulfillment/shipment-read.service.ts.
+      const answer = await shipmentRates(id, (detail, message) => fastify.log.warn(detail, message))
+      if (answer.status !== 200) return reply.code(answer.status).send(answer.body)
+      return answer.body
     } catch (error: any) {
       fastify.log.error({ err: error }, '[shipments/:id/rates] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -2910,31 +2238,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // O.28: bind operator's chosen carrier + service to the shipment.
   // Caller picks from the rates response above. Rejects post-
   // LABEL_PRINTED — once a label exists the carrier is committed.
+  // ── 07 O9: the tracking number of a MANUAL-carrier shipment ─────────
+  // The label step's MANUAL hint promised it: the operator (or Claude's confirm-shipment) pastes the carrier's tracking
+  // number, and marking the shipment shipped then uploads it to the channel.
+  fastify.patch('/fulfillment/shipments/:id/tracking', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { trackingNumber?: string; trackingUrl?: string; carrierName?: string }
+      const answer = await setManualTrackingNumber(id, body)
+      return reply.code(answer.status).send(answer.body)
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/:id/tracking] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.patch('/fulfillment/shipments/:id/service', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = request.body as {
-        carrierCode?: string
-        serviceCode?: string
-        serviceName?: string
-      }
-      const shipment = await prisma.shipment.findUnique({ where: { id } })
-      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
-      if (['LABEL_PRINTED', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(shipment.status)) {
-        return reply.code(400).send({
-          error: 'Cannot change service after label printed. Void the label first.',
-        })
-      }
-      const updated = await prisma.shipment.update({
-        where: { id },
-        data: {
-          ...(body.carrierCode ? { carrierCode: body.carrierCode as any } : {}),
-          ...(body.serviceCode != null ? { serviceCode: body.serviceCode } : {}),
-          ...(body.serviceName != null ? { serviceName: body.serviceName } : {}),
-          version: { increment: 1 },
-        },
-      })
-      return updated
+      const body = request.body as { carrierCode?: string; serviceCode?: string; serviceName?: string }
+      const answer = await setShipmentService(id, body, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[shipments/:id/service] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -2949,76 +2273,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments/:id/void-label', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const shipment = await prisma.shipment.findUnique({ where: { id } })
-      if (!shipment) return reply.code(404).send({ error: 'Shipment not found' })
-      if (!['LABEL_PRINTED'].includes(shipment.status)) {
-        return reply.code(400).send({
-          error: `Cannot void from status ${shipment.status}. Only LABEL_PRINTED labels can be voided.`,
-        })
-      }
-      if (!shipment.sendcloudParcelId) {
-        return reply.code(400).send({ error: 'No Sendcloud parcel to void.' })
-      }
-
-      const sendcloud = await import('../services/sendcloud/index.js')
-      let creds
-      try {
-        creds = await sendcloud.resolveCredentials()
-      } catch (e: any) {
-        if (e instanceof sendcloud.SendcloudError) {
-          return reply.code(e.status).send({ error: e.message, code: e.code })
-        }
-        throw e
-      }
-
-      const result = await sendcloud.voidParcel(creds, Number(shipment.sendcloudParcelId))
-      if (result.ok === false) {
-        const reason = (result as { ok: false; reason: string }).reason
-        // Audit the failed attempt — operator may want to see the
-        // history of "we tried to void, Sendcloud said no".
-        const { auditLogService } = await import('../services/audit-log.service.js')
-        void auditLogService.write({
-          entityType: 'Shipment',
-          entityId: id,
-          action: 'void-label-failed',
-          metadata: { reason },
-        })
-        return reply.code(502).send({ error: `Sendcloud refused: ${reason}` })
-      }
-
-      // Reset shipment for a fresh print. Keep the order link, items,
-      // weight + dimensions; clear the parcel-specific fields.
-      const updated = await prisma.shipment.update({
-        where: { id },
-        data: {
-          status: shipment.weightGrams ? 'PACKED' : 'DRAFT',
-          sendcloudParcelId: null,
-          trackingNumber: null,
-          trackingUrl: null,
-          labelUrl: null,
-          labelPrintedAt: null,
-          serviceCode: null,
-          serviceName: null,
-          version: { increment: 1 },
-        },
-      })
-
-      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
-      publishOutboundEvent({ type: 'shipment.updated', shipmentId: id, status: updated.status, ts: Date.now() })
-      const { auditLogService } = await import('../services/audit-log.service.js')
-      void auditLogService.write({
-        entityType: 'Shipment',
-        entityId: id,
-        action: 'void-label',
-        before: {
-          status: 'LABEL_PRINTED',
-          sendcloudParcelId: shipment.sendcloudParcelId,
-          trackingNumber: shipment.trackingNumber,
-        },
-        after: { status: updated.status },
-      })
-
-      return updated
+      const answer = await voidShipmentLabel(id, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[shipments/:id/void-label] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -3053,39 +2309,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments/:id/mark-shipped', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const before = await prisma.shipment.findUnique({
-        where: { id },
-        select: { status: true, trackingNumber: true, orderId: true },
-      })
-      if (!before) return reply.code(404).send({ error: 'Shipment not found' })
-      const shippedAt = new Date()
-      const updated = await prisma.shipment.update({
-        where: { id },
-        data: { status: 'SHIPPED', shippedAt, version: { increment: 1 } },
-      })
-      // O.4: project Shipment.shippedAt onto the parent Order when
-      // Order.shippedAt is still null. Multi-shipment orders keep the
-      // first ship-out (SLA milestone) — updateMany with the null
-      // guard makes this a no-op for later shipments.
-      if (before.orderId) {
-        await prisma.order.updateMany({
-          where: { id: before.orderId, shippedAt: null },
-          data: { shippedAt },
-        })
-      }
-      // O.39: audit.
-      const { auditLogService } = await import('../services/audit-log.service.js')
-      void auditLogService.write({
-        entityType: 'Shipment',
-        entityId: id,
-        action: 'mark-shipped',
-        before: { status: before.status },
-        after: { status: 'SHIPPED', shippedAt: updated.shippedAt },
-      })
-      // Channel pushback fires from the O.7 webhook handler when
-      // Sendcloud reports the actual carrier scan; this endpoint just
-      // records operator intent ("we shipped it manually").
-      return updated
+      const answer = await markShipmentShipped(id, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[mark-shipped] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -3095,104 +2320,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/shipments/bulk-create', async (request, reply) => {
     try {
       const body = request.body as { orderIds?: string[]; warehouseId?: string; carrierCode?: string }
-      const orderIds = Array.isArray(body.orderIds) ? body.orderIds : []
-      if (orderIds.length === 0) return reply.code(400).send({ error: 'orderIds[] required' })
-      if (orderIds.length > 200) return reply.code(400).send({ error: 'Max 200 orders per bulk create' })
-
-      // Caller-supplied warehouse wins; otherwise the routing engine
-      // (OrderRoutingRule rules) decides per-order.
-      const explicitWarehouseId = body.warehouseId ?? null
-
-      let created = 0
-      const errors: Array<{ orderId: string; reason: string }> = []
-      const routingByOrder: Record<string, { warehouseId: string | null; source: string; ruleName: string | null }> = {}
-      for (const oid of orderIds) {
-        try {
-          const existing = await prisma.shipment.findFirst({ where: { orderId: oid, status: { not: 'CANCELLED' } } })
-          if (existing) { errors.push({ orderId: oid, reason: 'shipment already exists' }); continue }
-          const order = await prisma.order.findUnique({ where: { id: oid }, include: { items: true } })
-          if (!order) { errors.push({ orderId: oid, reason: 'order not found' }); continue }
-
-          // Per-order routing: explicit override > rule match > default.
-          let resolvedWarehouseId: string | null = explicitWarehouseId
-          let routingSource = 'EXPLICIT_OVERRIDE'
-          let routingRuleName: string | null = null
-          if (!explicitWarehouseId) {
-            const shippingCountry =
-              (order.shippingAddress as any)?.country ?? null
-            const routing = await resolveWarehouseForOrder({
-              channel: order.channel,
-              marketplace: order.marketplace,
-              shippingCountry,
-              orderId: order.id, // shared stock step 4: pool units ship from the lender's address
-            })
-            resolvedWarehouseId = routing.warehouseId
-            routingSource = routing.source
-            routingRuleName = routing.ruleName
-          }
-          routingByOrder[oid] = {
-            warehouseId: resolvedWarehouseId,
-            source: routingSource,
-            ruleName: routingRuleName,
-          }
-
-          // O.16: shipping rules — decide carrier + service from
-          // operator-defined rules. Caller-supplied carrierCode wins
-          // (explicit override); otherwise the rules engine picks;
-          // otherwise fall back to SENDCLOUD as the original default.
-          let resolvedCarrier = (body.carrierCode as any) ?? null
-          let resolvedService: string | null = null
-          // O.36: hold-for-review state. Set when the matching rule's
-          // actions.holdForReview = true.
-          let holdForReview = false
-          let holdReason: string | null = null
-          if (!body.carrierCode) {
-            const { applyShippingRules } = await import('../services/shipping-rules/applier.js')
-            const dest = (order.shippingAddress as any)?.country
-              ?? (order.shippingAddress as any)?.CountryCode
-              ?? null
-            const applied = await applyShippingRules({
-              channel: order.channel,
-              marketplace: order.marketplace,
-              destinationCountry: typeof dest === 'string' ? dest : null,
-              weightGrams: null, // unknown until pack station
-              orderTotalCents: Math.round(Number(order.totalPrice) * 100),
-              itemCount: order.items.length,
-              isPrime: order.isPrime ?? null,
-              hasHazmat: false,
-              skus: order.items.map((it) => it.sku),
-            })
-            if (applied?.actions.preferCarrierCode) {
-              resolvedCarrier = applied.actions.preferCarrierCode as any
-              resolvedService = applied.actions.preferServiceCode ?? null
-            }
-            if (applied?.actions.holdForReview) {
-              holdForReview = true
-              holdReason = `Auto-held by rule "${applied.ruleName}"`
-            }
-          }
-          await prisma.shipment.create({
-            data: {
-              orderId: oid,
-              warehouseId: resolvedWarehouseId,
-              carrierCode: resolvedCarrier ?? 'SENDCLOUD',
-              serviceCode: resolvedService,
-              status: holdForReview ? ('ON_HOLD' as any) : 'DRAFT',
-              heldAt: holdForReview ? new Date() : null,
-              heldReason: holdReason,
-              items: {
-                create: order.items.map((it) => ({
-                  orderItemId: it.id, productId: it.productId, sku: it.sku, quantity: it.quantity,
-                })),
-              },
-            },
-          })
-          created++
-        } catch (e: any) {
-          errors.push({ orderId: oid, reason: e?.message ?? String(e) })
-        }
-      }
-      return { created, errors, routing: routingByOrder }
+      const answer = await bulkCreateShipments(body, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[bulk-create shipments] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -3301,176 +2430,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // Counts: overdue/today/tomorrow/this-week/later/unknown + per-channel.
   fastify.get('/fulfillment/outbound/pending-orders', async (request, reply) => {
     try {
-      const q = request.query as any
-      const page = Math.max(1, safeNum(q.page, 1) ?? 1)
-      const pageSize = Math.min(200, safeNum(q.pageSize, 50) ?? 50)
-      const sort = (q.sort as string) || 'ship-by-asc'
-
-      const channelList: string[] | undefined = q.channel
-        ? String(q.channel).split(',').map((s: string) => s.trim()).filter(Boolean)
-        : undefined
-      const marketplaceList: string[] | undefined = q.marketplace
-        ? String(q.marketplace).split(',').map((s: string) => s.trim()).filter(Boolean)
-        : undefined
-      const urgencyList: string[] | undefined = q.urgency
-        ? String(q.urgency).split(',').map((s: string) => s.trim().toUpperCase()).filter(Boolean)
-        : undefined
-
-      // ── Urgency window math (UTC-anchored). Buckets:
-      //   OVERDUE   shipByDate < now
-      //   TODAY     now ≤ shipByDate < now + 24h
-      //   TOMORROW  +24h ≤ shipByDate < +48h
-      //   THIS_WEEK +48h ≤ shipByDate < +7d
-      //   LATER     shipByDate ≥ +7d
-      //   UNKNOWN   shipByDate IS NULL
-      const now = new Date()
-      const inHrs = (h: number) => new Date(now.getTime() + h * 3_600_000)
-      const t24 = inHrs(24)
-      const t48 = inHrs(48)
-      const t7d = inHrs(24 * 7)
-
-      const where: any = {
-        status: { in: ['PENDING', 'PROCESSING'] as any[] },
-        // Exclude orders that already have an active shipment. Cancelled
-        // shipments don't count — operator may have voided + needs to
-        // re-create from scratch.
-        shipments: { none: { status: { not: 'CANCELLED' as any } } },
-      }
-      if (channelList?.length) where.channel = { in: channelList as any }
-      if (marketplaceList?.length) where.marketplace = { in: marketplaceList }
-      if (q.search?.trim()) {
-        const s = q.search.trim()
-        where.OR = [
-          { channelOrderId: { contains: s, mode: 'insensitive' } },
-          { customerName: { contains: s, mode: 'insensitive' } },
-          { customerEmail: { contains: s, mode: 'insensitive' } },
-          { items: { some: { sku: { contains: s, mode: 'insensitive' } } } },
-        ]
-      }
-      // Urgency is ANDed with the existing where via a discriminated OR.
-      if (urgencyList?.length) {
-        const urgencyClauses: any[] = []
-        for (const u of urgencyList) {
-          if (u === 'OVERDUE') urgencyClauses.push({ shipByDate: { lt: now } })
-          else if (u === 'TODAY') urgencyClauses.push({ shipByDate: { gte: now, lt: t24 } })
-          else if (u === 'TOMORROW') urgencyClauses.push({ shipByDate: { gte: t24, lt: t48 } })
-          else if (u === 'THIS_WEEK') urgencyClauses.push({ shipByDate: { gte: t48, lt: t7d } })
-          else if (u === 'LATER') urgencyClauses.push({ shipByDate: { gte: t7d } })
-          else if (u === 'UNKNOWN') urgencyClauses.push({ shipByDate: null })
-        }
-        // AND with existing search OR (if any) by nesting under AND.
-        const prevOR = where.OR
-        delete where.OR
-        where.AND = [
-          ...(prevOR ? [{ OR: prevOR }] : []),
-          { OR: urgencyClauses },
-        ]
-      }
-
-      // Sort. Postgres sorts NULLs last for ASC by default in Prisma 5+.
-      let orderBy: any = [{ shipByDate: 'asc' }, { purchaseDate: 'asc' }]
-      if (sort === 'value-desc') orderBy = [{ totalPrice: 'desc' }, { shipByDate: 'asc' }]
-      else if (sort === 'age-desc') orderBy = [{ purchaseDate: 'asc' }, { shipByDate: 'asc' }]
-
-      const [total, items] = await Promise.all([
-        prisma.order.count({ where }),
-        prisma.order.findMany({
-          where,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-          select: {
-            id: true,
-            channel: true,
-            marketplace: true,
-            channelOrderId: true,
-            status: true,
-            customerName: true,
-            customerEmail: true,
-            shippingAddress: true,
-            purchaseDate: true,
-            shipByDate: true,
-            earliestShipDate: true,
-            latestDeliveryDate: true,
-            fulfillmentLatency: true,
-            isPrime: true,
-            totalPrice: true,
-            currencyCode: true,
-            createdAt: true,
-            items: {
-              select: { id: true, sku: true, quantity: true, productId: true, price: true },
-            },
-          },
-        }),
-      ])
-
-      // Decorate each row with derived urgency + line-item totals, and
-      // serialize Decimal → number to keep the wire shape JSON-safe
-      // (D.2 lesson — see TECH_DEBT.md on Decimal+gzip).
-      const classifyUrgency = (d: Date | null | undefined): string => {
-        if (!d) return 'UNKNOWN'
-        const t = d.getTime()
-        if (t < now.getTime()) return 'OVERDUE'
-        if (t < t24.getTime()) return 'TODAY'
-        if (t < t48.getTime()) return 'TOMORROW'
-        if (t < t7d.getTime()) return 'THIS_WEEK'
-        return 'LATER'
-      }
-      const decorated = items.map((o) => {
-        const totalQuantity = o.items.reduce((n, it) => n + it.quantity, 0)
-        return {
-          ...o,
-          totalPrice: Number(o.totalPrice),
-          items: o.items.map((it) => ({ ...it, price: Number(it.price) })),
-          itemCount: o.items.length,
-          totalQuantity,
-          urgency: classifyUrgency(o.shipByDate),
-        }
-      })
-
-      // Counts — cheap aggregate queries against the same base where
-      // (minus the urgency filter so the count chips reflect "of all
-      // pending orders matching channel/search, how many overdue?").
-      const baseWhere: any = { ...where }
-      delete baseWhere.AND
-      delete baseWhere.OR
-      // Re-apply non-urgency clauses
-      if (q.search?.trim()) {
-        const s = q.search.trim()
-        baseWhere.OR = [
-          { channelOrderId: { contains: s, mode: 'insensitive' } },
-          { customerName: { contains: s, mode: 'insensitive' } },
-          { customerEmail: { contains: s, mode: 'insensitive' } },
-          { items: { some: { sku: { contains: s, mode: 'insensitive' } } } },
-        ]
-      }
-
-      const [overdue, today, tomorrow, thisWeek, later, unknown, byChannelRows] =
-        await Promise.all([
-          prisma.order.count({ where: { ...baseWhere, shipByDate: { lt: now } } }),
-          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: now, lt: t24 } } }),
-          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: t24, lt: t48 } } }),
-          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: t48, lt: t7d } } }),
-          prisma.order.count({ where: { ...baseWhere, shipByDate: { gte: t7d } } }),
-          prisma.order.count({ where: { ...baseWhere, shipByDate: null } }),
-          prisma.order.groupBy({
-            by: ['channel'],
-            where: baseWhere,
-            _count: { _all: true },
-          }),
-        ])
-
-      const byChannel: Record<string, number> = {}
-      for (const row of byChannelRows) byChannel[row.channel as string] = row._count._all
-
-      return {
-        items: decorated,
-        total,
-        page,
-        pageSize,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
-        counts: { overdue, today, tomorrow, thisWeek, later, unknown, byChannel },
-      }
+      // 07 O5 — the queue lives in services/fulfillment/shipment-read.service.ts (one read for the page and Claude).
+      return await pendingOrdersQueue(request.query as any)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[outbound/pending-orders] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -4221,82 +3182,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/fulfillment/inbound', async (request, reply) => {
     try {
-      const q = request.query as any
-      const where: any = {}
-      // RB.1 — recycle-bin scope. Default = live-only.
-      const showDeleted = q.deleted === 'true'
-      where.deletedAt = showDeleted ? { not: null } : null
-      if (q.type && q.type !== 'ALL') where.type = q.type
-      // H.3: status accepts comma-separated multi-select.
-      if (q.status && q.status !== 'ALL') {
-        const statuses = String(q.status).split(',').map((s) => s.trim()).filter(Boolean)
-        if (statuses.length === 1) where.status = statuses[0]
-        else if (statuses.length > 1) where.status = { in: statuses }
-      }
-      // H.3: search across reference / trackingNumber / carrierCode +
-      // any item.sku containing the term.
-      if (q.search?.trim()) {
-        const s = q.search.trim()
-        where.OR = [
-          { reference: { contains: s, mode: 'insensitive' } },
-          { trackingNumber: { contains: s, mode: 'insensitive' } },
-          { carrierCode: { contains: s, mode: 'insensitive' } },
-          { fbaShipmentId: { contains: s, mode: 'insensitive' } },
-          { asnNumber: { contains: s, mode: 'insensitive' } },
-          { purchaseOrder: { poNumber: { contains: s, mode: 'insensitive' } } },
-          { items: { some: { sku: { contains: s, mode: 'insensitive' } } } },
-        ]
-      }
-
-      // H.5: delayed filter — shipments past expectedAt in non-terminal
-      // status. Compounds with type/status/search filters.
-      if (q.delayed === 'true') {
-        where.expectedAt = { lt: new Date() }
-        const nonTerminal = ['DRAFT', 'SUBMITTED', 'IN_TRANSIT', 'ARRIVED', 'RECEIVING', 'PARTIALLY_RECEIVED']
-        if (where.status) {
-          // Caller already filtered by status — intersect rather than overwrite.
-          // (Most common case: q.delayed=true alone, no status filter.)
-        } else {
-          where.status = { in: nonTerminal as any }
-        }
-      }
-
-      // H.3: pagination + sort.
-      const page = Math.max(1, Math.floor(safeNum(q.page, 1) ?? 1))
-      const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
-      const skip = (page - 1) * pageSize
-      const sortBy = (q.sortBy ?? 'createdAt') as string
-      const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
-      const orderBy =
-        sortBy === 'expectedAt' ? { expectedAt: sortDir } :
-        sortBy === 'status'     ? { status: sortDir } :
-        sortBy === 'type'       ? { type: sortDir } :
-        sortBy === 'updatedAt'  ? { updatedAt: sortDir } :
-        { createdAt: sortDir }
-
-      const [total, items] = await Promise.all([
-        prisma.inboundShipment.count({ where }),
-        prisma.inboundShipment.findMany({
-          where,
-          include: {
-            items: true,
-            warehouse: { select: { code: true, name: true } },
-            purchaseOrder: { select: { poNumber: true, supplierId: true } },
-            workOrder: { select: { id: true, productId: true, quantity: true } },
-            _count: { select: { attachments: true, discrepancies: true } },
-          },
-          orderBy,
-          skip,
-          take: pageSize,
-        }),
-      ])
-      return {
-        items,
-        total,
-        page,
-        pageSize,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
-      }
+      return await listInboundShipments(request.query as any)
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fulfillment/inbound] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -4494,47 +3380,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/fulfillment/inbound/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const shipment = await prisma.inboundShipment.findUnique({
-      where: { id },
-      include: {
-        items: { include: { discrepancies: true, receipts: { orderBy: { receivedAt: 'desc' } } } },
-        warehouse: true,
-        purchaseOrder: true,
-        workOrder: true,
-        // H.1 additions — full bundle for the detail surface.
-        attachments: { orderBy: { uploadedAt: 'desc' } },
-        discrepancies: { where: { inboundShipmentItemId: null }, orderBy: { reportedAt: 'desc' } },
-      },
-    })
+    const shipment = await readInboundShipment(id)
     if (!shipment) return reply.code(404).send({ error: 'Inbound shipment not found' })
-
-    // H.11 — landed cost summary. Goods = sum of (unitCostCents *
-    // quantityExpected) — using expected, not received, so the
-    // landed cost is the planned figure regardless of receive
-    // progress. Operators with cost variance use the discrepancy
-    // surface to track actuals.
-    const goodsCents = shipment.items.reduce((sum, it) => {
-      return sum + (it.unitCostCents ?? 0) * it.quantityExpected
-    }, 0)
-    const shippingCents = shipment.shippingCostCents ?? 0
-    const customsCents = shipment.customsCostCents ?? 0
-    const dutiesCents = shipment.dutiesCostCents ?? 0
-    const insuranceCents = shipment.insuranceCostCents ?? 0
-    const totalCents = goodsCents + shippingCents + customsCents + dutiesCents + insuranceCents
-
-    return {
-      ...shipment,
-      landedCost: {
-        currencyCode: shipment.currencyCode,
-        exchangeRate: shipment.exchangeRate,
-        goodsCents,
-        shippingCents,
-        customsCents,
-        dutiesCents,
-        insuranceCents,
-        totalCents,
-      },
-    }
+    return shipment
   })
 
   // H.11 — patch costs. Updates shipment-level cost fields and/or
@@ -4543,43 +3391,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/fulfillment/inbound/:id/costs', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = request.body as {
-        currencyCode?: string
-        exchangeRate?: number | null
-        shippingCostCents?: number | null
-        customsCostCents?: number | null
-        dutiesCostCents?: number | null
-        insuranceCostCents?: number | null
-        items?: Array<{ id: string; unitCostCents: number | null }>
-      }
-      const existing = await prisma.inboundShipment.findUnique({ where: { id } })
-      if (!existing) return reply.code(404).send({ error: 'Inbound shipment not found' })
-
-      const data: any = {}
-      if (body.currencyCode !== undefined) data.currencyCode = body.currencyCode
-      if (body.exchangeRate !== undefined) data.exchangeRate = body.exchangeRate
-      if (body.shippingCostCents !== undefined) data.shippingCostCents = body.shippingCostCents
-      if (body.customsCostCents !== undefined) data.customsCostCents = body.customsCostCents
-      if (body.dutiesCostCents !== undefined) data.dutiesCostCents = body.dutiesCostCents
-      if (body.insuranceCostCents !== undefined) data.insuranceCostCents = body.insuranceCostCents
-
-      if (Object.keys(data).length > 0) {
-        await prisma.inboundShipment.update({ where: { id }, data })
-      }
-
-      if (body.items && body.items.length > 0) {
-        // updateMany doesn't support per-row values; loop with bounded
-        // concurrency. Item count per shipment is small (<100) so
-        // sequential is fine.
-        for (const it of body.items) {
-          await prisma.inboundShipmentItem.update({
-            where: { id: it.id },
-            data: { unitCostCents: it.unitCostCents },
-          })
-        }
-      }
-
-      publishInboundEvent({ type: 'inbound.updated', shipmentId: id, reason: 'costs', ts: Date.now() })
+      // 08 S10 — the work lives in services/supply/inbound-shipment.service.ts (Claude's update-inbound-shipment shares it).
+      if (!(await setInboundCosts(id, request.body as InboundCostsInput))) return reply.code(404).send({ error: 'Inbound shipment not found' })
       return { ok: true }
     } catch (err: any) {
       fastify.log.error({ err }, '[inbound/:id/costs] failed')
@@ -5452,28 +4265,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════════════════════════
 
   fastify.get('/fulfillment/suppliers', async (request, reply) => {
-    const q = request.query as any
-    const where: any = {}
-    if (q.search?.trim()) where.name = { contains: q.search.trim(), mode: 'insensitive' }
-    if (q.activeOnly === 'true') where.isActive = true
-    const items = await prisma.supplier.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      include: { _count: { select: { products: true, purchaseOrders: true } } },
-    })
-    return { items, total: items.length }
+    return listSuppliers(request.query as any)
   })
 
   fastify.get('/fulfillment/suppliers/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const supplier = await prisma.supplier.findUnique({
-      where: { id },
-      include: {
-        products: { include: { } as any },
-        purchaseOrders: { take: 20, orderBy: { createdAt: 'desc' } },
-        contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }, // PD.2
-      },
-    })
+    const supplier = await readSupplier(id)
     if (!supplier) return reply.code(404).send({ error: 'Supplier not found' })
     return supplier
   })
@@ -5712,9 +4509,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/fulfillment/suppliers', async (request, reply) => {
     try {
-      const body = request.body as any
+      const body = (request.body ?? {}) as Record<string, any>
       if (!body.name) return reply.code(400).send({ error: 'name required' })
-      const created = await prisma.supplier.create({ data: body })
+      // S1 (F10) — the same field allow-list as the edit below: the body was saved as-is, so a create could set the
+      // auto-PO opt-in (`autoTrigger*`), its ceilings or the lead-time statistics, which no screen offers.
+      const created = await prisma.supplier.create({ data: { ...supplierFields(body), name: String(body.name) } as Prisma.SupplierCreateInput })
       return created
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -5725,28 +4524,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { id } = request.params as { id: string }
       const body = (request.body ?? {}) as Record<string, any>
-      // PD.2 — whitelist editable scalar fields (was mass-assign `body`).
-      const ALLOWED = [
-        'name', 'contactName', 'email', 'phone', 'addressLine1', 'city',
-        'postalCode', 'country', 'taxId', 'paymentTerms', 'defaultCurrency',
-        'leadTimeDays', 'isActive', 'notes',
-        // S2 — supplier-level production/shipping defaults (nullable ints).
-        'productionTimeDays', 'productionUnitsPerDay', 'shippingTimeDays',
-      ] as const
-      const NULLABLE_INTS = new Set(['productionTimeDays', 'productionUnitsPerDay', 'shippingTimeDays'])
-      const data: Record<string, any> = {}
-      for (const k of ALLOWED) {
-        if (!(k in body)) continue
-        if (NULLABLE_INTS.has(k)) {
-          data[k] = body[k] === null || body[k] === '' ? null : Math.max(0, Math.round(Number(body[k])) || 0)
-        } else {
-          data[k] = k === 'leadTimeDays'
-            ? Math.max(0, Number(body[k]) || 0)
-            : k === 'isActive'
-              ? !!body[k]
-              : (body[k] === '' ? null : body[k])
-        }
-      }
+      // PD.2 — whitelist editable scalar fields (was mass-assign `body`); the create above takes the same list.
+      const data = supplierFields(body)
       const updated = await prisma.supplier.update({ where: { id }, data })
       return updated
     } catch (error: any) {
@@ -5890,28 +4669,22 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const body = (request.body ?? {}) as { to?: string; subject?: string; body?: string; contactId?: string }
       const to = body.to?.trim()
       const text = body.body?.trim()
-      const subject = body.subject?.trim() || 'Message from Xavia'
       if (!to || !/.+@.+\..+/.test(to)) return reply.code(400).send({ error: 'valid recipient email required' })
       if (!text) return reply.code(400).send({ error: 'body required' })
+      // MCP full control 07 O3 — the e-mail goes out as THIS business: its name in the default subject and its own
+      // sender (Xavia keeps exactly its subject and sender); a business with no identity is refused, never sent as another.
+      const { resolveBusinessIdentity } = await import('../services/business-identity.service.js')
+      const identity = await resolveBusinessIdentity()
+      if (identity.ok === false) return reply.code(409).send({ error: identity.reason })
+      const subject = body.subject?.trim() || `Message from ${identity.identity.brandName}`
 
-      const { sendEmail } = await import('../services/email/transport.js')
-      const html = `<div style="font-family:Inter,-apple-system,sans-serif;font-size:14px;color:#0f172a;white-space:pre-wrap;">${text.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</div>`
-      const result = await sendEmail({ to, subject, html, text, tag: `supplier-comms:${id}` })
-
-      const created = await prisma.supplierComm.create({
-        data: {
-          supplierId: id,
-          contactId: body.contactId ?? null,
-          channel: 'EMAIL',
-          direction: 'OUT',
-          subject,
-          body: text,
-          emailTo: to,
-          emailOk: result.ok,
-          byUserId: (request.headers['x-user-id'] as string | undefined) ?? null,
-        },
-      })
-      return reply.send({ comm: created, delivery: result })
+      // MCP full control 08 S9 — the send and its comms-log entry live in the service (Claude's email-supplier sends through it too).
+      const { sendSupplierEmail } = await import('../services/supply/supplier-email.service.js')
+      return reply.send(await sendSupplierEmail({
+        supplierId: id, to, subject, text, contactId: body.contactId ?? null,
+        byUserId: (request.headers['x-user-id'] as string | undefined) ?? null,
+        ...(identity.identity.emailFrom ? { from: identity.identity.emailFrom } : {}),
+      }))
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -6459,97 +5232,6 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // cost we ALSO point preferredSupplierId at that supplier — otherwise the
   // cost is orphaned and EOQ / working-capital / landed-cost stay €0.
 
-  // Whitelist + validate a SupplierProduct payload. Accepts cost as either
-  // costCents (int) or costEur (human-friendly decimal). Returns the
-  // sanitized partial or an { error } string.
-  function sanitizeSupplierProductInput(
-    body: any,
-  ): { data: Record<string, any> } | { error: string } {
-    const data: Record<string, any> = {}
-    if (body.supplierSku !== undefined)
-      data.supplierSku = body.supplierSku ? String(body.supplierSku).trim() : null
-    if (body.costEur !== undefined && body.costEur !== null && body.costEur !== '') {
-      const eur = Number(body.costEur)
-      if (!Number.isFinite(eur) || eur < 0) return { error: 'costEur must be a non-negative number' }
-      data.costCents = Math.round(eur * 100)
-    } else if (body.costCents !== undefined) {
-      if (body.costCents === null) data.costCents = null
-      else {
-        const c = Number(body.costCents)
-        if (!Number.isInteger(c) || c < 0) return { error: 'costCents must be a non-negative integer' }
-        data.costCents = c
-      }
-    }
-    if (body.currencyCode !== undefined) {
-      const cc = String(body.currencyCode || 'EUR').trim().toUpperCase()
-      if (!/^[A-Z]{3}$/.test(cc)) return { error: 'currencyCode must be a 3-letter ISO code' }
-      data.currencyCode = cc
-    }
-    if (body.moq !== undefined) {
-      const m = Number(body.moq)
-      if (!Number.isInteger(m) || m < 1) return { error: 'moq must be an integer >= 1' }
-      data.moq = m
-    }
-    if (body.casePack !== undefined) {
-      if (body.casePack === null || body.casePack === '') data.casePack = null
-      else {
-        const cp = Number(body.casePack)
-        if (!Number.isInteger(cp) || cp < 1) return { error: 'casePack must be an integer >= 1' }
-        data.casePack = cp
-      }
-    }
-    if (body.leadTimeDaysOverride !== undefined) {
-      if (body.leadTimeDaysOverride === null || body.leadTimeDaysOverride === '')
-        data.leadTimeDaysOverride = null
-      else {
-        const lt = Number(body.leadTimeDaysOverride)
-        if (!Number.isInteger(lt) || lt < 0) return { error: 'leadTimeDaysOverride must be an integer >= 0' }
-        data.leadTimeDaysOverride = lt
-      }
-    }
-    if (body.isPrimary !== undefined) data.isPrimary = !!body.isPrimary
-    // PD.1 — factory-facing naming (per-supplier default).
-    for (const k of ['factoryName', 'factorySize', 'factorySpec'] as const) {
-      if (body[k] !== undefined) data[k] = body[k] ? String(body[k]).trim() : null
-    }
-    // S2 — per-product production + shipping time overrides (nullable ints >= 0).
-    for (const k of [
-      'productionTimeDaysOverride',
-      'productionUnitsPerDayOverride',
-      'shippingTimeDaysOverride',
-    ] as const) {
-      if (body[k] === undefined) continue
-      if (body[k] === null || body[k] === '') {
-        data[k] = null
-      } else {
-        const n = Number(body[k])
-        if (!Number.isInteger(n) || n < 0) return { error: `${k} must be an integer >= 0` }
-        data[k] = n
-      }
-    }
-    return { data }
-  }
-
-  // When a supplier becomes a product's primary: clear other primaries for
-  // that product and point the ReplenishmentRule.preferredSupplierId at it
-  // so the cost flows into the replenishment math. Runs inside the caller's
-  // transaction client.
-  async function wirePrimarySupplier(
-    tx: any,
-    productId: string,
-    supplierId: string,
-  ): Promise<void> {
-    await tx.supplierProduct.updateMany({
-      where: { productId, supplierId: { not: supplierId }, isPrimary: true },
-      data: { isPrimary: false },
-    })
-    await tx.replenishmentRule.upsert({
-      where: { productId },
-      create: { productId, preferredSupplierId: supplierId },
-      update: { preferredSupplierId: supplierId },
-    })
-  }
-
   // POST — add/replace a product in a supplier's catalog (idempotent upsert
   // on the [supplierId, productId] unique). Accepts productId or sku.
   fastify.post('/fulfillment/suppliers/:supplierId/products', async (request, reply) => {
@@ -6748,88 +5430,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/fulfillment/purchase-orders', async (request, reply) => {
     try {
-      const q = request.query as any
-      const where: any = {}
-      // RB.1 — recycle-bin scope. Default = live-only.
-      const showDeleted = q.deleted === 'true'
-      where.deletedAt = showDeleted ? { not: null } : null
-      // H.4: status accepts comma-separated multi-select. Used by the
-      // create-inbound modal to limit the PO picker to in-flight POs
-      // (SUBMITTED, CONFIRMED, PARTIAL).
-      if (q.status && q.status !== 'ALL') {
-        const statuses = String(q.status).split(',').map((s) => s.trim()).filter(Boolean)
-        if (statuses.length === 1) where.status = statuses[0]
-        else if (statuses.length > 1) where.status = { in: statuses }
-      }
-      // PO.14 — supplier filter accepts comma-separated multi-select.
-      // Legacy `supplierId` (single) still honored for backward-compat
-      // with /products?supplierId= deep-links.
-      if (q.supplierIds) {
-        const ids = String(q.supplierIds).split(',').map((s) => s.trim()).filter(Boolean)
-        if (ids.length === 1) where.supplierId = ids[0]
-        else if (ids.length > 1) where.supplierId = { in: ids }
-      } else if (q.supplierId) {
-        where.supplierId = q.supplierId
-      }
-      // PO.14 — warehouse filter (single).
-      if (q.warehouseId) where.warehouseId = q.warehouseId
-      // PO.14 — currency filter (single 3-char code, uppercased).
-      if (q.currencyCode) {
-        where.currencyCode = String(q.currencyCode).trim().toUpperCase()
-      }
-      // PO.14 — value range. Cents are integers so no FX conversion
-      // here; mixed-ccy bands are operator's responsibility.
-      const minValue = q.minValueCents != null ? Number(q.minValueCents) : null
-      const maxValue = q.maxValueCents != null ? Number(q.maxValueCents) : null
-      if (Number.isFinite(minValue) || Number.isFinite(maxValue)) {
-        where.totalCents = {}
-        if (Number.isFinite(minValue) && minValue! >= 0) {
-          where.totalCents.gte = Math.floor(minValue!)
-        }
-        if (Number.isFinite(maxValue) && maxValue! >= 0) {
-          where.totalCents.lte = Math.floor(maxValue!)
-        }
-      }
-      // PO.14 — expectedDeliveryDate range.
-      const fromDate = q.expectedFrom ? new Date(String(q.expectedFrom)) : null
-      const toDate = q.expectedTo ? new Date(String(q.expectedTo)) : null
-      if (fromDate || toDate) {
-        where.expectedDeliveryDate = {}
-        if (fromDate && !isNaN(fromDate.getTime())) {
-          where.expectedDeliveryDate.gte = fromDate
-        }
-        if (toDate && !isNaN(toDate.getTime())) {
-          // Make `to` inclusive of the whole day.
-          const inclusive = new Date(toDate.getTime())
-          inclusive.setHours(23, 59, 59, 999)
-          where.expectedDeliveryDate.lte = inclusive
-        }
-      }
-      // PO.14 — lateOnly preset. Past expectedDeliveryDate AND status
-      // not yet fully received/cancelled. Combines with any explicit
-      // status filter via AND.
-      if (q.lateOnly === 'true') {
-        where.expectedDeliveryDate = {
-          ...(where.expectedDeliveryDate ?? {}),
-          lt: new Date(),
-        }
-        const lateStatuses = ['DRAFT', 'REVIEW', 'APPROVED', 'SUBMITTED', 'ACKNOWLEDGED', 'CONFIRMED', 'PARTIAL']
-        if (!where.status) {
-          where.status = { in: lateStatuses }
-        }
-      }
-
-      const items = await prisma.purchaseOrder.findMany({
-        where,
-        include: {
-          supplier: { select: { id: true, name: true } },
-          warehouse: { select: { code: true } },
-          items: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 200,
-      })
-      return { items, total: items.length }
+      return await listPurchaseOrders(request.query as any)
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -6837,70 +5438,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/fulfillment/purchase-orders/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const po = await prisma.purchaseOrder.findUnique({
-      where: { id },
-      include: {
-        supplier: true,
-        warehouse: true,
-        // PO.1 — line ordering is now durable; sort by lineOrder ASC
-        // with id tiebreak so the detail page matches the edit grid.
-        items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
-        inboundShipments: { orderBy: { createdAt: 'desc' } },
-        // PO.1 — surface attachments, revisions, comments. Empty
-        // collections until PO.5+ populate them, but already wired so
-        // the detail page (PO.2) can render skeleton sections without
-        // a second backend trip.
-        attachments: { orderBy: { uploadedAt: 'desc' } },
-        revisions: { orderBy: { version: 'asc' } },
-        comments: { orderBy: { createdAt: 'asc' } },
-      },
-    })
+    const po = await readPurchaseOrder(id)
     if (!po) return reply.code(404).send({ error: 'PO not found' })
-
-    // PO.12 — fiscal preview attached to the detail response. Only
-    // populated when BrandSettings.piva is set; non-IT operators see
-    // null and the detail UI skips the strip. Reverse-charge is
-    // auto-detected from supplier.country against the EU-non-IT set.
-    const brand = await prisma.brandSettings.findFirst({
-      select: { piva: true, vatScheme: true, codiceFiscale: true },
-    })
-    let fiscal: {
-      piva: string
-      vatScheme: string | null
-      ivaRateBp: number
-      reverseCharge: boolean
-      totalNetCents: number
-      ivaCents: number
-      totalGrossCents: number
-    } | null = null
-    if (brand?.piva) {
-      const EU_NON_IT_INLINE = new Set([
-        'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE',
-        'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
-      ])
-      const supplierCountry = (po.supplier?.country ?? null)?.toUpperCase() ?? null
-      const reverseCharge =
-        supplierCountry !== null && EU_NON_IT_INLINE.has(supplierCountry)
-      const ivaRateBp = Math.max(
-        0,
-        Number(process.env.NEXUS_DEFAULT_IVA_RATE_BP) || 2200,
-      )
-      const totalNetCents = po.totalCents
-      const ivaCents = reverseCharge
-        ? 0
-        : Math.round((totalNetCents * ivaRateBp) / 10000)
-      fiscal = {
-        piva: brand.piva,
-        vatScheme: brand.vatScheme,
-        ivaRateBp,
-        reverseCharge,
-        totalNetCents,
-        ivaCents,
-        totalGrossCents: totalNetCents + ivaCents,
-      }
-    }
-
-    return { ...po, fiscal }
+    return po
   })
 
   // R.7 — workflow state machine. submit-for-review / approve / send /
@@ -7263,282 +5803,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/purchase-orders/:id/match', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const po = await prisma.purchaseOrder.findUnique({
-        where: { id },
-        include: {
-          items: { orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }] },
-          // PO.11 — fetch the full cost detail for each linked shipment
-          // so the landed-cost roll-up can prorate shipping / customs /
-          // duties / insurance across the receive batches.
-          inboundShipments: {
-            select: {
-              id: true,
-              status: true,
-              arrivedAt: true,
-              currencyCode: true,
-              exchangeRate: true,
-              shippingCostCents: true,
-              customsCostCents: true,
-              dutiesCostCents: true,
-              insuranceCostCents: true,
-              items: {
-                select: {
-                  purchaseOrderItemId: true,
-                  quantityReceived: true,
-                  unitCostCents: true,
-                },
-              },
-            },
-          },
-        },
-      })
-      if (!po) return reply.code(404).send({ error: 'PO not found' })
-
-      const poiIds = po.items.map((it) => it.id)
-      // PO.10 still wants the flat list of shipment items; flatten from
-      // the nested include rather than running a second query.
-      const shipmentItems = po.inboundShipments.flatMap((s) =>
-        s.items
-          .filter((it) => it.purchaseOrderItemId && poiIds.includes(it.purchaseOrderItemId))
-          .map((it) => ({
-            purchaseOrderItemId: it.purchaseOrderItemId,
-            quantityReceived: it.quantityReceived,
-            unitCostCents: it.unitCostCents,
-          })),
-      )
-
-      // Roll up per-line actuals from the receive side.
-      const byPoi = new Map<string, { qty: number; weightedCostNum: number; sampleCount: number }>()
-      for (const si of shipmentItems) {
-        if (!si.purchaseOrderItemId) continue
-        const prev = byPoi.get(si.purchaseOrderItemId) ?? { qty: 0, weightedCostNum: 0, sampleCount: 0 }
-        prev.qty += si.quantityReceived ?? 0
-        if (si.unitCostCents != null && si.quantityReceived > 0) {
-          prev.weightedCostNum += si.unitCostCents * si.quantityReceived
-          prev.sampleCount += si.quantityReceived
-        }
-        byPoi.set(si.purchaseOrderItemId, prev)
-      }
-
-      // ── PO.11 — landed-cost rollup ─────────────────────────────
-      //
-      // For each linked InboundShipment:
-      //   1. overhead = shipping + customs + duties + insurance,
-      //      in the shipment's currency
-      //   2. receivedUnits = sum(quantityReceived across items)
-      //   3. per-unit overhead = overhead / receivedUnits
-      //   4. for each item: landed_unit_cost (shipment-ccy) =
-      //                       unitCostCents + per_unit_overhead
-      //   5. EUR conversion via shipment.exchangeRate (Decimal → number)
-      //
-      // Aggregate per POI:
-      //   - sum landed cost in shipment ccy AND in EUR
-      //   - units count
-      //
-      // Totals block reports overhead breakdown in EUR (the canonical
-      // base) so the UI doesn't have to mix currencies.
-      const landedByPoi = new Map<
-        string,
-        { units: number; landedCentsPoCcy: number; landedCentsEur: number }
-      >()
-      let overheadShippingEurCents = 0
-      let overheadCustomsEurCents = 0
-      let overheadDutiesEurCents = 0
-      let overheadInsuranceEurCents = 0
-      let goodsEurCents = 0
-
-      // PO currency may differ from each shipment's. We report landed
-      // unit cost in the PO currency when the shipment matches, and
-      // fall back to EUR-converted figures otherwise. The UI surfaces
-      // EUR-converted totals to keep the page readable when mixed.
-      for (const ship of po.inboundShipments) {
-        const overheadShipCents =
-          (ship.shippingCostCents ?? 0) +
-          (ship.customsCostCents ?? 0) +
-          (ship.dutiesCostCents ?? 0) +
-          (ship.insuranceCostCents ?? 0)
-        const receivedUnits = ship.items.reduce(
-          (s, it) => s + (it.quantityReceived ?? 0),
-          0,
-        )
-        const perUnitOverhead =
-          receivedUnits > 0 ? overheadShipCents / receivedUnits : 0
-
-        // Shipment-currency → EUR conversion. exchangeRate is a Decimal;
-        // null/missing falls back to 1.0 (treat as EUR when unknown).
-        const fxToEur = ship.exchangeRate ? Number(ship.exchangeRate) : 1
-
-        overheadShippingEurCents += Math.round((ship.shippingCostCents ?? 0) * fxToEur)
-        overheadCustomsEurCents += Math.round((ship.customsCostCents ?? 0) * fxToEur)
-        overheadDutiesEurCents += Math.round((ship.dutiesCostCents ?? 0) * fxToEur)
-        overheadInsuranceEurCents += Math.round((ship.insuranceCostCents ?? 0) * fxToEur)
-
-        for (const item of ship.items) {
-          if (!item.purchaseOrderItemId) continue
-          const q = item.quantityReceived ?? 0
-          if (q <= 0) continue
-          const unitCost = item.unitCostCents ?? 0
-          const landedShipUnitCents = unitCost + perUnitOverhead
-          const landedShipTotalCents = landedShipUnitCents * q
-          const landedEurTotalCents = Math.round(landedShipTotalCents * fxToEur)
-          goodsEurCents += Math.round(unitCost * q * fxToEur)
-
-          const prev = landedByPoi.get(item.purchaseOrderItemId) ?? {
-            units: 0,
-            landedCentsPoCcy: 0,
-            landedCentsEur: 0,
-          }
-          prev.units += q
-          prev.landedCentsPoCcy += landedShipTotalCents
-          prev.landedCentsEur += landedEurTotalCents
-          landedByPoi.set(item.purchaseOrderItemId, prev)
-        }
-      }
-
-      const ppvWarningBp = Math.max(0, Number(process.env.NEXUS_PO_PPV_WARNING_BP) || 200)
-      const tolerance = Math.max(0, Number(process.env.NEXUS_PO_AUTO_CLOSE_TOLERANCE_UNITS) || 0)
-
-      let totalOrdered = 0
-      let totalReceived = 0
-      let totalOrderedCents = 0
-      let totalReceivedCents = 0
-      let ppvFlags = 0
-      let overReceipts = 0
-      let underReceipts = 0
-
-      const lines = po.items.map((it) => {
-        const actuals = byPoi.get(it.id)
-        const receivedQty = actuals?.qty ?? 0
-        const receivedAvgUnitCostCents =
-          actuals && actuals.sampleCount > 0
-            ? Math.round(actuals.weightedCostNum / actuals.sampleCount)
-            : null
-
-        const orderedSubtotal = it.unitCostCents * it.quantityOrdered
-        const receivedSubtotal =
-          receivedAvgUnitCostCents != null
-            ? receivedAvgUnitCostCents * receivedQty
-            : it.unitCostCents * receivedQty // fall back to ordered cost when actuals unknown
-
-        const qtyDelta = receivedQty - it.quantityOrdered // negative = under, positive = over
-        const ppvBp =
-          receivedAvgUnitCostCents != null && it.unitCostCents > 0
-            ? Math.round(((receivedAvgUnitCostCents - it.unitCostCents) / it.unitCostCents) * 10000)
-            : 0
-
-        let lineStatus: 'matched' | 'partial' | 'over' | 'price-variance' | 'pending'
-        if (receivedQty === 0) lineStatus = 'pending'
-        else if (qtyDelta > 0) lineStatus = 'over'
-        else if (qtyDelta < -tolerance) lineStatus = 'partial'
-        else if (Math.abs(ppvBp) > ppvWarningBp) lineStatus = 'price-variance'
-        else lineStatus = 'matched'
-
-        if (qtyDelta > 0) overReceipts++
-        if (lineStatus === 'partial') underReceipts++
-        if (Math.abs(ppvBp) > ppvWarningBp) ppvFlags++
-
-        totalOrdered += it.quantityOrdered
-        totalReceived += receivedQty
-        totalOrderedCents += orderedSubtotal
-        totalReceivedCents += receivedSubtotal
-
-        // PO.11 — landed cost lookup for this PO line.
-        const landed = landedByPoi.get(it.id)
-        const landedUnitCentsPoCcy =
-          landed && landed.units > 0
-            ? Math.round(landed.landedCentsPoCcy / landed.units)
-            : null
-        const landedUnitCentsEur =
-          landed && landed.units > 0
-            ? Math.round(landed.landedCentsEur / landed.units)
-            : null
-
-        return {
-          purchaseOrderItemId: it.id,
-          productId: it.productId,
-          sku: it.sku,
-          supplierSku: it.supplierSku,
-          note: it.note,
-          orderedQty: it.quantityOrdered,
-          receivedQty,
-          openQty: Math.max(0, it.quantityOrdered - receivedQty),
-          orderedUnitCostCents: it.unitCostCents,
-          receivedAvgUnitCostCents,
-          orderedSubtotalCents: orderedSubtotal,
-          receivedSubtotalCents: receivedSubtotal,
-          qtyDelta,
-          ppvBp,
-          ppvCents:
-            receivedAvgUnitCostCents != null && receivedQty > 0
-              ? (receivedAvgUnitCostCents - it.unitCostCents) * receivedQty
-              : 0,
-          status: lineStatus,
-          // PO.11 — per-line landed cost. PoCcy = PO currency, Eur =
-          // canonical base. UI surfaces Eur when shipments mix
-          // currencies; PoCcy when they match.
-          landedUnitCentsPoCcy,
-          landedUnitCentsEur,
-          landedSubtotalCentsEur: landed?.landedCentsEur ?? 0,
-        }
-      })
-
-      const totalCostVarianceCents = totalReceivedCents - totalOrderedCents
-      const shortfallUnits = totalOrdered - totalReceived
-      const withinTolerance = shortfallUnits >= 0 && shortfallUnits <= tolerance
-      const linkedShipmentCount = po.inboundShipments.length
-
-      // PO.11 — total landed cost in EUR = goods + overhead.
-      const overheadTotalEurCents =
-        overheadShippingEurCents +
-        overheadCustomsEurCents +
-        overheadDutiesEurCents +
-        overheadInsuranceEurCents
-      const landedTotalEurCents = goodsEurCents + overheadTotalEurCents
-
-      return {
-        poNumber: po.poNumber,
-        status: po.status,
-        currencyCode: po.currencyCode,
-        toleranceUnits: tolerance,
-        ppvWarningBp,
-        totals: {
-          orderedQty: totalOrdered,
-          receivedQty: totalReceived,
-          shortfallUnits,
-          orderedCents: totalOrderedCents,
-          receivedCents: totalReceivedCents,
-          varianceCents: totalCostVarianceCents,
-          withinTolerance,
-        },
-        // PO.11 — Landed cost roll-up. All amounts in EUR cents so the
-        // UI doesn't have to mix currencies; line-level landedUnitCents
-        // also exposes the PO-currency figure for unmixed cases.
-        landed: {
-          goodsEurCents,
-          overheadShippingEurCents,
-          overheadCustomsEurCents,
-          overheadDutiesEurCents,
-          overheadInsuranceEurCents,
-          overheadTotalEurCents,
-          totalEurCents: landedTotalEurCents,
-          overheadShareBp:
-            landedTotalEurCents > 0
-              ? Math.round((overheadTotalEurCents / landedTotalEurCents) * 10000)
-              : 0,
-        },
-        flags: {
-          ppvLines: ppvFlags,
-          overReceiptLines: overReceipts,
-          underReceiptLines: underReceipts,
-        },
-        invoice: {
-          // No invoice ingestion yet; placeholder so the UI can keep
-          // the third column reserved.
-          status: 'not-tracked' as const,
-        },
-        linkedShipmentCount,
-        lines,
-      }
+      const match = await readPurchaseOrderMatch(id)
+      if (!match) return reply.code(404).send({ error: 'PO not found' })
+      return match
     } catch (err: any) {
       fastify.log.error({ err }, '[purchase-orders/:id/match] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -8450,79 +6717,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/fulfillment/purchase-orders', async (request, reply) => {
     try {
-      const body = request.body as {
-        supplierId?: string
-        warehouseId?: string
-        expectedDeliveryDate?: string
-        notes?: string
-        // PO.5 — currency lives on the PO header so line-item cents
-        // are unambiguous. Default EUR matches the Supplier model's
-        // defaultCurrency default.
-        currencyCode?: string
-        // PO-Plus.8 — optional drop-ship address. JSON blob passed
-        // through verbatim; the factory PDF renders it as the
-        // "Ship to" block when present (instead of the warehouse).
-        shipToAddress?: Record<string, unknown> | null
-        items?: Array<{
-          productId?: string
-          sku: string
-          supplierSku?: string
-          quantityOrdered: number
-          unitCostCents?: number
-          // PO.5 — per-line note, persisted via the PO.1 column added
-          // to PurchaseOrderItem. Surfaces in the factory PDF in PO.12.
-          note?: string
-          // PD.1 — factory-facing naming (per-line override).
-          factoryName?: string
-          factorySize?: string
-          factorySpec?: string
-        }>
-      }
-      const items = Array.isArray(body.items) ? body.items : []
-      if (items.length === 0) return reply.code(400).send({ error: 'items[] required' })
-      const totalCents = items.reduce((s, it) => s + (it.unitCostCents ?? 0) * it.quantityOrdered, 0)
-      const warehouseId = body.warehouseId ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
-
-      const po = await prisma.purchaseOrder.create({
-        data: {
-          poNumber: generatePoNumber(),
-          supplierId: body.supplierId ?? null,
-          warehouseId,
-          status: 'DRAFT',
-          expectedDeliveryDate: body.expectedDeliveryDate ? new Date(body.expectedDeliveryDate) : null,
-          notes: body.notes ?? null,
-          totalCents,
-          currencyCode: body.currencyCode?.toUpperCase() || 'EUR',
-          shipToAddress:
-            body.shipToAddress && typeof body.shipToAddress === 'object'
-              ? (body.shipToAddress as Prisma.InputJsonValue)
-              : Prisma.JsonNull,
-          items: {
-            create: items.map((it, idx) => ({
-              productId: it.productId ?? null,
-              sku: it.sku,
-              supplierSku: it.supplierSku ?? null,
-              quantityOrdered: it.quantityOrdered,
-              unitCostCents: it.unitCostCents ?? 0,
-              note: it.note ?? null,
-              lineOrder: idx,
-              // PD.1 — factory-facing naming on the new line.
-              factoryName: it.factoryName ?? null,
-              factorySize: it.factorySize ?? null,
-              factorySpec: it.factorySpec ?? null,
-            })),
-          },
-        },
-        include: { items: true },
-      })
-      // PO.4 — emit po.created so the list refreshes on every peer
-      // browser sub-second.
-      publishPoEvent({
-        type: 'po.created',
-        poId: po.id,
-        poNumber: po.poNumber,
-        ts: Date.now(),
-      })
+      const po = await createPurchaseOrder((request.body ?? {}) as CreatePurchaseOrderInput)
+      if (!po) return reply.code(400).send({ error: 'items[] required' })
       return po
     } catch (error: any) {
       fastify.log.error({ err: error }, '[POST /fulfillment/purchase-orders] failed')
@@ -8530,13 +6726,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  fastify.post('/fulfillment/purchase-orders/:id/submit', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const updated = await prisma.purchaseOrder.update({
-      where: { id },
-      data: { status: 'SUBMITTED', version: { increment: 1 } },
+  // S1 (F3) — retired. It set SUBMITTED from ANY status with no state machine, no approval threshold, no supplier
+  // e-mail, no actor and no event, and nothing in the app called it. A PO moves only through
+  // POST /fulfillment/purchase-orders/:id/transition (`transitionPo`). Kept as 410 Gone so a straggler is told where to go.
+  fastify.post('/fulfillment/purchase-orders/:id/submit', async (_request, reply) => {
+    return reply.code(410).send({
+      error: 'gone',
+      code: 'ROUTE_RETIRED',
+      message: 'This route was retired. Move a purchase order with POST /api/fulfillment/purchase-orders/:id/transition (submit-for-review, approve, send).',
+      replacement: '/api/fulfillment/purchase-orders/:id/transition',
     })
-    return updated
   })
 
   fastify.post('/fulfillment/purchase-orders/:id/receive', async (request, reply) => {
@@ -8548,34 +6747,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!po) return reply.code(404).send({ error: 'PO not found' })
 
-      // Create an InboundShipment (type=SUPPLIER) tied to this PO.
-      // H.0a — thread purchaseOrderItemId per row so the receive flow
-      // can propagate quantities back to the PO without a sku rematch.
-      const inbound = await prisma.inboundShipment.create({
-        data: {
-          type: 'SUPPLIER',
-          status: 'DRAFT',
-          warehouseId: po.warehouseId,
-          purchaseOrderId: po.id,
-          reference: `Receipt for ${po.poNumber}`,
-          items: {
-            create: po.items.map((it) => ({
-              productId: it.productId,
-              sku: it.sku,
-              quantityExpected: it.quantityOrdered - (it.quantityReceived ?? 0),
-              purchaseOrderItemId: it.id,
-              // H.1 — thread expected per-unit cost from the PO line so
-              // landed-cost variance can be computed at receive time.
-              unitCostCents: it.unitCostCents ?? null,
-            })),
-          },
-          // H.1 — propagate the PO's currency to the inbound. PO defaults
-          // to EUR; if the operator set USD/GBP/CNY there, the inbound
-          // mirrors so cost columns are interpreted consistently.
-          currencyCode: po.currencyCode ?? 'EUR',
-        },
-        include: { items: true },
-      })
+      // 08 S10 — the receipt shipment is built in services/supply/inbound-shipment.service.ts (createPoReceipt).
+      const inbound = await createPoReceipt(po, { status: 'DRAFT' })
       // PO.4 — both events fire so subscribers can choose granularity:
       //   po.received  → PO-aware pages (this list, detail page)
       //   inbound.created → inbound/stock/replenishment pages
@@ -8633,38 +6806,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!po) return reply.code(404).send({ error: 'PO not found' })
 
-      // Build the InboundShipment with quantityExpected = open qty
-      // (ordered − received) per line, and a parallel array of
-      // receive quantities we'll feed to receiveItems after create.
-      const openByPoi = new Map(
-        po.items.map((it) => [it.id, Math.max(0, it.quantityOrdered - (it.quantityReceived ?? 0))]),
-      )
-
       const arrivedAt = body.arrivedAt ? new Date(body.arrivedAt) : new Date()
 
-      const inbound = await prisma.inboundShipment.create({
-        data: {
-          type: 'SUPPLIER',
-          status: 'ARRIVED', // receiveItems() handles RECEIVING/RECEIVED transitions
-          warehouseId: po.warehouseId,
-          purchaseOrderId: po.id,
-          reference: body.reference?.trim() || `Receipt for ${po.poNumber}`,
-          carrierCode: body.carrierCode?.trim() || null,
-          trackingNumber: body.trackingNumber?.trim() || null,
-          arrivedAt,
-          notes: body.notes?.trim() || null,
-          currencyCode: po.currencyCode ?? 'EUR',
-          items: {
-            create: po.items.map((it) => ({
-              productId: it.productId,
-              sku: it.sku,
-              quantityExpected: openByPoi.get(it.id) ?? 0,
-              purchaseOrderItemId: it.id,
-              unitCostCents: it.unitCostCents ?? null,
-            })),
-          },
-        },
-        include: { items: true },
+      // 08 S10 — the shipment (quantityExpected = open qty per line) is built in
+      // services/supply/inbound-shipment.service.ts (createPoReceipt); receive quantities are fed to receiveItems below.
+      const inbound = await createPoReceipt(po, {
+        status: 'ARRIVED', reference: body.reference, carrierCode: body.carrierCode, trackingNumber: body.trackingNumber, arrivedAt, notes: body.notes,
       })
 
       // Map purchaseOrderItemId → freshly-created InboundShipmentItem.id
@@ -12129,23 +10276,29 @@ Return ONLY valid JSON, no prose:
         const supplierId = supplierKey === '__no_supplier__' ? null : supplierKey
         const supplier = supplierId ? supplierById.get(supplierId) : null
         const totalUnits = lineItems.reduce((acc, li) => acc + li.quantity, 0)
+        const costs = await draftLineCosts(supplierId, lineItems.map((li) => li.productId))
         const po = await prisma.purchaseOrder.create({
           data: {
             poNumber: generatePoNumber(),
             supplierId,
             status: 'DRAFT',
-            totalCents: 0,
+            totalCents: lineItems.reduce((acc, li) => acc + costs.costOf(li.productId) * li.quantity, 0),
+            currencyCode: costs.currencyCode,
             notes: body.notes ?? null,
             items: {
               create: lineItems.map((li) => ({
                 productId: li.productId,
                 sku: li.sku,
                 quantityOrdered: li.quantity,
+                unitCostCents: costs.costOf(li.productId),
               })),
             },
           },
           select: { id: true, poNumber: true, supplierId: true, _count: { select: { items: true } } },
         })
+        // S1 (F10) — the bulk draft published nothing, so the PO list stayed stale until a reload and the PO event log
+        // (PoEventLog) never recorded these POs being made. Every other PO create publishes this.
+        publishPoEvent({ type: 'po.created', poId: po.id, poNumber: po.poNumber, ts: Date.now() })
         createdPos.push({
           id: po.id,
           poNumber: po.poNumber,
@@ -12537,6 +10690,10 @@ Return ONLY valid JSON, no prose:
       const product = await prisma.product.findUnique({ where: { id: productId }, select: { sku: true } })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
       const supplierId = body.supplierId ?? (await prisma.replenishmentRule.findUnique({ where: { workspace_productId: workspaceKey({ productId: productId }) } }))?.preferredSupplierId ?? null
+      const quantity = body.quantity ?? 1
+      // S1 (F10) — the line carried cost 0 always; it now carries the supplier's (or the product's) cost.
+      const costs = await draftLineCosts(supplierId, [productId])
+      const unitCostCents = costs.costOf(productId)
 
       const po = await prisma.purchaseOrder.create({
         data: {
@@ -12544,17 +10701,20 @@ Return ONLY valid JSON, no prose:
           supplierId,
           status: 'DRAFT',
           expectedDeliveryDate: body.expectedDeliveryDate ? new Date(body.expectedDeliveryDate) : null,
-          totalCents: 0,
+          totalCents: unitCostCents * quantity,
+          currencyCode: costs.currencyCode,
           items: {
             create: [{
               productId,
               sku: product.sku,
-              quantityOrdered: body.quantity ?? 1,
+              quantityOrdered: quantity,
+              unitCostCents,
             }],
           },
         },
         include: { items: true },
       })
+      publishPoEvent({ type: 'po.created', poId: po.id, poNumber: po.poNumber, ts: Date.now() })
 
       // R.3 — attach back to the source rec when provided.
       if (body.recommendationId) {
@@ -13909,17 +12069,26 @@ Return ONLY valid JSON, no prose:
   // Surface for the rule-builder UI (W4.5). All routes scoped under
   // /fulfillment/replenishment/automation/rules so the page-level
   // permission check works against a single prefix.
+  //
+  // MCP full control R18 — that permission is replenishment.view / replenishment.run (it was ads.automation.manage,
+  // through the broad /automation matcher), so these routes reach REPLENISHMENT rules only: a domain named in the
+  // query or body other than replenishment is refused, and a rule id of another domain is not found. Ads, review,
+  // listing and bulk rules have their own routes and permissions.
+  const REPLENISHMENT = 'replenishment'
+  const WRONG_DOMAIN = { error: 'This route reaches replenishment rules only.' }
+  const replenishmentRule = async (id: string) => (await import('../services/automation/ops-rule-scope.js')).isDomainRule(id, REPLENISHMENT)
 
   fastify.get(
     '/fulfillment/replenishment/automation/rules',
-    async (request) => {
+    async (request, reply) => {
       const q = (request.query ?? {}) as {
         domain?: string
         trigger?: string
         enabled?: string
       }
+      if (q.domain && q.domain !== REPLENISHMENT) return reply.code(400).send(WRONG_DOMAIN)
       const where: Record<string, unknown> = {
-        domain: q.domain ?? 'replenishment',
+        domain: REPLENISHMENT,
       }
       if (q.trigger) where.trigger = q.trigger
       if (q.enabled === 'true') where.enabled = true
@@ -13951,6 +12120,7 @@ Return ONLY valid JSON, no prose:
       if (!body.name || !body.trigger) {
         return reply.code(400).send({ error: 'name + trigger required' })
       }
+      if (body.domain && body.domain !== REPLENISHMENT) return reply.code(400).send(WRONG_DOMAIN)
       const rule = await prisma.automationRule.create({
         data: {
           name: body.name,
@@ -13974,7 +12144,7 @@ Return ONLY valid JSON, no prose:
     '/fulfillment/replenishment/automation/rules/:id',
     async (request, reply) => {
       const { id } = request.params as { id: string }
-      const rule = await prisma.automationRule.findUnique({ where: { id } })
+      const rule = await prisma.automationRule.findFirst({ where: { id, domain: REPLENISHMENT } })
       if (!rule) return reply.code(404).send({ error: 'Rule not found' })
       return { rule }
     },
@@ -14003,6 +12173,8 @@ Return ONLY valid JSON, no prose:
       for (const k of writable) {
         if (body[k] !== undefined) data[k] = body[k]
       }
+      if (data.domain !== undefined && data.domain !== REPLENISHMENT) return reply.code(400).send(WRONG_DOMAIN)
+      if (!(await replenishmentRule(id))) return reply.code(404).send({ error: 'Rule not found' })
       try {
         const rule = await prisma.automationRule.update({
           where: { id },
@@ -14021,6 +12193,7 @@ Return ONLY valid JSON, no prose:
     '/fulfillment/replenishment/automation/rules/:id',
     async (request, reply) => {
       const { id } = request.params as { id: string }
+      if (!(await replenishmentRule(id))) return reply.code(404).send({ error: 'Rule not found' })
       try {
         await prisma.automationRule.delete({ where: { id } })
         return reply.code(204).send()
@@ -14041,10 +12214,13 @@ Return ONLY valid JSON, no prose:
     async (request, reply) => {
       const { id } = request.params as { id: string }
       const body = (request.body ?? {}) as { context?: unknown }
+      if (!(await replenishmentRule(id))) return reply.code(404).send({ status: 'FAILED', errorMessage: 'Rule not found' })
+      // R8 — a preview: no run row, no counter, no notification (as the ads rule Test since R3).
       const result = await evaluateRule({
         ruleId: id,
         context: body.context ?? {},
         forceDryRun: true,
+        noPersist: true,
       })
       if (result.status === 'FAILED' && result.errorMessage === 'Rule not found') {
         return reply.code(404).send(result)
@@ -14106,13 +12282,14 @@ Return ONLY valid JSON, no prose:
   // wanted this rule to fire side effects") survives the kill.
   fastify.post(
     '/fulfillment/replenishment/automation/emergency-disable-all',
-    async (request) => {
+    async (request, reply) => {
       const body = (request.body ?? {}) as {
         domain?: string
         allDomains?: boolean
         reason?: string
         userId?: string
       }
+      if (body.allDomains || (body.domain && body.domain !== REPLENISHMENT)) return reply.code(400).send(WRONG_DOMAIN)
       const where: { enabled: true; domain?: string } = { enabled: true }
       if (!body.allDomains) where.domain = body.domain ?? 'replenishment'
       const affected = await prisma.automationRule.findMany({
@@ -14170,6 +12347,8 @@ Return ONLY valid JSON, no prose:
       const { id } = request.params as { id: string }
       const q = (request.query ?? {}) as { limit?: string }
       const limit = Math.max(1, Math.min(parseInt(q.limit ?? '50', 10) || 50, 200))
+      // Another domain's rule has no runs here (as an unknown id never had).
+      if (!(await replenishmentRule(id))) return { executions: [] }
       const executions = await prisma.automationRuleExecution.findMany({
         where: { ruleId: id },
         orderBy: { startedAt: 'desc' },
@@ -15633,111 +13812,15 @@ Return ONLY valid JSON, no prose:
   })
 
   fastify.post('/fulfillment/carriers/:code/pickups', async (request, reply) => {
-    try {
-      const { code } = request.params as { code: string }
-      const body = request.body as {
-        warehouseId?: string | null
-        isRecurring?: boolean
-        daysOfWeek?: number | null
-        scheduledFor?: string | null
-        windowStart?: string | null
-        windowEnd?: string | null
-        contactName?: string | null
-        contactPhone?: string | null
-        notes?: string | null
-      }
-      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
-      if (!carrier) return reply.code(404).send({ error: 'Carrier not connected' })
-
-      const isRecurring = !!body.isRecurring
-      if (!isRecurring && !body.scheduledFor) {
-        return reply.code(400).send({ error: 'scheduledFor required for one-time pickup' })
-      }
-      if (isRecurring && (!body.daysOfWeek || body.daysOfWeek <= 0)) {
-        return reply.code(400).send({ error: 'daysOfWeek bitmap required for recurring pickup' })
-      }
-
-      const row = await prisma.pickupSchedule.create({
-        data: {
-          carrierId: carrier.id,
-          warehouseId: body.warehouseId ?? null,
-          isRecurring,
-          daysOfWeek: body.daysOfWeek ?? null,
-          scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
-          windowStart: body.windowStart ?? null,
-          windowEnd: body.windowEnd ?? null,
-          contactName: body.contactName ?? null,
-          contactPhone: body.contactPhone ?? null,
-          notes: body.notes ?? null,
-          status: 'ACTIVE',
-        },
-      })
-
-      // One-time SENDCLOUD pickups dispatch immediately so the operator
-      // sees confirmation. Failures persist as lastDispatchErr.
-      if (!isRecurring && code === 'SENDCLOUD') {
-        try {
-          const sendcloud = await import('../services/sendcloud/index.js')
-          const creds = await sendcloud.resolveCredentials()
-          let senderAddressId: number | null = null
-          if (body.warehouseId) {
-            const wh = await prisma.warehouse.findUnique({
-              where: { id: body.warehouseId },
-              select: { sendcloudSenderId: true },
-            })
-            senderAddressId = wh?.sendcloudSenderId ?? null
-          }
-          if (!senderAddressId) {
-            const senders = await sendcloud.listSenderAddresses(creds)
-            senderAddressId = senders.find((s) => s.isDefault)?.id ?? senders[0]?.id ?? null
-          }
-          if (!senderAddressId) {
-            throw new Error('No Sendcloud sender address available')
-          }
-          const result = await sendcloud.requestPickup(creds, {
-            senderAddressId,
-            pickupDate: body.scheduledFor!.slice(0, 10),
-            notes: body.notes ?? undefined,
-          })
-          if (result.ok === true) {
-            await prisma.pickupSchedule.update({
-              where: { id: row.id },
-              data: { externalRef: result.externalRef, lastDispatchAt: new Date() },
-            })
-          } else {
-            await prisma.pickupSchedule.update({
-              where: { id: row.id },
-              data: { lastDispatchErr: result.reason },
-            })
-          }
-        } catch (err: any) {
-          await prisma.pickupSchedule.update({
-            where: { id: row.id },
-            data: { lastDispatchErr: err?.message ?? String(err) },
-          }).catch(() => { /* */ })
-        }
-      }
-
-      const fresh = await prisma.pickupSchedule.findUnique({ where: { id: row.id } })
-      return { ok: true, pickup: fresh }
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[carriers/:code/pickups POST] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+    const { code } = request.params as { code: string }
+    const answer = await schedulePickup(code, request.body as PickupBody, fastify.log)
+    return reply.code(answer.status).send(answer.body)
   })
 
   fastify.post('/fulfillment/carriers/:code/pickups/:id/cancel', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      await prisma.pickupSchedule.update({
-        where: { id },
-        data: { status: 'CANCELLED' },
-      })
-      return { ok: true }
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[carriers/:code/pickups cancel] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+    const { id } = request.params as { id: string }
+    const answer = await cancelPickup(id, fastify.log)
+    return reply.code(answer.status).send(answer.body)
   })
 
   // CR.13 — operator-tunable preferences.

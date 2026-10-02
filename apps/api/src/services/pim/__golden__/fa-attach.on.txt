@@ -1,0 +1,2 @@
+201
+{"familyAttribute":{"workspaceId":"nexus_legacy_workspace","id":"<id 1>","familyId":"golden-fam-grandchild","attributeId":"golden-fam-attr-3","required":true,"channels":["EBAY"],"sortOrder":2,"createdAt":"<time>","updatedAt":"<time>"}}

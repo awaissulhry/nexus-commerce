@@ -22,6 +22,7 @@ import {
   Plug,
   Languages,
   Sparkles,
+  Bot,
   Image as ImageIcon,
   Megaphone,
   Layers,
@@ -264,7 +265,17 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         icon: Sparkles,
         description:
           'AI provider usage and spend tracking.',
-        keywords: ['ai', 'openai', 'anthropic', 'claude', 'gpt', 'tokens', 'spend'],
+        keywords: ['ai', 'openai', 'anthropic', 'gpt', 'tokens', 'spend'],
+        status: 'live',
+      },
+      {
+        // MCP full control C9 — how far Claude may go here without a person, its brakes, and what it did.
+        href: '/settings/ai/claude',
+        label: 'Claude',
+        icon: Bot,
+        description:
+          'What Claude may do without a person, Pause, and everything it did here.',
+        keywords: ['claude', 'mcp', 'trust', 'auto', 'pause', 'activity', 'undo', 'connector'],
         status: 'live',
       },
     ],

@@ -61,7 +61,8 @@ function isReal(): boolean {
   return process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true'
 }
 
-function defaultFrom(): string {
+/** The sender when a message names none (Xavia's; every other business names its own, O3). */
+export function defaultFrom(): string {
   return process.env.NEXUS_EMAIL_FROM ?? 'Xavia <ship@xavia.it>'
 }
 

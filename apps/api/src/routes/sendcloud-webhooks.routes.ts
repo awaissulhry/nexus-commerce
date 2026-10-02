@@ -33,6 +33,7 @@ import prisma from '../db.js'
 import { registerRawJsonParser } from '../utils/webhook.js'
 import type { RawBodyRequest } from '../utils/webhook.js'
 import { publishOutboundEvent } from '../services/outbound-events.service.js'
+import { enqueueTrackingUpload } from '../services/fulfillment/tracking-upload.service.js'
 
 // ── Sendcloud parcel-status code → our normalized TrackingEvent code ──
 // Subset; full list at https://api.sendcloud.dev. Anything not in the
@@ -399,33 +400,14 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
         // they care about). Skip when no order is attached (orphaned
         // shipment) or when there's no active log entry to retry.
         if (newStatus === 'SHIPPED' && shipment.order) {
-          const open = await prisma.trackingMessageLog.findFirst({
-            where: {
-              shipmentId: shipment.id,
-              channel: shipment.order.channel,
-              status: { in: ['PENDING', 'IN_FLIGHT'] },
-            },
-            select: { id: true },
+          // 07 O9 — the one writer of TrackingMessageLog (services/fulfillment/tracking-upload.service.ts); this path
+          // writes exactly the row it wrote before.
+          await enqueueTrackingUpload(shipment.id, {
+            shippedAt: occurredAt,
+            trackingNumber: parcel.tracking_number ?? shipment.trackingNumber,
+            trackingUrl: parcel.tracking_url ?? shipment.trackingUrl,
+            carrierCode: parcel.carrier?.code ?? shipment.carrierCode,
           })
-          if (!open) {
-            await prisma.trackingMessageLog.create({
-              data: {
-                shipmentId: shipment.id,
-                channel: shipment.order.channel,
-                marketplace: shipment.order.marketplace,
-                status: 'PENDING',
-                nextAttemptAt: new Date(),
-                requestPayload: {
-                  trackingNumber: parcel.tracking_number ?? shipment.trackingNumber,
-                  trackingUrl: parcel.tracking_url ?? shipment.trackingUrl,
-                  carrierCode: parcel.carrier?.code ?? shipment.carrierCode,
-                  shippedAt: occurredAt.toISOString(),
-                  shipmentId: shipment.id,
-                  orderId: shipment.order.id,
-                },
-              },
-            })
-          }
         }
       }
     }

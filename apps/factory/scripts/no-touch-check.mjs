@@ -12,7 +12,8 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APP = path.resolve(here, "..");
-const ROOTS = ["src", "worker", "scripts"].map((d) => path.join(APP, d));
+// P11 — mcp/: the stdio server Claude starts on the factory machine follows the same rule.
+const ROOTS = ["src", "worker", "scripts", "mcp"].map((d) => path.join(APP, d));
 const BAD = [/from\s+['"][^'"]*apps\/web\//, /from\s+['"][^'"]*apps\/api\//, /require\(\s*['"][^'"]*apps\/(web|api)\//];
 const EXT = new Set([".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"]);
 

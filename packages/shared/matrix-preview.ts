@@ -31,7 +31,16 @@ export interface PreviewContext {
   can: (permission: string) => boolean
   /** `true` when the read is a preview fixture. */
   simulated: boolean
+  /**
+   * MCP full control L8 — eBay ENDS a listing pinned at 0 unless the account's out-of-stock option is ON. Asked only for
+   * a pin to 0 on an eBay coordinate: true = ON (allowed), false = OFF, null = could not be read (both refused). The
+   * server reads the option from eBay; a context without it previews as before, and the server's re-check refuses.
+   */
+  ebayZeroAllowed?: (accountId: string | null, market: string) => boolean | null
 }
+
+export const EBAY_ZERO_REFUSAL = 'Refused — eBay ends a listing pinned at 0 unless the account\'s out-of-stock option is ON, and it is OFF '
+  + 'or could not be read. Turn the out-of-stock option on in eBay first, or pause this listing instead.'
 
 const money = (v: number | null | undefined, currency: string): string =>
   v == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(v)
@@ -131,6 +140,7 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
         if (p.verb === 'pin-quantity') {
           if (!Number.isInteger(p.value) || p.value < 0) { refuse(row, key, 'not-applicable', 'A pinned quantity is a whole number, zero or more'); break }
           if (s.mode === 'PINNED' && s.intended === p.value && s.kind === 'PINNED') break
+          if (p.value === 0 && coord.channel === 'EBAY' && ctx.ebayZeroAllowed && ctx.ebayZeroAllowed(coord.accountId, coord.market) !== true) { refuse(row, key, 'guard', EBAY_ZERO_REFUSAL); break }
           changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncQty', from: s.intended, to: p.value, fromLabel: from, toLabel: `Pinned ${p.value}`, note: s.kind === 'PAUSED' ? 'Still paused — resume to push' : undefined })
         } else if (p.verb === 'set-follow') {
           if (s.mode === 'FOLLOW') break /* already following — paused or not, nothing to change (resume is its own verb) */

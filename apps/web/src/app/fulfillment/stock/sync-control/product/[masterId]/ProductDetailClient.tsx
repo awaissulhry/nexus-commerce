@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
-import { DataGrid, Pagination, type Column } from '@/design-system/components'
+import { Banner, DataGrid, Pagination, type Column } from '@/design-system/components'
 import { Listbox, MultiSelect } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
@@ -25,6 +25,7 @@ import { ExternalLink } from 'lucide-react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import SyncExcelBar from '../../SyncExcelBar'
 import {
+  ebayZeroRefusal,
   listingTarget,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   type Density, type Mode, type Row, type ProductMaster,
@@ -68,6 +69,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   const [bufferVal, setBufferVal] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // A pin to 0 on eBay the API refused (the account's out-of-stock option is off): shown as a refusal, not a failure.
+  const [refusal, setRefusal] = useState<string | null>(null)
   const [density, setDensity] = useState<Density>('cozy')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
@@ -271,6 +274,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
         }),
       })
       let d = await res.json()
+      const refused = ebayZeroRefusal(res.status, d)
+      if (refused) { setRefusal(refused); return }
       if (res.status === 409 && d?.euExpandRequired) {
         // SCT.5b — one honest confirm with the true EU scope, then execute.
         const okEu = await confirm({
@@ -291,6 +296,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           }),
         })
         d = await res2.json()
+        const refusedEu = ebayZeroRefusal(res2.status, d)
+        if (refusedEu) { setRefusal(refusedEu); return }
         if (!res2.ok) throw new Error(d?.error ?? d?.message ?? `HTTP ${res2.status}`)
       } else if (!res.ok) {
         throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`)
@@ -474,6 +481,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
         </div>
       </div>
 
+      {refusal && <Banner tone="danger" title="Not changed — eBay would end these listings" onDismiss={() => setRefusal(null)}>{refusal}</Banner>}
       {notice && <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">{notice}</div>}
 
       <div className="nds-gridcard sc-card-pop">

@@ -13,7 +13,7 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { rebalanceAndAudit } from '../services/advertising/budget-pool-rebalancer.service.js'
+import { BUDGET_POOL_CRON_ACTOR, rebalanceAndAudit } from '../services/advertising/budget-pool-rebalancer.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -42,7 +42,7 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
     const outcome = await rebalanceAndAudit({
       poolId: p.id,
       triggeredBy: 'cron',
-      actor: 'user:cron-budget-pool',
+      actor: BUDGET_POOL_CRON_ACTOR,
     })
     if (outcome.skipped) {
       skipped += 1

@@ -37,7 +37,7 @@ import { computeListingPrice, holdsCascadedPrice } from '../../master-price.serv
 import { masterCurrency } from '../../fx-rate.service.js'
 import { marketCurrency, type MarketCurrencyRow } from '../../pim/market-currency.js'
 import { masterPriceBoundsReason, priceBoundsOf, storedPriceReason, type PriceBounds } from '../../price-bounds.service.js'
-import type { AgentTool, ToolResult } from '../tool-types.js'
+import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
 import { roundCents } from '@nexus/shared/listing-price'
 
 /** The most products one bulk change may name. */
@@ -55,6 +55,42 @@ export const MAX_ATTRIBUTES = 10
  * really queues, so this number cannot drift from the service unnoticed.
  */
 export const MASTER_PRICE_HOLD_MS = 30 * 1000
+
+/** C1 — how big a bulk price change may be without a person, when a business lets Claude run it itself (C5). */
+export const BULK_PRICE_LIMITS = z.object({
+  maxProducts: z.number().int().positive().max(BULK_MAX_PRODUCTS).default(25).describe('the most products one change may reprice'),
+  maxChangePercent: z.number().positive().max(100).default(10).describe('the most any master price may move, up or down, in percent'),
+})
+
+export function bulkPriceWithinLimits(preview: unknown, limits: Record<string, unknown>): string | null {
+  const p = (preview ?? {}) as {
+    totals?: { changing?: number }
+    changePercentRange?: { lowest: number; highest: number }
+    productsWithoutPrice?: number
+  }
+  const maxProducts = Number(limits.maxProducts)
+  const maxChange = Number(limits.maxChangePercent)
+  if (typeof p.totals?.changing !== 'number') return 'the preview names no products'
+  if (!(p.totals.changing <= maxProducts)) {
+    return `${p.totals.changing} master prices change, more than the ${maxProducts} allowed without a person`
+  }
+  if (p.productsWithoutPrice || !p.changePercentRange) return 'a product has no master price yet to compare the new one with'
+  const moves = Math.max(Math.abs(p.changePercentRange.lowest), Math.abs(p.changePercentRange.highest))
+  if (!(moves <= maxChange)) return `a master price moves ${moves} %, more than the ${maxChange} % allowed without a person`
+  return null
+}
+
+/** C1 — how many products a bulk attribute change may touch without a person (C5). */
+export const BULK_ATTRIBUTE_LIMITS = z.object({
+  maxProducts: z.number().int().positive().max(BULK_MAX_PRODUCTS).default(25).describe('the most products one change may touch'),
+})
+
+export function bulkAttributeWithinLimits(preview: unknown, limits: Record<string, unknown>): string | null {
+  const products = (preview as { totals?: { products?: number } } | null)?.totals?.products
+  const max = Number(limits.maxProducts)
+  if (typeof products !== 'number') return 'the preview names no products'
+  return products <= max ? null : `${products} products change, more than the ${max} allowed without a person`
+}
 
 export const NEXUS_ONLY =
   'This changes Nexus only. Amazon, eBay, Shopify and Etsy do not change until you publish from Nexus.'
@@ -220,9 +256,13 @@ async function writerRun(changes: Change[], userId: string | null | undefined) {
 const PRICE_OPERATIONS = ['set', 'percent', 'amount'] as const
 type PriceOperation = (typeof PRICE_OPERATIONS)[number]
 
+/** C2 — `each`: every product to its own price (set-master-prices, the undo of a bulk price change). */
+type PlanOperation = PriceOperation | 'each'
+
 interface PricePlan {
-  operation: PriceOperation
-  value: number
+  operation: PlanOperation
+  /** set / percent / amount: the one value; each: null (every item has its own). */
+  value: number | null
   currency: string
   products: BulkProduct[]
   /** Products whose master price changes, with the new price. */
@@ -231,7 +271,8 @@ interface PricePlan {
   unchanged: string[]
 }
 
-function describeOperation(operation: PriceOperation, value: number, currency: string): string {
+function describeOperation(operation: PlanOperation, value: number | null, currency: string): string {
+  if (operation === 'each') return `set product by product (${currency})`
   if (operation === 'set') return `set to ${currency} ${money(value)}`
   if (operation === 'percent') return `${value > 0 ? 'raised' : 'lowered'} by ${Math.abs(value)} %`
   return `${value > 0 ? 'raised' : 'lowered'} by ${currency} ${money(Math.abs(value))}`
@@ -391,7 +432,7 @@ async function pricePreview(plan: PricePlan) {
     ? 'No listing that follows the master price is sent to a marketplace.'
     : `${plural(counts.queued, 'listing')} that follow${one ? 's' : ''} the master price ${one ? 'is' : 'are'} sent to ${one ? 'its' : 'their'} marketplace after a hold of ${holdText()}.`
   return {
-    action: 'bulk-price-change',
+    action: plan.operation === 'each' ? 'set-master-prices' : 'bulk-price-change',
     effect:
       `Master price ${how} on ${plural(plan.items.length, 'product')}` +
       (plan.unchanged.length ? ` (${plan.unchanged.length} already at that price)` : '') +
@@ -400,6 +441,8 @@ async function pricePreview(plan: PricePlan) {
     changes,
     ...(plan.items.length > PREVIEW_LINES ? { moreProducts: plan.items.length - PREVIEW_LINES } : {}),
     ...(deltas.length ? { changePercentRange: { lowest: pct(Math.min(...deltas)), highest: pct(Math.max(...deltas)) } } : {}),
+    // C1 — only when there are some (a `set` can price a product that had none), so other previews read as before.
+    ...(plan.items.length > deltas.length ? { productsWithoutPrice: plan.items.length - deltas.length } : {}),
     listings: lines.slice(0, PREVIEW_LINES),
     ...(lines.length > PREVIEW_LINES ? { moreListings: lines.length - PREVIEW_LINES } : {}),
     totals: {
@@ -433,7 +476,7 @@ async function pricePreview(plan: PricePlan) {
       `follows the master price is updated and queued to its marketplace, held for ${holdText()} (the undo window), then sent on the outbound ` +
       "queue's next pass. A listing with its own price, a paused listing, or a market that sells in another currency is not sent; " +
       "a listing whose pricing rule would take it outside the product's floor or ceiling is not changed either." +
-      (plan.operation === 'set' ? '' : " A percent or amount change is worked out again from each product's base price when it runs."),
+      (plan.operation === 'set' || plan.operation === 'each' ? '' : " A percent or amount change is worked out again from each product's base price when it runs."),
   }
 }
 
@@ -441,6 +484,100 @@ const priceChanges = (plan: PricePlan): Change[] =>
   plan.items.map((item) => ({ id: item.id, field: 'basePrice', value: item.to, target: 'master' as const }))
 
 const skuMap = (list: Array<{ id: string; sku: string }>) => new Map(list.map((p) => [p.id, p.sku]))
+
+/**
+ * C1 — the master prices a run changed, by product id: `after` is exactly what undo compares with what is stored
+ * then; `before` adds each SKU for a person.
+ */
+export function priceChangeRecord(items: Array<{ id: string; sku: string; from: number | null; to: number }>) {
+  return {
+    before: {
+      prices: Object.fromEntries(items.map((item) => [item.id, item.from])),
+      skus: Object.fromEntries(items.map((item) => [item.id, item.sku])),
+    },
+    after: { prices: Object.fromEntries(items.map((item) => [item.id, item.to])) },
+  }
+}
+
+/** C1 — the master attribute values a run changed, by product id and attribute code. */
+function attributeChangeRecord(changes: Array<{ id: string; sku: string; code: string; from: unknown; to: unknown }>) {
+  const side = (pick: 'from' | 'to') => {
+    const out: Record<string, Record<string, unknown>> = {}
+    for (const c of changes) (out[c.id] ??= {})[c.code] = c[pick] ?? null
+    return out
+  }
+  return {
+    before: { attributes: side('from'), skus: Object.fromEntries(changes.map((c) => [c.id, c.sku])) },
+    after: { attributes: side('to') },
+  }
+}
+
+/** The preview of a price plan: the writer's own dry run judges every change; nothing is written. */
+async function previewPrices(plan: PricePlan | Refusal, nothing: string, none: string): Promise<ToolResult> {
+  if ('error' in plan) return { ok: false, error: plan.error }
+  if (!plan.items.length) return { ok: false, error: `${none} ${nothing}` }
+  const skuOf = skuMap(plan.items)
+  const checked = await writerDryRun(priceChanges(plan), skuOf)
+  if ('refusal' in checked) return { ok: false, error: refused(checked.refusal, nothing) }
+  return { ok: true, preview: withWriterWarnings(await pricePreview(plan), checked.warnings, skuOf) }
+}
+
+/**
+ * MCP.10 — runs hours after the preview, perhaps: the plan is worked out again from what is stored now (by the
+ * caller), and nothing is written unless every product still exists here and every price still holds.
+ */
+async function runPrices(plan: PricePlan | Refusal, userId: string | null | undefined, none: string): Promise<ToolResult> {
+  if ('error' in plan) return { ok: false, error: plan.error }
+  if (!plan.items.length) return { ok: true, data: { changed: 0, note: `${none} when this ran. Nothing changed.` } }
+  const changes = priceChanges(plan)
+  const checked = await writerDryRun(changes, skuMap(plan.items))
+  if ('refusal' in checked) return { ok: false, error: refused(checked.refusal, 'Nothing changed.') }
+  try {
+    const out = await writerRun(changes, userId)
+    const skuOf = skuMap(plan.items)
+    return {
+      ok: true,
+      data: {
+        changed: out.updated ?? 0,
+        operationId: out.operationId ?? null,
+        prices: plan.items.slice(0, PREVIEW_LINES).map((item) => `${item.sku}: ${money(item.from)} → ${money(item.to)}`),
+        ...(plan.items.length > PREVIEW_LINES ? { moreProducts: plan.items.length - PREVIEW_LINES } : {}),
+        alreadyAtPrice: plan.unchanged.length,
+        ...warningOutput(warningLines(out.warnings ?? [], skuOf)),
+        ...(out.errors?.length ? { notChanged: out.errors.slice(0, PREVIEW_LINES).map((e) => `${skuOf.get(e.id) ?? e.id}: ${e.error}`) } : {}),
+        note: `Listings that follow the master price are queued to their marketplace and sent after a hold of ${holdText()}.`,
+      },
+      change: priceChangeRecord(plan.items.filter((item) => !out.errors?.some((e) => e.id === item.id))),
+    }
+  } catch (error) {
+    if (!(error instanceof ProductBulkError)) throw error
+    return { ok: false, error: refused(error.message, 'Nothing changed.') }
+  }
+}
+
+/**
+ * C2 — undo of a bulk price change (or of set-master-prices): every product back to the master price it had, in ONE
+ * request of set-master-prices, through the same gate. Refused while any of those prices is no longer the one the
+ * change wrote, and when a product had no master price before (a master price cannot be taken away).
+ */
+export const PRICES_UNDO: ToolUndo = {
+  async current(change) {
+    const ids = Object.keys((change.after as { prices?: Record<string, unknown> } | null)?.prices ?? {})
+    const rows = await prisma.product.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, basePrice: true } })
+    const now = new Map(rows.map((row) => [row.id, row.basePrice != null ? Number(row.basePrice) : null]))
+    return { prices: Object.fromEntries(ids.map((id) => [id, now.get(id) ?? null])) }
+  },
+  request(change) {
+    const before = (change.before ?? {}) as { prices?: Record<string, number | null>; skus?: Record<string, string> }
+    const entries = Object.entries(before.prices ?? {})
+    if (!entries.length) return { refusal: 'This change names no product.' }
+    const none = entries.filter(([, price]) => price == null || !(price > 0)).map(([id]) => before.skus?.[id] ?? id)
+    if (none.length) {
+      return { refusal: `${plural(none.length, 'product')} had no master price before this change (${listed(none)}), and a master price cannot be taken away.` }
+    }
+    return { tool: 'set-master-prices', args: { prices: entries.map(([product, price]) => ({ product, price })) } }
+  },
+}
 
 const bulkPriceChange: AgentTool = {
   name: 'bulk-price-change',
@@ -458,49 +595,99 @@ const bulkPriceChange: AgentTool = {
   readOnly: false,
   alwaysAsk: true,
   openWorld: true,
+  // C1 — every previous master price is recorded (AgentChange); undo sets each one again, through the same gate.
+  reversibility: 'full',
+  maxClaudeTrust: 'auto',
+  limits: BULK_PRICE_LIMITS,
+  withinLimits: bulkPriceWithinLimits,
   description:
     `Change the master price of up to ${BULK_MAX_PRODUCTS} products at once: set a price, or change it by a percent or an amount. ` +
     'Listings that follow the master price change too and are sent to their marketplace. Always waits for a person to approve it in Nexus.',
+  undo: PRICES_UNDO,
   async handler(args): Promise<ToolResult> {
-    const plan = await planPrices(args, 'Nothing was queued.')
-    if ('error' in plan) return { ok: false, error: plan.error }
-    if (!plan.items.length) return { ok: false, error: 'Every product already has that master price. Nothing was queued.' }
-    const skuOf = skuMap(plan.items)
-    const checked = await writerDryRun(priceChanges(plan), skuOf)
-    if ('refusal' in checked) return { ok: false, error: refused(checked.refusal, 'Nothing was queued.') }
-    return { ok: true, preview: withWriterWarnings(await pricePreview(plan), checked.warnings, skuOf) }
+    return previewPrices(await planPrices(args, 'Nothing was queued.'), 'Nothing was queued.', 'Every product already has that master price.')
   },
   // MCP.10 — runs hours after the preview, perhaps: everything is worked out again from what is stored
   // now, and nothing is written unless every product still exists here and every price still holds.
   async execute(args, ctx): Promise<ToolResult> {
-    const plan = await planPrices(args, 'Nothing changed.')
-    if ('error' in plan) return { ok: false, error: plan.error }
-    if (!plan.items.length) {
-      return { ok: true, data: { changed: 0, note: 'Every product already had that master price when this ran. Nothing changed.' } }
+    return runPrices(await planPrices(args, 'Nothing changed.'), ctx.userId, 'Every product already had that master price')
+  },
+}
+
+// ── set-master-prices (C2) ───────────────────────────────────────────────────────────────────────
+
+/** Each product to its own new master price, from what is stored NOW. All or nothing. */
+async function planEachPrice(args: Record<string, unknown>, nothing: string): Promise<PricePlan | Refusal> {
+  const entries = (args.prices ?? []) as Array<{ product: string; price: number }>
+  const refs = entries.map((entry) => entry.product.trim())
+  const twice = refs.filter((ref, i) => refs.indexOf(ref) !== i)
+  if (twice.length) return { error: `Each product may be named once: ${listed([...new Set(twice)])}. ${nothing}` }
+  const found = await resolveProducts(refs, nothing)
+  if ('error' in found) return found
+  const byRef = (ref: string) => found.find((product) => product.id === ref) ?? found.find((product) => product.sku === ref)!
+  const seen = new Set<string>()
+  const items: PricePlan['items'] = []
+  const unchanged: string[] = []
+  const outOfBounds: string[] = []
+  for (const entry of entries) {
+    const product = byRef(entry.product.trim())
+    if (seen.has(product.id)) return { error: `${product.sku} is named twice (by its id and its SKU). ${nothing}` }
+    seen.add(product.id)
+    const to = cents(Number(entry.price))
+    if (!(to > 0)) return { error: `A master price must stay above 0: ${product.sku} would go to ${money(to)}. ${nothing}` }
+    const from = product.basePrice
+    const outside = from != null && cents(from) === to ? null : masterPriceBoundsReason(to, product.bounds)
+    if (outside) {
+      outOfBounds.push(`${product.sku} (${outside})`)
+      continue
     }
-    const changes = priceChanges(plan)
-    const checked = await writerDryRun(changes, skuMap(plan.items))
-    if ('refusal' in checked) return { ok: false, error: refused(checked.refusal, 'Nothing changed.') }
-    try {
-      const out = await writerRun(changes, ctx.userId)
-      const skuOf = skuMap(plan.items)
-      return {
-        ok: true,
-        data: {
-          changed: out.updated ?? 0,
-          operationId: out.operationId ?? null,
-          prices: plan.items.slice(0, PREVIEW_LINES).map((item) => `${item.sku}: ${money(item.from)} → ${money(item.to)}`),
-          ...(plan.items.length > PREVIEW_LINES ? { moreProducts: plan.items.length - PREVIEW_LINES } : {}),
-          alreadyAtPrice: plan.unchanged.length,
-          ...warningOutput(warningLines(out.warnings ?? [], skuOf)),
-          ...(out.errors?.length ? { notChanged: out.errors.slice(0, PREVIEW_LINES).map((e) => `${skuOf.get(e.id) ?? e.id}: ${e.error}`) } : {}),
-          note: `Listings that follow the master price are queued to their marketplace and sent after a hold of ${holdText()}.`,
-        },
-      }
-    } catch (error) {
-      if (!(error instanceof ProductBulkError)) throw error
-      return { ok: false, error: refused(error.message, 'Nothing changed.') }
+    if (from != null && cents(from) === to) unchanged.push(product.sku)
+    else items.push({ id: product.id, sku: product.sku, from, to, bounds: product.bounds })
+  }
+  if (outOfBounds.length) {
+    return {
+      error:
+        `A master price must stay within the pricing floor and ceiling set on the product: ${listed(outOfBounds)}. ` +
+        `Change the floor or ceiling on those products in Nexus, or leave them out. ${nothing}`,
     }
+  }
+  return { operation: 'each', value: null, currency: masterCurrency(), products: found, items, unchanged }
+}
+
+const setMasterPrices: AgentTool = {
+  name: 'set-master-prices',
+  title: 'Set master prices, one by one',
+  input: z.object({
+    prices: z
+      .array(
+        z.object({
+          product: z.string().trim().min(1).max(191).describe('a Nexus product id or SKU'),
+          price: z.coerce.number().positive().describe('its new master price, in the master currency; above 0'),
+        }),
+      )
+      .min(1)
+      .max(BULK_MAX_PRODUCTS)
+      .describe(`each product with its own new master price, 1 to ${BULK_MAX_PRODUCTS}`),
+  }),
+  requires: [F.productsPriceEdit, F.productsBulkRun],
+  category: 'pricing',
+  riskTier: 'high',
+  readOnly: false,
+  alwaysAsk: true,
+  openWorld: true,
+  reversibility: 'full',
+  maxClaudeTrust: 'auto',
+  limits: BULK_PRICE_LIMITS,
+  withinLimits: bulkPriceWithinLimits,
+  undo: PRICES_UNDO,
+  description:
+    `Set the master price of up to ${BULK_MAX_PRODUCTS} products, each to its own price (undo of a bulk price change uses it). ` +
+    'Listings that follow the master price change too and are sent to their marketplace. Always waits for a person to approve it in Nexus.',
+  async handler(args): Promise<ToolResult> {
+    return previewPrices(await planEachPrice(args, 'Nothing was queued.'), 'Nothing was queued.', 'Every product already has that master price.')
+  },
+  async execute(args, ctx): Promise<ToolResult> {
+    return runPrices(await planEachPrice(args, 'Nothing changed.'), ctx.userId, 'Every product already had that master price')
   },
 }
 
@@ -613,6 +800,11 @@ const bulkAttributeChange: AgentTool = {
   readOnly: false,
   alwaysAsk: true,
   openWorld: false,
+  // C1 — Nexus only, and every previous value is recorded (AgentChange).
+  reversibility: 'full',
+  maxClaudeTrust: 'auto',
+  limits: BULK_ATTRIBUTE_LIMITS,
+  withinLimits: bulkAttributeWithinLimits,
   description:
     `Set master attributes on up to ${BULK_MAX_PRODUCTS} products at once. ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. `
     + "It sets an attribute of the product's family, or one the product already holds a value for (a key saved empty or null does not count). "
@@ -650,6 +842,7 @@ const bulkAttributeChange: AgentTool = {
           ...(out.errors?.length ? { notChanged: out.errors.slice(0, PREVIEW_LINES).map((e) => `${skuOf.get(e.id) ?? e.id} ${e.field.replace(/^attr_/, '')}: ${plainRefusal(e.error)}`) } : {}),
           note: NEXUS_ONLY,
         },
+        change: attributeChangeRecord(plan.changes.filter((c) => !out.errors?.some((e) => e.id === c.id && e.field === `attr_${c.code}`))),
       }
     } catch (error) {
       if (!(error instanceof ProductBulkError)) throw error
@@ -658,4 +851,4 @@ const bulkAttributeChange: AgentTool = {
   },
 }
 
-export const BULK_TOOLS: AgentTool[] = [bulkPriceChange, bulkAttributeChange]
+export const BULK_TOOLS: AgentTool[] = [bulkPriceChange, setMasterPrices, bulkAttributeChange]

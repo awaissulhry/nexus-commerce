@@ -1,0 +1,1157 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > return e-mails, every kind, Italian and English 1`] = `
+[
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Il tuo reso è stato approvato. Spedisci l'articolo al nostro magazzino il prima possibile. Una volta ricevuto, lo controlleremo e procederemo al rimborso entro 14 giorni.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">Ordine SHOPIFY · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email inviata per il tuo reso TEST-RMA-1. Per dubbi: <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Reso approvato · Xavia · TEST-RMA-1",
+    "tag": "return-authorized",
+    "text": "Ciao Mario Rossi,
+
+Il tuo reso è stato approvato. Spedisci l'articolo al nostro magazzino il prima possibile. Una volta ricevuto, lo controlleremo e procederemo al rimborso entro 14 giorni.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">La tua etichetta di reso è pronta. Applicala al pacco e consegnalo al corriere. Ti aggiorneremo non appena il pacco arriva al nostro magazzino.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">Ordine SHOPIFY · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email inviata per il tuo reso TEST-RMA-1. Per dubbi: <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Etichetta di reso pronta · Xavia · TEST-RMA-1",
+    "tag": "return-label_ready",
+    "text": "Ciao Mario Rossi,
+
+La tua etichetta di reso è pronta. Applicala al pacco e consegnalo al corriere. Ti aggiorneremo non appena il pacco arriva al nostro magazzino.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Abbiamo ricevuto il tuo reso al nostro magazzino. Il nostro team lo controllerà entro 48 ore. Vedrai il rimborso accreditato entro 14 giorni dalla ricezione.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">Ordine SHOPIFY · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email inviata per il tuo reso TEST-RMA-1. Per dubbi: <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Reso ricevuto · Xavia · TEST-RMA-1",
+    "tag": "return-received",
+    "text": "Ciao Mario Rossi,
+
+Abbiamo ricevuto il tuo reso al nostro magazzino. Il nostro team lo controllerà entro 48 ore. Vedrai il rimborso accreditato entro 14 giorni dalla ricezione.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Abbiamo emesso il tuo rimborso di €48.80. Il rimborso comparirà sul tuo metodo di pagamento originale entro 5 giorni lavorativi.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">Ordine SHOPIFY · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email inviata per il tuo reso TEST-RMA-1. Per dubbi: <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Rimborso emesso · Xavia · TEST-RMA-1",
+    "tag": "return-refunded",
+    "text": "Ciao Mario Rossi,
+
+Abbiamo emesso il tuo rimborso di €48.80. Il rimborso comparirà sul tuo metodo di pagamento originale entro 5 giorni lavorativi.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Dopo aver esaminato il tuo reso, non siamo in grado di accettarlo. Motivo: Item used. Ti contatteremo entro 24 ore per spiegare i prossimi passi e organizzare il reinvio dell'articolo.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">Ordine SHOPIFY · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email inviata per il tuo reso TEST-RMA-1. Per dubbi: <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Reso non accettato · Xavia · TEST-RMA-1",
+    "tag": "return-rejected",
+    "text": "Ciao Mario Rossi,
+
+Dopo aver esaminato il tuo reso, non siamo in grado di accettarlo. Motivo: Item used. Ti contatteremo entro 24 ore per spiegare i prossimi passi e organizzare il reinvio dell'articolo.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Your return has been approved. Please ship the item back to our warehouse as soon as you can. Once it arrives we'll inspect it and process your refund within 14 days.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">SHOPIFY order · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email sent for your return TEST-RMA-1. Questions? <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Return approved · Xavia · TEST-RMA-1",
+    "tag": "return-authorized",
+    "text": "Hi Mario Rossi,
+
+Your return has been approved. Please ship the item back to our warehouse as soon as you can. Once it arrives we'll inspect it and process your refund within 14 days.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Your return label is ready. Attach it to the parcel and drop it off with the carrier. We'll let you know as soon as it reaches our warehouse.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">SHOPIFY order · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email sent for your return TEST-RMA-1. Questions? <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Return label ready · Xavia · TEST-RMA-1",
+    "tag": "return-label_ready",
+    "text": "Hi Mario Rossi,
+
+Your return label is ready. Attach it to the parcel and drop it off with the carrier. We'll let you know as soon as it reaches our warehouse.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">We've received your return at our warehouse. Our team will inspect it within 48 hours. You'll see your refund credited within 14 days of receipt.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">SHOPIFY order · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email sent for your return TEST-RMA-1. Questions? <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Return received · Xavia · TEST-RMA-1",
+    "tag": "return-received",
+    "text": "Hi Mario Rossi,
+
+We've received your return at our warehouse. Our team will inspect it within 48 hours. You'll see your refund credited within 14 days of receipt.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">We've issued your refund of €48.80. The refund will appear on your original payment method within 5 business days.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">SHOPIFY order · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email sent for your return TEST-RMA-1. Questions? <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Refund issued · Xavia · TEST-RMA-1",
+    "tag": "return-refunded",
+    "text": "Hi Mario Rossi,
+
+We've issued your refund of €48.80. The refund will appear on your original payment method within 5 business days.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">After reviewing your return, we're unable to accept it. Reason: Item used. We'll be in touch within 24 hours to explain next steps and arrange the return of your item.</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">SHOPIFY order · TEST-ORDER-1001</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email sent for your return TEST-RMA-1. Questions? <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Return not accepted · Xavia · TEST-RMA-1",
+    "tag": "return-rejected",
+    "text": "Hi Mario Rossi,
+
+After reviewing your return, we're unable to accept it. Reason: Item used. We'll be in touch within 24 hours to explain next steps and arrange the return of your item.
+
+SHOPIFY · TEST-ORDER-1001
+RMA: TEST-RMA-1
+— Xavia",
+    "to": "buyer@example.test",
+  },
+]
+`;
+
+exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > review request e-mails, Italian and English 1`] = `
+[
+  {
+    "headers": {
+      "List-Unsubscribe": "<https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-request>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    "html": "<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Come ti trovi con Test Jacket? Lasciaci la tua opinione</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden">
+  <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center">
+    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">XAVIA</span>
+    <span style="color:#9b8ea8;font-size:12px;display:block;margin-top:4px">Abbigliamento da moto</span>
+  </td></tr>
+  <tr><td style="padding:32px">
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Ciao Mario,</p>
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">
+      Speriamo tu abbia avuto il tempo di provare <strong>Test Jacket</strong> sulle tue uscite in moto.
+    </p>
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 24px">
+      Ci farebbe molto piacere sapere cosa ne pensi — soprattutto la vestibilità e la protezione della giacca.
+      La tua esperienza aiuta altri motociclisti a scegliere meglio.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center" style="padding-bottom:24px">
+      <a href="https://shop.example.test/review" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
+        Lascia la tua recensione →
+      </a>
+    </td></tr>
+    </table>
+    <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
+      Bastano 2 minuti. La tua opinione conta molto per noi e per la community Xavia.
+    </p>
+    <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
+      Hai ricevuto questa email perché hai acquistato da Xavia (ordine TEST-ORDER-1001).
+      Se hai dubbi o problemi con il prodotto, <a href="mailto:assistenza@xavia.it" style="color:#e63946">contattaci</a> — non lasciare
+      una recensione negativa prima di darci la possibilità di aiutarti.
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>",
+    "subject": "Come ti trovi con Test Jacket? Lasciaci la tua opinione",
+    "tag": "review-request",
+    "text": "Ciao Mario,
+
+Speriamo tu abbia avuto il tempo di provare Test Jacket sulle tue uscite in moto.
+
+Ci farebbe molto piacere sapere cosa ne pensi — soprattutto la vestibilità e la protezione della giacca.
+
+Lascia la tua recensione: https://shop.example.test/review
+
+Bastano 2 minuti. Grazie!
+
+— Il team Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "headers": {
+      "List-Unsubscribe": "<https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-request>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    "html": "<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How are you finding your Test Jacket? Share your review</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden">
+  <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center">
+    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">XAVIA</span>
+    <span style="color:#9b8ea8;font-size:12px;display:block;margin-top:4px">Motorcycle Gear</span>
+  </td></tr>
+  <tr><td style="padding:32px">
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Hi Mario,</p>
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">
+      We hope you've had the chance to try your <strong>Test Jacket</strong> out on the road.
+    </p>
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 24px">
+      We'd love to hear what you think — especially the fit and protection of the jacket.
+      Your experience helps other riders choose the right gear.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center" style="padding-bottom:24px">
+      <a href="https://shop.example.test/review" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
+        Leave your review →
+      </a>
+    </td></tr>
+    </table>
+    <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
+      It only takes 2 minutes. Your feedback means a lot to us and the Xavia community.
+    </p>
+    <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
+      You received this email because you purchased from Xavia (order TEST-ORDER-1001).
+      If you have any issues with the product, <a href="mailto:support@xavia.it" style="color:#e63946">contact us first</a> —
+      we'd love to make it right before you leave a review.
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>",
+    "subject": "How are you finding your Test Jacket? Share your review",
+    "tag": "review-request",
+    "text": "Hi Mario,
+
+We hope you've had the chance to try your Test Jacket out on the road.
+
+We'd love to hear what you think — especially the fit and protection of the jacket.
+
+Leave your review: https://shop.example.test/review
+
+It only takes 2 minutes. Thank you!
+
+— The Xavia Team",
+    "to": "buyer@example.test",
+  },
+]
+`;
+
+exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > send-customer-message 1`] = `
+[
+  {
+    "html": "<!doctype html><html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;"><tr><td align="center">
+<table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;"><tr><td>
+<div style="font-size:22px;font-weight:700;margin-bottom:24px;">Xavia</div>
+<p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+<p style="font-size:16px;margin:0 0 20px 0;white-space:pre-wrap;">Your parcel ships today.</p>
+<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Per dubbi, scrivi a <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+</td></tr></table></td></tr></table></body></html>",
+    "subject": "Un messaggio sul tuo ordine Xavia",
+    "tag": "agent-customer-message",
+    "text": "Ciao Mario Rossi,
+
+Your parcel ships today.
+
+— Xavia",
+    "to": "buyer@example.test",
+  },
+]
+`;
+
+exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > sentiment check e-mails, every language, and the in-app preview 1`] = `
+[
+  {
+    "headers": {
+      "List-Unsubscribe": "<https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    "html": "<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Come è andata? — Xavia</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;border-bottom:3px solid #c62828;">
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">XAVIA</h1>
+        </td></tr>
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;">
+          <div style="font-size:48px;line-height:1;margin-bottom:8px;">🏍️</div>
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;">Come è andata?</h2>
+        </td></tr>
+
+        <tr><td style="padding:8px 32px;font-size:15px;line-height:1.5;color:#333;">
+          <p style="margin:16px 0 8px;">Ciao Mario,</p>
+          <p style="margin:0 0 16px;">Speriamo che <strong>Test Jacket</strong> sia all'altezza delle aspettative. La tua opinione conta — ci aiuta a migliorare e aiuta altri motociclisti a scegliere bene.</p>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;" align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/positive" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#2e7d32;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😊 Adoro
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/negative" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#888;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😕 Qualcosa non va
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;font-size:13px;line-height:1.5;color:#666;border-top:1px solid #eee;margin-top:16px;">
+          <p style="margin:8px 0 4px;">Hi Mario,</p>
+          <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
+          <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
+            <li><strong>😊 Adoro / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
+            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+          </ul>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px;background:#fafafa;text-align:center;border-top:1px solid #eee;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;"><span style="color:#888">Ordine #TEST-ORDER-1001</span></div>
+          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">Xavia — abbigliamento moto Made in Italy.
+Questa è un&#39;email automatica. Non rispondere — usa i pulsanti sopra.</p>
+          <p style="margin:8px 0 0;font-size:11px;color:#aaa;">
+            <a href="https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check" style="color:#888;text-decoration:underline;">Annulla iscrizione</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>",
+    "subject": "Come è andata? — Xavia",
+    "tag": "review-sentiment-check",
+    "text": "Ciao Mario,
+
+Come è andata con Test Jacket?
+
+😊 Adoro: https://web.example.test/r/TEST/positive
+😕 Qualcosa non va: https://web.example.test/r/TEST/negative
+
+— Xavia
+
+---
+
+Hi Mario,
+
+How was it? Tap one of the links above.
+
+Annulla iscrizione: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check",
+    "to": "buyer@example.test",
+  },
+  {
+    "headers": {
+      "List-Unsubscribe": "<https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    "html": "<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Wie war es? — Xavia</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;border-bottom:3px solid #c62828;">
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">XAVIA</h1>
+        </td></tr>
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;">
+          <div style="font-size:48px;line-height:1;margin-bottom:8px;">🏍️</div>
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;">Wie war es?</h2>
+        </td></tr>
+
+        <tr><td style="padding:8px 32px;font-size:15px;line-height:1.5;color:#333;">
+          <p style="margin:16px 0 8px;">Hallo Mario,</p>
+          <p style="margin:0 0 16px;">Wir hoffen, dass <strong>Test Jacket</strong> Deinen Erwartungen entspricht. Deine Meinung zählt — sie hilft uns, besser zu werden, und anderen Bikern bei der Wahl.</p>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;" align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/positive" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#2e7d32;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😊 Top
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/negative" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#888;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😕 Etwas stimmt nicht
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;font-size:13px;line-height:1.5;color:#666;border-top:1px solid #eee;margin-top:16px;">
+          <p style="margin:8px 0 4px;">Hi Mario,</p>
+          <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
+          <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
+            <li><strong>😊 Top / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
+            <li><strong>😕 Etwas stimmt nicht / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+          </ul>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px;background:#fafafa;text-align:center;border-top:1px solid #eee;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;"><span style="color:#888">Bestellung #TEST-ORDER-1001</span></div>
+          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">Xavia — italienische Motorradausrüstung.
+Dies ist eine automatisch versendete E-Mail. Bitte nicht antworten — nutze die Buttons oben.</p>
+          <p style="margin:8px 0 0;font-size:11px;color:#aaa;">
+            <a href="https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check" style="color:#888;text-decoration:underline;">Abmelden</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>",
+    "subject": "Wie war es? — Xavia",
+    "tag": "review-sentiment-check",
+    "text": "Hallo Mario,
+
+Wie war es mit Test Jacket?
+
+😊 Top: https://web.example.test/r/TEST/positive
+😕 Etwas stimmt nicht: https://web.example.test/r/TEST/negative
+
+— Xavia
+
+---
+
+Hi Mario,
+
+How was it? Tap one of the links above.
+
+Abmelden: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check",
+    "to": "buyer@example.test",
+  },
+  {
+    "headers": {
+      "List-Unsubscribe": "<https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    "html": "<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Comment ça s&#39;est passé ? — Xavia</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;border-bottom:3px solid #c62828;">
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">XAVIA</h1>
+        </td></tr>
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;">
+          <div style="font-size:48px;line-height:1;margin-bottom:8px;">🏍️</div>
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;">Comment ça s&#39;est passé ?</h2>
+        </td></tr>
+
+        <tr><td style="padding:8px 32px;font-size:15px;line-height:1.5;color:#333;">
+          <p style="margin:16px 0 8px;">Salut Mario,</p>
+          <p style="margin:0 0 16px;">Nous espérons que <strong>Test Jacket</strong> est à la hauteur de tes attentes. Ton avis compte — il nous aide à nous améliorer et aide d'autres motards à bien choisir.</p>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;" align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/positive" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#2e7d32;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😊 J&#39;adore
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/negative" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#888;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😕 Un souci
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;font-size:13px;line-height:1.5;color:#666;border-top:1px solid #eee;margin-top:16px;">
+          <p style="margin:8px 0 4px;">Hi Mario,</p>
+          <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
+          <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
+            <li><strong>😊 J&#39;adore / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
+            <li><strong>😕 Un souci / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+          </ul>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px;background:#fafafa;text-align:center;border-top:1px solid #eee;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;"><span style="color:#888">Commande #TEST-ORDER-1001</span></div>
+          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">Xavia — équipement moto italien.
+Ceci est un e-mail automatique. Ne pas répondre — utilise les boutons ci-dessus.</p>
+          <p style="margin:8px 0 0;font-size:11px;color:#aaa;">
+            <a href="https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check" style="color:#888;text-decoration:underline;">Se désinscrire</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>",
+    "subject": "Comment ça s'est passé ? — Xavia",
+    "tag": "review-sentiment-check",
+    "text": "Salut Mario,
+
+Comment s'est passé Test Jacket ?
+
+😊 J'adore: https://web.example.test/r/TEST/positive
+😕 Un souci: https://web.example.test/r/TEST/negative
+
+— Xavia
+
+---
+
+Hi Mario,
+
+How was it? Tap one of the links above.
+
+Se désinscrire: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check",
+    "to": "buyer@example.test",
+  },
+  {
+    "headers": {
+      "List-Unsubscribe": "<https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    "html": "<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>¿Qué tal fue? — Xavia</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;border-bottom:3px solid #c62828;">
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">XAVIA</h1>
+        </td></tr>
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;">
+          <div style="font-size:48px;line-height:1;margin-bottom:8px;">🏍️</div>
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;">¿Qué tal fue?</h2>
+        </td></tr>
+
+        <tr><td style="padding:8px 32px;font-size:15px;line-height:1.5;color:#333;">
+          <p style="margin:16px 0 8px;">Hola Mario,</p>
+          <p style="margin:0 0 16px;">Esperamos que <strong>Test Jacket</strong> esté a la altura. Tu opinión cuenta — nos ayuda a mejorar y ayuda a otros moteros a elegir bien.</p>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;" align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/positive" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#2e7d32;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😊 Me encanta
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/negative" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#888;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😕 Algo va mal
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;font-size:13px;line-height:1.5;color:#666;border-top:1px solid #eee;margin-top:16px;">
+          <p style="margin:8px 0 4px;">Hi Mario,</p>
+          <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
+          <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
+            <li><strong>😊 Me encanta / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
+            <li><strong>😕 Algo va mal / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+          </ul>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px;background:#fafafa;text-align:center;border-top:1px solid #eee;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;"><span style="color:#888">Pedido #TEST-ORDER-1001</span></div>
+          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">Xavia — equipamiento moto italiano.
+Este es un correo automático. No respondas — usa los botones de arriba.</p>
+          <p style="margin:8px 0 0;font-size:11px;color:#aaa;">
+            <a href="https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check" style="color:#888;text-decoration:underline;">Cancelar suscripción</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>",
+    "subject": "¿Qué tal fue? — Xavia",
+    "tag": "review-sentiment-check",
+    "text": "Hola Mario,
+
+¿Qué tal con Test Jacket?
+
+😊 Me encanta: https://web.example.test/r/TEST/positive
+😕 Algo va mal: https://web.example.test/r/TEST/negative
+
+— Xavia
+
+---
+
+Hi Mario,
+
+How was it? Tap one of the links above.
+
+Cancelar suscripción: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check",
+    "to": "buyer@example.test",
+  },
+  {
+    "headers": {
+      "List-Unsubscribe": "<https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check>, <mailto:unsubscribe@xavia.it?subject=unsubscribe>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    "html": "<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>How was it? — Xavia</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;border-bottom:3px solid #c62828;">
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">XAVIA</h1>
+        </td></tr>
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;">
+          <div style="font-size:48px;line-height:1;margin-bottom:8px;">🏍️</div>
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;">How was it?</h2>
+        </td></tr>
+
+        <tr><td style="padding:8px 32px;font-size:15px;line-height:1.5;color:#333;">
+          <p style="margin:16px 0 8px;">Hi Mario,</p>
+          <p style="margin:0 0 16px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;" align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/positive" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#2e7d32;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😊 Love it
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://web.example.test/r/TEST/negative" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#888;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😕 Something&#39;s wrong
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        
+
+        <tr><td style="padding:24px 32px;background:#fafafa;text-align:center;border-top:1px solid #eee;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;"><span style="color:#888">Order #TEST-ORDER-1001</span></div>
+          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">Xavia — Italian motorcycle gear.
+This is an automated email. Don&#39;t reply — use the buttons above.</p>
+          <p style="margin:8px 0 0;font-size:11px;color:#aaa;">
+            <a href="https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check" style="color:#888;text-decoration:underline;">Unsubscribe</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>",
+    "subject": "How was it? — Xavia",
+    "tag": "review-sentiment-check",
+    "text": "Hi Mario,
+
+How was Test Jacket?
+
+😊 Love it: https://web.example.test/r/TEST/positive
+😕 Something's wrong: https://web.example.test/r/TEST/negative
+
+— Xavia
+
+Unsubscribe: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check",
+    "to": "buyer@example.test",
+  },
+]
+`;
+
+exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > sentiment check e-mails, every language, and the in-app preview 2`] = `
+"<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Come è andata? — Xavia</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f5;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;border-bottom:3px solid #c62828;">
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">XAVIA</h1>
+        </td></tr>
+
+        <tr><td style="padding:32px 32px 8px;text-align:center;">
+          <div style="font-size:48px;line-height:1;margin-bottom:8px;">🏍️</div>
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;">Come è andata?</h2>
+        </td></tr>
+
+        <tr><td style="padding:8px 32px;font-size:15px;line-height:1.5;color:#333;">
+          <p style="margin:16px 0 8px;">Ciao Test,</p>
+          <p style="margin:0 0 16px;">Speriamo che <strong>Casco Xavia Carbon</strong> sia all'altezza delle aspettative. La tua opinione conta — ci aiuta a migliorare e aiuta altri motociclisti a scegliere bene.</p>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;" align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://nexus-commerce-web.up.railway.app/r/__test__/positive" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#2e7d32;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😊 Adoro
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px;">
+                <a href="https://nexus-commerce-web.up.railway.app/r/__test__/negative" style="display:inline-block;padding:18px 32px;font-size:17px;font-weight:600;color:#fff;background:#888;border-radius:8px;text-decoration:none;min-width:160px;text-align:center;">
+                  😕 Qualcosa non va
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:16px 32px 8px;font-size:13px;line-height:1.5;color:#666;border-top:1px solid #eee;margin-top:16px;">
+          <p style="margin:8px 0 4px;">Hi Test,</p>
+          <p style="margin:0 0 8px;">We hope <strong>Casco Xavia Carbon</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
+          <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
+            <li><strong>😊 Adoro / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
+            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+          </ul>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px;background:#fafafa;text-align:center;border-top:1px solid #eee;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;"><span style="color:#888">Ordine #TEST-PREVIEW</span></div>
+          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">Xavia — abbigliamento moto Made in Italy.
+Questa è un&#39;email automatica. Non rispondere — usa i pulsanti sopra.</p>
+          <p style="margin:8px 0 0;font-size:11px;color:#aaa;">
+            <a href="https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=TEST-UNSUBSCRIBE-TOKEN&channel=review-sentiment-check" style="color:#888;text-decoration:underline;">Annulla iscrizione</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"
+`;
+
+exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > shipment e-mails, every kind, Italian and English 1`] = `
+[
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Buone notizie — il tuo ordine è stato spedito verso Testville con BRT.</p>
+        <p style="font-size:14px;color:#475569;">Consegna stimata: domenica 10 maggio</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">BRT · TEST-TRACK-1</p>
+        <div style="margin:24px 0;"><a href="https://web.example.test/track/TEST-TRACK-1" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-family:Inter,-apple-system,sans-serif;">Traccia il tuo pacco</a></div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Questa email è stata inviata per il tuo ordine TEST-ORDER-1001. Per dubbi, scrivi a <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Il tuo ordine Xavia è in viaggio · TEST-ORDER-1001",
+    "tag": "shipment-shipped",
+    "text": "Ciao Mario Rossi,
+
+Buone notizie — il tuo ordine è stato spedito verso Testville con BRT.
+
+BRT · TEST-TRACK-1
+https://web.example.test/track/TEST-TRACK-1
+
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Il tuo ordine è stato consegnato a Testville. Speriamo ti piaccia!</p>
+        
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">BRT · TEST-TRACK-1</p>
+        <div style="margin:24px 0;"><a href="https://web.example.test/track/TEST-TRACK-1" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-family:Inter,-apple-system,sans-serif;">Traccia il tuo pacco</a></div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Questa email è stata inviata per il tuo ordine TEST-ORDER-1001. Per dubbi, scrivi a <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Il tuo ordine Xavia è stato consegnato · TEST-ORDER-1001",
+    "tag": "shipment-delivered",
+    "text": "Ciao Mario Rossi,
+
+Il tuo ordine è stato consegnato a Testville. Speriamo ti piaccia!
+
+BRT · TEST-TRACK-1
+https://web.example.test/track/TEST-TRACK-1
+
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Ciao Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Stiamo verificando un'anomalia con la consegna del tuo ordine. Ti aggiorneremo a breve.</p>
+        
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">BRT · TEST-TRACK-1</p>
+        <div style="margin:24px 0;"><a href="https://web.example.test/track/TEST-TRACK-1" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-family:Inter,-apple-system,sans-serif;">Traccia il tuo pacco</a></div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">Questa email è stata inviata per il tuo ordine TEST-ORDER-1001. Per dubbi, scrivi a <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Aggiornamento sulla consegna del tuo ordine · TEST-ORDER-1001",
+    "tag": "shipment-exception",
+    "text": "Ciao Mario Rossi,
+
+Stiamo verificando un'anomalia con la consegna del tuo ordine. Ti aggiorneremo a breve.
+
+BRT · TEST-TRACK-1
+https://web.example.test/track/TEST-TRACK-1
+
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Good news — your order is on its way to Testville with BRT.</p>
+        <p style="font-size:14px;color:#475569;">Estimated delivery: Sunday 10 May</p>
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">BRT · TEST-TRACK-1</p>
+        <div style="margin:24px 0;"><a href="https://web.example.test/track/TEST-TRACK-1" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-family:Inter,-apple-system,sans-serif;">Track your package</a></div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">This email was sent for your order TEST-ORDER-1001. Questions? Reach us at <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Your Xavia order is on its way · TEST-ORDER-1001",
+    "tag": "shipment-shipped",
+    "text": "Hi Mario Rossi,
+
+Good news — your order is on its way to Testville with BRT.
+
+BRT · TEST-TRACK-1
+https://web.example.test/track/TEST-TRACK-1
+
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">Your order has arrived at Testville. We hope you love it!</p>
+        
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">BRT · TEST-TRACK-1</p>
+        <div style="margin:24px 0;"><a href="https://web.example.test/track/TEST-TRACK-1" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-family:Inter,-apple-system,sans-serif;">Track your package</a></div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">This email was sent for your order TEST-ORDER-1001. Questions? Reach us at <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Your Xavia order has been delivered · TEST-ORDER-1001",
+    "tag": "shipment-delivered",
+    "text": "Hi Mario Rossi,
+
+Your order has arrived at Testville. We hope you love it!
+
+BRT · TEST-TRACK-1
+https://web.example.test/track/TEST-TRACK-1
+
+— Xavia",
+    "to": "buyer@example.test",
+  },
+  {
+    "html": "<!doctype html>
+<html><body style="margin:0;padding:0;background:#f8fafc;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;padding:32px 16px;">
+  <tr><td align="center">
+    <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
+      <tr><td>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <p style="font-size:16px;margin:0 0 12px 0;">Hi Mario Rossi,</p>
+        <p style="font-size:16px;margin:0 0 20px 0;">We're investigating a delivery exception on your order and will update you shortly.</p>
+        
+        <p style="font-size:13px;color:#64748b;font-family:monospace;">BRT · TEST-TRACK-1</p>
+        <div style="margin:24px 0;"><a href="https://web.example.test/track/TEST-TRACK-1" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-family:Inter,-apple-system,sans-serif;">Track your package</a></div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:24px;">This email was sent for your order TEST-ORDER-1001. Questions? Reach us at <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>",
+    "subject": "Update on your Xavia order delivery · TEST-ORDER-1001",
+    "tag": "shipment-exception",
+    "text": "Hi Mario Rossi,
+
+We're investigating a delivery exception on your order and will update you shortly.
+
+BRT · TEST-TRACK-1
+https://web.example.test/track/TEST-TRACK-1
+
+— Xavia",
+    "to": "buyer@example.test",
+  },
+]
+`;

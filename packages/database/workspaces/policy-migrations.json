@@ -17,5 +17,7 @@
   "inbound-history.sql": "20260923e_cx_inbound_archive",
   "order-stock-locks.sql": "20260926u_cx_order_lock_pool_holds",
   "order-stock-restore.sql": "20260926v_cx_pool_lender_release",
-  "ebay-erasure-review.sql": "20260926t_cx_ebay_erasure_review"
+  "ebay-erasure-review.sql": "20260926t_cx_ebay_erasure_review",
+  "identity-foreign.sql": "20261001q_identity_foreign_ids",
+  "channel-item-claim.sql": "20261002j_identity_item_claim"
 }

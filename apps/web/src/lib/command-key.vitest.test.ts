@@ -216,7 +216,15 @@ describe('the API’s command receipts', () => {
 
   it('honours a key on exactly the routes the web keys', () => {
     expect(routes.sort()).toEqual([
+      // R16 — an engine's switch in the Control Room lever drawer.
+      '/api/advertising/automation/engine-switch/:key',
+      // MCP full control C6 — "Make a plan of the N ticked changes" on a plan card.
+      '/api/agent/fleet/approvals/:id/plan-amend',
       '/api/categories/schema/download',
+      // C8 / C5 — Undo on Claude's activity page; Claude's Pause and Resume.
+      '/api/claude/changes/:id/undo',
+      '/api/claude/pause',
+      '/api/claude/resume',
       '/api/listing-wizard/:id/submit',
       '/api/pim/attach-to-parent',
       '/api/pim/category-workspace/EBAY/site-assignments',
@@ -229,14 +237,19 @@ describe('the API’s command receipts', () => {
     const src = path.join(root, 'apps/web/src')
     const files = (readdirSync(src, { recursive: true }) as string[])
       .filter((f) => /\.tsx?$/.test(f) && !f.endsWith('.d.ts') && !f.endsWith('.vitest.test.ts'))
-    // `:id` is any interpolated segment: `/api/listing-wizard/${wizardId}/submit`.
-    const patterns = routes.map((r) => new RegExp(r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:id/g, '\\$\\{[^}]+\\}') + '(?![\\w-])'))
+    // A `:param` is any interpolated segment: `/api/listing-wizard/${wizardId}/submit`, `…/engine-switch/${engine.key}`.
+    const patterns = routes.map((r) => new RegExp(r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:[a-zA-Z]+/g, '\\$\\{[^}]+\\}') + '(?![\\w-])'))
     const callers = files.filter((f) => {
       const text = readFileSync(path.join(src, f), 'utf8')
       return patterns.some((p) => p.test(text))
     })
     // A positive control: the walk found the callers this change keys.
-    expect(callers.length).toBeGreaterThanOrEqual(5)
+    expect(callers.length).toBeGreaterThanOrEqual(8)
+    // Claude's brakes, its Undo and the plan card write the route in full, so the walk sees them too.
+    expect(callers).toEqual(expect.arrayContaining([
+      path.join('app', 'settings', 'ai', 'claude', 'claudeApi.ts'),
+      path.join('app', 'fleet', 'approvals', 'PlanCard.tsx'),
+    ]))
     for (const file of callers) {
       expect(readFileSync(path.join(src, file), 'utf8'), file).toMatch(/\bsendCommand\b/)
     }

@@ -1,0 +1,21 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`R17 — the repricing rule routes answer as before the move > every outcome, and the rows each leaves 1`] = `
+"POST /api/products/<id1>/repricing-rules → 400 {"error":"channel is required"}
+POST /api/products/<id1>/repricing-rules → 400 {"error":"minPrice must be >= 0"}
+POST /api/products/<id1>/repricing-rules → 400 {"error":"maxPrice must be >= minPrice"}
+POST /api/products/<id1>/repricing-rules → 400 {"error":"strategy must be one of match_buy_box, beat_lowest_by_pct, beat_lowest_by_amount, fixed_to_buy_box_minus, manual"}
+POST /api/products/<id1>/repricing-rules → 400 {"error":"beatPct is required for beat_lowest_by_pct"}
+POST /api/products/<id1>/repricing-rules → 400 {"error":"beatAmount is required for fixed_to_buy_box_minus"}
+POST /api/products/tst-no-such-product/repricing-rules → 404 {"error":"product not found"}
+POST /api/products/<id1>/repricing-rules → 201 {"rule":{"workspaceId":"nexus_legacy_workspace","id":"<id2>","productId":"<id1>","channel":"EBAY","marketplace":"IT","enabled":true,"minPrice":"10","maxPrice":"20.5","strategy":"beat_lowest_by_pct","beatPct":"2.5","beatAmount":null,"activeFromHour":8,"activeToHour":20,"activeDays":[1,2],"notes":"first","lastEvaluatedAt":null,"lastDecisionPrice":null,"lastDecisionReason":null,"createdAt":"<time>","updatedAt":"<time>"}}
+POST /api/products/<id1>/repricing-rules → 409 {"error":"a rule already exists for (channel=EBAY, marketplace=IT)"}
+POST /api/products/<id1>/repricing-rules → 201 {"rule":{"workspaceId":"nexus_legacy_workspace","id":"<id3>","productId":"<id1>","channel":"AMAZON","marketplace":null,"enabled":false,"minPrice":"0","maxPrice":"0","strategy":"match_buy_box","beatPct":null,"beatAmount":null,"activeFromHour":null,"activeToHour":null,"activeDays":[],"notes":null,"lastEvaluatedAt":null,"lastDecisionPrice":null,"lastDecisionReason":null,"createdAt":"<time>","updatedAt":"<time>"}}
+PATCH /api/repricing-rules/<id2> → 400 {"error":"no mutable fields supplied"}
+PATCH /api/repricing-rules/<id2> → 400 {"error":"minPrice must be >= 0"}
+PATCH /api/repricing-rules/<id2> → 400 {"error":"maxPrice must be >= 0"}
+PATCH /api/repricing-rules/<id2> → 400 {"error":"strategy must be one of match_buy_box, beat_lowest_by_pct, beat_lowest_by_amount, fixed_to_buy_box_minus, manual"}
+PATCH /api/repricing-rules/<id2> → 200 {"rule":{"workspaceId":"nexus_legacy_workspace","id":"<id2>","productId":"<id1>","channel":"EBAY","marketplace":"IT","enabled":false,"minPrice":"11","maxPrice":"19","strategy":"beat_lowest_by_amount","beatPct":null,"beatAmount":"1.5","activeFromHour":null,"activeToHour":22,"activeDays":[],"notes":"second","lastEvaluatedAt":null,"lastDecisionPrice":null,"lastDecisionReason":null,"createdAt":"<time>","updatedAt":"<time>"}}
+PATCH /api/repricing-rules/tst-no-such-rule → 404 {"error":"repricing-rule not found"}
+rows: [{"workspaceId":"nexus_legacy_workspace","id":"<id2>","productId":"<id1>","channel":"EBAY","marketplace":"IT","enabled":false,"minPrice":"11","maxPrice":"19","strategy":"beat_lowest_by_amount","beatPct":null,"beatAmount":"1.5","activeFromHour":null,"activeToHour":22,"activeDays":[],"notes":"second","lastEvaluatedAt":null,"lastDecisionPrice":null,"lastDecisionReason":null,"createdAt":"<time>","updatedAt":"<time>"},{"workspaceId":"nexus_legacy_workspace","id":"<id3>","productId":"<id1>","channel":"AMAZON","marketplace":null,"enabled":false,"minPrice":"0","maxPrice":"0","strategy":"match_buy_box","beatPct":null,"beatAmount":null,"activeFromHour":null,"activeToHour":null,"activeDays":[],"notes":null,"lastEvaluatedAt":null,"lastDecisionPrice":null,"lastDecisionReason":null,"createdAt":"<time>","updatedAt":"<time>"}]"
+`;

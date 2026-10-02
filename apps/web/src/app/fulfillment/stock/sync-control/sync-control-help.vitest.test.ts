@@ -19,7 +19,9 @@ import { ACTION_HELP, COLUMN_HELP, CONTROL_HELP, MODE_HELP, MODE_LABEL, PAGE_SIZ
 const DIR = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(DIR, '../../../../../../..')
 const read = (rel: string) => readFileSync(join(DIR, rel), 'utf8')
-const readApi = () => readFileSync(join(REPO, 'apps/api/src/routes/sync-control.routes.ts'), 'utf8')
+// MCP full control 08 S7 — the actions (and their target cap) moved into the service the route answers through.
+const readApi = () => ['apps/api/src/routes/sync-control.routes.ts', 'apps/api/src/services/stock/sync-control-actions.service.ts']
+  .map((file) => readFileSync(join(REPO, file), 'utf8')).join('\n')
 
 const SURFACES = [
   'SyncControlClient.tsx',

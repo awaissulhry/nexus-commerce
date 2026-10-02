@@ -58,6 +58,19 @@ import { checkAssetQuality } from '../services/asset-quality.service.js'
 import { safeFetch, SafeFetchError } from '../services/net/safe-fetch.js'
 import { buildAllVariants } from '../services/channel-variants.service.js'
 import { shopifyMediaRoutes } from './shopify-media.routes.js'
+// MCP full control P3 — the library, tag and folder reads live in asset-library.service.ts.
+import {
+  listAssetFolders,
+  listAssetLibrary,
+  listAssetTags,
+  VALID_ASSET_TYPES,
+  type AssetLibraryQuery,
+  ASSET_CODE_PATTERN,
+  moveAssets,
+  replaceAssetTags,
+  updateAssetFields,
+  type AssetFieldChange,
+} from '../services/assets/asset-library.service.js'
 
 // MC.13.1 — Storage quota. Env-driven for now (workspace settings
 // land in MC.13-followup). When set + the workspace's accumulated
@@ -93,8 +106,8 @@ function sha256Hex(buf: Buffer): string {
   return createHash('sha256').update(buf).digest('hex')
 }
 
-const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
-const VALID_ASSET_TYPES = new Set(['image', 'video', 'document', 'model3d'])
+/** An asset code: lowercase snake_case (asset-library.service.ts holds the rule; PATCH checks it there). */
+const CODE_PATTERN = ASSET_CODE_PATTERN
 
 // MC.3.1 — accept-list for direct upload. Image-first; MC.7 wires
 // video into the same path via Cloudinary's resource_type=video. The
@@ -324,331 +337,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // ProductImage rows are always type='image' so a type=video filter
   // implicitly excludes them. `search` matches filename/label/alt
   // case-insensitively across both tables.
-  fastify.get('/assets/library', async (request) => {
-    const q = request.query as {
-      type?: string
-      types?: string // comma-separated alt input
-      sources?: string // 'digital_asset,product_image'
-      usage?: string // 'in_use' | 'orphaned'
-      missingAlt?: string // '1' / 'true' to filter
-      dateRange?: string // 'today' | 'last_7d' | 'last_30d'
-      tagIds?: string // comma-separated, narrows DigitalAssets to those with ALL named tags
-      folderId?: string // 'unfiled' for null, '*' / unset for any, otherwise the folder id
-      search?: string
-      page?: string
-      pageSize?: string
-      // IE.7 — Cross-product scoping. When set, narrows to
-      // DigitalAssets used by at least one Product matching the
-      // given brand / productType. Lets the DAM picker surface
-      // "assets already in use by other products in this brand /
-      // category" first, encouraging cross-product reuse instead
-      // of re-upload.
-      relatedBrand?: string
-      relatedProductType?: string
-    }
-    const page = Math.max(parseInt(q.page ?? '1', 10) || 1, 1)
-    const pageSize = Math.min(
-      Math.max(parseInt(q.pageSize ?? '60', 10) || 60, 1),
-      200,
-    )
-    // Accept either ?type=image (legacy) or ?types=image,video. The
-    // multi-value form keeps the URL short when the operator filters
-    // to images-and-videos via the MC.1.3 sidebar.
-    const requestedTypes = new Set<string>()
-    if (q.type && VALID_ASSET_TYPES.has(q.type)) requestedTypes.add(q.type)
-    if (q.types) {
-      for (const v of q.types.split(',').map((s) => s.trim())) {
-        if (VALID_ASSET_TYPES.has(v)) requestedTypes.add(v)
-      }
-    }
-    const typeFilter = requestedTypes.size > 0 ? [...requestedTypes] : null
-
-    const sourceFilter = q.sources
-      ? new Set(
-          q.sources
-            .split(',')
-            .map((s) => s.trim())
-            .filter((s) => s === 'digital_asset' || s === 'product_image'),
-        )
-      : null
-
-    const usageFilter =
-      q.usage === 'in_use' || q.usage === 'orphaned' ? q.usage : null
-    const missingAlt = q.missingAlt === '1' || q.missingAlt === 'true'
-
-    const tagIds = q.tagIds
-      ? q.tagIds
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : []
-
-    // folderId: 'unfiled' filters to NULL (assets with no folder),
-    // any other non-empty value narrows to that folder. Unset means
-    // "every folder including unfiled".
-    const folderFilter: 'unfiled' | string | null = q.folderId
-      ? q.folderId === 'unfiled'
-        ? 'unfiled'
-        : q.folderId
-      : null
-
-    let dateFrom: Date | null = null
-    if (q.dateRange) {
-      const now = Date.now()
-      const day = 24 * 60 * 60 * 1000
-      if (q.dateRange === 'today')
-        dateFrom = new Date(now - day)
-      else if (q.dateRange === 'last_7d')
-        dateFrom = new Date(now - 7 * day)
-      else if (q.dateRange === 'last_30d')
-        dateFrom = new Date(now - 30 * day)
-    }
-
-    const search = q.search?.trim() || null
-
-    // Step 1 — figure out which sources are eligible.
-    //   - `sources` filter narrows explicitly.
-    //   - `type` filter implicitly excludes ProductImage when the
-    //     operator picks anything other than 'image'.
-    //   - `missingAlt` only matches ProductImage rows today (the
-    //     DigitalAsset alt lives in metadata.alt, an unindexed JSON
-    //     path; revisit when MC.2 gives DigitalAsset a dedicated
-    //     altText column).
-    const sourceAllowsDigitalAsset =
-      !sourceFilter || sourceFilter.has('digital_asset')
-    const sourceAllowsProductImage =
-      !sourceFilter || sourceFilter.has('product_image')
-    const typeAllowsProductImage =
-      !typeFilter || typeFilter.includes('image')
-    const includeDigitalAssets = sourceAllowsDigitalAsset && !missingAlt
-    // Tag filter is DigitalAsset-only (ProductImage isn't taggable
-    // until W4.7 migration cuts master gallery into the canonical
-    // model). Active tag filter implicitly excludes ProductImage.
-    const includeProductImages =
-      sourceAllowsProductImage &&
-      typeAllowsProductImage &&
-      tagIds.length === 0 &&
-      // Folder filter is DigitalAsset-only; any active folder
-      // filter (including "unfiled") implicitly excludes ProductImage.
-      folderFilter === null
-
-    const daWhere: Record<string, unknown> = {}
-    if (typeFilter) daWhere.type = { in: typeFilter }
-    if (dateFrom) daWhere.createdAt = { gte: dateFrom }
-    if (usageFilter === 'in_use') daWhere.usages = { some: {} }
-    if (usageFilter === 'orphaned') daWhere.usages = { none: {} }
-    if (tagIds.length > 0) {
-      // AND-style: asset must carry every tag in the filter set.
-      // Doing this with a single `tags: { every: ... }` filter is
-      // tempting but `every` against a join model with no rows
-      // matches everything, so spell it out as N AND'd `some`
-      // clauses.
-      daWhere.AND = tagIds.map((tagId) => ({
-        tags: { some: { tagId } },
-      }))
-    }
-    if (folderFilter === 'unfiled') daWhere.folderId = null
-    else if (folderFilter) daWhere.folderId = folderFilter
-
-    // IE.7 — Narrow to DigitalAssets used by at least one Product
-    // matching the given brand / productType. Filters on the
-    // AssetUsage join's product relation. Trim + case-insensitive
-    // so the FE doesn't have to normalise.
-    const relatedBrand = q.relatedBrand?.trim()
-    const relatedProductType = q.relatedProductType?.trim()
-    if (relatedBrand || relatedProductType) {
-      const productFilter: Record<string, unknown> = {}
-      if (relatedBrand) productFilter.brand = { equals: relatedBrand, mode: 'insensitive' }
-      if (relatedProductType) productFilter.productType = { equals: relatedProductType, mode: 'insensitive' }
-      const usageClause = {
-        usages: { some: { scope: 'product', product: productFilter } },
-      }
-      // Compose with any existing AND clauses (e.g. tag filter).
-      if (Array.isArray(daWhere.AND)) {
-        ;(daWhere.AND as Array<Record<string, unknown>>).push(usageClause)
-      } else {
-        Object.assign(daWhere, usageClause)
-      }
-    }
-    if (search) {
-      // MC.1.4 — match the structured fields plus JSON-path captures
-      // for caption and alt living under metadata. Prisma's
-      // string_contains JSON filter does case-sensitive matching;
-      // operator search is overwhelmingly lowercase so that's an
-      // acceptable trade-off until we promote those JSON keys to
-      // first-class columns. Tags are still array_contains so an
-      // exact tag like "racing" matches; partial tag substring search
-      // is a MC.2 follow-up that needs raw-SQL JSONB queries.
-      daWhere.OR = [
-        { label: { contains: search, mode: 'insensitive' } },
-        { code: { contains: search, mode: 'insensitive' } },
-        { originalFilename: { contains: search, mode: 'insensitive' } },
-        { metadata: { path: ['caption'], string_contains: search } },
-        { metadata: { path: ['alt'], string_contains: search } },
-        { metadata: { path: ['tags'], array_contains: search } },
-      ]
-    }
-
-    const piWhere: Record<string, unknown> = {}
-    if (dateFrom) piWhere.createdAt = { gte: dateFrom }
-    if (missingAlt) piWhere.OR = [{ alt: null }, { alt: '' }]
-    if (usageFilter === 'orphaned') {
-      // ProductImage rows are always attached to a product, so the
-      // orphaned filter rules them out entirely.
-      piWhere.id = '__never__'
-    }
-    if (search) {
-      const searchOr = [
-        { alt: { contains: search, mode: 'insensitive' } },
-        { publicId: { contains: search, mode: 'insensitive' } },
-        { product: { name: { contains: search, mode: 'insensitive' } } },
-        { product: { sku: { contains: search, mode: 'insensitive' } } },
-      ]
-      if (piWhere.OR) {
-        // missingAlt already set OR; combine via AND so both apply.
-        piWhere.AND = [{ OR: piWhere.OR }, { OR: searchOr }]
-        delete piWhere.OR
-      } else {
-        piWhere.OR = searchOr
-      }
-    }
-
-    const [daTotal, piTotal] = await Promise.all([
-      includeDigitalAssets
-        ? prisma.digitalAsset.count({ where: daWhere })
-        : Promise.resolve(0),
-      includeProductImages
-        ? prisma.productImage.count({ where: piWhere })
-        : Promise.resolve(0),
-    ])
-    const total = daTotal + piTotal
-
-    // Step 2 — fetch enough rows from each table to satisfy the
-    // requested page after merge. Worst case: all rows in one source
-    // come before the other in createdAt order, so we fetch
-    // (page * pageSize) rows from each. Capped at 1000 to keep the
-    // round trip bounded — MC.2 keyset pagination removes this cap.
-    const fetchLimit = Math.min(page * pageSize, 1000)
-
-    const [daRows, piRows] = await Promise.all([
-      includeDigitalAssets
-        ? prisma.digitalAsset.findMany({
-            where: daWhere,
-            orderBy: { createdAt: 'desc' },
-            take: fetchLimit,
-            include: { _count: { select: { usages: true } } },
-          })
-        : Promise.resolve([] as never[]),
-      includeProductImages
-        ? prisma.productImage.findMany({
-            where: piWhere,
-            orderBy: { createdAt: 'desc' },
-            take: fetchLimit,
-            include: {
-              product: { select: { id: true, sku: true, name: true } },
-            },
-          })
-        : Promise.resolve([] as never[]),
-    ])
-
-    type LibraryItem = {
-      id: string
-      source: 'digital_asset' | 'product_image'
-      url: string
-      label: string
-      type: string
-      mimeType: string | null
-      sizeBytes: number | null
-      width: number | null
-      height: number | null
-      createdAt: string
-      usageCount: number
-      productId: string | null
-      productSku: string | null
-      productName: string | null
-      role: string | null
-      hasQualityWarnings: boolean
-      /// MC.7.2 — surfaced for video tiles to render the duration
-      /// badge without a detail-fetch roundtrip.
-      durationSeconds: number | null
-    }
-
-    const merged: LibraryItem[] = []
-
-    for (const a of daRows) {
-      const meta = (a.metadata as Record<string, unknown> | null) ?? {}
-      merged.push({
-        id: `da_${a.id}`,
-        source: 'digital_asset',
-        url: a.url,
-        label: a.label || a.originalFilename || 'Untitled',
-        type: a.type,
-        mimeType: a.mimeType,
-        sizeBytes: a.sizeBytes,
-        width:
-          typeof meta.width === 'number' ? (meta.width as number) : null,
-        height:
-          typeof meta.height === 'number' ? (meta.height as number) : null,
-        createdAt: a.createdAt.toISOString(),
-        usageCount: a._count.usages,
-        productId: null,
-        productSku: null,
-        productName: null,
-        role: null,
-        hasQualityWarnings:
-          Array.isArray(meta.qualityWarnings) &&
-          meta.qualityWarnings.length > 0,
-        durationSeconds:
-          typeof meta.durationSeconds === 'number'
-            ? (meta.durationSeconds as number)
-            : null,
-      })
-    }
-
-    for (const p of piRows as Array<
-      (typeof piRows)[number] & { product: { id: string; sku: string; name: string } | null }
-    >) {
-      merged.push({
-        id: `pi_${p.id}`,
-        source: 'product_image',
-        url: p.url,
-        label: p.alt || p.publicId || `${p.product?.sku ?? ''} ${p.type}`.trim(),
-        type: 'image',
-        mimeType: null,
-        sizeBytes: null,
-        width: null,
-        height: null,
-        createdAt: p.createdAt.toISOString(),
-        // Each ProductImage row is intrinsically attached to one
-        // product, so usageCount is 1 by definition. Setting 0 would
-        // be misleading on the "Orphaned" KPI tile.
-        usageCount: 1,
-        productId: p.product?.id ?? null,
-        productSku: p.product?.sku ?? null,
-        productName: p.product?.name ?? null,
-        role: p.type,
-        // ProductImage rows pre-date MC.3.4 — they don't carry the
-        // upload-time quality check. Always false until W4.7 cuts
-        // them into DigitalAsset.
-        hasQualityWarnings: false,
-        durationSeconds: null,
-      })
-    }
-
-    // Step 3 — sort merged feed by createdAt desc, paginate.
-    merged.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    const start = (page - 1) * pageSize
-    const items = merged.slice(start, start + pageSize)
-    const hasMore = start + items.length < total
-
-    return {
-      items,
-      page,
-      pageSize,
-      total,
-      hasMore,
-    }
-  })
+  fastify.get('/assets/library', async (request) => listAssetLibrary(request.query as AssetLibraryQuery))
 
   // MC.1.5 — unified detail endpoint for the library drawer.
   //
@@ -944,44 +633,11 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch('/assets/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      label?: string
-      code?: string | null
-      metadata?: unknown
-    }
-    // storageProvider/storageId/url/mimeType/sizeBytes/type
-    // intentionally immutable — to "swap" the underlying file the
-    // operator should re-upload + create a new asset + re-attach
-    // usages. Keeps the audit story clean.
-    const data: Record<string, unknown> = {}
-    if (body.label !== undefined) {
-      if (!body.label.trim())
-        return reply.code(400).send({ error: 'label cannot be empty' })
-      data.label = body.label.trim()
-    }
-    if (body.code !== undefined) {
-      if (body.code && !CODE_PATTERN.test(body.code))
-        return reply.code(400).send({
-          error: 'code (when provided) must be lowercase snake_case',
-        })
-      data.code = body.code || null
-    }
-    if (body.metadata !== undefined)
-      data.metadata = (body.metadata as never) ?? null
-    if (Object.keys(data).length === 0)
-      return reply.code(400).send({ error: 'no mutable fields supplied' })
-    try {
-      const asset = await prisma.digitalAsset.update({ where: { id }, data })
-      return { asset }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'asset not found' })
-      if (err?.code === 'P2002')
-        return reply
-          .code(409)
-          .send({ error: `asset code "${body.code}" already exists` })
-      throw err
-    }
+    // MCP full control P7 — the checks and the write live in the asset library service (Claude's
+    // organize-image-library sets labels through it too).
+    const result = await updateAssetFields(id, request.body as AssetFieldChange)
+    if (result.ok === false) return reply.code(result.status).send({ error: result.error })
+    return { asset: result.asset }
   })
 
   fastify.delete('/assets/:id', async (request, reply) => {
@@ -1097,17 +753,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // /tags endpoint that already exists elsewhere; consolidating is a
   // follow-up. Returning here keeps /marketing/content's network
   // surface contained.
-  fastify.get('/asset-tags', async () => {
-    const tags = await prisma.tag.findMany({
-      orderBy: { name: 'asc' },
-      include: {
-        _count: {
-          select: { assets: true, products: true, orders: true },
-        },
-      },
-    })
-    return { tags }
-  })
+  fastify.get('/asset-tags', async () => listAssetTags())
 
   // Replace the tag set on a DigitalAsset. Body is { tagIds: [...] }
   // or { tagNames: [...] } — name form auto-creates tags that don't
@@ -1116,58 +762,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // render without re-fetching.
   fastify.put('/assets/:id/tags', async (request, reply) => {
     const { id: assetId } = request.params as { id: string }
-    const body = request.body as {
-      tagIds?: string[]
-      tagNames?: string[]
-    }
-    const asset = await prisma.digitalAsset.findUnique({
-      where: { id: assetId },
-      select: { id: true },
-    })
-    if (!asset)
+    // MCP full control P7 — the tag set is replaced by the asset library service.
+    const tags = await replaceAssetTags(assetId, request.body as { tagIds?: string[]; tagNames?: string[] })
+    if (!tags)
       return reply.code(404).send({ error: 'asset not found' })
-
-    const idSet = new Set(body.tagIds ?? [])
-
-    // Resolve names → ids, creating any that don't exist. createMany
-    // with skipDuplicates would be cleaner but doesn't return rows;
-    // upsert one-by-one is fine here because the picker shouldn't
-    // routinely create more than a handful.
-    if (body.tagNames?.length) {
-      for (const rawName of body.tagNames) {
-        const name = rawName.trim()
-        if (!name) continue
-        const existing = await prisma.tag.findUnique({ where: { workspace_name: workspaceKey({ name: name }) } })
-        if (existing) {
-          idSet.add(existing.id)
-        } else {
-          const created = await prisma.tag.create({ data: { name } })
-          idSet.add(created.id)
-        }
-      }
-    }
-
-    const tagIds = [...idSet]
-
-    // Replace strategy — drop existing rows then create the new set.
-    // Wrapped in a transaction so partial failures roll back; the
-    // operator sees either the old set or the new, never a mix.
-    await prisma.$transaction([
-      prisma.assetTag.deleteMany({ where: { assetId } }),
-      ...(tagIds.length
-        ? [
-            prisma.assetTag.createMany({
-              data: tagIds.map((tagId) => ({ assetId, tagId })),
-              skipDuplicates: true,
-            }),
-          ]
-        : []),
-    ])
-
-    const tags = await prisma.tag.findMany({
-      where: { id: { in: tagIds } },
-      orderBy: { name: 'asc' },
-    })
     return { tags }
   })
 
@@ -1348,15 +946,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // even at large catalogs), and the client renders the tree
   // structure off the parentId pointers. If the workspace ever
   // outgrows that, MC.2-followup paginates by depth.
-  fastify.get('/asset-folders', async () => {
-    const folders = await prisma.assetFolder.findMany({
-      orderBy: [{ parentId: 'asc' }, { order: 'asc' }, { name: 'asc' }],
-      include: {
-        _count: { select: { assets: true, children: true } },
-      },
-    })
-    return { folders }
-  })
+  fastify.get('/asset-folders', async () => listAssetFolders())
 
   fastify.post('/asset-folders', async (request, reply) => {
     const body = request.body as {
@@ -1534,7 +1124,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     // Storage when the workspace would breach the hard cap.
     {
       const quota = await checkStorageQuota(buffer.length)
-      if (!quota.ok)
+      if (quota.ok === false)
         return reply.code(507).send({
           error: `Storage quota exceeded`,
           usedBytes: quota.usedBytes,
@@ -1721,7 +1311,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     // cap exactly like multipart uploads.
     {
       const quota = await checkStorageQuota(buffer.byteLength)
-      if (!quota.ok)
+      if (quota.ok === false)
         return reply.code(507).send({
           error: 'Storage quota exceeded',
           usedBytes: quota.usedBytes,
@@ -2065,29 +1655,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // null). Used by the bulk Move action; also handles single-asset
   // moves from the detail drawer.
   fastify.post('/assets/move', async (request, reply) => {
-    const body = request.body as {
-      assetIds?: string[]
-      folderId?: string | null
-    }
-    if (!Array.isArray(body.assetIds) || body.assetIds.length === 0)
-      return reply
-        .code(400)
-        .send({ error: 'assetIds array is required (1+ ids)' })
-
-    if (body.folderId) {
-      const folder = await prisma.assetFolder.findUnique({
-        where: { id: body.folderId },
-        select: { id: true },
-      })
-      if (!folder)
-        return reply.code(400).send({ error: 'folderId does not exist' })
-    }
-
-    const updated = await prisma.digitalAsset.updateMany({
-      where: { id: { in: body.assetIds } },
-      data: { folderId: body.folderId ?? null },
-    })
-    return { moved: updated.count, folderId: body.folderId ?? null }
+    // MCP full control P7 — the move lives in the asset library service (Claude's organize-image-library too).
+    const result = await moveAssets(request.body as { assetIds?: string[]; folderId?: string | null })
+    if (result.ok === false) return reply.code(400).send({ error: result.error })
+    return { moved: result.moved, folderId: result.folderId }
   })
 }
 

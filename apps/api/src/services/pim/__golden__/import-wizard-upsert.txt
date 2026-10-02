@@ -1,0 +1,2010 @@
+[
+ {
+  "step": "inspect",
+  "status": 201,
+  "type": "application/json",
+  "body": {
+   "sourceId": "fixture-1",
+   "filename": "golden-upsert.csv",
+   "headers": [
+    "SKU",
+    "Name",
+    "Family"
+   ],
+   "total": 2,
+   "hash": "590727c005ada48d80f7af94fa7f834694b65064a1c1ff98e3ee36c6f1cda78d",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "sample": [
+    {
+     "SKU": "000777",
+     "Name": "Golden new product",
+     "Family": "coats"
+    },
+    {
+     "SKU": "000001",
+     "Name": "Golden variant name",
+     "Family": "coats"
+    }
+   ]
+  }
+ },
+ {
+  "step": "preview",
+  "status": 201,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "PREVIEWING",
+   "processed": 0,
+   "total": 2,
+   "mode": "upsert",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 0,
+    "unchanged": 0,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 0,
+    "listingsAffected": 0,
+    "newOverrides": 0,
+    "preservedOverrides": 0,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [],
+   "unmappedColumns": [],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-upsert.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "review",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "QUEUED",
+   "processed": 0,
+   "total": 2,
+   "mode": "upsert",
+   "counts": {
+    "productsCreated": 1,
+    "listingsCreated": 0,
+    "changed": 3,
+    "unchanged": 1,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 2,
+    "listingsAffected": 0,
+    "newOverrides": 0,
+    "preservedOverrides": 2,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [],
+   "unmappedColumns": [],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "reviewToken": "1d5e87b78a549d8f47224ba5246af55762f6598fef1a402a081c5769cd9072e1",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-upsert.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "outcomes",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 2,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-4",
+     "index": 1,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 2,
+      "entity": "Products",
+      "sku": "000777",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden new product",
+      "source": {
+       "column": "B",
+       "file": "golden-upsert.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000777",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden new product",
+       "source": {
+        "column": "B",
+        "file": "golden-upsert.csv"
+       },
+       "before": null,
+       "after": "Golden new product",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      },
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000777",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "family",
+       "action": "SET",
+       "value": "coats",
+       "source": {
+        "column": "C",
+        "file": "golden-upsert.csv"
+       },
+       "before": null,
+       "after": "coats",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-5",
+     "index": 2,
+     "status": "REVIEWED",
+     "identity": {
+      "row": 3,
+      "entity": "Products",
+      "sku": "000001",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden variant name",
+      "source": {
+       "column": "B",
+       "file": "golden-upsert.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 3,
+       "entity": "Products",
+       "sku": "000001",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden variant name",
+       "source": {
+        "column": "B",
+        "file": "golden-upsert.csv"
+       },
+       "before": "Original 1",
+       "after": "Golden variant name",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "changed"
+      },
+      {
+       "row": 3,
+       "entity": "Products",
+       "sku": "000001",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "family",
+       "action": "SET",
+       "value": "coats",
+       "source": {
+        "column": "C",
+        "file": "golden-upsert.csv"
+       },
+       "before": "coats",
+       "after": "coats",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "preserved": [
+      {
+       "entity": "Overrides",
+       "sku": "000001",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      },
+      {
+       "entity": "Overrides",
+       "sku": "000001",
+       "channel": "AMAZON",
+       "accountId": "account-b",
+       "marketplace": "FR",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    }
+   ]
+  }
+ },
+ {
+  "step": "apply",
+  "status": 202,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "RUNNING",
+   "processed": 0,
+   "total": 2,
+   "mode": "upsert",
+   "counts": {
+    "productsCreated": 1,
+    "listingsCreated": 0,
+    "changed": 3,
+    "unchanged": 1,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 2,
+    "listingsAffected": 0,
+    "newOverrides": 0,
+    "preservedOverrides": 2,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [],
+   "unmappedColumns": [],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "reviewToken": "1d5e87b78a549d8f47224ba5246af55762f6598fef1a402a081c5769cd9072e1",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-upsert.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "after apply",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-3",
+   "state": "PARTIAL",
+   "processed": 2,
+   "total": 2,
+   "mode": "upsert",
+   "counts": {
+    "productsCreated": 1,
+    "listingsCreated": 0,
+    "changed": 3,
+    "unchanged": 1,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 2,
+    "listingsAffected": 0,
+    "newOverrides": 0,
+    "preservedOverrides": 2,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "receipt": {
+    "saved": 1,
+    "unchanged": 0,
+    "failed": 1,
+    "excluded": 0,
+    "unprocessed": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [],
+   "unmappedColumns": [],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {},
+   "reviewToken": "1d5e87b78a549d8f47224ba5246af55762f6598fef1a402a081c5769cd9072e1",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-upsert.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": "2026-09-15T10:00:00.000Z"
+  }
+ },
+ {
+  "step": "outcomes after apply",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "total": 2,
+   "page": 1,
+   "pageSize": 50,
+   "rows": [
+    {
+     "id": "fixture-4",
+     "index": 1,
+     "status": "SUCCESS",
+     "identity": {
+      "row": 2,
+      "entity": "Products",
+      "sku": "000777",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden new product",
+      "source": {
+       "column": "B",
+       "file": "golden-upsert.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000777",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden new product",
+       "source": {
+        "column": "B",
+        "file": "golden-upsert.csv"
+       },
+       "before": null,
+       "after": "Golden new product",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      },
+      {
+       "row": 2,
+       "entity": "Products",
+       "sku": "000777",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "family",
+       "action": "SET",
+       "value": "coats",
+       "source": {
+        "column": "C",
+        "file": "golden-upsert.csv"
+       },
+       "before": null,
+       "after": "coats",
+       "beforeState": "inherited",
+       "afterState": "stored",
+       "verdict": "changed"
+      }
+     ],
+     "preserved": [],
+     "issues": [],
+     "exclusions": [],
+     "error": null
+    },
+    {
+     "id": "fixture-5",
+     "index": 2,
+     "status": "FAILED",
+     "identity": {
+      "row": 3,
+      "entity": "Products",
+      "sku": "000001",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": "",
+      "locale": "",
+      "field": "name",
+      "action": "SET",
+      "value": "Golden variant name",
+      "source": {
+       "column": "B",
+       "file": "golden-upsert.csv"
+      }
+     },
+     "cells": [
+      {
+       "row": 3,
+       "entity": "Products",
+       "sku": "000001",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "name",
+       "action": "SET",
+       "value": "Golden variant name",
+       "source": {
+        "column": "B",
+        "file": "golden-upsert.csv"
+       },
+       "before": "Original 1",
+       "after": "Golden variant name",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "changed"
+      },
+      {
+       "row": 3,
+       "entity": "Products",
+       "sku": "000001",
+       "channel": "",
+       "accountId": "",
+       "marketplace": "",
+       "aliasKey": "",
+       "locale": "",
+       "field": "family",
+       "action": "SET",
+       "value": "coats",
+       "source": {
+        "column": "C",
+        "file": "golden-upsert.csv"
+       },
+       "before": "coats",
+       "after": "coats",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "preserved": [
+      {
+       "entity": "Overrides",
+       "sku": "000001",
+       "channel": "AMAZON",
+       "accountId": "account-a",
+       "marketplace": "IT",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      },
+      {
+       "entity": "Overrides",
+       "sku": "000001",
+       "channel": "AMAZON",
+       "accountId": "account-b",
+       "marketplace": "FR",
+       "aliasKey": "",
+       "row": 0,
+       "locale": "",
+       "field": "material",
+       "action": "SET",
+       "before": "Protected cotton",
+       "after": "Protected cotton",
+       "beforeState": "stored",
+       "afterState": "stored",
+       "verdict": "unchanged"
+      }
+     ],
+     "issues": [],
+     "exclusions": [],
+     "error": "Product changed since preview; preview this SKU again"
+    }
+   ]
+  }
+ },
+ {
+  "step": "errors csv after apply",
+  "status": 200,
+  "type": "text/csv",
+  "body": "\"row\",\"sku\",\"field\",\"message\",\"file\",\"sheet\",\"column\"\r\n\"3\",\"000001\",\"name\",\"Product changed since preview; preview this SKU again\",\"golden-upsert.csv\",\"\",\"B\""
+ },
+ {
+  "step": "retry",
+  "status": 201,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-10",
+   "state": "PREVIEWING",
+   "processed": 0,
+   "total": 1,
+   "mode": "upsert",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 0,
+    "unchanged": 0,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 0,
+    "listingsAffected": 0,
+    "newOverrides": 0,
+    "preservedOverrides": 0,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [],
+   "unmappedColumns": [],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {
+    "autoApply": false
+   },
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-upsert.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "retry review",
+  "status": 200,
+  "type": "application/json",
+  "body": {
+   "jobId": "fixture-10",
+   "state": "QUEUED",
+   "processed": 0,
+   "total": 1,
+   "mode": "upsert",
+   "counts": {
+    "productsCreated": 0,
+    "listingsCreated": 0,
+    "changed": 1,
+    "unchanged": 1,
+    "refused": 0,
+    "excluded": 0,
+    "productsAffected": 1,
+    "listingsAffected": 0,
+    "newOverrides": 0,
+    "preservedOverrides": 2,
+    "alreadyEmpty": 0,
+    "clearUnchecked": 0,
+    "cleared": 0,
+    "ended": 0,
+    "pricesRecorded": 0
+   },
+   "hasChangeFilter": true,
+   "warnings": [],
+   "unmappedColumns": [],
+   "policy": {
+    "shared": "replace",
+    "overrides": "replace"
+   },
+   "source": {
+    "autoApply": false
+   },
+   "reviewToken": "01711e371e32a77fefbeccc17859cd1677d74bdd71d5e5e03443df89ff60d08e",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "filename": "golden-upsert.csv",
+   "links": [],
+   "deletes": [],
+   "readyOnly": false,
+   "completedAt": null
+  }
+ },
+ {
+  "step": "fetch: the supplier link",
+  "status": 201,
+  "type": "application/json",
+  "body": {
+   "sourceId": "fixture-12",
+   "filename": "golden.csv",
+   "headers": [
+    "SKU",
+    "Name"
+   ],
+   "total": 1,
+   "hash": "d9a5d8ffbc666331d376fb9e6ab8dc2c9cbcc850416d24852a12792d70c88967",
+   "expiresAt": "2026-09-16T10:00:00.000Z",
+   "url": "https://supplier.example.test/golden.csv",
+   "sample": [
+    {
+     "SKU": "000002",
+     "Name": "Fetched golden name"
+    }
+   ]
+  }
+ },
+ {
+  "step": "fetch: a refused link",
+  "status": 400,
+  "type": "application/json",
+  "body": {
+   "error": "The link was refused: only the golden supplier link is served here"
+  }
+ },
+ {
+  "step": "fetch: no link",
+  "status": 400,
+  "type": "application/json",
+  "body": {
+   "error": "Enter a source URL"
+  }
+ },
+ {
+  "step": "stored",
+  "body": {
+   "products": [
+    {
+     "id": "p0",
+     "sku": "000000",
+     "name": "Original 0",
+     "description": null,
+     "version": 3,
+     "parentId": null,
+     "isParent": true,
+     "basePrice": 25,
+     "totalStock": 17,
+     "status": null,
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p1",
+     "sku": "000001",
+     "name": "Saved meanwhile",
+     "description": null,
+     "version": 4,
+     "parentId": "p0",
+     "isParent": false,
+     "basePrice": 25,
+     "totalStock": 17,
+     "status": null,
+     "updatedAt": "2026-09-15T10:00:00.001Z"
+    },
+    {
+     "id": "p2",
+     "sku": "000002",
+     "name": "Original 2",
+     "description": null,
+     "version": 3,
+     "parentId": "p0",
+     "isParent": false,
+     "basePrice": 25,
+     "totalStock": 17,
+     "status": null,
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "fixture-6",
+     "sku": "000777",
+     "name": "Golden new product",
+     "version": 0,
+     "parentId": null,
+     "isParent": false,
+     "basePrice": 0,
+     "status": "DRAFT",
+     "updatedAt": "2026-09-15T10:00:00.000Z"
+    }
+   ],
+   "listings": [
+    {
+     "id": "p0-account-a",
+     "productId": "p0",
+     "channel": "AMAZON",
+     "marketplace": "IT",
+     "account": "account-a",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p0-account-b",
+     "productId": "p0",
+     "channel": "AMAZON",
+     "marketplace": "FR",
+     "account": "account-b",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p1-account-a",
+     "productId": "p1",
+     "channel": "AMAZON",
+     "marketplace": "IT",
+     "account": "account-a",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p1-account-b",
+     "productId": "p1",
+     "channel": "AMAZON",
+     "marketplace": "FR",
+     "account": "account-b",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p2-account-a",
+     "productId": "p2",
+     "channel": "AMAZON",
+     "marketplace": "IT",
+     "account": "account-a",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+     "id": "p2-account-b",
+     "productId": "p2",
+     "channel": "AMAZON",
+     "marketplace": "FR",
+     "account": "account-b",
+     "version": 8,
+     "title": "Sync snapshot",
+     "overrideData": {
+      "material": "Protected cotton"
+     },
+     "platformAttributes": {
+      "productType": "COAT"
+     },
+     "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+   ],
+   "listingTranslations": [],
+   "productTranslations": [],
+   "audit": [
+    {
+     "id": "fixture-7",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "userId": "owner",
+     "entityType": "Product",
+     "entityId": "fixture-6",
+     "action": "create",
+     "before": [
+      {
+       "field": "name",
+       "locale": "",
+       "value": null,
+       "state": "inherited"
+      },
+      {
+       "field": "family",
+       "locale": "",
+       "value": null,
+       "state": "inherited"
+      }
+     ],
+     "after": [
+      {
+       "field": "name",
+       "locale": "",
+       "value": "Golden new product",
+       "state": "stored"
+      },
+      {
+       "field": "family",
+       "locale": "",
+       "value": "coats",
+       "state": "stored"
+      }
+     ],
+     "metadata": {
+      "source": "catalog-transfer",
+      "jobId": "fixture-3",
+      "channel": "",
+      "accountId": "",
+      "marketplace": "",
+      "aliasKey": ""
+     }
+    }
+   ],
+   "bulkOperations": [
+    {
+     "id": "fixture-3",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "userId": "owner",
+     "productCount": 2,
+     "changeCount": 0,
+     "status": "PARTIAL",
+     "changes": {
+      "kind": "catalog-transfer-v2",
+      "outcomeVersion": 1,
+      "mode": "upsert",
+      "market": "IT",
+      "mapping": {
+       "kind": "catalog-source-v1",
+       "market": "IT",
+       "mode": "upsert",
+       "skuColumn": "SKU",
+       "policy": {
+        "shared": "replace",
+        "overrides": "replace"
+       },
+       "bindings": [
+        {
+         "source": "Name",
+         "entity": "Products",
+         "field": "name",
+         "format": "text"
+        },
+        {
+         "source": "Family",
+         "entity": "Products",
+         "field": "family",
+         "format": "text"
+        }
+       ]
+      },
+      "source": {},
+      "inputHash": "abc580964490581c5f50f5ac60311913c651502e1ba57d8cf92c2004f3ff073d",
+      "previewExpiresAt": "2026-09-16T10:00:00.000Z",
+      "counts": {
+       "productsCreated": 1,
+       "listingsCreated": 0,
+       "changed": 3,
+       "unchanged": 1,
+       "refused": 0,
+       "excluded": 0,
+       "productsAffected": 2,
+       "listingsAffected": 0,
+       "newOverrides": 0,
+       "preservedOverrides": 2,
+       "alreadyEmpty": 0,
+       "clearUnchecked": 0,
+       "cleared": 0,
+       "ended": 0,
+       "pricesRecorded": 0
+      },
+      "warnings": [],
+      "unmappedColumns": [],
+      "reviewToken": "1d5e87b78a549d8f47224ba5246af55762f6598fef1a402a081c5769cd9072e1",
+      "receipt": {
+       "saved": 1,
+       "unchanged": 0,
+       "failed": 1,
+       "excluded": 0,
+       "unprocessed": 0
+      }
+     },
+     "processed": 2,
+     "total": 2,
+     "uploadFilename": "golden-upsert.csv",
+     "expiresAt": null,
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "id": "fixture-10",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "userId": "owner",
+     "productCount": 1,
+     "changeCount": 0,
+     "status": "QUEUED",
+     "changes": {
+      "kind": "catalog-transfer-v2",
+      "outcomeVersion": 1,
+      "mode": "upsert",
+      "market": "IT",
+      "mapping": {
+       "kind": "catalog-source-v1",
+       "market": "IT",
+       "mode": "upsert",
+       "skuColumn": "SKU",
+       "policy": {
+        "shared": "replace",
+        "overrides": "replace"
+       },
+       "bindings": [
+        {
+         "source": "Name",
+         "entity": "Products",
+         "field": "name",
+         "format": "text"
+        },
+        {
+         "source": "Family",
+         "entity": "Products",
+         "field": "family",
+         "format": "text"
+        }
+       ]
+      },
+      "source": {
+       "autoApply": false
+      },
+      "inputHash": "6d5c5633054525e7007f5a77381b2fbe6313c8a3743de5f22fa61f2079786767",
+      "previewExpiresAt": "2026-09-16T10:00:00.000Z",
+      "counts": {
+       "productsCreated": 0,
+       "listingsCreated": 0,
+       "changed": 1,
+       "unchanged": 1,
+       "refused": 0,
+       "excluded": 0,
+       "productsAffected": 1,
+       "listingsAffected": 0,
+       "newOverrides": 0,
+       "preservedOverrides": 2,
+       "alreadyEmpty": 0,
+       "clearUnchecked": 0,
+       "cleared": 0,
+       "ended": 0,
+       "pricesRecorded": 0
+      },
+      "warnings": [],
+      "unmappedColumns": [],
+      "reviewToken": "01711e371e32a77fefbeccc17859cd1677d74bdd71d5e5e03443df89ff60d08e"
+     },
+     "processed": 0,
+     "total": 1,
+     "uploadFilename": "golden-upsert.csv",
+     "expiresAt": "2026-09-16T10:00:00.000Z"
+    }
+   ],
+   "importJobs": [
+    {
+     "successRows": 0,
+     "failedRows": 0,
+     "skippedRows": 0,
+     "id": "fixture-1",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.001Z",
+     "jobName": "golden-upsert.csv",
+     "filename": "golden-upsert.csv",
+     "fileKind": "csv",
+     "source": "upload",
+     "targetEntity": "catalog-source-input-v1",
+     "status": "SOURCE_READY",
+     "totalRows": 2,
+     "createdBy": "owner",
+     "planToken": "590727c005ada48d80f7af94fa7f834694b65064a1c1ff98e3ee36c6f1cda78d",
+     "planSummary": {
+      "headers": [
+       "SKU",
+       "Name",
+       "Family"
+      ],
+      "total": 2,
+      "hash": "590727c005ada48d80f7af94fa7f834694b65064a1c1ff98e3ee36c6f1cda78d",
+      "expiresAt": "2026-09-16T10:00:00.000Z"
+     }
+    },
+    {
+     "successRows": 1,
+     "failedRows": 1,
+     "skippedRows": 0,
+     "id": "fixture-3",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.003Z",
+     "jobName": "golden-upsert.csv",
+     "source": "upload",
+     "filename": "golden-upsert.csv",
+     "fileKind": "csv",
+     "targetEntity": "catalog-transfer-v2",
+     "columnMapping": {
+      "kind": "catalog-source-v1",
+      "market": "IT",
+      "mode": "upsert",
+      "skuColumn": "SKU",
+      "policy": {
+       "shared": "replace",
+       "overrides": "replace"
+      },
+      "bindings": [
+       {
+        "source": "Name",
+        "entity": "Products",
+        "field": "name",
+        "format": "text"
+       },
+       {
+        "source": "Family",
+        "entity": "Products",
+        "field": "family",
+        "format": "text"
+       }
+      ]
+     },
+     "status": "PARTIAL",
+     "totalRows": 2,
+     "createdBy": "owner",
+     "planToken": "1d5e87b78a549d8f47224ba5246af55762f6598fef1a402a081c5769cd9072e1",
+     "planComputedAt": "2026-09-15T10:00:00.000Z",
+     "planSummary": {
+      "productsCreated": 1,
+      "listingsCreated": 0,
+      "changed": 3,
+      "unchanged": 1,
+      "refused": 0,
+      "excluded": 0,
+      "productsAffected": 2,
+      "listingsAffected": 0,
+      "newOverrides": 0,
+      "preservedOverrides": 2,
+      "alreadyEmpty": 0,
+      "clearUnchecked": 0,
+      "cleared": 0,
+      "ended": 0,
+      "pricesRecorded": 0
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "successRows": 0,
+     "failedRows": 0,
+     "skippedRows": 0,
+     "id": "fixture-10",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.002Z",
+     "jobName": "golden-upsert.csv",
+     "source": "upload",
+     "filename": "golden-upsert.csv",
+     "fileKind": "csv",
+     "targetEntity": "catalog-transfer-v2",
+     "columnMapping": {
+      "kind": "catalog-source-v1",
+      "market": "IT",
+      "mode": "upsert",
+      "skuColumn": "SKU",
+      "policy": {
+       "shared": "replace",
+       "overrides": "replace"
+      },
+      "bindings": [
+       {
+        "source": "Name",
+        "entity": "Products",
+        "field": "name",
+        "format": "text"
+       },
+       {
+        "source": "Family",
+        "entity": "Products",
+        "field": "family",
+        "format": "text"
+       }
+      ]
+     },
+     "status": "QUEUED",
+     "totalRows": 1,
+     "createdBy": "owner",
+     "parentJobId": "fixture-3",
+     "planToken": "01711e371e32a77fefbeccc17859cd1677d74bdd71d5e5e03443df89ff60d08e",
+     "planComputedAt": "2026-09-15T10:00:00.000Z",
+     "planSummary": {
+      "productsCreated": 0,
+      "listingsCreated": 0,
+      "changed": 1,
+      "unchanged": 1,
+      "refused": 0,
+      "excluded": 0,
+      "productsAffected": 1,
+      "listingsAffected": 0,
+      "newOverrides": 0,
+      "preservedOverrides": 2,
+      "alreadyEmpty": 0,
+      "clearUnchecked": 0,
+      "cleared": 0,
+      "ended": 0,
+      "pricesRecorded": 0
+     }
+    },
+    {
+     "successRows": 0,
+     "failedRows": 0,
+     "skippedRows": 0,
+     "id": "fixture-12",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.001Z",
+     "jobName": "golden.csv",
+     "filename": "golden.csv",
+     "fileKind": "csv",
+     "source": "url",
+     "sourceUrl": "https://supplier.example.test/golden.csv",
+     "targetEntity": "catalog-source-input-v1",
+     "status": "SOURCE_READY",
+     "totalRows": 1,
+     "createdBy": "owner",
+     "planToken": "d9a5d8ffbc666331d376fb9e6ab8dc2c9cbcc850416d24852a12792d70c88967",
+     "planSummary": {
+      "headers": [
+       "SKU",
+       "Name"
+      ],
+      "total": 1,
+      "hash": "d9a5d8ffbc666331d376fb9e6ab8dc2c9cbcc850416d24852a12792d70c88967",
+      "expiresAt": "2026-09-16T10:00:00.000Z",
+      "url": "https://supplier.example.test/golden.csv"
+     }
+    }
+   ],
+   "importRows": [
+    {
+     "status": "PENDING",
+     "errorMessage": null,
+     "id": "fixture-2",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-1",
+     "rowIndex": 1,
+     "parsedValues": [
+      {
+       "SKU": "000777",
+       "Name": "Golden new product",
+       "Family": "coats"
+      },
+      {
+       "SKU": "000001",
+       "Name": "Golden variant name",
+       "Family": "coats"
+      }
+     ]
+    },
+    {
+     "status": "SUCCESS",
+     "errorMessage": null,
+     "id": "fixture-4",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 1,
+     "targetId": "[\"Products\",\"000777\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 2,
+        "entity": "Products",
+        "sku": "000777",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden new product",
+        "source": {
+         "column": "B",
+         "file": "golden-upsert.csv"
+        }
+       },
+       {
+        "row": 2,
+        "entity": "Products",
+        "sku": "000777",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "family",
+        "action": "SET",
+        "value": "coats",
+        "source": {
+         "column": "C",
+         "file": "golden-upsert.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Products\",\"000777\"]",
+       "identity": {
+        "row": 2,
+        "entity": "Products",
+        "sku": "000777",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden new product",
+        "source": {
+         "column": "B",
+         "file": "golden-upsert.csv"
+        }
+       },
+       "before": null,
+       "patch": {
+        "name": "Golden new product",
+        "familyId": "f1",
+        "isParent": false
+       },
+       "rows": [
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000777",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden new product",
+         "source": {
+          "column": "B",
+          "file": "golden-upsert.csv"
+         }
+        },
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000777",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "family",
+         "action": "SET",
+         "value": "coats",
+         "source": {
+          "column": "C",
+          "file": "golden-upsert.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000777",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden new product",
+         "source": {
+          "column": "B",
+          "file": "golden-upsert.csv"
+         },
+         "before": null,
+         "after": "Golden new product",
+         "beforeState": "inherited",
+         "afterState": "stored",
+         "verdict": "changed"
+        },
+        {
+         "row": 2,
+         "entity": "Products",
+         "sku": "000777",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "family",
+         "action": "SET",
+         "value": "coats",
+         "source": {
+          "column": "C",
+          "file": "golden-upsert.csv"
+         },
+         "before": null,
+         "after": "coats",
+         "beforeState": "inherited",
+         "afterState": "stored",
+         "verdict": "changed"
+        }
+       ],
+       "contractHash": "b429397db832397c58ba7f83d17b7f05760de0abb0dc175a4a451301c3ae6fda",
+       "create": true
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [],
+      "preserved": []
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z",
+     "afterState": {
+      "version": 0,
+      "deletedAt": null,
+      "parentId": null,
+      "familyId": "f1",
+      "categories": [],
+      "categoryAttributes": {},
+      "localizedContent": {},
+      "isParent": false,
+      "id": "fixture-6",
+      "createdAt": "2026-09-15T10:00:00.000Z",
+      "updatedAt": "2026-09-15T10:00:00.000Z",
+      "sku": "000777",
+      "name": "Golden new product",
+      "basePrice": 0,
+      "status": "DRAFT",
+      "translations": [],
+      "parent": null
+     }
+    },
+    {
+     "status": "FAILED",
+     "errorMessage": "Product changed since preview; preview this SKU again",
+     "id": "fixture-5",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-3",
+     "rowIndex": 2,
+     "targetId": "[\"Products\",\"000001\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 3,
+        "entity": "Products",
+        "sku": "000001",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden variant name",
+        "source": {
+         "column": "B",
+         "file": "golden-upsert.csv"
+        }
+       },
+       {
+        "row": 3,
+        "entity": "Products",
+        "sku": "000001",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "family",
+        "action": "SET",
+        "value": "coats",
+        "source": {
+         "column": "C",
+         "file": "golden-upsert.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Products\",\"000001\"]",
+       "identity": {
+        "row": 3,
+        "entity": "Products",
+        "sku": "000001",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden variant name",
+        "source": {
+         "column": "B",
+         "file": "golden-upsert.csv"
+        }
+       },
+       "before": {
+        "id": "p1",
+        "sku": "000001",
+        "name": "Original 1",
+        "description": null,
+        "familyId": "f1",
+        "parentId": "p0",
+        "isParent": false,
+        "version": 3,
+        "basePrice": 25,
+        "totalStock": 17,
+        "categories": [],
+        "categoryAttributes": {},
+        "localizedContent": {},
+        "deletedAt": null,
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "translations": [],
+        "parent": {
+         "id": "p0",
+         "sku": "000000",
+         "name": "Original 0",
+         "description": null,
+         "familyId": "f1",
+         "parentId": null,
+         "isParent": true,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+       },
+       "patch": {
+        "familyId": "f1"
+       },
+       "rows": [
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden variant name",
+         "source": {
+          "column": "B",
+          "file": "golden-upsert.csv"
+         }
+        },
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "family",
+         "action": "SET",
+         "value": "coats",
+         "source": {
+          "column": "C",
+          "file": "golden-upsert.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden variant name",
+         "source": {
+          "column": "B",
+          "file": "golden-upsert.csv"
+         },
+         "before": "Original 1",
+         "after": "Golden variant name",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "changed"
+        },
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "family",
+         "action": "SET",
+         "value": "coats",
+         "source": {
+          "column": "C",
+          "file": "golden-upsert.csv"
+         },
+         "before": "coats",
+         "after": "coats",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "unchanged"
+        }
+       ],
+       "contractHash": "b429397db832397c58ba7f83d17b7f05760de0abb0dc175a4a451301c3ae6fda",
+       "create": false,
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "source"
+         },
+         "values": {
+          "title": "Golden variant name"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000000",
+        "before": {
+         "id": "p0",
+         "sku": "000000",
+         "name": "Original 0",
+         "description": null,
+         "familyId": "f1",
+         "parentId": null,
+         "isParent": true,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z",
+         "translations": [],
+         "parent": null
+        }
+       }
+      ],
+      "preserved": [
+       {
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       },
+       {
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-b",
+        "marketplace": "FR",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       }
+      ]
+     },
+     "completedAt": "2026-09-15T10:00:00.000Z"
+    },
+    {
+     "status": "REVIEWED",
+     "errorMessage": null,
+     "id": "fixture-11",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-10",
+     "rowIndex": 1,
+     "targetId": "[\"Products\",\"000001\"]",
+     "parsedValues": {
+      "rows": [
+       {
+        "row": 3,
+        "entity": "Products",
+        "sku": "000001",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden variant name",
+        "source": {
+         "column": "B",
+         "file": "golden-upsert.csv"
+        }
+       },
+       {
+        "row": 3,
+        "entity": "Products",
+        "sku": "000001",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "family",
+        "action": "SET",
+        "value": "coats",
+        "source": {
+         "column": "C",
+         "file": "golden-upsert.csv"
+        }
+       }
+      ],
+      "declaredParent": false,
+      "changed": true,
+      "target": {
+       "key": "[\"Products\",\"000001\"]",
+       "identity": {
+        "row": 3,
+        "entity": "Products",
+        "sku": "000001",
+        "channel": "",
+        "accountId": "",
+        "marketplace": "",
+        "aliasKey": "",
+        "locale": "",
+        "field": "name",
+        "action": "SET",
+        "value": "Golden variant name",
+        "source": {
+         "column": "B",
+         "file": "golden-upsert.csv"
+        }
+       },
+       "before": {
+        "id": "p1",
+        "sku": "000001",
+        "name": "Saved meanwhile",
+        "description": null,
+        "familyId": "f1",
+        "parentId": "p0",
+        "isParent": false,
+        "version": 4,
+        "basePrice": 25,
+        "totalStock": 17,
+        "categories": [],
+        "categoryAttributes": {},
+        "localizedContent": {},
+        "deletedAt": null,
+        "updatedAt": "2026-09-15T10:00:00.001Z",
+        "translations": [],
+        "parent": {
+         "id": "p0",
+         "sku": "000000",
+         "name": "Original 0",
+         "description": null,
+         "familyId": "f1",
+         "parentId": null,
+         "isParent": true,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+       },
+       "patch": {
+        "familyId": "f1"
+       },
+       "rows": [
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden variant name",
+         "source": {
+          "column": "B",
+          "file": "golden-upsert.csv"
+         }
+        },
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "family",
+         "action": "SET",
+         "value": "coats",
+         "source": {
+          "column": "C",
+          "file": "golden-upsert.csv"
+         }
+        }
+       ],
+       "cells": [
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "name",
+         "action": "SET",
+         "value": "Golden variant name",
+         "source": {
+          "column": "B",
+          "file": "golden-upsert.csv"
+         },
+         "before": "Saved meanwhile",
+         "after": "Golden variant name",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "changed"
+        },
+        {
+         "row": 3,
+         "entity": "Products",
+         "sku": "000001",
+         "channel": "",
+         "accountId": "",
+         "marketplace": "",
+         "aliasKey": "",
+         "locale": "",
+         "field": "family",
+         "action": "SET",
+         "value": "coats",
+         "source": {
+          "column": "C",
+          "file": "golden-upsert.csv"
+         },
+         "before": "coats",
+         "after": "coats",
+         "beforeState": "stored",
+         "afterState": "stored",
+         "verdict": "unchanged"
+        }
+       ],
+       "contractHash": "b429397db832397c58ba7f83d17b7f05760de0abb0dc175a4a451301c3ae6fda",
+       "create": false,
+       "contentWrites": [
+        {
+         "address": {
+          "tier": "source"
+         },
+         "values": {
+          "title": "Golden variant name"
+         },
+         "reset": []
+        }
+       ]
+      },
+      "issues": [],
+      "exclusions": [],
+      "dependencies": [
+       {
+        "sku": "000000",
+        "before": {
+         "id": "p0",
+         "sku": "000000",
+         "name": "Original 0",
+         "description": null,
+         "familyId": "f1",
+         "parentId": null,
+         "isParent": true,
+         "version": 3,
+         "basePrice": 25,
+         "totalStock": 17,
+         "categories": [],
+         "categoryAttributes": {},
+         "localizedContent": {},
+         "deletedAt": null,
+         "updatedAt": "2026-01-01T00:00:00.000Z",
+         "translations": [],
+         "parent": null
+        }
+       }
+      ],
+      "preserved": [
+       {
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-a",
+        "marketplace": "IT",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       },
+       {
+        "entity": "Overrides",
+        "sku": "000001",
+        "channel": "AMAZON",
+        "accountId": "account-b",
+        "marketplace": "FR",
+        "aliasKey": "",
+        "row": 0,
+        "locale": "",
+        "field": "material",
+        "action": "SET",
+        "before": "Protected cotton",
+        "after": "Protected cotton",
+        "beforeState": "stored",
+        "afterState": "stored",
+        "verdict": "unchanged"
+       }
+      ]
+     }
+    },
+    {
+     "status": "PENDING",
+     "errorMessage": null,
+     "id": "fixture-13",
+     "createdAt": "2026-09-15T10:00:00.000Z",
+     "updatedAt": "2026-09-15T10:00:00.000Z",
+     "jobId": "fixture-12",
+     "rowIndex": 1,
+     "parsedValues": [
+      {
+       "SKU": "000002",
+       "Name": "Fetched golden name"
+      }
+     ]
+    }
+   ],
+   "outbound": []
+  }
+ }
+]

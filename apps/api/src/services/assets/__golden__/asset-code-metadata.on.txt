@@ -1,0 +1,2 @@
+200
+{"asset":{"workspaceId":"nexus_legacy_workspace","id":"golden-asset-3","code":null,"label":"Gloves","type":"image","mimeType":"image/jpeg","sizeBytes":1000,"storageProvider":"cloudinary","storageId":"golden/golden-asset-3","url":"https://example.test/golden-asset-3.jpg","originalFilename":null,"contentHash":null,"metadata":{"alt":"Gloves on white"},"folderId":null,"createdAt":"2026-09-15T06:40:00.000Z","updatedAt":"2026-09-15T10:00:00.000Z"}}

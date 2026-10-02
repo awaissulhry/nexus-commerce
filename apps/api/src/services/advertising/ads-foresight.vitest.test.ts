@@ -18,6 +18,8 @@ vi.mock('../../db.js', () => ({
     get $queryRawUnsafe() { return queryRawUnsafe },
     adSchedule: { get findMany() { return scheduleFindMany }, get count() { return scheduleCount } },
     rankTarget: { get findMany() { return rankFindMany } },
+    // R16 — the per-business engine switches Foresight reads (none set here: the env alone decides).
+    automationSwitch: { findUnique: async () => null },
   },
 }))
 

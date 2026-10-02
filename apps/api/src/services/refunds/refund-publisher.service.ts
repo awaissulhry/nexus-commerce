@@ -58,6 +58,8 @@ export type RefundOutcome =
   | 'OK_MANUAL_REQUIRED'
   | 'NOT_IMPLEMENTED'
   | 'FAILED'
+  /** The channel's refund switch is off: nothing was sent and no money moved (callers write nothing). */
+  | 'DRY_RUN'
 
 export interface RefundPublishResult {
   outcome: RefundOutcome
@@ -132,7 +134,7 @@ export function getRefundChannelAdapterStatus(): RefundChannelAdapterStatus[] {
       mode: isShopifyRefundReal() ? 'real' : 'dryRun',
       notes: isShopifyRefundReal()
         ? 'Admin GraphQL refundCreate mutation, refunding proportionally across capture/sale transactions.'
-        : 'Mocked refundGid. Set NEXUS_ENABLE_SHOPIFY_REFUND=true to flip to the real GraphQL refundCreate path.',
+        : 'Dry run: nothing is sent, no money moves and the return stays unrefunded. Set NEXUS_ENABLE_SHOPIFY_REFUND=true for the real GraphQL refundCreate path.',
       envFlag: 'NEXUS_ENABLE_SHOPIFY_REFUND',
     },
     {
@@ -327,19 +329,14 @@ async function publishEbayRefund(
     'Refund issued via Nexus Commerce'
   ).slice(0, 500)
 
-  // For v1 we issue a full-order refund (sums to ret.refundCents).
-  // Per-line partial refunds need refundItems[] with eBay
-  // lineItemIds, which require us to have stored them on
-  // OrderItem.ebayMetadata at order ingestion. Future enhancement.
+  // An order-level refund of exactly ret.refundCents (07 O12: before, the amount was computed and never sent, and
+  // eBay takes either orderLevelRefundAmount or refundItems[]). Per-line refunds need refundItems[] with eBay
+  // lineItemIds stored on OrderItem at ingestion — a follow-up.
   const body: Record<string, unknown> = {
     reasonForRefund,
     comment,
+    orderLevelRefundAmount: { value: totalAmount, currency: refundCurrency },
   }
-  // When refundCents differs from the order total OR the operator
-  // supplied per-item amounts, we'd build refundItems. For now,
-  // issue_refund with no refundItems[] = full refund of the
-  // remaining refundable amount; we coerce eBay to honour our
-  // refundCents by passing it as a partialRefundAmount when present.
   if (Object.keys(input.itemAmountsCents ?? {}).length > 0) {
     // Future: per-line refund mapping. Surface a clear error so the
     // caller knows it didn't apply.
@@ -523,6 +520,18 @@ function isShopifyRefundReal(): boolean {
   return process.env.NEXUS_ENABLE_SHOPIFY_REFUND === 'true'
 }
 
+/**
+ * Why a refund on this channel would be a dry run (its switch is off), in the words the Returns page shows; null when
+ * the channel's refund call is real (or not a dry-run channel). A dry run moves no money, so nothing may be marked
+ * refunded for it (100 % honest UI, 2026-10-02).
+ */
+export function refundDryRunMessage(channel: string | null | undefined): string | null {
+  if ((channel ?? '').toUpperCase() === 'SHOPIFY' && !isShopifyRefundReal()) {
+    return 'Dry run — no money moved: Shopify refunds are off here (NEXUS_ENABLE_SHOPIFY_REFUND). The return stays unrefunded; refund it in Shopify, then mark it refunded here.'
+  }
+  return null
+}
+
 async function publishShopifyRefund(
   ret: LoadedReturn,
   input: RefundPublishInput,
@@ -536,20 +545,10 @@ async function publishShopifyRefund(
   }
 
   if (!isShopifyRefundReal()) {
-    // dryRun-default: return a mock OK so the surface can be wired
-    // and exercised without the SHOPIFY_* env or marketplace
-    // credentials in place.
-    const mockGid = `gid://shopify/Refund/MOCK-${Date.now()}`
-    logger.info('shopify refund: dryRun (mock)', {
-      returnId: ret.id,
-      shopifyOrderId: order.channelOrderId,
-      mockGid,
-    })
-    return {
-      outcome: 'OK',
-      channelRefundId: mockGid,
-      channelMessage: `Shopify refund mocked (set NEXUS_ENABLE_SHOPIFY_REFUND=true to issue for real).`,
-    }
+    // Dry run: nothing is sent and no money moves, so the answer says so — never a mock "OK" with a made-up refund id
+    // (that marked returns refunded while the buyer got nothing; 2026-10-02).
+    logger.info('shopify refund: dry run, nothing sent', { returnId: ret.id, shopifyOrderId: order.channelOrderId })
+    return { outcome: 'DRY_RUN', channelMessage: refundDryRunMessage('SHOPIFY')! }
   }
 
   // P1.4b — the order's own Shopify account on the 2026-07 GraphQL client (services/shopify/

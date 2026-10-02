@@ -1,0 +1,2 @@
+200
+{"range":{"days":7,"since":"2026-09-08T10:00:00.000Z"},"byProvider":[{"name":"anthropic","calls":2,"inputTokens":1500,"outputTokens":200,"costUSD":0.133456},{"name":"gemini","calls":1,"inputTokens":10,"outputTokens":5,"costUSD":0.0005}],"byFeature":[{"name":"alt-text","calls":1,"inputTokens":10,"outputTokens":5,"costUSD":0.0005},{"name":"listing-content","calls":2,"inputTokens":1500,"outputTokens":200,"costUSD":0.133456}],"totals":{"calls":3,"inputTokens":1510,"outputTokens":205,"costUSD":0.133956}}

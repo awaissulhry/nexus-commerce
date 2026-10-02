@@ -19,6 +19,9 @@ import { currentProfileUser } from '../lib/auth/current-user.js'
  *   work). Writes a new audit row of its own so the revert itself
  *   is auditable.
  *
+ * MCP full control P3: the two reads live in services/audit/audit-search.service.ts; the
+ * revert (a write) stays here.
+ *
  * No auth gate yet — single-tenant. When auth lands, wrap with
  * the standard requireAuth() middleware.
  */
@@ -26,6 +29,7 @@ import { currentProfileUser } from '../lib/auth/current-user.js'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { writeSettingsAudit, type SettingsAuditKey } from '../utils/settings-audit.js'
+import { listSettingsAudit, settingsAuditKeyCounts, type SettingsAuditQuery } from '../services/audit/audit-search.service.js'
 
 const KNOWN_KEYS: ReadonlyArray<SettingsAuditKey> = [
   'account',
@@ -40,81 +44,10 @@ const KNOWN_KEYS: ReadonlyArray<SettingsAuditKey> = [
 const settingsAuditRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /api/settings/audit ─────────────────────────────────────
   fastify.get<{
-    Querystring: {
-      key?: string
-      action?: string
-      since?: string
-      until?: string
-      limit?: string
-      offset?: string
-    }
+    Querystring: SettingsAuditQuery
   }>('/settings/audit', async (request, reply) => {
     try {
-      const q = request.query
-      const limit = Math.min(
-        Math.max(parseInt(q.limit ?? '50', 10) || 50, 1),
-        200,
-      )
-      const offset = Math.max(parseInt(q.offset ?? '0', 10) || 0, 0)
-
-      const where: any = { entityType: 'Settings' }
-      if (q.key && q.key !== 'all') {
-        // Allow comma-separated list ("key=account,profile").
-        const keys = q.key.split(',').map((k) => k.trim()).filter(Boolean)
-        if (keys.length === 1) where.entityId = keys[0]
-        else if (keys.length > 1) where.entityId = { in: keys }
-      }
-      if (q.action) {
-        where.action = q.action
-      }
-      if (q.since) {
-        const d = new Date(q.since)
-        if (!Number.isNaN(d.getTime())) {
-          where.createdAt = { ...(where.createdAt ?? {}), gte: d }
-        }
-      }
-      if (q.until) {
-        const d = new Date(q.until)
-        if (!Number.isNaN(d.getTime())) {
-          where.createdAt = { ...(where.createdAt ?? {}), lte: d }
-        }
-      }
-
-      const [total, rows] = await Promise.all([
-        prisma.auditLog.count({ where }),
-        prisma.auditLog.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          take: limit,
-          skip: offset,
-          select: {
-            id: true,
-            entityId: true,
-            action: true,
-            before: true,
-            after: true,
-            metadata: true,
-            createdAt: true,
-            userId: true,
-          },
-        }),
-      ])
-
-      return {
-        total,
-        limit,
-        offset,
-        items: rows.map((r) => ({
-          id: r.id,
-          key: r.entityId,
-          action: r.action,
-          before: r.before,
-          after: r.after,
-          metadata: r.metadata,
-          createdAt: r.createdAt.toISOString(),
-          userId: r.userId,
-        })),
-      }
+      return await listSettingsAudit(request.query)
     } catch (err: any) {
       fastify.log.error({ err }, '[settings/audit GET] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -125,15 +58,7 @@ const settingsAuditRoutes: FastifyPluginAsync = async (fastify) => {
   // 30-day rollup. Cheap groupBy; one query, no joins.
   fastify.get('/settings/audit/keys', async (_request, reply) => {
     try {
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-      const rows = await prisma.auditLog.groupBy({
-        by: ['entityId'],
-        where: { entityType: 'Settings', createdAt: { gte: cutoff } },
-        _count: { _all: true },
-      })
-      const byKey: Record<string, number> = {}
-      for (const r of rows) byKey[r.entityId] = r._count._all
-      return { byKey, since: cutoff.toISOString() }
+      return await settingsAuditKeyCounts()
     } catch (err: any) {
       fastify.log.error({ err }, '[settings/audit/keys] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })

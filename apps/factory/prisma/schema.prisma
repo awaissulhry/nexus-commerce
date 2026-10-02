@@ -1025,6 +1025,7 @@ model User {
   chatMessages       ChatMessage[] // FC1
   chatMemberships    ChatMember[] // FC1
   chatReactions      ChatReaction[] // FC1
+  claudeTokens       FactoryAccessToken[] // P11 — the Claude connections this person's access runs through
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 }
@@ -1064,6 +1065,25 @@ model Session {
   userAgent      String?
   ip             String?
   createdAt      DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// P11 (MCP full control, decision P-1 = A) — one Claude connection to the factory, on this machine only. The OWNER
+/// creates it in Settings › Integrations › Claude; the raw token is shown once and only its sha256 is kept. Every MCP
+/// call resolves token → user → that user's permissions now, so a revoked, expired or deactivated one stops at once.
+model FactoryAccessToken {
+  id          String    @id @default(cuid())
+  userId      String // the person the calls run as (their roles decide what Claude may read and draft)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String
+  tokenHash   String    @unique // sha256 of the raw token; raw never stored
+  scopes      String // "read" | "read,draft"
+  expiresAt   DateTime // at most 90 days after creation
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdById String // the OWNER who created it
+  createdAt   DateTime  @default(now())
 
   @@index([userId])
 }

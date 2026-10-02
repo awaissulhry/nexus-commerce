@@ -174,3 +174,26 @@ export async function syncBuilderRuleFromAssignments(
   }
   return { updated }
 }
+
+/**
+ * MCP full control A3 — the read side: what may change one campaign again on its own. The ENABLED advertising rules
+ * bound to it through `CampaignRuleAssignment` (every kind, each with the kind it is bound by), and its schedule when
+ * enabled. Read-only. Claude's ad change tools name them in a preview: a rule or schedule on the campaign may move a bid
+ * or budget again minutes after an approved change.
+ */
+export async function automationsBoundToCampaign(campaignId: string): Promise<{
+  rules: Array<{ id: string; name: string; kind: string }>
+  schedules: Array<{ id: string; name: string }>
+}> {
+  const [links, schedules] = await Promise.all([
+    prisma.campaignRuleAssignment.findMany({
+      where: { campaignId, rule: { enabled: true, domain: 'advertising' } },
+      select: { kind: true, rule: { select: { id: true, name: true } } },
+    }),
+    prisma.adSchedule.findMany({ where: { campaignId, enabled: true }, select: { id: true, name: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }),
+  ])
+  const rules = links
+    .map((link) => ({ id: link.rule.id, name: link.rule.name, kind: link.kind }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  return { rules, schedules }
+}

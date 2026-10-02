@@ -44,14 +44,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { repricingEngineService } from '../services/repricing-engine.service.js'
-
-const VALID_STRATEGIES = new Set([
-  'match_buy_box',
-  'beat_lowest_by_pct',
-  'beat_lowest_by_amount',
-  'fixed_to_buy_box_minus',
-  'manual',
-])
+import { createRepricingRule, patchRepricingRule, type RepricingRuleCreate, type RepricingRulePatch } from '../services/repricing-rule.service.js'
+import { isRefused } from '../services/automation/service-outcome.js'
 
 const repricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/products/:id/repricing-rules', async (request, reply) => {
@@ -68,148 +62,19 @@ const repricingRulesRoutes: FastifyPluginAsync = async (fastify) => {
     return { rules }
   })
 
+  // R17 — create and edit moved unchanged into repricing-rule.service.ts (save-price-rule saves through them).
   fastify.post('/products/:id/repricing-rules', async (request, reply) => {
     const { id: productId } = request.params as { id: string }
-    const body = request.body as {
-      channel?: string
-      marketplace?: string | null
-      enabled?: boolean
-      minPrice?: number | string
-      maxPrice?: number | string
-      strategy?: string
-      beatPct?: number | string | null
-      beatAmount?: number | string | null
-      activeFromHour?: number | null
-      activeToHour?: number | null
-      activeDays?: number[]
-      notes?: string | null
-    }
-    if (!body.channel?.trim())
-      return reply.code(400).send({ error: 'channel is required' })
-    const minPrice = Number(body.minPrice)
-    const maxPrice = Number(body.maxPrice)
-    if (!(minPrice >= 0))
-      return reply.code(400).send({ error: 'minPrice must be >= 0' })
-    if (!(maxPrice >= minPrice))
-      return reply.code(400).send({ error: 'maxPrice must be >= minPrice' })
-    if (!body.strategy || !VALID_STRATEGIES.has(body.strategy))
-      return reply.code(400).send({
-        error: `strategy must be one of ${[...VALID_STRATEGIES].join(', ')}`,
-      })
-    // Strategy-specific param presence checks. Server-side belt-
-    // and-braces — the UI should already be enforcing these, but
-    // direct API callers shouldn't be able to create a rule that
-    // can never decide.
-    if (body.strategy === 'beat_lowest_by_pct' && body.beatPct == null)
-      return reply
-        .code(400)
-        .send({ error: 'beatPct is required for beat_lowest_by_pct' })
-    if (
-      (body.strategy === 'beat_lowest_by_amount' ||
-        body.strategy === 'fixed_to_buy_box_minus') &&
-      body.beatAmount == null
-    )
-      return reply
-        .code(400)
-        .send({ error: `beatAmount is required for ${body.strategy}` })
-
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-      select: { id: true },
-    })
-    if (!product) return reply.code(404).send({ error: 'product not found' })
-
-    try {
-      const rule = await prisma.repricingRule.create({
-        data: {
-          productId,
-          channel: body.channel.toUpperCase(),
-          marketplace: body.marketplace?.toUpperCase() || null,
-          enabled: body.enabled ?? true,
-          minPrice,
-          maxPrice,
-          strategy: body.strategy,
-          beatPct: body.beatPct == null ? null : Number(body.beatPct),
-          beatAmount:
-            body.beatAmount == null ? null : Number(body.beatAmount),
-          activeFromHour: body.activeFromHour ?? null,
-          activeToHour: body.activeToHour ?? null,
-          activeDays: Array.isArray(body.activeDays) ? body.activeDays : [],
-          notes: body.notes?.trim() || null,
-        },
-      })
-      return reply.code(201).send({ rule })
-    } catch (err: any) {
-      if (err?.code === 'P2002')
-        return reply.code(409).send({
-          error: `a rule already exists for (channel=${body.channel}, marketplace=${body.marketplace ?? 'any'})`,
-        })
-      throw err
-    }
+    const outcome = await createRepricingRule(productId, request.body as RepricingRuleCreate)
+    if (isRefused(outcome)) return reply.code(outcome.status).send(outcome.body)
+    return reply.code(201).send(outcome.value)
   })
 
   fastify.patch('/repricing-rules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      enabled?: boolean
-      minPrice?: number | string
-      maxPrice?: number | string
-      strategy?: string
-      beatPct?: number | string | null
-      beatAmount?: number | string | null
-      activeFromHour?: number | null
-      activeToHour?: number | null
-      activeDays?: number[]
-      notes?: string | null
-    }
-    // productId, channel, marketplace are part of the @@unique key
-    // — to "move" a rule, delete + create.
-    const data: Record<string, unknown> = {}
-    if (body.enabled !== undefined) data.enabled = !!body.enabled
-    if (body.minPrice !== undefined) {
-      const v = Number(body.minPrice)
-      if (!(v >= 0))
-        return reply.code(400).send({ error: 'minPrice must be >= 0' })
-      data.minPrice = v
-    }
-    if (body.maxPrice !== undefined) {
-      const v = Number(body.maxPrice)
-      if (!(v >= 0))
-        return reply.code(400).send({ error: 'maxPrice must be >= 0' })
-      data.maxPrice = v
-    }
-    if (body.strategy !== undefined) {
-      if (!VALID_STRATEGIES.has(body.strategy))
-        return reply.code(400).send({
-          error: `strategy must be one of ${[...VALID_STRATEGIES].join(', ')}`,
-        })
-      data.strategy = body.strategy
-    }
-    if (body.beatPct !== undefined)
-      data.beatPct = body.beatPct == null ? null : Number(body.beatPct)
-    if (body.beatAmount !== undefined)
-      data.beatAmount =
-        body.beatAmount == null ? null : Number(body.beatAmount)
-    if (body.activeFromHour !== undefined)
-      data.activeFromHour = body.activeFromHour
-    if (body.activeToHour !== undefined)
-      data.activeToHour = body.activeToHour
-    if (body.activeDays !== undefined)
-      data.activeDays = Array.isArray(body.activeDays) ? body.activeDays : []
-    if (body.notes !== undefined) data.notes = body.notes?.trim() || null
-    if (Object.keys(data).length === 0)
-      return reply.code(400).send({ error: 'no mutable fields supplied' })
-    try {
-      const rule = await prisma.repricingRule.update({
-        where: { id },
-        data,
-      })
-      return { rule }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'repricing-rule not found' })
-      throw err
-    }
+    const outcome = await patchRepricingRule(id, request.body as RepricingRulePatch)
+    if (isRefused(outcome)) return reply.code(outcome.status).send(outcome.body)
+    return outcome.value
   })
 
   fastify.delete('/repricing-rules/:id', async (request, reply) => {

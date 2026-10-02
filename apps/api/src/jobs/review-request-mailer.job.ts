@@ -31,6 +31,7 @@ import {
   benignSuppressedReason,
 } from '../services/reviews/amazon-solicitations.service.js'
 import { sendSentimentCheckEmail, resolveLocaleForMarketplace } from '../services/reviews/sentiment-check-email.service.js'
+import { readReviewMailerState } from '../services/reviews/review-mailer-state.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -70,11 +71,8 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
   // RV.4.2 — operational kill switch. When paused, log + bail before
   // doing any work. The cron tick still runs (no harm) but produces a
   // no-op result so the dashboard reflects the paused state.
-  const state = await prisma.reviewMailerState.upsert({
-    where: { id: 'default' },
-    update: {},
-    create: { id: 'default' },
-  })
+  // R1 — one switch per business (review-mailer-state.service.ts).
+  const state = await readReviewMailerState()
   if (state.isPaused) {
     const durationMs = Date.now() - startedAt
     lastRunAt = new Date()

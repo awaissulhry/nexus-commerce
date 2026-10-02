@@ -26,7 +26,7 @@
 
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import prisma from '../db.js'
-import { listInbox } from '../services/notification-inbox.service.js'
+import { listInbox, markNotificationsRead } from '../services/notification-inbox.service.js'
 
 /**
  * The session's user, or a 401. Never a fallback identity: a shared default id is how
@@ -62,16 +62,14 @@ const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params
       const userId = userIdFor(request, reply)
       if (!userId) return reply
-      const result = await prisma.notification.updateMany({
-        where: { id, userId, readAt: null },
-        data: { readAt: new Date() },
-      })
-      if (result.count === 0) {
+      // MCP full control P7 — the write lives in the notification service (Claude's acknowledge-alerts uses it too).
+      const updated = await markNotificationsRead([id], userId)
+      if (updated === 0) {
         // Not an error; might be already read or wrong user. Return
         // 200 so the client can be idempotent.
         return { ok: true, updated: 0 }
       }
-      return { ok: true, updated: result.count }
+      return { ok: true, updated }
     },
   )
 

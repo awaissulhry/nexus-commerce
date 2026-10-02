@@ -12,6 +12,9 @@ import {
   checkItemIdOwnership,
   parseListingStatus,
   parseTopLevelSku,
+  parseSellerUserId,
+  checkSellerOwnership,
+  combineOwnership,
 } from './ebay-itemid-relink.pure.js'
 
 const FAMILY = ['VENTRA-JACKET-ALT1', 'ventra-alt1-s', 'ventra-alt1-m', 'ventra-alt1-l']
@@ -110,5 +113,56 @@ describe('GetItem parsing', () => {
   it('returns null when only variation SKUs exist', () => {
     const raw = '<Item><Variations><Variation><SKU>VAR-1</SKU></Variation></Variations></Item>'
     expect(parseTopLevelSku(raw)).toBeNull()
+  })
+})
+
+// I4 / G2 — the SKUs alone do not prove ownership: two businesses that share stock by SKU carry the same SKUs. The
+// item must also be listed by the seller behind the account Nexus would drive it through.
+describe('checkSellerOwnership', () => {
+  it('VERIFIES when eBay names the account\'s own seller (case-insensitive, as eBay user ids are)', () => {
+    expect(checkSellerOwnership({ itemSeller: 'Test-Seller_A', accountSeller: 'test-seller_a' })).toMatchObject({ verdict: 'verified' })
+  })
+  it('REJECTS an item another seller lists, and names both sellers', () => {
+    const r = checkSellerOwnership({ itemSeller: 'test-seller-b', accountSeller: 'test-seller-a' })
+    expect(r.verdict).toBe('rejected')
+    expect(r.reason).toContain('test-seller-b')
+    expect(r.reason).toContain('test-seller-a')
+  })
+  it('is UNVERIFIABLE, never verified, when the account has no recorded seller', () => {
+    for (const accountSeller of [null, '', '   ']) {
+      const r = checkSellerOwnership({ itemSeller: 'test-seller-a', accountSeller })
+      expect(r.verdict).toBe('unverifiable')
+      expect(r.reason).toMatch(/no recorded eBay seller/)
+    }
+  })
+  it('is UNVERIFIABLE when eBay does not say who lists the item', () => {
+    expect(checkSellerOwnership({ itemSeller: null, accountSeller: 'test-seller-a' }).verdict).toBe('unverifiable')
+  })
+})
+
+describe('combineOwnership', () => {
+  const sku = (verdict: 'verified' | 'unverifiable' | 'rejected') => ({ verdict, reason: `skus ${verdict}`, matchedSkus: ['a'], foreignSkus: [] })
+  const seller = (verdict: 'verified' | 'unverifiable' | 'rejected') => ({ verdict, reason: `seller ${verdict}` })
+  it('the worse verdict wins: rejected over unverifiable over verified', () => {
+    expect(combineOwnership(sku('verified'), seller('verified')).verdict).toBe('verified')
+    expect(combineOwnership(sku('verified'), seller('unverifiable')).verdict).toBe('unverifiable')
+    expect(combineOwnership(sku('unverifiable'), seller('rejected')).verdict).toBe('rejected')
+    expect(combineOwnership(sku('rejected'), seller('verified')).verdict).toBe('rejected')
+  })
+  it('says both reasons, and keeps the SKU lists', () => {
+    const r = combineOwnership(sku('verified'), seller('unverifiable'))
+    expect(r.reason).toContain('skus verified')
+    expect(r.reason).toContain('seller unverifiable')
+    expect(r.matchedSkus).toEqual(['a'])
+  })
+})
+
+describe('parseSellerUserId', () => {
+  it('reads Item.Seller.UserID, not another UserID in the body', () => {
+    const raw = '<GetItemResponse><Item><Seller><UserID>test-seller-a</UserID><FeedbackScore>9</FeedbackScore></Seller><HighBidder><UserID>buyer-x</UserID></HighBidder></Item></GetItemResponse>'
+    expect(parseSellerUserId(raw)).toBe('test-seller-a')
+  })
+  it('returns null when eBay names no seller', () => {
+    expect(parseSellerUserId('<Item><HighBidder><UserID>buyer-x</UserID></HighBidder></Item>')).toBeNull()
   })
 })

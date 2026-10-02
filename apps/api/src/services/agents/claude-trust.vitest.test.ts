@@ -1,0 +1,425 @@
+/**
+ * MCP full control C5 — trust levels and limits for Claude, per business and per tool, and Claude's brakes.
+ *
+ * Proven through Claude's own door (runToolForClaude → the gate → the Approvals sweep's commit), on a real PostgreSQL
+ * with the production schema and business policies (PGlite). The master price service is real; nothing is sent to a
+ * marketplace from here.
+ *
+ *   no rows     every change waits for a person, exactly as before C5 (level ask)
+ *   auto        inside the tool's limits and with the connection's nexus.run scope, a change is scheduled by the
+ *               business's rule, as the person who asked (decisionVia auto), and the normal commit runs it after the
+ *               undo window; outside them, or without the scope, it waits for a person and Claude is told why
+ *   off         the tool is refused (and hidden from tools/list)
+ *   ceilings    a level above the tool's code ceiling is read as the ceiling, and cannot be saved
+ *   brakes      the daily cap, Pause (instant: what waits to run by rule goes back to a person), the level lowered in
+ *               the window, and the automatic pause after 5 stale or failed rule-runs in an hour
+ *   raising     needs settings.security.manage (the routes) and a fresh 2FA code; lowering does not
+ *   businesses  one business's level never applies in another
+ */
+import { randomUUID } from 'node:crypto'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { generateSecret, generateSync } from 'otplib'
+import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
+import { formulaDatabase } from '../../test-support/formula-database.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
+
+let database: Awaited<ReturnType<typeof formulaDatabase>>
+// As db.ts wraps it: inside a transaction, `prisma.x` is that transaction's client.
+vi.mock('../../db.js', async () => {
+  const { contextualDatabase } = await import('../../lib/database-context.js')
+  let wrapped: object | null = null
+  return {
+    default: new Proxy({}, {
+      get: (_target, property) => Reflect.get((wrapped ??= contextualDatabase(database.client as never)), property),
+    }),
+  }
+})
+vi.mock('../../lib/queue.js', () => ({
+  outboundSyncQueue: null, channelSyncQueue: null, bulkJobQueue: null, redis: null,
+  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
+  addJobSafely: vi.fn(async () => ({ enqueued: false })),
+}))
+vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
+vi.mock('../pim/readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
+
+import { __stepUpTest } from '../../lib/auth/step-up.js'
+import { commitScheduledApproval, UNDO_WINDOW_MS } from '../agent-fleet/approval-inbox.service.js'
+import type { McpPrincipal } from '../mcp/mcp-auth.js'
+import { runToolForClaude } from '../mcp/mcp-tool-call.js'
+import { getTool } from './tool-registry.js'
+import { z } from 'zod'
+import type { AgentTool } from './tool-types.js'
+import {
+  AUTO_PAUSE_FAILURES,
+  limitsTighten,
+  claudeOffTools,
+  claudeRuleOf,
+  listClaudeRules,
+  pauseAutoRuns,
+  resumeAutoRuns,
+  setClaudeRule,
+  setDailyAutoCap,
+} from './claude-trust.service.js'
+
+const A = LEGACY_WORKSPACE_ID
+const B = 'c5_trust_bravo'
+const TIMEOUT = 30_000
+const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
+const inside = <T>(work: () => Promise<T>, workspaceId = A) => withWorkspace(business(workspaceId), work)
+const db = () => database.client
+
+const EVERYTHING = new Set<string>([...Object.values(F), ...Object.values(FIELDS)])
+const ids = { person: '', productA: '', productB: '', stale: '' }
+let secret = ''
+const names = { A: '', B: 'Bravo trust business' }
+
+/** The person, as Claude's door sees them: a token's business, permissions and scopes. */
+function claude(workspaceId = A, scopes: string[] = ['nexus.read', 'nexus.write', 'nexus.run']): McpPrincipal {
+  return {
+    kind: 'user',
+    userId: ids.person,
+    label: 'Tara Trust',
+    permissions: { isOwner: false, permissions: EVERYTHING },
+    workspace: business(workspaceId),
+    business: { id: workspaceId, name: workspaceId === A ? names.A : names.B },
+    via: 'claude',
+    oauthGrantId: `grant-${workspaceId}`,
+    scopes,
+  } as McpPrincipal
+}
+/** A person who manages security settings (may raise); `brake` = one who may only use Claude here (may lower and pause). */
+const actor = () => ({ userId: ids.person, label: 'Tara Trust', canManage: true })
+const brake = () => ({ userId: ids.person, label: 'Tara Trust', canManage: false })
+const code = () => {
+  __stepUpTest.reset()
+  return generateSync({ secret })
+}
+
+/** One tools/call as Claude makes it, and the JSON Claude reads. */
+async function call(tool: string, args: Record<string, unknown>, who = claude()) {
+  const result = await runToolForClaude(who, getTool(tool)!, { ...args, business: who.business.name })
+  return { isError: !!result.isError, answer: JSON.parse((result.content as Array<{ text: string }>).map((b) => b.text).join('')) }
+}
+
+const approvalOf = (id: string, workspaceId = A) => inside(() => db().agentApproval.findUniqueOrThrow({ where: { id } }), workspaceId)
+const priceOf = async (id: string, workspaceId = A) => inside(async () => Number((await db().product.findUniqueOrThrow({ where: { id } })).basePrice), workspaceId)
+const setPriceDirectly = (id: string, price: string) => inside(() => db().product.update({ where: { id }, data: { basePrice: price } }))
+/** The window closes: what the sweep then does. */
+async function windowCloses(approvalId: string) {
+  await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+  return inside(() => commitScheduledApproval(approvalId))
+}
+/** Set a level (and limits) the way the Settings page does: raising takes a fresh code. */
+async function setLevel(tool: string, level: string, limits?: Record<string, unknown> | null, workspaceId = A) {
+  const saved = await inside(() => setClaudeRule(actor(), tool, { level, ...(limits !== undefined ? { limits } : {}), code: code() }), workspaceId)
+  expect(saved, 'error' in saved ? saved.error : '').toMatchObject({ ok: true })
+}
+const resetRules = () => inside(async () => {
+  await db().agentTool.deleteMany({})
+  await db().agentAutonomy.deleteMany({})
+})
+
+beforeAll(async () => {
+  database = await formulaDatabase()
+  vi.stubEnv('NEXUS_OAUTH_ISSUER', 'https://web.example.test')
+  vi.stubEnv('NEXUS_AI_KILL_SWITCH', '')
+  const client = database.client
+  secret = generateSecret()
+  const role = await client.role.create({
+    data: { key: `C5_TRUST_${randomUUID().slice(0, 8)}`, name: 'Trust tester', description: 'test', isSystem: false, permissions: [...EVERYTHING] },
+  })
+  const person = await client.userProfile.create({
+    data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: 'Tara Trust', twoFactorEnabledAt: new Date(), twoFactorSecret: secret },
+  })
+  ids.person = person.id
+  await client.userRole.create({ data: { userId: person.id, roleId: role.id } })
+  await client.workspace.create({ data: { id: B, name: names.B, createdByUserId: person.id, creationKey: randomUUID() } })
+  names.A = (await client.workspace.findUniqueOrThrow({ where: { id: A } })).name
+  for (const workspaceId of [A, B]) {
+    const membership = await client.workspaceMembership.create({ data: { workspaceId, userId: person.id, status: 'active' } })
+    await client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
+  }
+  await inside(async () => {
+    ids.productA = (await client.product.create({ data: { sku: 'TEST-TRUST-1', name: 'Trust jacket', basePrice: '100.00' } })).id
+    ids.stale = (await client.product.create({ data: { sku: 'TEST-TRUST-STALE', name: 'Stale jacket', basePrice: '100.00' } })).id
+  })
+  await inside(async () => {
+    // The same SKU in the other business (shared stock by SKU): its own row, its own rules.
+    ids.productB = (await client.product.create({ data: { sku: 'TEST-TRUST-1', name: 'Bravo trust jacket', basePrice: '100.00' } })).id
+  }, B)
+}, 120_000)
+
+beforeEach(async () => {
+  __stepUpTest.reset()
+  await resetRules()
+  await inside(async () => { await db().agentAutonomy.deleteMany({}); await db().agentTool.deleteMany({}) }, B)
+  // What an earlier test left waiting to run by rule is not this test's: set it aside.
+  for (const workspaceId of [A, B]) {
+    await inside(() => db().agentApproval.updateMany({ where: { status: 'scheduled' }, data: { status: 'rejected', decisionVia: null } }), workspaceId)
+  }
+})
+
+afterAll(async () => {
+  vi.unstubAllEnvs()
+  await database?.close()
+}, 30_000)
+
+describe('C5 — with no rows, a change from Claude waits for a person, exactly as before', { timeout: TIMEOUT }, () => {
+  it('set-price: queued, nobody decided, and Claude is told nothing new', async () => {
+    const { answer } = await call('set-price', { productId: ids.productA, price: 101 })
+    expect(answer).toMatchObject({ status: 'waiting_for_approval', approvalId: expect.any(String) })
+    expect(answer).not.toHaveProperty('trust')
+    expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, decidedByUserId: null })
+    expect(await inside(() => claudeRuleOf('set-price'))).toMatchObject({ level: 'ask', ceiling: 'auto' })
+  })
+})
+
+describe('C5 — auto: runs by the business’s rule, inside the limits, through the normal window and commit', { timeout: TIMEOUT }, () => {
+  it('inside the limits: scheduled as the person who asked (decisionVia auto); after the window it runs as them', async () => {
+    await setLevel('set-price', 'auto')
+    const before = await priceOf(ids.productA)
+    const { answer } = await call('set-price', { productId: ids.productA, price: before + 5 })
+    expect(answer).toMatchObject({ status: 'runs_by_rule', approvalId: expect.any(String), trust: { level: 'auto' } })
+    const parked = await approvalOf(answer.approvalId)
+    expect(parked).toMatchObject({ status: 'scheduled', decisionVia: 'auto', decidedByUserId: ids.person, decidedBy: 'Tara Trust' })
+    expect(parked.executeAfter!.getTime() - parked.decidedAt!.getTime()).toBeCloseTo(UNDO_WINDOW_MS, -3)
+    expect(new Date(answer.runsAt).getTime()).toBe(parked.executeAfter!.getTime())
+    expect(await priceOf(ids.productA)).toBe(before) // nothing inside the window
+
+    expect(await windowCloses(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await priceOf(ids.productA)).toBe(before + 5)
+    const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId: answer.approvalId } }))
+    expect(change).toMatchObject({ via: 'claude', executedByUserId: ids.person })
+    expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'executed', decisionVia: 'auto' })
+  })
+
+  it('outside the limits it waits for a person, and Claude is told why; the business’s own limits move the line', async () => {
+    await setLevel('set-price', 'auto')
+    const before = await priceOf(ids.productA)
+    const far = await call('set-price', { productId: ids.productA, price: Math.round(before * 1.5) })
+    expect(far.answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: expect.stringMatching(/moves [\d.]+ %, more than the 10 % allowed without a person; a person approves it in Nexus$/) } })
+    expect(await approvalOf(far.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    await setLevel('set-price', 'auto', { maxChangePercent: 60 })
+    const allowed = await call('set-price', { productId: ids.productA, price: Math.round(before * 1.5) })
+    expect(allowed.answer.status).toBe('runs_by_rule')
+  })
+
+  it('a connection without nexus.run: every change waits for a person', async () => {
+    await setLevel('set-price', 'auto')
+    const { answer } = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 }, claude(A, ['nexus.read', 'nexus.write']))
+    expect(answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: expect.stringContaining('nexus.run') } })
+    expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'pending' })
+  })
+
+  it('confirm waits for a person until confirm-change exists, and says so', async () => {
+    await setLevel('set-price', 'confirm')
+    const { answer } = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'confirm', why: expect.stringContaining('Nexus') } })
+  })
+
+  it('undo-change follows the level of the change it asks for', async () => {
+    await setLevel('set-price', 'auto')
+    const before = await priceOf(ids.productA)
+    const ran = await call('set-price', { productId: ids.productA, price: before + 2 })
+    await windowCloses(ran.answer.approvalId)
+    const undo = await call('undo-change', { approvalId: ran.answer.approvalId })
+    expect(undo.answer).toMatchObject({ status: 'runs_by_rule', undoes: { changeId: expect.any(String) } })
+    expect(await windowCloses(undo.answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await priceOf(ids.productA)).toBe(before)
+  })
+
+  it('one business’s rule never applies in the other, for the same SKU', async () => {
+    await setLevel('set-price', 'auto')
+    const inB = await inside(() => call('set-price', { productId: ids.productB, price: 101 }, claude(B)), B)
+    expect(inB.answer).toMatchObject({ business: { id: B }, status: 'waiting_for_approval' })
+    expect(inB.answer).not.toHaveProperty('trust')
+    expect(await inside(() => claudeRuleOf('set-price'), B)).toMatchObject({ level: 'ask' })
+  })
+})
+
+describe('C5 — off and the ceilings', { timeout: TIMEOUT }, () => {
+  it('off: refused before anything runs, nothing queued, and left out of the tool list', async () => {
+    const saved = await inside(() => setClaudeRule(actor(), 'set-price', { level: 'off' })) // lowering: no code
+    expect(saved).toMatchObject({ ok: true })
+    const pending = () => inside(() => db().agentApproval.count({ where: { toolName: 'set-price', status: 'pending' } }))
+    const start = await pending()
+    const { isError, answer } = await call('set-price', { productId: ids.productA, price: 101 })
+    expect(isError).toBe(true)
+    expect(answer.error).toBe(`set-price is turned off for Claude in ${names.A}. Nothing was queued.`)
+    expect(await pending()).toBe(start)
+    expect(await inside(() => claudeOffTools())).toEqual(new Set(['set-price']))
+    expect(await inside(() => claudeOffTools(), B)).toEqual(new Set())
+  })
+
+  it('a level above the tool’s ceiling cannot be saved, and a stored one is read as the ceiling', async () => {
+    const message = getTool('send-customer-message')!
+    expect(message.maxClaudeTrust).toBe('ask')
+    const refused = await inside(() => setClaudeRule(actor(), 'send-customer-message', { level: 'auto', code: code() }))
+    expect(refused).toMatchObject({ ok: false, status: 400, error: expect.stringContaining('ask at most') })
+    const read = await inside(() => setClaudeRule(actor(), 'product-search', { level: 'auto', code: code() }))
+    expect(read).toMatchObject({ ok: false, status: 400 })
+    // Written straight into the row (an older release, a hand edit): still ask.
+    await inside(() => db().agentTool.create({ data: { name: 'send-customer-message', riskTier: 'high', requiresApproval: true, claudeTrust: 'auto' } }))
+    expect(await inside(() => claudeRuleOf('send-customer-message'))).toMatchObject({ level: 'ask', stored: 'auto', ceiling: 'ask' })
+  })
+})
+
+describe('C5 — raising takes a fresh 2FA code; lowering does not; every change is audited', { timeout: TIMEOUT }, () => {
+  it('raising without a code, or with a wrong one, is refused; with a fresh one it is saved and audited', async () => {
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto' }))).toMatchObject({ ok: false, status: 403, code: 'mfa_required' })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto', code: '000000' }))).toMatchObject({ ok: false, status: 400, code: 'mfa_invalid' })
+    expect(await inside(() => claudeRuleOf('set-price'))).toMatchObject({ level: 'ask' })
+    const saved = await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto', code: code() }))
+    expect(saved).toMatchObject({ ok: true, rule: { level: 'auto' } })
+    const audit = await inside(() => db().agentControlAudit.findFirstOrThrow({ where: { charterKey: 'claude', action: 'policy' }, orderBy: { createdAt: 'desc' } }))
+    expect(audit).toMatchObject({ actor: 'Tara Trust', fromValue: { tool: 'set-price', level: 'ask' }, toValue: { tool: 'set-price', level: 'auto' } })
+  })
+
+  it('limits: checked against the tool’s own schema, and a looser one needs the code', async () => {
+    await setLevel('set-price', 'auto')
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 500 }, code: code() }))).toMatchObject({ ok: false, status: 400 })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 5, extra: 1 }, code: code() }))).toMatchObject({ ok: false, status: 400 })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 15 } }))).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 15 }, code: code() }))).toMatchObject({ ok: true, rule: { limits: { maxChangePercent: 15 } } })
+  })
+
+  it('lowering needs no code', async () => {
+    await setLevel('set-price', 'auto')
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'ask' }))).toMatchObject({ ok: true, rule: { level: 'ask' } })
+  })
+
+  it('the rules list: every Claude tool, its level, ceiling and limits, and the business’s brakes', async () => {
+    await setLevel('set-price', 'auto')
+    const view = await inside(() => listClaudeRules())
+    expect(view.autonomy).toMatchObject({ paused: false, dailyAutoCap: 200 })
+    const setPrice = view.tools.find((t) => t.name === 'set-price')!
+    expect(setPrice).toMatchObject({ level: 'auto', ceiling: 'auto', levels: ['off', 'ask', 'confirm', 'auto'], limits: { maxChangePercent: 10 }, defaultLimits: { maxChangePercent: 10 } })
+    expect(setPrice.limitsSchema).toMatchObject({ type: 'object', properties: { maxChangePercent: expect.any(Object) } })
+    expect(view.tools.find((t) => t.name === 'product-search')).toMatchObject({ level: 'ask', levels: ['off', 'ask'] })
+    expect(view.tools.find((t) => t.name === 'send-customer-message')).toMatchObject({ ceiling: 'ask', levels: ['off', 'ask'] })
+    expect(view.tools.some((t) => t.name === 'draft-seo')).toBe(false) // not offered to Claude
+  })
+})
+
+describe('C5 — a brake is easy: anyone who may use Claude here lowers and pauses; raising needs settings.security.manage', { timeout: TIMEOUT }, () => {
+  it('lowering a level, lowering the cap and Pause need no more than that', async () => {
+    await setLevel('set-price', 'auto')
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'ask' }))).toMatchObject({ ok: true, rule: { level: 'ask' } })
+    expect(await inside(() => setDailyAutoCap(brake(), { dailyAutoCap: 50 }))).toMatchObject({ ok: true, dailyAutoCap: 50 })
+    expect(await inside(() => pauseAutoRuns(brake(), 'stop'))).toMatchObject({ ok: true, paused: true })
+  })
+
+  it('raising a level, loosening limits, raising the cap or Resume: refused without it, even with a right code', async () => {
+    const forbidden = { ok: false, status: 403, code: 'forbidden', error: expect.stringContaining('settings.security.manage') }
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'auto', code: code() }))).toMatchObject(forbidden)
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 15 }, code: code() }))).toMatchObject(forbidden)
+    expect(await inside(() => setDailyAutoCap(brake(), { dailyAutoCap: 500, code: code() }))).toMatchObject(forbidden)
+    await inside(() => pauseAutoRuns(brake(), 'stop'))
+    expect(await inside(() => resumeAutoRuns(brake(), code()))).toMatchObject(forbidden)
+    expect(await inside(() => claudeRuleOf('set-price'))).toMatchObject({ level: 'ask' })
+  })
+})
+
+describe('C5 — tightening a limit is a brake too; loosening one needs settings.security.manage and the code', { timeout: TIMEOUT }, () => {
+  it('a smaller max, a shorter list of what is allowed: no code, no permission beyond using Claude', async () => {
+    await setLevel('set-price', 'auto')
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 5 } }))).toMatchObject({ ok: true, rule: { limits: { maxChangePercent: 5 } } })
+    expect(await inside(() => setClaudeRule(brake(), 'bulk-price-change', { limits: { maxProducts: 10, maxChangePercent: 10 } }))).toMatchObject({ ok: true })
+    expect(await inside(() => setClaudeRule(brake(), 'apply-content', { limits: { fields: ['title'] } }))).toMatchObject({ ok: true, rule: { limits: { fields: ['title'] } } })
+    const audit = await inside(() => db().agentControlAudit.findFirstOrThrow({ where: { charterKey: 'claude', action: 'policy' }, orderBy: { createdAt: 'desc' } }))
+    expect(audit.toValue).toMatchObject({ tool: 'apply-content', limits: { fields: ['title'] } })
+  })
+
+  it('a larger max, a longer list, back to looser defaults, or one looser among tighter: settings.security.manage and the code', async () => {
+    const forbidden = { ok: false, status: 403, code: 'forbidden' }
+    await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 5 } }))
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 8 } }))).toMatchObject(forbidden)
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: null }))).toMatchObject(forbidden) // the default, 10, is looser
+    expect(await inside(() => setClaudeRule(brake(), 'bulk-price-change', { limits: { maxProducts: 10, maxChangePercent: 20 } }))).toMatchObject(forbidden)
+    await inside(() => setClaudeRule(brake(), 'apply-content', { limits: { fields: ['title'] } }))
+    expect(await inside(() => setClaudeRule(brake(), 'apply-content', { limits: { fields: ['title', 'description'] } }))).toMatchObject(forbidden)
+    // The person who may raise still needs the code to loosen.
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 8 } }))).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 8 }, code: code() }))).toMatchObject({ ok: true })
+  })
+
+  it('the direction of every kind of limit: max lower, min higher, allow off, a max level earlier, the allowed list smaller; anything else loosens', () => {
+    const tool = {
+      name: 'example-limits',
+      limits: z.object({
+        maxUnits: z.number().default(10).describe('x'),
+        minMargin: z.number().default(5).describe('x'),
+        allowNew: z.boolean().default(true).describe('x'),
+        maxLevel: z.enum(['OBSERVE', 'PROPOSE', 'AUTO']).default('PROPOSE').describe('x'),
+        fields: z.array(z.enum(['a', 'b', 'c'])).default(['a', 'b']).describe('x'),
+        note: z.string().default('x').describe('x'),
+      }),
+    } as unknown as AgentTool
+    const base = { maxUnits: 10, minMargin: 5, allowNew: true, maxLevel: 'PROPOSE', fields: ['a', 'b'], note: 'x' }
+    expect(limitsTighten(tool, base, base)).toBe(true)
+    expect(limitsTighten(tool, base, { ...base, maxUnits: 5, minMargin: 8, allowNew: false, maxLevel: 'OBSERVE', fields: ['a'] })).toBe(true)
+    for (const looser of [{ maxUnits: 11 }, { minMargin: 4 }, { maxLevel: 'AUTO' }, { fields: ['a', 'c'] }, { note: 'y' }]) {
+      expect(limitsTighten(tool, base, { ...base, ...looser }), JSON.stringify(looser)).toBe(false)
+    }
+    expect(limitsTighten(tool, { ...base, allowNew: false }, base)).toBe(false)
+  })
+})
+
+describe('C5 — the brakes', { timeout: TIMEOUT }, () => {
+  it('the daily cap: once reached, the next change waits for a person', async () => {
+    await setLevel('set-price', 'auto')
+    const first = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(first.answer.status).toBe('runs_by_rule')
+    const used = (await inside(() => listClaudeRules())).autonomy.autoRunsLastDay
+    expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: used }))).toMatchObject({ ok: true }) // lowering: no code
+    const second = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 2 })
+    expect(second.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining(`${used} changes run by rule in 24 hours`) } })
+    // Raising it back takes the code.
+    expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: 200 }))).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: 200, code: code() }))).toMatchObject({ ok: true })
+  })
+
+  it('Pause: at once, what waits to run by rule goes back to a person, and new ones wait; Resume takes the code', async () => {
+    await setLevel('set-price', 'auto')
+    const parked = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(parked.answer.status).toBe('runs_by_rule')
+    expect(await inside(() => pauseAutoRuns(actor(), 'checking prices'))).toMatchObject({ ok: true, handedBack: 1 })
+    expect(await approvalOf(parked.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null, reason: expect.stringContaining('paused') })
+    const next = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(next.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('paused') } })
+    expect((await inside(() => listClaudeRules())).autonomy).toMatchObject({ paused: true, pausedBy: 'Tara Trust', reason: 'checking prices' })
+
+    expect(await inside(() => resumeAutoRuns(actor(), undefined))).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await inside(() => resumeAutoRuns(actor(), code()))).toMatchObject({ ok: true })
+    expect((await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })).answer.status).toBe('runs_by_rule')
+  })
+
+  it('a level lowered inside the window: the change goes back to a person instead of running', async () => {
+    await setLevel('set-price', 'auto')
+    const before = await priceOf(ids.productA)
+    const parked = await call('set-price', { productId: ids.productA, price: before + 1 })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'ask' }))).toMatchObject({ ok: true })
+    const out = await windowCloses(parked.answer.approvalId)
+    expect(out).toMatchObject({ ok: false, error: expect.stringContaining('no longer') })
+    expect(await approvalOf(parked.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    expect(await priceOf(ids.productA)).toBe(before)
+  })
+
+  it(`after ${AUTO_PAUSE_FAILURES} stale rule-runs in an hour, Nexus pauses Claude’s rule-runs itself`, async () => {
+    await setLevel('set-price', 'auto')
+    for (let i = 0; i < AUTO_PAUSE_FAILURES; i++) {
+      const price = await priceOf(ids.stale)
+      const parked = await call('set-price', { productId: ids.stale, price: price + 1 })
+      expect(parked.answer.status, `run ${i + 1}`).toBe('runs_by_rule')
+      await setPriceDirectly(ids.stale, String(price + 0.5)) // someone else moved it inside the window
+      expect(await windowCloses(parked.answer.approvalId)).toMatchObject({ ok: false })
+      expect(await approvalOf(parked.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    }
+    const autonomy = (await inside(() => listClaudeRules())).autonomy
+    expect(autonomy).toMatchObject({ paused: true, pausedBy: 'Nexus', reason: expect.stringContaining(`${AUTO_PAUSE_FAILURES}`) })
+    const next = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(next.answer.status).toBe('waiting_for_approval')
+    // The other business is not paused.
+    expect((await inside(() => listClaudeRules(), B)).autonomy.paused).toBe(false)
+  })
+})

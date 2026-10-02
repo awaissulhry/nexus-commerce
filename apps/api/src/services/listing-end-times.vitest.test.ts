@@ -55,6 +55,8 @@ vi.mock('../lib/queue.js', () => {
     redis: { connection: null },
   }
 })
+// The eBay accounts' out-of-stock option is ON here: a Sync Control pin to 0 on eBay needs it (else eBay ends the item).
+vi.mock('./channel-delist.service.js', async (importOriginal) => ({ ...await importOriginal<object>(), readEbayOutOfStockPreference: async () => 'ON' }))
 // The real writer, wrapped so an arm can make it fail once.
 vi.mock('./follow-master.service.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('./follow-master.service.js')>()
@@ -114,8 +116,8 @@ describe.skipIf(!serverUrl)(`Shared stock step 3 — end times (needs ${CONCURRE
     await settle()
     return { status: response.statusCode, body: response.json() as Record<string, unknown> }
   }
-  const coordinate = (listingId: string) => ({ productId: id.coat, channel: listingKey[listingId][0], marketplace: listingKey[listingId][1], channelConnectionId: null, aliasKey: '' })
-  const listingKey: Record<string, [string, string]> = {}
+  const coordinate = (listingId: string) => ({ productId: id.coat, channel: listingKey[listingId][0], marketplace: listingKey[listingId][1], channelConnectionId: listingKey[listingId][2], aliasKey: '' })
+  const listingKey: Record<string, [string, string, string | null]> = {}
   const inMinutes = (n: number) => new Date(Date.now() + n * MINUTE).toISOString()
 
   beforeAll(async () => {
@@ -140,13 +142,18 @@ describe.skipIf(!serverUrl)(`Shared stock step 3 — end times (needs ${CONCURRE
     await q(`INSERT INTO "StockLevel" (id, "workspaceId", "locationId", "productId", quantity, reserved, available, "lastUpdatedAt") VALUES ($1,$2,$3,$4,8,0,8,now()), ($5,$6,$7,$8,5,0,5,now())`,
       [randomUUID(), B, id.bMain, id.coat, randomUUID(), A, id.aMain, id.aCoat])
 
+    // B's eBay listings name B's eBay account, as a live listing does: a pin to 0 on eBay asks that account's
+    // out-of-stock option (stood in as ON above), and a listing that names no account cannot be asked.
+    id.bEbay = randomUUID()
+    await q(`INSERT INTO "ChannelConnection" ("workspaceId", id, "channelType", "accountLabel", "isActive", "isPrimary", "updatedAt") VALUES ($1,$2,'EBAY','B eBay',true,true,now())`, [B, id.bEbay])
     const listing = async (name: string, workspaceId: string, productId: string, channel: string, marketplace: string, extra: Record<string, unknown> = {}) => {
       const lid = randomUUID()
-      const cols = { id: lid, workspaceId, productId, channel, marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, listingStatus: 'ACTIVE', externalListingId: `ext-${lid.slice(0, 6)}`, updatedAt: new Date(), ...extra }
+      const account = workspaceId === B && channel === 'EBAY' ? id.bEbay : null
+      const cols = { id: lid, workspaceId, productId, channel, marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, listingStatus: 'ACTIVE', externalListingId: `ext-${lid.slice(0, 6)}`, updatedAt: new Date(), channelConnectionId: account, ...extra }
       const keys = Object.keys(cols)
       await q(`INSERT INTO "ChannelListing" (${keys.map((k) => `"${k}"`).join(',')}) VALUES (${keys.map((_, i) => `$${i + 1}`).join(',')})`, Object.values(cols))
       id[name] = lid
-      listingKey[lid] = [channel, marketplace]
+      listingKey[lid] = [channel, marketplace, account]
     }
     // Business B's coat: 8 in its warehouse.
     await listing('eIT', B, id.coat, 'EBAY', 'IT', { quantity: 7, stockBuffer: 1 }) // follows: 8 − 1

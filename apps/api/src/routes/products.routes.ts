@@ -3,6 +3,7 @@ import { inDatabaseTransaction } from '../lib/database-context.js'
 import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { normalizeLanguage } from '../services/pim/content-language.js'
 import { applyProductBulkEdits, ProductBulkError, type ProductBulkInput } from '../services/products/bulk-edit.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { runFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
@@ -13,6 +14,7 @@ import { RESTORABLE_MASTER_FIELDS } from '../services/pim/restorable-fields.js'
 import { buildUploadPlan, parseUploadBuffer, summarisePlan, type PlanRow } from '../services/products/bulk-upload.service.js'
 import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
+import { assertCreatable, createProduct, CreateProductError } from '../services/products/create-product.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { countProductStats, listProducts, type ProductListQuery } from '../services/products/list-products.service.js'
@@ -1014,6 +1016,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         ifMatch: request.headers['if-match'], formulaWriteToken: request.headers['x-nexus-formula-write'],
         formulaCascade: request.headers['x-nexus-formula-cascade'] === '1',
         userId: (request as { authUser?: { id?: string } }).authUser?.id, ip: request.ip, logger: request.log,
+        can: permissionCheckerFor(request), // S1 (F4, F5) — a price or a cost needs its own permission
       })
     } catch (error) {
       if (error instanceof ProductBulkError) return reply.code(error.statusCode).send(error.details)
@@ -1341,163 +1344,20 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }>('/products/create-wizard', async (request, reply) => {
     const body = request.body ?? ({} as any)
-    // Required-field guards. Mirror the catalog endpoint so error
-    // shape matches and clients can branch the same way.
-    if (!body.sku?.trim()) {
-      return reply
-        .code(400)
-        .send({ error: 'sku is required', code: 'INVALID_REQUEST' })
-    }
-    if (!body.name?.trim()) {
-      return reply
-        .code(400)
-        .send({ error: 'name is required', code: 'INVALID_REQUEST' })
-    }
-    if (
-      typeof body.basePrice !== 'number' ||
-      Number.isNaN(body.basePrice) ||
-      body.basePrice < 0
-    ) {
-      return reply.code(400).send({
-        error: 'basePrice must be a non-negative number',
-        code: 'INVALID_REQUEST',
-      })
-    }
-
-    // SKU uniqueness — check master + every variation up front so we
-    // can return a clean conflict before the transaction starts.
-    const variationSkus = (body.variations ?? []).map((v) => v.sku?.trim())
-    if (variationSkus.some((s) => !s)) {
-      return reply.code(400).send({
-        error: 'every variation must have a non-empty sku',
-        code: 'INVALID_REQUEST',
-      })
-    }
-    const allSkus = [body.sku.trim(), ...variationSkus]
-    if (new Set(allSkus).size !== allSkus.length) {
-      return reply.code(400).send({
-        error: 'duplicate SKUs in this request — master and variations must be unique',
-        code: 'DUPLICATE_SKU',
-      })
-    }
-    const conflict = await prisma.product.findFirst({
-      where: { sku: { in: allSkus } },
-      select: { sku: true },
-    })
-    if (conflict) {
-      return reply.code(409).send({
-        error: `SKU "${conflict.sku}" already exists`,
-        code: 'DUPLICATE_SKU',
-      })
-    }
-
+    // MCP full control L7 — the wizard's guards and transaction live in create-product.service.ts (Claude's
+    // create-product uses them too); this route answers exactly as before.
     try {
-      const result = await prisma.$transaction(async (tx) => {
-        const isParent = (body.variations?.length ?? 0) > 0
-        const masterData: Record<string, unknown> = {
-          sku: body.sku.trim(),
-          name: body.name.trim(),
-          basePrice: body.basePrice,
-          isParent,
-          status: 'ACTIVE',
-          syncChannels: [],
-          validationStatus: 'VALID',
-          validationErrors: [],
-          hasChannelOverrides: false,
-        }
-        // Optional fields: only set when present so we don't blow
-        // away DB defaults with explicit null/undefined.
-        if (body.brand !== undefined) masterData.brand = body.brand
-        if (body.productType !== undefined)
-          masterData.productType = body.productType
-        if (body.description !== undefined)
-          masterData.description = body.description
-        if (typeof body.costPrice === 'number')
-          masterData.costPrice = body.costPrice
-        if (typeof body.totalStock === 'number')
-          masterData.totalStock = body.totalStock
-        if (typeof body.lowStockThreshold === 'number')
-          masterData.lowStockThreshold = body.lowStockThreshold
-        if (body.upc !== undefined) masterData.upc = body.upc
-        if (body.ean !== undefined) masterData.ean = body.ean
-        if (body.gtin !== undefined) masterData.gtin = body.gtin
-        if (typeof body.weightValue === 'number')
-          masterData.weightValue = body.weightValue
-        if (body.weightUnit !== undefined)
-          masterData.weightUnit = body.weightUnit
-        if (typeof body.dimLength === 'number')
-          masterData.dimLength = body.dimLength
-        if (typeof body.dimWidth === 'number')
-          masterData.dimWidth = body.dimWidth
-        if (typeof body.dimHeight === 'number')
-          masterData.dimHeight = body.dimHeight
-        if (body.dimUnit !== undefined) masterData.dimUnit = body.dimUnit
-        if (body.manufacturer !== undefined)
-          masterData.manufacturer = body.manufacturer
-        if (
-          body.categoryAttributes &&
-          Object.keys(body.categoryAttributes).length > 0
-        ) {
-          masterData.categoryAttributes = body.categoryAttributes
-        }
-
-        const product = await tx.product.create({ data: masterData as any })
-
-        if (isParent && body.variations) {
-          // Each variation gets a Product row with parentId set + the
-          // variation's attribute map written to variantAttributes. This
-          // is the canonical "child product" pattern (244 active rows in
-          // prod under parentId; the PV mirror that used to live here was
-          // removed in TECH_DEBT #43.4 once the listing-wizard reader
-          // services migrated to parentId in #43.1-#43.3).
-          for (const v of body.variations) {
-            await tx.product.create({
-              data: {
-                sku: v.sku.trim(),
-                name: v.name?.trim() || `${body.name} — ${v.sku.trim()}`,
-                basePrice: v.price ?? body.basePrice,
-                totalStock: v.stock ?? 0,
-                parentId: product.id,
-                isParent: false,
-                isMasterProduct: false,
-                status: 'ACTIVE',
-                syncChannels: [],
-                validationStatus: 'VALID',
-                validationErrors: [],
-                hasChannelOverrides: false,
-                // R-23 (Step 2.6c-2) — the one store; the legacy `variantAttributes` is never written.
-                categoryAttributes: { variations: v.variationAttributes ?? {} } as any,
-              } as any,
-            })
-          }
-        }
-
-        return product
-      })
-
-      // NN.4 — audit log the creation.
-      void auditLogService.write({
-        userId: null,
-        ip: request.ip ?? null,
-        entityType: 'Product',
-        entityId: result.id,
-        action: 'create',
-        after: { sku: result.sku, name: result.name },
-        metadata: {
-          source: 'create-wizard',
-          variationCount: body.variations?.length ?? 0,
-        },
-      })
-
+      await assertCreatable(body)
+    } catch (err) {
+      if (err instanceof CreateProductError) return reply.code(err.statusCode).send({ error: err.message, code: err.code })
+      throw err
+    }
+    try {
+      const result = await createProduct(body, { userId: null, ip: request.ip ?? null, source: 'create-wizard' })
       return reply.code(201).send({
         success: true,
-        product: {
-          id: result.id,
-          sku: result.sku,
-          name: result.name,
-          isParent: result.isParent,
-        },
-        variationCount: body.variations?.length ?? 0,
+        product: result.product,
+        variationCount: result.variationCount,
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

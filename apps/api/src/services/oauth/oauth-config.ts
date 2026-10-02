@@ -7,12 +7,18 @@
  *   · PKCE S256 only; public clients only (token_endpoint_auth_method "none").
  *   · Clients register by Client ID Metadata Document (preferred) or dynamic registration.
  *   · A redirect is exact, except loopback (Claude Code), which matches on any port.
- *   · Every token names the one MCP URL it is for (RFC 8707), and the server refuses any other.
+ *   · Every token names the one MCP URL it is for (RFC 8707), and the server refuses any other: the plain
+ *     URL, or (C4) one business's own URL, which also locks the consent to that business.
  */
 
 import { publicApiOrigin } from '../public-api-origin.js'
 
-export const MCP_SCOPES = ['nexus.read', 'nexus.write'] as const
+/**
+ * nexus.read reads; nexus.write asks for changes (each waits for a person, or for the business's rule). C5 — nexus.run
+ * lets the business's rules run a change Claude asked for without a person (the tools a business set to auto): without
+ * it every change waits for a person, whatever the level. A token only ever narrows what the person's role allows.
+ */
+export const MCP_SCOPES = ['nexus.read', 'nexus.write', 'nexus.run'] as const
 export type McpScope = (typeof MCP_SCOPES)[number]
 
 export const ACCESS_TOKEN_SECONDS = 3600
@@ -53,15 +59,50 @@ export function oauthApiOrigin(): string {
   return withoutTrailingSlash(derived.origin)
 }
 
-/** The canonical MCP URL: the only `resource` a token may be issued for. */
+/** The canonical MCP URL. A token is issued for it, or for one business's URL under it (`mcpResourceFor`). */
 export function mcpResource(): string {
   return withoutTrailingSlash(process.env.NEXUS_MCP_RESOURCE?.trim() || `${oauthApiOrigin()}/mcp`)
+}
+
+/** C4 — a business id as a business's MCP URL may carry it (the shape the workspace hook accepts, any length). */
+const BUSINESS_ID = /^[A-Za-z0-9_-]{1,100}$/
+
+export function isMcpBusinessId(value: string): boolean {
+  return BUSINESS_ID.test(value)
+}
+
+/**
+ * MCP full control C4 (D2 = A) — one connection per business: the business's own MCP URL, `<mcp>/w/<business id>`.
+ * A token issued for it works there and nowhere else, and only for that business; the plain URL keeps working.
+ */
+export function mcpResourceFor(workspaceId: string): string {
+  return `${mcpResource()}/w/${workspaceId}`
+}
+
+/**
+ * C4 — which of our MCP URLs a `resource` is: the plain one (`workspaceId: null`) or one business's (its id). Null when
+ * it is not one of ours. A trailing slash is the same URL.
+ */
+export function mcpResourceTarget(resource: string): { resource: string; workspaceId: string | null } | null {
+  const value = withoutTrailingSlash(resource)
+  const plain = mcpResource()
+  if (value === plain) return { resource: plain, workspaceId: null }
+  const prefix = `${plain}/w/`
+  if (!value.startsWith(prefix)) return null
+  const id = value.slice(prefix.length)
+  return isMcpBusinessId(id) ? { resource: value, workspaceId: id } : null
 }
 
 /** Businesses allowed to connect Claude, when the rollout names them. Null = every business. */
 export function mcpWorkspaceAllowList(): Set<string> | null {
   const ids = list(process.env.NEXUS_MCP_WORKSPACES)
   return ids.length ? new Set(ids) : null
+}
+
+/** C4 — may a business's own MCP URL be served at all: a well-formed id inside the allow-list (the outer ceiling). */
+export function mcpBusinessUrlAllowed(workspaceId: string): boolean {
+  const allow = mcpWorkspaceAllowList()
+  return isMcpBusinessId(workspaceId) && (!allow || allow.has(workspaceId))
 }
 
 /** Hosts a Client ID Metadata Document may live on. */

@@ -7,12 +7,42 @@
 import { describe, expect, it } from 'vitest'
 import { listTools } from '../agents/tool-registry.js'
 import { offeredOn } from '../agents/call-tool.js'
-import { requiredScope, toolAnnotations } from './mcp-server.js'
+import { mcpInputSchema, mcpInstructions, mcpServerInfo, requiredScope, toolAnnotations } from './mcp-server.js'
+import { inputJsonSchema } from '../agents/tool-loop.service.js'
 
 /** Call OUR AI provider: offered in the app only. */
 const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-content', 'draft-seo', 'translate-content']
 /** Their preview or their action reaches a marketplace or a buyer. */
-const OPEN_WORLD = ['bulk-price-change', 'publish-listing', 'send-customer-message', 'set-price']
+// 07 O5 — shipping-rates asks a carrier (Sendcloud, Amazon Buy Shipping) live: outside Nexus too.
+// L3 — publish-review reads the channel live (the studio's review). publication-status only reads what Nexus stored.
+// MCP full control P8 — save-channel-mapping: activating a mapping queues the listings' pushes to the channels.
+// C6 — a change plan says so too: its steps may reach a marketplace or a buyer (each step's preview says which).
+// R10–R17 (automation) — a level move, a resume, a suggestion decided, an engine tuned or a price rule saved
+// changes what the engines then send to a marketplace.
+// 07 O8 — buying and voiding labels reach a carrier (and cost money).
+// 08 S6 — a stock change moves what listings that follow stock show: the cascade queues the new quantity to channels.
+// 08 S12 — a promotion's sales and a scheduled master price reach the channels when they run.
+// 08 S9 — sending a purchase order e-mails the supplier. 08 S10 — a receive raises what listings that follow stock show.
+// 08 S13 — an eBay promotion and an FBA plan reach the marketplace; FBA options are read live from Amazon.
+// T11 — the three content tools that read a channel live (a Shopify store, a listing on its channel) are open world too.
+// I8/I9 — channel-identity-check reads the marketplace live; link-channel-id verifies on the channel before it asks.
+// L8 — stock and price per listing reach the channels (the Matrix door queues the pushes); a revert sends the old values.
+// L9 — closing and reopening a listing changes it on the channel.
+const OPEN_WORLD = [
+  'add-photo-from-url', 'advance-purchase-order', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
+  'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign',
+  'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'dispose-return-items',
+  'ebay-keywords-change', 'email-supplier', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
+  'link-channel-id', 'listing-live-content', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
+  'publish-review', 'receive-stock', 'reconcile-stock-count', 'reopen-listing', 'reply-to-review', 'request-review', 'resend-prices',
+  'reserve-stock', 'restore-campaign', 'resume-automation', 'revert-listing-change', 'rollback-bulk-operation',
+  'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
+  'set-campaign-budget', 'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion',
+  'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-placement-multipliers', 'set-price',
+  'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates',
+  'shopify-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine',
+  'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'void-shipping-label',
+]
 
 describe('MCP.7 — every tool, as Claude sees it', () => {
   it('has a short title', () => {
@@ -52,9 +82,48 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     expect(open).toEqual(OPEN_WORLD)
   })
 
+  it('A2 — the six ad reads are offered to Claude as reads: nexus.read, closed world, ads.view', () => {
+    const reads = ['ads-overview', 'ad-campaigns', 'ad-targets', 'ad-search-terms', 'ad-changes', 'ad-recommendations']
+    for (const name of reads) {
+      const tool = listTools().find((t) => t.name === name)
+      expect(tool, name).toBeDefined()
+      expect({ name, offered: offeredOn(tool!, 'mcp'), scope: requiredScope(tool!), open: toolAnnotations(tool!).openWorldHint, readOnly: tool!.readOnly, execute: !!tool!.execute, requires: tool!.requires })
+        .toEqual({ name, offered: true, scope: 'nexus.read', open: false, readOnly: true, execute: false, requires: ['ads.view'] })
+    }
+  })
+
   it('the AI drafts, and only they, are kept from Claude', () => {
     const appOnly = listTools().filter((tool) => !offeredOn(tool, 'mcp')).map((tool) => tool.name).sort()
     expect(appOnly).toEqual(AI_DRAFTS)
-    expect(listTools().every((tool) => offeredOn(tool, 'app'))).toBe(true)
+    // C7 — and only confirm-change is Claude's alone: a person confirms in Claude with a code; in Nexus they approve.
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name)).toEqual(['confirm-change'])
+  })
+})
+
+describe('C3 — the server and every change tool name the business', () => {
+  const business = { id: 'ws-1', name: 'Xavia Racing' }
+
+  it('the server title and the instructions name it', () => {
+    expect(mcpServerInfo(business)).toMatchObject({ name: 'nexus', title: 'Nexus — Xavia Racing' })
+    expect(mcpInstructions(business)).toContain('This connection works in the business "Xavia Racing" only')
+    expect(mcpInstructions(business)).toContain('business: "Xavia Racing"')
+  })
+
+  it('every change tool takes a required business name; a read takes none', () => {
+    for (const tool of listTools()) {
+      const schema = mcpInputSchema(tool, business) as { properties?: Record<string, { type?: string; description?: string }>; required?: string[] }
+      const own = inputJsonSchema(tool) as { properties?: Record<string, unknown>; required?: string[] }
+      if (tool.readOnly) {
+        expect(schema, tool.name).toEqual(own)
+        continue
+      }
+      expect(schema.properties?.business, tool.name).toMatchObject({ type: 'string', description: expect.stringContaining('"Xavia Racing"') })
+      expect(schema.required, tool.name).toContain('business')
+      // The tool's own arguments are all still there, unchanged.
+      for (const [key, value] of Object.entries(own.properties ?? {})) expect(schema.properties?.[key]).toEqual(value)
+      for (const key of own.required ?? []) expect(schema.required).toContain(key)
+      // The tool's own schema is untouched (the in-app assistant gets it as it is).
+      expect(own.properties ?? {}).not.toHaveProperty('business')
+    }
   })
 })

@@ -16,7 +16,8 @@ import {
   BulkActionTemplateService,
   type ParameterDecl,
 } from '../services/bulk-action-template.service.js'
-import { BulkActionInputError, BulkActionService } from '../services/bulk-action.service.js'
+import { BulkActionInputError, BulkActionPermissionError, BulkActionService } from '../services/bulk-action.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 import prisma from '../db.js'
 import { bulkActorOf } from '../services/bulk-action-actor.js'
 
@@ -237,12 +238,14 @@ const bulkActionTemplateRoutes: FastifyPluginAsync = async (fastify) => {
         filters: filters ?? undefined,
         targetProductIds: body.targetProductIds,
         createdBy: bulkActorOf(request),
+        can: permissionCheckerFor(request), // S1 (F5) — a price-changing template needs products.price.edit
       } as never)
       // Best-effort telemetry; never blocks the apply.
       void templateService.recordUsage(id)
       return reply.code(201).send({ success: true, job })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
+      if (e instanceof BulkActionPermissionError) return reply.code(403).send({ success: false, error: msg, code: e.code })
       if (msg.startsWith('Required parameter missing') || e instanceof BulkActionInputError) {
         return reply.code(400).send({ success: false, error: msg })
       }

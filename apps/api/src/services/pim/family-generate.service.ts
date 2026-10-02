@@ -411,7 +411,9 @@ export async function generateCombinations(input: GenerateInput): Promise<Genera
           status: 'DRAFT',
           productType: source?.productType ?? parentRow.productType ?? null,
           basePrice: source?.basePrice ?? parentRow.basePrice ?? null,
-          totalStock: source?.totalStock ?? 0,
+          // Stock 0, never the sibling's count: `totalStock` copied here was stock outside the ledger, held by no
+          // location, which the cascade could push to a channel. Stock arrives through the stock doors only.
+          totalStock: 0,
           // R-23 (Step 2.6c-2) — the one store; the legacy `variantAttributes` is never written.
           categoryAttributes: { ...copiedCategory, variations: axisPairs } as never,
         },

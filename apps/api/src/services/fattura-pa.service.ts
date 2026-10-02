@@ -42,23 +42,12 @@ import {
   getCreditNoteForRefund,
 } from './credit-note.service.js'
 import { logger } from '../utils/logger.js'
+import { requireFatturaPaIssuer } from './business-identity.service.js'
 
 const ENABLED = process.env.NEXUS_ENABLE_SDI_DISPATCH === 'true'
 
-const ISSUER = {
-  vatNumber: process.env.NEXUS_ISSUER_VAT ?? 'IT00000000000',
-  fiscalCode: process.env.NEXUS_ISSUER_CF ?? '00000000000',
-  // Drop the IT prefix from VAT for IdCodice (FatturaPA expects
-  // the bare digits when IdPaese is set).
-  countryCode: 'IT',
-  name: process.env.NEXUS_ISSUER_NAME ?? 'Xavia S.r.l.',
-  regime: process.env.NEXUS_ISSUER_REGIME ?? 'RF01', // Ordinario
-  address: process.env.NEXUS_ISSUER_ADDRESS ?? 'Via Esempio 1',
-  city: process.env.NEXUS_ISSUER_CITY ?? 'Milano',
-  postalCode: process.env.NEXUS_ISSUER_POSTAL ?? '20100',
-  province: process.env.NEXUS_ISSUER_PROVINCE ?? 'MI',
-  country: 'IT',
-}
+// The issuer is read per call: requireFatturaPaIssuer() (business-identity.service) — Xavia's NEXUS_ISSUER_*, each
+// required, never a placeholder; any other business refused.
 
 function escapeXml(s: unknown): string {
   if (s == null) return ''
@@ -99,6 +88,8 @@ export interface FatturaPaResult {
  * invoice number when none has been issued yet.
  */
 export async function generateFatturaPaXml(orderId: string): Promise<FatturaPaResult> {
+  // O3 — the cedente: Xavia's NEXUS_ISSUER_*, all set; never another business's sale, never a placeholder.
+  const ISSUER = requireFatturaPaIssuer()
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { items: true },
@@ -361,6 +352,8 @@ export interface CreditNoteXmlResult {
 export async function generateCreditNoteXml(
   refundId: string,
 ): Promise<CreditNoteXmlResult> {
+  // O3 — the cedente: Xavia's NEXUS_ISSUER_*, all set; never another business's refund, never a placeholder.
+  const ISSUER = requireFatturaPaIssuer()
   const refund = await prisma.refund.findUnique({
     where: { id: refundId },
     include: {

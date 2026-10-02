@@ -5,7 +5,8 @@
  *   - Sequential within fiscal year (Jan 1–Dec 31)
  *   - Gap-free — auditors flag missing numbers
  *   - Resets every January 1
- *   - Per-issuer (single tenant ⇒ 'XAVIA' default)
+ *   - Per-issuer: one series per business (O2) — Xavia keeps 'XAVIA',
+ *     every other business its own issuer (business-identity.service)
  *
  * Implementation: per-(year, issuer) counter row + transactional
  * SELECT FOR UPDATE on the counter, then upsert the FiscalInvoice
@@ -21,6 +22,8 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { currentInvoiceIssuer } from './business-identity.service.js'
+import { publishEvent } from '../lib/events/publish.js'
 
 export interface FiscalInvoiceAssignment {
   invoiceNumber: string
@@ -32,8 +35,6 @@ export interface FiscalInvoiceAssignment {
    *  existing FiscalInvoice was returned. */
   newlyAssigned: boolean
 }
-
-const DEFAULT_ISSUER = 'XAVIA'
 
 function fiscalYearOf(d: Date): number {
   // Italian fiscal year = calendar year. Some companies use a
@@ -55,9 +56,10 @@ function formatInvoiceNumber(seq: number, year: number): string {
  */
 export async function assignInvoiceNumber(
   orderId: string,
-  opts: { issuer?: string; at?: Date } = {},
+  opts: { at?: Date } = {},
 ): Promise<FiscalInvoiceAssignment> {
-  const issuer = opts.issuer ?? DEFAULT_ISSUER
+  // O2 — the business's own series: Xavia keeps 'XAVIA', every other business its own (business-identity.service).
+  const issuer = currentInvoiceIssuer()
   const issuedAt = opts.at ?? new Date()
   const fiscalYear = fiscalYearOf(issuedAt)
 
@@ -118,6 +120,9 @@ export async function assignInvoiceNumber(
         issuedAt,
       },
     })
+
+    // 07 O14 — with the number, in the same transaction: ids and the number only.
+    await publishEvent(tx, 'invoice.issued', { kind: 'INVOICE', documentId: created.id, number: created.invoiceNumber, orderId, refundId: null })
 
     logger.info('fiscal-invoice: assigned', {
       orderId,

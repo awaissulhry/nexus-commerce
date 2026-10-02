@@ -16,13 +16,19 @@ export interface ContentWrite {
   userId?: string | null; ip?: string; state?: 'draft' | 'reviewed'
   /** PSIE — `false`: a shared write cascades to following listings but queues no channel update (see master-content). */
   queueOutbound?: boolean
+  /**
+   * MCP full control — who wrote the text, for its provenance: `sourceModel` is stamped on a language-tier translation
+   * row (e.g. "claude-mcp"); `reason` goes into the audit rows (e.g. "mcp:set-content"). Absent: as before.
+   */
+  sourceModel?: string
+  reason?: string
 }
 const refuse = (label: string) => productWriteRefusal(409, `${label} changed. Reload before saving it.`)
 
 /** Persist a validated, explicitly addressed edit; all shared writes cascade in this transaction. */
 export async function writeContent(input: ContentWrite) {
   const address = contentAddress(input.address, input.label)
-  if (address.tier === 'language') return writeTranslation({ ...input, address, locale: address.language, state: input.state ?? 'reviewed', expectedTranslationVersion: input.expectedContentVersion, queueOutbound: input.queueOutbound })
+  if (address.tier === 'language') return writeTranslation({ ...input, address, locale: address.language, state: input.state ?? 'reviewed', expectedTranslationVersion: input.expectedContentVersion, queueOutbound: input.queueOutbound, sourceModel: input.sourceModel, reason: input.reason })
   return inDatabaseTransaction(prisma, async () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: input.productId } })
     const values = Object.fromEntries(Object.entries(input.values).map(([key,value]) => [contentField(key), contentStorageValue(contentField(key), value)]))
@@ -48,7 +54,7 @@ export async function writeContent(input: ContentWrite) {
       const updated = await prisma.product.updateMany({ where: { id: product.id, version: product.version }, data: { ...data, categoryAttributes: attributes as any, version: { increment: 1 } } })
       if (updated.count !== 1) throw refuse(input.label)
       const { masterContentService } = await import('../master-content.service.js')
-      await masterContentService.update(product.id, values, { address, locale: PRIMARY_CONTENT_LOCALE, actor: input.userId, reviewed: input.state !== 'draft', masterAlreadyWritten: true, previousValues, queueOutbound: input.queueOutbound, tx: prisma as any })
+      await masterContentService.update(product.id, values, { address, locale: PRIMARY_CONTENT_LOCALE, actor: input.userId, reviewed: input.state !== 'draft', masterAlreadyWritten: true, previousValues, queueOutbound: input.queueOutbound, ...(input.reason ? { reason: input.reason } : {}), tx: prisma as any })
       return prisma.product.findUniqueOrThrow({ where: { id: product.id } })
     }
     const c = address.coordinate
@@ -87,7 +93,7 @@ export async function writeContent(input: ContentWrite) {
       if (saved.count !== 1) throw refuse(input.label)
     } else await prisma.channelListingTranslation.create({ data: { ...data, channelListingId: listing.id, language: address.language, version: 1 } })
     await prisma.auditLog.create({ data: { entityType: 'ChannelListing', entityId: listing.id, action: 'update', userId: input.userId ?? null, ip: input.ip,
-      before: prior as any ?? {}, after: { values, reset: resets } as any, metadata: { layer: 'pin', language: address.language, coordinate: c as any } } })
+      before: prior as any ?? {}, after: { values, reset: resets } as any, metadata: { layer: 'pin', language: address.language, coordinate: c as any, ...(input.reason ? { reason: input.reason } : {}) } } })
     await produceReadiness(product.id, { channel: listing.channel, market: listing.marketplace, accountId: listing.channelConnectionId })
     return prisma.channelListingTranslation.findUniqueOrThrow({ where: { channelListingId_language: workspaceKey({ channelListingId: listing.id, language: address.language }) } })
   })

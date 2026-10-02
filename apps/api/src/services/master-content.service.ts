@@ -144,17 +144,20 @@ export class MasterContentService {
         const follows = [...new Set([...(pin?.follows ?? []), ...following])]
         if (pin) await tx.channelListingTranslation.update({ where: { id: pin.id }, data: { follows, version: { increment: 1 } } })
         else await tx.channelListingTranslation.create({ data: { channelListingId: listing.id, language, follows, version: 1 } })
-        await tx.channelListing.update({ where: { id: listing.id }, data: { version: { increment: 1 }, lastSyncStatus: 'PENDING', lastSyncedAt: null } })
-        // Qualified receipts: this following listing's own content row moved, from the pair read above.
-        recordContentWrite({ tier: 'pin', productId: listing.productId, listingId: listing.id, language }, { ownerVersion: listing.version, contentVersion: pin?.version ?? 0 })
-        cascadedListingIds.push(listing.id)
         // The existing content sync queue consumes a language-qualified payload.
         // Caller transactions leave scheduling to the drain after commit.
         // A paused listing (an operator's pause, or an inert draft) follows the text but is not
         // queued, as in the stock cascade: the push lock refused its row at dispatch anyway. A
         // still-draft (never published, no channel id) is held the same way even when it is not
         // paused: only Publish sends it, and it sends the text it follows.
-        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false && ctx.queueOutbound !== false && !listing.syncPaused && !isStillDraftListing(listing)) {
+        const queues = CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false && ctx.queueOutbound !== false && !listing.syncPaused && !isStillDraftListing(listing)
+        // MCP full control T1 — "Pending" only when a row is queued below. A Nexus-only write (queueOutbound false), a
+        // paused or still-draft listing, or a draft write queue nothing, and the listing must not read as waiting to send.
+        await tx.channelListing.update({ where: { id: listing.id }, data: { version: { increment: 1 }, ...(queues ? { lastSyncStatus: 'PENDING', lastSyncedAt: null } : {}) } })
+        // Qualified receipts: this following listing's own content row moved, from the pair read above.
+        recordContentWrite({ tier: 'pin', productId: listing.productId, listingId: listing.id, language }, { ownerVersion: listing.version, contentVersion: pin?.version ?? 0 })
+        cascadedListingIds.push(listing.id)
+        if (queues) {
           const payload = Object.fromEntries(following.map(field => [field, resolveContent({ product: listing.product as any, parent: listing.productId === productId ? undefined : product as any, field, localizableKeys: fields, address: { requested: language } }).value]))
           const queue = await createOutboundRow(tx, { data: { productId: listing.productId, channelListingId: listing.id, channelConnectionId: listing.channelConnectionId, targetChannel: listing.channel as any,
             targetRegion: listing.region, externalListingId: listing.externalListingId, syncStatus: 'PENDING', syncType: 'CONTENT_UPDATE',

@@ -1,0 +1,8 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`R10 — the schedule route answers as before the move > every outcome 1`] = `
+"404 {"error":"not found"}
+200 {"workspaceId":"nexus_legacy_workspace","id":"<id1>","campaignId":"<id2>","name":"PARITY night (renamed)","windows":[{"days":[1],"endHour":6,"startHour":0}],"timezone":"Europe/Rome","enabled":true,"defaultTargetKey":null,"lastApplied":"PAUSED","lastEvaluatedAt":null,"originalBids":null,"targetOverrides":{},"createdAt":"<time>","updatedAt":"<time>","createdBy":null,"groupId":null}
+200 {"workspaceId":"nexus_legacy_workspace","id":"<id1>","campaignId":"<id2>","name":"PARITY night (renamed)","windows":[{"days":[1],"endHour":6,"startHour":0}],"timezone":"Europe/Rome","enabled":false,"defaultTargetKey":null,"lastApplied":"PAUSED","lastEvaluatedAt":null,"originalBids":null,"targetOverrides":{},"createdAt":"<time>","updatedAt":"<time>","createdBy":null,"groupId":null}
+200 {"workspaceId":"nexus_legacy_workspace","id":"<id1>","campaignId":"<id2>","name":"PARITY night (renamed)","windows":[{"days":[1],"endHour":6,"startHour":0}],"timezone":"Europe/Rome","enabled":true,"defaultTargetKey":null,"lastApplied":"PAUSED","lastEvaluatedAt":null,"originalBids":null,"targetOverrides":{},"createdAt":"<time>","updatedAt":"<time>","createdBy":null,"groupId":null}"
+`;

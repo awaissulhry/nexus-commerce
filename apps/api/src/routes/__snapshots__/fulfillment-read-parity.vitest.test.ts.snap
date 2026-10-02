@@ -1,0 +1,980 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > rates: Sendcloud methods cheapest first; 404 and a shipment without an order 1`] = `
+{
+  "body": "{
+  "rates": [
+    {
+      "source": "SENDCLOUD",
+      "carrier": "BRT",
+      "serviceName": "Test Standard",
+      "serviceCode": "2001",
+      "priceEur": 4.2
+    },
+    {
+      "source": "SENDCLOUD",
+      "carrier": "DHL",
+      "serviceName": "Test Express",
+      "serviceCode": "2002",
+      "priceEur": 12.5
+    }
+  ],
+  "weightKg": 2.5,
+  "destinationCountry": "IT"
+}",
+  "status": 200,
+}
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > rates: Sendcloud methods cheapest first; 404 and a shipment without an order 2`] = `
+{
+  "body": "{
+  "error": "Shipment not found"
+}",
+  "status": 404,
+}
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > rates: Sendcloud methods cheapest first; 404 and a shipment without an order 3`] = `
+{
+  "body": "{
+  "error": "Shipment has no order"
+}",
+  "status": 400,
+}
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > ship queue: age sort 1`] = `
+"{
+  "items": [
+    {
+      "id": "q-overdue",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-OVERDUE",
+      "status": "PROCESSING",
+      "customerName": "Anna Bianchi",
+      "customerEmail": "q-overdue@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-08T10:00:00.000Z",
+      "shipByDate": "2026-04-10T07:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 30,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-overdue",
+          "sku": "TEST-SKU-Q-OVERDUE",
+          "quantity": 1,
+          "productId": null,
+          "price": 30
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "OVERDUE"
+    },
+    {
+      "id": "q-today",
+      "channel": "SHOPIFY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-TODAY",
+      "status": "PENDING",
+      "customerName": "Mario Rossi",
+      "customerEmail": "q-today@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-09T16:00:00.000Z",
+      "shipByDate": "2026-04-10T17:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 80,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-today",
+          "sku": "TEST-SKU-Q-TODAY",
+          "quantity": 1,
+          "productId": null,
+          "price": 80
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "TODAY"
+    },
+    {
+      "id": "q-tomorrow",
+      "channel": "AMAZON",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-Q-TOMORROW",
+      "status": "PROCESSING",
+      "customerName": "Hans Muller",
+      "customerEmail": "q-tomorrow@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "DE"
+      },
+      "purchaseDate": "2026-04-10T02:00:00.000Z",
+      "shipByDate": "2026-04-11T18:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 15,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-tomorrow",
+          "sku": "TEST-SKU-Q-TOMORROW",
+          "quantity": 1,
+          "productId": null,
+          "price": 15
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "TOMORROW"
+    },
+    {
+      "id": "q-week",
+      "channel": "EBAY",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-Q-WEEK",
+      "status": "PROCESSING",
+      "customerName": "Eva Weber",
+      "customerEmail": "q-week@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T07:00:00.000Z",
+      "shipByDate": "2026-04-14T16:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 22,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-week",
+          "sku": "TEST-SKU-Q-WEEK",
+          "quantity": 1,
+          "productId": null,
+          "price": 22
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "THIS_WEEK"
+    },
+    {
+      "id": "q-later",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-LATER",
+      "status": "PROCESSING",
+      "customerName": "Luca Verdi",
+      "customerEmail": "q-later@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T10:00:00.000Z",
+      "shipByDate": "2026-04-23T00:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 9,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-later",
+          "sku": "TEST-SKU-Q-LATER",
+          "quantity": 1,
+          "productId": null,
+          "price": 9
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "LATER"
+    },
+    {
+      "id": "q-unknown",
+      "channel": "SHOPIFY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-UNKNOWN",
+      "status": "PROCESSING",
+      "customerName": "Sara Neri",
+      "customerEmail": "q-unknown@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T11:00:00.000Z",
+      "shipByDate": null,
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 41,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-unknown",
+          "sku": "TEST-SKU-Q-UNKNOWN",
+          "quantity": 1,
+          "productId": null,
+          "price": 41
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "UNKNOWN"
+    }
+  ],
+  "total": 6,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 1,
+  "counts": {
+    "overdue": 1,
+    "today": 1,
+    "tomorrow": 1,
+    "thisWeek": 1,
+    "later": 1,
+    "unknown": 1,
+    "byChannel": {
+      "AMAZON": 1,
+      "EBAY": 3,
+      "SHOPIFY": 2
+    }
+  }
+}"
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > ship queue: channel and market 1`] = `
+"{
+  "items": [
+    {
+      "id": "q-overdue",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-OVERDUE",
+      "status": "PROCESSING",
+      "customerName": "Anna Bianchi",
+      "customerEmail": "q-overdue@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-08T10:00:00.000Z",
+      "shipByDate": "2026-04-10T07:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 30,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-overdue",
+          "sku": "TEST-SKU-Q-OVERDUE",
+          "quantity": 1,
+          "productId": null,
+          "price": 30
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "OVERDUE"
+    },
+    {
+      "id": "q-week",
+      "channel": "EBAY",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-Q-WEEK",
+      "status": "PROCESSING",
+      "customerName": "Eva Weber",
+      "customerEmail": "q-week@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T07:00:00.000Z",
+      "shipByDate": "2026-04-14T16:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 22,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-week",
+          "sku": "TEST-SKU-Q-WEEK",
+          "quantity": 1,
+          "productId": null,
+          "price": 22
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "THIS_WEEK"
+    },
+    {
+      "id": "q-later",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-LATER",
+      "status": "PROCESSING",
+      "customerName": "Luca Verdi",
+      "customerEmail": "q-later@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T10:00:00.000Z",
+      "shipByDate": "2026-04-23T00:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 9,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-later",
+          "sku": "TEST-SKU-Q-LATER",
+          "quantity": 1,
+          "productId": null,
+          "price": 9
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "LATER"
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 1,
+  "counts": {
+    "overdue": 1,
+    "today": 0,
+    "tomorrow": 0,
+    "thisWeek": 1,
+    "later": 1,
+    "unknown": 0,
+    "byChannel": {
+      "EBAY": 3
+    }
+  }
+}"
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > ship queue: default (ship-by first) 1`] = `
+"{
+  "items": [
+    {
+      "id": "q-overdue",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-OVERDUE",
+      "status": "PROCESSING",
+      "customerName": "Anna Bianchi",
+      "customerEmail": "q-overdue@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-08T10:00:00.000Z",
+      "shipByDate": "2026-04-10T07:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 30,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-overdue",
+          "sku": "TEST-SKU-Q-OVERDUE",
+          "quantity": 1,
+          "productId": null,
+          "price": 30
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "OVERDUE"
+    },
+    {
+      "id": "q-today",
+      "channel": "SHOPIFY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-TODAY",
+      "status": "PENDING",
+      "customerName": "Mario Rossi",
+      "customerEmail": "q-today@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-09T16:00:00.000Z",
+      "shipByDate": "2026-04-10T17:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 80,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-today",
+          "sku": "TEST-SKU-Q-TODAY",
+          "quantity": 1,
+          "productId": null,
+          "price": 80
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "TODAY"
+    },
+    {
+      "id": "q-tomorrow",
+      "channel": "AMAZON",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-Q-TOMORROW",
+      "status": "PROCESSING",
+      "customerName": "Hans Muller",
+      "customerEmail": "q-tomorrow@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "DE"
+      },
+      "purchaseDate": "2026-04-10T02:00:00.000Z",
+      "shipByDate": "2026-04-11T18:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 15,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-tomorrow",
+          "sku": "TEST-SKU-Q-TOMORROW",
+          "quantity": 1,
+          "productId": null,
+          "price": 15
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "TOMORROW"
+    },
+    {
+      "id": "q-week",
+      "channel": "EBAY",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-Q-WEEK",
+      "status": "PROCESSING",
+      "customerName": "Eva Weber",
+      "customerEmail": "q-week@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T07:00:00.000Z",
+      "shipByDate": "2026-04-14T16:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 22,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-week",
+          "sku": "TEST-SKU-Q-WEEK",
+          "quantity": 1,
+          "productId": null,
+          "price": 22
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "THIS_WEEK"
+    },
+    {
+      "id": "q-later",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-LATER",
+      "status": "PROCESSING",
+      "customerName": "Luca Verdi",
+      "customerEmail": "q-later@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T10:00:00.000Z",
+      "shipByDate": "2026-04-23T00:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 9,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-later",
+          "sku": "TEST-SKU-Q-LATER",
+          "quantity": 1,
+          "productId": null,
+          "price": 9
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "LATER"
+    },
+    {
+      "id": "q-unknown",
+      "channel": "SHOPIFY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-UNKNOWN",
+      "status": "PROCESSING",
+      "customerName": "Sara Neri",
+      "customerEmail": "q-unknown@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T11:00:00.000Z",
+      "shipByDate": null,
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 41,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-unknown",
+          "sku": "TEST-SKU-Q-UNKNOWN",
+          "quantity": 1,
+          "productId": null,
+          "price": 41
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "UNKNOWN"
+    }
+  ],
+  "total": 6,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 1,
+  "counts": {
+    "overdue": 1,
+    "today": 1,
+    "tomorrow": 1,
+    "thisWeek": 1,
+    "later": 1,
+    "unknown": 1,
+    "byChannel": {
+      "AMAZON": 1,
+      "EBAY": 3,
+      "SHOPIFY": 2
+    }
+  }
+}"
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > ship queue: urgency and search 1`] = `
+"{
+  "items": [
+    {
+      "id": "q-overdue",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-OVERDUE",
+      "status": "PROCESSING",
+      "customerName": "Anna Bianchi",
+      "customerEmail": "q-overdue@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-08T10:00:00.000Z",
+      "shipByDate": "2026-04-10T07:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 30,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-overdue",
+          "sku": "TEST-SKU-Q-OVERDUE",
+          "quantity": 1,
+          "productId": null,
+          "price": 30
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "OVERDUE"
+    },
+    {
+      "id": "q-today",
+      "channel": "SHOPIFY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-TODAY",
+      "status": "PENDING",
+      "customerName": "Mario Rossi",
+      "customerEmail": "q-today@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-09T16:00:00.000Z",
+      "shipByDate": "2026-04-10T17:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 80,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-today",
+          "sku": "TEST-SKU-Q-TODAY",
+          "quantity": 1,
+          "productId": null,
+          "price": 80
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "TODAY"
+    },
+    {
+      "id": "q-unknown",
+      "channel": "SHOPIFY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-UNKNOWN",
+      "status": "PROCESSING",
+      "customerName": "Sara Neri",
+      "customerEmail": "q-unknown@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T11:00:00.000Z",
+      "shipByDate": null,
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 41,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-unknown",
+          "sku": "TEST-SKU-Q-UNKNOWN",
+          "quantity": 1,
+          "productId": null,
+          "price": 41
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "UNKNOWN"
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 1,
+  "counts": {
+    "overdue": 1,
+    "today": 1,
+    "tomorrow": 1,
+    "thisWeek": 1,
+    "later": 1,
+    "unknown": 1,
+    "byChannel": {
+      "AMAZON": 1,
+      "EBAY": 3,
+      "SHOPIFY": 2
+    }
+  }
+}"
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > ship queue: value sort, paged 1`] = `
+"{
+  "items": [
+    {
+      "id": "q-week",
+      "channel": "EBAY",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-Q-WEEK",
+      "status": "PROCESSING",
+      "customerName": "Eva Weber",
+      "customerEmail": "q-week@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T07:00:00.000Z",
+      "shipByDate": "2026-04-14T16:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 22,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-week",
+          "sku": "TEST-SKU-Q-WEEK",
+          "quantity": 1,
+          "productId": null,
+          "price": 22
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "THIS_WEEK"
+    },
+    {
+      "id": "q-tomorrow",
+      "channel": "AMAZON",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-Q-TOMORROW",
+      "status": "PROCESSING",
+      "customerName": "Hans Muller",
+      "customerEmail": "q-tomorrow@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "DE"
+      },
+      "purchaseDate": "2026-04-10T02:00:00.000Z",
+      "shipByDate": "2026-04-11T18:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 15,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-tomorrow",
+          "sku": "TEST-SKU-Q-TOMORROW",
+          "quantity": 1,
+          "productId": null,
+          "price": 15
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "TOMORROW"
+    },
+    {
+      "id": "q-later",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-Q-LATER",
+      "status": "PROCESSING",
+      "customerName": "Luca Verdi",
+      "customerEmail": "q-later@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "line1": "Via Test 1",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T10:00:00.000Z",
+      "shipByDate": "2026-04-23T00:00:00.000Z",
+      "earliestShipDate": null,
+      "latestDeliveryDate": null,
+      "fulfillmentLatency": null,
+      "isPrime": null,
+      "totalPrice": 9,
+      "currencyCode": "EUR",
+      "createdAt": "<clock>",
+      "items": [
+        {
+          "id": "item-q-later",
+          "sku": "TEST-SKU-Q-LATER",
+          "quantity": 1,
+          "productId": null,
+          "price": 9
+        }
+      ],
+      "itemCount": 1,
+      "totalQuantity": 1,
+      "urgency": "LATER"
+    }
+  ],
+  "total": 6,
+  "page": 2,
+  "pageSize": 3,
+  "totalPages": 2,
+  "counts": {
+    "overdue": 1,
+    "today": 1,
+    "tomorrow": 1,
+    "thisWeek": 1,
+    "later": 1,
+    "unknown": 1,
+    "byChannel": {
+      "AMAZON": 1,
+      "EBAY": 3,
+      "SHOPIFY": 2
+    }
+  }
+}"
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > shipment: found, and not found 1`] = `
+{
+  "body": "{
+  "workspaceId": "nexus_legacy_workspace",
+  "id": "test-shipment-1",
+  "orderId": "q-has-shipment",
+  "warehouseId": "test-wh-1",
+  "carrierCode": "SENDCLOUD",
+  "status": "READY_TO_PICK",
+  "sendcloudParcelId": null,
+  "trackingNumber": null,
+  "trackingUrl": null,
+  "labelUrl": null,
+  "serviceCode": null,
+  "serviceName": "Test Standard",
+  "weightGrams": 2500,
+  "lengthCm": null,
+  "widthCm": null,
+  "heightCm": null,
+  "costCents": null,
+  "currencyCode": "EUR",
+  "pickedAt": null,
+  "packedAt": null,
+  "labelPrintedAt": null,
+  "shippedAt": null,
+  "deliveredAt": null,
+  "cancelledAt": null,
+  "trackingPushedAt": null,
+  "trackingPushError": null,
+  "pickedBy": null,
+  "packedBy": null,
+  "heldAt": null,
+  "heldReason": null,
+  "notes": null,
+  "version": 1,
+  "createdAt": "<clock>",
+  "updatedAt": "<clock>",
+  "deletedAt": null,
+  "items": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-shipment-item-1",
+      "shipmentId": "test-shipment-1",
+      "orderItemId": null,
+      "productId": null,
+      "sku": "TEST-SKU-Q-HAS-SHIPMENT",
+      "quantity": 1
+    }
+  ],
+  "warehouse": {
+    "workspaceId": "nexus_legacy_workspace",
+    "id": "test-wh-1",
+    "code": "TEST-WH",
+    "name": "Test warehouse",
+    "addressLine1": "Via Magazzino 1",
+    "addressLine2": null,
+    "city": "Testville",
+    "postalCode": "00000",
+    "country": "IT",
+    "isDefault": true,
+    "isActive": true,
+    "kind": null,
+    "sendcloudSenderId": null,
+    "sharedFromLocationId": null,
+    "defaultCarrierAccountId": null,
+    "createdAt": "<clock>",
+    "updatedAt": "<clock>"
+  }
+}",
+  "status": 200,
+}
+`;
+
+exports[`07 O5 — fulfilment reads: the routes answer exactly as before the move > shipment: found, and not found 2`] = `
+{
+  "body": "{
+  "error": "Shipment not found"
+}",
+  "status": 404,
+}
+`;

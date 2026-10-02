@@ -15,6 +15,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { sendEmail } from '../services/email/transport.js'
+import { triageReview } from '../services/reviews/review-triage.service.js'
 import {
   runReviewIngestOnce,
   summarizeReviewIngest,
@@ -33,11 +34,11 @@ import { draftReviewReply } from '../services/reviews/review-reply.service.js'
 import { sendReviewDigestOnce } from '../services/reviews/review-digest.service.js'
 import { generateSpotlight, getLatestSpotlight } from '../services/reviews/review-spotlight.service.js'
 import { generateActionItemsForSpike } from '../services/reviews/review-actions.service.js'
-import { respondToEbayFeedback } from '../services/reviews/adapters/ebay-feedback.adapter.js'
+import { sendReviewReply } from '../services/reviews/review-reply-send.service.js'
 import { sseResponseHeaders } from '../lib/sse.js'
-import { publishReviewEvent } from '../services/review-events.service.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
 import { runReviewMailerOnce } from '../jobs/review-request-mailer.job.js'
+import { findReviewMailerState, pauseReviewMailer, readReviewMailerState, resumeReviewMailer } from '../services/reviews/review-mailer-state.service.js'
 
 // SR.3 — register review action handlers (side-effect import)
 import '../services/reviews/review-action-handlers.js'
@@ -458,24 +459,13 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { status?: string; assignee?: string | null; tags?: string[]; note?: string | null }
   }>('/reviews/:id/triage', async (request, reply) => {
     const { id } = request.params
-    const b = request.body ?? {}
-    const VALID = ['NEW', 'IN_PROGRESS', 'RESPONDED', 'RESOLVED', 'IGNORED']
-    if (b.status && !VALID.includes(b.status)) {
-      reply.code(400)
-      return { error: 'invalid_status' }
+    // 07 O7 — the triage lives in services/reviews/review-triage.service.ts (the desk and Claude write one way).
+    const result = await triageReview(id, request.body ?? {})
+    if ('error' in result) {
+      reply.code(result.error === 'invalid_status' ? 400 : 404)
+      return { error: result.error }
     }
-    const existing = await prisma.review.findUnique({ where: { id }, select: { id: true } })
-    if (!existing) {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-    const data: Record<string, unknown> = { triageUpdatedAt: new Date() }
-    if (b.status !== undefined) data.triageStatus = b.status
-    if (b.assignee !== undefined) data.assignee = b.assignee
-    if (b.tags !== undefined) data.triageTags = b.tags
-    if (b.note !== undefined) data.triageNote = b.note
-    const review = await prisma.review.update({ where: { id }, data })
-    return { review }
+    return { review: result.review }
   })
 
   // ── GET /reviews/:id/responses (RX.2) ───────────────────────────────
@@ -534,67 +524,8 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { id: string }
     Body: { body?: string; responseId?: string; actor?: string }
   }>('/reviews/:id/reply/send', async (request, reply) => {
-    const { id } = request.params
-    const b = request.body ?? {}
-    const review = await prisma.review.findUnique({
-      where: { id },
-      select: { id: true, channel: true, externalReviewId: true },
-    })
-    if (!review) {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-    const text = (b.body ?? '').trim()
-    if (!text) {
-      reply.code(400)
-      return { error: 'empty_body' }
-    }
-
-    let code = 'MANUAL'
-    let ok = true
-    let errorMessage: string | null = null
-
-    if (review.channel === 'EBAY') {
-      const res = await respondToEbayFeedback(review.externalReviewId, text)
-      ok = res.ok
-      code = res.code
-      errorMessage = res.error ?? null
-    }
-    // Amazon/Shopify: no public reply API — stored as MANUAL (operator
-    // posts on-platform and confirms here).
-
-    // Upsert the response row.
-    const baseData = {
-      channel: review.channel,
-      body: text,
-      status: ok ? 'SENT' : 'FAILED',
-      providerResponseCode: code,
-      errorMessage,
-      sentAt: ok ? new Date() : null,
-      createdBy: b.actor ?? 'user:anonymous',
-    }
-    let row
-    if (b.responseId) {
-      row = await prisma.reviewResponse.update({ where: { id: b.responseId }, data: baseData })
-    } else {
-      row = await prisma.reviewResponse.create({ data: { reviewId: id, ...baseData } })
-    }
-
-    if (ok) {
-      await prisma.review.update({
-        where: { id },
-        data: { triageStatus: 'RESPONDED', triageUpdatedAt: new Date() },
-      })
-      publishReviewEvent({
-        type: 'review.responded',
-        reviewId: id,
-        channel: review.channel,
-        ts: Date.now(),
-      })
-    }
-
-    if (!ok) reply.code(502)
-    return { ok, response: row, code, error: errorMessage }
+    const answer = await sendReviewReply(request.params.id, request.body ?? {})
+    return reply.code(answer.status).send(answer.body)
   })
 
   // ── GET /reviews/spikes ─────────────────────────────────────────────
@@ -1075,7 +1006,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       const { renderSentimentCheckPreview } = await import(
         '../services/reviews/sentiment-check-email.service.js'
       )
-      const html = renderSentimentCheckPreview({
+      const html = await renderSentimentCheckPreview({
         locale: body.locale ?? 'it',
         productName: body.productName ?? null,
       })
@@ -1110,7 +1041,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       const dueRetries = await prisma.reviewRequest.count({
         where: { status: 'FAILED', nextRetryAt: { not: null, lte: now }, attemptCount: { lt: 3 } },
       })
-      const mailerState = await prisma.reviewMailerState.findUnique({ where: { id: 'default' } })
+      const mailerState = await findReviewMailerState()
       return {
         ok: true,
         wouldProcess: dueScheduled + dueRetries,
@@ -1153,11 +1084,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.reviewSentimentCheck.count({ where: { response: 'NEGATIVE' } }),
     ])
     // RV.4.2 — include the mailer pause state so the dashboard renders the toggle correctly
-    const mailerState = await prisma.reviewMailerState.upsert({
-      where: { id: 'default' },
-      update: {},
-      create: { id: 'default' },
-    })
+    const mailerState = await readReviewMailerState()
 
     // RV.9.2 — pipeline health: surface stale/stuck cron rows + age of
     // the most recent successful mailer tick. Used by the dashboard
@@ -1262,37 +1189,13 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     '/reviews/mailer/pause',
     async (request) => {
       const body = (request.body ?? {}) as { reason?: string; pausedBy?: string }
-      const state = await prisma.reviewMailerState.upsert({
-        where: { id: 'default' },
-        update: {
-          isPaused: true,
-          pausedReason: body.reason ?? null,
-          pausedAt: new Date(),
-          pausedBy: body.pausedBy ?? 'default-user',
-        },
-        create: {
-          id: 'default',
-          isPaused: true,
-          pausedReason: body.reason ?? null,
-          pausedAt: new Date(),
-          pausedBy: body.pausedBy ?? 'default-user',
-        },
-      })
+      const state = await pauseReviewMailer({ reason: body.reason, pausedBy: body.pausedBy })
       return { ok: true, state }
     },
   )
 
   fastify.post('/reviews/mailer/resume', async (_request) => {
-    const state = await prisma.reviewMailerState.upsert({
-      where: { id: 'default' },
-      update: {
-        isPaused: false,
-        pausedReason: null,
-        pausedAt: null,
-        pausedBy: null,
-      },
-      create: { id: 'default', isPaused: false },
-    })
+    const state = await resumeReviewMailer()
     return { ok: true, state }
   })
 

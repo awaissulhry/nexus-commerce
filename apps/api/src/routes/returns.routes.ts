@@ -1,4 +1,3 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
 // Returns routes. R0.2 extracted them out of the 8358-line
 // fulfillment.routes.ts; R0.3 layers on bug fixes — idempotency on
 // create (B7), pagination on list (B6), AuditLog on every state
@@ -8,15 +7,13 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import prisma from '../db.js'
-import { applyStockMovement } from '../services/stock-movement.service.js'
+import { generateReturnLabel } from '../services/returns/return-label.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
-
-function generateRmaNumber(): string {
-  const d = new Date()
-  const yymmdd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
-  return `RMA-${yymmdd}-${rand}`
-}
+import {
+  authorizeRequestedReturn, bulkReceiveReturn, createReturn, inspectReturn, receiveReturn, rejectRequestedReturn, restockReturn, scrapReturn,
+  updateReturnWarranty, type CreateReturnBody, type InspectBody, type WarrantyBody,
+} from '../services/returns/return-actions.service.js'
+import { issueRefund, type RefundBody } from '../services/refunds/issue-refund.service.js'
 
 // Pull a stable client identity off the request for AuditLog without
 // pulling in the auth stack. userId comes from the existing
@@ -550,98 +547,9 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   // create. Otherwise create with the key persisted, so a subsequent
   // retry with the same key short-circuits.
   fastify.post('/fulfillment/returns', async (request, reply) => {
-    try {
-      const body = request.body as {
-        orderId?: string
-        channel: string
-        marketplace?: string
-        reason?: string
-        isFbaReturn?: boolean
-        returnType?: string // STANDARD | WARRANTY | DEFECT (RX.6b)
-        items?: Array<{ orderItemId?: string; productId?: string; sku: string; quantity: number }>
-      }
-      if (!body.channel) return reply.code(400).send({ error: 'channel required' })
-      const items = Array.isArray(body.items) ? body.items : []
-
-      const idemKey =
-        (request.headers['idempotency-key'] as string | undefined)?.trim() || null
-
-      if (idemKey) {
-        const existing = await prisma.return.findUnique({
-          where: { workspace_idempotencyKey: workspaceKey({ idempotencyKey: idemKey }) },
-          include: { items: true },
-        })
-        if (existing) {
-          return reply
-            .header('Idempotent-Replay', 'true')
-            .send(existing)
-        }
-      }
-
-      const ret = await prisma.return.create({
-        data: {
-          orderId: body.orderId ?? null,
-          channel: body.channel,
-          marketplace: body.marketplace ?? null,
-          rmaNumber: generateRmaNumber(),
-          status: 'REQUESTED',
-          reason: body.reason ?? null,
-          isFbaReturn: !!body.isFbaReturn,
-          // RX.6b — warranty/defect returns start a diagnosis track.
-          returnType: body.returnType ?? 'STANDARD',
-          warrantyStatus: body.returnType === 'WARRANTY' || body.returnType === 'DEFECT' ? 'PENDING_DIAGNOSIS' : null,
-          defectReportedAt: body.returnType === 'WARRANTY' || body.returnType === 'DEFECT' ? new Date() : null,
-          idempotencyKey: idemKey,
-          items: {
-            create: items.map((it) => ({
-              orderItemId: it.orderItemId ?? null,
-              productId: it.productId ?? null,
-              sku: it.sku,
-              quantity: it.quantity,
-            })),
-          },
-        },
-        include: { items: true },
-      })
-
-      const ctx = auditCtx(request)
-      void auditLogService.write({
-        ...ctx,
-        entityType: 'Return',
-        entityId: ret.id,
-        action: 'create',
-        after: {
-          rmaNumber: ret.rmaNumber,
-          channel: ret.channel,
-          status: ret.status,
-          itemCount: ret.items.length,
-        },
-        metadata: idemKey ? { idempotencyKey: idemKey } : undefined,
-      })
-
-      return ret
-    } catch (error: any) {
-      // P2002 = unique-constraint violation on idempotencyKey, which
-      // means a concurrent retry won the race. Treat as idempotent
-      // hit: re-look-up and return the existing row.
-      if (error?.code === 'P2002') {
-        const idemKey =
-          (request.headers['idempotency-key'] as string | undefined)?.trim()
-        if (idemKey) {
-          const existing = await prisma.return.findUnique({
-            where: { workspace_idempotencyKey: workspaceKey({ idempotencyKey: idemKey }) },
-            include: { items: true },
-          })
-          if (existing) {
-            return reply
-              .header('Idempotent-Replay', 'race')
-              .send(existing)
-          }
-        }
-      }
-      fastify.log.error({ err: error }, '[POST /fulfillment/returns] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+    const idemKey = (request.headers['idempotency-key'] as string | undefined)?.trim() || null
+    const answer = await createReturn(request.body as CreateReturnBody, idemKey, auditCtx(request), fastify.log)
+    return reply.headers(answer.headers).code(answer.status).send(answer.body)
   })
 
   // B2 — Receive emits no StockMovement (the units aren't in our
@@ -658,73 +566,8 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   // log alone.
   fastify.post('/fulfillment/returns/:id/receive', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = (request.body ?? {}) as { warehouseId?: string }
-    const before = await prisma.return.findUnique({
-      where: { id },
-      select: { status: true },
-    })
-    const retDetail = await prisma.return.findUnique({
-      where: { id },
-      include: { items: { select: { id: true, productId: true, sku: true, quantity: true } } },
-    })
-
-    const updated = await prisma.return.update({
-      where: { id },
-      data: { status: 'RECEIVED', receivedAt: new Date(), version: { increment: 1 } },
-    })
-
-    // F1.3 — emit RETURN_RECEIVED audit-only movements (change=0) per
-    // item with productId. Scope to the receiving warehouse → its
-    // primary StockLocation. Failures don't roll back the receive
-    // (the receive itself succeeded; movement rows are best-effort
-    // audit, mirrors the L.11 inbound pattern).
-    if (retDetail?.items?.length) {
-      try {
-        const warehouseId = body.warehouseId ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
-        const stockLocation = warehouseId
-          ? await prisma.stockLocation.findFirst({ where: { warehouseId }, select: { id: true } })
-          : null
-
-        if (stockLocation) {
-          for (const it of retDetail.items) {
-            if (!it.productId) continue
-            const sl = await prisma.stockLevel.findFirst({
-              where: { productId: it.productId, locationId: stockLocation.id },
-              select: { quantity: true },
-            })
-            const balance = sl?.quantity ?? 0
-            await prisma.stockMovement.create({
-              data: {
-                productId: it.productId,
-                locationId: stockLocation.id,
-                change: 0,
-                balanceAfter: balance,
-                quantityBefore: balance,
-                reason: 'RETURN_RECEIVED',
-                referenceType: 'Return',
-                referenceId: id,
-                returnId: id,
-                notes: `Return ${retDetail.rmaNumber ?? id.slice(0, 8)} arrived at warehouse — awaiting inspection`,
-                actor: 'return-receive',
-              },
-            })
-          }
-        }
-      } catch (err) {
-        // Don't fail the receive on audit-write error — log + continue.
-        request.log.warn({ err }, '[returns/:id/receive] RETURN_RECEIVED audit-row write failed')
-      }
-    }
-
-    void auditLogService.write({
-      ...auditCtx(request),
-      entityType: 'Return',
-      entityId: id,
-      action: 'receive',
-      before: { status: before?.status ?? null },
-      after: { status: updated.status, receivedAt: updated.receivedAt, itemsTouched: retDetail?.items.length ?? 0 },
-    })
-    return updated
+    const answer = await receiveReturn(id, (request.body ?? {}) as { warehouseId?: string }, auditCtx(request), request.log)
+    return reply.code(answer.status).send(answer.body)
   })
 
   // R3.2 — accepts per-item disposition + scrapReason. Auto-derives
@@ -732,151 +575,15 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   // → SELLABLE; DAMAGED/UNUSABLE → SCRAP). Restock route uses
   // disposition to route per-item to the matching warehouse kind.
   fastify.post('/fulfillment/returns/:id/inspect', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const body = request.body as {
-        items: Array<{
-          itemId: string
-          conditionGrade: string
-          notes?: string
-          disposition?: string
-          scrapReason?: string
-        }>
-        overallCondition?: string
-      }
-      const VALID_DISPOSITIONS = new Set([
-        'SELLABLE', 'SECOND_QUALITY', 'REFURBISH', 'QUARANTINE', 'SCRAP',
-      ])
-      const inferDisposition = (grade: string): string => {
-        if (grade === 'NEW' || grade === 'LIKE_NEW' || grade === 'GOOD') return 'SELLABLE'
-        return 'SCRAP'
-      }
-      for (const it of body.items ?? []) {
-        const disposition = it.disposition && VALID_DISPOSITIONS.has(it.disposition)
-          ? it.disposition
-          : inferDisposition(it.conditionGrade)
-        await prisma.returnItem.update({
-          where: { id: it.itemId },
-          data: {
-            conditionGrade: it.conditionGrade as any,
-            notes: it.notes ?? null,
-            disposition,
-            scrapReason: disposition === 'SCRAP' ? (it.scrapReason ?? null) : null,
-          },
-        })
-      }
-      const updated = await prisma.return.update({
-        where: { id },
-        data: {
-          status: 'INSPECTING',
-          conditionGrade: (body.overallCondition as any) ?? null,
-          inspectedAt: new Date(),
-          version: { increment: 1 },
-        },
-        include: { items: true },
-      })
-      void auditLogService.write({
-        ...auditCtx(request),
-        entityType: 'Return',
-        entityId: id,
-        action: 'inspect',
-        after: {
-          status: updated.status,
-          overallCondition: updated.conditionGrade,
-          itemGrades: (body.items ?? []).map((it) => ({
-            itemId: it.itemId,
-            grade: it.conditionGrade,
-            disposition: it.disposition ?? inferDisposition(it.conditionGrade),
-          })),
-        },
-      })
-      return updated
-    } catch (error: any) {
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+    const { id } = request.params as { id: string }
+    const answer = await inspectReturn(id, request.body as InspectBody, auditCtx(request))
+    return reply.code(answer.status).send(answer.body)
   })
 
   fastify.post('/fulfillment/returns/:id/restock', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const body = request.body as { warehouseId?: string }
-      const ret = await prisma.return.findUnique({ where: { id }, include: { items: true } })
-      if (!ret) return reply.code(404).send({ error: 'Return not found' })
-
-      const warehouseId = body.warehouseId ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
-
-      const restocked: Array<{ sku: string; productId: string; qty: number; grade: string | null; to?: 'shared-stock' }> = []
-      const skipped: Array<{ sku: string; reason: string }> = []
-      const { putBackForOrder } = await import('../services/stock-pool/order-routing.js')
-      const poolRouteOf = new Map<string, string>()
-      for (const item of ret.items) {
-        if (!item.productId) {
-          skipped.push({ sku: item.sku, reason: 'no-productId' })
-          continue
-        }
-        // Only restock items graded NEW/LIKE_NEW/GOOD; DAMAGED and UNUSABLE go to write-off.
-        const grade = item.conditionGrade
-        if (grade === 'DAMAGED' || grade === 'UNUSABLE') {
-          skipped.push({ sku: item.sku, reason: `grade-${grade}` })
-          continue
-        }
-        // Shared stock step 4 — a unit its order took from a pool goes back to the pool (door 5: to the
-        // lent warehouse the order took the most from; once per return; never more than the order took).
-        // Decided once per product, for all of the return's restockable items of that product together.
-        if (ret.orderId) {
-          let route = poolRouteOf.get(item.productId)
-          if (!route) {
-            const quantity = ret.items
-              .filter((other) => other.productId === item.productId && other.conditionGrade !== 'DAMAGED' && other.conditionGrade !== 'UNUSABLE')
-              .reduce((sum, other) => sum + other.quantity, 0)
-            const pooled = await putBackForOrder({
-              productId: item.productId, quantity, orderId: ret.orderId, putBackRef: ret.id,
-              reason: 'RETURN_RESTOCKED', actor: 'return-restock',
-            })
-            route = pooled.via === 'none' ? `shared-stock: ${pooled.refusal.code}` : pooled.via
-            poolRouteOf.set(item.productId, route)
-          }
-          if (route === 'pool') {
-            restocked.push({ sku: item.sku, productId: item.productId, qty: item.quantity, grade, to: 'shared-stock' })
-            continue
-          }
-          if (route !== 'own') {
-            skipped.push({ sku: item.sku, reason: route })
-            continue
-          }
-        }
-        await applyStockMovement({
-          productId: item.productId,
-          warehouseId,
-          change: item.quantity,
-          reason: 'RETURN_RESTOCKED',
-          referenceType: 'Return',
-          referenceId: ret.id,
-          actor: 'return-restock',
-        })
-        restocked.push({ sku: item.sku, productId: item.productId, qty: item.quantity, grade })
-      }
-      const updated = await prisma.return.update({
-        where: { id },
-        data: { status: 'RESTOCKED', restockedAt: new Date(), version: { increment: 1 } },
-      })
-      void auditLogService.write({
-        ...auditCtx(request),
-        entityType: 'Return',
-        entityId: id,
-        action: 'restock',
-        after: {
-          status: updated.status,
-          warehouseId,
-          restockedItems: restocked,
-          skippedItems: skipped,
-        },
-      })
-      return updated
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[returns/:id/restock] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+    const { id } = request.params as { id: string }
+    const answer = await restockReturn(id, (request.body ?? {}) as { warehouseId?: string }, auditCtx(request), fastify.log)
+    return reply.code(answer.status).send(answer.body)
   })
 
   /**
@@ -923,329 +630,10 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   //   reason           channel-reason text override (for eBay's
   //                     `comment` field, etc.).
   fastify.post('/fulfillment/returns/:id/refund', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const body = (request.body ?? {}) as {
-        refundCents?: number
-        kind?: 'CASH' | 'STORE_CREDIT' | 'EXCHANGE'
-        skipChannelPush?: boolean
-        reason?: string
-        // RX.3 — financial precision. Per-line refund allocation +
-        // order-level fee breakdown. amountCents stays the NET figure
-        // actually moved to the buyer; the breakdown is recorded for the
-        // fiscal/audit trail and the per-line map for line-level pushes.
-        perLineAmounts?: Record<string, number>
-        grossCents?: number
-        restockingFeeCents?: number
-        returnShippingFeeCents?: number
-      }
-
-      // Resolve the Return so we know channel + currency.
-      const ret = await prisma.return.findUnique({
-        where: { id },
-        select: {
-          id: true, channel: true, currencyCode: true, refundCents: true, refundedAt: true,
-          items: { select: { id: true } },
-        },
-      })
-      if (!ret) return reply.code(404).send({ error: 'Return not found' })
-
-      // F1.1 — race guard. Concurrent /refund calls on the same Return
-      // would each create a Refund row and overwrite refundedAt. Fail
-      // fast when a non-failed Refund already exists. The DB-level
-      // partial unique index "Refund_oneActivePerReturn" is the
-      // bedrock; this returns a clearer 409 to the second caller.
-      const existingActive = await prisma.refund.findFirst({
-        where: {
-          returnId: id,
-          channelStatus: { in: ['PENDING', 'POSTED', 'MANUAL_REQUIRED'] },
-        },
-        select: { id: true, channelStatus: true },
-      })
-      if (existingActive) {
-        return reply.code(409).send({
-          error: 'A refund is already in progress or completed for this return',
-          existingRefundId: existingActive.id,
-          existingRefundStatus: existingActive.channelStatus,
-        })
-      }
-
-      // Determine the amount: prefer body, fall back to staged
-      // Return.refundCents (legacy callers + the inspect-then-
-      // refund flow that stages the amount in advance).
-      const amountCents = typeof body.refundCents === 'number' && body.refundCents > 0
-        ? body.refundCents
-        : ret.refundCents
-      if (!amountCents || amountCents <= 0) {
-        return reply.code(400).send({ error: 'refundCents required (or stage on Return first)' })
-      }
-
-      // RX.3 — validate + normalise the per-line refund allocation.
-      // Keys must reference items on this return; values are positive
-      // integer cents. We only forward the map to the channel publisher
-      // when it sums exactly to the net amount (no order-level fee
-      // discrepancy), so a channel push can never disagree with the
-      // total we mark refunded. Otherwise it's recorded for our own
-      // reporting and the publisher refunds the net total as before.
-      let perLineAmounts: Record<string, number> | null = null
-      if (body.perLineAmounts && typeof body.perLineAmounts === 'object') {
-        const validIds = new Set(ret.items.map((i) => i.id))
-        const norm: Record<string, number> = {}
-        for (const [k, v] of Object.entries(body.perLineAmounts)) {
-          if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) continue
-          if (!validIds.has(k)) {
-            return reply.code(400).send({ error: `perLineAmounts references unknown return item ${k}` })
-          }
-          norm[k] = Math.round(v)
-        }
-        if (Object.keys(norm).length) perLineAmounts = norm
-      }
-      const sumPerLine = perLineAmounts
-        ? Object.values(perLineAmounts).reduce((a, b) => a + b, 0)
-        : 0
-
-      // RX.3 — fee breakdown note for the fiscal/audit trail. The net
-      // (amountCents) is authoritative; this records how it was derived.
-      const feeParts: string[] = []
-      const c = (cents: number) => `€${(cents / 100).toFixed(2)}`
-      if (typeof body.grossCents === 'number' && body.grossCents > amountCents) feeParts.push(`gross ${c(body.grossCents)}`)
-      if (typeof body.restockingFeeCents === 'number' && body.restockingFeeCents > 0) feeParts.push(`restocking −${c(body.restockingFeeCents)}`)
-      if (typeof body.returnShippingFeeCents === 'number' && body.returnShippingFeeCents > 0) feeParts.push(`return shipping −${c(body.returnShippingFeeCents)}`)
-      const feeNote = feeParts.length ? `Net ${c(amountCents)} (${feeParts.join(', ')})` : null
-
-      // Stage the cache up-front so the channel publisher (which
-      // reads ret.refundCents) sees the amount we intend to issue.
-      if (ret.refundCents !== amountCents) {
-        await prisma.return.update({
-          where: { id },
-          data: { refundCents: amountCents },
-        })
-      }
-
-      // 1) Always create the Refund row (PENDING). This is the
-      //    canonical record; channel attempts decorate it.
-      //    F1.1 — race fallback: if two callers slipped past the
-      //    upfront guard at the same moment, the partial unique index
-      //    Refund_oneActivePerReturn rejects the second insert with
-      //    P2002. Surface as 409 instead of 500.
-      let refund
-      try {
-        refund = await prisma.refund.create({
-          data: {
-            returnId: id,
-            amountCents,
-            currencyCode: ret.currencyCode || 'EUR',
-            kind: (body.kind ?? 'CASH') as any,
-            reason: body.reason ?? null,
-            perLineAmounts: (perLineAmounts ?? undefined) as any,
-            notes: feeNote,
-            channel: ret.channel,
-            channelStatus: 'PENDING',
-            actor: (request.headers['x-user-id'] as string | undefined) ?? null,
-          },
-        })
-      } catch (err: any) {
-        if (err?.code === 'P2002') {
-          return reply.code(409).send({
-            error: 'A refund is already in progress for this return (concurrent attempt)',
-          })
-        }
-        throw err
-      }
-
-      // 2) Skip-channel path: operator already refunded externally.
-      //    Mark Refund POSTED with no channelRefundId, project
-      //    to Return cache, audit.
-      if (body.skipChannelPush) {
-        const now = new Date()
-        await prisma.refundAttempt.create({
-          data: { refundId: refund.id, outcome: 'SKIPPED' },
-        })
-        await prisma.refund.update({
-          where: { id: refund.id },
-          data: { channelStatus: 'POSTED', channelPostedAt: now },
-        })
-        const updated = await prisma.return.update({
-          where: { id },
-          data: {
-            status: 'REFUNDED',
-            refundStatus: 'REFUNDED',
-            refundedAt: now,
-            channelRefundError: null,
-            version: { increment: 1 },
-          },
-        })
-        void auditLogService.write({
-          ...auditCtx(request),
-          entityType: 'Return',
-          entityId: id,
-          action: 'refund',
-          after: {
-            status: updated.status,
-            refundId: refund.id,
-            refundCents: amountCents,
-            channelOutcome: 'SKIPPED',
-          },
-        })
-        // F1.4 — auto-assign Italian nota di credito number on POSTED.
-        // Fiscal sequence is allocated lazily so a fresh number is
-        // burned only when value actually moves. Errors don't block
-        // the refund response; operator can retry via assign endpoint.
-        void (async () => {
-          try {
-            const { assignCreditNoteNumber } = await import(
-              '../services/credit-note.service.js'
-            )
-            await assignCreditNoteNumber(refund.id)
-          } catch (e: any) {
-            request.log.error(
-              { refundId: refund.id, err: e?.message },
-              'credit-note auto-assign failed (skipChannelPush path)',
-            )
-          }
-        })()
-        return { ...updated, refundId: refund.id, channelOutcome: 'SKIPPED' }
-      }
-
-      // 3) Channel publish. The publisher returns a structured
-      //    outcome and never throws (per its caller contract).
-      const t0 = Date.now()
-      const { publishRefundToChannel } = await import(
-        '../services/refunds/refund-publisher.service.js'
-      )
-      const publish = await publishRefundToChannel({
-        returnId: id,
-        reasonText: body.reason,
-        // Only forward line-level amounts when they reconcile to the net
-        // total — otherwise the channel total could drift from what we
-        // mark refunded.
-        ...(perLineAmounts && sumPerLine === amountCents ? { itemAmountsCents: perLineAmounts } : {}),
-      })
-      const durationMs = Date.now() - t0
-
-      // 4) Record the attempt (OK / OK_MANUAL_REQUIRED /
-      //    NOT_IMPLEMENTED / FAILED) regardless of outcome.
-      await prisma.refundAttempt.create({
-        data: {
-          refundId: refund.id,
-          outcome: publish.outcome,
-          channelRefundId: publish.channelRefundId ?? null,
-          errorMessage: publish.error ?? null,
-          durationMs,
-          rawResponse: {
-            outcome: publish.outcome,
-            channelRefundId: publish.channelRefundId ?? null,
-            channelMessage: publish.channelMessage ?? null,
-          } as any,
-        },
-      })
-
-      // 5) Update the Refund row from the publish result.
-      const channelStatus =
-        publish.outcome === 'FAILED' ? 'FAILED' :
-        publish.outcome === 'NOT_IMPLEMENTED' ? 'NOT_IMPLEMENTED' :
-        publish.outcome === 'OK_MANUAL_REQUIRED' ? 'MANUAL_REQUIRED' :
-        'POSTED'
-      await prisma.refund.update({
-        where: { id: refund.id },
-        data: {
-          channelStatus: channelStatus as any,
-          channelRefundId: publish.channelRefundId ?? null,
-          channelError: publish.outcome === 'FAILED' ? (publish.error ?? 'Unknown channel error') : null,
-          channelPostedAt: publish.outcome === 'OK' ? new Date() : null,
-        },
-      })
-
-      // 6) FAILED → keep Return.status untouched so the operator
-      //    can retry; mark refundStatus=CHANNEL_FAILED and surface
-      //    the error.
-      if (publish.outcome === 'FAILED') {
-        const updated = await prisma.return.update({
-          where: { id },
-          data: {
-            refundStatus: 'CHANNEL_FAILED',
-            channelRefundError: publish.error ?? 'Unknown channel error',
-            version: { increment: 1 },
-          },
-        })
-        void auditLogService.write({
-          ...auditCtx(request),
-          entityType: 'Return',
-          entityId: id,
-          action: 'refund-failed',
-          after: {
-            refundId: refund.id,
-            refundStatus: updated.refundStatus,
-            channelError: publish.error,
-            channelOutcome: 'FAILED',
-          },
-        })
-        return reply.code(502).send({
-          ...updated,
-          refundId: refund.id,
-          channelOutcome: 'FAILED',
-          channelError: publish.error,
-        })
-      }
-
-      // 7) OK / OK_MANUAL_REQUIRED / NOT_IMPLEMENTED → mark
-      //    Return REFUNDED + project Refund channelRefundId to
-      //    the cache.
-      const updated = await prisma.return.update({
-        where: { id },
-        data: {
-          status: 'REFUNDED',
-          refundStatus: 'REFUNDED',
-          refundedAt: new Date(),
-          channelRefundId: publish.channelRefundId ?? null,
-          channelRefundedAt: publish.outcome === 'OK' ? new Date() : null,
-          channelRefundError: null,
-          version: { increment: 1 },
-        },
-      })
-      void auditLogService.write({
-        ...auditCtx(request),
-        entityType: 'Return',
-        entityId: id,
-        action: 'refund',
-        after: {
-          status: updated.status,
-          refundId: refund.id,
-          refundCents: amountCents,
-          channelOutcome: publish.outcome,
-          channelRefundId: publish.channelRefundId,
-        },
-      })
-      // F1.4 — auto-assign Italian nota di credito number when channel
-      // refund landed cleanly. OK_MANUAL_REQUIRED / NOT_IMPLEMENTED are
-      // intentionally excluded — those are not yet "posted value
-      // movements" from a fiscal standpoint; operator must promote them
-      // via skip-channel-push or the assign endpoint.
-      if (publish.outcome === 'OK') {
-        void (async () => {
-          try {
-            const { assignCreditNoteNumber } = await import(
-              '../services/credit-note.service.js'
-            )
-            await assignCreditNoteNumber(refund.id)
-          } catch (e: any) {
-            request.log.error(
-              { refundId: refund.id, err: e?.message },
-              'credit-note auto-assign failed (channel-publish path)',
-            )
-          }
-        })()
-      }
-      return {
-        ...updated,
-        refundId: refund.id,
-        channelOutcome: publish.outcome,
-        channelMessage: publish.channelMessage,
-        channelRefundId: publish.channelRefundId,
-      }
-    } catch (error: any) {
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+    const { id } = request.params as { id: string }
+    const actor = (request.headers['x-user-id'] as string | undefined) ?? null
+    const answer = await issueRefund(id, (request.body ?? {}) as RefundBody, actor, auditCtx(request), request.log)
+    return reply.code(answer.status).send(answer.body)
   })
 
   // Return label workflow — operator-driven for v0. The carrier
@@ -1384,151 +772,8 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/fulfillment/returns/:id/generate-label', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const ret = await prisma.return.findUnique({
-        where: { id },
-        include: {
-          order: {
-            include: {
-              items: {
-                include: {
-                  product: {
-                    select: {
-                      sku: true,
-                      hsCode: true,
-                      countryOfOrigin: true,
-                      weightValue: true,
-                      weightUnit: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      })
-      if (!ret) return reply.code(404).send({ error: 'Return not found' })
-      if (!ret.order) {
-        return reply.code(400).send({ error: 'Return has no order — cannot generate label' })
-      }
-      if (ret.returnLabelUrl) {
-        return reply.code(409).send({
-          error: 'Label already exists — remove the existing label first',
-          code: 'LABEL_EXISTS',
-        })
-      }
-
-      const sendcloud = await import('../services/sendcloud/index.js')
-      let creds
-      try {
-        creds = await sendcloud.resolveCredentials()
-      } catch (e: any) {
-        if (e instanceof sendcloud.SendcloudError) {
-          return reply.code(e.status).send({ error: e.message, code: e.code })
-        }
-        throw e
-      }
-
-      const order = ret.order
-      const ship = order.shippingAddress as any
-      const addr = {
-        name: order.customerName || 'Customer',
-        address: ship?.AddressLine1 ?? ship?.addressLine1 ?? ship?.street ?? '',
-        address_2: ship?.AddressLine2 ?? ship?.addressLine2 ?? undefined,
-        city: ship?.City ?? ship?.city ?? '',
-        postal_code: ship?.PostalCode ?? ship?.postalCode ?? '',
-        country: ship?.CountryCode ?? ship?.countryCode ?? ship?.country ?? 'IT',
-        country_state: ship?.StateOrRegion ?? ship?.stateOrProvince ?? ship?.state ?? undefined,
-        telephone: ship?.Phone ?? ship?.phone ?? undefined,
-        email: order.customerEmail || undefined,
-      }
-
-      // Weight: aggregate from product master if available, else 1.5kg
-      // baseline (same fallback as outbound print-label).
-      const summedKg = order.items.reduce((acc, it) => {
-        const w = it.product?.weightValue ? Number(it.product.weightValue) : 0
-        const factor = it.product?.weightUnit === 'g' ? 0.001 : 1
-        return acc + w * factor * it.quantity
-      }, 0)
-      const weightKg = summedKg > 0 ? summedKg : 1.5
-
-      const totalValue = order.items.reduce(
-        (acc, it) => acc + Number(it.price) * it.quantity,
-        0,
-      )
-
-      try {
-        const parcel = await sendcloud.createParcel(creds, {
-          ...addr,
-          weight: weightKg.toFixed(3),
-          order_number: ret.rmaNumber ?? ret.id,
-          total_order_value: totalValue.toFixed(2),
-          total_order_value_currency: ret.currencyCode ?? 'EUR',
-          external_reference: `return-${ret.id}`,
-          is_return: true,
-          // Customs items only matter for international returns;
-          // Sendcloud silently ignores them domestically.
-          parcel_items: order.items.map((it) => ({
-            description: it.product?.sku ?? it.sku,
-            quantity: it.quantity,
-            weight: '0.100',
-            value: Number(it.price).toFixed(2),
-            hs_code: it.product?.hsCode ?? undefined,
-            origin_country: it.product?.countryOfOrigin ?? undefined,
-            sku: it.sku,
-          })),
-        })
-
-        const labelUrl = parcel.label?.normal_printer?.[0] ?? null
-        if (!labelUrl) {
-          return reply.code(502).send({
-            error: 'Sendcloud accepted parcel but returned no label URL',
-            parcelId: parcel.id,
-          })
-        }
-
-        const updated = await prisma.return.update({
-          where: { id },
-          data: {
-            returnLabelUrl: labelUrl,
-            returnLabelCarrier: 'SENDCLOUD',
-            returnTrackingNumber: parcel.tracking_number ?? null,
-            returnLabelGeneratedAt: new Date(),
-            // R0.3 (B3) — persist parcel id so the Sendcloud webhook
-            // can resolve incoming carrier-scan events back to this
-            // Return when the customer ships the box.
-            sendcloudParcelId: parcel.id != null ? String(parcel.id) : null,
-          },
-        })
-        // Audit trail — fail-open writer so a logging failure never
-        // wedges the operator workflow.
-        try {
-          await prisma.auditLog.create({
-            data: {
-              entityType: 'Return',
-              entityId: id,
-              action: 'generate-return-label',
-              metadata: {
-                carrier: 'SENDCLOUD',
-                tracking: parcel.tracking_number,
-                parcelId: parcel.id,
-                dryRun: process.env.NEXUS_ENABLE_SENDCLOUD_REAL !== 'true',
-              } as any,
-            },
-          })
-        } catch (e) {
-          fastify.log.warn({ err: e }, '[returns/generate-label] audit write failed')
-        }
-        return reply.send({
-          success: true,
-          return: updated,
-          dryRun: process.env.NEXUS_ENABLE_SENDCLOUD_REAL !== 'true',
-        })
-      } catch (e: any) {
-        if (e instanceof sendcloud.SendcloudError) {
-          return reply.code(e.status).send({ error: e.message, code: e.code })
-        }
-        throw e
-      }
+      const answer = await generateReturnLabel(id, fastify.log)
+      return reply.code(answer.status).send(answer.body)
     } catch (err: any) {
       fastify.log.error({ err }, '[returns/:id/generate-label] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -1550,58 +795,9 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   // grades that were restockable (NEW/LIKE_NEW/GOOD); damaged grades
   // were never restocked and don't need a write-off here.
   fastify.post('/fulfillment/returns/:id/scrap', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const ret = await prisma.return.findUnique({
-        where: { id },
-        include: { items: true },
-      })
-      if (!ret) return reply.code(404).send({ error: 'Return not found' })
-
-      const writeOffs: Array<{ sku: string; qty: number }> = []
-      if (ret.status === 'RESTOCKED') {
-        const warehouseId =
-          ret.restockWarehouseId ??
-          (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
-        for (const item of ret.items) {
-          if (!item.productId) continue
-          const grade = item.conditionGrade
-          if (grade === 'DAMAGED' || grade === 'UNUSABLE') continue
-          await applyStockMovement({
-            productId: item.productId,
-            warehouseId,
-            change: -item.quantity,
-            reason: 'WRITE_OFF',
-            referenceType: 'Return',
-            referenceId: ret.id,
-            actor: 'return-scrap-after-restock',
-            notes: 'Scrapped after prior restock — removing from stock',
-          })
-          writeOffs.push({ sku: item.sku, qty: item.quantity })
-        }
-      }
-
-      const updated = await prisma.return.update({
-        where: { id },
-        data: { status: 'SCRAPPED', version: { increment: 1 } },
-      })
-      void auditLogService.write({
-        ...auditCtx(request),
-        entityType: 'Return',
-        entityId: id,
-        action: 'scrap',
-        before: { status: ret.status },
-        after: {
-          status: updated.status,
-          writeOffs,
-          itemCount: ret.items.length,
-        },
-      })
-      return updated
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[returns/:id/scrap] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
+    const { id } = request.params as { id: string }
+    const answer = await scrapReturn(id, auditCtx(request), fastify.log)
+    return reply.code(answer.status).send(answer.body)
   })
 
   // ─── R6.3 — Italian customer comms ──────────────────────────────
@@ -2117,43 +1313,9 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   // money side (if resolution=REFUND) still goes through the normal,
   // human-clicked refund path — this only records the warranty decision.
   fastify.patch('/fulfillment/returns/:id/warranty', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const body = (request.body ?? {}) as {
-        warrantyStatus?: string | null
-        warrantyResolution?: string | null
-        manufacturerRef?: string | null
-        defectReportedAt?: string | null
-      }
-      const data: Record<string, unknown> = {}
-      if ('warrantyStatus' in body) data.warrantyStatus = body.warrantyStatus
-      if ('warrantyResolution' in body) data.warrantyResolution = body.warrantyResolution
-      if ('manufacturerRef' in body) data.manufacturerRef = body.manufacturerRef
-      if ('defectReportedAt' in body) {
-        data.defectReportedAt = body.defectReportedAt ? new Date(body.defectReportedAt) : null
-      }
-      if (Object.keys(data).length === 0) {
-        return reply.code(400).send({ error: 'No warranty fields to update' })
-      }
-      data.version = { increment: 1 }
-      const updated = await prisma.return.update({ where: { id }, data })
-      void auditLogService.write({
-        ...auditCtx(request),
-        entityType: 'Return',
-        entityId: id,
-        action: 'warranty-update',
-        after: {
-          warrantyStatus: updated.warrantyStatus,
-          warrantyResolution: updated.warrantyResolution,
-          manufacturerRef: updated.manufacturerRef,
-        },
-      })
-      return updated
-    } catch (error: any) {
-      const msg = error instanceof Error ? error.message : String(error)
-      if (msg.includes('Record to update not found')) return reply.code(404).send({ error: 'Return not found' })
-      return reply.code(500).send({ error: msg })
-    }
+    const { id } = request.params as { id: string }
+    const answer = await updateReturnWarranty(id, (request.body ?? {}) as WarrantyBody, auditCtx(request))
+    return reply.code(answer.status).send(answer.body)
   })
 
   fastify.post('/fulfillment/returns/:id/items/:itemId/upload-photo', async (request, reply) => {
@@ -2257,33 +1419,15 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   }
 
   fastify.post<{ Body: BulkBody }>('/fulfillment/returns/bulk/approve', async (request) =>
-    bulkApply(request, request.body, async (id) => {
-      const r = await prisma.return.updateMany({
-        where: { id, status: 'REQUESTED' },
-        data: { status: 'AUTHORIZED', version: { increment: 1 } },
-      })
-      return r.count > 0 ? { ok: true } : { ok: false, error: 'Not in REQUESTED state' }
-    }, 'bulk-approve'),
+    bulkApply(request, request.body, authorizeRequestedReturn, 'bulk-approve'),
   )
 
   fastify.post<{ Body: BulkBody }>('/fulfillment/returns/bulk/deny', async (request) =>
-    bulkApply(request, request.body, async (id) => {
-      const r = await prisma.return.updateMany({
-        where: { id, status: 'REQUESTED' },
-        data: { status: 'REJECTED', version: { increment: 1 } },
-      })
-      return r.count > 0 ? { ok: true } : { ok: false, error: 'Not in REQUESTED state' }
-    }, 'bulk-deny'),
+    bulkApply(request, request.body, rejectRequestedReturn, 'bulk-deny'),
   )
 
   fastify.post<{ Body: BulkBody }>('/fulfillment/returns/bulk/receive', async (request) =>
-    bulkApply(request, request.body, async (id) => {
-      const r = await prisma.return.updateMany({
-        where: { id, status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT'] } },
-        data: { status: 'RECEIVED', receivedAt: new Date(), version: { increment: 1 } },
-      })
-      return r.count > 0 ? { ok: true } : { ok: false, error: 'Already received or not authorized' }
-    }, 'bulk-receive'),
+    bulkApply(request, request.body, bulkReceiveReturn, 'bulk-receive'),
   )
 
   // ─── RX.4 — Automation engine (guardrailed, diff-then-apply) ────

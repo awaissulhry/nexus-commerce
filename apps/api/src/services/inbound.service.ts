@@ -40,7 +40,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import prisma from '../db.js'
 import type { InboundStatus, Prisma } from '@prisma/client'
-import { applyStockMovement } from './stock-movement.service.js'
+import { afterStockMovementCommit, applyStockMovement, applyStockMovementInTx } from './stock-movement.service.js'
 import { logger } from '../utils/logger.js'
 
 // ─── State machine ──────────────────────────────────────────────────
@@ -129,9 +129,66 @@ export async function receiveItems(args: ReceiveArgs) {
 
     const target = Number(upd.quantityReceived)
     if (!Number.isFinite(target) || target < 0) continue
-    const delta = target - orig.quantityReceived
 
-    if (delta === 0) {
+    // MCP full control 08 S10 — the line is locked while its received count is read and the stock moved, in one
+    // transaction. Before, two identical receives of "5 received" (a double-click, a retried request) both read 0,
+    // both added 5 and the shelf showed 10. Now the second waits, finds 5 already received and moves nothing; two
+    // different targets end at the later one with the stock moved by exactly the difference each time.
+    const isStock = (!upd.qcStatus || upd.qcStatus === 'PASS') && !!orig.productId
+    const settled = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "InboundShipmentItem" WHERE id = ${orig.id} FOR UPDATE`
+      const fresh = await tx.inboundShipmentItem.findUniqueOrThrow({ where: { id: orig.id }, select: { quantityReceived: true } })
+      const delta = target - fresh.quantityReceived
+      if (delta === 0) return { delta: 0, moved: null }
+
+      // Idempotency dedupe.
+      if (upd.idempotencyKey) {
+        const existing = await tx.inboundReceipt.findFirst({
+          where: { inboundShipmentItemId: orig.id, idempotencyKey: upd.idempotencyKey },
+          select: { id: true },
+        })
+        if (existing) return { delta: 0, moved: null, duplicate: true }
+      }
+
+      // QC PASS or unset = stock; FAIL/HOLD = log event but no stock.
+      const moved = isStock
+        ? await applyStockMovementInTx(tx, {
+            productId: orig.productId!,
+            warehouseId: shipment.warehouseId ?? undefined,
+            change: sign * delta,
+            reason,
+            referenceType: 'InboundShipment',
+            referenceId: shipment.id,
+            actor: actor ?? 'inbound-receive',
+          })
+        : null
+
+      const itemUpdate: Prisma.InboundShipmentItemUpdateInput = {
+        quantityReceived: target,
+        qcStatus: upd.qcStatus ?? null,
+        qcNotes: upd.qcNotes ?? null,
+      }
+      if (upd.photoUrls && upd.photoUrls.length > 0) {
+        itemUpdate.photoUrls = { push: upd.photoUrls }
+      }
+      await tx.inboundReceipt.create({
+        data: {
+          inboundShipmentItemId: orig.id,
+          quantity: delta,
+          qcStatus: upd.qcStatus ?? null,
+          qcNotes: upd.qcNotes ?? null,
+          notes: upd.notes ?? null,
+          idempotencyKey: upd.idempotencyKey ?? null,
+          stockMovementId: moved?.movement.id ?? null,
+          receivedBy: actor ?? 'inbound-receive',
+        },
+      })
+      await tx.inboundShipmentItem.update({ where: { id: orig.id }, data: itemUpdate })
+      return { delta, moved }
+    })
+
+    if (settled.delta === 0) {
+      if ('duplicate' in settled) continue
       // QC + photo append still allowed without stock churn.
       const data: Prisma.InboundShipmentItemUpdateInput = {}
       if (upd.qcStatus !== undefined) data.qcStatus = upd.qcStatus ?? null
@@ -144,133 +201,86 @@ export async function receiveItems(args: ReceiveArgs) {
       }
       continue
     }
+    if (!settled.moved || !orig.productId) continue
+    const delta = settled.delta
+    const stockMovementId: string | null = settled.moved.movement.id
+    // The instant channel push, stockout hook and read-cache refresh, after the commit (as applyStockMovement does).
+    await afterStockMovementCommit({ productId: orig.productId, reason }, settled.moved)
 
-    // Idempotency dedupe.
-    if (upd.idempotencyKey) {
-      const existing = await prisma.inboundReceipt.findFirst({
-        where: { inboundShipmentItemId: orig.id, idempotencyKey: upd.idempotencyKey },
-        select: { id: true },
-      })
-      if (existing) continue
-    }
-
-    // QC PASS or unset = stock; FAIL/HOLD = log event but no stock.
-    let stockMovementId: string | null = null
-    if ((!upd.qcStatus || upd.qcStatus === 'PASS') && orig.productId) {
-      const mv = await applyStockMovement({
-        productId: orig.productId,
-        warehouseId: shipment.warehouseId ?? undefined,
-        change: sign * delta,
-        reason,
-        referenceType: 'InboundShipment',
-        referenceId: shipment.id,
-        actor: actor ?? 'inbound-receive',
-      })
-      stockMovementId = mv.id
-
-      // L.11 — capture lot when the operator provided a number on this
-      // receipt. Receives only add to lots (sign = +1); the FBA
-      // outbound case (sign = -1) doesn't create lots since FBA
-      // ownership has already transferred.
-      if (sign > 0 && upd.lotNumber?.trim()) {
-        try {
-          const { receiveIntoLot } = await import('./lot.service.js')
-          await receiveIntoLot({
-            productId: orig.productId,
-            lotNumber: upd.lotNumber,
-            unitsAdded: delta,
-            expiresAt: upd.expiresAt ? new Date(upd.expiresAt) : null,
-            supplierLotRef: upd.supplierLotRef ?? null,
-            originPoId: shipment.purchaseOrderId ?? null,
-            originInboundShipmentId: shipment.id,
-            originStockMovementId: stockMovementId,
-            notes: upd.lotNotes ?? null,
-          })
-        } catch (err) {
-          // Lot capture failure shouldn't roll back the stock movement
-          // — the receive itself succeeded. Log loudly and continue.
-          // Operator can manually create the lot via POST /lots
-          // afterwards using the receive's stockMovementId.
-          logger.error('inbound receive: lot capture failed (stock movement kept)', {
-            stockMovementId,
-            lotNumber: upd.lotNumber,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-
-      // F1.13 — bin put-away on receive. Same try/catch discipline as
-      // L.11: failures are logged but the receive itself stands. The
-      // operator can put away later via /api/stock/bins/move once the
-      // bin exists.
-      if (sign > 0 && upd.binCode?.trim()) {
-        try {
-          const { assignReceivedToBin } = await import('./bin.service.js')
-          // Resolve the StockLocation. shipment.warehouseId is a
-          // string keyed off StockLocation.warehouseId; we need the
-          // actual StockLocation.id for the bin lookup.
-          let locationId: string | null = null
-          if (shipment.warehouseId) {
-            const sl = await prisma.stockLocation.findUnique({
-              where: { warehouseId: shipment.warehouseId },
-              select: { id: true },
-            })
-            locationId = sl?.id ?? null
-          }
-          if (!locationId) {
-            const itMain = await prisma.stockLocation.findUnique({
-              where: { workspace_code: workspaceKey({ code: 'IT-MAIN' }) },
-              select: { id: true },
-            }) ?? await (await import('./default-stock-location.js')).defaultStockLocation()
-            locationId = itMain?.id ?? null
-          }
-          if (locationId) {
-            await assignReceivedToBin({
-              productId: orig.productId,
-              variationId: null,
-              locationId,
-              binCode: upd.binCode,
-              quantity: delta,
-              receiveMovementId: stockMovementId ?? undefined,
-            })
-          }
-        } catch (err) {
-          logger.error('inbound receive: bin put-away failed (stock movement kept)', {
-            stockMovementId,
-            binCode: upd.binCode,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-    }
-
-    const itemUpdate: Prisma.InboundShipmentItemUpdateInput = {
-      quantityReceived: target,
-      qcStatus: upd.qcStatus ?? null,
-      qcNotes: upd.qcNotes ?? null,
-    }
-    if (upd.photoUrls && upd.photoUrls.length > 0) {
-      itemUpdate.photoUrls = { push: upd.photoUrls }
-    }
-
-    await prisma.$transaction([
-      prisma.inboundReceipt.create({
-        data: {
-          inboundShipmentItemId: orig.id,
-          quantity: delta,
-          qcStatus: upd.qcStatus ?? null,
-          qcNotes: upd.qcNotes ?? null,
-          notes: upd.notes ?? null,
-          idempotencyKey: upd.idempotencyKey ?? null,
+    // L.11 — capture lot when the operator provided a number on this
+    // receipt. Receives only add to lots (sign = +1); the FBA
+    // outbound case (sign = -1) doesn't create lots since FBA
+    // ownership has already transferred.
+    if (sign > 0 && upd.lotNumber?.trim()) {
+      try {
+        const { receiveIntoLot } = await import('./lot.service.js')
+        await receiveIntoLot({
+          productId: orig.productId,
+          lotNumber: upd.lotNumber,
+          unitsAdded: delta,
+          expiresAt: upd.expiresAt ? new Date(upd.expiresAt) : null,
+          supplierLotRef: upd.supplierLotRef ?? null,
+          originPoId: shipment.purchaseOrderId ?? null,
+          originInboundShipmentId: shipment.id,
+          originStockMovementId: stockMovementId,
+          notes: upd.lotNotes ?? null,
+        })
+      } catch (err) {
+        // Lot capture failure shouldn't roll back the stock movement
+        // — the receive itself succeeded. Log loudly and continue.
+        // Operator can manually create the lot via POST /lots
+        // afterwards using the receive's stockMovementId.
+        logger.error('inbound receive: lot capture failed (stock movement kept)', {
           stockMovementId,
-          receivedBy: actor ?? 'inbound-receive',
-        },
-      }),
-      prisma.inboundShipmentItem.update({
-        where: { id: orig.id },
-        data: itemUpdate,
-      }),
-    ])
+          lotNumber: upd.lotNumber,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // F1.13 — bin put-away on receive. Same try/catch discipline as
+    // L.11: failures are logged but the receive itself stands. The
+    // operator can put away later via /api/stock/bins/move once the
+    // bin exists.
+    if (sign > 0 && upd.binCode?.trim()) {
+      try {
+        const { assignReceivedToBin } = await import('./bin.service.js')
+        // Resolve the StockLocation. shipment.warehouseId is a
+        // string keyed off StockLocation.warehouseId; we need the
+        // actual StockLocation.id for the bin lookup.
+        let locationId: string | null = null
+        if (shipment.warehouseId) {
+          const sl = await prisma.stockLocation.findUnique({
+            where: { warehouseId: shipment.warehouseId },
+            select: { id: true },
+          })
+          locationId = sl?.id ?? null
+        }
+        if (!locationId) {
+          const itMain = await prisma.stockLocation.findUnique({
+            where: { workspace_code: workspaceKey({ code: 'IT-MAIN' }) },
+            select: { id: true },
+          }) ?? await (await import('./default-stock-location.js')).defaultStockLocation()
+          locationId = itMain?.id ?? null
+        }
+        if (locationId) {
+          await assignReceivedToBin({
+            productId: orig.productId,
+            variationId: null,
+            locationId,
+            binCode: upd.binCode,
+            quantity: delta,
+            receiveMovementId: stockMovementId ?? undefined,
+          })
+        }
+      } catch (err) {
+        logger.error('inbound receive: bin put-away failed (stock movement kept)', {
+          stockMovementId,
+          binCode: upd.binCode,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
   }
 
   // Update shipment cursor + auto-transition status if appropriate.

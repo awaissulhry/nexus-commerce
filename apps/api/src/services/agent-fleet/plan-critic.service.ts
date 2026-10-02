@@ -105,7 +105,7 @@ export async function runPreChecks(plan: {
       continue
     }
     const res = (
-      await callTool(systemPrincipal('plan-critic'), item.tool, item.args as Record<string, unknown>)
+      await callTool(systemPrincipal('plan-critic', 'fleet'), item.tool, item.args as Record<string, unknown>)
     ).raw
     if (!res.ok) {
       const reason = res.error ?? 'tool dry-run denied'

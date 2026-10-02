@@ -1,0 +1,2 @@
+200
+{"option":{"workspaceId":"nexus_legacy_workspace","id":"golden-option-red","attributeId":"golden-attr-select","code":"red","label":"Scarlet","metadata":null,"sortOrder":5,"synonyms":["rosso","rot"],"archivedAt":"<time>","createdAt":"<time>","updatedAt":"<time>"}}

@@ -11,6 +11,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { answer } from '../services/automation/service-outcome.js'
+import type { BidPolicyInput, SpendCeilingInput } from '../services/advertising/ads-guardrail.service.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
@@ -101,9 +103,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    * and can simulate a DISABLED rule without arming it — which is the main case, since 29 of the
    * 51 rules are off and "what would this do" is what you ask before turning one on.
    *
-   * It DOES write `AutomationRuleExecution` rows, one per evaluated context, exactly as a
-   * dry-run tick does. "Writes nothing" means nothing reaches Amazon, not that the database is
-   * untouched — the response says so on `wroteAuditRows` so no caller has to guess.
+   * R3 (MCP full control, part 06 gap 6) — it writes no `AutomationRuleExecution` row and raises no
+   * counter the graduation gate reads (`simulateOneRule` passes `noPersist`). It used to write one row
+   * per evaluated context; `wroteAuditRows` stays in the response, now always 0, so a caller that reads
+   * it is told the truth.
    */
   fastify.post('/advertising/automation-rules/:id/simulate', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -114,7 +117,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         ...out,
         reachedAmazon: false,
-        wroteAuditRows: out.results?.length ?? 0,
+        wroteAuditRows: 0,
       }
     } catch (e) {
       reply.status(500); return { ok: false, error: (e as Error)?.message }
@@ -1467,48 +1470,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post('/advertising/automation-rules/preview', async (request, reply) => {
     const body = (request.body ?? {}) as { actions?: unknown; conditions?: unknown; scopeMarketplace?: string | null }
-    /**
-     * SOV-P2 — dispatched on the draft's OWN slug (`actions[0].type`, the type a stored rule
-     * carries), so the dispatch key is the rule's identity rather than a second contract.
-     *
-     * 🔴 PLC-P2's placement branch is below. It was dropped by a bad hunk-filter in `e1e78d6d9`,
-     * which shipped `previewPlacementRule` with NO caller — a placement draft fell through to
-     * `previewBudgetRule` and came back `not_a_budget_draft`. Caught by the SOV session reading
-     * the committed route rather than the working tree, which is the only place the gap was
-     * visible: it is a missing BRANCH, so nothing in tsc or the test suite could see it.
-     */
-    const slug = String((Array.isArray(body.actions) ? (body.actions[0] as { type?: unknown })?.type : '') ?? '')
-    const svc = await import('../services/advertising/ads-rule-preview.service.js')
-    if (slug === 'placement') {
-      const out = await svc.previewPlacementRule(body)
-      if (!out.ok) reply.code(400)
-      return out
-    }
-    // BID-P — the fifth and last consumer. Bid was the only slug still computing its preview in
-    // the browser; with this branch every draft preview on every tab runs the real engine.
-    if (slug === 'bid') {
-      const out = await svc.previewBidRule(body)
-      if (!out.ok) reply.code(400)
-      return out
-    }
-    if (slug === 'sov') {
-      const { previewSovRule } = await import('../services/advertising/ads-sov-preview.service.js')
-      const out = await previewSovRule(body)
-      if (!out.ok) reply.code(400)
-      return out
-    }
-    /**
-     * KT-P2 — the Keyword Tracker branch, and the only one that must also report the state of its
-     * FEED. A rank rule matching nothing has two completely different causes — "no keyword met your
-     * criteria" and "no rank has ever been ingested" — and today it is always the second, so the
-     * result carries `feed` alongside the census and the surface can tell them apart.
-     */
-    if (slug === 'keyword-tracker') {
-      const out = await svc.previewKeywordTrackerRule(body)
-      if (!out.ok) reply.code(400)
-      return out
-    }
-    const out = await svc.previewBudgetRule(body)
+    // R8 — the slug dispatch (placement, bid, sov, keyword-tracker, else budget) lives in ads-rule-preview.service.ts
+    // (previewAdsRuleDraft), shared with Claude's preview-automation; the answer is unchanged.
+    const { previewAdsRuleDraft } = await import('../services/advertising/ads-rule-preview.service.js')
+    const out = await previewAdsRuleDraft(body as never)
     if (!out.ok) reply.code(400)
     return out
   })
@@ -2610,38 +2575,24 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    * Automations" is the substrate arbitration's line. The gate half (`spend_ceiling` denials on
    * budget increases) lives in ads-write-gate.ts and is inert until a row exists.
    */
+  // R4 — spend ceilings and bid policies live in ads-guardrail.service.ts (Claude's guardrail tool runs the same code);
+  // each answer is unchanged, and every set / delete now leaves an audit row naming the person (this file's
+  // convention: the signed-in user).
+  const guardrailActor = (request: unknown) => `user:${(request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'}`
   fastify.get('/advertising/spend-ceilings', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store')
-    const rows = await prisma.adSpendCeiling.findMany({ orderBy: [{ grain: 'asc' }, { label: 'asc' }] })
-    return { ceilings: rows }
+    const { listSpendCeilings } = await import('../services/advertising/ads-guardrail.service.js')
+    return listSpendCeilings()
   })
 
   fastify.put('/advertising/spend-ceilings', async (request, reply) => {
-    const b = request.body as { grain?: string; scopeId?: string; label?: string; dailyCapCents?: number | null; enabled?: boolean; note?: string | null }
-    const GRAINS = new Set(['CAMPAIGN', 'LINE', 'PORTFOLIO', 'MARKET'])
-    if (!b?.grain || !GRAINS.has(b.grain) || !b.scopeId || !b.label?.trim()) {
-      reply.code(400)
-      return { error: 'grain (CAMPAIGN|LINE|PORTFOLIO|MARKET) + scopeId + label required' }
-    }
-    if (b.dailyCapCents != null && (!Number.isFinite(b.dailyCapCents) || b.dailyCapCents < 0)) {
-      reply.code(400)
-      return { error: 'dailyCapCents must be a non-negative integer, or null for "opened but not set"' }
-    }
-    const row = await prisma.adSpendCeiling.upsert({
-      where: { grain_scopeId: workspaceKey({ grain: b.grain, scopeId: b.scopeId }) },
-      create: { grain: b.grain, scopeId: b.scopeId, label: b.label.trim(), dailyCapCents: b.dailyCapCents ?? null, enabled: b.enabled ?? true, note: b.note ?? null, createdBy: 'operator' },
-      update: { label: b.label.trim(), dailyCapCents: b.dailyCapCents ?? null, ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.note !== undefined ? { note: b.note } : {}) },
-    })
-    return { ceiling: row }
+    const { setSpendCeiling } = await import('../services/advertising/ads-guardrail.service.js')
+    return answer(reply, await setSpendCeiling(request.body as SpendCeilingInput, guardrailActor(request)))
   })
 
   fastify.delete('/advertising/spend-ceilings', async (request, reply) => {
-    const q = request.query as { grain?: string; scopeId?: string }
-    if (!q.grain || !q.scopeId) { reply.code(400); return { error: 'grain + scopeId required' } }
-    const existing = await prisma.adSpendCeiling.findUnique({ where: { grain_scopeId: workspaceKey({ grain: q.grain, scopeId: q.scopeId }) } })
-    if (!existing) { reply.code(404); return { error: 'not_found' } }
-    await prisma.adSpendCeiling.delete({ where: { id: existing.id } })
-    return { ok: true }
+    const { deleteSpendCeiling } = await import('../services/advertising/ads-guardrail.service.js')
+    return answer(reply, await deleteSpendCeiling(request.query as { grain?: string; scopeId?: string }, guardrailActor(request)))
   })
 
   /**
@@ -2650,39 +2601,18 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/advertising/bid-policies', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store')
-    const rows = await prisma.adBidPolicy.findMany({ orderBy: [{ grain: 'asc' }, { label: 'asc' }] })
-    return { policies: rows }
+    const { listBidPolicies } = await import('../services/advertising/ads-guardrail.service.js')
+    return listBidPolicies()
   })
 
   fastify.put('/advertising/bid-policies', async (request, reply) => {
-    const b = request.body as { grain?: string; scopeId?: string; label?: string; minBidCents?: number | null; maxBidCents?: number | null; enabled?: boolean; note?: string | null }
-    const GRAINS = new Set(['LINE', 'PORTFOLIO', 'MARKET'])
-    if (!b?.grain || !GRAINS.has(b.grain) || !b.scopeId || !b.label?.trim()) {
-      reply.code(400)
-      return { error: 'grain (LINE|PORTFOLIO|MARKET) + scopeId + label required — the CAMPAIGN grain is the Campaign columns, set via the guardrails PATCH' }
-    }
-    for (const [name, v] of [['minBidCents', b.minBidCents], ['maxBidCents', b.maxBidCents]] as const) {
-      if (v != null && (!Number.isFinite(v) || v < 2)) { reply.code(400); return { error: `${name} must be ≥ 2 cents or null` } }
-    }
-    if (b.minBidCents != null && b.maxBidCents != null && b.minBidCents > b.maxBidCents) {
-      reply.code(400)
-      return { error: `minBidCents (${b.minBidCents}¢) is above maxBidCents (${b.maxBidCents}¢)` }
-    }
-    const row = await prisma.adBidPolicy.upsert({
-      where: { grain_scopeId: workspaceKey({ grain: b.grain, scopeId: b.scopeId }) },
-      create: { grain: b.grain, scopeId: b.scopeId, label: b.label.trim(), minBidCents: b.minBidCents ?? null, maxBidCents: b.maxBidCents ?? null, enabled: b.enabled ?? true, note: b.note ?? null, createdBy: 'operator' },
-      update: { label: b.label.trim(), minBidCents: b.minBidCents ?? null, maxBidCents: b.maxBidCents ?? null, ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.note !== undefined ? { note: b.note } : {}) },
-    })
-    return { policy: row }
+    const { setBidPolicy } = await import('../services/advertising/ads-guardrail.service.js')
+    return answer(reply, await setBidPolicy(request.body as BidPolicyInput, guardrailActor(request)))
   })
 
   fastify.delete('/advertising/bid-policies', async (request, reply) => {
-    const q = request.query as { grain?: string; scopeId?: string }
-    if (!q.grain || !q.scopeId) { reply.code(400); return { error: 'grain + scopeId required' } }
-    const existing = await prisma.adBidPolicy.findUnique({ where: { grain_scopeId: workspaceKey({ grain: q.grain, scopeId: q.scopeId }) } })
-    if (!existing) { reply.code(404); return { error: 'not_found' } }
-    await prisma.adBidPolicy.delete({ where: { id: existing.id } })
-    return { ok: true }
+    const { deleteBidPolicy } = await import('../services/advertising/ads-guardrail.service.js')
+    return answer(reply, await deleteBidPolicy(request.query as { grain?: string; scopeId?: string }, guardrailActor(request)))
   })
 
   /**

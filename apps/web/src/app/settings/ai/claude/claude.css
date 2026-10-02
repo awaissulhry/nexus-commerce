@@ -1,0 +1,61 @@
+/* Settings › AI › Claude (MCP full control C9). Layout only: every control keeps its design-system size and colour. */
+.claude-page { display: grid; gap: var(--nds-space-16); min-width: 0; font-size: var(--nds-font-size-base); }
+/* Grid children may shrink below their content, so a narrow viewport never scrolls the page sideways. */
+.claude-page > *, .claude-panel > *, .claude-card-body > * { min-width: 0; }
+.claude-heading h2 { font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); margin: 0 0 var(--nds-space-4); }
+.claude-note { color: var(--nds-text-2); margin: 0; }
+.claude-tabpanel { display: grid; gap: var(--nds-space-16); min-width: 0; }
+.claude-panel { display: grid; gap: var(--nds-space-16); min-width: 0; }
+.claude-card-body { display: grid; gap: var(--nds-space-12); }
+.claude-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.claude-form { display: grid; gap: var(--nds-space-12); }
+.claude-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--nds-space-12); }
+.claude-grow { flex: 1; }
+.claude-tool { display: grid; line-height: 1.25; }
+.claude-tool-title { color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+.claude-sub { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.claude-limits { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.claude-limits-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* The tools (RulesPanel ToolRows): one row each, as columns under one header for the eye. Every Level select and Edit
+   is a Tab stop in the order shown (a grid held Tab in its header row: the 2026-10-02 browser check). */
+.claude-tools { container: claude-tools / inline-size; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); min-width: 0; }
+.claude-tools-head, .claude-tool-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.3fr) minmax(0, 1.7fr) minmax(0, 0.6fr) minmax(0, 1.6fr);
+  gap: var(--nds-space-12);
+  align-items: center;
+  padding: var(--nds-space-8) var(--nds-space-12);
+}
+.claude-tools-head { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-medium); border-bottom: 1px solid var(--nds-border); }
+.claude-tools-list { list-style: none; margin: 0; padding: 0; }
+.claude-tool-row + .claude-tool-row { border-top: 1px solid var(--nds-border-subtle); }
+.claude-tool-row > * { min-width: 0; }
+/* A column's name, read on screen only when the header row is gone (phone width). */
+.claude-cell-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@container claude-tools (max-width: 640px) {
+  .claude-tools-head { display: none; }
+  .claude-tool-row { grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-6); align-items: start; }
+  .claude-cell-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; color: var(--nds-text-2); }
+}
+/* The activity (ActivityPanel ActivityRows): one row per call, as columns under one header for the eye. */
+.claude-activity { container: claude-activity / inline-size; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); min-width: 0; }
+.claude-activity-head, .claude-activity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.8fr) minmax(0, 0.6fr);
+  gap: var(--nds-space-12);
+  align-items: center;
+  padding: var(--nds-space-8) var(--nds-space-12);
+}
+.claude-activity-head { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-medium); border-bottom: 1px solid var(--nds-border); }
+.claude-activity-list { list-style: none; margin: 0; padding: 0; }
+.claude-activity-row + .claude-activity-row { border-top: 1px solid var(--nds-border-subtle); }
+.claude-activity-row > * { min-width: 0; overflow-wrap: anywhere; }
+/* Phone width: each call stacks in one column, and its Undo takes the first line's right end — always on screen. */
+@container claude-activity (max-width: 760px) {
+  .claude-activity-head { display: none; }
+  .claude-activity-row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--nds-space-4) var(--nds-space-12); align-items: start; }
+  .claude-activity-row > :not(.claude-activity-undo) { grid-column: 1; }
+  .claude-activity-undo { grid-column: 2; grid-row: 1; justify-self: end; }
+  .claude-activity-when, .claude-activity-connection { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+  .claude-activity-tool { font-weight: var(--nds-font-weight-semibold); }
+}

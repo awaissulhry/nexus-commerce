@@ -1,0 +1,2 @@
+201
+{"option":{"workspaceId":"nexus_legacy_workspace","id":"<id 1>","attributeId":"golden-attr-select","code":"blue","label":"Blue","metadata":{"hex":"#00f"},"sortOrder":2,"synonyms":[],"archivedAt":null,"createdAt":"<time>","updatedAt":"<time>"}}

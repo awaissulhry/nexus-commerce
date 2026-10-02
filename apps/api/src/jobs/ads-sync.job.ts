@@ -689,6 +689,10 @@ export function startAnomalyGuardCron(): void {
 // skip, SUGGEST propose-only) + per-campaign write-gate allowlist downstream.
 export async function runAutoBidCron(): Promise<void> {
   await recordCronRun('ads-auto-bid', async () => {
+    // R16 — this business's own switch, under the env that armed the cron.
+    const { engineMode } = await import('../services/automation/engine-switch.service.js')
+    const gate = await engineMode('auto-bid', 'AUTO')
+    if (gate.mode === 'OFF') return `skipped: ${gate.note}`
     const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
     const r = await runAutoBidOnce()
     return r.skipped ? `skipped=${r.skipped}` : `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}`

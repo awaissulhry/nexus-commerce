@@ -45,6 +45,7 @@ beforeAll(async () => {
   // Production: the session hook sets `authUser` from the cookie, the API-key hook sets `apiKey`, the workspace hook
   // enters the business. Here a header names the person (or key) so each arm chooses who is signed in.
   app.addHook('preHandler', (request, _reply, done) => {
+    Object.assign(request, { __rbacResolved: { isOwner: true, permissions: new Set<string>() } }) // the Owner, as the RBAC gate resolves him: price writes check the person's permissions (S1 F5)
     const person = request.headers['x-test-person']
     if (typeof person === 'string') Object.assign(request, { authUser: { id: person, email: `${person}@example.test`, displayName: person, status: 'active', mfaRequired: false, twoFactorEnabledAt: null, permissionsVersion: 1, roleKeys: [] } })
     const key = request.headers['x-test-api-key']

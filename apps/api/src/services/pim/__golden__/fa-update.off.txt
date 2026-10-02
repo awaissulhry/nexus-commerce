@@ -1,0 +1,2 @@
+200
+{"familyAttribute":{"workspaceId":"nexus_legacy_workspace","id":"golden-fa-child","familyId":"golden-fam-child","attributeId":"golden-fam-attr-2","required":true,"channels":[],"sortOrder":7,"createdAt":"<time>","updatedAt":"<time>"}}

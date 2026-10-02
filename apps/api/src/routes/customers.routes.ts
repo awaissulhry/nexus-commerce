@@ -28,6 +28,7 @@ import { logger } from '../utils/logger.js'
 import { refreshCustomerCache } from '../services/customer-cache.service.js'
 import { recomputeCustomerRisk } from '../services/order-risk.service.js'
 import { csvDocument } from '../lib/csv.js'
+import { MANUAL_REVIEW_STATES, addCustomerNote, deleteCustomerNote, setCustomerTags, setManualReviewState, updateCustomerNote } from '../services/customers/customer-update.service.js'
 import {
   validateCodiceFiscale,
   validatePartitaIva,
@@ -199,21 +200,11 @@ export async function customersRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string }
       const body = request.body as { body?: string; pinned?: boolean; authorEmail?: string }
-      if (!body.body || body.body.trim() === '') {
-        return reply.status(400).send({ error: 'body required' })
-      }
-      const customer = await prisma.customer.findUnique({ where: { id }, select: { id: true } })
-      if (!customer) return reply.status(404).send({ error: 'Customer not found' })
-
-      const note = await prisma.customerNote.create({
-        data: {
-          customerId: id,
-          body: body.body.trim(),
-          pinned: body.pinned ?? false,
-          authorEmail: body.authorEmail ?? null,
-        },
-      })
-      return note
+      // 07 O7 — the write lives in services/customers/customer-update.service.ts (the page and Claude write one way).
+      const added = await addCustomerNote(id, body)
+      if (added.status === 'invalid') return reply.status(400).send({ error: 'body required' })
+      if (added.status === 'not_found') return reply.status(404).send({ error: 'Customer not found' })
+      return added.note
     } catch (err: any) {
       return reply.status(500).send({ error: err?.message ?? 'failed' })
     }
@@ -223,17 +214,8 @@ export async function customersRoutes(app: FastifyInstance) {
     try {
       const { id, noteId } = request.params as { id: string; noteId: string }
       const body = request.body as { body?: string; pinned?: boolean }
-      const existing = await prisma.customerNote.findFirst({
-        where: { id: noteId, customerId: id },
-      })
-      if (!existing) return reply.status(404).send({ error: 'Note not found' })
-      const updated = await prisma.customerNote.update({
-        where: { id: noteId },
-        data: {
-          body: body.body !== undefined ? body.body.trim() : undefined,
-          pinned: body.pinned !== undefined ? body.pinned : undefined,
-        },
-      })
+      const updated = await updateCustomerNote(id, noteId, body)
+      if (!updated) return reply.status(404).send({ error: 'Note not found' })
       return updated
     } catch (err: any) {
       return reply.status(500).send({ error: err?.message ?? 'failed' })
@@ -243,11 +225,7 @@ export async function customersRoutes(app: FastifyInstance) {
   app.delete('/api/customers/:id/notes/:noteId', async (request, reply) => {
     try {
       const { id, noteId } = request.params as { id: string; noteId: string }
-      const existing = await prisma.customerNote.findFirst({
-        where: { id: noteId, customerId: id },
-      })
-      if (!existing) return reply.status(404).send({ error: 'Note not found' })
-      await prisma.customerNote.delete({ where: { id: noteId } })
+      if (!(await deleteCustomerNote(id, noteId))) return reply.status(404).send({ error: 'Note not found' })
       return { ok: true }
     } catch (err: any) {
       return reply.status(500).send({ error: err?.message ?? 'failed' })
@@ -329,11 +307,7 @@ export async function customersRoutes(app: FastifyInstance) {
       if (!Array.isArray(body.tags)) {
         return reply.status(400).send({ error: 'tags array required' })
       }
-      const updated = await prisma.customer.update({
-        where: { id },
-        data: { tags: body.tags },
-      })
-      return { id: updated.id, tags: updated.tags }
+      return await setCustomerTags(id, body.tags)
     } catch (err: any) {
       return reply.status(500).send({ error: err?.message ?? 'failed' })
     }
@@ -391,16 +365,11 @@ export async function customersRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string }
       const body = request.body as { state?: string }
-      const allowed = ['PENDING', 'APPROVED', 'REJECTED']
+      const allowed: readonly string[] = MANUAL_REVIEW_STATES
       if (!body.state || !allowed.includes(body.state)) {
         return reply.status(400).send({ error: `state must be one of ${allowed.join(', ')}` })
       }
-      const updated = await prisma.customer.update({
-        where: { id },
-        data: { manualReviewState: body.state },
-        select: { id: true, manualReviewState: true },
-      })
-      return updated
+      return await setManualReviewState(id, body.state)
     } catch (err: any) {
       return reply.status(500).send({ error: err?.message ?? 'failed' })
     }

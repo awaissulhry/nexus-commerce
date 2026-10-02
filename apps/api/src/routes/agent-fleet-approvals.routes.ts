@@ -36,17 +36,22 @@ import { listCharters } from '../services/agent-fleet/charter-registry.js'
 import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
 import {
   cannotApproveFor,
+  reversibilityOf,
   checkStaleness,
   FLEET_TOOLS,
   inboxViewer,
+  planApprovalRefusal,
   resolveActor,
 } from '../services/agent-fleet/approval-inbox.service.js'
+import { amendPlan, planView } from '../services/agents/change-plan.service.js'
+import { PLAN_TOOL } from '../services/agents/tool-types.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
 import type { ToolResult } from '../services/agents/tool-types.js'
 import {
   callTool,
   requestPrincipal,
+  storedOutputOf,
   ToolAccessError,
 } from '../services/agents/call-tool.js'
 import {
@@ -165,6 +170,12 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       'set-price',
       'publish-listing',
       'send-customer-message',
+      // MCP full control, section 03 — content changes Claude asks for; each waits here for a person (a name not
+      // registered yet is skipped below).
+      'set-content',
+      'set-listing-content',
+      'bulk-content-change',
+      'set-shopify-content',
     ]
     const tools: GateTool[] = []
     for (const name of toolNames) {
@@ -734,12 +745,20 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
     const runById = new Map(runs.map((r) => [r.id, r]))
     // Per row: why THIS viewer may not approve it (null when they may) — a card never offers an Apply that can only
     // answer 403 (a person whose permission was taken away while their approval waited, say).
-    const cannotApprove = cannotApproveFor(await inboxViewer(request))
+    const viewer = await inboxViewer(request)
+    const cannotApprove = cannotApproveFor(viewer)
+    // C6 — a plan: approving it needs what each of its steps needs.
+    const planRefusals = new Map<string, string | null>()
+    for (const a of rows.filter((row) => row.toolName === PLAN_TOOL)) {
+      planRefusals.set(a.id, viewer ? await planApprovalRefusal(a.id, viewer) : null)
+    }
 
     return {
       approvals: rows.map((a) => {
         const run = runById.get(a.agentRunId)
         const tool = getTool(a.toolName)
+        const isPlan = a.toolName === PLAN_TOOL
+        const planPreview = (isPlan ? a.preview : null) as { kinds?: unknown; totals?: { steps?: number } } | null
         return {
           id: a.id,
           toolName: a.toolName,
@@ -754,10 +773,21 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
           decidedBy: a.decidedBy,
           /** Where it came from, verbatim. Never a fabricated worker name. */
           originKey: run?.agentKey ?? null,
-          /** True for all of these — it is why they matter. */
-          canExecute: typeof tool?.execute === 'function',
+          /** True for all of these — it is why they matter. C6 — a plan runs its steps. */
+          canExecute: isPlan || typeof tool?.execute === 'function',
+          /** C1 — how far it can be put back, from the tool registry (the only place that states it). */
+          reversibility: reversibilityOf(a.toolName),
+          /** C9 — what the card names it (the tool's own title) and whether it reaches a marketplace or a buyer. */
+          title: tool?.title ?? null,
+          openWorld: !!tool?.openWorld,
+          /** C5 — who decided a parked one: `auto` = the business's rule, as the person who asked. */
+          decisionVia: a.decisionVia,
           /** Why this viewer may not approve it, in the approve's own words; null when they may. */
-          cannotApprove: cannotApprove(a.toolName),
+          cannotApprove: cannotApprove(a.toolName) ?? planRefusals.get(a.id) ?? null,
+          /** C6 — a change plan: the line Nexus wrote, its hash, how many steps, and one entry per kind of consequence. */
+          ...(isPlan
+            ? { plan: { summary: a.summary, planHash: a.planHash, steps: planPreview?.totals?.steps ?? null, kinds: planPreview?.kinds ?? [] } }
+            : {}),
           /** No `charterKey`, so no per-worker history exists for these. */
           trackRecord: null,
         }
@@ -766,6 +796,21 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       /** The list is capped; say so rather than silently truncating. */
       cap: 100,
     }
+  })
+
+  // C6 — a change plan's steps, for its card: each step's fate, and its preview through the reader's money filter.
+  fastify.get<{ Params: { id: string } }>('/agent/fleet/approvals/:id/plan', async (request, reply) => {
+    const view = await planView(request.params.id, { storedOutput: storedOutputOf(await requestPrincipal(request)) })
+    if (!view) return reply.code(404).send({ error: 'plan not found' })
+    return view
+  })
+
+  // C6 — untick steps: a smaller plan of the steps kept, re-checked as the person; the original superseded (AQ.8).
+  fastify.post<{ Params: { id: string }; Body: { keep?: unknown } }>('/agent/fleet/approvals/:id/plan-amend', async (request, reply) => {
+    const out = await amendPlan(request.params.id, request.body?.keep, await requestPrincipal(request))
+    if (out.ok !== false) return out
+    const { status, ...body } = out as Extract<typeof out, { ok: false }>
+    return reply.code(status).send(body)
   })
 }
 

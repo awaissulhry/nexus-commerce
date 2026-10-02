@@ -1,0 +1,2 @@
+200
+{"items":[{"id":"da_golden-asset-1","source":"digital_asset","url":"https://cdn.example.test/golden-asset-1.jpg","label":"Hero shot","type":"image","mimeType":"image/jpeg","sizeBytes":1000,"width":2000,"height":1500,"createdAt":"2026-09-15T09:50:00.000Z","usageCount":1,"productId":null,"productSku":null,"productName":null,"role":null,"hasQualityWarnings":true,"durationSeconds":null}],"page":1,"pageSize":60,"total":1,"hasMore":false}

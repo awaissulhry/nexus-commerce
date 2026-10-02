@@ -35,6 +35,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { publishEvent } from '../../lib/events/publish.js'
 
 const BACKOFF_MINUTES_BY_ATTEMPT = [30, 120, 360, 1440] // attempts 1..4
 const MAX_ATTEMPTS = 5
@@ -98,7 +99,7 @@ export async function isRetryReady(returnId: string): Promise<RetryDecision> {
 }
 
 export interface RetryResult {
-  outcome: 'OK' | 'OK_MANUAL_REQUIRED' | 'NOT_IMPLEMENTED' | 'FAILED' | 'SKIPPED'
+  outcome: 'OK' | 'OK_MANUAL_REQUIRED' | 'NOT_IMPLEMENTED' | 'FAILED' | 'SKIPPED' | 'DRY_RUN'
   reason?: 'max_attempts' | 'backoff' | 'not_failed'
   refundId?: string
   channelRefundId?: string
@@ -133,6 +134,8 @@ export async function retryRefund(
       currencyCode: true,
       refundCents: true,
       reason: true,
+      orderId: true,
+      rmaNumber: true,
     },
   })
   if (!ret || !ret.refundCents || ret.refundCents <= 0) {
@@ -142,6 +145,12 @@ export async function retryRefund(
       priorAttempts: decision.priorAttempts,
     }
   }
+
+  // A channel whose refund switch is off: a dry run moves no money, so nothing is written and the return stays failed
+  // (2026-10-02, 100 % honest UI).
+  const { publishRefundToChannel, refundDryRunMessage } = await import('./refund-publisher.service.js')
+  const dryRun = refundDryRunMessage(ret.channel)
+  if (dryRun) return { outcome: 'DRY_RUN', channelMessage: dryRun, priorAttempts: decision.priorAttempts }
 
   // 1) Create a Refund row in PENDING state — this row decorates
   //    the retry attempt regardless of outcome, so the audit log
@@ -162,13 +171,17 @@ export async function retryRefund(
 
   // 2) Call the publisher.
   const t0 = Date.now()
-  const { publishRefundToChannel } = await import('./refund-publisher.service.js')
   const publish = await publishRefundToChannel({
     returnId,
     reasonText: ret.reason ?? undefined,
     actor: opts.actor ?? undefined,
   })
   const durationMs = Date.now() - t0
+  // The switch flipped between the check above and the call: nothing moved, nothing stays recorded.
+  if (publish.outcome === 'DRY_RUN') {
+    await prisma.refund.delete({ where: { id: refund.id } })
+    return { outcome: 'DRY_RUN', channelMessage: publish.channelMessage, priorAttempts: decision.priorAttempts }
+  }
 
   // 3) Record the attempt.
   await prisma.refundAttempt.create({
@@ -226,6 +239,22 @@ export async function retryRefund(
         version: { increment: 1 },
       },
     })
+    // A retried refund that went through is a refund issued, as on the first try (2026-10-02). The refund already
+    // went through: an event that cannot be written is logged, never turned into a failed retry.
+    try {
+      await publishEvent(prisma, 'refund.issued', { refundId: refund.id, returnId, orderId: ret.orderId, channel: ret.channel, outcome: publish.outcome })
+    } catch (err) {
+      logger.error('refund-retry: refund.issued event write failed', { refundId: refund.id, err })
+    }
+    // A refunded buyer is not asked for a review (2026-10-02).
+    if (ret.orderId) {
+      try {
+        const { suppressReviewRequestsForRefund } = await import('../reviews/review-request.service.js')
+        await suppressReviewRequestsForRefund(ret.orderId, ret.rmaNumber)
+      } catch (err) {
+        logger.error('refund-retry: review-request suppression failed', { refundId: refund.id, err })
+      }
+    }
   }
 
   // 6) AuditLog attribution.

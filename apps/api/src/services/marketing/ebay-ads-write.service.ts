@@ -25,9 +25,10 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { checkMarketingWriteGate } from './marketing-write-gate.js'
+import { marketCurrency } from '../pim/market-currency.js'
 import { normalizeCampaignStatus, canTransitionCampaignStatus, EBAY_CAMPAIGN_STATUS_MAP, type NormalizedCampaignStatus } from '../ads-core/campaign-status.js'
 import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
-import { resolveConnection } from '../connection-resolver.service.js'
+import { resolveConnection, tryResolveConnection } from '../connection-resolver.service.js'
 import {
   getEbayAdsAuthFor, type EbayAdsAuth,
   createCampaignApi, campaignLifecycleApi, cloneCampaignApi,
@@ -38,7 +39,16 @@ import {
 } from './ebay-ads-api.service.js'
 
 export type WriteMode = 'sandbox' | 'live'
-export interface OpContext { actorUserId: string | null }
+export interface OpContext {
+  actorUserId: string | null
+  /**
+   * MCP full control A14 — an approved request's id: every CampaignAction the op writes carries it as `executionId`,
+   * so approval-status finds exactly its writes. Absent for the console's own writes (unchanged).
+   */
+  changeSetId?: string | null
+  /** A14 — why, as the audit keeps it (`_reason` in the payload, beside `_mode`). Absent: no reason recorded. */
+  reason?: string | null
+}
 export interface ItemOutcome { key: string; ok: boolean; mode: WriteMode; id?: string | null; error?: string | null; warning?: string | null; blocked?: string | null }
 
 const CHUNK = 500 // verified bulk cap
@@ -95,7 +105,7 @@ export function rateGuardrail(
   return { blocked: null, warning: null }
 }
 
-async function loadBreakEvens(marketplaceShort: string, listingIds: string[]): Promise<Map<string, { be: number | null; status: string | null }>> {
+export async function loadBreakEvens(marketplaceShort: string, listingIds: string[]): Promise<Map<string, { be: number | null; status: string | null }>> {
   if (!listingIds.length) return new Map()
   const rows = await prisma.ebayListingEconomics.findMany({
     where: { marketplace: marketplaceShort, itemId: { in: listingIds } },
@@ -104,11 +114,18 @@ async function loadBreakEvens(marketplaceShort: string, listingIds: string[]): P
   return new Map(rows.map((r) => [r.itemId, { be: r.breakEvenAdRatePct != null ? Number(r.breakEvenAdRatePct.toString()) : null, status: r.dataStatus }]))
 }
 
-async function killSwitchCheck(marketplace: string): Promise<void> {
+/** Why every eBay ad write in this market is halted right now (the kill switch, or the halted state); null when not. */
+export async function ebayWritesHalted(marketplace: string): Promise<string | null> {
   const ceiling = await prisma.marketingSpendCeiling.findFirst({ where: { channel: 'EBAY', marketplace, killSwitch: true } })
-  if (ceiling) throw new Error(`kill switch is ON for EBAY/${marketplace} — all ad writes are halted`)
+  if (ceiling) return `kill switch is ON for EBAY/${marketplace} — all ad writes are halted`
   const state = await prisma.marketingAutomationState.findUnique({ where: { workspace_channel: workspaceKey({ channel: 'EBAY' }) } })
-  if (state?.halted) throw new Error(`eBay ads automation state is HALTED (${state.haltReason ?? 'no reason recorded'}) — writes blocked`)
+  if (state?.halted) return `eBay ads automation state is HALTED (${state.haltReason ?? 'no reason recorded'}) — writes blocked`
+  return null
+}
+
+async function killSwitchCheck(marketplace: string): Promise<void> {
+  const halted = await ebayWritesHalted(marketplace)
+  if (halted) throw new Error(halted)
 }
 
 async function audit(params: {
@@ -124,9 +141,10 @@ async function audit(params: {
       entityType: params.entityType,
       entityId: params.entityId,
       payloadBefore: (params.before ?? {}) as object,
-      payloadAfter: ({ ...(params.after as object ?? {}), _mode: params.mode }) as object,
+      payloadAfter: ({ ...(params.after as object ?? {}), _mode: params.mode, ...(params.ctx.reason ? { _reason: params.ctx.reason } : {}) }) as object,
       channelResponseId: params.responseId ?? null,
       channelResponseStatus: params.status,
+      ...(params.ctx.changeSetId ? { executionId: params.ctx.changeSetId } : {}),
     },
   }).catch((e) => logger.error(`[E4][ebay-ads] audit write failed: ${(e as Error).message}`))
 }
@@ -146,8 +164,36 @@ async function authForCampaign(c: { id: string; channelConnectionId: string }): 
 }
 
 const SHORT = EBAY_MARKETPLACE_SHORT // D3 — one shared map
-const gate = (marketplace: string, valueCents = 0) =>
-  checkMarketingWriteGate({ channel: 'EBAY', marketplace, payloadValueCents: valueCents })
+
+/**
+ * The currency a campaign's money (its daily budget, its bids) is sent to eBay in: its marketplace's own
+ * (`Marketplace.currency` — a British campaign's money is pounds). Bids, ad group defaults and Priority budgets used to be
+ * sent as euros on every market. A market with no currency configured falls back to the campaign's stored currency;
+ * with neither known it refuses, rather than guess a currency eBay would charge in.
+ */
+export async function ebayMoneyCurrency(marketplace: string, stored?: string | null): Promise<string> {
+  try {
+    return await marketCurrency('EBAY', marketplace)
+  } catch (e) {
+    const known = stored?.trim().toUpperCase()
+    if (known && /^[A-Z]{3}$/.test(known)) return known
+    throw e
+  }
+}
+const money = (currency: string, cents: number) => ({ currency, value: (cents / 100).toFixed(2) })
+/**
+ * The write gate, for a write worth `valueCents` (a budget, or the highest bid it sets): the mode it runs in — or, when
+ * the gate refuses it (its value cap), a throw before anything is written, in EVERY mode. The layer used to read only
+ * the mode, so a refused write still ran its sandbox branch (Nexus rows and audit, as if allowed); and a bid was handed
+ * over as worth nothing, so the cap never bound a bid.
+ */
+function gate(marketplace: string, valueCents = 0): { mode: WriteMode } {
+  const decision = checkMarketingWriteGate({ channel: 'EBAY', marketplace, payloadValueCents: valueCents })
+  if (decision.allowed === false) throw new Error(`write gate blocked: ${decision.reason}`)
+  return { mode: decision.mode }
+}
+/** The highest of these bids, in cents (0 when none sets a bid): what the gate's value cap judges. */
+const highestBid = (items: Array<{ bidCents?: number | null }>) => Math.max(0, ...items.map((i) => i.bidCents ?? 0))
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Campaign lifecycle
@@ -275,6 +321,14 @@ export interface CreateCampaignInput {
   startDate?: string
 }
 
+/**
+ * MCP full control A15 — the eBay account a new campaign is created on: createCampaign's own choice (the primary),
+ * for a preview to name before anything is created. Null when no account is the primary.
+ */
+export async function newCampaignAccount() {
+  return tryResolveConnection({ channel: 'EBAY', primary: true })
+}
+
 export async function createCampaign(ctx: OpContext, input: CreateCampaignInput) {
   await killSwitchCheck(input.marketplace)
   if (input.marketplace === 'EBAY_ES' && input.fundingModel === 'COST_PER_CLICK') {
@@ -300,6 +354,9 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
   // MAP.3 — DECLARED, and it still throws when there is none, as findFirstOrThrow did.
   const conn = await resolveConnection({ channel: 'EBAY', primary: true })
 
+  // A General campaign sends no money: an unknown market currency keeps the old label rather than refusing it.
+  const currency = isCps ? await ebayMoneyCurrency(input.marketplace).catch(() => null) : await ebayMoneyCurrency(input.marketplace)
+
   let externalCampaignId = `sandbox-${Date.now()}`
   if (decision.mode === 'live') {
     const auth = await getEbayAdsAuthFor(conn.id)
@@ -319,11 +376,11 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
         : {
             fundingModel: 'COST_PER_CLICK',
             ...(input.targetingType === 'SMART'
-              ? { bidPreferences: [{ maxCpc: { amount: { currency: 'EUR', value: (input.maxCpcCents! / 100).toFixed(2) } } }] }
+              ? { bidPreferences: [{ maxCpc: { amount: money(currency!, input.maxCpcCents!) } }] }
               : { biddingStrategy: 'FIXED' }),
           },
       ...(isCps ? {} : { campaignTargetingType: input.targetingType ?? 'MANUAL' }),
-      ...(!isCps ? { budget: { daily: { amount: { currency: 'EUR', value: (input.dailyBudgetCents! / 100).toFixed(2) } } } } : {}),
+      ...(!isCps ? { budget: { daily: { amount: money(currency!, input.dailyBudgetCents!) } } } : {}),
       ...(input.selectionRules?.length
         ? { campaignCriterion: { autoSelectFutureInventory: input.autoSelectFutureInventory ?? false, selectionRules: input.selectionRules } }
         : {}),
@@ -348,7 +405,7 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
       nexusManaged: true,
       bidPercentage: isCps && input.adRateStrategy !== 'DYNAMIC' ? String(input.ratePct) : null,
       dailyBudget: !isCps ? (input.dailyBudgetCents! / 100).toFixed(2) : null,
-      budgetCurrency: 'EUR',
+      budgetCurrency: currency ?? 'EUR',
       status: decision.mode === 'live' ? (scheduled ? 'SCHEDULED' : 'RUNNING') : 'DRAFT',
       startDate: start,
     },
@@ -588,10 +645,9 @@ export async function updateBudget(ctx: OpContext, campaignId: string, dailyBudg
   if (used >= 15) throw new Error(`budget-update quota exhausted for today (15/15 used) — eBay enforces 15 updates per campaign per day`)
 
   const decision = gate(c.marketplace, dailyBudgetCents)
-  if (!decision.allowed) throw new Error(`write gate blocked: ${'reason' in decision ? decision.reason : 'unknown'}`)
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
     const auth = await authForCampaign(c)
-    await updateCampaignBudgetApi(auth.token, c.externalCampaignId, { budget: { daily: { amount: { currency: c.budgetCurrency ?? 'EUR', value: (dailyBudgetCents / 100).toFixed(2) } } } })
+    await updateCampaignBudgetApi(auth.token, c.externalCampaignId, { budget: { daily: { amount: money(await ebayMoneyCurrency(c.marketplace, c.budgetCurrency), dailyBudgetCents) } } })
   }
   await prisma.ebayCampaign.update({
     where: { id: c.id },
@@ -614,7 +670,6 @@ export async function updateCampaignIdentification(ctx: OpContext, campaignId: s
   if (status === 'ENDED') throw new Error('campaign has ended — clone to relaunch')
 
   const decision = gate(c.marketplace)
-  if (!decision.allowed) throw new Error(`write gate blocked: ${'reason' in decision ? decision.reason : 'unknown'}`)
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
     const auth = await authForCampaign(c)
     await updateCampaignIdentificationApi(auth.token, c.externalCampaignId, {
@@ -645,11 +700,11 @@ export async function createAdGroup(ctx: OpContext, campaignId: string, name: st
   const c = await prisma.ebayCampaign.findUniqueOrThrow({ where: { id: campaignId } })
   await killSwitchCheck(c.marketplace)
   if ((c.fundingModel ?? '') !== 'COST_PER_CLICK' || c.campaignTargetingType === 'SMART') throw new Error('ad groups exist on MANUAL Priority campaigns only')
-  const decision = gate(c.marketplace)
+  const decision = gate(c.marketplace, defaultBidCents ?? 0)
   let externalAdGroupId = `sandbox-ag-${Date.now()}`
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
     const auth = await authForCampaign(c)
-    externalAdGroupId = await createAdGroupApi(auth.token, c.externalCampaignId, { name, ...(defaultBidCents != null ? { defaultBid: { currency: 'EUR', value: (defaultBidCents / 100).toFixed(2) } } : {}) })
+    externalAdGroupId = await createAdGroupApi(auth.token, c.externalCampaignId, { name, ...(defaultBidCents != null ? { defaultBid: money(await ebayMoneyCurrency(c.marketplace, c.budgetCurrency), defaultBidCents) } : {}) })
   }
   const row = await prisma.ebayAdGroup.create({ data: { campaignId: c.id, externalAdGroupId, name, status: 'ACTIVE', defaultBidCents: defaultBidCents ?? null } })
   await audit({ ctx, actionType: 'create_ad_group', entityType: 'CAMPAIGN', entityId: c.externalCampaignId, before: {}, after: { name, defaultBidCents }, mode: decision.mode, status: 'SUCCESS', responseId: externalAdGroupId })
@@ -661,19 +716,20 @@ export async function addKeywords(ctx: OpContext, campaignId: string, adGroupId:
   const g = await prisma.ebayAdGroup.findUniqueOrThrow({ where: { id: adGroupId } })
   await killSwitchCheck(c.marketplace)
   const dynamicBidding = false // manual campaigns default FIXED; DYNAMIC lock enforced by eBay — surfaced in UI
-  const decision = gate(c.marketplace)
+  const decision = gate(c.marketplace, highestBid(keywords))
   const valid = keywords.filter((k) => k.text.trim().length > 0 && k.text.length <= 100 && k.text.trim().split(/\s+/).length <= 10)
   const invalid = keywords.filter((k) => !valid.includes(k))
 
   let live: BulkItemResult[] = []
   if (decision.mode === 'live' && valid.length && !c.externalCampaignId.startsWith('sandbox-')) {
     const auth = await authForCampaign(c)
+    const currency = valid.some((k) => k.bidCents != null) ? await ebayMoneyCurrency(c.marketplace, c.budgetCurrency) : null
     for (const batch of chunk(valid)) {
       live.push(...await bulkCreateKeywordApi(auth.token, c.externalCampaignId, batch.map((k) => ({
         adGroupId: g.externalAdGroupId,
         keywordText: k.text.trim(),
         matchType: k.matchType,
-        ...(!dynamicBidding && k.bidCents != null ? { bid: { currency: 'EUR', value: (k.bidCents / 100).toFixed(2) } } : {}),
+        ...(!dynamicBidding && k.bidCents != null ? { bid: money(currency!, k.bidCents) } : {}),
       }))))
     }
   }
@@ -700,15 +756,16 @@ export async function updateKeywords(ctx: OpContext, campaignId: string, updates
   await killSwitchCheck(c.marketplace)
   const rows = await prisma.ebayKeyword.findMany({ where: { id: { in: updates.map((u) => u.keywordId) }, campaignId: c.id } })
   const byId = new Map(rows.map((r) => [r.id, r]))
-  const decision = gate(c.marketplace)
+  const decision = gate(c.marketplace, highestBid(updates))
   let live: BulkItemResult[] = []
   const pushable = updates.filter((u) => byId.has(u.keywordId) && !byId.get(u.keywordId)!.externalKeywordId.startsWith('sandbox-'))
   if (decision.mode === 'live' && pushable.length && !c.externalCampaignId.startsWith('sandbox-')) {
     const auth = await authForCampaign(c)
+    const currency = pushable.some((u) => u.bidCents != null) ? await ebayMoneyCurrency(c.marketplace, c.budgetCurrency) : null
     for (const batch of chunk(pushable)) {
       live.push(...await bulkUpdateKeywordApi(auth.token, c.externalCampaignId, batch.map((u) => ({
         keywordId: byId.get(u.keywordId)!.externalKeywordId,
-        ...(u.bidCents != null ? { bid: { currency: 'EUR', value: (u.bidCents / 100).toFixed(2) } } : {}),
+        ...(u.bidCents != null ? { bid: money(currency!, u.bidCents) } : {}),
         ...(u.status ? { keywordStatus: u.status } : {}),
       }))))
     }

@@ -6,11 +6,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { audit } from "@/lib/audit";
-import { publishEventDurable } from "@/lib/events";
 import { guarded, jsonStripped } from "@/lib/auth/guard";
 import { PAGES, FEATURES } from "@/lib/auth/permissions";
-import { nextNumber } from "@/lib/counters";
+import { createDraftPurchaseOrder } from "@/lib/materials/purchase-order-draft";
 
 export const permission = { GET: PAGES.materials, POST: FEATURES.materialsManage };
 
@@ -37,15 +35,9 @@ const Create = z.object({
 export const POST = guarded(FEATURES.materialsManage, async (req, { actor, resolved }) => {
   const parsed = Create.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid PO" }, { status: 400 });
-  const supplier = await prisma.party.findUnique({ where: { id: parsed.data.supplierId }, select: { id: true } });
-  if (!supplier) return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
-
-  const number = await nextNumber("po");
-  const po = await prisma.purchaseOrder.create({
-    data: { number, supplierId: parsed.data.supplierId, state: "DRAFT", lines: parsed.data.lines, expectedAt: parsed.data.expectedAt ? new Date(parsed.data.expectedAt) : null },
-    select: { id: true, number: true },
-  });
-  void audit({ actorId: actor!.id, entityType: "purchaseorder", entityId: po.id, action: "created", after: { number, lines: parsed.data.lines.length } });
-  await publishEventDurable("workorder.updated", { purchaseOrderId: po.id, created: true }); // FS2 — no silent mutations
+  // P12 — created by src/lib/materials/purchase-order-draft.ts (Claude's factory-draft-purchase-order too).
+  const created = await createDraftPurchaseOrder({ ...parsed.data, actorId: actor!.id });
+  if (!created.ok) return NextResponse.json({ error: created.error }, { status: created.status });
+  const po = created.purchaseOrder;
   return jsonStripped({ purchaseOrder: po }, resolved, { status: 201 });
 });

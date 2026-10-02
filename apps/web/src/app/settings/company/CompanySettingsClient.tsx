@@ -42,6 +42,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { useSettingsForm } from '../_shell/SettingsSaveBar'
 import { Listbox } from '@/design-system/components/Listbox'
+import { Banner } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import {
@@ -238,6 +239,9 @@ export default function CompanySettingsClient() {
       const body = await res.json().catch(() => null)
       if (body?.fieldErrors) {
         setServerFieldErrors(body.fieldErrors as Record<string, string>)
+        // The reason, in the save bar too: "Validation failed" says nothing a person can act on.
+        const first = Object.values(body.fieldErrors as Record<string, string>)[0]
+        if (first) throw new Error(first)
       }
       throw new Error(body?.error ?? `HTTP ${res.status}`)
     }
@@ -739,12 +743,8 @@ function FiscalSection({
           </Field>
         </div>
 
-        {errors.routing && (
-          <div className="flex items-start gap-2 p-3 rounded-md border border-amber-300 bg-amber-50 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-            <AlertCircle size={14} className="mt-0.5 shrink-0" />
-            <span>{errors.routing}</span>
-          </div>
-        )}
+        {/* The server checks the same rule on what the row will hold after the save (2026-10-01). */}
+        {errors.routing && <Banner tone="warning" title="Invoices need an SDI code or a PEC">{errors.routing}</Banner>}
 
         <Field
           label="VAT scheme"

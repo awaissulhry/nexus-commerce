@@ -7,13 +7,15 @@ import type { FastifyInstance } from "fastify";
 import { amazonCatalogService } from "../services/amazon-catalog.service.js";
 import outboundSyncService from "../services/outbound-sync.service.js";
 import prisma from "../db.js";
+import { listingSkuRefusal, skusUsedByListings } from "../services/identity/identity-write-guards.js";
 import { assertCanDeleteRelationshipProduct, ProductRelationshipError, relationshipParent, relationshipProduct, relationshipTransaction } from '../services/pim/product-relationship.service.js'
 import { copySiblingListings, type SkippedListingCopy } from '../services/pim/variant-listing-copy.service.js'
 
 import { importEbayCatalog, getEbayImportStats } from "../services/ebay-import.service.js";
 import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
-import { MasterPriceRefusedError, masterPriceService } from "../services/master-price.service.js";
+import { MasterPricePermissionError, MasterPriceRefusedError, masterPriceService } from "../services/master-price.service.js";
+import { permissionCheckerFor } from "./studio-matrix.routes.js";
 import { applyStockMovement } from "../services/stock-movement.service.js";
 import { replaceCategoryAttributesKeepingVariations } from "../services/pim/category-attributes-write.js";
 
@@ -297,6 +299,15 @@ export async function catalogRoutes(app: FastifyInstance) {
               code: "SKU_ALREADY_EXISTS",
               message: `Product with SKU "${sku}" already exists`,
             },
+          });
+        }
+
+        // I4 / G4 — nor may a new product take a SKU an extra listing already uses as its own.
+        const [listingSku] = await skusUsedByListings([sku]);
+        if (listingSku) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: "SKU_ALREADY_EXISTS", message: listingSkuRefusal(listingSku) },
           });
         }
 
@@ -894,6 +905,7 @@ export async function catalogRoutes(app: FastifyInstance) {
             actor: "default-user",
             reason: "catalog-products-patch",
             tx,
+            can: permissionCheckerFor(request),
           })
         }
         if (stockDelta !== 0) {
@@ -988,6 +1000,10 @@ export async function catalogRoutes(app: FastifyInstance) {
       // A master price the product's own rules refuse (not above 0, outside its floor/ceiling): said, not a 500.
       if (error instanceof MasterPriceRefusedError) {
         return reply.status(400).send({ success: false, error: { code: error.code, message: error.message } });
+      }
+      // S1 (F5) — a person without products.price.edit: refused, nothing written.
+      if (error instanceof MasterPricePermissionError) {
+        return reply.status(403).send({ success: false, error: { code: error.code, message: error.message } });
       }
       console.error("Error updating product:", error);
 
@@ -1645,6 +1661,7 @@ export async function catalogRoutes(app: FastifyInstance) {
             actor: "default-user",
             reason: "catalog-children-patch",
             tx,
+            can: permissionCheckerFor(request),
           })
         }
         if (stockDelta !== 0) {
@@ -1671,6 +1688,10 @@ export async function catalogRoutes(app: FastifyInstance) {
     } catch (error: any) {
       if (error instanceof MasterPriceRefusedError) {
         return reply.status(400).send({ success: false, error: { code: error.code, message: error.message } });
+      }
+      // S1 (F5) — a person without products.price.edit: refused, nothing written.
+      if (error instanceof MasterPricePermissionError) {
+        return reply.status(403).send({ success: false, error: { code: error.code, message: error.message } });
       }
       console.error("Error updating child product:", error);
 

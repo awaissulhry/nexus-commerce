@@ -44,16 +44,28 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { invalidateAttributeSchemasAfterWrites } from '../services/pim/attribute-schema-invalidation.js'
 import prisma from '../db.js'
-import { CODE_NOT_LOCALIZABLE, CODE_TYPES, localizableRefusalFor } from '../services/pim/attribute-rules.js'
-import { parseAttributeRules } from '@nexus/shared/attributes'
 import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION } from '@nexus/shared/attribute-concepts'
 import { applyConceptDictionary, applyConceptOptions, conceptDictionaryPlan, ConceptOptionsError } from '../services/pim/attribute-concepts.service.js'
 import { attributeChoices, ChoicesError } from '../services/pim/attribute-choices.service.js'
-import { DictionaryError, OPTION_TYPES, semanticKeyRefusal, upsertAttributes, type AttributeUpsert } from '../services/pim/attribute-dictionary.service.js'
+import { DictionaryError, upsertAttributes, type AttributeUpsert } from '../services/pim/attribute-dictionary.service.js'
+import {
+  AttributeAdminError, createAttributeGroup, createAttributeOption, createCustomAttribute, deleteAttributeGroup, deleteAttributeOption,
+  updateAttributeGroup, updateAttributeOption, updateCustomAttribute,
+  type AttributeCreateInput, type AttributeUpdateInput, type GroupInput, type OptionCreateInput, type OptionUpdateInput,
+} from '../services/pim/attribute-admin.service.js'
 import { archiveAttribute, deleteAttribute, PlacementError, restoreAttribute, setAttributePlacement, undoPlacementChange, type Actor } from '../services/pim/attribute-placement.service.js'
 import { applyPlacementProposal, placementProposalPreview, undoPlacementProposal } from '../services/pim/attribute-placement-correction.js'
 import { attributeUsages } from '../services/pim/attribute-usage.service.js'
 import type { FastifyReply, FastifyRequest } from 'fastify'
+
+/** MCP full control P8 — a write refused by attribute-admin.service.ts: its status and sentence, as the page always got them. */
+async function adminReply<T>(reply: FastifyReply, work: () => Promise<T>) {
+  try { return await work() }
+  catch (error) {
+    if (error instanceof AttributeAdminError) return reply.code(error.status).send({ error: error.message })
+    throw error
+  }
+}
 
 const actorOf = (request: FastifyRequest): Actor => ({ userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null, ip: request.ip ?? null })
 
@@ -65,29 +77,6 @@ async function placementReply<T>(reply: FastifyReply, work: () => Promise<T>) {
     throw error
   }
 }
-
-/** P3 — `validation` must satisfy the shared contract; the refusal names each problem. `null`/absent = no rules. */
-function validationRefusal(validation: unknown): string | null {
-  if (validation === undefined || validation === null) return null
-  const rules = parseAttributeRules(validation)
-  return rules.ok ? null : `validation is invalid: ${(rules as { errors: string[] }).errors.join('; ')}`
-}
-
-const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
-
-const VALID_ATTRIBUTE_TYPES = new Set([
-  'text',
-  'textarea',
-  'number',
-  'boolean',
-  'select',
-  'multiselect',
-  'date',
-  'reference',
-  'asset',
-])
-
-const VALID_SCOPES = new Set(['global', 'per_variant'])
 
 // A-25 (R-22): a closed choice list cannot be made per-language — the rule and its lookup live in the service.
 export { CODE_NOT_LOCALIZABLE } from '../services/pim/attribute-rules.js'
@@ -120,84 +109,22 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.post('/attribute-groups', async (request, reply) => {
-    const body = request.body as {
-      code?: string
-      label?: string
-      description?: string | null
-      sortOrder?: number
-    }
-    if (!body.code || !CODE_PATTERN.test(body.code))
-      return reply.code(400).send({
-        error:
-          'code is required and must be lowercase snake_case (matches /^[a-z][a-z0-9_]{0,63}$/)',
-      })
-    if (!body.label?.trim())
-      return reply.code(400).send({ error: 'label is required' })
-    try {
-      const group = await prisma.attributeGroup.create({
-        data: {
-          code: body.code,
-          label: body.label.trim(),
-          description: body.description?.trim() || null,
-          sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
-        },
-      })
+    const body = request.body as GroupInput
+    return adminReply(reply, async () => {
+      const group = await createAttributeGroup(body)
       return reply.code(201).send({ group })
-    } catch (err: any) {
-      if (err?.code === 'P2002')
-        return reply
-          .code(409)
-          .send({ error: `group code "${body.code}" already exists` })
-      throw err
-    }
+    })
   })
 
   fastify.patch('/attribute-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      label?: string
-      description?: string | null
-      sortOrder?: number
-    }
-    const data: Record<string, unknown> = {}
-    if (body.label !== undefined) {
-      if (!body.label.trim())
-        return reply.code(400).send({ error: 'label cannot be empty' })
-      data.label = body.label.trim()
-    }
-    if (body.description !== undefined)
-      data.description = body.description?.trim() || null
-    if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
-    if (Object.keys(data).length === 0)
-      return reply.code(400).send({ error: 'no mutable fields supplied' })
-    try {
-      const group = await prisma.attributeGroup.update({ where: { id }, data })
-      return { group }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'group not found' })
-      throw err
-    }
+    const body = request.body as Omit<GroupInput, 'code'>
+    return adminReply(reply, async () => ({ group: await updateAttributeGroup(id, body) }))
   })
 
   fastify.delete('/attribute-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await prisma.attributeGroup.delete({ where: { id } })
-      return { ok: true, id }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'group not found' })
-      // P2003 = FK constraint failed (RESTRICT — group still has
-      // attributes). Surface a 409 so the UI can prompt the operator
-      // to move/delete attributes first.
-      if (err?.code === 'P2003')
-        return reply.code(409).send({
-          error:
-            'cannot delete group: attributes are still attached. Move or delete them first.',
-        })
-      throw err
-    }
+    return adminReply(reply, () => deleteAttributeGroup(id))
   })
 
   // ── CustomAttribute ──────────────────────────────────────────
@@ -233,151 +160,19 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.post('/attributes', async (request, reply) => {
-    const body = request.body as {
-      code?: string
-      label?: string
-      description?: string | null
-      groupId?: string
-      type?: string
-      validation?: unknown
-      defaultValue?: unknown
-      localizable?: boolean
-      scope?: string
-      sortOrder?: number
-      semanticKey?: string | null
-    }
-    if (!body.code || !CODE_PATTERN.test(body.code))
-      return reply.code(400).send({
-        error:
-          'code is required and must be lowercase snake_case (matches /^[a-z][a-z0-9_]{0,63}$/)',
-      })
-    if (!body.label?.trim())
-      return reply.code(400).send({ error: 'label is required' })
-    if (!body.groupId)
-      return reply.code(400).send({ error: 'groupId is required' })
-    if (!body.type || !VALID_ATTRIBUTE_TYPES.has(body.type))
-      return reply.code(400).send({
-        error: `type must be one of ${[...VALID_ATTRIBUTE_TYPES].join(', ')}`,
-      })
-    if (body.scope && !VALID_SCOPES.has(body.scope))
-      return reply.code(400).send({
-        error: `scope must be one of ${[...VALID_SCOPES].join(', ')}`,
-      })
-    if (body.localizable && CODE_TYPES.has(body.type))
-      return reply.code(400).send({ error: CODE_NOT_LOCALIZABLE })
-    const invalidRules = validationRefusal(body.validation)
-    if (invalidRules) return reply.code(400).send({ error: invalidRules })
-    const conceptRefusal = semanticKeyRefusal(body.semanticKey)
-    if (conceptRefusal) return reply.code(400).send({ error: conceptRefusal })
-
-    const groupExists = await prisma.attributeGroup.findUnique({
-      where: { id: body.groupId },
-      select: { id: true },
-    })
-    if (!groupExists)
-      return reply.code(400).send({ error: 'groupId does not exist' })
-
-    try {
-      const attribute = await prisma.customAttribute.create({
-        data: {
-          code: body.code,
-          label: body.label.trim(),
-          description: body.description?.trim() || null,
-          groupId: body.groupId,
-          type: body.type,
-          validation: (body.validation as never) ?? null,
-          defaultValue: (body.defaultValue as never) ?? null,
-          localizable: body.localizable ?? false,
-          scope: body.scope ?? 'global',
-          sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
-          semanticKey: body.semanticKey ?? null,
-        },
-      })
+    const body = request.body as AttributeCreateInput
+    return adminReply(reply, async () => {
+      const attribute = await createCustomAttribute(body)
       return reply.code(201).send({ attribute })
-    } catch (err: any) {
-      if (err?.code === 'P2002')
-        return reply
-          .code(409)
-          .send({ error: String(err?.meta?.target ?? '').includes('semanticKey')
-            ? `concept "${body.semanticKey}" is already linked to another attribute`
-            : `attribute code "${body.code}" already exists` })
-      throw err
-    }
+    })
   })
 
+  // Deliberately not allowing `type` or `code` changes — type would orphan stored values; code is the stable
+  // identifier referenced by FamilyAttribute and product values (attribute-admin.service.ts).
   fastify.patch('/attributes/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      label?: string
-      description?: string | null
-      groupId?: string
-      validation?: unknown
-      defaultValue?: unknown
-      localizable?: boolean
-      scope?: string
-      sortOrder?: number
-      semanticKey?: string | null
-    }
-    // Deliberately not allowing `type` or `code` changes — type
-    // would orphan stored values; code is the stable identifier
-    // referenced by FamilyAttribute and product values.
-    const data: Record<string, unknown> = {}
-    if (body.label !== undefined) {
-      if (!body.label.trim())
-        return reply.code(400).send({ error: 'label cannot be empty' })
-      data.label = body.label.trim()
-    }
-    if (body.description !== undefined)
-      data.description = body.description?.trim() || null
-    if (body.groupId !== undefined) {
-      const exists = await prisma.attributeGroup.findUnique({
-        where: { id: body.groupId },
-        select: { id: true },
-      })
-      if (!exists)
-        return reply.code(400).send({ error: 'groupId does not exist' })
-      data.groupId = body.groupId
-    }
-    if (body.validation !== undefined) {
-      const invalidRules = validationRefusal(body.validation)
-      if (invalidRules) return reply.code(400).send({ error: invalidRules })
-      data.validation = (body.validation as never) ?? null
-    }
-    if (body.semanticKey !== undefined) {
-      const conceptRefusal = semanticKeyRefusal(body.semanticKey)
-      if (conceptRefusal) return reply.code(400).send({ error: conceptRefusal })
-      data.semanticKey = body.semanticKey
-    }
-    if (body.defaultValue !== undefined)
-      data.defaultValue = (body.defaultValue as never) ?? null
-    if (body.localizable === true) {
-      const refusal = await localizableRefusalFor(id)
-      if (refusal) return reply.code(400).send({ error: refusal })
-    }
-    if (body.localizable !== undefined) data.localizable = body.localizable
-    if (body.scope !== undefined) {
-      if (!VALID_SCOPES.has(body.scope))
-        return reply.code(400).send({
-          error: `scope must be one of ${[...VALID_SCOPES].join(', ')}`,
-        })
-      data.scope = body.scope
-    }
-    if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
-    if (Object.keys(data).length === 0)
-      return reply.code(400).send({ error: 'no mutable fields supplied' })
-    try {
-      const attribute = await prisma.customAttribute.update({
-        where: { id },
-        data,
-      })
-      return { attribute }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'attribute not found' })
-      if (err?.code === 'P2002')
-        return reply.code(409).send({ error: `concept "${body.semanticKey}" is already linked to another attribute` })
-      throw err
-    }
+    const body = request.body as AttributeUpdateInput
+    return adminReply(reply, async () => ({ attribute: await updateCustomAttribute(id, body) }))
   })
 
   // P3b S3 (docs/attributes/PLAN.md §10.9) — delete only what nothing uses; otherwise 409 "archive instead".
@@ -422,87 +217,17 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/attributes/:attrId/options', async (request, reply) => {
     const { attrId } = request.params as { attrId: string }
-    const body = request.body as {
-      code?: string
-      label?: string
-      metadata?: unknown
-      sortOrder?: number
-    }
-    if (!body.code || !CODE_PATTERN.test(body.code))
-      return reply.code(400).send({
-        error:
-          'code is required and must be lowercase snake_case (matches /^[a-z][a-z0-9_]{0,63}$/)',
-      })
-    if (!body.label?.trim())
-      return reply.code(400).send({ error: 'label is required' })
-    const attr = await prisma.customAttribute.findUnique({
-      where: { id: attrId },
-      select: { id: true, type: true },
-    })
-    if (!attr) return reply.code(404).send({ error: 'attribute not found' })
-    // P6 — a text attribute's options are suggestions for the open dropdown.
-    if (!OPTION_TYPES.has(attr.type))
-      return reply.code(400).send({
-        error: `attribute type "${attr.type}" does not accept options (select, multiselect, text or textarea)`,
-      })
-    try {
-      const option = await prisma.attributeOption.create({
-        data: {
-          attributeId: attrId,
-          code: body.code,
-          label: body.label.trim(),
-          metadata: (body.metadata as never) ?? null,
-          sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
-        },
-      })
+    const body = request.body as OptionCreateInput
+    return adminReply(reply, async () => {
+      const option = await createAttributeOption(attrId, body)
       return reply.code(201).send({ option })
-    } catch (err: any) {
-      if (err?.code === 'P2002')
-        return reply.code(409).send({
-          error: `option code "${body.code}" already exists on this attribute`,
-        })
-      throw err
-    }
+    })
   })
 
   fastify.patch('/attribute-options/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      label?: string
-      metadata?: unknown
-      sortOrder?: number
-      synonyms?: string[]
-      archived?: boolean
-    }
-    const data: Record<string, unknown> = {}
-    if (body.label !== undefined) {
-      if (!body.label.trim())
-        return reply.code(400).send({ error: 'label cannot be empty' })
-      data.label = body.label.trim()
-    }
-    if (body.metadata !== undefined)
-      data.metadata = (body.metadata as never) ?? null
-    if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
-    if (body.synonyms !== undefined) {
-      if (!Array.isArray(body.synonyms) || body.synonyms.some(s => typeof s !== 'string' || !s.trim()))
-        return reply.code(400).send({ error: 'synonyms must be a list of non-empty text' })
-      data.synonyms = body.synonyms.map(s => s.trim())
-    }
-    // P3 — retiring keeps every stored value valid; it only stops offering the option.
-    if (body.archived !== undefined) data.archivedAt = body.archived ? new Date() : null
-    if (Object.keys(data).length === 0)
-      return reply.code(400).send({ error: 'no mutable fields supplied' })
-    try {
-      const option = await prisma.attributeOption.update({
-        where: { id },
-        data,
-      })
-      return { option }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'option not found' })
-      throw err
-    }
+    const body = request.body as OptionUpdateInput
+    return adminReply(reply, async () => ({ option: await updateAttributeOption(id, body) }))
   })
 
   // ── P3 — the dictionary at scale, and the shared concepts ────
@@ -565,14 +290,7 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/attribute-options/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await prisma.attributeOption.delete({ where: { id } })
-      return { ok: true, id }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'option not found' })
-      throw err
-    }
+    return adminReply(reply, () => deleteAttributeOption(id))
   })
 }
 

@@ -31,8 +31,14 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, ToolbarButton } from '@/design-system/primitives'
-import { X, Play, AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
+import { Drawer } from '@/design-system/components'
+import { usePermission } from '@/lib/auth/AuthProvider'
+import { sendCommand, useCommandKey } from '@/lib/command-key'
+import { switchStep, type LeverControl, type LeverMode, type SwitchEvent, type SwitchState } from './lever-control'
+import { LeverSwitchSection } from './LeverSwitch'
+import { Play, AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from 'lucide-react'
+import { LeverConfirm } from './LeverConfirm'
 import { getBackendUrl } from '@/lib/backend-url'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 
@@ -107,15 +113,46 @@ const EVIDENCE_COLUMNS: Array<Column<EvidenceRow>> = [
 ]
 
 export function LeverDrawer({ engine, onClose, onRan }: {
-  engine: { key: string; name: string; what: string; cron: string | null; mode: string }
+  engine: { key: string; name: string; what: string; cron: string | null; mode: string; control?: LeverControl }
   onClose: () => void
-  /** Let the parent refresh its rows once a manual run has been accepted. */
+  /** Let the parent refresh its rows once a manual run (or a switch move) has been accepted. */
   onRan?: () => void
 }) {
   const [d, setD] = useState<EngineDetail | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [ran, setRan] = useState<string | null>(null)
+
+  // R16 — this business's own switch, set here directly (down at once; up after a confirmation, never past the env).
+  const canSwitch = usePermission('ads.automation.manage')
+  const switchKey = useCommandKey()
+  const [control, setControl] = useState<LeverControl | undefined>(engine.control)
+  useEffect(() => { setControl(engine.control) }, [engine.control])
+  const [switching, setSwitching] = useState(false)
+  const [switchState, setSwitchState] = useState<SwitchState>({ raise: null })
+  const raise = switchState.raise
+  const moveSwitch = async (to: LeverMode, confirmed: boolean) => {
+    if (!control || switching) return
+    setSwitching(true); setErr(null); setRan(null)
+    try {
+      const { response, body } = await sendCommand<{ ok?: boolean; mode?: LeverMode; error?: string }>(
+        switchKey,
+        `${getBackendUrl()}/api/advertising/automation/engine-switch/${engine.key}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: to, ...(confirmed ? { confirm: true } : {}) }) },
+      )
+      if (!response.ok) throw new Error(body?.error ?? `Could not switch (${response.status})`)
+      setControl({ ...control, switch: to === control.levels[control.levels.length - 1] ? null : { mode: to, setBy: 'user:you', setAt: new Date().toISOString(), reason: null } })
+      setRan(`${engine.name} is ${to} for this business from its next run.`)
+      onRan?.()
+    } catch (e) { setErr((e as Error).message) } finally { setSwitching(false) }
+  }
+  // One step function (lever-control.ts `switchStep`) decides what the switch shows and sends; its tests drive it too.
+  const step = (event: SwitchEvent) => {
+    const next = switchStep(switchState, event)
+    setSwitchState(next.state)
+    if (next.send) void moveSwitch(next.send.to, next.send.confirm)
+  }
+  const chooseSwitch = (to: LeverMode) => { if (control) step({ type: 'choose', to, engineName: engine.name, control }) }
 
   const load = useCallback(async () => {
     try {
@@ -127,8 +164,9 @@ export function LeverDrawer({ engine, onClose, onRan }: {
   }, [engine.key])
   useEffect(() => { void load() }, [load])
 
-  const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
-  useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
+  // Escape, the Tab trap and focus (in on open, back to the row that opened it on close) are the design system's
+  // Drawer's; an open up-confirmation owns Escape itself (LeverConfirm).
+  const cancelRaise = useCallback(() => setSwitchState({ raise: null }), [])
 
   /**
    * The manual trigger is the platform's existing generic one — the same endpoint the sync
@@ -155,26 +193,28 @@ export function LeverDrawer({ engine, onClose, onRan }: {
   const failing = d && d.health.runs14d > 0 && d.health.failures14d / d.health.runs14d > 0.2
 
   return (
-    <div className="acr-dw-back" onClick={onClose} role="presentation">
-      <aside
-        className="acr-dw"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Engine — ${engine.name}`}
-      >
-        <header className="acr-dw-h">
-          <div className="acr-dw-title">
-            <strong>{engine.name}</strong>
-            <p>{engine.what}</p>
-            {engine.cron && <code className="acr-dw-cron">{engine.cron}</code>}
-          </div>
-          <ToolbarButton className="acr-dw-x" icon={<X size={18} />} label="Close" tooltip={false} onClick={onClose} />
-        </header>
-
-        <div className="acr-dw-b">
+    <Drawer
+      open
+      onClose={onClose}
+      title={engine.name}
+      subtitle={engine.what}
+      width="min(760px, 94vw)"
+      overlay={raise ? (
+        <LeverConfirm
+          impact={raise.impact}
+          onCancel={cancelRaise}
+          onConfirm={() => step({ type: 'confirm' })}
+        />
+      ) : undefined}
+    >
+        {/* While the up-confirmation is open the drawer behind it is inert: Tab stays in the confirmation. */}
+        <div className="acr-dw-b" inert={raise ? true : undefined}>
+          {engine.cron && <code className="acr-dw-cron">{engine.cron}</code>}
           {err && <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
           {ran && <div className="acr-banner ok" role="status"><CheckCircle2 size={15} /> {ran}</div>}
+
+          {/* R16 — what decides it: the server setting (the outer limit) and this business's own switch under it. */}
+          {control && <LeverSwitchSection control={control} inForce={engine.mode as LeverMode} canSwitch={canSwitch} busy={switching} onChoose={chooseSwitch} />}
 
           {!d ? <div className="acr-empty">Loading…</div> : <>
             {/* ── run now + the headline health ── */}
@@ -252,7 +292,6 @@ export function LeverDrawer({ engine, onClose, onRan }: {
             )}
           </>}
         </div>
-      </aside>
-    </div>
+    </Drawer>
   )
 }

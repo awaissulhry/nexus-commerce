@@ -1,0 +1,27 @@
+{
+  "name": "nexus-factory",
+  "displayName": "Nexus Factory",
+  "version": "0.1.0",
+  "description": "Connects Claude Code or Claude Desktop on the factory machine to the Nexus factory app through the factory's own local server (stdio, no network), and adds the factory-desk skill. Claude reads orders, quotes, production, materials, shipments, the inbox and, with permission, the money; with a drafting token it can also make drafts: DRAFT quotes and purchase orders, internal comments, and one work-order stage step. Sending, converting, labels, invoices and payments stay in the factory app.",
+  "author": {
+    "name": "Nexus Commerce"
+  },
+  "homepage": "https://github.com/awaissulhry/nexus-commerce/tree/main/integrations/claude",
+  "repository": "https://github.com/awaissulhry/nexus-commerce",
+  "keywords": ["nexus", "factory", "manufacturing", "quotes", "work-orders", "mcp"],
+  "userConfig": {
+    "repo_dir": {
+      "type": "directory",
+      "title": "Nexus repository folder",
+      "description": "The top folder of the copy of the Nexus repository the factory app runs from on this machine (its dependencies installed with npm ci).",
+      "required": true
+    },
+    "factory_token": {
+      "type": "string",
+      "title": "Factory token for Claude",
+      "description": "The token the factory app shows once in Settings › Integrations › Claude. Kept in this computer's secure storage, never in a file.",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

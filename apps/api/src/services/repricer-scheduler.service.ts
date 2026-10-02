@@ -79,9 +79,11 @@ const MAX_ROWS_PER_TICK = 5000
 
 export async function runRepricerTick(
   prisma: PrismaClient,
+  // R16 — a business switched to OBSERVE runs dry even where the env is live; it never makes a dry env live.
+  opts: { dryRun?: boolean } = {},
 ): Promise<RepricerTickResult> {
   const startedAt = Date.now()
-  const liveMode = process.env.NEXUS_REPRICER_LIVE === '1'
+  const liveMode = process.env.NEXUS_REPRICER_LIVE === '1' && !opts.dryRun
   const thresholdPct = Math.max(
     0,
     Number(process.env.NEXUS_REPRICER_THRESHOLD_PCT ?? DEFAULT_THRESHOLD_PCT),

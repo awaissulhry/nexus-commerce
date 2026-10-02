@@ -126,6 +126,7 @@ export async function runPromotionScheduler(
         productId: true,
         channel: true,
         marketplace: true,
+        channelConnectionId: true,
         price: true,
         priceOverride: true,
         salePrice: true,
@@ -170,6 +171,8 @@ export async function runPromotionScheduler(
             sku: baseSku,
             channel: l.channel,
             marketplace: l.marketplace,
+            // The listing's own account: a business with two accounts on a channel has no "the" account.
+            channelConnectionId: l.channelConnectionId ?? null,
           })
         } catch (err) {
           if (!isPriceRefusal(err)) throw err
@@ -400,7 +403,7 @@ async function recordPromotionSkips(prisma: PrismaClient, skips: readonly Promot
  * each is the door's audit row by `promotion:<event>` — or, for a sale set before the door, the old
  * `lastOverrideBy` marker with no later sale change.
  */
-async function promotionSales<T extends { id: string }>(prisma: PrismaClient, eventId: string, candidates: T[]): Promise<T[]> {
+export async function promotionSales<T extends { id: string }>(prisma: PrismaClient, eventId: string, candidates: T[]): Promise<T[]> {
   const mine: T[] = []
   for (const l of candidates) {
     const latest = await prisma.channelListingOverride.findFirst({ where: { channelListingId: l.id, fieldName: 'salePrice' }, orderBy: { createdAt: 'desc' }, select: { changedBy: true } })

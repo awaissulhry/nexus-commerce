@@ -42,6 +42,12 @@ export interface CreateNegativeArgs {
   scope: NegativeScope
   /** Marketplace code (e.g. APJ6JRA9NG5V4) — needed by the write gate. */
   marketplace: string
+  /**
+   * MCP full control A5 — the Nexus Campaign.id, when the caller has it. Handed to the write gate as `campaignId`, so
+   * the per-campaign live-write allowlist (and anything else the gate binds to a campaign) binds to this negative too.
+   * Absent = the gate's creation-flow path, exactly as before: every existing caller passes nothing and is unchanged.
+   */
+  nexusCampaignId?: string
 }
 
 export interface CreateNegativeResult {
@@ -170,6 +176,7 @@ export async function createNegative(
     // is not the only caller that can negate a term.
     isNegation: true,
     keywordText: args.keywordText ?? null,
+    ...(args.nexusCampaignId ? { campaignId: args.nexusCampaignId } : {}),
   })
   if (gate.allowed === false) {
     logger.warn('[ads-negative-kw] write gate denied', {

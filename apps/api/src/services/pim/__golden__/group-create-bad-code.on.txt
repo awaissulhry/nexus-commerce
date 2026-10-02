@@ -1,0 +1,2 @@
+400
+{"error":"code is required and must be lowercase snake_case (matches /^[a-z][a-z0-9_]{0,63}$/)"}

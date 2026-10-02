@@ -41,6 +41,7 @@
  */
 
 import prisma from '../db.js'
+import { requireCompanyIdentity } from './business-identity.service.js'
 import { logger } from '../utils/logger.js'
 
 const ENABLED = process.env.NEXUS_ENABLE_CORRISPETTIVI_DISPATCH === 'true'
@@ -70,14 +71,9 @@ function escapeXml(s: unknown): string {
     .replace(/'/g, '&apos;')
 }
 
-const ISSUER = {
-  vatNumber: process.env.NEXUS_ISSUER_VAT ?? 'IT00000000000',
-  fiscalCode: process.env.NEXUS_ISSUER_CF ?? '00000000000',
-  // RT identifier (matricola) — assigned by Agenzia delle Entrate
-  // when the operator registers their virtual RT. NULL until the
-  // operator wires it up via env.
-  rtMatricola: process.env.NEXUS_RT_MATRICOLA ?? '',
-}
+// The issuer (P.IVA, codice fiscale, RT matricola) is the business the day belongs to: its company identity
+// (business-identity.service: Settings › Company, then NEXUS_ISSUER_* / NEXUS_RT_MATRICOLA for Xavia). Without a
+// P.IVA the day is refused: never reported under another business's or a made-up number.
 
 /**
  * Aggregate B2C orders for a given date + emit the daily summary.
@@ -96,6 +92,8 @@ const ISSUER = {
 export async function generateCorrispettiviDaily(
   date: string, // YYYY-MM-DD
 ): Promise<CorrispettiviDailyResult> {
+  const legal = await requireCompanyIdentity(['vat'], 'the daily corrispettivi')
+  const ISSUER = { vatNumber: legal.vatNumber ?? '', fiscalCode: legal.fiscalCode, rtMatricola: legal.rtMatricola }
   const dayStart = new Date(`${date}T00:00:00Z`)
   const dayEnd = new Date(`${date}T23:59:59.999Z`)
 

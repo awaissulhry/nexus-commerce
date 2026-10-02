@@ -1,0 +1,2 @@
+200
+{"items":[{"id":"golden-tag-empty","name":"Archive","color":null,"icon":null,"productCount":0,"updatedAt":"2026-09-15T09:50:00.000Z"},{"id":"golden-tag-new","name":"New season","color":null,"icon":null,"productCount":1,"updatedAt":"2026-09-15T09:40:00.000Z"},{"id":"golden-tag-sale","name":"sale","color":"#ff0000","icon":"tag","productCount":2,"updatedAt":"2026-09-15T09:30:00.000Z"}]}

@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Tabs } from '@/design-system/components'
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
 import { DecisionCard, TOOL_CARDS, toolCardFor } from './DecisionCard'
+import type { Reversibility } from '@/app/fleet/approvals/reversibility'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
@@ -44,6 +45,8 @@ export interface ApprovalRow {
   isFleet: boolean
   /** AP.8 — how this worker's proposals of this kind have fared with you. */
   trackRecord?: { approved: number; rejected: number; total: number } | null
+  /** C1 — how far it can be put back, as the API states it from the tool registry. */
+  reversibility?: Reversibility | null
 }
 
 /** AP.7 — one thing a past decision taught the fleet. */

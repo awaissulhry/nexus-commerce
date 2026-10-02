@@ -29,7 +29,7 @@
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
-import { previewVerb, type PreviewContext } from '@nexus/shared/matrix-preview'
+import { inventoryCoordinate, previewVerb, type PreviewContext } from '@nexus/shared/matrix-preview'
 import {
   MATRIX_COPY,
   type CoordinateKey,
@@ -400,9 +400,45 @@ export function paramsForChange(verb: MatrixVerbId, change: VerbChange): MatrixV
 
 export type VerbCommitResult = { operation: VerbOperation; results: MatrixWriteOutcome[] }
 
+/**
+ * MCP full control L8 — eBay ENDS a listing pinned at 0 unless the account's out-of-stock option is ON. For a pin to 0 on
+ * eBay coordinates (a fresh request, or a carried preview), the option is read from eBay ONCE per account and market
+ * (`readEbayOutOfStockPreference`: through the channel gateway, bounded, unknown on any failure) and handed to the shared
+ * preview, which refuses the pin unless it is ON — in the preview the page shows and in every commit's re-check.
+ */
+async function ebayZeroAllowed(read: MatrixRead, req: MatrixVerbRequest & { preview?: VerbPreview }): Promise<PreviewContext['ebayZeroAllowed']> {
+  const p = req.params as { verb: MatrixVerbId; value?: unknown }
+  const zero = p.verb === 'pin-quantity' && (p.value === 0 || (req.preview?.changes ?? []).some((c) => c.cell === 'syncQty' && c.to === 0))
+  if (!zero) return undefined
+  const pairs = new Map<string, { accountId: string | null; market: string }>()
+  for (const t of [...req.targets, ...(req.preview?.changes ?? [])]) {
+    const coord = read.coordinates.find((c) => c.key === inventoryCoordinate(read, t.coordinateKey))
+    if (coord?.channel === 'EBAY') pairs.set(JSON.stringify([coord.accountId, coord.market]), { accountId: coord.accountId, market: coord.market })
+  }
+  if (!pairs.size) return undefined
+  return ebayZeroAllowedFor(pairs.values())
+}
+
+/**
+ * The same check for any caller that pins eBay listings or shared variants to 0 (Sync Control for Claude, 08 S7): the
+ * account's out-of-stock option, read from eBay ONCE per account and market. true = ON (a pin to 0 is allowed), false =
+ * OFF, null = could not be read — both refused, with the Matrix's sentence (`EBAY_ZERO_REFUSAL`).
+ */
+export async function ebayZeroAllowedFor(pairs: Iterable<{ accountId: string | null; market: string }>): Promise<(accountId: string | null, market: string) => boolean | null> {
+  const { readEbayOutOfStockPreference } = await import('../channel-delist.service.js')
+  const answers = new Map<string, boolean | null>()
+  for (const { accountId, market } of pairs) {
+    const key = JSON.stringify([accountId, market])
+    if (answers.has(key)) continue
+    const state = accountId ? await readEbayOutOfStockPreference(accountId, market) : 'UNKNOWN'
+    answers.set(key, state === 'ON' ? true : state === 'OFF' ? false : null)
+  }
+  return (accountId, market) => answers.get(JSON.stringify([accountId, market])) ?? null
+}
+
 export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & { preview?: VerbPreview }): Promise<VerbPreview | VerbCommitResult> {
   const read = await getMatrixRead({ productId: ctx.productId, canEditPrice: ctx.can(PRICE_PERMISSION) })
-  const pctx: PreviewContext = { can: ctx.can, simulated: false }
+  const pctx: PreviewContext = { can: ctx.can, simulated: false, ebayZeroAllowed: await ebayZeroAllowed(read, req) }
   if (!req.commit) return previewVerb(read, { ...req, commit: false }, pctx)
   const verb = req.params.verb
   /* The page commits with `params: { verb }` + the preview it showed; a caller with full params gets a fresh preview. */

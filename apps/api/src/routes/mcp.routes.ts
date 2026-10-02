@@ -13,17 +13,27 @@
  *
  * MCP.11 — each connection and each business has a count per minute (services/mcp/mcp-rate.ts);
  * over it, 429 with Retry-After.
+ *
+ * MCP full control C4 (D2 = A) — one connection per business:
+ *
+ *   POST   /mcp/w/:workspaceId                                       the same endpoint, at one business's own URL
+ *   GET    /.well-known/oauth-protected-resource/mcp/w/:workspaceId  its RFC 9728 document
+ *
+ * A token is issued for one URL (its `resource`) and works there only: a business's URL refuses a token of the plain
+ * URL or of another business (401 with that business's challenge). The path names the business only as the URL the
+ * token was issued for: the business still comes from the token, and a header or query naming one is still refused.
+ * NEXUS_MCP_WORKSPACES stays the outer allow-list: a business outside it has no URL (404).
  */
 
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { originValidation } from '@modelcontextprotocol/fastify'
 import { withAuthenticatedUser } from '../lib/auth/identity-context.js'
 import { withWorkspace } from '../lib/workspace-context.js'
-import { mcpEnabled, mcpResource } from '../services/oauth/oauth-config.js'
+import { mcpBusinessUrlAllowed, mcpEnabled, mcpResource, mcpResourceFor } from '../services/oauth/oauth-config.js'
 import {
   authenticateMcp,
-  isProtectedResourceMetadataPath,
   mcpAllowedOriginHosts,
+  metadataResourceOf,
   protectedResourceMetadata,
 } from '../services/mcp/mcp-auth.js'
 import { takeMcpRequest } from '../services/mcp/mcp-rate.js'
@@ -80,52 +90,59 @@ const mcpRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   const metadata = async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!isProtectedResourceMetadataPath(request.url.split('?')[0])) return reply.code(404).send({ error: 'Not found' })
+    const resource = metadataResourceOf(request.url.split('?')[0])
+    if (!resource) return reply.code(404).send({ error: 'Not found' })
     reply.header('Cache-Control', 'public, max-age=300').header('Access-Control-Allow-Origin', '*')
-    return protectedResourceMetadata()
+    return protectedResourceMetadata(resource)
   }
   fastify.get('/.well-known/oauth-protected-resource', metadata)
   fastify.get('/.well-known/oauth-protected-resource/*', metadata)
 
-  fastify.post(
-    '/mcp',
-    {
-      // The MCP transport rule: a browser Origin must be one of ours (a missing one is fine).
-      onRequest: (request, reply) => originValidation(mcpAllowedOriginHosts())(request, reply),
-    },
-    async (request, reply) => {
-      reply.header('Cache-Control', 'no-store')
-      if (namesBusiness(request)) {
-        return jsonRpcError(reply, 400, -32600, 'The business comes from your Nexus connection. Do not name one.')
-      }
-      const auth = await authenticateMcp(request.headers.authorization)
-      if ('refusal' in auth) {
-        const { status, challenge, body } = auth.refusal
-        return reply.code(status).header('WWW-Authenticate', challenge).send(body)
-      }
-      const { principal, authInfo } = auth.caller
+  // The MCP transport rule: a browser Origin must be one of ours (a missing one is fine).
+  const origin = { onRequest: (request: FastifyRequest, reply: FastifyReply) => originValidation(mcpAllowedOriginHosts())(request, reply) }
 
-      // MCP.11 — per connection and per business, before anything reaches a tool.
-      const rate = await takeMcpRequest({ workspaceId: principal.workspace.workspaceId, grantId: principal.oauthGrantId })
-      if (!rate.ok) {
-        const who = rate.limitedBy === 'connection' ? 'this Claude connection' : 'this business'
-        reply.header('Retry-After', String(rate.retryAfterSec))
-        return jsonRpcError(reply, 429, -32000, `Too many requests from ${who} (at most ${rate.limit} a minute). Try again in ${rate.retryAfterSec} s.`)
-      }
+  /** One MCP exchange at `resource`: the plain URL, or one business's own (C4). */
+  const serve = async (request: FastifyRequest, reply: FastifyReply, resource: string) => {
+    reply.header('Cache-Control', 'no-store')
+    if (namesBusiness(request)) {
+      return jsonRpcError(reply, 400, -32600, 'The business comes from your Nexus connection. Do not name one.')
+    }
+    const auth = await authenticateMcp(request.headers.authorization, resource)
+    if ('refusal' in auth) {
+      const { status, challenge, body } = auth.refusal
+      return reply.code(status).header('WWW-Authenticate', challenge).send(body)
+    }
+    const { principal, authInfo } = auth.caller
 
-      // Stops the SDK's work if Claude goes away before the answer is written.
-      const aborted = new AbortController()
-      reply.raw.on('close', () => {
-        if (!reply.raw.writableFinished) aborted.abort()
-      })
-      const response = await withAuthenticatedUser(principal.userId, () =>
-        withWorkspace(principal.workspace, () =>
-          handler.fetch(webRequest(request, aborted.signal), { authInfo, parsedBody: request.body }),
-        ),
-      )
-      return send(reply, response)
-    },
-  )
+    // MCP.11 — per connection and per business, before anything reaches a tool.
+    const rate = await takeMcpRequest({ workspaceId: principal.workspace.workspaceId, grantId: principal.oauthGrantId })
+    if (!rate.ok) {
+      const who = rate.limitedBy === 'connection' ? 'this Claude connection' : 'this business'
+      reply.header('Retry-After', String(rate.retryAfterSec))
+      return jsonRpcError(reply, 429, -32000, `Too many requests from ${who} (at most ${rate.limit} a minute). Try again in ${rate.retryAfterSec} s.`)
+    }
+
+    // Stops the SDK's work if Claude goes away before the answer is written.
+    const aborted = new AbortController()
+    reply.raw.on('close', () => {
+      if (!reply.raw.writableFinished) aborted.abort()
+    })
+    const response = await withAuthenticatedUser(principal.userId, () =>
+      withWorkspace(principal.workspace, () =>
+        handler.fetch(webRequest(request, aborted.signal), { authInfo, parsedBody: request.body }),
+      ),
+    )
+    return send(reply, response)
+  }
+
+  fastify.post('/mcp', origin, (request, reply) => serve(request, reply, mcpResource()))
+
+  // C4 — a business's own URL: its id well formed and inside the allow-list, else there is no such URL.
+  fastify.post<{ Params: { workspaceId: string } }>('/mcp/w/:workspaceId', origin, (request, reply) => {
+    const { workspaceId } = request.params
+    if (!mcpBusinessUrlAllowed(workspaceId)) return reply.code(404).send({ error: 'Not found' })
+    return serve(request, reply, mcpResourceFor(workspaceId))
+  })
 
   const methodNotAllowed = async (_request: FastifyRequest, reply: FastifyReply) => {
     reply.header('Allow', 'POST')
@@ -133,6 +150,8 @@ const mcpRoutes: FastifyPluginAsync = async (fastify) => {
   }
   fastify.get('/mcp', methodNotAllowed)
   fastify.delete('/mcp', methodNotAllowed)
+  fastify.get('/mcp/w/:workspaceId', methodNotAllowed)
+  fastify.delete('/mcp/w/:workspaceId', methodNotAllowed)
 }
 
 export default mcpRoutes

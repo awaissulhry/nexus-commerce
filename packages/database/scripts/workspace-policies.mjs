@@ -111,5 +111,10 @@ export function workspacePolicySql() {
   sql.push(readFileSync(new URL('../workspaces/ebay-quarantine.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/inbound-history.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/ebay-erasure-review.sql', import.meta.url), 'utf8'))
+  // MCP full control I5 — which of a business's own channel ids another business also holds. Byte-for-byte the tail
+  // of 20261001q.
+  sql.push(readFileSync(new URL('../workspaces/identity-foreign.sql', import.meta.url), 'utf8'))
+  // MCP full control I12 — one seller-owned channel id, one owner (report mode). Byte-for-byte the tail of 20261002j.
+  sql.push(readFileSync(new URL('../workspaces/channel-item-claim.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

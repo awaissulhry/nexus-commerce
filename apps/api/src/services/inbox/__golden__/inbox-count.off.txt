@@ -1,0 +1,2 @@
+200
+{"total":7,"bySeverity":{"critical":2,"warn":3,"info":2}}

@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`07 O9 — tracking uploads > the webhook path is unchanged: a SHIPPED scan writes its one upload; a repeat writes none 1`] = `
+[
+  {
+    "channel": "EBAY",
+    "marketplace": "IT",
+    "requestPayload": {
+      "carrierCode": "brt",
+      "orderId": "test-o9-order-webhook",
+      "shipmentId": "test-o9-shipment-webhook",
+      "shippedAt": "2026-03-31T23:33:20.000Z",
+      "trackingNumber": "TEST-SC-TRACK",
+      "trackingUrl": "https://track.example.test/1",
+    },
+    "status": "PENDING",
+  },
+]
+`;

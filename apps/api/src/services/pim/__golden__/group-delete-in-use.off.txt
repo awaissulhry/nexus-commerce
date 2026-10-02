@@ -1,0 +1,2 @@
+409
+{"error":"cannot delete group: attributes are still attached. Move or delete them first."}

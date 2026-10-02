@@ -1,0 +1,2 @@
+400
+{"error":"A choice list stores a code, and each market shows its own label for it, so it cannot be made per-language."}

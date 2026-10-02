@@ -1,0 +1,2 @@
+409
+{"error":"asset code \"jacket_front\" already exists"}

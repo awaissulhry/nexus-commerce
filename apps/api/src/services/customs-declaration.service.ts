@@ -24,6 +24,7 @@
  */
 
 import prisma from '../db.js'
+import { requireCompanyIdentity } from './business-identity.service.js'
 import { logger } from '../utils/logger.js'
 
 // EU customs union — duplicates the inline set in
@@ -36,15 +37,16 @@ const EU_COUNTRIES = new Set([
   'RO', 'SK', 'SI', 'ES', 'SE',
 ])
 
-const ISSUER = {
-  name: process.env.NEXUS_ISSUER_NAME ?? 'Xavia S.r.l.',
-  vatNumber: process.env.NEXUS_ISSUER_VAT ?? 'IT00000000000',
-  address: process.env.NEXUS_ISSUER_ADDRESS ?? 'Via Esempio 1',
-  city: process.env.NEXUS_ISSUER_CITY ?? 'Milano',
-  postalCode: process.env.NEXUS_ISSUER_POSTAL ?? '20100',
-  country: process.env.NEXUS_ISSUER_COUNTRY ?? 'IT',
-  phone: process.env.NEXUS_ISSUER_PHONE ?? '',
-  email: process.env.NEXUS_ISSUER_EMAIL ?? 'info@xavia.example',
+/**
+ * The sender on the form: the business the shipment belongs to, its company identity (business-identity.service:
+ * Settings › Company, then NEXUS_ISSUER_* for Xavia); refused without a name, a full address or a P.IVA.
+ */
+interface CustomsSender {
+  name: string
+  /** The address, line by line, after the name. */
+  lines: string[]
+  phone: string
+  vatNumber: string
 }
 
 // SDR threshold from UPU; €350 is the practical Italian Post
@@ -118,6 +120,8 @@ export async function customsDeclarationHtml(
   })
   if (!shipment) throw new Error(`Shipment ${shipmentId} not found`)
   if (!shipment.order) throw new Error(`Shipment ${shipmentId} has no order`)
+  const legal = await requireCompanyIdentity(['name', 'address', 'vat'], 'the customs declaration')
+  const sender: CustomsSender = { name: legal.name, lines: legal.postalLines, phone: legal.phone, vatNumber: legal.vatNumber ?? '' }
 
   const ship = shipment.order.shippingAddress as any
   const destCountry = (
@@ -199,7 +203,7 @@ export async function customsDeclarationHtml(
   const html = renderHtml({
     formType,
     category,
-    issuer: ISSUER,
+    issuer: sender,
     recipient,
     lines,
     totalValueEur,
@@ -230,7 +234,7 @@ export async function customsDeclarationHtml(
 interface RenderInput {
   formType: 'CN22' | 'CN23'
   category: CustomsCategory
-  issuer: typeof ISSUER
+  issuer: CustomsSender
   recipient: {
     name: string
     address1: string
@@ -329,10 +333,7 @@ function renderHtml(args: RenderInput): string {
   <div class="panels">
     <div class="panel">
       <h3>From / Expéditeur</h3>
-      <div class="line">${escapeHtml(issuer.name)}</div>
-      <div class="line">${escapeHtml(issuer.address)}</div>
-      <div class="line">${escapeHtml(issuer.postalCode)} ${escapeHtml(issuer.city)}</div>
-      <div class="line">${escapeHtml(issuer.country)}</div>
+      ${[issuer.name, ...issuer.lines].map((line) => `<div class="line">${escapeHtml(line)}</div>`).join('\n      ')}
       ${issuer.phone ? `<div class="line">Tel: ${escapeHtml(issuer.phone)}</div>` : ''}
       <div class="line">VAT/IVA: ${escapeHtml(issuer.vatNumber)}</div>
     </div>

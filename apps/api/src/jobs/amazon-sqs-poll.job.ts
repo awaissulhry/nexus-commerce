@@ -367,6 +367,8 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
         // idempotent on (channel, channelEventId) so retries collapse
         // safely. Drift surfaces on /fulfillment/stock/channel-drift
         // in ~30s instead of waiting for the CS ingester sweep.
+        // 08 S2b — no location is passed: the service compares the number with the FBA mirror and never applies it
+        // (only the FBA inventory sync writes FBA stock; an own warehouse never moves on an FBA number).
         if (msg.inventoryNotification) {
           let recordedCount = 0
           let recordedErrors = 0

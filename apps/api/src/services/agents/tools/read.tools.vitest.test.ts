@@ -57,6 +57,9 @@ beforeAll(async () => {
     // ebayItemId) are left empty, as they are for a listing made in Nexus.
     ids.parent = (await db.product.create({ data: { sku: 'MCP12-PARENT', name: 'Parent jacket', basePrice: '10.00', isParent: true } })).id
     ids.child = (await db.product.create({ data: { sku: 'MCP12-PARENT-S', name: 'Parent jacket S', basePrice: '10.00', parentId: ids.parent } })).id
+    // I1 — a second live variation and a deleted one: the snapshot counts the live child products (parentId).
+    await db.product.create({ data: { sku: 'MCP12-PARENT-M', name: 'Parent jacket M', basePrice: '10.00', parentId: ids.parent } })
+    await db.product.create({ data: { sku: 'MCP12-PARENT-XL', name: 'Parent jacket XL', basePrice: '10.00', parentId: ids.parent, deletedAt: new Date() } })
     const listing = (productId: string, channel: string, marketplace: string, data: Record<string, unknown>) =>
       db.channelListing.create({ data: { productId, channel, marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, ...data } as never })
     await listing(ids.parent, 'AMAZON', 'IT', { listingStatus: 'ACTIVE', externalListingId: 'EXT-MCP12-1' })
@@ -120,6 +123,13 @@ describe('MCP.12 — product-snapshot reads the listings Nexus holds', () => {
     const [id] = (await call('product-search', { query: 'MCP12-AXB' })).products.map((p: Data) => p.id)
     const snap = await call('product-snapshot', { productId: id })
     expect(snap).toMatchObject({ hasAmazon: false, hasEbay: false, listings: [], listingCounts: { total: 0, drafts: 0, linked: 0 } })
+  })
+
+  // I1 — a variation is a child Product (parentId). The old ProductVariation table is empty and no longer written,
+  // so counting it said "0 variations" for every family.
+  it('variationCount counts the live child products, not the old ProductVariation table', async () => {
+    expect((await call('product-snapshot', { productId: ids.parent })).variationCount).toBe(2)
+    expect((await call('product-snapshot', { productId: ids.child })).variationCount).toBe(0)
   })
 })
 

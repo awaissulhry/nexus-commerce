@@ -4250,6 +4250,32 @@
       }
     ]
   },
+  "AgentPlanStep": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      { "field": "approval", "model": "AgentApproval", "from": ["approvalId"], "to": ["id"] }
+    ]
+  },
+  "AgentAutonomy": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentChange": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      { "field": "approval", "model": "AgentApproval", "from": ["approvalId"], "to": ["id"] }
+    ]
+  },
+  "BuyerMessage": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      { "field": "order", "model": "Order", "from": ["orderId"], "to": ["id"] }
+    ]
+  },
   "AgentMemory": {
     "scalar": {},
     "compound": {
@@ -5573,6 +5599,13 @@
     "compound": {},
     "relations": []
   },
+  "AutomationSwitch": {
+    "scalar": {
+      "key": "workspace_key"
+    },
+    "compound": {},
+    "relations": []
+  },
   "AmazonReportRun": {
     "scalar": {
       "reportId": "workspace_reportId"
@@ -6221,6 +6254,60 @@
         "model": "Product",
         "from": [
           "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelHeldId": {
+    "scalar": {},
+    "compound": {
+      "held_id": [
+        "channelConnectionId",
+        "marketplace",
+        "externalId",
+        "sellerSku"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "listing",
+        "model": "ChannelListing",
+        "from": [
+          "listingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelHeldSweep": {
+    "scalar": {},
+    "compound": {
+      "held_sweep": [
+        "channelConnectionId",
+        "channel"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
         ],
         "to": [
           "id"

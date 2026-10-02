@@ -8,8 +8,8 @@
  * approval's business — their membership there with business profiles on, their login roles off — before anything
  * runs.
  *
- * Driven on a real PostgreSQL (PGlite) through the real page path with a real tool (publish-listing: its re-checked
- * preview fields are plain values), real roles and real rows.
+ * Driven on a real PostgreSQL (PGlite) through the real page path with a real tool (publish-listing, on a faked studio
+ * service: its re-checked preview fields are plain values), real roles and real rows.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -28,7 +28,27 @@ vi.mock('../../db.js', async () => {
     }),
   }
 })
-// No Redis here: the queue row is the fact this file reads.
+/**
+ * L5 — publish-listing publishes through the product studio. The studio service is faked here: what this file reads is
+ * WHO it publishes as (the user id the submit runs with), not what a channel receives (publish-listing.tools test).
+ */
+const studio = vi.hoisted(() => ({ submit: vi.fn() }))
+vi.mock('../pim/studio-publication.service.js', () => {
+  const review = (productId: string) => ({ id: null, productId, scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account' }, accountLabel: 'decider-amazon',
+    aliasLabel: 'Primary listing', mode: 'live', action: 'update', rows: [{ productId, sku: 'DECIDER-1', title: 'Decider jacket', existing: true }], excluded: 0, issues: [],
+    expiresAt: '2030-01-01T00:00:00.000Z',
+    changes: [{ id: JSON.stringify([productId, 'title']), productId, sku: 'DECIDER-1', field: 'title', label: 'Title', current: { state: 'value', value: 'New title' },
+      lastAccepted: { state: 'value', value: 'Decider jacket' }, channel: { state: 'value', value: 'Decider jacket' }, status: 'SEND', selectable: true,
+      selectedByDefault: true, localChanged: true, channelChanged: false, reason: 'Nexus changed', operation: 'replace' }] })
+  return {
+    reviewStudioPublication: async (productId: string) => review(productId),
+    previewStudioPublication: async (productId: string, _scope: unknown, userId: string | null) => ({ ...review(productId), id: `review-${userId}` }),
+    previewStudioPublicationSelection: async () => ({ token: 'selection-token' }),
+    submitStudioPublication: studio.submit,
+    readStoredPublication: async () => null,
+  }
+})
+// No Redis here.
 vi.mock('../../lib/queue.js', () => ({
   outboundSyncQueue: null, channelSyncQueue: null, bulkJobQueue: null, redis: null,
   searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
@@ -77,8 +97,8 @@ async function personWith(label: string, roles: Array<{ id: string; permissions:
 }
 
 const BASE = ['ai.run', F.productsView]
-/** A person who may publish listings. */
-const publisher = (label: string) => personWith(label, [{ id: baseRoleId, permissions: BASE }, { id: publishRoleId, permissions: [F.listingsPublish] }])
+/** A person who may publish listings (L5: products.publish too, as the studio's own Publish needs). */
+const publisher = (label: string) => personWith(label, [{ id: baseRoleId, permissions: BASE }, { id: publishRoleId, permissions: [F.productsPublish, F.listingsPublish] }])
 /** A person who may change master prices. */
 const pricer = (label: string) => personWith(label, [{ id: baseRoleId, permissions: BASE }, { id: priceRoleId, permissions: [F.productsPriceEdit] }])
 
@@ -107,7 +127,9 @@ async function commitAfterTheWindow(approvalId: string) {
 }
 
 const approval = (id: string) => inside(() => database.client.agentApproval.findUniqueOrThrow({ where: { id } }))
-const syncRows = () => inside(() => database.client.outboundSyncQueue.count({ where: { channelListingId: listingId, syncType: 'LISTING_SYNC' } }))
+/** How many publishes ran, and as whom (the user id the studio submit ran with). */
+const syncRows = async () => studio.submit.mock.calls.length
+const publishedAs = () => studio.submit.mock.calls.at(-1)?.[3]
 const audits = (action: string) => inside(() => database.client.agentControlAudit.findMany({ where: { action } }))
 
 beforeAll(async () => {
@@ -116,7 +138,8 @@ beforeAll(async () => {
   const role = (name: string, permissions: string[]) =>
     db.role.create({ data: { key: `DECIDER_${name}_${randomUUID().slice(0, 8)}`, name, description: 'test', permissions, isSystem: false } })
   baseRoleId = (await role('BASE', ['ai.run', F.productsView])).id
-  publishRoleId = (await role('PUBLISH', [F.listingsPublish])).id
+  publishRoleId = (await role('PUBLISH', [F.productsPublish, F.listingsPublish])).id
+  studio.submit.mockImplementation(async (_productId: string, id: string) => ({ id, status: 'SUBMITTED', message: 'Submitted to Amazon.', results: [] }))
   priceRoleId = (await role('PRICE', [F.productsPriceEdit])).id
   await inside(async () => {
     const account = await db.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'decider-amazon', isActive: true, externalAccountId: 'SELLER-TEST-D' } as never })
@@ -151,11 +174,11 @@ describe('an approval from the Approvals page runs only while its approver still
 
     const before = await syncRows()
     const out = await commitAfterTheWindow(id)
-    expect(out).toEqual({ ok: false, error: 'not run — Omar Approver no longer holds listings.publish, which publish listing needs' })
+    expect(out).toEqual({ ok: false, error: 'not run — Omar Approver no longer holds products.publish and listings.publish, which publish listing needs' })
     expect(await syncRows()).toBe(before)
     const row = await approval(id)
     expect(row).toMatchObject({ status: 'pending', decidedBy: null, decidedByUserId: null, executeAfter: null })
-    expect(row.reason).toBe('not run — Omar Approver no longer holds listings.publish, which publish listing needs')
+    expect(row.reason).toBe('not run — Omar Approver no longer holds products.publish and listings.publish, which publish listing needs')
     expect((await audits('permission_refused')).some((a) => (a.toValue as { approvalId?: string })?.approvalId === id)).toBe(true)
   })
 
@@ -184,11 +207,8 @@ describe('an approval from the Approvals page runs only while its approver still
     const person = await publisher('Sara Approver')
     const id = await approveOnThePage(person)
     expect(await commitAfterTheWindow(id)).toMatchObject({ ok: true })
-    // publish-listing writes the `ctx.userId` it ran with into the push it queues.
-    const [push] = await inside(() => database.client.outboundSyncQueue.findMany({
-      where: { channelListingId: listingId, syncType: 'LISTING_SYNC' }, orderBy: { createdAt: 'desc' }, take: 1,
-    }))
-    expect((push.payload as { requestedBy?: string }).requestedBy).toBe(person.id)
+    // publish-listing submits the studio publication as the `ctx.userId` it ran with.
+    expect(publishedAs()).toBe(person.id)
     expect(await approval(id)).toMatchObject({ status: 'executed', decidedBy: 'Sara Approver', decidedByUserId: person.id })
   })
 
@@ -225,10 +245,7 @@ describe('an approval from the Approvals page runs only while its approver still
     const parked = await inside(() => decideFleetApproval({ id: queued.approvalId!, decision: 'approve', actor: person.principal }))
     expect(parked).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitAfterTheWindow(queued.approvalId!)).toMatchObject({ ok: true })
-    const [push] = await inside(() => database.client.outboundSyncQueue.findMany({
-      where: { channelListingId: listingId, syncType: 'LISTING_SYNC' }, orderBy: { createdAt: 'desc' }, take: 1,
-    }))
-    expect((push.payload as { requestedBy?: string }).requestedBy).toBe(person.id)
+    expect(publishedAs()).toBe(person.id)
   })
 
   it('a system run that no person decides (a tool that needs no approval) still runs as the system', async () => {

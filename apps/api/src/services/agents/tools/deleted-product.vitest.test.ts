@@ -15,9 +15,18 @@ import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
-vi.mock('../../../db.js', () => ({
-  default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
-}))
+// I10 — wrapped as db.ts wraps it (as tool-money-and-business does): inside a transaction, `prisma.x` is that
+// transaction's client. The identity fix tools' preview runs the product writer's dry run, which opens one and queries
+// through `prisma` inside it; on the raw client those queries waited for the pool's only connection.
+vi.mock('../../../db.js', async () => {
+  const { contextualDatabase } = await import('../../../lib/database-context.js')
+  let wrapped: object | null = null
+  return {
+    default: new Proxy({}, {
+      get: (_target, property) => Reflect.get((wrapped ??= contextualDatabase(database.client as never)), property),
+    }),
+  }
+})
 
 import { callTool, type UserPrincipal } from '../call-tool.js'
 import { listTools } from '../tool-registry.js'
@@ -45,32 +54,45 @@ type Json = Record<string, any>
 /** A value of the right shape for one JSON Schema property: enough to pass the tool's own argument check. */
 function sample(schema: Json): unknown {
   if (Array.isArray(schema.enum)) return schema.enum[0]
-  if (schema.anyOf) return sample(schema.anyOf[0])
+  if (schema.const !== undefined) return schema.const
+  // A union samples its simplest option (L10: a photo edit's `axis` op needs only its name).
+  if (schema.anyOf) return sample([...schema.anyOf].sort((a: Json, b: Json) => (a.required?.length ?? 0) - (b.required?.length ?? 0))[0])
+  if (schema.oneOf) return sample([...schema.oneOf].sort((a: Json, b: Json) => (a.required?.length ?? 0) - (b.required?.length ?? 0))[0])
   switch (schema.type) {
-    case 'string': return 'test'
+    // L11 — a web address (a photo link) must parse as one.
+    case 'string': return schema.format === 'uri' ? 'https://photos.example.test/test.png' : 'test'
     case 'number': case 'integer': return Math.max(1, schema.minimum ?? 1)
     case 'boolean': return true
     case 'array': return [sample(schema.items ?? { type: 'string' })]
-    case 'object': return { test_attribute: 'x' }
+    // An object samples its required properties (L8: Matrix targets); a record its own value shape (L7: value lists per axis).
+    case 'object': return schema.properties
+      ? Object.fromEntries(((schema.required ?? []) as string[]).map((name) => [name, sample(schema.properties[name])]))
+      : { test_attribute: schema.additionalProperties && typeof schema.additionalProperties === 'object' ? sample(schema.additionalProperties) : 'x' }
     default: return 'test'
   }
 }
 
-interface ProductTool { tool: AgentTool; key: 'productId' | 'products'; required: boolean }
-/** The tools whose input names a product, and how. */
+interface ProductTool { tool: AgentTool; key: 'productId' | 'products' | 'product'; required: boolean }
+/**
+ * Tools whose productId is optional only because an EDIT names its own row instead (save-price-rule: priceRuleId).
+ * Not lists: given a product they are about that product, so they are checked as if it were required.
+ */
+const CREATE_OR_EDIT = new Set(['save-price-rule'])
+/** The tools whose input names a product, and how (`product`: one product by Nexus id or SKU). */
 function productTools(): ProductTool[] {
   return listTools().flatMap((tool): ProductTool[] => {
     const schema = inputJsonSchema(tool) as Json
     const props = (schema.properties ?? {}) as Json
     const required = new Set<string>(schema.required ?? [])
-    if ('productId' in props) return [{ tool, key: 'productId', required: required.has('productId') }]
+    if ('productId' in props) return [{ tool, key: 'productId', required: required.has('productId') || CREATE_OR_EDIT.has(tool.name) }]
     if ('products' in props) return [{ tool, key: 'products', required: required.has('products') }]
+    if ('product' in props && props.product.type === 'string') return [{ tool, key: 'product', required: required.has('product') }]
     return []
   })
 }
 
 /** Every required argument sampled; the product named as `ref`. */
-function argsFor(tool: AgentTool, key: 'productId' | 'products', ref: string): Record<string, unknown> {
+function argsFor(tool: AgentTool, key: ProductTool['key'], ref: string): Record<string, unknown> {
   const schema = inputJsonSchema(tool) as Json
   const args: Record<string, unknown> = {}
   for (const name of (schema.required ?? []) as string[]) args[name] = sample(schema.properties[name])
@@ -114,8 +136,9 @@ describe('MCP.12 — which tools name a product (read from the registry)', () =>
     expect(names).toEqual(expect.arrayContaining([
       'apply-content', 'bulk-attribute-change', 'bulk-price-change', 'channel-price-stock', 'channel-stock-drift',
       'draft-alt-text', 'draft-listing-content', 'draft-seo', 'listing-health', 'listing-issues', 'out-of-sync-listings',
-      'price-status', 'product-analytics', 'product-snapshot', 'publish-listing', 'replenishment-forecast', 'set-price',
-      'stock-levels', 'translate-content',
+      'price-status', 'product-analytics', 'product-content', 'product-snapshot', 'publish-listing', 'replenishment-forecast',
+      'set-content', 'set-listing-content', 'set-price', 'stock-levels', 'translate-content', 'translation-status',
+      'shopify-content', 'set-shopify-content', 'listing-live-content',
     ]))
   })
 })

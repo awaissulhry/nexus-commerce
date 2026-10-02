@@ -427,7 +427,8 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
       })
       if (c) context = { marketplace: c.primaryMarketplace, campaignId: c.id, campaign: { ...c, acos: c.acos != null ? Number(c.acos) : null, roas: c.roas != null ? Number(c.roas) : null } }
     }
-    const result = await evaluateRule({ ruleId: id, context, forceDryRun })
+    // R8 — the default dry run is a preview: no run row, no counter, no notification. ?mode=apply is a real run.
+    const result = await evaluateRule({ ruleId: id, context, forceDryRun, ...(forceDryRun ? { noPersist: true } : {}) })
     return { forceDryRun, result }
   })
 

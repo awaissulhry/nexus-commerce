@@ -1,0 +1,2 @@
+200
+{"items":[{"key":"alert:golden-alert-1","source":"alert","severity":"critical","title":"Alert fired: Error rate high","body":"EBAY · errorRate = 0.4","channel":"EBAY","href":"/sync-logs/alerts","createdAt":"2026-09-15T09:30:00.000Z","meta":{"id":"golden-alert-1","ruleId":"golden-rule-rate","metric":"errorRate","value":0.4}}],"total":3,"counts":{"all":3,"sync":1,"alert":1,"notification":1,"webhook":0}}

@@ -13,6 +13,8 @@ import {
 import { runScheduledBulkActionTickOnce } from '../jobs/scheduled-bulk-action.job.js'
 import prisma from '../db.js'
 import { bulkActorOf } from '../services/bulk-action-actor.js'
+import { assertBulkJobPricePermission, BulkActionPermissionError } from '../services/bulk-action.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 
 const scheduleService = new ScheduledBulkActionService(prisma)
 
@@ -91,6 +93,13 @@ const scheduledBulkActionRoutes: FastifyPluginAsync = async (fastify) => {
         return reply
           .code(400)
           .send({ success: false, error: 'actionType is required' })
+      }
+      // S1 (F5) — a schedule that changes prices runs as its creator later: it needs products.price.edit now.
+      try {
+        assertBulkJobPricePermission({ actionType: body.actionType, actionPayload: body.actionPayload ?? {} }, permissionCheckerFor(request))
+      } catch (e) {
+        if (e instanceof BulkActionPermissionError) return reply.code(403).send({ success: false, error: e.message, code: e.code })
+        throw e
       }
       try {
         const schedule = await scheduleService.create({

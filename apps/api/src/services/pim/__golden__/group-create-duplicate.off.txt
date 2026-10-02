@@ -1,0 +1,2 @@
+409
+{"error":"group code \"golden_new\" already exists"}

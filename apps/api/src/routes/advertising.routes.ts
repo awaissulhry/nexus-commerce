@@ -31,7 +31,7 @@ import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegio
 import { conditionsTextOf } from '../services/advertising/rule-conditions-text.js'
 import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../services/ads-core/ams-daily.js'
 import { adsRefreshExpiry } from '../services/ads-core/ads-token-expiry.js'
-import { allocate, microsToCents, toEurCents, ntbIsPublishedFor } from '../services/ads-core/metrics-math.js'
+import { allocate, microsToCents, toEurCents } from '../services/ads-core/metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { PROFIT_UNKNOWN_REASON } from '../services/advertising/profit-coverage.js'
 import { getFxRate } from '../services/fx-rate.service.js'
@@ -67,7 +67,12 @@ import { runAdvertisingRuleEvaluatorOnce } from '../jobs/advertising-rule-evalua
 import { CRON_JOBS, readCronCard } from '../services/runtime-status/cron-status.service.js'
 import { evaluateRule } from '../services/automation-rule.service.js'
 import { rollbackByExecutionId } from '../services/advertising/rollback.service.js'
-import { attachSourceLinks, familyOfRow, projectBidCents, muteSuggestion, unmuteSuggestion } from '../services/advertising/ads-suggestions.service.js'
+import { attachSourceLinks, familyOfRow, projectBidCents, muteSuggestion, unmuteSuggestion, type DecideResult } from '../services/advertising/ads-suggestions.service.js'
+// R4 — route-only logic moved into services a Claude tool can reuse; each route answers exactly as before.
+import { applySuggestion, dismissSuggestion, restoreSuggestion, decideSuggestionsBulk, type ApplyOverride, type BulkDecideInput } from '../services/advertising/ads-suggestion-decide.service.js'
+import type { AdsRuleCreateInput, AdsRuleUpdateInput } from '../services/advertising/ads-rule-crud.service.js'
+import type { KeywordProtectionInput } from '../services/advertising/ads-guardrail.service.js'
+import { answer } from '../services/automation/service-outcome.js'
 import {
   rebalanceAndAudit,
   computeRebalance,
@@ -76,6 +81,9 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
 // ADM-P6/DC — THE definition of ad-attributed sales. Fourteen readers open-coded it as
 // sales7dCents + sales14dCents, which double-counted the moment the 14-day window was populated.
 import { adSalesCents } from '../services/ads-core/ad-sales.js'
+// A1 (MCP full control) — route-only logic moved to services so Claude's ad tools share it.
+import { listAmazonCampaigns, type AmazonCampaignListQuery } from '../services/advertising/ads-campaign-list.service.js'
+import { clampBidsByCeiling } from '../services/advertising/ads-cpc-ceiling.js'
 // AX-IE.2 — the bulksheet grammar. Shared with apps/web so the browser's
 // pre-validation and this server-side gate cannot drift apart.
 import {
@@ -151,399 +159,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── GET /advertising/campaigns ──────────────────────────────────────
   fastify.get('/advertising/campaigns', async (request, reply) => {
-    const q = request.query as {
-      marketplace?: string
-      status?: string
-      search?: string
-      limit?: string
-    }
-    const where: Record<string, unknown> = {}
-    if (q.marketplace) where.marketplace = q.marketplace
-    if (q.status) where.status = q.status
-    if (q.search) where.name = { contains: q.search, mode: 'insensitive' }
-    const limit = Math.min(Number(q.limit) || 200, 500)
-
-    // CBN.2g — date-windowed metrics. When the Ad Manager passes a range
-    // (preset/startDate/endDate/windowDays) the spend/sales/etc. are derived LIVE
-    // from AmazonAdsDailyPerformance for that window (the same authoritative source
-    // the detail page + trends use). With no date params we keep the fast stored
-    // columns, so other callers are unchanged.
-    const qd = q as { preset?: string; startDate?: string; endDate?: string; windowDays?: string }
-    const hasDateParams = !!(qd.preset || qd.startDate || qd.endDate || qd.windowDays)
-    const { resolveRange } = await import('../services/ads-core/date-range.js')
-    const range = hasDateParams ? resolveRange(qd) : null
-
-    const { cached } = await import('../services/advertising/ads-cache.js')
-    const rangeKey = range ? `${range.sinceStr}:${range.untilStr}` : 'stored'
-    const cacheKey = `campaigns:${q.marketplace ?? ''}:${q.status ?? ''}:${q.search ?? ''}:${limit}:${rangeKey}`
-    const result = await cached(cacheKey, 300, async () => {
-      const campaigns = await prisma.campaign.findMany({
-        where,
-        orderBy: [{ marketplace: 'asc' }, { name: 'asc' }],
-        take: limit,
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          adProduct: true,
-          status: true,
-          marketplace: true,
-          externalCampaignId: true,
-          dailyBudget: true,
-          biddingStrategy: true,
-          impressions: true,
-          clicks: true,
-          spend: true,
-          sales: true,
-          acos: true,
-          roas: true,
-          trueProfitCents: true,
-          trueProfitMarginPct: true,
-          lastSyncedAt: true,
-          lastSyncStatus: true,
-          // H.2: v1 export populates these — surface in the table for
-          // operators to see *why* a campaign isn't serving.
-          deliveryStatus: true,
-          deliveryReasons: true,
-          // Ads-console table columns (image #6 defaults).
-          startDate: true,
-          endDate: true,
-          portfolioId: true,
-          // P2 (Trading Desk Ad Manager): placement multipliers live here.
-          dynamicBidding: true,
-          // ADX G2 — the absolute bid bounds the write gate enforces, so the grid can
-          // show at a glance which campaigns are unbounded.
-          minBidCents: true,
-          maxBidCents: true,
-          // ADM-H P1, RESTORED 2026-08-26 — the BUDGET twin of the pair above, enforced by the
-          // same `ads-write-gate.ts` on every budget write. The Ad Manager's Min/Max Budget cell
-          // read `c.minMaxBudget`, a key this response has never sent, so it printed "None" on
-          // 220 of 220 rows while its pencil wrote React state that died on reload. The cell and
-          // the `PATCH /advertising/campaigns/:id/guardrails` writer both speak these cents; only
-          // the SELECT was missing, and it was lost with the rest of P1 in the 2026-08-22 rebase.
-          // Currently unset on 220 of 220 campaigns — so "None" stays the honest reading, but it
-          // is now a reading rather than a hard-coded absence, and the editor round-trips.
-          minBudgetCents: true,
-          maxBudgetCents: true,
-        },
-      })
-      // P2 — derive inline placement multipliers (ToS/PDP/RoS) from
-      // Campaign.dynamicBidding.placementBidding so the Ad Manager grid can
-      // show them as columns without an extra per-campaign fetch. The heavy
-      // dynamicBidding JSON is stripped from the response.
-      const base = campaigns.map((c) => {
-        const { dynamicBidding, ...rest } = c
-        const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }>; targetAcos?: number; bidAutomation?: boolean; bidAlgorithm?: string }
-        const pb = db.placementBidding ?? []
-        const find = (kw: string) => {
-          const m = pb.find((p) => p.placement?.toLowerCase().includes(kw))
-          return m ? m.percentage : null
-        }
-        // CBN.2h.6 — surface the Bulk-Actions-managed settings inline (stored in
-        // dynamicBidding alongside placementBidding). targetAcos is a fraction
-        // (0.3 = 30%) — the same shape the bid-optimizer reads.
-        // C1 (2026-08-20) — `bidAlgorithm` joins them. Amazon exposes no per-campaign
-        // bid-algorithm field, so this is OUR store for the Adtomic-cluster picker. It was
-        // React state in the Ad Manager grid and nothing else: the choice died on reload, and
-        // Apply Rules could never show what the Ad Manager had been told. Null means nobody has
-        // chosen; the cell names its own fallback rather than the payload asserting one.
-        return { ...rest, placements: { tos: find('top'), pdp: find('product'), ros: find('rest') }, targetAcos: db.targetAcos ?? null, bidAutomation: db.bidAutomation ?? false, bidAlgorithm: db.bidAlgorithm ?? null }
-      })
-
-      if (!range) return { items: base, count: base.length, range: null }
-
-      // CBN.2g — override the stored columns with window-aggregated metrics from the
-      // daily-performance table, batched across the whole list (2 groupBys). The
-      // localEntityId match + entityId fallback (rows that never linked locally)
-      // mirrors the detail endpoint's OR-match without double-counting.
-      //
-      // AX2.3 — the "without double-counting" claim held only while
-      // localEntityId:null meant "campaign we could not link". Amazon Marketing
-      // Stream broke that: its daily upsert never set localEntityId, so 659
-      // rows for campaigns that ARE linked fell into the fallback bucket and
-      // were ADDED to the report figures — inflating spend, sales, impressions,
-      // clicks and orders (and therefore ACoS/ROAS) for every IT campaign with
-      // AMS coverage. Reports own the daily grain; AMS owns hourly. Excluding
-      // the stream's marker here fixes the arithmetic without deleting data.
-      const ids = campaigns.map((c) => c.id)
-      const extIds = campaigns.map((c) => c.externalCampaignId).filter(Boolean) as string[]
-      const n = (v: bigint | number | null | undefined) => Number(v ?? 0)
-      const m2c = (v: bigint | number | null | undefined) => Math.round(Number(v ?? 0) / 10000)
-      const dateFilter = { gte: range.since, lte: range.until }
-      /**
-       * ADM-H P3, RESTORED 2026-08-26 — the seven columns that rendered "unknown" forever.
-       *
-       * `Sale Units`, `SameSKU Sales/Sale Units/Orders`, `Other Sales`, `Other Sales %` and `ASP`
-       * all have their cells built and deployed in CampaignsGrid; the SELECT that feeds them was
-       * lost to a rebase on 2026-08-22 and never re-landed, so the payload simply never carried
-       * the keys. Measured on prod 2026-08-26: 100 of 100 rendered rows read "unknown" while
-       * `units7d` had data on 302 of 302 report rows and the SameSKU trio on 183 of 302.
-       *
-       * 🔴 The SameSKU window must match the SALES window or the halo subtraction below is
-       * nonsense — `adSalesCents` reads `sales7dCents`, so these read the `*SameSku7d*` twins.
-       * Mixing 7d sales with 14d same-SKU would produce negative halo on real campaigns.
-       *
-       * `_count` rides beside `_sum`: these columns are nullable and Amazon leaves them unset for
-       * campaigns it has not attributed. Prisma sums null as 0, so without the count an
-       * unreported figure becomes a confident "0 units sold" — the exact class of lie
-       * `feedback_100_percent_honest_ui` forbids. Zero counted rows ⇒ null ⇒ the cell says
-       * "unknown".
-       */
-      const _sum = {
-        impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true,
-        units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true,
-        // ADM-A3 — new-to-brand and KENP. Requested from Amazon for the first time on 2026-08-26:
-        // SB/SD publish newToBrand*, SP publishes the two kindle columns, and CAMPAIGN_COLUMNS had
-        // asked for none of them, which is why all four legacy fields were 0 on 6,045 rows.
-        ntbOrders14d: true, ntbSalesCents14d: true, ntbUnits14d: true,
-        kenpRead14d: true, kenpRoyaltiesCents14d: true,
-      } as const
-      const _count = {
-        units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true,
-        ntbOrders14d: true, ntbSalesCents14d: true, ntbUnits14d: true,
-        kenpRead14d: true, kenpRoyaltiesCents14d: true,
-      } as const
-      // 🔴 ntbOrdersRate14d is a RATE, so it goes through _avg, never _sum — adding a rate across
-      // days produces a number with no meaning (7 days at 20% would read 140%). Same reasoning as
-      // weightedIS above; this one Amazon publishes per day, so a mean over the reported days is
-      // the faithful reading.
-      const _avg = { ntbOrdersRate14d: true } as const
-      const [byLocal, byExt] = await Promise.all([
-        prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum, _count, _avg }),
-        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum, _count, _avg }),
-      ])
-      const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
-      const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
-      const cntL = new Map(byLocal.map((r) => [r.localEntityId, r._count]))
-      const cntE = new Map(byExt.map((r) => [r.entityId, r._count]))
-      const avgL = new Map(byLocal.map((r) => [r.localEntityId, r._avg]))
-      const avgE = new Map(byExt.map((r) => [r.entityId, r._avg]))
-      /**
-       * ADM-H P2, RESTORED — Average Budget Utilization.
-       *
-       * 🔴 The arithmetic is the whole point. Total spend ÷ average budget is WRONG and the Budget
-       * Manager already paid for that lesson: after a cut, an averaged denominator makes a EUR1.00
-       * campaign read 392% utilised. So this takes **each day's spend ÷ THAT day's budget, then
-       * averages the ratios** — `campaignBudgetCents` is what Amazon reported the budget to be on
-       * that date, so a mid-window budget change is handled by construction.
-       *
-       * `days` rides beside it because the window the operator picked and the days Amazon has
-       * actually reported are different numbers, and a cell saying "7-day average" over 4 days of
-       * data would be inventing three days.
-       *
-       * NULL, never 0, when nothing is measurable: a campaign with no report row was not served,
-       * which is not the same as spending none of its budget.
-       *
-       * Deliberately RAW rather than a Prisma groupBy: `campaignBudgetCents` is not in the
-       * committed schema (it belongs to SPC.1's uncommitted block), and raw SQL reads the column
-       * that is really there. That also keeps this free of a dependency on another session's
-       * unlanded work — which is how the original of this query came to be lost.
-       */
-      const avgUtilRows = ids.length
-        ? await prisma.$queryRaw<Array<{ cid: string; util: number | null; days: bigint }>>`
-            WITH d AS (
-              SELECT "localEntityId" AS cid, "date",
-                     SUM("costMicros") / 10000.0     AS spend_cents,
-                     MAX("campaignBudgetCents")::int AS budget_cents
-              FROM "AmazonAdsDailyPerformance"
-              WHERE "entityType" = 'CAMPAIGN'
-                AND "localEntityId" IN (${Prisma.join(ids)})
-                AND "date" >= ${range.since} AND "date" <= ${range.until}
-              GROUP BY 1, 2
-            )
-            SELECT cid,
-                   AVG(spend_cents / NULLIF(budget_cents, 0))::float8 AS util,
-                   COUNT(*) FILTER (WHERE budget_cents > 0)           AS days
-            FROM d GROUP BY cid
-          `
-        : []
-      const avgUtilById = new Map(avgUtilRows.map((r) => [r.cid, r]))
-
-      /**
-       * ADM-A2 — Top of Search impression share. The column read "unknown" on every row.
-       *
-       * 🔴 It is NOT an honest absence, and the obvious check says it is. `topOfSearchIS` exists on
-       * BOTH `AmazonAdsDailyPerformance` and `AmazonAdsPlacementReport`; the daily-performance copy
-       * is abandoned and stopped being written on 2026-08-19, so sampling that table over a recent
-       * window returns 0 of 302 and reads exactly like "Amazon reports nothing". The live source is
-       * the PLACEMENT report — 1,460 non-null rows, current to 2026-08-24, refreshed nightly by
-       * `tos-is-ingest` (213 rows updated 2026-08-26). Nothing read it into this payload.
-       *
-       * Only TOP rows ever carry the column, so `topOfSearchIS: { not: null }` is the whole filter —
-       * matching on a placement label would couple this to Amazon's wording for that bucket.
-       *
-       * `weightedIS` is IMPORTED, not reimplemented: an impression share is a ratio, so days are
-       * weighted by impressions and never averaged flat. A second copy of that rule is how two
-       * surfaces start quoting different shares for the same campaign.
-       *
-       * `days` rides beside the value for the same reason it does on avgBudgetUtil — the window the
-       * operator picked and the days Amazon actually reported are different numbers.
-       */
-      const { weightedIS } = await import('../services/advertising/placement-grid.service.js')
-      const tosRows = extIds.length
-        ? await prisma.amazonAdsPlacementReport.findMany({
-            where: { campaignId: { in: extIds }, date: dateFilter, topOfSearchIS: { not: null } },
-            select: { campaignId: true, impressions: true, topOfSearchIS: true },
-          })
-        : []
-      const tosByExt = new Map<string, Array<{ value: number; weight: number }>>()
-      for (const r of tosRows) {
-        if (r.topOfSearchIS == null) continue
-        const pts = tosByExt.get(r.campaignId) ?? []
-        pts.push({ value: Number(r.topOfSearchIS), weight: r.impressions ?? 0 })
-        tosByExt.set(r.campaignId, pts)
-      }
-
-      /**
-       * ADM-P6 — Current Budget Utilization, and the two hour columns beside it.
-       *
-       * The Ad Manager rendered `not measured` on 220 of 220 rows for all three, and the sentence
-       * behind that was true when it was written: no source held today's spend-so-far, and the
-       * Marketing Stream's budget-usage percentage is received, counted, logged and never stored.
-       *
-       * There was a third source. `POST /sp/campaigns/budget/usage` answers synchronously for
-       * every Sponsored Products campaign — 200 of 200, measured 2026-08-22 — with Amazon's OWN
-       * percentage, Amazon's OWN budget as the denominator, and `usageUpdatedTimestamp`, the age
-       * of the reading itself. `budget-usage-sample` records it every five minutes; this reads
-       * what was recorded.
-       *
-       * Read from OUR samples, never called inline: this response is cached for 300s, and an
-       * outbound Amazon call inside a cached read would be both slow and a lie about its own
-       * freshness — what is fresh is the reading's timestamp, not the fetch.
-       *
-       * Two queries, both on indexed columns, and only on the windowed path the Ad Manager uses.
-       * Callers that pass no date params keep the fast stored-column path exactly as it was.
-       */
-      const { readCurrentBudgetUsage, readBudgetUsageHours, budgetUsageSamplingSince } =
-        await import('../services/advertising/ads-budget-usage.service.js')
-      const usageInput = base.map((c) => ({ id: c.id, adProduct: c.adProduct, dailyBudget: c.dailyBudget }))
-      const [curUsage, usageHours, usageSince] = await Promise.all([
-        readCurrentBudgetUsage(usageInput),
-        readBudgetUsageHours(usageInput),
-        budgetUsageSamplingSince(),
-      ])
-      const usageSinceIso = usageSince ? usageSince.toISOString() : null
-
-      const items = base.map((it) => {
-        const a = mapL.get(it.id)
-        const b = it.externalCampaignId ? mapE.get(it.externalCampaignId) : undefined
-        const au = avgUtilById.get(it.id)
-        const cu = curUsage.get(it.id) ?? { state: 'unknown' as const, fraction: null, budgetCents: null, asOf: null }
-        const uh = usageHours.get(it.id) ?? { observed: 0, outOfBudget: 0, actBid: 0, supported: false }
-        const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros)
-        const salesCents = adSalesCents(a) + adSalesCents(b)
-        // ADM-H P3 — a nullable metric Amazon never reported is `unknown`, not 0. The count of
-        // rows that actually carried a value decides; the sum alone cannot tell "reported zero"
-        // from "never reported", and Prisma renders both as 0.
-        const ca = cntL.get(it.id)
-        const cb = it.externalCampaignId ? cntE.get(it.externalCampaignId) : undefined
-        const tosPts = (it.externalCampaignId ? tosByExt.get(it.externalCampaignId) : undefined) ?? []
-        const reported = (f: keyof typeof _count) => n(ca?.[f]) + n(cb?.[f]) > 0
-        const summed = (f: keyof typeof _count) => (reported(f) ? n(a?.[f]) + n(b?.[f]) : null)
-        const saleUnits = summed('units7d')
-        const sameSkuCents = summed('salesSameSku7dCents')
-        const ppcOrders = n(a?.orders7d) + n(b?.orders7d)
-        // 🔴 ADM-A5 — gate NTB on the AD PRODUCT, not just on whether a row exists.
-        //
-        // `ntbOrders14d` and `ntbSalesCents14d` are the two legacy columns carrying `DEFAULT 0`, so
-        // every one of the 6,019 Sponsored Products rows already holds a 0 that nobody measured —
-        // we never requested a newToBrand column for any ad product until today, and Amazon does
-        // not publish one for SP at all (52 allowed columns, none of them newToBrand, verified
-        // 2026-08-26). `_count` cannot save us here: a defaulted 0 counts as present.
-        //
-        // Without this gate the grid printed "0" for new-to-brand orders on Sponsored Products
-        // campaigns — a confident measurement of something Amazon has never reported and never
-        // will. Caught on prod immediately after the ADM-A3 deploy, on the same page it fixed.
-        const ntbPublished = ntbIsPublishedFor(it.adProduct)
-        const ntbOrders = ntbPublished ? summed('ntbOrders14d') : null
-        const ntbSalesCents = ntbPublished ? summed('ntbSalesCents14d') : null
-        const ntbUnits = ntbPublished ? summed('ntbUnits14d') : null
-        // Amazon's own rate: take whichever bucket reported it rather than averaging the two —
-        // combining two means is the mean-of-means error this file already avoids for topOfSearchIS
-        // and budget utilization. In practice a campaign's rows sit in one bucket or the other.
-        const avgRate = avgL.get(it.id)?.ntbOrdersRate14d
-          ?? (it.externalCampaignId ? avgE.get(it.externalCampaignId)?.ntbOrdersRate14d : null)
-          ?? null
-        // Halo: Amazon publishes no other-SKU column at campaign grain, so it is (total − sameSKU).
-        // Null when the same-SKU half is unknown — a subtraction with an unknown operand is not 0,
-        // and clamped at 0 because attribution windows can make the parts exceed the whole.
-        const otherCents = sameSkuCents == null ? null : Math.max(0, salesCents - sameSkuCents)
-        return {
-          ...it,
-          impressions: n(a?.impressions) + n(b?.impressions),
-          clicks: n(a?.clicks) + n(b?.clicks),
-          spend: spendCents / 100,
-          sales: salesCents / 100,
-          acos: salesCents > 0 ? spendCents / salesCents : null,
-          roas: spendCents > 0 ? salesCents / spendCents : null,
-          ppcOrders,
-          // ADM-H P3 — euros for the money columns, counts for the rest, a FRACTION for the
-          // percentage: the units each cell already formats for (eur / toLocaleString / sharePct).
-          saleUnits,
-          sameSkuSales: sameSkuCents == null ? null : sameSkuCents / 100,
-          sameSkuSaleUnits: summed('unitsSameSku7d'),
-          sameSkuOrders: summed('ordersSameSku7d'),
-          otherSales: otherCents == null ? null : otherCents / 100,
-          otherSalesPct: otherCents == null || salesCents <= 0 ? null : otherCents / salesCents,
-          // Average selling price = ad sales ÷ units sold. Null when units are unknown OR zero:
-          // dividing by an unsold campaign invents a price no one paid.
-          asp: saleUnits == null || saleUnits <= 0 ? null : salesCents / 100 / saleUnits,
-          // ADM-A2 — a FRACTION, impression-weighted across the days Amazon reported, and null
-          // when it reported none. `days` is what the cell prints beside it so a one-day share is
-          // never read as a week's.
-          topOfSearchIS: tosPts.length ? weightedIS(tosPts) : null,
-          topOfSearchISDays: tosPts.length,
-          // ADM-A3 — new-to-brand. Null (never 0) when this campaign's ad product does not publish
-          // it: Amazon offers no newToBrand column on the SP report at all, so an SP campaign is a
-          // real "not applicable" and the cell says so, while an SB/SD campaign with no attributed
-          // NTB is a real zero. `_count` is what separates the two.
-          ntbOrders, ntbSales: ntbSalesCents == null ? null : ntbSalesCents / 100, ntbUnits,
-          // The three percentages are DERIVED (ntb ÷ total) rather than stored: only SB publishes
-          // *Percentage columns, and one rule applied everywhere beats a stored SB figure sitting
-          // beside a derived SD one where the two could disagree. Null when the numerator is
-          // unknown or the denominator is zero — a share of nothing is not 0%.
-          ntbOrdersPct: ntbOrders == null || ppcOrders <= 0 ? null : ntbOrders / ppcOrders,
-          ntbSalesPct: ntbSalesCents == null || salesCents <= 0 ? null : ntbSalesCents / salesCents,
-          ntbUnitsPct: ntbUnits == null || saleUnits == null || saleUnits <= 0 ? null : ntbUnits / saleUnits,
-          // Amazon's OWN rate, SB only — deliberately not back-filled from the derivation above, so
-          // a reading and a calculation are never confused for one another.
-          ntbOrderRate: ntbPublished && reported('ntbOrders14d') ? avgRate : null,
-          // ADM-A3 — KENP. Offered on the SP report; never requested until now. The Ad Manager said
-          // "this account sells no books, so Amazon has nothing to report" — a business claim
-          // standing in for an ingest gap. Now the data answers it.
-          kindleReads: summed('kenpRead14d'),
-          kindleRoyalties: (() => { const c = summed('kenpRoyaltiesCents14d'); return c == null ? null : c / 100 })(),
-          // ADM-P6 — TODAY's utilization, as a FRACTION, and null whenever the state is not a
-          // reading: `silent` (Amazon has reported nothing since the 00:00 UTC reset),
-          // `unsupported` (SD/SB — the SP endpoint does not cover them), `unknown` (never
-          // sampled). A 0 here would answer a question nobody can answer, which is precisely the
-          // defect this column was built to end.
-          // ADM-H P2 — a FRACTION (0.5 = 50%), and null when nothing was measurable. Deliberately
-          // not rounded here: the cell decides its own precision, and a rounded null is how a
-          // "no data" becomes a confident zero one layer up.
-          avgBudgetUtil: au && au.util != null && Number(au.days) > 0 ? au.util : null,
-          avgBudgetUtilDays: au ? Number(au.days) : 0,
-          curBudgetUtil: cu.fraction,
-          curBudgetUtilState: cu.state,
-          // Amazon's usageUpdatedTimestamp — the age of the READING. Not of our poll, and not of
-          // this response.
-          curBudgetUtilAsOf: cu.asOf,
-          // The denominator that fraction actually used, in euros: Amazon's own budget for a
-          // `live` reading, ours for a `derived` one. They can disagree — on 3 of 200 campaigns
-          // they do — so the cell names the one it divided by.
-          curBudgetUtilBudget: cu.budgetCents != null ? cu.budgetCents / 100 : null,
-          // ADM-P6 — hours of the current budget day, counted from observation SPANS rather than
-          // from a count of samples. Null, never 0, for a campaign this source cannot answer for.
-          oobHours: uh.supported ? uh.outOfBudget : null,
-          actBidHours: uh.supported ? uh.actBid : null,
-          hoursObserved: uh.supported ? uh.observed : null,
-          // Neither Amazon feed can be backfilled, so both hour columns are bounded by the moment
-          // sampling began, and have to say so.
-          usageSince: usageSinceIso,
-        }
-      })
-      return { items, count: items.length, range: { startDate: range.sinceStr, endDate: range.untilStr, preset: range.preset } }
-    })
+    // A1 — the list lives in services/advertising/ads-campaign-list.service.ts (shared with Claude's read tool).
+    const result = await listAmazonCampaigns(request.query as AmazonCampaignListQuery)
     reply.header('Cache-Control', 'private, max-age=60')
     return result
   })
@@ -1725,115 +1342,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // an optional Target-ACoS / strategy bid rule, and an optional inline Negative-Targeting
   // rule. Same gated local-first create path (no Amazon push unless the write gate is open).
   fastify.post('/advertising/campaign-builder/single/launch', async (request, reply) => {
-    type PRef = { asin?: string; sku?: string; productId?: string }
-    const b = request.body as {
-      market?: string; name?: string; adGroupName?: string; portfolioId?: string
-      biddingStrategy?: 'down' | 'updown' | 'fixed'; sites?: 'amazon' | 'business'
-      placementBids?: { tos?: string; pdp?: string; ros?: string }
-      bidBoosts?: { video?: boolean; amazonBusiness?: boolean; amazonBusinessPct?: string; audience?: boolean }
-      products?: PRef[]; sponsoredVideoAsins?: string[]; budgetEur?: number; defaultBidEur?: number
-      bidConfig?: { strategy?: string; targetAcos?: string; minBid?: string; maxBid?: string }
-      targetMode?: 'keyword' | 'product'
-      keywords?: Array<{ text?: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>
-      negKeywords?: Array<{ text?: string; matchType?: 'EXACT' | 'PHRASE' }>
-      productTargets?: PRef[]; negProducts?: PRef[]
-      addNegativeRule?: boolean; attachRuleIds?: string[]; autoBidAdjust?: boolean; dryRun?: boolean
-    }
-    const market = b.market || 'IT'
-    const name = (b.name || '').trim()
-    if (!name) { reply.status(400); return { ok: false, error: 'campaign name required' } }
-    const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
-    const defaultBidEur = Number(b.defaultBidEur) || 0.75
-    const budgetEur = Number(b.budgetEur) || 10
-    if (b.dryRun) return { ok: true, dryRun: true, plan: { market, name, products: products.length, keywords: (b.keywords ?? []).length } }
-
-    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
-    const userId = actorFromHeaders(request.headers as Record<string, unknown>)
-    const biddingStrategy: 'legacyForSales' | 'autoForSales' | 'manual' = b.biddingStrategy === 'updown' ? 'autoForSales' : b.biddingStrategy === 'fixed' ? 'manual' : 'legacyForSales'
-    const rulesCreated: Array<{ id: string; name: string }> = []
-    try {
-      const camp = await createCampaignLocal({ name, type: 'SP', marketplace: market, targetingType: 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy, portfolioId: b.portfolioId, userId })
-      const ag = await createAdGroupLocal({ campaignId: camp.id, name: (b.adGroupName || '').trim() || `${name} Ad Group`, defaultBidEur, userId })
-      for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) } catch (e) { logger.warn('[single-launch] product ad failed', { error: (e as Error).message }) } }
-      if ((b.targetMode ?? 'keyword') === 'product') {
-        for (const pt of b.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: defaultBidEur, userId }) } catch (e) { logger.warn('[single-launch] product target failed', { error: (e as Error).message }) } }
-      } else {
-        for (const kw of b.keywords ?? []) { const text = (kw?.text || '').trim(); if (!text) continue; const mt: 'BROAD' | 'PHRASE' | 'EXACT' = kw.matchType === 'PHRASE' ? 'PHRASE' : kw.matchType === 'EXACT' ? 'EXACT' : 'BROAD'; try { await createKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, bidEur: Number(kw.bidEur) || defaultBidEur, userId }) } catch (e) { logger.warn('[single-launch] keyword failed', { error: (e as Error).message }) } }
-      }
-      for (const nk of b.negKeywords ?? []) { const text = (nk?.text || '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = nk.matchType === 'PHRASE' ? 'PHRASE' : 'EXACT'; try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, userId }) } catch (e) { logger.warn('[single-launch] neg keyword failed', { error: (e as Error).message }) } }
-      for (const np of b.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) } catch (e) { logger.warn('[single-launch] neg product failed', { error: (e as Error).message }) } }
-      const pb = b.placementBids ?? {}
-      const adjustments = ([['PLACEMENT_TOP', pb.tos], ['PLACEMENT_PRODUCT_PAGE', pb.pdp], ['PLACEMENT_REST_OF_SEARCH', pb.ros]] as Array<[string, string | undefined]>)
-        .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
-      if (adjustments.length) { try { await updatePlacementBidding({ campaignId: camp.id, adjustments, userId }) } catch (e) { logger.warn('[single-launch] placement failed', { error: (e as Error).message }) } }
-
-      // #1/#3/#4 — persist Sponsored-Video opt-ins, Sites reach, and the video/AB/audience bid
-      // boosts onto the campaign's dynamicBidding config (preserves the placementBidding just
-      // written). Forward-looking: applied to Amazon when the v3 boost write-path opens (same gate).
-      const svAsins = (b.sponsoredVideoAsins ?? []).filter(Boolean)
-      const boosts = b.bidBoosts ?? {}
-      const wantBoost = !!(boosts.video || boosts.amazonBusiness || boosts.audience)
-      if (svAsins.length || b.sites === 'business' || wantBoost) {
-        try {
-          const cur = await prisma.campaign.findUnique({ where: { id: camp.id }, select: { dynamicBidding: true } })
-          const dyn = (cur?.dynamicBidding && typeof cur.dynamicBidding === 'object' ? cur.dynamicBidding : {}) as Record<string, unknown>
-          await prisma.campaign.update({ where: { id: camp.id }, data: { dynamicBidding: {
-            ...dyn,
-            ...(b.sites ? { sites: b.sites } : {}),
-            ...(svAsins.length ? { sponsoredVideoAsins: svAsins } : {}),
-            ...(wantBoost ? { bidBoosts: { video: !!boosts.video, amazonBusiness: !!boosts.amazonBusiness, amazonBusinessPct: Number(boosts.amazonBusinessPct) || undefined, audience: !!boosts.audience } } : {}),
-          } as never } })
-        } catch (e) { logger.warn('[single-launch] config merge failed', { error: (e as Error).message }) }
-      }
-
-      // #2 — attach this campaign to existing rules: append its id to each rule action's
-      // campaignIds / sources so the Rules engine evaluates it too (read+extend, never rebuild).
-      let attachedCount = 0
-      for (const ruleId of (b.attachRuleIds ?? [])) {
-        try {
-          const rule = await prisma.automationRule.findUnique({ where: { id: ruleId }, select: { id: true, actions: true, domain: true } })
-          if (!rule || rule.domain !== 'advertising') continue
-          const actions = (Array.isArray(rule.actions) ? rule.actions : []) as Array<Record<string, unknown>>
-          let touched = false
-          for (const a of actions) {
-            if (Array.isArray(a.campaignIds) && !(a.campaignIds as string[]).includes(camp.id)) { (a.campaignIds as string[]).push(camp.id); touched = true }
-            if (Array.isArray(a.sources) && !(a.sources as Array<{ campaignId?: string }>).some((s) => s?.campaignId === camp.id)) { (a.sources as unknown[]).push({ adGroupId: ag.id, campaignId: camp.id, harvestFrom: true, graduate: [], negate: [] }); touched = true }
-          }
-          if (touched) { await prisma.automationRule.update({ where: { id: ruleId }, data: { actions: actions as never } }); attachedCount++ }
-        } catch (e) { logger.warn('[single-launch] attach rule failed', { ruleId, error: (e as Error).message }) }
-      }
-
-      if (b.bidConfig?.strategy && b.bidConfig.strategy !== 'none') {
-        try {
-          const bc = b.bidConfig
-          const minBidEur = Number(bc.minBid) || undefined
-          const maxBidEur = Number(bc.maxBid) || undefined
-          const action = bc.strategy === 'targetAcos'
-            ? { type: 'bid_to_target_acos', targetAcos: Number(bc.targetAcos) || 30, minBidEur, maxBidEur, campaignIds: [camp.id] }
-            : { type: 'set_bid_strategy', strategy: bc.strategy, minBidEur, maxBidEur, campaignIds: [camp.id] }
-          const label = bc.strategy === 'targetAcos' ? 'Target ACoS' : bc.strategy === 'maxImpressions' ? 'Max Impressions' : bc.strategy === 'maxOrders' ? 'Max Orders' : 'Custom'
-          const rule = await prisma.automationRule.create({ data: { name: `${name} — ${label} bidding`.slice(0, 120), description: 'Bid strategy from Single Campaign builder', domain: 'advertising', trigger: 'SCHEDULE', conditions: [] as never, actions: [action] as never, enabled: !!b.autoBidAdjust, dryRun: true, maxExecutionsPerDay: 4, createdBy: userId ?? null } })
-          rulesCreated.push({ id: rule.id, name: rule.name })
-        } catch (e) { logger.error('[single-launch] bid rule failed', { error: (e as Error).message }) }
-      }
-      if (b.addNegativeRule) {
-        try {
-          const rule = await prisma.automationRule.create({ data: { name: `${name} — Negative Targeting`.slice(0, 120), description: 'Negative rule from Single Campaign builder', domain: 'advertising', trigger: 'SCHEDULE', conditions: [] as never, actions: [{ type: 'harvest_and_negate', control: 'manual', mode: 'negative', windowDays: 60, minSpendCents: 1000, minOrders: 0, sources: [{ adGroupId: ag.id, campaignId: camp.id, harvestFrom: true, graduate: [], negate: ['EXACT'] }], destinations: {} }] as never, enabled: true, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? null } })
-          rulesCreated.push({ id: rule.id, name: rule.name })
-        } catch (e) { logger.error('[single-launch] negative rule failed', { error: (e as Error).message }) }
-      }
-      logger.warn('[single-launch] created campaign', { market, name, campaignId: camp.id, rules: rulesCreated.length, attached: attachedCount, actor: userId })
-      // AX-VT.1 — read back and repair portfolio membership before claiming success.
-      const { settleLaunchPortfolios } = await import('../services/advertising/ads-create.service.js')
-      const portfolioCheck = await settleLaunchPortfolios([camp.id])
-      // AX-VT.4 — full intended-vs-observed receipt for the campaign and everything under it.
-      const { verifyLaunch } = await import('../services/advertising/ads-launch-verify.service.js')
-      const verification = await verifyLaunch([camp.id]).catch(() => null)
-      return { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck, verification }
-    } catch (e) {
-      logger.error('[single-launch] failed', { name, market, error: (e as Error).message })
-      reply.status(500); return { ok: false, error: (e as Error).message }
-    }
+    const { singleLaunch } = await import('../services/advertising/ads-single-launch.service.js')
+    const out = await singleLaunch(request.body as import('../services/advertising/ads-single-launch.service.js').SingleLaunchBody, actorFromHeaders(request.headers as Record<string, unknown>))
+    if (out.status !== 200) reply.status(out.status)
+    return out.body
   })
 
   // ── AT.3 — suggested bid per Auto-targeting group (READ; works pre-launch + while
@@ -6437,66 +5949,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * B4 (2026-08-20) — WHAT EACH RULE HAS ACTUALLY DONE.
-   *
-   * The Automation toggle is a fork in the road: Off (PROPOSE) queues an `AdsRuleSuggestion` for a
-   * human; On (AUTO) writes to Amazon and drops a receipt in the change log. Both halves worked
-   * and neither was visible — a rule with 125 proposals nobody has read renders identically to one
-   * with none, and a rule that has never moved a bid renders identically to one that moves them
-   * hourly.
-   *
-   * Three facts per rule, each from the table that actually records that half:
-   *   · `pending`     — AdsRuleSuggestion rows awaiting a decision. The PROPOSE half's output.
-   *   · `lastWroteAt` — the newest AdvertisingActionLog row written by this rule's own actor.
-   *   · `writes7d`    — how many it wrote in the last 7 days, so "wrote once in June" and "writes
-   *                     every hour" are different rows rather than the same green tick.
-   *
-   * 🔴 `lastWroteAt` is deliberately NOT `AutomationRule.lastExecutedAt`. Those are different
-   * facts and conflating them is this section's most expensive recurring mistake: `lastExecutedAt`
-   * moves every time the rule is EVALUATED, whatever came of it. Measured on prod today, 4 of the
-   * 18 Bid rules are enabled at AUTO with `lastExecutedAt` inside the last hour and have **never
-   * written a single row** — they run, they succeed, they do nothing
-   * ([[reference_four_inert_ads_rules]]). An action log row is the only proof a bid moved.
-   *
-   * The actor convention is `automation:<ruleId>` (`RULE_ACTOR`, automation-action-handlers.ts),
-   * and every rule write reaches it: `bulkUpdateAdTargetBids` delegates per entry to
-   * `updateAdTargetWithSync`, which calls `writeAdvertisingActionLog` with the actor. A write that
-   * returns `no_changes` logs nothing, which is correct — it was not a write.
-   *
-   * ⚠ Most `automation:` actors in that table are NOT rules: 54 of 56 are `automation:rank-defend-*`,
-   * the rank-defend cron, which has its own actor space. Match on the exact `automation:<ruleId>`
-   * string, never on the prefix, or the page inherits another job's activity.
-   *
-   * Three indexed groupBys; measured on prod at 122ms / 103ms / 201ms against 59,810 log rows.
+   * B4 (2026-08-20) — WHAT EACH RULE HAS ACTUALLY DONE: pending proposals, last write, writes in 7 days, matched on the
+   * exact `automation:<ruleId>` actor. R4 — the logic and its full story live in ads-rule-list.service.ts
+   * (adsRuleActivity), shared with Claude's automation tools.
    */
-  fastify.get('/advertising/automation-rules/activity', async (request, reply) => {
-    const since = new Date(Date.now() - 7 * 86_400_000)
-    const [pending, wrote, recent] = await Promise.all([
-      prisma.adsRuleSuggestion.groupBy({ by: ['ruleId'], where: { status: 'pending' }, _count: true }),
-      prisma.advertisingActionLog.groupBy({
-        by: ['userId'], where: { userId: { startsWith: 'automation:' } }, _max: { createdAt: true },
-      }),
-      prisma.advertisingActionLog.groupBy({
-        by: ['userId'], where: { userId: { startsWith: 'automation:' }, createdAt: { gte: since } }, _count: true,
-      }),
-    ])
-    const ruleIds = new Set(
-      (await prisma.automationRule.findMany({ where: { domain: 'advertising' }, select: { id: true } })).map((r) => r.id),
-    )
-    const items: Record<string, { pending: number; lastWroteAt: string | null; writes7d: number }> = {}
-    const ensure = (id: string) => (items[id] ??= { pending: 0, lastWroteAt: null, writes7d: 0 })
-    for (const p of pending) if (p.ruleId) ensure(p.ruleId).pending = p._count
-    // Exact id match — see the rank-defend warning above.
-    for (const w of wrote) {
-      const id = String(w.userId ?? '').slice('automation:'.length)
-      if (ruleIds.has(id) && w._max.createdAt) ensure(id).lastWroteAt = w._max.createdAt.toISOString()
-    }
-    for (const w of recent) {
-      const id = String(w.userId ?? '').slice('automation:'.length)
-      if (ruleIds.has(id)) ensure(id).writes7d = w._count
-    }
+  fastify.get('/advertising/automation-rules/activity', async (_request, reply) => {
+    const { adsRuleActivity } = await import('../services/advertising/ads-rule-list.service.js')
+    const out = await adsRuleActivity()
     reply.header('Cache-Control', 'private, max-age=30')
-    return { items }
+    return out
   })
 
   /**
@@ -6524,201 +5985,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { rule, builderView }
   })
 
+  // R4 — the logic lives in ads-rule-crud.service.ts (a Claude tool runs the same code); the answer is unchanged.
   fastify.post('/advertising/automation-rules', async (request, reply) => {
-    const body = request.body as {
-      name: string
-      description?: string
-      trigger: string
-      conditions?: object[]
-      actions?: object[]
-      maxExecutionsPerDay?: number
-      maxValueCentsEur?: number
-      maxDailyAdSpendCentsEur?: number
-      maxWritesPerDay?: number
-      scopeMarketplace?: string
-    }
-    if (!body?.name || !body.trigger) {
-      reply.code(400)
-      return { error: 'name + trigger required' }
-    }
-    // P2.1 — refuse an untranslatable builder rule AT SAVE. The adapter used to drop unmapped
-    // AND-conditions at evaluation, which made the rule LOOSER than the author wrote; now the
-    // adapter fails such a rule closed and this refuses to store one at all, naming the metrics.
-    {
-      const { listUntranslatableMetrics } = await import('../services/advertising/ads-rule-adapter.service.js')
-      const bad = listUntranslatableMetrics({ actions: body.actions, conditions: body.conditions })
-      if (bad.length) {
-        reply.code(400)
-        return { error: 'untranslatable_conditions', metrics: bad, message: `No engine signal exists for: ${bad.join(', ')}. Remove those conditions — a rule saved with them could never evaluate as written.` }
-      }
-    }
-    const ALLOWED_TRIGGERS = new Set([
-      'FBA_AGE_THRESHOLD_REACHED',
-      'AD_SPEND_PROFITABILITY_BREACH',
-      'CAC_SPIKE',
-      'AD_TARGET_UNDERPERFORMING',
-      'CAMPAIGN_PERFORMANCE_BUDGET',
-      'SCHEDULE',
-      // evaluator also supports these keyword/search-term/conversion triggers
-      'CVR_DROP',
-      'KEYWORD_LOW_CTR',
-      'KEYWORD_WASTED_SPEND',
-      'KEYWORD_ZERO_IMPRESSIONS',
-      'SEARCH_TERM_CONVERTING',
-      // Engine expansion (E-series) — net-new triggers
-      'KEYWORD_HIGH_ACOS',
-      'KEYWORD_SCALE_OPPORTUNITY',
-      'AD_GROUP_UNDERPERFORMING',
-      'NEW_TO_BRAND_WINNER',
-      'CAMPAIGN_NO_SALES',
-      'SEARCH_TERM_WASTING',
-      'CAMPAIGN_ROAS_DECLINING',
-      'KEYWORD_RISING_STAR',
-      // SK-series — keyword-bid-adjustment rules driven by Share-of-Voice / keyword-tracker rank data
-      'SOV_BID',
-      'KEYWORD_RANK_BID',
-    ])
-    if (!ALLOWED_TRIGGERS.has(body.trigger)) {
-      reply.code(400)
-      return { error: `unknown trigger: ${body.trigger}` }
-    }
-    const rule = await prisma.automationRule.create({
-      data: {
-        name: body.name,
-        description: body.description ?? null,
-        domain: 'advertising',
-        trigger: body.trigger,
-        conditions: (body.conditions ?? []) as object,
-        actions: (body.actions ?? []) as object,
-        // Safe defaults: every new advertising rule starts disabled +
-        // dry-run; operator must explicitly opt in to live writes.
-        enabled: false,
-        dryRun: true,
-        maxExecutionsPerDay: body.maxExecutionsPerDay ?? 10,
-        maxValueCentsEur: body.maxValueCentsEur ?? null,
-        maxDailyAdSpendCentsEur: body.maxDailyAdSpendCentsEur ?? 10000,
-        // P2.2 — the demote-to-dry-run write cap (CAP step 6). Builder rules could not set it at
-        // all before, so every one arrived with the second brake unset.
-        maxWritesPerDay: body.maxWritesPerDay ?? null,
-        scopeMarketplace: body.scopeMarketplace ?? null,
-        createdBy: 'user',
-      },
-    })
-    // BUD-P2 — mirror a builder BUDGET rule's picker list into `CampaignRuleAssignment`, so the
-    // Apply Rules Budget-Rule column shows what this rule actually governs. Never fatal: the rule
-    // is saved and the engine reads the rule's own list, so a failed mirror leaves the COLUMN
-    // stale, not the rule broken.
-    try {
-      const { syncRuleCampaignBinding } = await import('../services/advertising/rule-campaign-binding.service.js')
-      await syncRuleCampaignBinding(rule.id, body.actions, actorFromHeaders(request.headers as Record<string, unknown>))
-    } catch (e) {
-      logger.error('[ADS-RULE-BINDING] create mirror failed', { ruleId: rule.id, error: String(e) })
-    }
-    return { rule }
+    const { createAdsRule } = await import('../services/advertising/ads-rule-crud.service.js')
+    return answer(reply, await createAdsRule(request.body as AdsRuleCreateInput, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   fastify.patch('/advertising/automation-rules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const existing = await prisma.automationRule.findUnique({ where: { id } })
-    if (!existing || existing.domain !== 'advertising') {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-    const body = request.body as {
-      name?: string
-      description?: string | null
-      enabled?: boolean
-      dryRun?: boolean
-      conditions?: object[]
-      actions?: object[]
-      maxExecutionsPerDay?: number | null
-      maxValueCentsEur?: number | null
-      maxDailyAdSpendCentsEur?: number | null
-      maxWritesPerDay?: number | null
-      scopeMarketplace?: string | null
-      priority?: number
-    }
-    // P2.1 — same save-time refusal as the create route. Validate the MERGED rule: a PATCH that
-    // touches neither actions nor conditions cannot introduce an untranslatable metric, but one
-    // that changes either half must be checked against the pair it will actually store.
-    if (body.actions !== undefined || body.conditions !== undefined) {
-      const { listUntranslatableMetrics } = await import('../services/advertising/ads-rule-adapter.service.js')
-      const bad = listUntranslatableMetrics({
-        actions: body.actions ?? (existing.actions as object[]),
-        conditions: body.conditions ?? (existing.conditions as object[]),
-      })
-      if (bad.length) {
-        reply.code(400)
-        return { error: 'untranslatable_conditions', metrics: bad, message: `No engine signal exists for: ${bad.join(', ')}. Remove those conditions — a rule saved with them could never evaluate as written.` }
-      }
-    }
-    const data: Record<string, unknown> = {}
-    if (body.name !== undefined) data.name = body.name
-    if (body.description !== undefined) data.description = body.description
-    if (body.enabled !== undefined) data.enabled = body.enabled
-    if (body.dryRun !== undefined) data.dryRun = body.dryRun
-    if (body.conditions !== undefined) {
-      /**
-       * 🔴 EA5 — an ENGINE-NATIVE rule keeps its shape.
-       *
-       * The builder always sends nested groups. Storing those on a rule whose actions are engine
-       * types would leave a pair nothing handles: `maybeTranslateAdsRule` fires on builder-shaped
-       * ACTIONS only, so the nested conditions would reach `evaluateFlatList`, whose leaves have no
-       * `field`, and throw mid-tick — taking every remaining trigger down with it.
-       *
-       * `conditionsForStorage` translates them back to flat leaves with the same maps the forward
-       * direction uses. A builder-shaped rule is passed through untouched.
-       */
-      const { conditionsForStorage } = await import('../services/advertising/ads-rule-adapter.service.js')
-      const stored = conditionsForStorage({ actions: existing.actions }, body.conditions)
-      if (stored.unmapped.length) {
-        reply.code(400)
-        return { error: 'untranslatable_conditions', metrics: stored.unmapped, message: `No engine signal exists for: ${stored.unmapped.join(', ')}.` }
-      }
-      data.conditions = stored.conditions
-    }
-    if (body.actions !== undefined) data.actions = body.actions
-    /**
-     * EA7 — run order. Clamped to 1..999 so a value cannot be set outside the band the UI shows,
-     * and rejected rather than coerced if it is not a number: silently turning a typo into 0 would
-     * promote a rule to first place without saying so.
-     */
-    if (body.priority !== undefined) {
-      if (!Number.isFinite(body.priority) || body.priority < 1 || body.priority > 999) {
-        reply.code(400)
-        return { error: 'priority must be a number between 1 and 999 (lower runs first)' }
-      }
-      data.priority = Math.round(body.priority)
-    }
-    if (body.maxExecutionsPerDay !== undefined) data.maxExecutionsPerDay = body.maxExecutionsPerDay
-    if (body.maxValueCentsEur !== undefined) data.maxValueCentsEur = body.maxValueCentsEur
-    if (body.maxDailyAdSpendCentsEur !== undefined) data.maxDailyAdSpendCentsEur = body.maxDailyAdSpendCentsEur
-    if (body.maxWritesPerDay !== undefined) data.maxWritesPerDay = body.maxWritesPerDay
-    if (body.scopeMarketplace !== undefined) data.scopeMarketplace = body.scopeMarketplace
-    const rule = await prisma.automationRule.update({ where: { id }, data })
-    // BUD-P2 — the picker list changed only if `actions` was sent; re-mirror from the SAVED rule
-    // so the column follows an edit that removed campaigns as faithfully as one that added them.
-    if (body.actions !== undefined) {
-      try {
-        const { syncRuleCampaignBinding } = await import('../services/advertising/rule-campaign-binding.service.js')
-        await syncRuleCampaignBinding(rule.id, rule.actions, actorFromHeaders(request.headers as Record<string, unknown>))
-      } catch (e) {
-        logger.error('[ADS-RULE-BINDING] patch mirror failed', { ruleId: rule.id, error: String(e) })
-      }
-    }
-    return { rule }
+    const { updateAdsRule } = await import('../services/advertising/ads-rule-crud.service.js')
+    return answer(reply, await updateAdsRule(id, request.body as AdsRuleUpdateInput, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   fastify.delete('/advertising/automation-rules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const existing = await prisma.automationRule.findUnique({ where: { id } })
-    if (!existing || existing.domain !== 'advertising') {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-    // Cascading delete on AutomationRuleExecution covered by the FK.
-    await prisma.automationRule.delete({ where: { id } })
-    return { ok: true }
+    const { deleteAdsRule } = await import('../services/advertising/ads-rule-crud.service.js')
+    return answer(reply, await deleteAdsRule(id, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   // ── B3 (Budget rule builder): reusable rule templates — save a rule's criteria +
@@ -6974,118 +6256,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * ── SG.0 — ONE decide path, shared by the single routes and the bulk route ──────────────────
    *
-   * Each helper returns a plain outcome instead of writing to `reply`, so the bulk route can
-   * report per-row results and the single routes can map the same outcome to an HTTP code.
-   * `httpStatus` is set only for the outcomes that are protocol-level (404/409/422/423);
-   * a REFUSAL is not one of them — see applySuggestion.
+   * R4 — apply / dismiss / restore and the bulk decide live in ads-suggestion-decide.service.ts (a Claude tool decides
+   * through the same code); each returns a plain outcome and `sendOutcome` maps it to HTTP exactly as before.
+   * `/pause-target` below keeps its own logic: it pauses, and nothing Claude runs may pause.
    */
-  type DecideOutcome = { ok: boolean; httpStatus?: number; error?: string; refused?: boolean; result?: unknown }
-
-  /**
-   * SG.2b — the operator's override, in either of two grammars:
-   *   value            replaces the action's own magnitude (the drawer's edit: decPct 15 → 20).
-   *   resultBidCents / resultBudgetEur
-   *                    replaces the RESULT (H10's inline staging input: type €0.35 in the row).
-   *                    Expressed by rewriting the action to the setValue op of its family — the
-   *                    one honest translation of "make it exactly this" — with every other field
-   *                    (entity ids, context) preserved. The write gate still binds either way,
-   *                    and `appliedResult.override` records the edit, which graduation reads as
-   *                    agreement-with-correction.
-   */
-  type ApplyOverride = { value?: number; resultBidCents?: number; resultBudgetEur?: number }
-
-  // Approve → re-run the proposed action LIVE against the frozen execution context (respects the
-  // automation halt + the handlers' own spend caps). The operator already approved, so we apply
-  // the action directly rather than re-evaluating conditions.
-  const applySuggestion = async (id: string, ov: ApplyOverride = {}): Promise<DecideOutcome> => {
-    const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
-    if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
-    if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
-    const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
-    if (await isAutomationHalted()) return { ok: false, httpStatus: 423, error: 'automation_halted' }
-    // The frozen execution context is pruned after a few days. Don't hard-fail a stale
-    // suggestion: budget/bid/placement actions are self-contained (they carry campaignId + op +
-    // value and read current values live from the DB), so they re-apply correctly against an
-    // empty context. Context-dependent actions (e.g. search-term harvest) fail CLOSED inside the
-    // handler ("No campaign.id in context") — never a blind write.
-    const exec = sug.executionId
-      ? await prisma.automationRuleExecution.findUnique({ where: { id: sug.executionId }, select: { triggerData: true } })
-      : null
-    const triggerData = exec?.triggerData ?? {}
-    await import('../services/advertising/automation-action-handlers.js') // ensure handlers registered
-    const { ACTION_HANDLERS } = await import('../services/automation-rule.service.js')
-    // S.5 — optional edit-before-apply: the operator may override the action's magnitude
-    // (`value`) from the detail drawer. The handler still clamps to the action's own min/max
-    // bounds (e.g. minEur/maxEur), so an override can't escape the rule's guardrails.
-    let action = { ...(sug.proposedAction as Record<string, unknown>) }
-    let overridden = false
-    let overrideRecord: Record<string, number> | null = null
-    if (typeof ov.resultBidCents === 'number' && Number.isFinite(ov.resultBidCents) && ov.resultBidCents > 0) {
-      action = { ...action, type: 'bid_apply', op: 'setValue', value: ov.resultBidCents / 100 }
-      overridden = true
-      overrideRecord = { resultBidCents: ov.resultBidCents }
-    } else if (typeof ov.resultBudgetEur === 'number' && Number.isFinite(ov.resultBudgetEur) && ov.resultBudgetEur > 0) {
-      action = { ...action, type: 'budget_apply', op: 'setValue', value: ov.resultBudgetEur }
-      overridden = true
-      overrideRecord = { resultBudgetEur: ov.resultBudgetEur }
-    } else if (typeof ov.value === 'number' && Number.isFinite(ov.value) && ov.value !== action.value) {
-      action.value = ov.value
-      overridden = true
-      overrideRecord = { value: ov.value }
-    }
-    const handler = ACTION_HANDLERS[String(action.type)]
-    if (!handler) return { ok: false, httpStatus: 422, error: `no handler for ${action.type}` }
-    const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId })
-    /**
-     * 🔴 SG.0 — a refused apply STAYS PENDING.
-     *
-     * This route used to mark the row `applied` unconditionally, so a write-gate denial or a
-     * protectConverting refusal landed in the Applied tab looking like a success — two rows with
-     * identical status meaning "landed at Amazon" and "refused at the gate". A refusal is a
-     * governed stop, not a decision the operator made: the row keeps waiting, and the caller
-     * gets the server's own sentence to show.
-     */
-    if (result.ok === false) {
-      return { ok: false, refused: true, error: result.error ?? 'refused', result }
-    }
-    await prisma.adsRuleSuggestion.update({
-      where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: { ...(result as object), ...(overridden && overrideRecord ? { override: overrideRecord } : {}) } as object },
-    })
-    return { ok: true, result }
-  }
-
-  const dismissSuggestion = async (id: string): Promise<DecideOutcome> => {
-    const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id }, select: { status: true } })
-    if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
-    if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
-    await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'dismissed', decidedAt: new Date(), decidedBy: 'operator' } })
-    return { ok: true }
-  }
-
-  // S.4 — Undo a dismiss: put a dismissed (or SG.0-expired) suggestion back to pending.
-  // SG.3 — an APPLIED row may come back too, but ONLY when its write never landed (the gate
-  // refused it after the approve, or delivery dead-lettered). A change that reached Amazon is
-  // not un-applied here — that is the rollback path's job, from the Change Log handle.
-  const restoreSuggestion = async (id: string): Promise<DecideOutcome> => {
-    const sug = await prisma.adsRuleSuggestion.findUnique({
-      where: { id },
-      select: { status: true, entityType: true, entityId: true, decidedAt: true, appliedResult: true },
-    })
-    if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
-    if (sug.status === 'applied') {
-      const { attachDeliveryData } = await import('../services/advertising/ads-suggestions.service.js')
-      const [row] = await attachDeliveryData([sug])
-      if (row.delivery.state !== 'refused' && row.delivery.state !== 'failed') {
-        return { ok: false, httpStatus: 409, error: 'this change was delivered — undo it from the Change Log instead of restoring the suggestion' }
-      }
-      // the appliedResult (the refusal, in the server's words) stays on the row as history
-      await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'pending', decidedAt: null, decidedBy: null } })
-      return { ok: true }
-    }
-    if (sug.status !== 'dismissed' && sug.status !== 'expired') return { ok: false, httpStatus: 409, error: `cannot restore ${sug.status}` }
-    await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'pending', decidedAt: null, decidedBy: null } })
-    return { ok: true }
-  }
+  type DecideOutcome = DecideResult
 
   const sendOutcome = (reply: { code: (n: number) => unknown }, out: DecideOutcome) => {
     if (out.httpStatus) { reply.code(out.httpStatus); return { error: out.error } }
@@ -7176,63 +6351,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * matching the old client loop's pacing.
    */
   fastify.post('/advertising/suggestions/bulk', async (request, reply) => {
-    const b = (request.body ?? {}) as {
-      ids?: unknown; kind?: string
-      /** SG.2b — H10's staged batch: accepts and removals COMMIT TOGETHER on "Apply N Changes",
-       *  each accept optionally carrying the operator's inline override. */
-      ops?: Array<{ id?: unknown; kind?: unknown; value?: unknown; resultBidCents?: unknown; resultBudgetEur?: unknown }>
-    }
-    // SG.9 — `mute` / `unmute` join the staged batch: H10 commits all three row verbs through
-    // the one "Apply N Changes", so the third one cannot be a side-channel POST.
-    type Op = { id: string; kind: 'apply' | 'dismiss' | 'restore' | 'mute' | 'unmute'; ov: ApplyOverride }
-    const KINDS = ['apply', 'dismiss', 'restore', 'mute', 'unmute']
-    const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
-    let ops: Op[] = []
-    if (Array.isArray(b.ops)) {
-      const seen = new Set<string>()
-      for (const o of b.ops) {
-        const id = typeof o?.id === 'string' ? o.id : ''
-        const kind = String(o?.kind ?? '')
-        if (!id || seen.has(id) || !KINDS.includes(kind)) continue
-        seen.add(id)
-        ops.push({ id, kind: kind as Op['kind'], ov: { value: num(o.value), resultBidCents: num(o.resultBidCents), resultBudgetEur: num(o.resultBudgetEur) } })
-      }
-    } else {
-      const ids = Array.isArray(b.ids) ? [...new Set(b.ids.filter((x): x is string => typeof x === 'string'))] : []
-      const kind = String(b.kind ?? '')
-      if (KINDS.includes(kind)) ops = ids.map((id) => ({ id, kind: kind as Op['kind'], ov: {} }))
-    }
-    if (!ops.length || ops.length > 200) {
-      reply.code(400)
-      return { error: 'ops (1–200 of {id, kind apply|dismiss|restore|mute|unmute}) or ids+kind required' }
-    }
-    if (ops.some((o) => o.kind === 'apply')) {
-      const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
-      if (await isAutomationHalted()) { reply.code(423); return { error: 'automation_halted' } }
-    }
-    const byId = new Map<string, DecideOutcome>()
-    let i = 0
-    const worker = async () => {
-      while (i < ops.length) {
-        const op = ops[i++]
-        try {
-          byId.set(op.id, op.kind === 'apply' ? await applySuggestion(op.id, op.ov)
-            : op.kind === 'dismiss' ? await dismissSuggestion(op.id)
-            : op.kind === 'mute' ? await muteSuggestion(op.id)
-            : op.kind === 'unmute' ? await unmuteSuggestion(op.id)
-            : await restoreSuggestion(op.id))
-        } catch (e) {
-          byId.set(op.id, { ok: false, error: (e as Error).message })
-        }
-      }
-    }
-    await Promise.all([worker(), worker(), worker()])
-    const results = ops.map(({ id, kind }) => {
-      const out = byId.get(id) ?? { ok: false, error: 'not_processed' }
-      return { id, kind, ok: out.ok, ...(out.refused ? { refused: true } : {}), ...(out.error ? { error: out.error } : {}) }
-    })
-    const okCount = results.filter((r) => r.ok).length
-    return { ok: okCount === results.length, okCount, failCount: results.length - okCount, results }
+    return answer(reply, await decideSuggestionsBulk((request.body ?? {}) as BulkDecideInput))
   })
 
   // SG.0 — the poll cursor (see ads-cursors.service.ts for the house rules: a value fingerprint
@@ -7247,29 +6366,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Test a rule against a synthetic context — used by the rule-builder
   // UI to preview which actions would fire. Always forces dryRun=true,
   // never writes side-effects regardless of rule.dryRun.
+  // R3 — and `noPersist`: no run row and no evaluation/match counters, which the graduation gate
+  // below counts. A Test press used to count as one evaluation (and one match) of the rule.
   fastify.post('/advertising/automation-rules/:id/test', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as { context?: unknown }
-    if (body?.context == null) {
-      reply.code(400)
-      return { error: 'context required' }
-    }
-    const rule = await prisma.automationRule.findUnique({ where: { id } })
-    if (!rule || rule.domain !== 'advertising') {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-    // RA.AUTO — a disabled rule is evaluated via `ignoreEnabled`, not by arming it.
-    //
-    // This used to write `enabled: true`, evaluate, and write it back in a `finally`. For the
-    // duration the database held a genuinely armed rule, against an evaluator cron that ticks
-    // every 15 minutes — and if the process died in between, the rule stayed armed. The flag
-    // reaches the same result with no window and no write. Behaviour for callers is identical.
-    const result = await evaluateRule({
-      ruleId: id, context: body.context, forceDryRun: true, isTestRun: true,
-      ignoreEnabled: !rule.enabled,
-    })
-    return { result }
+    const { testAdsRule } = await import('../services/advertising/ads-rule-crud.service.js')
+    return answer(reply, await testAdsRule(id, body?.context))
   })
 
   // GET /api/advertising/automation-rules/:id/gate-status — Phase 9
@@ -7281,94 +6384,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   //
   // OBSERVATION_WINDOW uses rule.createdAt as a conservative proxy for
   // "how long has this rule been deployed". We require 14 full days.
+  // R4 — the checks live in ads-rule-crud.service.ts (adsRuleGateStatus), shared with Claude's tools.
   fastify.get('/advertising/automation-rules/:id/gate-status', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const rule = await prisma.automationRule.findUnique({
-      where: { id },
-      select: {
-        id: true, domain: true, enabled: true, dryRun: true,
-        createdAt: true, evaluationCount: true, matchCount: true,
-        executionCount: true,
-      },
-    })
-    if (!rule || rule.domain !== 'advertising') return reply.code(404).send({ error: 'not_found' })
-
-    const conn = await prisma.amazonAdsConnection.findFirst({
-      where: { isActive: true },
-      select: { mode: true, writesEnabledAt: true },
-    })
-
-    const daysInDryRun = Math.floor(
-      (Date.now() - rule.createdAt.getTime()) / (1000 * 60 * 60 * 24),
-    )
-    const OBSERVATION_DAYS = 14
-    const liveMode = (process.env.NEXUS_AMAZON_ADS_MODE ?? 'sandbox') === 'live'
-
-    const checks = [
-      {
-        id: 'RULE_ENABLED',
-        label: 'Rule is enabled',
-        detail: rule.enabled ? 'Enabled' : 'Rule must be enabled (toggle it on first)',
-        passed: rule.enabled,
-      },
-      {
-        id: 'RULE_DRY_RUN',
-        label: 'Rule is in dry-run mode',
-        detail: rule.dryRun ? 'Currently dry-run (safe to graduate)' : 'Already live — nothing to graduate',
-        passed: rule.dryRun,
-      },
-      {
-        id: 'OBSERVATION_WINDOW',
-        label: `${OBSERVATION_DAYS}-day observation period`,
-        detail: daysInDryRun >= OBSERVATION_DAYS
-          ? `${daysInDryRun} days since rule created — window complete`
-          : `${daysInDryRun}/${OBSERVATION_DAYS} days — ${OBSERVATION_DAYS - daysInDryRun} days remaining`,
-        passed: daysInDryRun >= OBSERVATION_DAYS,
-      },
-      {
-        id: 'HAS_EVALUATIONS',
-        label: 'Rule has evaluation history',
-        detail: rule.evaluationCount >= 10
-          ? `${rule.evaluationCount} evaluations recorded`
-          : `${rule.evaluationCount} evaluations — need at least 10 to prove the rule has run`,
-        passed: rule.evaluationCount >= 10,
-      },
-      {
-        id: 'HAS_MATCHES',
-        label: 'Rule has matched at least once',
-        detail: rule.matchCount > 0
-          ? `${rule.matchCount} matches — rule has found real candidates`
-          : 'Zero matches — rule may not be triggering correctly (check conditions)',
-        passed: rule.matchCount > 0,
-      },
-      {
-        id: 'CONNECTION_PRODUCTION',
-        label: 'Ads connection in production mode',
-        detail: conn?.mode === 'production'
-          ? 'AmazonAdsConnection.mode = production'
-          : `AmazonAdsConnection.mode = ${conn?.mode ?? 'none'} (must be production)`,
-        passed: conn?.mode === 'production',
-      },
-      {
-        id: 'WRITES_ENABLED',
-        label: 'Live writes explicitly enabled',
-        detail: conn?.writesEnabledAt != null
-          ? `Writes enabled at ${conn.writesEnabledAt.toISOString()}`
-          : 'Run /advertising/connection/preview-writes + /enable-writes first',
-        passed: conn?.writesEnabledAt != null,
-      },
-      {
-        id: 'LIVE_MODE_ENV',
-        label: 'NEXUS_AMAZON_ADS_MODE=live deployed',
-        detail: liveMode
-          ? 'Environment variable confirmed'
-          : 'Set NEXUS_AMAZON_ADS_MODE=live on Railway and redeploy',
-        passed: liveMode,
-      },
-    ]
-
-    const gateOpen = checks.every((c) => c.passed)
-    return { gateOpen, daysInDryRun, observationDaysRequired: OBSERVATION_DAYS, checks }
+    const { adsRuleGateStatus } = await import('../services/advertising/ads-rule-crud.service.js')
+    return answer(reply, await adsRuleGateStatus(id))
   })
 
   // POST /api/advertising/automation-rules/:id/graduate — Phase 9
@@ -7376,82 +6396,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Flips dryRun=false after re-running all 8 gate checks server-side.
   // Returns 409 with structured failures if any check hasn't passed.
   // The operator is responsible for monitoring the first live executions.
+  // R4 — ads-rule-crud.service.ts (graduateAdsRule); it now also leaves an audit row.
   fastify.post('/advertising/automation-rules/:id/graduate', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const rule = await prisma.automationRule.findUnique({
-      where: { id },
-      select: {
-        id: true, domain: true, name: true, enabled: true, dryRun: true,
-        createdAt: true, evaluationCount: true, matchCount: true, actions: true, conditions: true,
-      },
-    })
-    if (!rule || rule.domain !== 'advertising') return reply.code(404).send({ error: 'not_found' })
-
-    // ADX N3 — the eight checks below are about EVIDENCE: has this rule run long enough,
-    // matched often enough, is the connection live. None of them ask what the rule
-    // actually DOES, so a rule that creates negatives could graduate on the strength of
-    // having done so quietly for a fortnight.
-    //
-    // A bid is a number the engine can move back. A negative is a thing that now exists
-    // and that nobody will notice later. The ceiling is judged by the rule's most
-    // dangerous action and it is not overridable here — a structural rule stays at
-    // PROPOSE until it has a retirement path, which is a design decision, not a
-    // question of how much evidence has accumulated.
-    const { graduationCeiling } = await import('../services/advertising/ads-graduation.js')
-    // BP.P1 — op-aware: a builder rule is judged by the actions its translation actually emits
-    // (a set/raise/lower Bid rule is reversible; only a Pause/Unpause one is structural).
-    const { producedActionTypes } = await import('../services/advertising/ads-rule-adapter.service.js')
-    const protectionCount = await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } })
-    const ceiling = graduationCeiling({
-      actionTypes: producedActionTypes(rule),
-      hasKeywordProtections: protectionCount > 0,
-    })
-    if (ceiling.maxLevel !== 'AUTO') {
-      return reply.code(409).send({
-        error: 'above_graduation_ceiling',
-        maxLevel: ceiling.maxLevel,
-        blockedBy: ceiling.blockedBy,
-        message: ceiling.reason,
-      })
-    }
-
-    // Re-validate gate server-side — never trust the client's gate result
-    const conn = await prisma.amazonAdsConnection.findFirst({
-      where: { isActive: true },
-      select: { profileId: true, mode: true, writesEnabledAt: true },
-    })
-    const daysInDryRun = Math.floor((Date.now() - rule.createdAt.getTime()) / (1000 * 60 * 60 * 24))
-    const liveMode = (process.env.NEXUS_AMAZON_ADS_MODE ?? 'sandbox') === 'live'
-
-    const failures: string[] = []
-    if (!rule.enabled)            failures.push('RULE_ENABLED')
-    if (!rule.dryRun)             failures.push('RULE_DRY_RUN')
-    if (daysInDryRun < 14)        failures.push(`OBSERVATION_WINDOW (${daysInDryRun}/14 days)`)
-    if (rule.evaluationCount < 10) failures.push(`HAS_EVALUATIONS (${rule.evaluationCount}/10)`)
-    if (rule.matchCount < 1)      failures.push('HAS_MATCHES')
-    if (conn?.mode !== 'production') failures.push('CONNECTION_PRODUCTION')
-    if (!conn?.writesEnabledAt)   failures.push('WRITES_ENABLED')
-    if (!liveMode)                failures.push('LIVE_MODE_ENV')
-
-    if (failures.length > 0) {
-      return reply.code(409).send({
-        error: 'gate_not_open',
-        failures,
-        message: 'Not all gate checks passed — resolve the listed items first',
-      })
-    }
-
-    const updated = await prisma.automationRule.update({
-      where: { id },
-      // ADX N2 — set the dial as well as the legacy binary, so the two cannot disagree
-      // about whether this rule acts.
-      data: { dryRun: false, autonomyLevel: 'AUTO' },
-      select: { id: true, name: true, dryRun: true, enabled: true, autonomyLevel: true },
-    })
-    logger.info('[ADS-GRADUATE] rule graduated to live', {
-      ruleId: id, ruleName: rule.name, profileId: conn?.profileId,
-    })
-    return { ok: true, rule: updated, graduatedAt: new Date().toISOString() }
+    const { graduateAdsRule } = await import('../services/advertising/ads-rule-crud.service.js')
+    return answer(reply, await graduateAdsRule(id, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   fastify.post('/advertising/automation-rules/seed-templates', async (_request, _reply) => {
@@ -7660,255 +6609,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return getForesight()
   })
 
+  // R4 — the rule board (ceiling, reach, 7-day outcomes) lives in ads-rule-list.service.ts, shared with Claude's tools.
   fastify.get('/advertising/autonomy/rules', async () => {
-    const [rules, protectionCount] = await Promise.all([
-      prisma.automationRule.findMany({
-        where: { domain: 'advertising' },
-        select: {
-          id: true, name: true, trigger: true, enabled: true, dryRun: true, autonomyLevel: true,
-          // EA7 — execution order. Lower runs first; ties fall back to createdAt.
-          priority: true,
-          actions: true, maxExecutionsPerDay: true, maxValueCentsEur: true, maxWritesPerDay: true,
-          maxDailyAdSpendCentsEur: true, scopeMarketplace: true,
-          scopePortfolioId: true, scopeCampaignId: true,
-          evaluationCount: true, matchCount: true, executionCount: true,
-          lastEvaluatedAt: true, lastMatchedAt: true, lastExecutedAt: true, createdAt: true,
-          // RA.AUTO — the rule list has to render plain-English When / If / Then, and this was
-          // the one board that could not: it returned neither. Consumers that do not read them
-          // are unaffected; every field below is additive.
-          description: true, conditions: true,
-          // RA.GRAIN — the fourth grain.
-          scopeProductId: true,
-        },
-        orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
-      }),
-      prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } }),
-    ])
-
-    const weekAgo = new Date(Date.now() - 7 * 86_400_000)
-    // DAILY_CAP_EXCEEDED rows are the ENGINE declining to run a rule, not the rule failing.
-    // They were also written by the self-ratcheting cap bug fixed on 2026-08-04, which left
-    // 109,551 of them in the last week alone — enough to show a healthy rule as "5,093 failed"
-    // and make every row on this board look broken. The cap counter already excludes them;
-    // the trust signal must exclude them for the same reason, or the board argues against
-    // rules on the strength of a defect they had no part in.
-    const recent = await prisma.automationRuleExecution.groupBy({
-      by: ['ruleId', 'status'],
-      where: {
-        startedAt: { gte: weekAgo },
-        ruleId: { in: rules.map((r) => r.id) },
-        // Must spell out the null branch. `NOT: { errorMessage: 'X' }` becomes
-        // NOT (errorMessage = 'X'), which is NULL — not TRUE — for a null errorMessage, so
-        // three-valued logic drops the row. Every SUCCESS and DRY_RUN has a null
-        // errorMessage, so the terse form silently zeroed `acted` and `proposed` for every
-        // rule on the board while correctly removing the cap rows.
-        OR: [
-          { errorMessage: null },
-          { errorMessage: { not: 'DAILY_CAP_EXCEEDED' } },
-        ],
-      },
-      _count: { _all: true },
-    })
-    const weekBy = new Map<string, Record<string, number>>()
-    for (const g of recent) {
-      const m = weekBy.get(g.ruleId) ?? {}
-      m[g.status] = g._count._all
-      weekBy.set(g.ruleId, m)
-    }
-
-    /**
-     * RA.AUTO — the cap rows, counted SEPARATELY rather than merged back in.
-     *
-     * Excluding them from `failed` (above) is right: the engine declining to run a rule is not
-     * the rule failing. But dropping them entirely hid the thing that actually governs this
-     * account. Measured on prod 2026-08-10: "Profit-native bid optimisation" wrote 3,793 times
-     * in 30 days and was refused 19,423 times by its own daily cap — so the cap, not the rule,
-     * is what decides how much of the account it reaches. A health strip that shows only the
-     * writes describes the wrong bottleneck, and an operator raising a threshold to get more
-     * coverage would be turning the one knob that cannot deliver it.
-     */
-    const cappedRows = await prisma.automationRuleExecution.groupBy({
-      by: ['ruleId'],
-      where: { startedAt: { gte: weekAgo }, ruleId: { in: rules.map((r) => r.id) }, errorMessage: 'DAILY_CAP_EXCEEDED' },
-      _count: { _all: true },
-    })
-    const cappedBy = new Map(cappedRows.map((g) => [g.ruleId, g._count._all]))
-
-    const { resolveAutonomy } = await import('../services/advertising/ads-autonomy.js')
-    const { graduationCeiling } = await import('../services/advertising/ads-graduation.js')
-    const { ruleCategory, RULE_CATEGORY_META } = await import('../services/advertising/rule-category.js')
-
-    // ACR.7 — resolve scope ids to names once, so every consumer shows "portfolio: Xavia GALE IT"
-    // rather than an opaque id.
-    const scopedPortfolioIds = [...new Set(rules.map((r) => r.scopePortfolioId).filter((x): x is string => !!x))]
-    const scopedCampaignIds = [...new Set(rules.map((r) => r.scopeCampaignId).filter((x): x is string => !!x))]
-    const [scopedPortfolios, scopedCampaigns] = await Promise.all([
-      scopedPortfolioIds.length
-        ? prisma.amazonAdsPortfolio.findMany({ where: { externalPortfolioId: { in: scopedPortfolioIds } }, select: { externalPortfolioId: true, name: true } })
-        : Promise.resolve([]),
-      scopedCampaignIds.length
-        ? prisma.campaign.findMany({ where: { id: { in: scopedCampaignIds } }, select: { id: true, name: true } })
-        : Promise.resolve([]),
-    ])
-    const portfolioName = new Map(scopedPortfolios.map((p) => [p.externalPortfolioId, p.name]))
-    const campaignName = new Map(scopedCampaigns.map((c) => [c.id, c.name]))
-
-    /**
-     * RA.GRAIN — resolve product scope to a NAME, and say whether it is a line or one variation.
-     *
-     * "scopeProductId: cmsn…" tells an operator nothing; "GALE-JACKET — the whole line, 18
-     * variations" tells them what the rule can touch. Resolved here rather than in the client so
-     * every consumer of this board agrees, the same reason portfolio and campaign names are.
-     */
-    const scopedProductIds = [...new Set(rules.map((r) => r.scopeProductId).filter((x): x is string => !!x))]
-    const scopedProducts = scopedProductIds.length
-      ? await prisma.product.findMany({ where: { id: { in: scopedProductIds } }, select: { id: true, sku: true, name: true, parentId: true } })
-      : []
-    const childCounts = scopedProductIds.length
-      ? await prisma.product.groupBy({ by: ['parentId'], where: { parentId: { in: scopedProductIds } }, _count: { _all: true } })
-      : []
-    const childCountByParent = new Map(childCounts.map((c) => [c.parentId as string, c._count._all]))
-    const productById = new Map(scopedProducts.map((p) => [p.id, p]))
-
-    /**
-     * ADVERTISED children, not catalogue children — the count that explains the reach beside it.
-     *
-     * IT-MOSS-JACKET has 30 children in the PIM and 21 that any campaign advertises. Reporting 30
-     * here while the scope form's reach line said "21 advertised variations" was two numbers for
-     * one thing, which is the third time this shape of defect has appeared in this programme
-     * (targetAcos units, then 40-vs-18 in the reach label). Only the advertised count is
-     * actionable: the other 9 cannot be reached by any binding.
-     */
-    const advertisedChildren = scopedProductIds.length
-      ? await prisma.adProductAd.findMany({
-        where: { product: { parentId: { in: scopedProductIds } } },
-        select: { productId: true, product: { select: { parentId: true } } },
-      })
-      : []
-    const advertisedByParent = new Map<string, Set<string>>()
-    for (const a of advertisedChildren) {
-      const parent = a.product?.parentId
-      if (!parent || !a.productId) continue
-      const s = advertisedByParent.get(parent) ?? new Set<string>()
-      s.add(a.productId); advertisedByParent.set(parent, s)
-    }
-
-    /**
-     * RA.AUTO — actions that never reach Amazon. Same set as `rule-category.ts`'s
-     * NON_WRITING_ACTIONS, and it is the difference between "9 rules are on AUTO" and "8 rules
-     * can change your account". Measured on prod: "Alert: ACOS spike" is AUTO and its only
-     * action is `alert_operator`, so a census band counting AUTO rules overstated the rules
-     * able to write by one. `actionTypes` below already strips these for display, which is why
-     * the flag has to be computed before that filter rather than from it.
-     */
-    const NON_WRITING = new Set(['notify', 'alert_operator', 'log_only'])
-
-    /**
-     * EA6 — reach: how many campaigns each rule's scope currently admits.
-     *
-     * Computed with the evaluator's own `ruleMatchesScope`, never a parallel query, so the number
-     * on the row cannot disagree with what the engine does on the next tick. One campaign load for
-     * the whole list. Measured 2026-08-19: 43 of 51 rules are unscoped and therefore read 220.
-     */
-    const { reachForRules } = await import('../services/advertising/ads-rule-reach.service.js')
-    const reach = await reachForRules(rules)
-    // BP.P1 — the ceiling is op-aware (see the PATCH route below): the toggle pre-disable this
-    // list feeds must agree with what that route will actually refuse.
-    const { producedActionTypes } = await import('../services/advertising/ads-rule-adapter.service.js')
-
-    const items = rules.map((r) => {
-      const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
-        .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
-      const ceiling = graduationCeiling({ actionTypes: producedActionTypes(r), hasKeywordProtections: protectionCount > 0 })
-      const week = weekBy.get(r.id) ?? {}
-      return {
-        id: r.id,
-        name: r.name,
-        description: r.description,
-        conditions: r.conditions,
-        /**
-         * RA.AUTO — the RAW actions, parameters and all.
-         *
-         * `actionTypes` below is filtered (it drops notify/alert_operator) and carries no
-         * parameters, so it cannot answer "what would this rule do". Rendering a Then-line from
-         * it alone made the Automations drawer print "no actions — this rule does nothing" over
-         * a rule carrying `bid_to_target_acos` and a WRITES badge. A surface stating the opposite
-         * of the truth about whether a rule touches the account is the exact defect this
-         * programme exists to remove.
-         */
-        actions: r.actions,
-        /** Whether ANY of this rule's actions reaches Amazon. AUTO on a notify-only rule writes nothing. */
-        writes: actionTypes.some((t) => !NON_WRITING.has(t)),
-        /**
-         * EA6 — blast radius. `{ campaigns, enabledCampaigns, total }`. A `campaigns` of 0 is a
-         * DEAD rule: armed, and its scope resolves to nothing. `campaigns === total` is the whole
-         * account, which is what 43 of these rules are whether or not anyone realised.
-         */
-        reach: reach.get(r.id) ?? null,
-        /** EA7 — where this rule sits in the run order. Lower goes first; 100 is the default. */
-        priority: r.priority,
-        trigger: r.trigger,
-        marketplace: r.scopeMarketplace,
-        level: resolveAutonomy(r),
-        ceiling: ceiling.maxLevel,
-        ceilingReason: ceiling.reason,
-        blockedBy: ceiling.blockedBy,
-        actionTypes: actionTypes.filter((t) => !['notify', 'alert_operator', 'log_only'].includes(t)),
-        // ACR.7 — colour carries the grouping now that emojis are gone from names.
-        category: ruleCategory(actionTypes),
-        categoryColor: RULE_CATEGORY_META[ruleCategory(actionTypes)].color,
-        categoryLabel: RULE_CATEGORY_META[ruleCategory(actionTypes)].label,
-        // `kind`/`id`/`name` are unchanged — the AutomationDock and the Control Room's Levers view
-        // both read them, so RA.GRAIN adds `product` beside them rather than restructuring.
-        scope: {
-          ...(r.scopeCampaignId
-            ? { kind: 'campaign' as const, id: r.scopeCampaignId, name: campaignName.get(r.scopeCampaignId) ?? r.scopeCampaignId }
-            : r.scopePortfolioId
-              ? { kind: 'portfolio' as const, id: r.scopePortfolioId, name: portfolioName.get(r.scopePortfolioId) ?? r.scopePortfolioId }
-              : { kind: 'account' as const, id: null, name: null }),
-          product: r.scopeProductId
-            ? {
-              id: r.scopeProductId,
-              sku: productById.get(r.scopeProductId)?.sku ?? null,
-              name: productById.get(r.scopeProductId)?.name ?? null,
-              /** A parent is the whole line; a child is one variation. */
-              isLine: (childCountByParent.get(r.scopeProductId) ?? 0) > 0,
-              /** Variations any campaign actually advertises — the number that explains the reach. */
-              variations: advertisedByParent.get(r.scopeProductId)?.size ?? 0,
-              /** Every variation in the catalogue, so "21 of 30" is stateable rather than implied. */
-              variationsInCatalogue: childCountByParent.get(r.scopeProductId) ?? 0,
-              /** True when the id no longer resolves — the reach line then reads 0, honestly. */
-              missing: !productById.has(r.scopeProductId),
-            }
-            : null,
-        },
-        caps: {
-          perDay: r.maxExecutionsPerDay,
-          perExecutionCents: r.maxValueCentsEur,
-          perDayCents: r.maxDailyAdSpendCentsEur,
-          // AUTO.A2 (additive) — the demote-to-dry-run write cap (CAP step 6, armed 2026-08-14).
-          writesPerDay: r.maxWritesPerDay,
-        },
-        // The accountability strip: what it has actually done, not what it might do.
-        week: {
-          acted: (week.SUCCESS ?? 0) + (week.PARTIAL ?? 0),
-          proposed: week.DRY_RUN ?? 0,
-          failed: week.FAILED ?? 0,
-          /** The engine declining to run it. Never merged into `failed` — see cappedBy above. */
-          capped: cappedBy.get(r.id) ?? 0,
-        },
-        lifetime: { evaluations: r.evaluationCount, matches: r.matchCount, executions: r.executionCount },
-        lastEvaluatedAt: r.lastEvaluatedAt,
-        lastMatchedAt: r.lastMatchedAt,
-        lastExecutedAt: r.lastExecutedAt,
-        ageDays: Math.floor((Date.now() - r.createdAt.getTime()) / 86_400_000),
-        /** W1 — provenance. Predates the 2026-08-20 cutover ⇒ machine-created, not by the
-         *  operator. A label only: nothing in evaluation, caps or autonomy reads it. */
-        createdAt: r.createdAt,
-        legacy: isLegacyRule(r),
-      }
-    })
-    return { items, protectedTerms: protectionCount }
+    const { listAdsRuleBoard } = await import('../services/advertising/ads-rule-list.service.js')
+    return listAdsRuleBoard()
   })
 
   /**
@@ -8118,81 +6822,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // R10 — the level dial lives in ads-rule-crud.service.ts (setAdsRuleLevel), shared with Claude's turn-up-automation and
+  // turn-down-automation: one level service for every caller.
   fastify.patch('/advertising/autonomy/rules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as { level?: string }
-    const { isAutonomyLevel } = await import('../services/advertising/ads-autonomy.js')
-    const { graduationCeiling, isLevelAllowed } = await import('../services/advertising/ads-graduation.js')
-    if (!isAutonomyLevel(body.level)) { reply.code(400); return { ok: false, error: 'level must be OFF | OBSERVE | PROPOSE | AUTO' } }
-
-    const rule = await prisma.automationRule.findUnique({
-      where: { id }, select: { id: true, name: true, domain: true, actions: true, conditions: true },
-    })
-    if (!rule || rule.domain !== 'advertising') { reply.code(404); return { ok: false, error: 'not_found' } }
-
-    const protectionCount = await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } })
-    // BP.P1 — op-aware ceiling: a builder Bid rule whose THEN sets/raises/lowers a bid produces
-    // only `bid_apply` and may reach AUTO; one whose THEN pauses produces `pause_target` and
-    // stays capped. Judged by the translation's own output, never by the slug's full repertoire.
-    const { producedActionTypes } = await import('../services/advertising/ads-rule-adapter.service.js')
-    const ceiling = graduationCeiling({
-      actionTypes: producedActionTypes(rule),
-      hasKeywordProtections: protectionCount > 0,
-    })
-    // The ceiling is not overridable from here. A structural rule stays gated because of
-    // what it does, not because of how much evidence has accumulated.
-    if (!isLevelAllowed(body.level, ceiling.maxLevel)) {
-      reply.code(409)
-      return { ok: false, error: 'above_ceiling', maxLevel: ceiling.maxLevel, message: ceiling.reason, blockedBy: ceiling.blockedBy }
-    }
-
-    /**
-     * D-PLC-2 — a Placement rule may not be armed to AUTO against the rank engine.
-     *
-     * Not a ceiling: the ceiling judges what a rule DOES, and this judges who else is already
-     * writing the same field on the same campaigns. `ad-rank-defend` made 7,818 lane writes across
-     * 34 campaigns in 7 days, so on Auto such a rule sets a modifier and has it reverted within the
-     * hour, forever. Refused with the same 409 shape the ceiling uses, so the grid renders it
-     * through the path it already has (`message`).
-     *
-     * 🔴 Product Pages is exempt — the engine wrote it twice in 30 days against 12,197 on Top of
-     * Search. Blocking that lane would forbid the one placement automation that works on the
-     * governed half of the account. See `ads-placement-autonomy.ts`.
-     */
-    const { checkPlacementAutoAllowed } = await import('../services/advertising/ads-placement-autonomy.js')
-    const placementVerdict = await checkPlacementAutoAllowed(rule, body.level, producedActionTypes(rule))
-    if (placementVerdict.blocked) {
-      reply.code(409)
-      return { ok: false, error: 'contested_by_rank_engine', maxLevel: 'PROPOSE', message: placementVerdict.message, blockedBy: placementVerdict.lanes }
-    }
-
-    // `enabled` remains the on/off, and dryRun is kept in step so the two cannot disagree
-    // about whether this rule acts.
-    const updated = await prisma.automationRule.update({
-      where: { id },
-      data: {
-        autonomyLevel: body.level,
-        enabled: body.level !== 'OFF',
-        dryRun: body.level !== 'AUTO',
-      },
-      select: { id: true, name: true, autonomyLevel: true, enabled: true, dryRun: true },
-    })
-    await prisma.advertisingActionLog.create({
-      data: {
-        userId: actorFromHeaders(request.headers as Record<string, unknown>),
-        actionType: 'set_rule_autonomy', entityType: 'RULE', entityId: id,
-        payloadBefore: {}, payloadAfter: { level: body.level }, amazonResponseStatus: 'SUCCESS',
-        evidence: { metric: 'operator_autonomy', note: `${rule.name} → ${body.level}` },
-      },
-    }).catch(() => { /* an audit row must never fail the write it describes */ })
-    return { ok: true, rule: updated }
+    const { setAdsRuleLevel } = await import('../services/advertising/ads-rule-crud.service.js')
+    return answer(reply, await setAdsRuleLevel(id, body.level, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
-  fastify.post('/advertising/autonomy/pause-all', async (_request) => {
-    const enabled = await prisma.automationRule.findMany({ where: { domain: 'advertising', enabled: true }, select: { id: true } })
-    const ids = enabled.map((r) => r.id)
-    if (ids.length) await prisma.automationRule.updateMany({ where: { id: { in: ids } }, data: { enabled: false } })
-    return { ok: true, pausedRuleIds: ids }
+  fastify.post('/advertising/autonomy/pause-all', async (request) => {
+    const { pauseAllAdsRules } = await import('../services/advertising/ads-rule-crud.service.js')
+    return pauseAllAdsRules(actorFromHeaders(request.headers as Record<string, unknown>))
   })
   fastify.post('/advertising/autonomy/resume', async (request, reply) => {
     const b = (request.body ?? {}) as { ruleIds?: string[] }
@@ -9119,7 +7760,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as { kind?: string; payload?: Record<string, unknown> }
     if (!b?.kind || !b?.payload) { reply.status(400); return { error: 'kind + payload required' } }
     const { applyRecommendation } = await import('../services/advertising/ads-recommendations.service.js')
-    try { return await applyRecommendation({ kind: b.kind, payload: b.payload }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // R2 — the person who pressed Apply; the writes said `automation:bid-optimizer` / `budget-pacing` before.
+    try { return await applyRecommendation({ kind: b.kind, payload: b.payload, userId: actorFromHeaders(request.headers as Record<string, unknown>) }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AX.10: Budget pacing ────────────────────────────────────────────
@@ -9131,7 +7773,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
   fastify.post('/advertising/pacing/apply', async (request, reply) => {
     const { applyPacing } = await import('../services/advertising/ads-budget-pacing.service.js')
-    try { return await applyPacing((request.body ?? { changes: [] }) as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // R2 — the caller, never an actor named in the body (which could pose as a rule and spend its write cap).
+    const b = (request.body ?? {}) as { changes?: Array<{ campaignId: string; proposedBudgetCents: number }> }
+    try { return await applyPacing({ changes: b.changes ?? [], actor: actorFromHeaders(request.headers as Record<string, unknown>) }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AX.9: Dayparting schedules ──────────────────────────────────────
@@ -9145,24 +7789,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!b?.campaignId || !b?.name) { reply.status(400); return { error: 'campaignId, name required' } }
     return prisma.adSchedule.create({ data: { campaignId: b.campaignId as string, name: b.name as string, windows: (b.windows as object) ?? [], timezone: (b.timezone as string) ?? 'Europe/Rome', enabled: (b.enabled as boolean) ?? true, defaultTargetKey: (b.defaultTargetKey as string | null) ?? null } })
   })
+  // R10 — the patch (with its RC2.T3 resume) lives in ads-schedule.service.ts, shared with turn-down-automation.
   fastify.patch('/advertising/schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as Record<string, unknown>
-    const data: Record<string, unknown> = {}
-    for (const k of ['name', 'windows', 'timezone', 'enabled', 'defaultTargetKey', 'targetOverrides']) if (b[k] !== undefined) data[k] = b[k]
-    const before = await prisma.adSchedule.findUnique({ where: { id }, select: { campaignId: true, lastApplied: true } })
-    if (!before) { reply.status(404); return { error: 'not found' } }
-    // RC2.T3 reactivation safety: disabling a schedule that currently has the
-    // campaign PAUSED must resume it — the cron only resumes ENABLED schedules,
-    // so a disable-while-paused would otherwise strand the campaign paused.
-    if (data.enabled === false && before.lastApplied === 'PAUSED') {
-      try {
-        const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
-        await updateCampaignWithSync({ campaignId: before.campaignId, patch: { status: 'ENABLED' }, actor: 'automation:dayparting-disable', reason: 'dayparting schedule disabled — resume', applyImmediately: true } as never)
-        data.lastApplied = 'ENABLED'
-      } catch { /* best-effort resume */ }
-    }
-    try { return await prisma.adSchedule.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
+    const { patchAdSchedule } = await import('../services/advertising/ads-schedule.service.js')
+    return answer(reply, await patchAdSchedule(id, request.body as Record<string, unknown>))
   })
   fastify.delete('/advertising/schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -9342,113 +7973,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { schedule }
   })
 
-  /**
-   * W4 (2026-08-20) — a schedule being DELETED or DISABLED mid-window must give the budgets back.
-   *
-   * The executor's revert is convergent ("outside every window → base"), so it only reverts
-   * schedules it can still SEE: `findMany({ enabled: true })`. Deleting an active schedule — or
-   * flipping `enabled` off — removed it from that set with its boost still applied, and nothing
-   * would ever restore the base. Dayparting's own delete route has resumed campaigns since RC2.T3;
-   * budget never did.
-   *
-   * The restore honours the same two laws as the executor:
-   *   · base precedence — captured baseline ▸ creation snapshot ▸ live (`ad-budget-schedule.job.ts`);
-   *   · a manual override wins — if the live budget is no longer the value THIS schedule last
-   *     applied, someone else moved it since, and re-fighting them is the §3 precedence decision
-   *     this route must not take on its own.
-   * Best-effort per campaign, same as dayparting's resume.
-   */
-  const bsRestoreBase = async (s: { id: string; campaigns: unknown; lastApplied: unknown }): Promise<{ restored: number; refused: number }> => {
-    const camps = Array.isArray(s.campaigns) ? s.campaigns as Array<{ id: string; dailyBudget?: number | null }> : []
-    const last = (s.lastApplied as Record<string, { budget?: number }> | null) ?? {}
-    let restored = 0, refused = 0
-    if (camps.length === 0) return { restored, refused }
-    const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
-    for (const c of camps) {
-      const applied = last[c.id]?.budget
-      if (applied == null) continue // this schedule never touched it
-      const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true, budgetBaselineCents: true } })
-      if (!campaign || campaign.status === 'ARCHIVED') continue
-      const live = Number(campaign.dailyBudget ?? 0)
-      if (live !== applied) continue // moved by someone else since — their write wins
-      const base = campaign.budgetBaselineCents != null
-        ? campaign.budgetBaselineCents / 100
-        : c.dailyBudget != null ? Number(c.dailyBudget) : live
-      const target = Math.max(1, Math.round(base * 100) / 100)
-      if (live === target) continue
-      try {
-        // 🔴 BSP-P3 — the second of the two bare call sites. `updateCampaignWithSync` returns
-        // `{ ok:false }` rather than throwing ([[reference_mutation_outcome_returned_not_thrown]]),
-        // so this `catch` never saw a refusal and the route reported a restore that never happened.
-        // The `as never` casts are gone: they are what hid the return type from review.
-        const outcome = await updateCampaignWithSync({
-          campaignId: c.id,
-          patch: { dailyBudget: target },
-          actor: `automation:budget-schedule-${s.id}`,
-          reason: 'budget schedule removed or disabled — restore base budget',
-          applyImmediately: true,
-        })
-        // `.ok` is three-way: `no_changes` is ok:true and enqueues nothing, so counting it as a
-        // restore would overstate what this route gave back. Same branch as the executor's.
-        if (outcome.ok && outcome.error !== 'no_changes') restored++
-        else if (!outcome.ok) { refused++; fastify.log.warn({ scheduleId: s.id, campaignId: c.id, error: outcome.error }, '[budget-schedule] restore refused') }
-      } catch { refused++ /* best-effort, mirrors dayparting's resume */ }
-    }
-    return { restored, refused }
-  }
-
+  // W4 / BSP-P3 — the edit and the delete give back what a schedule applied; R14 moved both, unchanged, into
+  // ads-budget-schedule.service.ts (tune-ad-engine and the budget-schedule switch use the same code).
   fastify.patch('/advertising/budget-schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = (request.body ?? {}) as Record<string, unknown>
-    const data: Record<string, unknown> = {}
-    // BSP-B5 sweep — `autoRefill` dropped from the accepted set for the reason given in POST above.
-    for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
-    // BSP.2 (§2.2) — same sanitisation as create: an array or nothing.
-    if (data.excludeDates !== undefined && !Array.isArray(data.excludeDates)) data.excludeDates = []
-    if (b.startDate !== undefined) data.startDate = b.startDate ? new Date(String(b.startDate)) : null
-    if (b.endDate !== undefined) data.endDate = b.endDate ? new Date(String(b.endDate)) : null
-    try {
-      // W4 — read before write, so a disable can give back what THIS schedule applied.
-      const before = data.enabled === false
-        ? await prisma.budgetSchedule.findUnique({ where: { id }, select: { id: true, enabled: true, campaigns: true, lastApplied: true } })
-        : null
-      const schedule = await prisma.budgetSchedule.update({ where: { id }, data })
-      // Disable AFTER the update: the executor only reads enabled schedules, so once the row says
-      // enabled:false the cron cannot race this restore by re-applying the window.
-      // BSP-P3 — the outcome is REPORTED now: "paused" and "paused, and 3 campaigns kept the boost
-      // because the restore was refused" are different facts and the operator gets the second one.
-      const restore = before?.enabled === true ? await bsRestoreBase(before) : null
-      await prisma.advertisingActionLog.create({
-        data: {
-          userId: actorFromHeaders(request.headers as Record<string, unknown>),
-          actionType: 'budget_schedule_update', entityType: 'BUDGET_SCHEDULE', entityId: id,
-          payloadBefore: {}, payloadAfter: { fields: Object.keys(data), enabled: schedule.enabled },
-          amazonResponseStatus: 'SUCCESS',
-        },
-      }).catch(() => { /* best-effort */ })
-      return { schedule, restore }
-    } catch { reply.status(404); return { error: 'not found' } }
+    const { patchBudgetSchedule } = await import('../services/advertising/ads-budget-schedule.service.js')
+    const out = await patchBudgetSchedule(id, (request.body ?? {}) as Record<string, unknown>, actorFromHeaders(request.headers as Record<string, unknown>))
+    if (!out) { reply.status(404); return { error: 'not found' } }
+    return out
   })
 
   fastify.delete('/advertising/budget-schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      const gone = await prisma.budgetSchedule.delete({ where: { id } })
-      // W4 — restore base AFTER the delete (the executor can no longer see the row, so it cannot
-      // re-apply mid-restore). Before this, deleting a schedule mid-window left the boosted
-      // budget in place forever — the one writer that knew the base was gone.
-      // BSP-P3 — and the outcome is reported rather than assumed.
-      const restore = gone.enabled ? await bsRestoreBase(gone) : null
-      await prisma.advertisingActionLog.create({
-        data: {
-          userId: actorFromHeaders(request.headers as Record<string, unknown>),
-          actionType: 'budget_schedule_delete', entityType: 'BUDGET_SCHEDULE', entityId: id,
-          payloadBefore: { name: gone.name, type: gone.type, enabled: gone.enabled }, payloadAfter: {},
-          amazonResponseStatus: 'SUCCESS',
-        },
-      }).catch(() => { /* best-effort */ })
-      return { ok: true, restore }
-    } catch { reply.status(404); return { error: 'not found' } }
+    const { deleteBudgetSchedule } = await import('../services/advertising/ads-budget-schedule.service.js')
+    const out = await deleteBudgetSchedule(id, actorFromHeaders(request.headers as Record<string, unknown>))
+    if (!out) { reply.status(404); return { error: 'not found' } }
+    return out
   })
 
   /**
@@ -9749,11 +8289,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
   fastify.patch('/advertising/rank-targets/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as Record<string, unknown>
-    const data: Record<string, unknown> = {}
-    for (const k of ['name', 'placement', 'targetISPct', 'acosCapPct', 'maxCpcCents', 'biasPct', 'floorBidCents', 'jumpStartPct', 'stepUpPct', 'stepDownPct', 'maxBiasPct', 'keepClimbing', 'pause', 'allOut', 'color', 'sortOrder', 'bidMode', 'bidValueCents', 'bidDeltaPct']) if (b[k] !== undefined) data[k] = b[k]
-    if (b.lanes !== undefined) data.lanes = Array.isArray(b.lanes) ? b.lanes : [] // BL — [] = clear blend
-    try { return await prisma.rankTarget.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
+    // R14 — moved unchanged into ads-engine-settings.service.ts (tune-ad-engine writes through it).
+    const { patchRankTarget } = await import('../services/advertising/ads-engine-settings.service.js')
+    const target = await patchRankTarget(id, request.body as Record<string, unknown>)
+    if (!target) { reply.status(404); return { error: 'not found' } }
+    return target
   })
   fastify.delete('/advertising/rank-targets/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -11216,7 +9756,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
   fastify.post('/advertising/bid-optimizer/apply', async (request, reply) => {
     const { applyBidOptimization } = await import('../services/advertising/ads-bid-optimizer.service.js')
-    try { return await applyBidOptimization((request.body ?? { changes: [] }) as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // R2 — the caller, never an actor named in the body (which could pose as a rule and spend its write cap).
+    const b = (request.body ?? {}) as { changes?: Array<{ targetId: string; proposedBidCents: number }>; dryRun?: boolean; changeSetId?: string | null }
+    try { return await applyBidOptimization({ changes: b.changes ?? [], dryRun: b.dryRun, changeSetId: b.changeSetId, actor: actorFromHeaders(request.headers as Record<string, unknown>) }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AX.7: Negative + keyword harvesting ─────────────────────────────
@@ -11493,63 +10035,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Additive and backward-compatible: absent `matchType` falls through to the pre-existing
   // `isPrefix` behaviour, so every caller that predates this — and every stored row — is
   // unchanged. `isPrefix` is still written so the legacy column stays consistent with the new one.
+  // R13 — add / remove live in ads-guardrail.service.ts, shared with Claude's set-ad-guardrail; answers unchanged.
   fastify.post('/advertising/keyword-protections', async (request, reply) => {
-    const b = request.body as {
-      mode?: string; term?: string; isPrefix?: boolean; matchType?: string
-      marketplace?: string | null; campaignId?: string | null; reason?: string | null
-    }
-    const mode = b.mode === 'BLACKLIST' ? 'BLACKLIST' : 'WHITELIST'
-    const MATCH_TYPES = ['EXACT', 'PREFIX', 'CONTAINS']
-    const rawMatch = typeof b.matchType === 'string' ? b.matchType.trim().toUpperCase() : ''
-    if (rawMatch && !MATCH_TYPES.includes(rawMatch)) {
-      reply.code(400)
-      return { ok: false, error: `matchType must be one of ${MATCH_TYPES.join('/')}`, code: 'match_type_invalid' }
-    }
-    // The gate reads `matchType ?? (isPrefix ? 'PREFIX' : 'EXACT')`, so writing null here keeps the
-    // old two-way behaviour exactly. Only an explicit choice stores a value.
-    const matchType = rawMatch || null
-    const { normaliseTerm } = await import('../services/advertising/ads-write-gate.js')
-    const term = normaliseTerm(String(b.term ?? ''))
-    if (!term) { reply.code(400); return { ok: false, error: 'term required' } }
-    // Same normalisation the gate matches on, so what an operator types is what binds.
-    const existing = await prisma.adKeywordProtection.findFirst({
-      where: { mode, term, marketplace: b.marketplace ?? null, campaignId: b.campaignId ?? null },
-      select: { id: true, matchType: true, isPrefix: true },
-    })
-    if (existing) {
-      // NEG.5 — say what is already there and how it differs. A protection cannot be edited in
-      // place (only deleted and re-added, which loses createdBy/createdAt), so a bare "already
-      // protected" left an operator trying to strengthen EXACT → CONTAINS with no way forward and
-      // no idea why.
-      const had = existing.matchType ?? (existing.isPrefix ? 'PREFIX' : 'EXACT')
-      const want = matchType ?? (b.isPrefix ? 'PREFIX' : 'EXACT')
-      reply.code(409)
-      return {
-        ok: false,
-        id: existing.id,
-        error: had === want
-          ? `“${term}” is already protected with ${had} matching`
-          : `“${term}” is already protected with ${had} matching. A protection cannot be changed in place — delete it and re-add it as ${want}.`,
-        code: 'already_protected',
-        existingMatchType: had,
-      }
-    }
-    const row = await prisma.adKeywordProtection.create({
-      data: {
-        mode, term, isPrefix: matchType ? matchType === 'PREFIX' : !!b.isPrefix, matchType,
-        marketplace: b.marketplace ?? null, campaignId: b.campaignId ?? null,
-        reason: b.reason ?? null, createdBy: actorFromHeaders(request.headers as Record<string, unknown>),
-      },
-    })
-    return { ok: true, item: row }
+    const { addKeywordProtection } = await import('../services/advertising/ads-guardrail.service.js')
+    return answer(reply, await addKeywordProtection(request.body as KeywordProtectionInput, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   fastify.delete('/advertising/keyword-protections/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const row = await prisma.adKeywordProtection.findUnique({ where: { id } })
-    if (!row) { reply.code(404); return { ok: false, error: 'not_found' } }
-    await prisma.adKeywordProtection.delete({ where: { id } })
-    return { ok: true }
+    const { removeKeywordProtection } = await import('../services/advertising/ads-guardrail.service.js')
+    return answer(reply, await removeKeywordProtection(id, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   fastify.patch('/advertising/ad-groups/:id', async (request, reply) => {
@@ -11593,37 +10088,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
-  // CPC-ceiling enforcement (route layer, before the audited mutation service).
-  // For each requested bid, if the target's campaign has cpcCeiling enabled and
-  // the target has historical clicks, clamp the bid to `multiple × its CPC`
-  // (never below the 5-cent floor). Targets with no click history have no basis
-  // → left unclamped. Returns the effective entries + a clamp log. One findMany.
-  const clampBidsByCeiling = async (
-    entries: Array<{ adTargetId: string; bidCents: number }>,
-  ): Promise<{ entries: Array<{ adTargetId: string; bidCents: number }>; clamps: Array<{ adTargetId: string; from: number; to: number; ceilingCents: number }> }> => {
-    const ids = entries.map((e) => e.adTargetId)
-    const targets = await prisma.adTarget.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, clicks: true, spendCents: true, adGroup: { select: { campaign: { select: { dynamicBidding: true } } } } },
-    })
-    const byId = new Map(targets.map((t) => [t.id, t]))
-    const clamps: Array<{ adTargetId: string; from: number; to: number; ceilingCents: number }> = []
-    const out = entries.map((e) => {
-      const t = byId.get(e.adTargetId)
-      const db = (t?.adGroup?.campaign?.dynamicBidding ?? {}) as { cpcCeiling?: { enabled?: boolean; multiple?: number } }
-      const ceil = db.cpcCeiling
-      if (!t || !ceil?.enabled || !t.clicks || t.clicks <= 0) return e
-      const avgCpc = t.spendCents / t.clicks
-      const ceilingCents = Math.max(5, Math.round((ceil.multiple ?? 1.5) * avgCpc))
-      if (e.bidCents > ceilingCents) {
-        clamps.push({ adTargetId: e.adTargetId, from: e.bidCents, to: ceilingCents, ceilingCents })
-        return { ...e, bidCents: ceilingCents }
-      }
-      return e
-    })
-    return { entries: out, clamps }
-  }
-
+  // CPC-ceiling enforcement before the audited mutation service: clampBidsByCeiling
+  // (services/advertising/ads-cpc-ceiling.ts, A1 — moved there unchanged).
   fastify.patch('/advertising/ad-targets/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = request.body as {
@@ -12392,15 +10858,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       enabled?: boolean
       dryRun?: boolean
     }
-    const existing = await prisma.budgetPool.findUnique({ where: { id } })
-    if (!existing) {
+    // R14 — moved unchanged into ads-engine-settings.service.ts (tune-ad-engine writes through it).
+    const { patchBudgetPool } = await import('../services/advertising/ads-engine-settings.service.js')
+    const pool = await patchBudgetPool(id, body as Record<string, unknown>)
+    if (!pool) {
       reply.code(404)
       return { error: 'not_found' }
     }
-    const pool = await prisma.budgetPool.update({
-      where: { id },
-      data: body as Record<string, unknown>,
-    })
     return { pool }
   })
 

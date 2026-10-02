@@ -390,6 +390,13 @@ async function computeUrgencyWeights(
 
 import { updateCampaignWithSync, type AdsActor } from './ads-mutation.service.js'
 
+/**
+ * R2 — the actor the pool cron's budget writes carry: the engine the Control Room's evidence and actor list look for
+ * (`ads-control-room-detail.service.ts`, `ads-actors.service.ts`). It wrote `user:cron-budget-pool` before, which
+ * the change feed read as a person; `parseActor` still reads those old rows as this engine.
+ */
+export const BUDGET_POOL_CRON_ACTOR: AdsActor = 'automation:budget-pool-rebalance'
+
 export interface ApplyOutcome {
   applied: number
   skipped: number

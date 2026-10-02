@@ -1,8 +1,7 @@
 /** FP3 — add a line to a DRAFT quote. */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
-import { audit } from "@/lib/audit";
+import { addDraftQuoteLine } from "@/lib/quotes/create-draft";
 import { guarded } from "@/lib/auth/guard";
 import { FEATURES } from "@/lib/auth/permissions";
 
@@ -12,13 +11,15 @@ const Body = z.object({ templateId: z.string().nullable().optional(), descriptio
 
 export const POST = guarded(FEATURES.quotesCreate, async (req, { params, actor }) => {
   const { id } = await params;
-  const quote = await prisma.quote.findUnique({ where: { id }, select: { state: true } });
-  if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (quote.state !== "DRAFT") return NextResponse.json({ error: "Revise the quote to a draft before editing lines" }, { status: 400 });
+  // P12 — the write lives in src/lib/quotes/create-draft.ts (Claude's factory-draft-quote adds lines through it too).
+  // A body that does not parse still adds an empty line, as before; a missing or non-draft quote is refused first.
   const parsed = Body.safeParse(await req.json().catch(() => null));
-  const line = await prisma.quoteLine.create({
-    data: { quoteId: id, templateId: parsed.success ? parsed.data.templateId ?? null : null, description: parsed.success ? parsed.data.description : undefined, selections: [] },
+  const added = await addDraftQuoteLine({
+    quoteId: id,
+    actorId: actor!.id,
+    templateId: parsed.success ? parsed.data.templateId ?? null : null,
+    description: parsed.success ? parsed.data.description : undefined,
   });
-  void audit({ actorId: actor!.id, entityType: "quote", entityId: id, action: "line.added", after: { lineId: line.id } });
-  return NextResponse.json({ line }, { status: 201 });
+  if (!added.ok) return NextResponse.json({ error: added.error }, { status: added.status });
+  return NextResponse.json({ line: added.line }, { status: 201 });
 });

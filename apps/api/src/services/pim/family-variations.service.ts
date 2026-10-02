@@ -158,6 +158,27 @@ export async function setFamilyVariationValues(familyId: string, input: { expect
 }
 
 /**
+ * MCP full control L7 — a family's axes named by their variation value names ("Size", "Colore"): the dictionary attribute
+ * each one is (by code, semantic key or label, as `attributeForAxis` reads an axis), for `setFamilyAxes`. A name that is
+ * no attribute, or more than one, is refused by name: a family varies by dictionary attributes only.
+ */
+export async function axisCodesFor(names: readonly string[]): Promise<{ codes: string[]; labels: string[] } | { error: string }> {
+  const attributes = await variationDictionary()
+  const codes: string[] = []
+  for (const name of names) {
+    const found = attributeForAxis(name, attributes)
+    if ('reason' in found) {
+      return { error: found.reason === 'ambiguous'
+        ? `"${name}" names more than one attribute (${found.candidates.join(', ')}): use one of these codes as the variation name.`
+        : `"${name}" is not an attribute of the Nexus attribute dictionary: add it there (or use an existing attribute's name) first.` }
+    }
+    codes.push(found.attribute!.code)
+  }
+  if (new Set(codes).size !== codes.length) return { error: 'Two variation names are the same attribute: name each attribute once.' }
+  return { codes, labels: [...names] }
+}
+
+/**
  * VTR step 1 — THE writer of a family's axes: an ordered list of dictionary attribute CODES (`variationAxisCodes`). The label mirror
  * `variationAxes` keeps each axis's existing spelling ("Colore") so today's readers see no change; a new axis takes the attribute label.
  * Compare-and-set on the family root; open coordinate editors are invalidated (their listing versions bump), as the studio axes save does.

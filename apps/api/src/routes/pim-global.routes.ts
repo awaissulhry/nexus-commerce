@@ -37,6 +37,7 @@ import { getMasterAttributeSchema } from '../services/pim/master-schema.service.
 import { proposeImportFromChannel, proposeImportFromFlatFile } from '../services/pim/reverse-mapping.service.js'
 import { getMasterCompleteness } from '../services/pim/master-completeness.service.js'
 import { suggestMasterAttributes } from '../services/pim/master-ai-fill.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -509,7 +510,7 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       const fields: ResettableField[] = field === 'all' ? ['title', 'description', 'price', 'quantity', 'bulletPoints'] : [field]
       let reset: Awaited<ReturnType<typeof resetListingToMaster>>
       try {
-        reset = await resetListingToMaster({ productId: id, listingId: clId, fields, actor: bulkActorOf(request) ?? 'channel-listing-reset' })
+        reset = await resetListingToMaster({ productId: id, listingId: clId, fields, actor: bulkActorOf(request) ?? 'channel-listing-reset', can: permissionCheckerFor(request) })
       } catch (err) {
         if (err instanceof ListingPricingError) return reply.status(err.statusCode).send({ error: err.message, ...err.details })
         throw err

@@ -1,0 +1,2 @@
+200
+{"workspaceId":"nexus_legacy_workspace","id":"golden-rule-a","name":"Alpha error rate","description":"Too many failures","metric":"errorRate","operator":"gt","threshold":0.2,"windowMinutes":15,"channel":"EBAY","notificationChannels":["log"],"enabled":true,"lastEvaluatedAt":null,"lastValue":null,"lastFired":true,"createdAt":"2026-09-15T01:40:00.000Z","updatedAt":"2026-09-15T03:20:00.000Z"}

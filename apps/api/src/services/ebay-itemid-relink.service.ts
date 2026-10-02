@@ -12,6 +12,9 @@
  *     ebay-itemid-relink.pure.ts for the rules. 'unverifiable' requires an
  *     explicit acknowledgement; it never auto-passes.
  *   • An ItemID already owned by a DIFFERENT family is refused outright.
+ *   • I4 / G2 — the item must be listed by the seller behind the account (Item.Seller.UserID equals the
+ *     connection's externalAccountId). The SKUs alone do not prove it: two businesses sharing stock by SKU
+ *     carry the same SKUs. An account with no recorded seller is 'unverifiable'.
  *   • Writes are transactional and cover BOTH stores, so the two can't drift
  *     apart again through this path.
  */
@@ -21,7 +24,10 @@ import { parseLiveVariations } from './ebay-membership-reconcile.service.js'
 import {
   normalizeItemId,
   checkItemIdOwnership,
+  checkSellerOwnership,
+  combineOwnership,
   parseListingStatus,
+  parseSellerUserId,
   parseTopLevelSku,
   type OwnershipVerdict,
 } from './ebay-itemid-relink.pure.js'
@@ -46,6 +52,8 @@ export interface RelinkResult {
   foreignSkus: string[]
   liveTitle?: string
   liveStatus?: string | null
+  /** I4 / G2 — the seller eBay names for the item, and the seller recorded for the account (null = none recorded). */
+  seller?: { item: string | null; account: string | null }
   before: {
     externalListingId: string | null
     listingStatus: string | null
@@ -63,6 +71,7 @@ export function buildGetItemForRelinkXml(itemId: string): string {
   <OutputSelector>Item.Title</OutputSelector>
   <OutputSelector>Item.SKU</OutputSelector>
   <OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>
+  <OutputSelector>Item.Seller.UserID</OutputSelector>
   <OutputSelector>Item.Variations.Variation.SKU</OutputSelector>
   <OutputSelector>Item.Variations.Variation.VariationSpecifics</OutputSelector>
 </GetItemRequest>`
@@ -179,7 +188,14 @@ export async function relinkEbayItemId(
   const topSku = parseTopLevelSku(raw)
   const liveSkus = variationSkus.length > 0 ? variationSkus : topSku ? [topSku] : []
 
-  const check = checkItemIdOwnership({ liveSkus, familySkus, listingStatus: liveStatus })
+  // I4 / G2 — the SKUs alone do not prove ownership (two businesses can carry the same SKUs): the item must also be
+  // listed by the seller behind the account this re-link drives it through.
+  const account = await prisma.channelConnection.findFirst({ where: { id: ctx.connectionId }, select: { externalAccountId: true } })
+  const seller = { item: parseSellerUserId(raw), account: account?.externalAccountId ?? null }
+  const check = combineOwnership(
+    checkItemIdOwnership({ liveSkus, familySkus, listingStatus: liveStatus }),
+    checkSellerOwnership({ itemSeller: seller.item, accountSeller: seller.account }),
+  )
   const result: RelinkResult = {
     ...base,
     itemId,
@@ -189,6 +205,7 @@ export async function relinkEbayItemId(
     foreignSkus: check.foreignSkus,
     liveTitle,
     liveStatus,
+    seller,
   }
 
   const mayWrite =

@@ -1,0 +1,2 @@
+200
+{"tags":[{"workspaceId":"nexus_legacy_workspace","id":"golden-tagw-sale","name":"sale","color":"#ff0000","icon":"tag","metadata":null,"createdAt":"2026-09-15T05:00:00.000Z","updatedAt":"2026-09-15T09:30:00.000Z"},{"workspaceId":"nexus_legacy_workspace","id":"golden-tagw-summer","name":"Summer","color":null,"icon":null,"metadata":null,"createdAt":"2026-09-15T06:40:00.000Z","updatedAt":"2026-09-15T09:40:00.000Z"}]}

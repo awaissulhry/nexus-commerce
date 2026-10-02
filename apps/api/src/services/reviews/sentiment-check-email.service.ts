@@ -13,6 +13,7 @@
  */
 
 import { sendEmail } from '../email/transport.js'
+import { requireBusinessIdentity, resolveBusinessIdentity, type BusinessIdentity } from '../business-identity.service.js'
 import { isEmailSuppressed, unsubscribeTokenFor } from './email-suppression.service.js'
 
 export type SentimentEmailLocale = 'it' | 'de' | 'fr' | 'es' | 'en'
@@ -160,7 +161,17 @@ const UNSUBSCRIBE_LABEL: Record<SentimentEmailLocale, string> = {
   en: 'Unsubscribe',
 }
 
-function buildHtml(ctx: SentimentEmailContext): string {
+/** O3 — the subject as `identity` (Xavia's copy names Xavia; another business's names it instead). */
+function subjectFor(copy: LocaleCopy, identity: BusinessIdentity): string {
+  return identity.xavia ? copy.subject : copy.subject.replace(' — Xavia', ` — ${identity.brandName}`)
+}
+
+/** O3 — the footer as `identity`: Xavia keeps its tagline; another business's name replaces it. */
+function footerFor(copy: LocaleCopy, identity: BusinessIdentity): string {
+  return identity.xavia ? copy.footer : [identity.brandName, ...copy.footer.split('\n').slice(1)].join('\n')
+}
+
+function buildHtml(ctx: SentimentEmailContext, identity: BusinessIdentity): string {
   const locale = ctx.locale ?? 'it'
   const copy = COPY[locale]
   const positiveUrl = `${ctx.baseUrl}/positive`
@@ -184,7 +195,7 @@ function buildHtml(ctx: SentimentEmailContext): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${escapeHtml(copy.subject)}</title>
+  <title>${escapeHtml(subjectFor(copy, identity))}</title>
 </head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f5;">
@@ -192,7 +203,7 @@ function buildHtml(ctx: SentimentEmailContext): string {
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
 
         <tr><td style="padding:32px 32px 8px;text-align:center;border-bottom:3px solid #c62828;">
-          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">XAVIA</h1>
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:0.05em;color:#c62828;">${escapeHtml(identity.brandMark)}</h1>
         </td></tr>
 
         <tr><td style="padding:32px 32px 8px;text-align:center;">
@@ -239,7 +250,7 @@ function buildHtml(ctx: SentimentEmailContext): string {
 
         <tr><td style="padding:24px 32px;background:#fafafa;text-align:center;border-top:1px solid #eee;">
           ${orderRef ? `<div style="font-size:12px;color:#aaa;margin-bottom:4px;">${orderRef}</div>` : ''}
-          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">${escapeHtml(copy.footer)}</p>
+          <p style="margin:0;font-size:11px;color:#999;white-space:pre-line;">${escapeHtml(footerFor(copy, identity))}</p>
           <p style="margin:8px 0 0;font-size:11px;color:#aaa;">
             <a href="${unsubUrl}" style="color:#888;text-decoration:underline;">${escapeHtml(UNSUBSCRIBE_LABEL[locale])}</a>
           </p>
@@ -252,7 +263,7 @@ function buildHtml(ctx: SentimentEmailContext): string {
 </html>`
 }
 
-function buildText(ctx: SentimentEmailContext): string {
+function buildText(ctx: SentimentEmailContext, identity: BusinessIdentity): string {
   const locale = ctx.locale ?? 'it'
   const copy = COPY[locale]
   const positiveUrl = `${ctx.baseUrl}/positive`
@@ -268,7 +279,7 @@ function buildText(ctx: SentimentEmailContext): string {
     `${copy.ctaPositive}: ${positiveUrl}`,
     `${copy.ctaNegative}: ${negativeUrl}`,
     '',
-    '— Xavia',
+    `— ${identity.brandName}`,
   ]
   if (locale !== 'en') {
     lines.push(
@@ -298,19 +309,21 @@ function escapeHtml(s: string): string {
  * Lets the dashboard iframe show the operator what the email looks
  * like in each locale before exposing real customers.
  */
-export function renderSentimentCheckPreview(opts: {
+export async function renderSentimentCheckPreview(opts: {
   locale: SentimentEmailLocale
   productName?: string | null
   customerName?: string | null
-}): string {
+}): Promise<string> {
+  // O3 — previewed as the business it would be sent for; one with no identity for buyers is refused (409).
+  const identity = await requireBusinessIdentity()
   return buildHtml({
     to: 'preview@xavia.it',
     customerName: opts.customerName ?? 'Test Operator',
-    productName: opts.productName ?? 'Casco Xavia Carbon',
+    productName: opts.productName ?? (identity.xavia ? 'Casco Xavia Carbon' : 'Test product'),
     baseUrl: (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '') + '/r/__test__',
     channelOrderId: 'TEST-PREVIEW',
     locale: opts.locale,
-  })
+  }, identity)
 }
 
 export async function sendSentimentCheckEmail(
@@ -322,15 +335,20 @@ export async function sendSentimentCheckEmail(
   if (sup.suppressed) {
     return { ok: false, dryRun: false, suppressed: true, error: `suppressed (${sup.source})` }
   }
+  // O3 — sent as the business the order belongs to; refused (nothing sent) when it has no identity for buyers.
+  const found = await resolveBusinessIdentity()
+  if (found.ok === false) return { ok: false, dryRun: false, error: found.reason }
+  const identity = found.identity
   const locale = ctx.locale ?? 'it'
   const copy = COPY[locale]
   const result = await sendEmail({
     to: ctx.to,
-    subject: copy.subject,
-    html: buildHtml(ctx),
-    text: buildText(ctx),
+    subject: subjectFor(copy, identity),
+    html: buildHtml(ctx, identity),
+    text: buildText(ctx, identity),
     tag: 'review-sentiment-check',
-    headers: buildUnsubscribeHeaders(ctx.to),
+    ...(identity.emailFrom ? { from: identity.emailFrom } : {}),
+    headers: buildUnsubscribeHeaders(ctx.to, identity),
   })
   return { ok: result.ok, dryRun: result.dryRun, error: result.error }
 }
@@ -340,11 +358,11 @@ export async function sendSentimentCheckEmail(
  * unlock the one-click "Unsubscribe" button in Gmail / Apple Mail. Bare
  * `mailto:` is the legacy fallback for ancient clients.
  */
-function buildUnsubscribeHeaders(to: string): Record<string, string> {
+function buildUnsubscribeHeaders(to: string, identity: BusinessIdentity): Record<string, string> {
   const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
   const token = unsubscribeTokenFor(to)
   const httpUrl = `${webBase}/api/email/unsubscribe?token=${token}&channel=review-sentiment-check`
-  const mailto = 'mailto:unsubscribe@xavia.it?subject=unsubscribe'
+  const mailto = `mailto:${identity.unsubscribeEmail}?subject=unsubscribe`
   return {
     'List-Unsubscribe': `<${httpUrl}>, <${mailto}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',

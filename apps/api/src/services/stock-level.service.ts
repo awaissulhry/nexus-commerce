@@ -26,7 +26,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
-import { afterStockMovementCommit, applyStockMovement, applyStockMovementInTx, InsufficientStockError, type StockMovementTxResult } from './stock-movement.service.js'
+import { afterStockMovementCommit, applyStockMovementInTx, InsufficientStockError, type StockMovementTxResult } from './stock-movement.service.js'
 import { lockProductStock } from './stock-lock.js'
 import { pooledNow, PoolHoldError, PooledProductError } from './stock-pool/pool-guard.js'
 import { consumePoolHolds, releasePoolHolds, reportPoolOrderRefusal } from './stock-pool/order-routing.js'
@@ -469,7 +469,14 @@ export interface TransferStockArgs {
   actor?: string
 }
 
-/** Atomically move N units between locations. */
+/**
+ * Atomically move N units between locations.
+ *
+ * MCP full control 08 S2 (F8) — ONE transaction: the OUT and the IN movement (with their from/to stamps) commit
+ * together or not at all. Before, they were two transactions, so a failure between them left the units gone from the
+ * source and arrived nowhere, and every reader in between saw them missing. A protected location on either side
+ * (F7: the FBA mirror, a Shopify location) is refused before anything is written.
+ */
 export async function transferStock(args: TransferStockArgs) {
   const {
     productId,
@@ -485,44 +492,40 @@ export async function transferStock(args: TransferStockArgs) {
     throw new Error('transferStock: from and to locations must differ')
   }
 
-  // Two applyStockMovement calls in sequence. Each is its own
-  // transaction; if the second fails, we're left with an OUT but no IN.
-  // Acceptable because the audit row makes the inconsistency visible
-  // and a retry of the IN side completes the transfer cleanly.
-  const out = await applyStockMovement({
+  const outInput = {
     productId,
     variationId,
     locationId: fromLocationId,
     change: -quantity,
-    reason: 'TRANSFER_OUT',
+    reason: 'TRANSFER_OUT' as const,
     referenceType: 'StockTransfer',
     notes,
     actor,
-  })
-  const inMv = await applyStockMovement({
-    productId,
-    variationId,
-    locationId: toLocationId,
-    change: +quantity,
-    reason: 'TRANSFER_IN',
-    referenceType: 'StockTransfer',
-    referenceId: out.id, // link to the OUT row
-    notes,
-    actor,
-  })
-
-  // Stitch fromLocationId/toLocationId on both rows for the
-  // movement-history UI.
-  await prisma.stockMovement.update({
-    where: { id: out.id },
-    data: { fromLocationId, toLocationId },
-  })
-  await prisma.stockMovement.update({
-    where: { id: inMv.id },
-    data: { fromLocationId, toLocationId },
+  }
+  const committed = await prisma.$transaction(async (tx) => {
+    const out = await applyStockMovementInTx(tx, outInput)
+    const inMv = await applyStockMovementInTx(tx, {
+      productId,
+      variationId,
+      locationId: toLocationId,
+      change: +quantity,
+      reason: 'TRANSFER_IN',
+      referenceType: 'StockTransfer',
+      referenceId: out.movement.id, // link to the OUT row
+      notes,
+      actor,
+    })
+    // Stitch fromLocationId/toLocationId on both rows for the movement-history UI.
+    const stamped = await Promise.all([out.movement.id, inMv.movement.id].map((id) =>
+      tx.stockMovement.update({ where: { id }, data: { fromLocationId, toLocationId } })))
+    return { out, inMv, stamped }
   })
 
-  return { out, in: inMv }
+  // After the commit: the queue push, stockout hook and read-cache refresh of each movement.
+  await afterStockMovementCommit({ productId, reason: 'TRANSFER_OUT' }, committed.out)
+  await afterStockMovementCommit({ productId, reason: 'TRANSFER_IN' }, committed.inMv)
+
+  return { out: committed.stamped[0], in: committed.stamped[1] }
 }
 
 /**

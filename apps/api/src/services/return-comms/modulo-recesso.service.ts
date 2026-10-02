@@ -21,6 +21,7 @@
  */
 
 import PDFDocument from 'pdfkit'
+import { requireCompanyIdentity } from '../business-identity.service.js'
 
 export interface ModuloRecessoInput {
   rmaNumber: string | null
@@ -62,7 +63,11 @@ function formatAddress(addr: Record<string, unknown> | null): string {
  * is fully serialized — pdfkit's `end()` triggers the 'end' event
  * after streams finalize.
  */
-export function buildModuloRecessoPdf(input: ModuloRecessoInput): Promise<Buffer> {
+export async function buildModuloRecessoPdf(input: ModuloRecessoInput): Promise<Buffer> {
+  // O3 — addressed to the business the return belongs to: its company identity (Settings › Company; for Xavia
+  // NEXUS_ISSUER_* fills a gap); refused when it lacks a name or a full address — never a placeholder address.
+  const company = await requireCompanyIdentity(['name', 'address'], 'the withdrawal form')
+  const recipient = [company.name, ...company.postalLines, ...(company.email ? [`Email: ${company.email}`] : [])]
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
@@ -70,7 +75,7 @@ export function buildModuloRecessoPdf(input: ModuloRecessoInput): Promise<Buffer
         margin: 56,
         info: {
           Title: `Modulo di Recesso ${input.rmaNumber ?? input.channelOrderId ?? ''}`.trim(),
-          Author: 'Xavia',
+          Author: company.name,
           Subject: 'Modulo di Recesso / Withdrawal Form',
           Keywords: 'recesso withdrawal return EU consumer rights',
         },
@@ -91,19 +96,15 @@ export function buildModuloRecessoPdf(input: ModuloRecessoInput): Promise<Buffer
         .text('Withdrawal Form', { align: 'center' })
         .moveDown(0.5)
 
-      // Recipient block (always Xavia for now — when multi-tenant,
-      // pull from BrandSettings).
+      // Recipient block: the business the return belongs to (O3, business-identity.service).
       doc
         .fontSize(10)
         .fillColor('#0f172a')
         .text('Destinatario / Recipient:', { continued: false })
         .moveDown(0.2)
         .fontSize(11)
-        .text('Xavia S.r.l.')
-        .text('Via Esempio 1')
-        .text('47838 Riccione (RN), Italia')
-        .text('Email: support@xavia.it')
-        .moveDown(0.8)
+      for (const line of recipient) doc.text(line)
+      doc.moveDown(0.8)
 
       // Order context
       const orderDateStr = input.orderDate

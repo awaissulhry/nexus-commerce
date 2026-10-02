@@ -9,6 +9,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { updateCampaignWithSync } from './ads-mutation.service.js'
+import { adsActorOf } from './ads-actor.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 
 const RAISE_PCT = 0.25
@@ -49,9 +50,11 @@ export async function previewPacing(opts: { targetRoas?: number } = {}): Promise
 }
 
 export async function applyPacing(args: { changes: Array<{ campaignId: string; proposedBudgetCents: number }>; actor?: string }): Promise<{ applied: number }> {
+  // R2 — the bare default `budget-pacing` read as a PERSON of that name in the change feed.
+  const actor = adsActorOf(args.actor, 'budget-pacing')
   let applied = 0
   for (const c of args.changes) {
-    try { await updateCampaignWithSync({ campaignId: c.campaignId, patch: { dailyBudget: c.proposedBudgetCents / 100 }, actor: args.actor ?? 'budget-pacing', reason: 'AX.10 budget pacing' } as never); applied++ }
+    try { await updateCampaignWithSync({ campaignId: c.campaignId, patch: { dailyBudget: c.proposedBudgetCents / 100 }, actor, reason: 'AX.10 budget pacing' }); applied++ }
     catch (e) { logger.warn('[AX.10] pacing apply failed', { campaignId: c.campaignId, error: (e as Error).message }) }
   }
   return { applied }

@@ -118,6 +118,17 @@ export interface MktTickSummary {
 
 let lastSummary: string | null = null
 
+/**
+ * R8 (MCP full control, part 06) — the contexts a marketing rule's trigger would hand it now, built exactly as the tick
+ * builds them (read-only), for Claude's preview-automation.
+ */
+export async function marketingContextsFor(trigger: string): Promise<Array<{ marketplace: string | null } & Record<string, unknown>>> {
+  if (trigger === 'MKT_ACOS_BREACH') return (await buildAcosBreachContexts()) as never
+  if (trigger === 'MKT_UNDERPACING') return (await buildUnderpacingContexts()) as never
+  if (trigger === 'MKT_CRON_TICK') return [{ marketplace: null, ts: Date.now() }]
+  return []
+}
+
 export async function runMarketingRuleEvaluatorOnce(): Promise<MktTickSummary> {
   const startedAt = Date.now()
   const [acos, underpace] = await Promise.all([buildAcosBreachContexts(), buildUnderpacingContexts()])

@@ -30,6 +30,22 @@ vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn(), 
 vi.mock('./control-audit.service.js', () => ({ recordControlChange: vi.fn() }))
 vi.mock('./exemplar.service.js', () => ({ mintExemplarFromDecision: vi.fn() }))
 vi.mock('../../utils/logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }))
+/*
+ * MCP full control A4 — `set-target-bid` executes now, so S8.4 refuses its bulk approve (tested below with the real
+ * tool). The bulk-sentence cases were written with it as the preview-only stand-in: they keep it as one, a copy of
+ * the real tool without its executor, so they still test what they were written to test.
+ */
+vi.mock('../agents/tool-registry.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../agents/tool-registry.js')>()
+  return {
+    ...real,
+    getTool: (name: string) => {
+      const tool = real.getTool(name)
+      return name === 'set-target-bid' && tool && !executableBid.on ? { ...tool, execute: undefined } : tool
+    },
+  }
+})
+const executableBid = vi.hoisted(() => ({ on: false }))
 
 import prisma from '../../db.js'
 import { decideApproval } from '../agents/approval-gate.service.js'
@@ -479,6 +495,27 @@ describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
     expect(p.count).toBe(1)
     expect(p.sentence).toContain('approves 1 action')
     expect(p.sentence).toContain('already decided or counting down')
+  })
+
+  it('A4 — a bid change that executes is decided one at a time (S8.4), and its money is still stated', async () => {
+    executableBid.on = true
+    try {
+      db.agentApproval.findMany.mockResolvedValue([
+        pending('set-target-bid', 'high', { currency: 'EUR', currentBidCents: 31, proposedBidCents: 84 }),
+        pending('set-target-bid', 'high', { currency: 'EUR', currentBidCents: 50, proposedBidCents: 60, effectiveBidCents: 55 }),
+      ] as never)
+      const p = await previewBulk(['a', 'b'], 'approve')
+      expect(p.blockedReason).toContain('can actually change something on Amazon (set target bid)')
+      // The bid that lands (after the clamps) is what is counted: 53c + 5c.
+      expect(p.euro?.amount).toBe(58)
+      // A bid in another currency is not added to euros.
+      db.agentApproval.findMany.mockResolvedValue([
+        pending('set-target-bid', 'high', { currency: 'GBP', currentBidCents: 31, proposedBidCents: 84 }),
+      ] as never)
+      expect((await previewBulk(['a'], 'approve')).euro).toBeNull()
+    } finally {
+      executableBid.on = false
+    }
   })
 
   it('says so plainly when nothing is selected', async () => {

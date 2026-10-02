@@ -7,7 +7,8 @@
  *
  * Part 1 drives the real refund publisher and the real signing code (only the network, the token
  * and the stored key are stand-ins) and verifies the signature cryptographically against a base
- * rebuilt by hand. Part 2 is a census: every file that names an endpoint on eBay's must-sign list
+ * rebuilt by hand. MCP full control 07 O12: the request carries the amount (orderLevelRefundAmount), so eBay refunds
+ * exactly what Nexus records and caps. Part 2 is a census: every file that names an endpoint on eBay's must-sign list
  * must call it through the signing client.
  */
 import { createHash, generateKeyPairSync, verify } from 'node:crypto'
@@ -89,7 +90,8 @@ describe('P0.4 — eBay issue_refund is signed', () => {
       'Content-Digest': `sha-256=:${createHash('sha256').update(request.body, 'utf8').digest('base64')}:`,
     })
     expect(request.headers['Signature-Input']).toMatch(/^sig1=\("content-digest" "x-ebay-signature-key" "@method" "@path" "@authority"\);created=\d+$/)
-    expect(JSON.parse(request.body)).toEqual({ reasonForRefund: 'ITEM_DAMAGED', comment: 'Refund issued via Nexus Commerce' })
+    // 07 O12 — the amount Nexus records is the amount eBay is asked for (before: no amount was sent at all).
+    expect(JSON.parse(request.body)).toEqual({ reasonForRefund: 'ITEM_DAMAGED', comment: 'Refund issued via Nexus Commerce', orderLevelRefundAmount: { value: '49.90', currency: 'EUR' } })
     // The call ledger row is unchanged.
     expect(h.recorded).toEqual([expect.objectContaining({ channel: 'EBAY', operation: 'issueRefund', connectionId: 'conn-ebay-it', marketplace: 'EBAY_IT' })])
   })

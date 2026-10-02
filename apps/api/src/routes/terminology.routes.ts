@@ -13,6 +13,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { listTerminology } from '../services/ai/terminology.service.js'
 import { writeSettingsAudit } from '../utils/settings-audit.js'
 
 const TERM_SNAPSHOT_FIELDS = [
@@ -59,21 +60,9 @@ const terminologyRoutes: FastifyPluginAsync = async (fastify) => {
     Querystring: { brand?: string; marketplace?: string }
   }>('/terminology', async (request) => {
     const { brand, marketplace } = request.query
-    const where: any = {}
-    if (marketplace) {
-      where.marketplace = marketplace.toUpperCase()
-    }
-    if (brand === '__none__') {
-      where.brand = null
-    } else if (brand && brand !== '*') {
-      // Brand specified — include both brand-specific and defaults
-      // (defaults apply to all brands in the marketplace).
-      where.OR = [{ brand }, { brand: null }]
-    }
-    const items = await prisma.terminologyPreference.findMany({
-      where,
-      orderBy: [{ marketplace: 'asc' }, { brand: 'asc' }, { preferred: 'asc' }],
-    })
+    // MCP full control T4 — the query lives in the terminology service, which Claude's content-guidelines tool
+    // reads too. Only these two filters: the route takes no other.
+    const items = await listTerminology({ brand, marketplace })
     return { items, count: items.length }
   })
 

@@ -193,6 +193,7 @@ export function ParkedRow({
   onUndo,
   onCommit,
   onHold,
+  byRule,
 }: {
   id: string
   toolName: string
@@ -206,6 +207,8 @@ export function ParkedRow({
       the hold route. Absent means the button is not offered, never a button
       that throws. */
   onHold?: (id: string) => Promise<{ ok: boolean; executeAfter?: string; error?: string }>
+  /** C5 — the business's rule decided it (auto), not a person: said so, with the same Undo and Hold. */
+  byRule?: boolean
 }) {
   const card = toolCardFor(toolName)
 
@@ -275,7 +278,8 @@ export function ParkedRow({
       </span>
       <span className="ap-schedbody">
         <span className="ap-schedwhat">
-          Approved — {workerName ? `${workerName} will ` : ''}
+          {byRule ? 'Runs by your rule — ' : 'Approved — '}
+          {workerName ? `${workerName} will ` : ''}
           {card.shortAsk}
         </span>
         {/* aria-live so a screen reader is told the state, but POLITE and only

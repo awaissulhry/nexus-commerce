@@ -202,6 +202,34 @@ async function processOne(rowId: string): Promise<'SUCCESS' | 'FAILED' | 'DEAD_L
           outcome = { success: false, error: e?.message ?? String(e), code: e?.code ?? null }
         }
       }
+    } else if (row.channel === 'ETSY') {
+      // MCP full control 07 O17 — Etsy: the receipt's tracking (createReceiptShipment) on the order's own Etsy account,
+      // through the gateway as an order action. Its own switch, as the other channels: off → nothing is sent and the
+      // row stays a failure with that reason. Etsy has no idempotency key: the write client never retries the POST.
+      const shipment = await prisma.shipment.findUnique({
+        where: { id: row.shipmentId },
+        include: { order: { select: { id: true, channelOrderId: true, channelConnectionId: true } } },
+      })
+      if (!shipment?.order || !shipment.trackingNumber || !shipment.order.channelConnectionId) {
+        outcome = { success: false, error: 'Etsy input incomplete (order, tracking number or Etsy account)', code: 'INPUT_INCOMPLETE' }
+      } else if (process.env.NEXUS_ENABLE_ETSY_SHIP_CONFIRM !== 'true') {
+        outcome = { success: false, error: 'Etsy tracking push-back is switched off (NEXUS_ENABLE_ETSY_SHIP_CONFIRM). Nothing was sent.', code: 'SHIP_CONFIRM_OFF' }
+      } else {
+        try {
+          const { etsyWriter } = await import('../services/etsy/write-client.js')
+          const writer = await etsyWriter(shipment.order.channelConnectionId)
+          const result = await writer.send({
+            path: `/shops/${encodeURIComponent(writer.shopId)}/receipts/${encodeURIComponent(shipment.order.channelOrderId)}/tracking`,
+            method: 'POST',
+            kind: 'action',
+            operation: 'receipts.createReceiptShipment',
+            form: { tracking_code: shipment.trackingNumber, carrier_name: (shipment.serviceName ?? shipment.carrierCode).toLowerCase() },
+          })
+          outcome = { success: true, response: result }
+        } catch (e: any) {
+          outcome = { success: false, error: e?.message ?? String(e), code: e?.code ?? null }
+        }
+      }
     } else {
       outcome = { success: false, error: `Unsupported channel: ${row.channel}`, code: 'UNSUPPORTED_CHANNEL' }
     }

@@ -55,3 +55,14 @@ it('rejects a changed plan and rechecks membership within the transaction', asyn
   await expect(generateCombinations({ ...input(), dryRun: false, previewToken: preview.previewToken })).rejects.toThrow('variant changed')
   expect(fixture.created).toEqual([])
 })
+
+// MCP full control (lead review, 2026-10-01) — a generated variation starts at stock 0. Copying the nearest sibling's
+// `totalStock` wrote a stock count outside the stock ledger: units no location holds, which the cascade could then push to
+// a channel. Stock arrives only through the stock doors (a count, a receipt, a transfer).
+it('a new variation starts at stock 0, whatever its nearest sibling holds', async () => {
+  fixture.children = [{ ...fixture.children[0], totalStock: 7, basePrice: 12 }]
+  const preview = await generateCombinations(input()) as GenerateDryRun
+  expect(preview.plan[0].copiesFrom).toMatchObject({ sku: 'P-NERO-M' })
+  await generateCombinations({ ...input(), dryRun: false, previewToken: preview.previewToken })
+  expect(fixture.created).toEqual([expect.objectContaining({ sku: 'P-NERO-L', totalStock: 0, basePrice: 12 })])
+})

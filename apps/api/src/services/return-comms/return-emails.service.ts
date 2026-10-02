@@ -22,7 +22,8 @@
  * 2026-05-08).
  */
 
-import { sendEmail } from '../email/transport.js'
+import { sendEmail, type SendResult } from '../email/transport.js'
+import { resolveBusinessIdentity, type BusinessIdentity } from '../business-identity.service.js'
 
 // RX.7 — comms journey. authorized + label_ready extend the existing
 // received / refunded / rejected stages so the buyer is kept informed
@@ -52,11 +53,19 @@ export interface ReturnEmailRendered {
   text: string
 }
 
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** O3 — rendered as `identity`, the business the return belongs to (Xavia's copy is unchanged). */
 export function renderReturnEmail(
   kind: ReturnEmailKind,
   ctx: ReturnEmailContext,
+  identity: BusinessIdentity,
 ): ReturnEmailRendered {
   const it = (ctx.locale ?? 'it') === 'it'
+  const brandName = identity.brandName
+  const brand = escapeHtml(identity.brandName)
+  const support = escapeHtml(identity.supportEmail)
   const greet = it
     ? `Ciao ${ctx.customerName?.trim() || 'cliente'},`
     : `Hi ${ctx.customerName?.trim() || 'there'},`
@@ -72,29 +81,29 @@ export function renderReturnEmail(
 
   if (kind === 'authorized') {
     subject = it
-      ? `Reso approvato · Xavia${rmaSuffix}`
-      : `Return approved · Xavia${rmaSuffix}`
+      ? `Reso approvato · ${brandName}${rmaSuffix}`
+      : `Return approved · ${brandName}${rmaSuffix}`
     body = it
       ? `Il tuo reso è stato approvato. Spedisci l'articolo al nostro magazzino il prima possibile. Una volta ricevuto, lo controlleremo e procederemo al rimborso entro ${ctx.refundDeadlineDays} giorni.`
       : `Your return has been approved. Please ship the item back to our warehouse as soon as you can. Once it arrives we'll inspect it and process your refund within ${ctx.refundDeadlineDays} days.`
   } else if (kind === 'label_ready') {
     subject = it
-      ? `Etichetta di reso pronta · Xavia${rmaSuffix}`
-      : `Return label ready · Xavia${rmaSuffix}`
+      ? `Etichetta di reso pronta · ${brandName}${rmaSuffix}`
+      : `Return label ready · ${brandName}${rmaSuffix}`
     body = it
       ? `La tua etichetta di reso è pronta. Applicala al pacco e consegnalo al corriere. Ti aggiorneremo non appena il pacco arriva al nostro magazzino.`
       : `Your return label is ready. Attach it to the parcel and drop it off with the carrier. We'll let you know as soon as it reaches our warehouse.`
   } else if (kind === 'received') {
     subject = it
-      ? `Reso ricevuto · Xavia${rmaSuffix}`
-      : `Return received · Xavia${rmaSuffix}`
+      ? `Reso ricevuto · ${brandName}${rmaSuffix}`
+      : `Return received · ${brandName}${rmaSuffix}`
     body = it
       ? `Abbiamo ricevuto il tuo reso al nostro magazzino. Il nostro team lo controllerà entro 48 ore. Vedrai il rimborso accreditato entro ${ctx.refundDeadlineDays} giorni dalla ricezione.`
       : `We've received your return at our warehouse. Our team will inspect it within 48 hours. You'll see your refund credited within ${ctx.refundDeadlineDays} days of receipt.`
   } else if (kind === 'refunded') {
     subject = it
-      ? `Rimborso emesso · Xavia${rmaSuffix}`
-      : `Refund issued · Xavia${rmaSuffix}`
+      ? `Rimborso emesso · ${brandName}${rmaSuffix}`
+      : `Refund issued · ${brandName}${rmaSuffix}`
     const channelNote = it
       ? ctx.channel === 'AMAZON'
         ? 'Il rimborso comparirà sul tuo metodo di pagamento Amazon entro 5 giorni lavorativi.'
@@ -117,8 +126,8 @@ export function renderReturnEmail(
   } else {
     // rejected
     subject = it
-      ? `Reso non accettato · Xavia${rmaSuffix}`
-      : `Return not accepted · Xavia${rmaSuffix}`
+      ? `Reso non accettato · ${brandName}${rmaSuffix}`
+      : `Return not accepted · ${brandName}${rmaSuffix}`
     const reasonLine = ctx.reason
       ? it
         ? ` Motivo: ${ctx.reason}.`
@@ -136,8 +145,8 @@ export function renderReturnEmail(
     : ''
 
   const footer = it
-    ? `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email inviata per il tuo reso${rmaSuffix ? ` ${ctx.rmaNumber}` : ''}. Per dubbi: <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>`
-    : `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email sent for your return${rmaSuffix ? ` ${ctx.rmaNumber}` : ''}. Questions? <a href="mailto:support@xavia.it" style="color:#2563eb;">support@xavia.it</a>.</p>`
+    ? `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email inviata per il tuo reso${rmaSuffix ? ` ${ctx.rmaNumber}` : ''}. Per dubbi: <a href="mailto:${support}" style="color:#2563eb;">${support}</a>.</p>`
+    : `<p style="font-size:11px;color:#94a3b8;margin-top:24px;">Email sent for your return${rmaSuffix ? ` ${ctx.rmaNumber}` : ''}. Questions? <a href="mailto:${support}" style="color:#2563eb;">${support}</a>.</p>`
 
   const html = `<!doctype html>
 <html><body style="margin:0;padding:0;background:#f8fafc;">
@@ -145,7 +154,7 @@ export function renderReturnEmail(
   <tr><td align="center">
     <table cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:32px;font-family:Inter,-apple-system,sans-serif;color:#0f172a;">
       <tr><td>
-        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">Xavia</div>
+        <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;">${brand}</div>
         <p style="font-size:16px;margin:0 0 12px 0;">${greet}</p>
         <p style="font-size:16px;margin:0 0 20px 0;">${body}</p>
         ${orderLine}
@@ -156,7 +165,7 @@ export function renderReturnEmail(
 </table>
 </body></html>`
 
-  const text = `${greet}\n\n${body}\n\n${ctx.channelOrderId ? `${ctx.channel} · ${ctx.channelOrderId}\n` : ''}${ctx.rmaNumber ? `RMA: ${ctx.rmaNumber}\n` : ''}— Xavia`
+  const text = `${greet}\n\n${body}\n\n${ctx.channelOrderId ? `${ctx.channel} · ${ctx.channelOrderId}\n` : ''}${ctx.rmaNumber ? `RMA: ${ctx.rmaNumber}\n` : ''}— ${brandName}`
 
   return { subject, html, text }
 }
@@ -171,14 +180,18 @@ export type { SendResult as ReturnEmailSendResult } from '../email/transport.js'
 export async function sendReturnEmail(
   kind: ReturnEmailKind,
   ctx: ReturnEmailContext,
-) {
-  const { subject, html, text } = renderReturnEmail(kind, ctx)
+): Promise<SendResult> {
+  // O3 — sent as the business the return belongs to; refused (nothing sent) when it has no identity for buyers.
+  const found = await resolveBusinessIdentity()
+  if (found.ok === false) return { ok: false, provider: 'mock', dryRun: false, error: found.reason }
+  const { subject, html, text } = renderReturnEmail(kind, ctx, found.identity)
   return sendEmail({
     to: ctx.to,
     subject,
     html,
     text,
     tag: `return-${kind}`,
+    ...(found.identity.emailFrom ? { from: found.identity.emailFrom } : {}),
   })
 }
 

@@ -191,9 +191,23 @@ export async function transitionPo(args: {
     data.cancelledReason = args.cancelReason ?? 'no reason given'
   }
 
-  const updated = await prisma.purchaseOrder.update({
+  // MCP full control 08 S9 — a compare-and-set on the status read above (and the version moves): two transitions of
+  // one PO at the same moment cannot both land. Before, both read APPROVED, both wrote SUBMITTED and both e-mailed the
+  // supplier; a send and a cancel could both "succeed". The loser finds the PO already where it wanted it (the same
+  // idempotent answer as above) or is told it moved on.
+  const claimed = await prisma.purchaseOrder.updateMany({
+    where: { id: po.id, status: po.status },
+    data: { ...data, version: { increment: 1 } },
+  })
+  if (claimed.count === 0) {
+    const now = await prisma.purchaseOrder.findUnique({ where: { id: po.id }, select: { status: true } })
+    if (now && targetByTransition[args.transition].includes(now.status)) {
+      return { poId: po.id, poNumber: po.poNumber, fromStatus: now.status, toStatus: now.status, autoAdvanced: [] }
+    }
+    throw new Error(`Transition '${args.transition}' not allowed: the PO moved on to ${now?.status ?? 'another status'} meanwhile`)
+  }
+  const updated = await prisma.purchaseOrder.findUniqueOrThrow({
     where: { id: po.id },
-    data,
     select: { id: true, poNumber: true, status: true },
   })
 

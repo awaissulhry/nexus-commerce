@@ -1,0 +1,2 @@
+404
+{"error":"Audit log entry not found"}

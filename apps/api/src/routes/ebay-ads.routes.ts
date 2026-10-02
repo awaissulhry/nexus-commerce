@@ -14,7 +14,23 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { resolveRange, priorRange, bucketFor, type ResolvedRange } from '../services/ads-core/date-range.js'
+import type { EbayRuleCreateInput, EbayRuleUpdateInput } from '../services/marketing/ebay-ads-rule-crud.service.js'
+import { answer } from '../services/automation/service-outcome.js'
+import { resolveRange } from '../services/ads-core/date-range.js'
+import {
+  derive,
+  ebayAdsActions,
+  ebayAdsCampaigns,
+  ebayAdsSummary,
+  ebayAdsTrend,
+  freshness,
+  sumFields,
+  toSums,
+  zeroSums,
+  type EbayActionsQuery,
+  type Sums,
+  type WindowQuery as ReadWindowQuery,
+} from '../services/marketing/ebay-ads-read.service.js'
 import * as writes from '../services/marketing/ebay-ads-write.service.js'
 import { exportAdsCsv, parseAdsOpsCsv, diffOps, applyOps } from '../services/marketing/ebay-ads-csv.service.js'
 import { getLiveEbayItemIds } from '../services/marketing/ebay-listing-index.service.js'
@@ -28,53 +44,9 @@ import { EBAY_MARKETPLACE_SHORT, marketplaceShort } from '../services/ads-core/e
 
 const SHORT_BY_MKT = EBAY_MARKETPLACE_SHORT // D3 — one shared map
 
-interface WindowQuery { preset?: string; startDate?: string; endDate?: string; marketplace?: string }
-
-function factWhere(q: WindowQuery, r: ResolvedRange, entityType?: string) {
-  return {
-    ...(entityType ? { entityType } : {}),
-    ...(q.marketplace && q.marketplace !== 'all' ? { marketplace: q.marketplace } : {}),
-    date: { gte: r.since, lte: r.until },
-  }
-}
-
-const sumFields = { impressions: true, clicks: true, adFeesCents: true, salesCents: true, soldQty: true } as const
-
-type Sums = { impressions: number; clicks: number; adFeesCents: number; salesCents: number; soldQty: number }
-const zeroSums: Sums = { impressions: 0, clicks: 0, adFeesCents: 0, salesCents: 0, soldQty: 0 }
-
-function toSums(agg: { _sum: Partial<Record<keyof Sums, number | null>> }): Sums {
-  return {
-    impressions: agg._sum.impressions ?? 0,
-    clicks: agg._sum.clicks ?? 0,
-    adFeesCents: agg._sum.adFeesCents ?? 0,
-    salesCents: agg._sum.salesCents ?? 0,
-    soldQty: agg._sum.soldQty ?? 0,
-  }
-}
-
-function derive(s: Sums) {
-  return {
-    ...s,
-    ctrPct: s.impressions > 0 ? (s.clicks / s.impressions) * 100 : null,
-    // eBay ACOS = ad fees ÷ ATTRIBUTED (any-click) sales — labeled in UI.
-    acosPct: s.salesCents > 0 ? (s.adFeesCents / s.salesCents) * 100 : null,
-    avgCpcCents: s.clicks > 0 ? Math.round(s.adFeesCents / s.clicks) : null,
-  }
-}
-
-async function freshness() {
-  const [facts, entity, discovery] = await Promise.all([
-    prisma.ebayAdsDailyPerformance.aggregate({ _max: { reportedAt: true } }),
-    prisma.ebayCampaign.aggregate({ _max: { lastEntitySyncAt: true } }),
-    prisma.ebayListingIndex.aggregate({ _max: { lastSeenAt: true } }),
-  ])
-  return {
-    factsReportedAt: facts._max.reportedAt,
-    entitySyncAt: entity._max.lastEntitySyncAt,
-    listingSeenAt: discovery._max.lastSeenAt,
-  }
-}
+// MCP full control A13 — the window helpers and the summary / trend / campaign reads live in the read service, so
+// the routes and Claude's ad read tools share one code path.
+type WindowQuery = ReadWindowQuery
 
 /** Account-health cache: eligibility changes on eBay's timescale, not ours. */
 const ACCOUNT_HEALTH_TTL_MS = 5 * 60_000
@@ -119,140 +91,13 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // ── Summary KPIs (+ vs-previous-period deltas) ─────────────────────────
-  app.get<{ Querystring: WindowQuery }>('/ebay-ads/summary', async (req) => {
-    const r = resolveRange(req.query)
-    const p = priorRange(r)
-    const [cur, prev, campaigns, economics, fr, liveCount, promotedRows] = await Promise.all([
-      prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(req.query, r, 'CAMPAIGN'), _sum: sumFields }),
-      prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(req.query, p, 'CAMPAIGN'), _sum: sumFields }),
-      prisma.ebayCampaign.groupBy({ by: ['status'], _count: { _all: true } }),
-      prisma.ebayListingEconomics.groupBy({ by: ['dataStatus'], _count: { _all: true } }),
-      freshness(),
-      prisma.ebayListingIndex.count({ where: { endedAt: null } }),
-      prisma.ebayAd.findMany({ where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] } } }, select: { listingId: true }, distinct: ['listingId'] }),
-    ])
-    const current = derive(toSums(cur))
-    const prior = derive(toSums(prev))
-    const deltaPct = (c: number, pr: number) => (pr > 0 ? ((c - pr) / pr) * 100 : null)
-    return {
-      window: { preset: r.preset, since: r.sinceStr, until: r.untilStr, days: r.days, includesToday: r.includesToday },
-      currency: 'EUR',
-      current,
-      prior,
-      deltas: {
-        adFeesPct: deltaPct(current.adFeesCents, prior.adFeesCents),
-        salesPct: deltaPct(current.salesCents, prior.salesCents),
-        clicksPct: deltaPct(current.clicks, prior.clicks),
-        impressionsPct: deltaPct(current.impressions, prior.impressions),
-      },
-      campaignCounts: Object.fromEntries(campaigns.map((c) => [c.status, c._count._all])),
-      // Net margin after ads is only shown when economics has real inputs —
-      // today most listings are MISSING_COGS ("manual only"); surface that.
-      economicsStatus: Object.fromEntries(economics.map((e) => [e.dataStatus, e._count._all])),
-      attributionModel: 'ebay-any-click',
-      // E7 #21 — coverage KPI: % of live listings promoted in ≥1 active
-      // General campaign (the standing guard proposes enrollment for the rest)
-      coverage: { liveListings: liveCount, promoted: promotedRows.length, pct: liveCount > 0 ? Math.round((promotedRows.length / liveCount) * 1000) / 10 : null },
-      freshness: fr,
-    }
-  })
+  app.get<{ Querystring: WindowQuery }>('/ebay-ads/summary', async (req) => ebayAdsSummary(req.query))
 
   // ── Daily trend (account level = derived campaign grain summed) ────────
-  app.get<{ Querystring: WindowQuery }>('/ebay-ads/trend', async (req) => {
-    const r = resolveRange(req.query)
-    const rows = await prisma.ebayAdsDailyPerformance.groupBy({
-      by: ['date'],
-      where: factWhere(req.query, r, 'CAMPAIGN'),
-      _sum: sumFields,
-      orderBy: { date: 'asc' },
-    })
-    return {
-      window: { since: r.sinceStr, until: r.untilStr, bucket: bucketFor(r.days) },
-      currency: 'EUR',
-      points: rows.map((row) => ({
-        date: row.date.toISOString().slice(0, 10),
-        ...derive(toSums(row)),
-      })),
-      freshness: await freshness(),
-    }
-  })
+  app.get<{ Querystring: WindowQuery }>('/ebay-ads/trend', async (req) => ebayAdsTrend(req.query))
 
   // ── Campaign grid ───────────────────────────────────────────────────────
-  app.get<{ Querystring: WindowQuery }>('/ebay-ads/campaigns', async (req) => {
-    const r = resolveRange(req.query)
-    const yday = new Date(); yday.setUTCDate(yday.getUTCDate() - 1); yday.setUTCHours(0, 0, 0, 0)
-    const [camps, facts, adCounts, hiddenCounts, policies, allRules, ydayFacts] = await Promise.all([
-      prisma.ebayCampaign.findMany({
-        where: req.query.marketplace && req.query.marketplace !== 'all' ? { marketplace: req.query.marketplace } : {},
-        orderBy: [{ status: 'asc' }, { startDate: 'desc' }],
-      }),
-      prisma.ebayAdsDailyPerformance.groupBy({
-        by: ['entityId'],
-        where: factWhere(req.query, r, 'CAMPAIGN'),
-        _sum: sumFields,
-      }),
-      prisma.ebayAd.groupBy({ by: ['campaignId', 'status'], _count: { _all: true } }),
-      // ER3.1 — ads eBay auto-hid (out of stock): a state, not an error
-      prisma.ebayAd.groupBy({ by: ['campaignId'], where: { hiddenReason: { not: null } }, _count: { _all: true } }),
-      prisma.ebayCampaignAutomationPolicy.findMany(),
-      prisma.ebayAdsRule.findMany({ where: { enabled: true }, select: { marketplace: true, scope: true } }),
-      // ER3.1 — "Limited by budget" heuristic input: yesterday's campaign fees
-      prisma.ebayAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', date: yday }, _sum: { adFeesCents: true } }),
-    ])
-    const factsByExt = new Map(facts.map((f) => [f.entityId, derive(toSums(f))]))
-    const adsByCampaign = new Map<string, { total: number; stale: number }>()
-    for (const a of adCounts) {
-      const cur = adsByCampaign.get(a.campaignId) ?? { total: 0, stale: 0 }
-      cur.total += a._count._all
-      if (a.status === 'STALE') cur.stale += a._count._all
-      adsByCampaign.set(a.campaignId, cur)
-    }
-    const hiddenByCampaign = new Map(hiddenCounts.map((h) => [h.campaignId, h._count._all]))
-    const policyByCampaign = new Map(policies.map((p) => [p.campaignId, p]))
-    const ydayFeesByExt = new Map(ydayFacts.map((f) => [f.entityId, f._sum.adFeesCents ?? 0]))
-    const ruleCountFor = (id: string, marketplace: string): number =>
-      allRules.filter((r0) => {
-        const scoped = ((r0.scope as { campaignIds?: string[] } | null)?.campaignIds) ?? []
-        return scoped.length ? scoped.includes(id) : (!r0.marketplace || r0.marketplace === marketplace)
-      }).length
-    return {
-      window: { preset: r.preset, since: r.sinceStr, until: r.untilStr },
-      currency: 'EUR',
-      campaigns: camps.map((c) => ({
-        id: c.id,
-        externalCampaignId: c.externalCampaignId,
-        name: c.name,
-        marketplace: c.marketplace,
-        fundingModel: c.fundingModel ?? 'COST_PER_SALE',
-        targetingType: c.campaignTargetingType,
-        channels: c.channels,
-        status: c.status,
-        adRateStrategy: c.adRateStrategy,
-        bidPercentage: c.bidPercentage != null ? Number(c.bidPercentage.toString()) : null,
-        dailyBudgetCents: c.dailyBudget != null ? Math.round(Number(c.dailyBudget.toString()) * 100) : null,
-        budgetCurrency: c.budgetCurrency ?? 'EUR',
-        isRulesBased: c.isRulesBased,
-        nexusManaged: c.nexusManaged,
-        startDate: c.startDate,
-        endDate: c.endDate,
-        lastEntitySyncAt: c.lastEntitySyncAt,
-        budgetUpdatesToday: c.budgetUpdatesToday, // ER3.1 — grid Budget modal meter
-        ads: { ...(adsByCampaign.get(c.id) ?? { total: 0, stale: 0 }), hidden: hiddenByCampaign.get(c.id) ?? 0 },
-        metrics: factsByExt.get(c.externalCampaignId) ?? derive(zeroSums),
-        // ER3.1 — automation column (rules that apply + policy) + honest
-        // budget-cap heuristic (yesterday fees ≥ 90% of daily budget)
-        automation: {
-          rules: ruleCountFor(c.id, c.marketplace),
-          protected: policyByCampaign.get(c.id)?.protected ?? false,
-          posture: policyByCampaign.get(c.id)?.posture ?? 'INHERIT',
-        },
-        limitedByBudget: (c.fundingModel === 'COST_PER_CLICK' && c.status === 'RUNNING' && c.dailyBudget != null)
-          ? (ydayFeesByExt.get(c.externalCampaignId) ?? 0) >= Math.round(Number(c.dailyBudget.toString()) * 100) * 0.9
-          : false,
-      })),
-      freshness: await freshness(),
-    }
-  })
+  app.get<{ Querystring: WindowQuery }>('/ebay-ads/campaigns', async (req) => ebayAdsCampaigns(req.query))
 
   // ER3.1 — manual entity sync (the header's Data Sync button)
   app.post('/ebay-ads/sync', async () => {
@@ -776,65 +621,18 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     if (!rule) return reply.code(404).send({ error: 'rule not found' })
     return rule
   })
-  app.post<{ Body: { name: string; trigger: unknown; action: unknown; guardrails?: unknown; scope?: unknown; marketplace?: string | null; cooldownHours?: number } }>('/ebay-ads/automation/rules', async (req, reply) => {
-    const auto = await import('../services/marketing/ebay-ads-automation.service.js')
-    const errs = auto.validateRuleBody(req.body as Partial<import('../services/marketing/ebay-ads-automation.service.js').RuleBody>)
-    if (errs.length) return reply.code(400).send({ error: errs.join(' · ') })
-    const row = await prisma.ebayAdsRule.create({ data: {
-      name: req.body.name.trim(), enabled: false, mode: 'PROPOSE',
-      trigger: req.body.trigger as object, action: req.body.action as object,
-      guardrails: (req.body.guardrails ?? undefined) as object | undefined, scope: (req.body.scope ?? undefined) as object | undefined,
-      marketplace: req.body.marketplace ?? null, cooldownHours: req.body.cooldownHours ?? 24,
-    } })
-    await auto.snapshotRuleVersion(row.id, 1, auto.ruleConfigOf(row), (req as { authUser?: { id?: string } }).authUser?.id ?? null) // ER5
-    return row
+  // R4 — create / edit / delete live in ebay-ads-rule-crud.service.ts (Claude's rule tool saves through the same
+  // validation and version history); each answer is unchanged, and each now leaves an audit row.
+  const ruleActor = (req: unknown) => (req as { authUser?: { id?: string } }).authUser?.id ?? null
+  app.post<{ Body: EbayRuleCreateInput }>('/ebay-ads/automation/rules', async (req, reply) => {
+    const { createEbayAdsRule } = await import('../services/marketing/ebay-ads-rule-crud.service.js')
+    return answer(reply, await createEbayAdsRule(req.body, ruleActor(req)))
   })
   // ER3.2 — full edit: config fields validated against the merged rule; the
   // original enabled/mode toggles keep their exact semantics.
-  app.post<{ Params: { id: string }; Body: { enabled?: boolean; mode?: 'PROPOSE' | 'AUTOPILOT'; name?: string; trigger?: unknown; action?: unknown; guardrails?: unknown; scope?: unknown; marketplace?: string | null; cooldownHours?: number } }>('/ebay-ads/automation/rules/:id', async (req, reply) => {
-    const rule = await prisma.ebayAdsRule.findUnique({ where: { id: req.params.id } })
-    if (!rule) return reply.code(404).send({ error: 'rule not found' })
-    const b = req.body
-    const touchesConfig = b.name !== undefined || b.trigger !== undefined || b.action !== undefined || b.guardrails !== undefined || b.scope !== undefined || b.marketplace !== undefined || b.cooldownHours !== undefined
-    if (touchesConfig) {
-      const auto = await import('../services/marketing/ebay-ads-automation.service.js')
-      const merged = {
-        name: b.name ?? rule.name,
-        trigger: (b.trigger ?? rule.trigger) as import('../services/marketing/ebay-ads-automation.service.js').RuleTrigger,
-        action: (b.action ?? rule.action) as import('../services/marketing/ebay-ads-automation.service.js').RuleAction,
-        guardrails: (b.guardrails ?? rule.guardrails) as Record<string, unknown> | null,
-        scope: (b.scope ?? rule.scope) as { campaignIds?: string[] } | null,
-        marketplace: b.marketplace !== undefined ? b.marketplace : rule.marketplace,
-        cooldownHours: b.cooldownHours ?? rule.cooldownHours,
-      }
-      const errs = auto.validateRuleBody(merged)
-      if (errs.length) return reply.code(400).send({ error: errs.join(' · ') })
-      // ER5 — version only REAL config changes (not no-op saves, not enabled/mode)
-      const mergedCfg = { name: merged.name, marketplace: merged.marketplace ?? null, scope: merged.scope ?? null, trigger: merged.trigger, action: merged.action, guardrails: merged.guardrails ?? null, cooldownHours: merged.cooldownHours }
-      if (auto.ruleConfigChanged(auto.ruleConfigOf(rule), mergedCfg)) {
-        const next = rule.version + 1
-        const updated = await prisma.ebayAdsRule.update({ where: { id: req.params.id }, data: {
-          ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
-          ...(b.mode ? { mode: b.mode } : {}),
-          name: merged.name.trim(), trigger: merged.trigger as object, action: merged.action as object,
-          guardrails: (merged.guardrails ?? undefined) as object | undefined, scope: (merged.scope ?? undefined) as object | undefined,
-          marketplace: merged.marketplace, cooldownHours: merged.cooldownHours, version: next,
-        } })
-        await auto.snapshotRuleVersion(rule.id, next, mergedCfg, (req as { authUser?: { id?: string } }).authUser?.id ?? null)
-        return updated
-      }
-    }
-    return prisma.ebayAdsRule.update({ where: { id: req.params.id }, data: {
-      ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
-      ...(b.mode ? { mode: b.mode } : {}),
-      ...(b.name !== undefined ? { name: b.name.trim() } : {}),
-      ...(b.trigger !== undefined ? { trigger: b.trigger as object } : {}),
-      ...(b.action !== undefined ? { action: b.action as object } : {}),
-      ...(b.guardrails !== undefined ? { guardrails: b.guardrails as object } : {}),
-      ...(b.scope !== undefined ? { scope: b.scope as object } : {}),
-      ...(b.marketplace !== undefined ? { marketplace: b.marketplace } : {}),
-      ...(b.cooldownHours !== undefined ? { cooldownHours: b.cooldownHours } : {}),
-    } })
+  app.post<{ Params: { id: string }; Body: EbayRuleUpdateInput }>('/ebay-ads/automation/rules/:id', async (req, reply) => {
+    const { updateEbayAdsRule } = await import('../services/marketing/ebay-ads-rule-crud.service.js')
+    return answer(reply, await updateEbayAdsRule(req.params.id, req.body, ruleActor(req)))
   })
   // ER5 — immutable config history (full snapshots; sentences render client-side)
   app.get<{ Params: { id: string } }>('/ebay-ads/automation/rules/:id/versions', async (req) => ({
@@ -847,10 +645,8 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     } catch (e) { return reply.code(400).send({ error: (e as Error).message }) }
   })
   app.delete<{ Params: { id: string } }>('/ebay-ads/automation/rules/:id', async (req, reply) => {
-    const rule = await prisma.ebayAdsRule.findUnique({ where: { id: req.params.id }, select: { id: true } })
-    if (!rule) return reply.code(404).send({ error: 'rule not found' })
-    await prisma.ebayAdsRule.delete({ where: { id: req.params.id } }) // executions cascade; proposals keep ruleId (history survives)
-    return { ok: true }
+    const { deleteEbayAdsRule } = await import('../services/marketing/ebay-ads-rule-crud.service.js')
+    return answer(reply, await deleteEbayAdsRule(req.params.id, ruleActor(req))) // executions cascade; proposals keep ruleId (history survives)
   })
   // ER3.2 — dry-run an unsaved rule body: counts + first matches, zero writes.
   app.post<{ Body: unknown }>('/ebay-ads/automation/rules/preview', async (req, reply) => {
@@ -1188,38 +984,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   // Audit trail for the console's activity panels (immutable event log —
   // pass entityId=<externalCampaignId> for one campaign's history; `before`
   // = createdAt cursor for pagination — ER1)
-  app.get<{ Querystring: { limit?: string; entityId?: string; before?: string; actionType?: string } }>('/ebay-ads/actions', async (req) => {
-    const rows = await prisma.campaignAction.findMany({
-      where: {
-        channel: 'EBAY',
-        ...(req.query.entityId ? { entityId: req.query.entityId } : {}),
-        ...(req.query.actionType ? { actionType: req.query.actionType } : {}), // ER3.4
-        ...(req.query.before && !Number.isNaN(Date.parse(req.query.before)) ? { createdAt: { lt: new Date(req.query.before) } } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: Math.min(Number(req.query.limit ?? 50), 200),
-    })
-    // ER3.4 Change Log — additive per-row fields: campaign name/id resolution
-    // (eBay audit rows are CAMPAIGN-grain, entityId = externalCampaignId) and
-    // the H10 change-source classification, derived from RECORDED actors:
-    // drift-Accept rows carry _mode='accept' (the change originated on eBay).
-    const extIds = [...new Set(rows.filter((a) => a.entityType === 'CAMPAIGN').map((a) => a.entityId))]
-    const camps = extIds.length
-      ? await prisma.ebayCampaign.findMany({ where: { externalCampaignId: { in: extIds } }, select: { id: true, externalCampaignId: true, name: true } })
-      : []
-    const campBy = new Map(camps.map((c) => [c.externalCampaignId, c]))
-    const actions = rows.map((a) => {
-      const mode = String((a.payloadAfter as { _mode?: string } | null)?._mode ?? '')
-      const c = a.entityType === 'CAMPAIGN' ? campBy.get(a.entityId) : undefined
-      return {
-        ...a,
-        campaignId: c?.id ?? null,
-        campaignName: c?.name ?? null,
-        source: mode === 'accept' ? 'external_accepted' : a.userId === 'automation:ebay-ads' ? 'automation' : 'operator',
-      }
-    })
-    return { actions }
-  })
+  app.get<{ Querystring: EbayActionsQuery }>('/ebay-ads/actions', async (req) => ebayAdsActions(req.query))
 
   // ═══ ER1 — campaign detail v2 endpoints ═════════════════════════════════
 
@@ -1269,35 +1034,10 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
 
   // Policy write — local governance (no eBay call), still audited.
   app.put<{ Params: { id: string }; Body: { posture?: string; protected?: boolean; rateCapPct?: number | null; rateFloorPct?: number | null; bidCapCents?: number | null; bidFloorCents?: number | null } }>('/ebay-ads/campaigns/:id/automation-policy', async (req, reply) => {
-    const c = await prisma.ebayCampaign.findUnique({ where: { id: req.params.id }, include: { automationPolicy: true } })
-    if (!c) return reply.code(404).send({ error: 'campaign not found' })
-    const b = req.body
-    if (b.posture != null && !['INHERIT', 'OFF', 'SUGGEST', 'AUTO'].includes(b.posture)) return reply.code(400).send({ error: 'posture must be INHERIT | OFF | SUGGEST | AUTO' })
-    for (const k of ['rateCapPct', 'rateFloorPct'] as const) {
-      const v = b[k]
-      if (v != null && (!Number.isFinite(v) || v < 0 || v > 100)) return reply.code(400).send({ error: `${k} must be 0–100` })
-    }
-    if (b.rateCapPct != null && b.rateFloorPct != null && b.rateFloorPct > b.rateCapPct) return reply.code(400).send({ error: 'rate floor cannot exceed rate cap' })
-    const data = {
-      ...(b.posture != null ? { posture: b.posture } : {}),
-      ...(b.protected != null ? { protected: b.protected } : {}),
-      ...(b.rateCapPct !== undefined ? { rateCapPct: b.rateCapPct } : {}),
-      ...(b.rateFloorPct !== undefined ? { rateFloorPct: b.rateFloorPct } : {}),
-      ...(b.bidCapCents !== undefined ? { bidCapCents: b.bidCapCents } : {}),
-      ...(b.bidFloorCents !== undefined ? { bidFloorCents: b.bidFloorCents } : {}),
-      updatedBy: actor(req).actorUserId,
-    }
-    const before = c.automationPolicy
-    const saved = await prisma.ebayCampaignAutomationPolicy.upsert({ where: { campaignId: c.id }, create: { campaignId: c.id, ...data }, update: data })
-    await prisma.campaignAction.create({
-      data: {
-        userId: actor(req).actorUserId, channel: 'EBAY', actionType: 'set_automation_policy', entityType: 'CAMPAIGN', entityId: c.externalCampaignId,
-        payloadBefore: (before ? { posture: before.posture, protected: before.protected } : {}) as object,
-        payloadAfter: { posture: saved.posture, protected: saved.protected, rateCapPct: saved.rateCapPct?.toString() ?? null, rateFloorPct: saved.rateFloorPct?.toString() ?? null, _mode: 'local' } as object,
-        channelResponseStatus: 'SUCCESS',
-      },
-    }).catch(() => {})
-    return { ok: true, policy: { posture: saved.posture, protected: saved.protected, rateCapPct: saved.rateCapPct != null ? Number(saved.rateCapPct.toString()) : null, rateFloorPct: saved.rateFloorPct != null ? Number(saved.rateFloorPct.toString()) : null, bidCapCents: saved.bidCapCents, bidFloorCents: saved.bidFloorCents } }
+    // R14 — moved unchanged into ebay-campaign-policy.service.ts (tune-ad-engine writes through it).
+    const { setEbayCampaignPolicy } = await import('../services/marketing/ebay-campaign-policy.service.js')
+    const outcome = await setEbayCampaignPolicy(req.params.id, req.body, actor(req).actorUserId)
+    return answer(reply, outcome)
   })
 
   // Suggested keyword bids (quota-governed passthrough)

@@ -376,6 +376,8 @@ ACTION_HANDLERS.pause_campaign = async (action, context, meta): Promise<ActionRe
 // purpose). Lets rules like "negative ad margin" actually reach a human.
 ACTION_HANDLERS.notify = async (action, context, meta): Promise<ActionResult> => {
   const title = (action.title as string) || (action.message as string) || 'Advertising automation alert'
+  // R8 — a preview (Test, Simulate, Claude's preview-automation) says whom it would tell and tells no one.
+  if (meta.preview) return { type: action.type, ok: true, output: { preview: true, notified: 0, wouldNotify: 'every operator', title, dryRun: meta.dryRun } }
   const severity = ((action.severity as string) === 'danger' || (action.severity as string) === 'info' || (action.severity as string) === 'success')
     ? (action.severity as 'danger' | 'info' | 'success') : 'warn'
   const bits: string[] = []
@@ -982,6 +984,9 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
 // Adjusts the PLACEMENT_TOP (or other placement) bid adjustment % for a
 // campaign. Lets rules like "raise top-of-search bids when ACOS is low" or
 // "lower when ACOS is high" without touching keyword bids directly.
+// Part 06 fix (lead review of R7) — every placement write of a rule carries the rule's OWN actor (RULE_ACTOR), the string
+// its daily write cap counts. It used to be `automation:rule-<ruleId>`, which no cap counted (a cap bypass); old rows keep
+// that form and parseActor still reads them as the rule.
 ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promise<ActionResult> => {
   const campaignId = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   if (!campaignId) return { type: action.type, ok: false, error: 'No campaign.id in context' }
@@ -994,7 +999,7 @@ ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promis
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
-  const res = await updatePlacementBidding({ campaignId, adjustments: [...others, { placement, percentage: pct }], actor: `automation:rule-${meta.ruleId}`, reason: `rule ${action.type}` })
+  const res = await updatePlacementBidding({ campaignId, adjustments: [...others, { placement, percentage: pct }], actor: RULE_ACTOR(meta.ruleId), reason: `rule ${action.type}` })
   return { type: action.type, ok: res.ok !== false, output: { campaignId, placement, percentage: pct, mode: res.mode } }
 }
 
@@ -1562,6 +1567,8 @@ ACTION_HANDLERS.raise_bids_for_rank_defense = async (action, context, meta): Pro
 ACTION_HANDLERS.alert_operator = async (action, context, meta): Promise<ActionResult> => {
   const severity = (action.severity as string | undefined) ?? 'info'
   const message = (action.message as string | undefined) ?? `Automation alert: ${action.type}`
+  // R8 — a preview says whom it would alert and alerts no one (no bell, no log line that reads as a real alert).
+  if (meta.preview) return { type: action.type, ok: true, output: { preview: true, severity, message, ruleId: meta.ruleId, notified: 0, wouldNotify: 'every operator' } }
   logger.warn(`[automation:alert] ${severity.toUpperCase()}: ${message}`, { ruleId: meta.ruleId, context: JSON.stringify(context)?.slice(0, 500) })
   // 🔴 It used to stop at that logger.warn. The action named "alert operator" reached neither the
   // bell, the feed nor the inbox — five advertising rules use it and none of their alerts has ever
@@ -1770,7 +1777,7 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
   const res = await updatePlacementBidding({
     campaignId: id,
     adjustments: buildManualAdjustments(db.placementBidding, placement as never, next),
-    actor: `automation:rule-${meta.ruleId}`,
+    actor: RULE_ACTOR(meta.ruleId),
     reason: `rule ${action.type}: ${current}% \u2192 ${next}%`,
   })
   /**

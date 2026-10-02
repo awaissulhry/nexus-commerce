@@ -24,6 +24,9 @@
  */
 import '../src/env.js'
 const { default: prisma } = await import('../src/db.js')
+// MCP full control I11 — one adoption is the identity merge service's (it also sets aliasKey and the account, which this
+// script used to leave unset); the dry-run report and the Owner rulings stay here.
+const { adoptShellListing } = await import('../src/services/identity/identity-merge.service.js')
 
 const APPLY = process.argv.includes('--apply')
 
@@ -74,6 +77,7 @@ interface Plan {
   masterSku?: string; masterId?: string
   channel?: string; marketplace?: string
   itemId?: string | null; listingStatus?: string; qty?: number | null
+  listingId?: string; connectionId?: string | null
   listingCount: number
   ok: boolean; reason?: string
 }
@@ -112,6 +116,7 @@ for (const shell of shells) {
     masterSku: master.sku, masterId: master.id,
     channel: l.channel, marketplace: l.marketplace,
     itemId: l.externalListingId, listingStatus: l.listingStatus, qty: l.quantity,
+    listingId: l.id, connectionId: l.channelConnectionId,
     listingCount: 1, ok: true,
   })
 }
@@ -157,25 +162,11 @@ if (blocked) {
 
 let done = 0
 for (const p of good) {
-  await prisma.$transaction(async (tx) => {
-    const highest = await tx.productListingAlias.findFirst({
-      where: { productId: p.masterId!, channel: p.channel!, marketplace: p.marketplace! },
-      orderBy: { position: 'desc' }, select: { position: true },
-    })
-    const alias = await tx.productListingAlias.create({
-      data: {
-        productId: p.masterId!, channel: p.channel!, marketplace: p.marketplace!,
-        label: p.shellSku, position: (highest?.position ?? 0) + 1,
-        adoptedFromProductId: p.shellId, createdBy: 'pes5-adopt-shells',
-      },
-    })
-    await tx.channelListing.updateMany({
-      where: { productId: p.shellId },
-      data: { productId: p.masterId!, aliasId: alias.id },
-    })
-    // SOFT delete: the shell stays recoverable and the adoption reversible.
-    await tx.product.update({ where: { id: p.shellId }, data: { deletedAt: new Date() } })
-  })
+  await prisma.$transaction((tx) => adoptShellListing(tx, {
+    shellId: p.shellId, shellSku: p.shellSku, masterId: p.masterId!,
+    listing: { id: p.listingId!, channel: p.channel!, marketplace: p.marketplace!, channelConnectionId: p.connectionId ?? null },
+    createdBy: 'pes5-adopt-shells',
+  }))
   done++
   console.log(`  adopted ${p.shellSku} -> ${p.masterSku}`)
 }

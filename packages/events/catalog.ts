@@ -332,6 +332,49 @@ export const EVENTS = {
     subject: (p) => p.jobId,
   }),
 
+  // Source: apps/api/src/services/agents/change-record.service.ts and claude-trust.service.ts (MCP full control C8) —
+  // what Claude's (and every approved) change did, so the bell can say "Claude ran 40 price changes (auto)". Ids,
+  // names and counts only: never a tool's arguments, a value it wrote or money.
+  'agent.change.executed': defineEvent({
+    type: 'agent.change.executed',
+    context: 'operations',
+    description: 'An approved change ran and was recorded (AgentChange): which tool, through which door, decided how.',
+    schema: z.strictObject({
+      changeId: z.string().min(1),
+      approvalId: z.string().min(1),
+      /** The tool's name (set-price). */
+      tool: z.string().min(1),
+      /** The door the request came through: app | claude | fleet | system. */
+      via: z.string().min(1),
+      /** Who decided: nexus (a person) | auto (the business's rule) | claude-confirm; null when not recorded. */
+      decisionVia: z.string().nullable(),
+    }),
+    subject: (p) => p.changeId,
+  }),
+  'agent.change.undone': defineEvent({
+    type: 'agent.change.undone',
+    context: 'operations',
+    description: 'A recorded change was put back: the undo request that did it ran.',
+    schema: z.strictObject({ changeId: z.string().min(1), undoneByApprovalId: z.string().min(1) }),
+    subject: (p) => p.changeId,
+  }),
+  'agent.autorun.paused': defineEvent({
+    type: 'agent.autorun.paused',
+    context: 'operations',
+    description: "Claude's changes that run by rule were paused in a business, by a person or by Nexus after too many failures.",
+    schema: z.strictObject({
+      /** The business's brake row (AgentAutonomy.id). */
+      autonomyId: z.string().min(1),
+      /** True when Nexus paused it itself (stale or failed rule-runs). */
+      automatic: z.boolean(),
+      /** The stale or failed rule-runs in the hour that triggered an automatic pause; null for a person's pause. */
+      failures: z.number().int().nonnegative().nullable(),
+      /** Changes that were waiting to run by rule and went back to a person. */
+      handedBack: z.number().int().nonnegative(),
+    }),
+    subject: (p) => p.autonomyId,
+  }),
+
   // ── fulfillment ───────────────────────────────────────────────────────────
   // Source: inbound-events.service.ts
   'inbound.created': defineEvent({
@@ -450,6 +493,48 @@ export const EVENTS = {
       totalPriceCents: z.number().int().optional(),
     }),
     subject: (p) => p.orderId,
+  }),
+  'customer.message.sent': defineEvent({
+    type: 'customer.message.sent',
+    context: 'orders',
+    description:
+      'A message to a buyer went through the buyer-message door (MCP full control 07 O11). Ids, channel, route and outcome only: never its text or the buyer.',
+    schema: z.strictObject({
+      messageId: z.string().min(1),
+      orderId: z.string().min(1),
+      channel: z.string().min(1),
+      route: z.enum(['EMAIL', 'AMAZON', 'EBAY']),
+      outcome: z.enum(['SENT', 'DRY_RUN', 'SUPPRESSED', 'FAILED']),
+    }),
+    subject: (p) => p.orderId,
+  }),
+  'refund.issued': defineEvent({
+    type: 'refund.issued',
+    context: 'orders',
+    description:
+      'A refund of a return went through (MCP full control 07 O12): on its channel, or recorded as done there (SKIPPED), or left to finish in the channel\'s back office (OK_MANUAL_REQUIRED, NOT_IMPLEMENTED). Ids, channel and outcome only: never the amount or the buyer. A channel failure publishes none.',
+    schema: z.strictObject({
+      refundId: z.string().min(1),
+      returnId: z.string().min(1),
+      orderId: z.string().min(1).nullable(),
+      channel: z.string().min(1),
+      outcome: z.enum(['OK', 'OK_MANUAL_REQUIRED', 'NOT_IMPLEMENTED', 'SKIPPED']),
+    }),
+    subject: (p) => p.returnId,
+  }),
+  'invoice.issued': defineEvent({
+    type: 'invoice.issued',
+    context: 'orders',
+    description:
+      'A fiscal number was taken (MCP full control 07 O14): an invoice for an order, or a credit note (nota di credito) for a refund, in the business\'s own series. Ids and the number only: never an amount or the buyer. Nothing was sent to SDI.',
+    schema: z.strictObject({
+      kind: z.enum(['INVOICE', 'CREDIT_NOTE']),
+      documentId: z.string().min(1),
+      number: z.string().min(1),
+      orderId: z.string().min(1).nullable(),
+      refundId: z.string().min(1).nullable(),
+    }),
+    subject: (p) => p.documentId,
   }),
   'return.created': defineEvent({
     type: 'return.created',

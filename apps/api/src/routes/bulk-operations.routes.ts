@@ -10,18 +10,23 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { sseResponseHeaders } from '../lib/sse.js'
 import {
+  assertBulkJobPricePermission,
   BulkActionInputError,
+  BulkActionPermissionError,
   BulkActionService,
   type BulkActionType,
 } from '../services/bulk-action.service.js'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 import prisma from '../db.js'
 import { CreateBulkJobSchema } from './validation.js'
 import { bulkActorOf } from '../services/bulk-action-actor.js'
+// MCP full control P3 — the history and item reads live in the bulk history service.
+import { bulkHistory, bulkJobItems } from '../services/bulk/bulk-history.service.js'
 
 const bulkActionService = new BulkActionService(prisma)
 
 /** A job that cannot run as asked is the caller's to fix (400, with the plain reason); anything else is ours (500). */
-const statusOf = (error: unknown) => (error instanceof BulkActionInputError ? 400 : 500)
+const statusOf = (error: unknown) => (error instanceof BulkActionInputError ? 400 : error instanceof BulkActionPermissionError ? 403 : 500)
 
 interface CreateBody {
   jobName?: string
@@ -101,8 +106,10 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       // The job acts for the signed-in person; a `createdBy` in the body is ignored.
-      const input = { ...parsed.data, createdBy: bulkActorOf(request) ?? undefined }
+      const input = { ...parsed.data, createdBy: bulkActorOf(request) ?? undefined, can: permissionCheckerFor(request) }
       try {
+        // S1 (F5) — a price-changing job needs products.price.edit: refused before the conflict check and before a job exists.
+        assertBulkJobPricePermission(input, input.can)
         const force = request.body?.force === true
         if (!force) {
           const conflicts = await bulkActionService.findConflictingJobs(input)
@@ -363,14 +370,12 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/bulk-operations/history', async (request, reply) => {
     try {
       const { limit, status, actionType, since } = request.query
-      const jobs = await bulkActionService.withActorNames(
-        await bulkActionService.listJobs({
-          limit: limit ? Number(limit) : undefined,
-          status,
-          actionType,
-          since: since ? new Date(since) : undefined,
-        }),
-      )
+      const jobs = await bulkHistory({
+        limit: limit ? Number(limit) : undefined,
+        status,
+        actionType,
+        since: since ? new Date(since) : undefined,
+      })
       return reply.send({ success: true, jobs, count: jobs.length })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -491,7 +496,7 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ success: false, error: 'job id required' })
     }
     try {
-      const items = await bulkActionService.listItems(id, {
+      const items = await bulkJobItems(id, {
         status: request.query.status,
         limit: request.query.limit ? Number(request.query.limit) : undefined,
       })

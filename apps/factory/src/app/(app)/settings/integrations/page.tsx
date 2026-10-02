@@ -16,6 +16,7 @@ import { Button, Input, Pill } from "@/design-system/primitives";
 import { Listbox } from "@/design-system/components";
 import { apiJson } from "@/lib/api-client";
 import { useFactoryEvents } from "@/lib/use-factory-events";
+import { ClaudeConnections } from "./ClaudeConnections";
 
 type Status = {
   google: {
@@ -456,6 +457,8 @@ function IntegrationsInner() {
             )}
           </div>
         </Card>
+
+        <ClaudeConnections />
       </div>
     </div>
   );

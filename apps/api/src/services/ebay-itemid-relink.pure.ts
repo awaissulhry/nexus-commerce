@@ -109,3 +109,51 @@ export function parseTopLevelSku(raw: string): string | null {
   const withoutVariations = raw.replace(/<Variations>[\s\S]*?<\/Variations>/g, '')
   return /<SKU>([^<]*)<\/SKU>/.exec(withoutVariations)?.[1]?.trim() || null
 }
+
+/**
+ * I4 / G2 — GetItem's Item.Seller.UserID. Other UserIDs in the body (a high bidder) are not the seller.
+ */
+export function parseSellerUserId(raw: string): string | null {
+  return /<Seller>[\s\S]*?<UserID>([^<]+)<\/UserID>[\s\S]*?<\/Seller>/.exec(raw)?.[1]?.trim() || null
+}
+
+export interface SellerCheck {
+  verdict: OwnershipVerdict
+  reason: string
+}
+
+/**
+ * I4 / G2 — is the item listed by the seller behind the account Nexus would drive it through? The SKUs alone do not
+ * say so: two businesses that share stock by SKU carry the same SKUs, so another business's live item passed the SKU
+ * check. eBay user ids are case-insensitive. An account connected before Nexus recorded its seller (no
+ * externalAccountId) cannot prove it: unverifiable, never verified.
+ */
+export function checkSellerOwnership(args: { itemSeller: string | null; accountSeller: string | null }): SellerCheck {
+  const account = (args.accountSeller ?? '').trim()
+  const item = (args.itemSeller ?? '').trim()
+  if (!account) {
+    return {
+      verdict: 'unverifiable',
+      reason: 'This eBay account has no recorded eBay seller (it was connected before Nexus recorded one), so it cannot be '
+        + 'proven that the item is this account\'s. Reconnect the account in Nexus, or confirm explicitly.',
+    }
+  }
+  if (!item) {
+    return { verdict: 'unverifiable', reason: 'eBay did not say which seller lists this item, so it cannot be proven that it is this account\'s.' }
+  }
+  if (norm(item) !== norm(account)) {
+    return {
+      verdict: 'rejected',
+      reason: `The item is listed by eBay seller "${item}", not by this account's seller "${account}". Linking it would drive another seller's listing — refusing.`,
+    }
+  }
+  return { verdict: 'verified', reason: `eBay confirms the item is listed by this account's seller "${account}".` }
+}
+
+const VERDICT_RANK: Record<OwnershipVerdict, number> = { verified: 0, unverifiable: 1, rejected: 2 }
+
+/** The SKU check and the seller check together: the worse verdict wins, and both reasons are said. */
+export function combineOwnership(skus: OwnershipCheck, seller: SellerCheck): OwnershipCheck {
+  const verdict = VERDICT_RANK[seller.verdict] > VERDICT_RANK[skus.verdict] ? seller.verdict : skus.verdict
+  return { ...skus, verdict, reason: `${skus.reason} ${seller.reason}` }
+}

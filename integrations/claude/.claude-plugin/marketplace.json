@@ -1,6 +1,6 @@
 {
   "name": "nexus-commerce",
-  "description": "Nexus Commerce for Claude: the Nexus connector and skills that use it.",
+  "description": "Nexus Commerce for Claude: the Nexus connector and the skills that use it, and the local factory connector.",
   "owner": {
     "name": "Nexus Commerce"
   },
@@ -13,9 +13,21 @@
         "path": "integrations/claude/nexus",
         "ref": "main"
       },
-      "description": "Connects Claude to Nexus Commerce and adds three skills: a weekly channel health check, fixing listing issues, and a bulk reprice. Every change Claude asks for waits for a person's approval in Nexus.",
+      "description": "Connects Claude to Nexus Commerce for one business per connection, and adds 18 skills: listings, content, ids, prices, stock, reorders, orders, returns, buyer messages, ads, automations, platform health, change plans and undo. Every change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code.",
       "category": "commerce",
-      "tags": ["nexus", "ecommerce", "listings", "pricing", "mcp"]
+      "tags": ["nexus", "ecommerce", "listings", "pricing", "orders", "advertising", "mcp"]
+    },
+    {
+      "name": "nexus-factory",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/awaissulhry/nexus-commerce.git",
+        "path": "integrations/claude/nexus-factory",
+        "ref": "main"
+      },
+      "description": "Connects Claude on the factory machine to the Nexus factory app through its own local server, and adds the factory-desk skill: reads, and drafts the Owner finishes in the factory app. Needs a copy of the repository and a token from the factory's Settings › Integrations › Claude.",
+      "category": "productivity",
+      "tags": ["nexus", "factory", "manufacturing", "mcp"]
     }
   ]
 }

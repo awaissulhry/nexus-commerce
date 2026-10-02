@@ -151,7 +151,16 @@ export interface ActionResult {
 export type ActionHandler = (
   action: Action,
   context: unknown,
-  meta: { dryRun: boolean; ruleId: string },
+  meta: {
+    dryRun: boolean
+    ruleId: string
+    /**
+     * R8 (MCP full control, part 06) — set when the run is a PREVIEW (`evaluateRule({ noPersist })`: the Test and
+     * Simulate buttons, Claude's preview-automation). A handler that notifies by design in a dry run (`notify`,
+     * `alert_operator`) reports whom it would reach and sends nothing.
+     */
+    preview?: boolean
+  },
 ) => Promise<ActionResult>
 
 /**
@@ -186,6 +195,10 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
       typeof action.message === 'string'
         ? action.message
         : `Rule ${meta.ruleId} matched`
+    // R8 — a preview says whom it would tell and tells no one.
+    if (meta.preview) {
+      return { type: action.type, ok: true, output: { preview: true, delivered: false, notified: 0, wouldNotify: action.target ?? 'operator', target: action.target ?? 'operator', message } }
+    }
     logger.info('automation-rule notify', {
       ruleId: meta.ruleId,
       target: action.target ?? 'operator',
@@ -443,6 +456,21 @@ export interface EvaluateRuleArgs {
    * pairing, so a future caller must keep it: this flag says "ignore the gate", not "it is safe".
    */
   ignoreEnabled?: boolean
+  /**
+   * R3 (MCP full control, part 06 gap 6) — a PREVIEW: evaluate and report, and leave nothing behind.
+   *
+   * No `AutomationRuleExecution` row, no `evaluationCount` / `matchCount` / `executionCount` / `last*At`, no refusal
+   * record, no suggestion and no "rule fired" event. The graduation gate (gate-status and graduate in
+   * advertising.routes.ts) counts those numbers — 10 evaluations, 1 match — and the daily cap counts those rows, so a
+   * preview that wrote them could open the road to Auto, or spend the rule's own cap, without the rule ever running on
+   * a tick. Always a dry run: an action nothing records must never act.
+   *
+   * Set by the Test route and `simulateOneRule`. Every tick leaves it unset and records exactly as before.
+   *
+   * R8 — and it notifies nobody: handlers get `meta.preview`, and `notify` / `alert_operator` report whom they would
+   * reach instead of ringing every operator's bell (which a tick's dry run still does, by design).
+   */
+  noPersist?: boolean
 }
 
 export interface EvaluateRuleResult {
@@ -542,7 +570,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     // would have negated at any ACOS. The save routes refuse these with a 400 now, so this branch
     // only fires for rules written around the API; it evaluates as no-match, never as loosened.
     if (translated?.untranslatable?.length) {
-      await prisma.automationRule.update({
+      if (!args.noPersist) await prisma.automationRule.update({
         where: { id: rule.id },
         data: { evaluationCount: { increment: 1 }, lastEvaluatedAt: new Date() },
       })
@@ -591,7 +619,8 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
 
   // Always increment evaluationCount, even on no-match. Helps the UI
   // surface "this rule fires every X minutes but never matches".
-  await prisma.automationRule.update({
+  // R3 — except for a preview: the graduation gate counts this number.
+  if (!args.noPersist) await prisma.automationRule.update({
     where: { id: rule.id },
     data: { evaluationCount: { increment: 1 }, lastEvaluatedAt: new Date() },
   })
@@ -644,7 +673,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       const taken = fields.find((f) => args.claims!.has(`${entity}:${f}`))
       if (taken) {
         const winner = args.claims.get(`${entity}:${taken}`)
-        await prisma.automationRule.update({
+        if (!args.noPersist) await prisma.automationRule.update({
           where: { id: rule.id },
           data: { lastMatchedAt: new Date(), matchCount: { increment: 1 } },
         })
@@ -727,6 +756,17 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       },
     })
     if (todayCount >= rule.maxExecutionsPerDay) {
+      // R3 — a preview reports the cap and records nothing: it was not refused, it only asked.
+      if (args.noPersist) {
+        return {
+          ruleId: rule.id,
+          matched: true,
+          status: 'CAP_EXCEEDED',
+          actionResults: [],
+          durationMs: Date.now() - startedAt,
+          errorMessage: 'DAILY_CAP_EXCEEDED',
+        }
+      }
       // AUTO.P0 — the durable half. The publish below reaches an in-process 50-event, 5-minute
       // ring buffer on one instance, which is why the `capped` chip has rendered 0 for every rule
       // since 2026-08-04 while rules were being refused tens of thousands of times a day. NOT an
@@ -792,7 +832,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   // its actions — including the notification that would have reported it — in silence. A demoted
   // rule keeps evaluating, keeps proposing and keeps telling you; it just stops writing.
   let writeCapReached = false
-  if (rule.maxWritesPerDay != null && levelActs(level) && !args.forceDryRun) {
+  if (rule.maxWritesPerDay != null && levelActs(level) && !args.forceDryRun && !args.noPersist) {
     const dayStart = new Date()
     dayStart.setUTCHours(0, 0, 0, 0)
     const writesToday = await prisma.advertisingActionLog.count({
@@ -818,7 +858,8 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
 
   // EA3 — Manual-control ads rules are propose-only: force dry-run so they generate suggestions
   // (audit "would do X" rows) but never auto-apply. Automate rules respect the dial + autonomy.
-  const dryRun = !levelActs(level) || !!args.forceDryRun || adsManualSuggest || writeCapReached
+  // R3 — `noPersist` is always a dry run: an action nothing records must never act.
+  const dryRun = !levelActs(level) || !!args.forceDryRun || adsManualSuggest || writeCapReached || !!args.noPersist
   const actions = (rule.actions ?? []) as unknown as Action[]
   const actionResults: ActionResult[] = []
   let valueSpentCentsEur = 0
@@ -855,7 +896,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
         // "failures" in eight days were this. A rule that is switched off reads as a rule that is
         // broken. Recording it here does not fix the status — that is a separate change with its
         // own blast radius — but it makes the two countable apart for the first time.
-        void recordAutomationRefusal({
+        if (!args.noPersist) void recordAutomationRefusal({
           actorId: rule.id,
           reason: 'VALUE_CAP_EXCEEDED',
           detail: `${rule.name} refused its \`${action.type}\` action: this execution had already committed ${projected}¢ against a per-execution cap of ${rule.maxValueCentsEur}¢.${rule.maxValueCentsEur === 0 ? ' The cap is 0¢, so every action of this rule is refused on its first step — the rule is effectively off, not failing.' : ''}`,
@@ -867,7 +908,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     }
 
     try {
-      const result = await handler(action, args.context, { dryRun, ruleId: rule.id })
+      const result = await handler(action, args.context, { dryRun, ruleId: rule.id, ...(args.noPersist ? { preview: true } : {}) })
       actionResults.push(result)
       if (result.ok) anyOk = true
       else anyFailed = true
@@ -891,6 +932,18 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       : anyFailed
         ? 'PARTIAL'
         : 'SUCCESS'
+
+  // R3 — a preview ends here: what the rule would have done, with no run row, no counters, no suggestion and no
+  // "rule fired" event (see `EvaluateRuleArgs.noPersist`).
+  if (args.noPersist) {
+    return {
+      ruleId: rule.id,
+      matched: true,
+      status,
+      actionResults,
+      durationMs: Date.now() - startedAt,
+    }
+  }
 
   const exec = await prisma.automationRuleExecution.create({
     data: {

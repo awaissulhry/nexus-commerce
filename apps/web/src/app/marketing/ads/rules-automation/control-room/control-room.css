@@ -442,34 +442,14 @@
    rules-automation.css, which reaches this page only because a parent layout
    happens to import it — the same borrowed-classes coupling that shipped the
    Coverage page unstyled. Light only, like everything above. */
-.acr-dw-back {
-  position: fixed; inset: 0; z-index: 70;
-  background: rgba(18, 26, 36, 0.34);
-  display: flex; justify-content: flex-end;
-}
-.acr-dw {
-  width: min(760px, 94vw); height: 100%;
-  background: var(--nds-white); border-left: 1px solid var(--nds-grey-200);
-  box-shadow: -8px 0 28px rgba(18, 26, 36, 0.13);
-  display: flex; flex-direction: column;
-}
-
-.acr-dw-h {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
-  padding: 16px 18px 14px; border-bottom: 1px solid var(--nds-grey-150); flex-shrink: 0;
-}
-.acr-dw-title { min-width: 0; }
-.acr-dw-title strong { font-size: 15px; font-weight: 650; color: var(--nds-grey-900); display: block; }
-.acr-dw-title p { font-size: 12.5px; color: var(--nds-grey-600); margin: 3px 0 0; line-height: 1.45; }
+/* The panel, its header, Escape, the Tab trap and focus return are the design system's Drawer (LeverDrawer.tsx);
+   only the content below is ours. */
 .acr-dw-cron {
-  display: inline-block; margin-top: 7px;
+  display: inline-block; margin-bottom: 12px;
   font-size: 11px; color: #46536a; background: var(--nds-grey-75);
   border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 2px 6px;
 }
-/* DS-ALIGN — the drawer close is the DS `ToolbarButton`; only the no-shrink is ours. */
-.acr-dw-x { flex-shrink: 0; }
-
-.acr-dw-b { padding: 16px 18px 40px; overflow-y: auto; flex: 1; }
+.acr-dw-b { padding-bottom: 24px; }
 .acr-dw-b .acr-sec-head { margin-top: 24px; }
 .acr-dw-b .acr-sec-head:first-child { margin-top: 0; }
 
@@ -540,7 +520,6 @@
 }
 
 @media (max-width: 900px) {
-  .acr-dw { width: 100vw; }
   .acr-dw-runbar { align-items: flex-start; flex-direction: column; }
 }
 

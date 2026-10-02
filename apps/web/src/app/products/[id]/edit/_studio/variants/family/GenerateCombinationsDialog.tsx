@@ -107,7 +107,7 @@ export function GenerateCombinationsDialog({ open, productId, version, parentSku
         </Field>
         <span className={styles.preview}>
           {Object.entries(preview?.codes ?? {}).map(([axis, codes]) => <span key={axis}>Codes: {Object.entries(codes).map(([value, code]) => `${value} → ${code}`).join(', ')} · </span>)}
-          {preview?.plan[0] && <>first new SKU <code>{preview.plan[0].sku}</code> · title, price and stock copy from the nearest sibling</>}
+          {preview?.plan[0] && <>first new SKU <code>{preview.plan[0].sku}</code> · title and price copy from the nearest sibling; stock starts at 0</>}
         </span>
         {axes.flatMap(axis => (added[axis.key] ?? []).map(value => <Field key={`${axis.key}:${value}`} label={`Code for ${value}`}>
           <Input size="sm" aria-label={`Code for ${value}`} value={codeEdit[axis.key]?.[value] ?? defaultCode(value)} disabled={busy}

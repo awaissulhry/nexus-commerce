@@ -88,6 +88,7 @@ import {
 } from './pim/follower-price.js'
 import { priceBoundsOf, storedPriceReason } from './price-bounds.service.js'
 import { lockProductStock } from './stock-lock.js'
+import { PRICE_PERMISSION_REASON } from './pim/matrix-cells.js'
 export { computeListingPrice, holdsCascadedPrice }
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
@@ -111,6 +112,27 @@ export interface MasterPriceUpdateContext {
   applyGrace?: boolean
   /** Optional Prisma transactional client — when called inside an outer $transaction. */
   tx?: Prisma.TransactionClient
+  /**
+   * S1 (F5) — the acting person's permissions, from the request (`permissionCheckerFor`). Given, a person without
+   * `products.price.edit` is refused before anything is read or written. Every route a person changes a master price
+   * through passes it; jobs and the system's own writers (scheduled changes, assortment copy) pass none.
+   */
+  can?: (permission: string) => boolean
+}
+
+/** S1 (F5) — the price permission a person needs to change a master price, a listing price or a bulk price. */
+export const PRICE_EDIT_PERMISSION = 'products.price.edit'
+/** The sentence every price write answers a person without it: the matrix's own. */
+export const PRICE_EDIT_REFUSAL = PRICE_PERMISSION_REASON
+
+/** A person without `products.price.edit` asked for a master price. Nothing was written. */
+export class MasterPricePermissionError extends Error {
+  readonly statusCode = 403
+  readonly code = 'PRICE_PERMISSION'
+  constructor() {
+    super(PRICE_EDIT_REFUSAL)
+    this.name = 'MasterPricePermissionError'
+  }
 }
 
 export interface MasterPriceUpdateResult {
@@ -187,6 +209,7 @@ export class MasterPriceService {
         `MasterPriceService.update: invalid basePrice ${newBasePrice} (must be a non-negative finite number)`,
       )
     }
+    if (ctx.can && !ctx.can(PRICE_EDIT_PERMISSION)) throw new MasterPricePermissionError()
     const rounded = roundCurrency(newBasePrice)
     const txFn = ctx.tx ?? this.client
 

@@ -165,7 +165,7 @@ export async function runFleetCouncilOnce(): Promise<CouncilResult> {
       const outcome = await runOrQueueTool(
         item.tool,
         item.args as Record<string, unknown>,
-        systemPrincipal('amazon-ads-director'),
+        systemPrincipal('amazon-ads-director', 'fleet'),
         directorRun!.id,
         { forceAsk: gate === 'ask' },
       )

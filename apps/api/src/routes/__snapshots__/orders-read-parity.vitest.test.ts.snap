@@ -1,0 +1,1328 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > an unknown order: 404 for the detail and the timeline; the financials of nothing are empty 1`] = `
+{
+  "body": "{
+  "error": "Order not found"
+}",
+  "status": 404,
+}
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > an unknown order: 404 for the detail and the timeline; the financials of nothing are empty 2`] = `
+{
+  "body": "{
+  "error": "Order not found"
+}",
+  "status": 404,
+}
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > an unknown order: 404 for the detail and the timeline; the financials of nothing are empty 3`] = `
+{
+  "body": "{
+  "rollup": {
+    "gross": 0,
+    "fees": 0,
+    "net": 0
+  },
+  "transactions": []
+}",
+  "status": 200,
+}
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-a > /financials 1`] = `
+"{
+  "rollup": {
+    "gross": 49.9,
+    "fees": 15,
+    "net": 34.9
+  },
+  "transactions": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-tx-a2",
+      "amazonTransactionId": null,
+      "ebayTransactionId": null,
+      "orderId": "test-order-a",
+      "transactionType": "Refund",
+      "transactionDate": "2026-04-06T12:00:00.000Z",
+      "amount": -49.9,
+      "currencyCode": "USD",
+      "amazonFee": 0,
+      "fbaFee": 0,
+      "paymentServicesFee": 0,
+      "ebayFee": 0,
+      "paypalFee": 0,
+      "otherFees": 0,
+      "grossRevenue": -49.9,
+      "netRevenue": -49.9,
+      "status": "Completed",
+      "amazonMetadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>"
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-tx-a1",
+      "amazonTransactionId": null,
+      "ebayTransactionId": null,
+      "orderId": "test-order-a",
+      "transactionType": "Order",
+      "transactionDate": "2026-04-01T12:00:00.000Z",
+      "amount": 99.8,
+      "currencyCode": "USD",
+      "amazonFee": 15,
+      "fbaFee": 0,
+      "paymentServicesFee": 0,
+      "ebayFee": 0,
+      "paypalFee": 0,
+      "otherFees": 0,
+      "grossRevenue": 99.8,
+      "netRevenue": 84.8,
+      "status": "Completed",
+      "amazonMetadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>"
+    }
+  ]
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-a > /timeline 1`] = `
+"{
+  "events": [
+    {
+      "at": "2026-04-01T10:00:00.000Z",
+      "kind": "placed",
+      "label": "Order placed"
+    },
+    {
+      "at": "2026-04-01T11:00:00.000Z",
+      "kind": "paid",
+      "label": "Payment received"
+    },
+    {
+      "at": "2026-04-02T10:00:00.000Z",
+      "kind": "shipped",
+      "label": "Shipped"
+    },
+    {
+      "at": "2026-04-02T10:00:00.000Z",
+      "kind": "shipment-shipped",
+      "label": "Shipment TEST-TRACK-A shipped",
+      "meta": {
+        "shipmentId": "test-shipment-a",
+        "carrier": "MANUAL"
+      }
+    },
+    {
+      "at": "2026-04-03T10:00:00.000Z",
+      "kind": "shipment-delivered",
+      "label": "Shipment TEST-TRACK-A delivered",
+      "meta": {
+        "shipmentId": "test-shipment-a"
+      }
+    },
+    {
+      "at": "2026-04-05T10:00:00.000Z",
+      "kind": "return-received",
+      "label": "Return TEST-RMA-A received",
+      "meta": {
+        "returnId": "test-return-a"
+      }
+    },
+    {
+      "at": "2026-04-06T10:00:00.000Z",
+      "kind": "return-refunded",
+      "label": "Return TEST-RMA-A refunded",
+      "meta": {
+        "returnId": "test-return-a"
+      }
+    },
+    {
+      "at": "2026-04-09T10:00:00.000Z",
+      "kind": "review-sent",
+      "label": "Review request sent on AMAZON",
+      "meta": {
+        "reviewRequestId": "test-review-a",
+        "status": "SENT"
+      }
+    }
+  ]
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-a > detail 1`] = `
+"{
+  "workspaceId": "nexus_legacy_workspace",
+  "id": "test-order-a",
+  "channel": "AMAZON",
+  "marketplace": "IT",
+  "channelOrderId": "TEST-A-1",
+  "status": "SHIPPED",
+  "totalPrice": 99.8,
+  "currencyCode": "EUR",
+  "customerName": "Mario Rossi",
+  "customerEmail": "mario@example.test",
+  "customerId": null,
+  "shippingAddress": {
+    "city": "Testville",
+    "countryCode": "IT"
+  },
+  "codiceFiscale": null,
+  "partitaIva": null,
+  "fiscalKind": null,
+  "pecEmail": null,
+  "codiceDestinatario": null,
+  "purchaseDate": "2026-04-01T10:00:00.000Z",
+  "paidAt": "2026-04-01T11:00:00.000Z",
+  "shippedAt": "2026-04-02T10:00:00.000Z",
+  "deliveredAt": null,
+  "cancelledAt": null,
+  "deliveredAtSource": null,
+  "fulfillmentMethod": "FBM",
+  "shipByDate": "2026-04-03T10:00:00.000Z",
+  "earliestShipDate": null,
+  "latestDeliveryDate": null,
+  "fulfillmentLatency": null,
+  "isPrime": true,
+  "amazonMetadata": {
+    "IsBusinessOrder": false
+  },
+  "ebayMetadata": null,
+  "shopifyMetadata": null,
+  "woocommerceMetadata": null,
+  "etsyMetadata": null,
+  "createdAt": "<clock>",
+  "updatedAt": "<clock>",
+  "deletedAt": null,
+  "channelConnectionId": null,
+  "items": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-item-a1",
+      "orderId": "test-order-a",
+      "productId": "test-product-1",
+      "sku": "TEST-SKU-1",
+      "quantity": 2,
+      "price": 49.9,
+      "externalLineItemId": null,
+      "itVatRatePct": null,
+      "amazonMetadata": null,
+      "ebayMetadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "product": {
+        "id": "test-product-1",
+        "sku": "TEST-SKU-1",
+        "name": "Test Jacket",
+        "basePrice": 49.9,
+        "images": [],
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "financialTransactions": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-tx-a2",
+      "amazonTransactionId": null,
+      "ebayTransactionId": null,
+      "orderId": "test-order-a",
+      "transactionType": "Refund",
+      "transactionDate": "2026-04-06T12:00:00.000Z",
+      "amount": -49.9,
+      "currencyCode": "USD",
+      "amazonFee": 0,
+      "fbaFee": 0,
+      "paymentServicesFee": 0,
+      "ebayFee": 0,
+      "paypalFee": 0,
+      "otherFees": 0,
+      "grossRevenue": -49.9,
+      "netRevenue": -49.9,
+      "status": "Completed",
+      "amazonMetadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>"
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-tx-a1",
+      "amazonTransactionId": null,
+      "ebayTransactionId": null,
+      "orderId": "test-order-a",
+      "transactionType": "Order",
+      "transactionDate": "2026-04-01T12:00:00.000Z",
+      "amount": 99.8,
+      "currencyCode": "USD",
+      "amazonFee": 15,
+      "fbaFee": 0,
+      "paymentServicesFee": 0,
+      "ebayFee": 0,
+      "paypalFee": 0,
+      "otherFees": 0,
+      "grossRevenue": 99.8,
+      "netRevenue": 84.8,
+      "status": "Completed",
+      "amazonMetadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>"
+    }
+  ],
+  "shipments": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-shipment-a",
+      "orderId": "test-order-a",
+      "warehouseId": null,
+      "carrierCode": "MANUAL",
+      "status": "SHIPPED",
+      "sendcloudParcelId": null,
+      "trackingNumber": "TEST-TRACK-A",
+      "trackingUrl": null,
+      "labelUrl": null,
+      "serviceCode": null,
+      "serviceName": null,
+      "weightGrams": null,
+      "lengthCm": null,
+      "widthCm": null,
+      "heightCm": null,
+      "costCents": null,
+      "currencyCode": "EUR",
+      "pickedAt": null,
+      "packedAt": null,
+      "labelPrintedAt": null,
+      "shippedAt": "2026-04-02T10:00:00.000Z",
+      "deliveredAt": "2026-04-03T10:00:00.000Z",
+      "cancelledAt": null,
+      "trackingPushedAt": null,
+      "trackingPushError": null,
+      "pickedBy": null,
+      "packedBy": null,
+      "heldAt": null,
+      "heldReason": null,
+      "notes": null,
+      "version": 1,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "deletedAt": null,
+      "items": [],
+      "warehouse": null
+    }
+  ],
+  "returns": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-return-a",
+      "orderId": "test-order-a",
+      "channel": "AMAZON",
+      "marketplace": null,
+      "channelReturnId": null,
+      "rmaNumber": "TEST-RMA-A",
+      "status": "RECEIVED",
+      "reason": null,
+      "conditionGrade": null,
+      "refundStatus": "PENDING",
+      "refundCents": null,
+      "currencyCode": "EUR",
+      "channelRefundId": null,
+      "channelRefundError": null,
+      "channelRefundedAt": null,
+      "isFbaReturn": false,
+      "restockChannel": null,
+      "restockWarehouseId": null,
+      "returnType": "STANDARD",
+      "warrantyStatus": null,
+      "warrantyResolution": null,
+      "defectReportedAt": null,
+      "manufacturerRef": null,
+      "receivedAt": "2026-04-05T10:00:00.000Z",
+      "inspectedAt": null,
+      "refundedAt": "2026-04-06T10:00:00.000Z",
+      "restockedAt": null,
+      "returnLabelUrl": null,
+      "returnLabelCarrier": null,
+      "returnTrackingNumber": null,
+      "returnLabelGeneratedAt": null,
+      "returnLabelEmailedAt": null,
+      "notes": null,
+      "version": 1,
+      "sendcloudParcelId": null,
+      "idempotencyKey": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "items": []
+    }
+  ],
+  "reviewRequests": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-review-a",
+      "orderId": "test-order-a",
+      "channel": "AMAZON",
+      "marketplace": null,
+      "status": "SENT",
+      "scheduledFor": null,
+      "sentAt": "2026-04-09T10:00:00.000Z",
+      "providerRequestId": null,
+      "providerResponseCode": null,
+      "errorMessage": null,
+      "suppressedReason": null,
+      "ruleId": null,
+      "attemptCount": 0,
+      "lastAttemptAt": null,
+      "nextRetryAt": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "rule": null
+    }
+  ],
+  "tags": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-tag-1",
+      "name": "VIP",
+      "color": "#ff0000",
+      "icon": null,
+      "metadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>"
+    }
+  ],
+  "routingDecisions": [],
+  "fiscalInvoice": null,
+  "customerHistory": [
+    {
+      "id": "test-order-c",
+      "channelOrderId": "TEST-C-1",
+      "channel": "SHOPIFY",
+      "totalPrice": 10,
+      "currencyCode": "EUR",
+      "status": "CANCELLED",
+      "purchaseDate": "2026-04-05T10:00:00.000Z",
+      "createdAt": "<clock>"
+    }
+  ]
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-b > /financials 1`] = `
+"{
+  "rollup": {
+    "gross": 0,
+    "fees": 0,
+    "net": 0
+  },
+  "transactions": []
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-b > /timeline 1`] = `
+"{
+  "events": [
+    {
+      "at": "2026-04-04T10:00:00.000Z",
+      "kind": "placed",
+      "label": "Order placed"
+    },
+    {
+      "at": "2026-04-04T11:00:00.000Z",
+      "kind": "paid",
+      "label": "Payment received"
+    }
+  ]
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-b > detail 1`] = `
+"{
+  "workspaceId": "nexus_legacy_workspace",
+  "id": "test-order-b",
+  "channel": "EBAY",
+  "marketplace": "DE",
+  "channelOrderId": "TEST-B-1",
+  "status": "PROCESSING",
+  "totalPrice": 25,
+  "currencyCode": "EUR",
+  "customerName": "Anna Bianchi",
+  "customerEmail": "anna@example.test",
+  "customerId": null,
+  "shippingAddress": {
+    "city": "Testville",
+    "countryCode": "IT"
+  },
+  "codiceFiscale": null,
+  "partitaIva": null,
+  "fiscalKind": null,
+  "pecEmail": null,
+  "codiceDestinatario": null,
+  "purchaseDate": "2026-04-04T10:00:00.000Z",
+  "paidAt": "2026-04-04T11:00:00.000Z",
+  "shippedAt": null,
+  "deliveredAt": null,
+  "cancelledAt": null,
+  "deliveredAtSource": null,
+  "fulfillmentMethod": "FBM",
+  "shipByDate": null,
+  "earliestShipDate": null,
+  "latestDeliveryDate": null,
+  "fulfillmentLatency": null,
+  "isPrime": null,
+  "amazonMetadata": null,
+  "ebayMetadata": null,
+  "shopifyMetadata": null,
+  "woocommerceMetadata": null,
+  "etsyMetadata": null,
+  "createdAt": "<clock>",
+  "updatedAt": "<clock>",
+  "deletedAt": null,
+  "channelConnectionId": null,
+  "items": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-item-b1",
+      "orderId": "test-order-b",
+      "productId": null,
+      "sku": "TEST-SKU-2",
+      "quantity": 1,
+      "price": 25,
+      "externalLineItemId": null,
+      "itVatRatePct": null,
+      "amazonMetadata": null,
+      "ebayMetadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "product": null
+    }
+  ],
+  "financialTransactions": [],
+  "shipments": [],
+  "returns": [],
+  "reviewRequests": [],
+  "tags": [],
+  "routingDecisions": [],
+  "fiscalInvoice": null,
+  "customerHistory": []
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-d > /financials 1`] = `
+"{
+  "rollup": {
+    "gross": 0,
+    "fees": 0,
+    "net": 0
+  },
+  "transactions": []
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-d > /timeline 1`] = `
+"{
+  "events": [
+    {
+      "at": "2026-04-07T10:00:00.000Z",
+      "kind": "placed",
+      "label": "Order placed"
+    },
+    {
+      "at": "2026-04-08T10:00:00.000Z",
+      "kind": "shipped",
+      "label": "Shipped"
+    },
+    {
+      "at": "2026-04-09T10:00:00.000Z",
+      "kind": "delivered",
+      "label": "Delivered"
+    }
+  ]
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > detail, timeline and financials of test-order-d > detail 1`] = `
+"{
+  "workspaceId": "nexus_legacy_workspace",
+  "id": "test-order-d",
+  "channel": "AMAZON",
+  "marketplace": "FR",
+  "channelOrderId": "TEST-D-1",
+  "status": "DELIVERED",
+  "totalPrice": 60,
+  "currencyCode": "EUR",
+  "customerName": "Luc Martin",
+  "customerEmail": "luc@example.test",
+  "customerId": null,
+  "shippingAddress": {
+    "city": "Testville",
+    "countryCode": "IT"
+  },
+  "codiceFiscale": null,
+  "partitaIva": null,
+  "fiscalKind": null,
+  "pecEmail": null,
+  "codiceDestinatario": null,
+  "purchaseDate": "2026-04-07T10:00:00.000Z",
+  "paidAt": null,
+  "shippedAt": "2026-04-08T10:00:00.000Z",
+  "deliveredAt": "2026-04-09T10:00:00.000Z",
+  "cancelledAt": null,
+  "deliveredAtSource": null,
+  "fulfillmentMethod": "FBA",
+  "shipByDate": null,
+  "earliestShipDate": null,
+  "latestDeliveryDate": null,
+  "fulfillmentLatency": null,
+  "isPrime": null,
+  "amazonMetadata": null,
+  "ebayMetadata": null,
+  "shopifyMetadata": null,
+  "woocommerceMetadata": null,
+  "etsyMetadata": null,
+  "createdAt": "<clock>",
+  "updatedAt": "<clock>",
+  "deletedAt": null,
+  "channelConnectionId": null,
+  "items": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "id": "test-item-d1",
+      "orderId": "test-order-d",
+      "productId": "test-product-1",
+      "sku": "TEST-SKU-1",
+      "quantity": 1,
+      "price": 60,
+      "externalLineItemId": null,
+      "itVatRatePct": null,
+      "amazonMetadata": null,
+      "ebayMetadata": null,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "product": {
+        "id": "test-product-1",
+        "sku": "TEST-SKU-1",
+        "name": "Test Jacket",
+        "basePrice": 49.9,
+        "images": [],
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "financialTransactions": [],
+  "shipments": [],
+  "returns": [],
+  "reviewRequests": [],
+  "tags": [],
+  "routingDecisions": [],
+  "fiscalInvoice": null,
+  "customerHistory": []
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: cancelled tab 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-c",
+      "channel": "SHOPIFY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-C-1",
+      "status": "CANCELLED",
+      "fulfillmentMethod": null,
+      "totalPrice": 10,
+      "currencyCode": "EUR",
+      "customerName": "Mario Rossi",
+      "customerEmail": "mario@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-05T10:00:00.000Z",
+      "paidAt": null,
+      "shippedAt": null,
+      "deliveredAt": null,
+      "cancelledAt": "2026-04-06T10:00:00.000Z",
+      "shipByDate": null,
+      "latestDeliveryDate": null,
+      "isPrime": null,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 0,
+      "shipmentCount": 0,
+      "returnCount": 0,
+      "financialTxCount": 0,
+      "hasActiveReturn": false,
+      "hasRefund": false,
+      "customerOrderCount": 2,
+      "tags": [],
+      "reviewRequests": [],
+      "items": [],
+      "firstItem": null
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 1,
+  "totalPages": 1
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: date range and has-return 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-b",
+      "channel": "EBAY",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-B-1",
+      "status": "PROCESSING",
+      "fulfillmentMethod": "FBM",
+      "totalPrice": 25,
+      "currencyCode": "EUR",
+      "customerName": "Anna Bianchi",
+      "customerEmail": "anna@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-04T10:00:00.000Z",
+      "paidAt": "2026-04-04T11:00:00.000Z",
+      "shippedAt": null,
+      "deliveredAt": null,
+      "cancelledAt": null,
+      "shipByDate": null,
+      "latestDeliveryDate": null,
+      "isPrime": null,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 0,
+      "returnCount": 0,
+      "financialTxCount": 0,
+      "hasActiveReturn": false,
+      "hasRefund": false,
+      "customerOrderCount": 1,
+      "tags": [],
+      "reviewRequests": [],
+      "items": [
+        {
+          "id": "test-item-b1",
+          "sku": "TEST-SKU-2",
+          "quantity": 1,
+          "price": 25,
+          "productId": null
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-2",
+        "quantity": 1,
+        "price": 25,
+        "subtotal": 25,
+        "productName": null,
+        "amazonAsin": null,
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 2,
+  "totalPages": 1
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: default list (All scope hides cancelled) 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-d",
+      "channel": "AMAZON",
+      "marketplace": "FR",
+      "channelOrderId": "TEST-D-1",
+      "status": "DELIVERED",
+      "fulfillmentMethod": "FBA",
+      "totalPrice": 60,
+      "currencyCode": "EUR",
+      "customerName": "Luc Martin",
+      "customerEmail": "luc@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-07T10:00:00.000Z",
+      "paidAt": null,
+      "shippedAt": "2026-04-08T10:00:00.000Z",
+      "deliveredAt": "2026-04-09T10:00:00.000Z",
+      "cancelledAt": null,
+      "shipByDate": null,
+      "latestDeliveryDate": null,
+      "isPrime": null,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 0,
+      "returnCount": 0,
+      "financialTxCount": 0,
+      "hasActiveReturn": false,
+      "hasRefund": false,
+      "customerOrderCount": 1,
+      "tags": [],
+      "reviewRequests": [],
+      "items": [
+        {
+          "id": "test-item-d1",
+          "sku": "TEST-SKU-1",
+          "quantity": 1,
+          "price": 60,
+          "productId": "test-product-1"
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-1",
+        "quantity": 1,
+        "price": 60,
+        "subtotal": 60,
+        "productName": "Test Jacket",
+        "amazonAsin": "TESTASIN01",
+        "thumbnailUrl": null
+      }
+    },
+    {
+      "id": "test-order-b",
+      "channel": "EBAY",
+      "marketplace": "DE",
+      "channelOrderId": "TEST-B-1",
+      "status": "PROCESSING",
+      "fulfillmentMethod": "FBM",
+      "totalPrice": 25,
+      "currencyCode": "EUR",
+      "customerName": "Anna Bianchi",
+      "customerEmail": "anna@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-04T10:00:00.000Z",
+      "paidAt": "2026-04-04T11:00:00.000Z",
+      "shippedAt": null,
+      "deliveredAt": null,
+      "cancelledAt": null,
+      "shipByDate": null,
+      "latestDeliveryDate": null,
+      "isPrime": null,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 0,
+      "returnCount": 0,
+      "financialTxCount": 0,
+      "hasActiveReturn": false,
+      "hasRefund": false,
+      "customerOrderCount": 1,
+      "tags": [],
+      "reviewRequests": [],
+      "items": [
+        {
+          "id": "test-item-b1",
+          "sku": "TEST-SKU-2",
+          "quantity": 1,
+          "price": 25,
+          "productId": null
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-2",
+        "quantity": 1,
+        "price": 25,
+        "subtotal": 25,
+        "productName": null,
+        "amazonAsin": null,
+        "thumbnailUrl": null
+      }
+    },
+    {
+      "id": "test-order-a",
+      "channel": "AMAZON",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-A-1",
+      "status": "SHIPPED",
+      "fulfillmentMethod": "FBM",
+      "totalPrice": 99.8,
+      "currencyCode": "EUR",
+      "customerName": "Mario Rossi",
+      "customerEmail": "mario@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-01T10:00:00.000Z",
+      "paidAt": "2026-04-01T11:00:00.000Z",
+      "shippedAt": "2026-04-02T10:00:00.000Z",
+      "deliveredAt": null,
+      "cancelledAt": null,
+      "shipByDate": "2026-04-03T10:00:00.000Z",
+      "latestDeliveryDate": null,
+      "isPrime": true,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 1,
+      "returnCount": 1,
+      "financialTxCount": 2,
+      "hasActiveReturn": true,
+      "hasRefund": true,
+      "customerOrderCount": 2,
+      "tags": [
+        {
+          "id": "test-tag-1",
+          "name": "VIP",
+          "color": "#ff0000"
+        }
+      ],
+      "reviewRequests": [
+        {
+          "id": "test-review-a",
+          "channel": "AMAZON",
+          "status": "SENT",
+          "sentAt": "2026-04-09T10:00:00.000Z",
+          "scheduledFor": null
+        }
+      ],
+      "items": [
+        {
+          "id": "test-item-a1",
+          "sku": "TEST-SKU-1",
+          "quantity": 2,
+          "price": 49.9,
+          "productId": "test-product-1"
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-1",
+        "quantity": 2,
+        "price": 49.9,
+        "subtotal": 99.8,
+        "productName": "Test Jacket",
+        "amazonAsin": "TESTASIN01",
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 3,
+  "totalPages": 1
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: explicit status and channel 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-d",
+      "channel": "AMAZON",
+      "marketplace": "FR",
+      "channelOrderId": "TEST-D-1",
+      "status": "DELIVERED",
+      "fulfillmentMethod": "FBA",
+      "totalPrice": 60,
+      "currencyCode": "EUR",
+      "customerName": "Luc Martin",
+      "customerEmail": "luc@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-07T10:00:00.000Z",
+      "paidAt": null,
+      "shippedAt": "2026-04-08T10:00:00.000Z",
+      "deliveredAt": "2026-04-09T10:00:00.000Z",
+      "cancelledAt": null,
+      "shipByDate": null,
+      "latestDeliveryDate": null,
+      "isPrime": null,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 0,
+      "returnCount": 0,
+      "financialTxCount": 0,
+      "hasActiveReturn": false,
+      "hasRefund": false,
+      "customerOrderCount": 1,
+      "tags": [],
+      "reviewRequests": [],
+      "items": [
+        {
+          "id": "test-item-d1",
+          "sku": "TEST-SKU-1",
+          "quantity": 1,
+          "price": 60,
+          "productId": "test-product-1"
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-1",
+        "quantity": 1,
+        "price": 60,
+        "subtotal": 60,
+        "productName": "Test Jacket",
+        "amazonAsin": "TESTASIN01",
+        "thumbnailUrl": null
+      }
+    },
+    {
+      "id": "test-order-a",
+      "channel": "AMAZON",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-A-1",
+      "status": "SHIPPED",
+      "fulfillmentMethod": "FBM",
+      "totalPrice": 99.8,
+      "currencyCode": "EUR",
+      "customerName": "Mario Rossi",
+      "customerEmail": "mario@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-01T10:00:00.000Z",
+      "paidAt": "2026-04-01T11:00:00.000Z",
+      "shippedAt": "2026-04-02T10:00:00.000Z",
+      "deliveredAt": null,
+      "cancelledAt": null,
+      "shipByDate": "2026-04-03T10:00:00.000Z",
+      "latestDeliveryDate": null,
+      "isPrime": true,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 1,
+      "returnCount": 1,
+      "financialTxCount": 2,
+      "hasActiveReturn": true,
+      "hasRefund": true,
+      "customerOrderCount": 2,
+      "tags": [
+        {
+          "id": "test-tag-1",
+          "name": "VIP",
+          "color": "#ff0000"
+        }
+      ],
+      "reviewRequests": [
+        {
+          "id": "test-review-a",
+          "channel": "AMAZON",
+          "status": "SENT",
+          "sentAt": "2026-04-09T10:00:00.000Z",
+          "scheduledFor": null
+        }
+      ],
+      "items": [
+        {
+          "id": "test-item-a1",
+          "sku": "TEST-SKU-1",
+          "quantity": 2,
+          "price": 49.9,
+          "productId": "test-product-1"
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-1",
+        "quantity": 2,
+        "price": 49.9,
+        "subtotal": 99.8,
+        "productName": "Test Jacket",
+        "amazonAsin": "TESTASIN01",
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 2,
+  "totalPages": 1
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: fulfilment and market 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-d",
+      "channel": "AMAZON",
+      "marketplace": "FR",
+      "channelOrderId": "TEST-D-1",
+      "status": "DELIVERED",
+      "fulfillmentMethod": "FBA",
+      "totalPrice": 60,
+      "currencyCode": "EUR",
+      "customerName": "Luc Martin",
+      "customerEmail": "luc@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-07T10:00:00.000Z",
+      "paidAt": null,
+      "shippedAt": "2026-04-08T10:00:00.000Z",
+      "deliveredAt": "2026-04-09T10:00:00.000Z",
+      "cancelledAt": null,
+      "shipByDate": null,
+      "latestDeliveryDate": null,
+      "isPrime": null,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 0,
+      "returnCount": 0,
+      "financialTxCount": 0,
+      "hasActiveReturn": false,
+      "hasRefund": false,
+      "customerOrderCount": 1,
+      "tags": [],
+      "reviewRequests": [],
+      "items": [
+        {
+          "id": "test-item-d1",
+          "sku": "TEST-SKU-1",
+          "quantity": 1,
+          "price": 60,
+          "productId": "test-product-1"
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-1",
+        "quantity": 1,
+        "price": 60,
+        "subtotal": 60,
+        "productName": "Test Jacket",
+        "amazonAsin": "TESTASIN01",
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 1,
+  "totalPages": 1
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: order type Prime and tag 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-a",
+      "channel": "AMAZON",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-A-1",
+      "status": "SHIPPED",
+      "fulfillmentMethod": "FBM",
+      "totalPrice": 99.8,
+      "currencyCode": "EUR",
+      "customerName": "Mario Rossi",
+      "customerEmail": "mario@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-01T10:00:00.000Z",
+      "paidAt": "2026-04-01T11:00:00.000Z",
+      "shippedAt": "2026-04-02T10:00:00.000Z",
+      "deliveredAt": null,
+      "cancelledAt": null,
+      "shipByDate": "2026-04-03T10:00:00.000Z",
+      "latestDeliveryDate": null,
+      "isPrime": true,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 1,
+      "returnCount": 1,
+      "financialTxCount": 2,
+      "hasActiveReturn": true,
+      "hasRefund": true,
+      "customerOrderCount": 2,
+      "tags": [
+        {
+          "id": "test-tag-1",
+          "name": "VIP",
+          "color": "#ff0000"
+        }
+      ],
+      "reviewRequests": [
+        {
+          "id": "test-review-a",
+          "channel": "AMAZON",
+          "status": "SENT",
+          "sentAt": "2026-04-09T10:00:00.000Z",
+          "scheduledFor": null
+        }
+      ],
+      "items": [
+        {
+          "id": "test-item-a1",
+          "sku": "TEST-SKU-1",
+          "quantity": 2,
+          "price": 49.9,
+          "productId": "test-product-1"
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-1",
+        "quantity": 2,
+        "price": 49.9,
+        "subtotal": 99.8,
+        "productName": "Test Jacket",
+        "amazonAsin": "TESTASIN01",
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 1,
+  "totalPages": 1
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: search by buyer, sorted by total, paged 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-a",
+      "channel": "AMAZON",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-A-1",
+      "status": "SHIPPED",
+      "fulfillmentMethod": "FBM",
+      "totalPrice": 99.8,
+      "currencyCode": "EUR",
+      "customerName": "Mario Rossi",
+      "customerEmail": "mario@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-01T10:00:00.000Z",
+      "paidAt": "2026-04-01T11:00:00.000Z",
+      "shippedAt": "2026-04-02T10:00:00.000Z",
+      "deliveredAt": null,
+      "cancelledAt": null,
+      "shipByDate": "2026-04-03T10:00:00.000Z",
+      "latestDeliveryDate": null,
+      "isPrime": true,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 1,
+      "shipmentCount": 1,
+      "returnCount": 1,
+      "financialTxCount": 2,
+      "hasActiveReturn": true,
+      "hasRefund": true,
+      "customerOrderCount": 2,
+      "tags": [
+        {
+          "id": "test-tag-1",
+          "name": "VIP",
+          "color": "#ff0000"
+        }
+      ],
+      "reviewRequests": [
+        {
+          "id": "test-review-a",
+          "channel": "AMAZON",
+          "status": "SENT",
+          "sentAt": "2026-04-09T10:00:00.000Z",
+          "scheduledFor": null
+        }
+      ],
+      "items": [
+        {
+          "id": "test-item-a1",
+          "sku": "TEST-SKU-1",
+          "quantity": 2,
+          "price": 49.9,
+          "productId": "test-product-1"
+        }
+      ],
+      "firstItem": {
+        "sku": "TEST-SKU-1",
+        "quantity": 2,
+        "price": 49.9,
+        "subtotal": 99.8,
+        "productName": "Test Jacket",
+        "amazonAsin": "TESTASIN01",
+        "thumbnailUrl": null
+      }
+    }
+  ],
+  "page": 1,
+  "pageSize": 1,
+  "total": 1,
+  "totalPages": 1
+}"
+`;
+
+exports[`07 O4 — order reads: the routes answer exactly as before the move > list: the bin 1`] = `
+"{
+  "orders": [
+    {
+      "id": "test-order-bin",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelOrderId": "TEST-BIN-1",
+      "status": "PROCESSING",
+      "fulfillmentMethod": null,
+      "totalPrice": 5,
+      "currencyCode": "EUR",
+      "customerName": "Deleted Buyer",
+      "customerEmail": "bin@example.test",
+      "shippingAddress": {
+        "city": "Testville",
+        "countryCode": "IT"
+      },
+      "purchaseDate": "2026-04-10T10:00:00.000Z",
+      "paidAt": null,
+      "shippedAt": null,
+      "deliveredAt": null,
+      "cancelledAt": null,
+      "shipByDate": null,
+      "latestDeliveryDate": null,
+      "isPrime": null,
+      "isBusinessOrder": false,
+      "createdAt": "<clock>",
+      "updatedAt": "<clock>",
+      "itemCount": 0,
+      "shipmentCount": 0,
+      "returnCount": 0,
+      "financialTxCount": 0,
+      "hasActiveReturn": false,
+      "hasRefund": false,
+      "customerOrderCount": 1,
+      "tags": [],
+      "reviewRequests": [],
+      "items": [],
+      "firstItem": null
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 1,
+  "totalPages": 1
+}"
+`;

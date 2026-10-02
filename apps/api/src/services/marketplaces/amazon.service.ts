@@ -310,12 +310,14 @@ export class AmazonService {
    * waits for it to finish, downloads the TSV document, and parses
    * it into an array of {@link CatalogItem} objects.
    */
-  async fetchActiveCatalog(marketplaceId?: string): Promise<CatalogItem[]> {
+  // MCP full control I7 — `accountId` reads THIS account's report (the identity sweep reads every account); omitted, the
+  // primary account as before.
+  async fetchActiveCatalog(marketplaceId?: string, accountId?: string): Promise<CatalogItem[]> {
     const mpId = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4"
     try {
       console.log(`[Amazon] Requesting GET_MERCHANT_LISTINGS_ALL_DATA report for ${mpId}…`);
 
-      const sp = await this.getClient();
+      const sp = await this.getClient(accountId);
 
       // Step 1 — Create the report
       const createRes: any = await sp.callAPI({

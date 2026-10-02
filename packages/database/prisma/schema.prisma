@@ -1553,6 +1553,8 @@ model VariantChannelListing {
 model ChannelListing {
   translations  ChannelListingTranslation[]
   listingClaims ChannelListingClaim[]
+  // MCP full control I6 — what a channel account holds, linked to this listing.
+  heldIds ChannelHeldId[]
   /// PLAN Step 3.5a (A-36) — what the channel holds that differs from us, for THIS listing (at most one: `listing_drift`).
   channelDrifts ChannelDrift[]
   // Business ownership comes from verified database context.
@@ -5728,6 +5730,7 @@ model Order {
   riskScore             OrderRiskScore? // O.22 — at most one per order
   fiscalInvoice         FiscalInvoice? // F.2 — at most one IT invoice per order
   notes                 OrderNote[] // AU.5 — per-order operator notes
+  buyerMessages         BuyerMessage[] // MCP full control 07 O11 — messages to the buyer
   routingDecisions      RoutingDecision[] // CE.4 — routing audit trail
 
   // Metadata
@@ -6047,6 +6050,42 @@ model CreditNote {
 // Distinct from CustomerNote (which persists across all the customer's
 // orders). OrderNote is about THIS order: pack instructions, fraud
 // review notes, buyer-messaged-about-gift-wrap memos, etc.
+/// MCP full control 07 O11 — one message to a buyer, written by the one buyer-message door
+/// (apps/api/src/services/comms/buyer-message.service.ts): who asked for it and through which door, the route it
+/// took (EMAIL; AMAZON and EBAY through the marketplaces' own messaging from O15), and how it ended. A message is
+/// never edited: a resend is a new row.
+model BuyerMessage {
+  // Business ownership comes from verified database context.
+  workspaceId  String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String    @id @default(cuid())
+  order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId      String
+  /// The order's channel (AMAZON, EBAY, SHOPIFY, ETSY, WOOCOMMERCE, MANUAL).
+  channel      String
+  /// EMAIL | AMAZON | EBAY.
+  route        String
+  /// The template it was made from; null for a free message.
+  template     String?
+  /// Its language (it, en, de, fr, es).
+  language     String
+  subject      String?
+  body         String
+  /// PENDING | SENT | DRY_RUN | SUPPRESSED | FAILED.
+  status       String    @default("PENDING")
+  providerRef  String?
+  error        String?
+  sentByUserId String?
+  /// The door the request came through: app, claude, fleet or system.
+  via          String
+  approvalId   String?
+  createdAt    DateTime  @default(now())
+  sentAt       DateTime?
+
+  @@index([orderId])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId])
+}
+
 model OrderNote {
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -6940,6 +6979,9 @@ model ChannelConnection {
   listingAliases           ProductListingAlias[] // PES.5
   shopifyColourProducts    ShopifyColourProduct[]
   shopifyColourSyncs       ShopifyColourSync[]
+  // MCP full control I6 — the ids this account holds on its channel, and the last sweep of them.
+  heldIds                  ChannelHeldId[]
+  heldIdSweeps             ChannelHeldSweep[]
   sharedListingMemberships SharedListingMembership[]
   orders                   Order[]
   syncChannelPolicies      SyncChannelPolicy[]
@@ -13440,6 +13482,13 @@ model AgentTool {
   requiresApproval Boolean  @default(false) // override; high tier is always true in policy
   rateLimitPerHour Int?
   dailyBudgetUSD   Decimal? @db.Decimal(12, 6)
+  /// MCP full control C5 — how far Claude may run this tool in this business: off (not offered to Claude) | ask (a
+  /// person approves it in Nexus; the default) | confirm | auto (runs after the undo window, inside claudeLimits).
+  /// Never above the tool's code ceiling (maxClaudeTrust): a higher stored value is read as the ceiling.
+  claudeTrust      String   @default("ask")
+  /// C5 — this business's limits for running the tool without a person (the tool's own `limits` schema). Null = the
+  /// tool's code defaults.
+  claudeLimits     Json?
   updatedBy        String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -13484,6 +13533,19 @@ model AgentApproval {
   /// it and the counts exclude it, so the queue and the badge agree. Never
   /// later than `expiresAt` — a snooze cannot outlive the request it defers.
   snoozedUntil DateTime?
+  /// MCP full control C2 — what this approval changed when it ran (one row per executed approval, or per plan
+  /// step once plans exist).
+  changes      AgentChange[]
+  /// MCP full control C5 — who took the decision that scheduled it: nexus (a person in Nexus) | auto (the business's
+  /// rule for that tool, as the person who asked) | claude-confirm (C7). Null while nobody has decided, and again when
+  /// a decision is handed back.
+  decisionVia  String?
+  /// MCP full control C6 — a change plan (toolName submit-change-plan): the one line Nexus wrote about it, and the
+  /// sha256 of its title and steps (what the person approves, and what a confirm in Claude names, C7). Null otherwise.
+  summary      String?
+  planHash     String?
+  /// C6 — the plan's steps, one per change, run in order after the approval.
+  planSteps    AgentPlanStep[]
 
   @@index([status, requestedAt])
   /// NAF.AP.4/AP.5 — the maintenance sweep's two queries: commit what is due,
@@ -13491,6 +13553,91 @@ model AgentApproval {
   @@index([status, executeAfter])
   @@index([status, expiresAt])
   @@index([workspaceId])
+}
+
+/// MCP full control C6 — one step of a change plan: a change of one tool (its args and the raw preview the person
+/// approved), run in `position` order by the plan worker after the undo window: claimed (pending → executing), its
+/// approver's permissions and its preview re-checked, then run — or skipped with the reason (stale, a permission lost,
+/// the rule changed) while the others go on. `changeId`: the AgentChange it made. `undoesChangeId`: in an undo plan,
+/// the change this step puts back.
+model AgentPlanStep {
+  // Business ownership comes from verified database context.
+  workspaceId    String        @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id             String        @id @default(cuid())
+  approvalId     String
+  approval       AgentApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  position       Int
+  toolName       String
+  args           Json
+  preview        Json?
+  /// pending | executing | done | skipped | failed
+  status         String        @default("pending")
+  reason         String?
+  changeId       String?
+  undoesChangeId String?
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@unique([approvalId, position])
+  @@index([approvalId, status])
+  @@index([workspaceId])
+}
+
+/// MCP full control C5 — Claude's brakes in one business: a Pause that stops every change running by rule at once (no
+/// deploy), set by a person or by Nexus itself after too many stale or failed rule-runs, and the most changes that may
+/// run by rule in 24 hours. One row per business; no row = not paused, 200 a day.
+model AgentAutonomy {
+  // Business ownership comes from verified database context.
+  workspaceId  String    @unique @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String    @id @default(cuid())
+  autoPausedAt DateTime?
+  /// The person's name, or "Nexus" for an automatic pause.
+  autoPausedBy String?
+  pauseReason  String?
+  dailyAutoCap Int       @default(200)
+  updatedBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+/// MCP full control C2 (plan section 05 §3.4) — what an approved change did, kept so a person or Claude can see
+/// it and undo it. Written by the approval gate when the tool's `execute` succeeds (`ToolResult.change`); never
+/// edited afterwards except to say it was undone. Undo is a NEW request of the inverse tool through the same gate
+/// (`undo-change`), refused while what is stored is no longer `after`.
+model AgentChange {
+  // Business ownership comes from verified database context.
+  workspaceId        String        @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                 String        @id @default(cuid())
+  approvalId         String
+  approval           AgentApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  /// C6 — the step of a change plan this row records; null for a single change.
+  planStepId         String?
+  toolName           String
+  /// The front door the REQUEST came through: app | claude | fleet | system.
+  via                String
+  /// The Claude connection (OAuthGrant.id) behind a 'claude' request. No foreign key: the record outlives it.
+  oauthGrantId       String?
+  /// The person it ran as (the approver). Null only for a system run.
+  executedByUserId   String?
+  executedAt         DateTime      @default(now())
+  /// The tool's reversibility when it ran: full | partial | none.
+  reversibility      String
+  /// What it replaced and what it wrote, in the tool's own shape (ToolResult.change). Null when the tool keeps none.
+  before             Json?
+  after              Json?
+  /// The request that would put `before` back, as the tool's undo built it when the change ran.
+  undoTool           String?
+  undoArgs           Json?
+  /// Set when the undo request ran; `undoneByApprovalId` is that request (set as soon as it is asked for).
+  undoneAt           DateTime?
+  undoneByApprovalId String?
+  /// True when the change is sent on to a marketplace or a buyer (the tool is openWorld).
+  outbound           Boolean       @default(false)
+
+  @@index([workspaceId, executedAt])
+  @@index([approvalId])
+  @@index([undoneByApprovalId])
 }
 
 // Per-agent / per-entity memory for continuity + learning.
@@ -17527,6 +17674,25 @@ model DevelopmentCertification {
 // dial + the circuit-breaker halt. The env kill-switch (NEXUS_ADS_AUTOMATION_KILL)
 // stays as a deploy-level backstop; THIS row lets an operator (or the anomaly
 // guard) halt/resume + change posture at runtime without a deploy.
+/// R16 (MCP full control, decision D-R2) — a per-business switch for an engine that only the server env switched
+/// before (rank-defend, budget enforcement, auto-bid, top-of-search defense, the coverage engine, the analyst fleet,
+/// the snapshot repricer). The env stays the outer limit and is never written: an engine acts at
+/// lowest(env ceiling, mode). No row = the env alone decides, exactly as before this table existed. Down is instant;
+/// up only as far as the env allows, and a person clicks it.
+model AutomationSwitch {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  key         String // the engine: rank-defend | budget-enforce | auto-bid | tos-defense | coverage-engine | fleet-analysts | repricer
+  mode        String // OFF | OBSERVE | PROPOSE | AUTO — the most this business lets it do
+  reason      String?
+  setBy       String // 'user:<id>'
+  setAt       DateTime @default(now())
+
+  @@unique([workspaceId, key], name: "workspace_key", map: "AutomationSwitch_workspace_key_key")
+  @@index([workspaceId])
+}
+
 model AdsAutomationState {
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -19404,6 +19570,8 @@ model Workspace {
   ingressRoutes            ChannelAccountRoute[]
   guestAccountGrants       ChannelAccountGrant[]     @relation("GrantGuest")
   listingClaims            ChannelListingClaim[]
+  // MCP full control I12 — the seller-owned channel ids this business holds (one owner per id).
+  channelItemClaims        ChannelItemClaim[]
   sharedAccountGrants      ChannelAccountGrant[]     @relation("GrantOwner")
   /// AE.2 — assortments this business offers to others, and those offered to it.
   assortmentSharesOffered  AssortmentShare[]         @relation("AssortmentShareOwner")
@@ -20351,4 +20519,80 @@ model ShopifyColourSync {
 
   @@unique([workspaceId, familyId, channelConnectionId, marketplace, aliasKey], name: "colour_sync")
   @@index([workspaceId, dueAt])
+}
+
+/// MCP full control I6 (docs/mcp-full-control/sections/04-identity.md §4.2 M1) — one id a channel account holds, as its
+/// own read says: an eBay Item ID, an Amazon ASIN with its seller SKU, a Shopify product or variant, an Etsy listing. The
+/// per-account sweep (services/identity/channel-held.service.ts) writes it; the identity audit compares it with the
+/// listings (#3 an id the account does not hold, #4 an id with no listing, #12 a seller SKU that differs).
+/// `sellerSku` is NOT NULL ('' when none): a NULL would defeat the unique key.
+model ChannelHeldId {
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  channel             String
+  channelConnectionId String
+  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  marketplace         String
+  externalId          String
+  parentExternalId    String?
+  sellerSku           String            @default("")
+  title               String?
+  remoteStatus        String?
+  firstSeenAt         DateTime          @default(now())
+  lastSeenAt          DateTime          @default(now())
+  /// Set when a COMPLETE sweep no longer saw it; a truncated sweep never sets it.
+  endedAt             DateTime?
+  listingId           String?
+  listing             ChannelListing?   @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  /// LINKED (a listing here holds it) | UNLINKED (none does) | IGNORED (a person said leave it)
+  matchState          String            @default("UNLINKED")
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([workspaceId, channelConnectionId, marketplace, externalId, sellerSku], name: "held_id")
+  @@index([workspaceId])
+  @@index([channelConnectionId, endedAt])
+  @@index([listingId])
+}
+
+/// MCP full control I6 — the last sweep of one account on one channel: when it ran, and whether it read everything. The
+/// audit trusts "not held" (#3) only after a complete sweep, and only for listings that existed when it began.
+model ChannelHeldSweep {
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  channel             String
+  channelConnectionId String
+  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  startedAt           DateTime
+  finishedAt          DateTime?
+  complete            Boolean           @default(false)
+  itemsSeen           Int               @default(0)
+  reason              String?
+  /// The start of the last sweep that read everything (null until one has).
+  lastCompleteAt      DateTime?
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([workspaceId, channelConnectionId, channel], name: "held_sweep")
+  @@index([workspaceId])
+}
+
+/// MCP full control I12 (docs/mcp-full-control/sections/04-identity.md §4.2 M3, D1 = B) — one seller-owned channel id
+/// (an eBay Item ID, a Shopify product, an Etsy listing; never an ASIN, which is a catalogue id), one owner: the business,
+/// the family (its parent product) and the listing (extra listing key) that hold it. A family's variations share it.
+/// Written only by the trigger on ChannelListing (packages/database/workspaces/channel-item-claim.sql). REPORT mode: a
+/// write that meets another owner's claim is not refused — the identity audit (#1, #2) reports it. ENFORCE refuses such
+/// a write; it is a later migration, after audit #1 and #2 read 0 in production, on the Owner's word.
+model ChannelItemClaim {
+  channel       String
+  marketplace   String
+  externalId    String
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  rootProductId String
+  aliasKey      String    @default("")
+  connectionId  String?
+  claimedAt     DateTime  @default(now())
+
+  @@id([channel, marketplace, externalId])
+  @@index([workspaceId])
 }
