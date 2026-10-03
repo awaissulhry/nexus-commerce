@@ -31,6 +31,7 @@ import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { mediaLayoutFor } from '../images/media-plan.service.js'
 import { amazonSlotsFor, type AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
 import { NO_LISTING_PRICE_FACTS, currencyCode, listingSendPrice } from './follower-price.js'
+import { assertNoMerchantQuantityForFba } from '../../lib/amazon-fba-boundary.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -221,6 +222,8 @@ export async function sendAmazonPublication(plan: AmazonPublication, accountId: 
   let documentId: string
   let sp: Awaited<ReturnType<typeof getAmazonSpClient>>
   try {
+    // FBA boundary first: a merchant quantity for an FBA SKU refuses the whole feed before any preview or upload.
+    await assertNoMerchantQuantityForFba(plan.feed, accountId)
     const client = new AmazonSpApiClient({ id: accountId, region: await getAmazonRegion(accountId) })
     for (const message of plan.feed.messages) {
       const checked = await client.validateListing({ sellerId: plan.sellerId, marketplaceId: plan.marketplaceId,
