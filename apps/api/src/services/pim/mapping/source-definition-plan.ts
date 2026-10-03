@@ -61,7 +61,9 @@ export function sourceOwner(field: Pick<ChannelFieldSpec, 'key' | 'masterKey' | 
   if (field.masterKey || field.defaultRule) return null
   if (PACKAGE_SOURCES[key] || NATIVE_MEASURES[key]) return null
   const group = field.group?.key
-  if (['product_details', 'product_identity', 'safety_and_compliance', 'aspects'].includes(group ?? '') && !CHANNEL_FACTS.has(key)) return null
+  // By attribute too: a selector leaf (`compliance_media__content_type`) belongs to its channel-fact root, or the root is
+  // split between owners and every Amazon publish refuses it as mixed (`mappedAmazonRoots`).
+  if (['product_details', 'product_identity', 'safety_and_compliance', 'aspects'].includes(group ?? '') && !CHANNEL_FACTS.has(key) && !CHANNEL_FACTS.has(field.attribute)) return null
   const path = !field.channelStore ? `listing.overrideData.${key}` : field.channelStore.kind === 'listingColumn' ? `listing.${field.channelStore.column}` : `listing.platformAttributes.${field.channelStore.path.join('.')}`
   if (field.readOnlyReason) return { kind: 'system', label: 'Channel-reported data', path }
   const label = field.shopifyField?.definition ? 'Shopify metafields' : group === 'images' || /image_locator|imageUrls|videoId/.test(key) ? 'Media'
